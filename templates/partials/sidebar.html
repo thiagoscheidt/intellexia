@@ -1,0 +1,116 @@
+<!--begin::Sidebar-->
+<aside class="app-sidebar bg-body-secondary shadow" data-bs-theme="dark">
+  <!--begin::Sidebar Brand-->
+  <div class="sidebar-brand">
+    <!--begin::Brand Link-->
+    <a href="{{ url_for('index') }}" class="brand-link">
+      <!--begin::Brand Image-->
+      <img
+        src="{{ url_for('static', filename='assets/img/AdminLTELogo.png') }}"
+        alt="AdminLTE Logo"
+        class="brand-image opacity-75 shadow"
+      />
+      <!--end::Brand Image-->
+      <!--begin::Brand Text-->
+      <span class="brand-text fw-light">IntellexIA</span>
+      <!--end::Brand Text-->
+    </a>
+    <!--end::Brand Link-->
+  </div>
+  <!--end::Sidebar Brand-->
+  <!--begin::Sidebar Wrapper-->
+  <div class="sidebar-wrapper">
+    <nav class="mt-2">
+      <!--begin::Sidebar Menu-->
+      <ul
+        class="nav sidebar-menu flex-column"
+        data-lte-toggle="treeview"
+        role="navigation"
+        aria-label="Main navigation"
+        data-accordion="false"
+        id="navigation"
+      >
+        <li class="nav-item menu-open">
+          <a href="#" class="nav-link active">
+            <i class="nav-icon bi bi-speedometer"></i>
+            <p>
+              Dashboard's
+              <i class="nav-arrow bi bi-chevron-right"></i>
+            </p>
+          </a>
+          <ul class="nav nav-treeview">
+            <li class="nav-item">
+              <a href="{{ url_for('index') }}" class="nav-link active">
+                <i class="nav-icon bi bi-circle"></i>
+                <p>Dashboard (Petições)</p>
+              </a>
+            </li>
+          </ul>
+        </li>
+           <li class="nav-item">
+          <a href="#" class="nav-link">
+            <i class="nav-icon bi bi-newspaper"></i>
+            <p>
+              Casos
+              <i class="nav-arrow bi bi-chevron-right"></i>
+            </p>
+          </a>
+          <ul class="nav nav-treeview">
+            <li class="nav-item">
+              <a href="{{ url_for('index') }}" class="nav-link">
+                <i class="nav-icon bi-list"></i>
+                <p>Lista de Casos</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('index2') }}" class="nav-link">
+                <i class="nav-icon bi bi-plus-square"></i>
+                <p>Novo Caso</p>
+              </a>
+            </li>
+          </ul>
+        </li>
+
+          </li>
+           <li class="nav-item">
+          <a href="#" class="nav-link">
+            <i class="nav-icon bi bi-people"></i>
+            <p>
+              Clientes
+              <i class="nav-arrow bi bi-chevron-right"></i>
+            </p>
+          </a>
+          <ul class="nav nav-treeview">
+            <li class="nav-item">
+              <a href="{{ url_for('index') }}" class="nav-link">
+                <i class="nav-icon bi-list"></i>
+                <p>Lista de Clientes</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('index2') }}" class="nav-link">
+                <i class="nav-icon bi bi-building-add"></i>
+                <p>Novo Cliente (PJ)</p>
+              </a>
+            </li>
+                        <li class="nav-item">
+              <a href="{{ url_for('index2') }}" class="nav-link">
+                <i class="nav-icon bi bi-person-add"></i>
+                <p>Novo Cliente (PF)</p>
+              </a>
+            </li>
+          </ul>
+        </li>
+        <li class="nav-item">
+          <a href="{{ url_for('static', filename='generate/theme.html') }}" class="nav-link">
+            <i class="nav-icon bi bi-palette"></i>
+            <p>Usuários</p>
+          </a>
+        </li>
+      </ul>
+      <!--end::Sidebar Menu-->
+    </nav>
+  </div>
+  <!--end::Sidebar Wrapper-->
+</aside>
+<!--end::Sidebar-->

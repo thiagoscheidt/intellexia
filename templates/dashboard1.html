@@ -1,0 +1,101 @@
+{% extends 'layout/base.html' %}
+
+{% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-lg-3 col-6">
+    <div class="small-box text-bg-primary">
+      <div class="inner">
+        <h3>10</h3>
+        <p>Total de Petições</p>
+      </div>
+      <div class="small-box-icon">
+        <i class="bi bi-bag-fill"></i>
+      </div>
+      <a href="#" class="small-box-footer">
+        More info <i class="bi bi-arrow-right-circle-fill"></i>
+      </a>
+    </div>
+  </div>
+  
+  <div class="col-lg-3 col-6">
+    <div class="small-box text-bg-success">
+      <div class="inner">
+        <h3>10<sup class="fs-5">%</sup></h3>
+        <p>Total de Petições finalizadas</p>
+      </div>
+      <div class="small-box-icon">
+        <i class="bi bi-graph-up-arrow"></i>
+      </div>
+      <a href="#" class="small-box-footer">
+        More info <i class="bi bi-arrow-right-circle-fill"></i>
+      </a>
+    </div>
+  </div>
+  
+  <div class="col-lg-3 col-6">
+    <div class="small-box text-bg-warning">
+      <div class="inner">
+        <h3>44</h3>
+        <p>User Registrations</p>
+      </div>
+      <div class="small-box-icon">
+        <i class="bi bi-people-fill"></i>
+      </div>
+      <a href="#" class="small-box-footer">
+        More info <i class="bi bi-arrow-right-circle-fill"></i>
+      </a>
+    </div>
+  </div>
+  
+  <div class="col-lg-3 col-6">
+    <div class="small-box text-bg-danger">
+      <div class="inner">
+        <h3>65</h3>
+        <p>Unique Visitors</p>
+      </div>
+      <div class="small-box-icon">
+        <i class="bi bi-pie-chart-fill"></i>
+      </div>
+      <a href="#" class="small-box-footer">
+        More info <i class="bi bi-arrow-right-circle-fill"></i>
+      </a>
+    </div>
+  </div>
+</div>
+
+<div class="row">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Welcome to AdminLTE</h3>
+      </div>
+      <div class="card-body">
+        <p>This is an example dashboard using the modular Flask template structure.</p>
+        <p>The layout has been split into:</p>
+        <ul>
+          <li><strong>Base Layout:</strong> <code>layout/base.html</code></li>
+          <li><strong>Header:</strong> <code>partials/header.html</code></li>
+          <li><strong>Sidebar:</strong> <code>partials/sidebar.html</code></li>
+          <li><strong>Footer:</strong> <code>partials/footer.html</code></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+  
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">Acesso Rápido</h3>
+      </div>
+      <div class="card-body">
+        <a href="{{ url_for('index2') }}" class="btn btn-primary">Nova Petição</a>
+        <a href="{{ url_for('index3') }}" class="btn btn-secondary">Chat Bot</a>
+        <a href="{{ url_for('index3') }}" class="btn btn-secondary">Configurações</a>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
