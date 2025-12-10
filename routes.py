@@ -126,3 +126,7 @@ def index2():
 @app.route('/dashboard3')
 def index3():
     return render_template('index3.html')
+
+@app.route('/clients')
+def clients():
+    return render_template('clients.html')
