@@ -1,0 +1,133 @@
+{% extends "layout/base.html" %}
+
+{% block title %}{{ title }} - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-sm-6">
+        <h3 class="mb-0">{{ title }}</h3>
+      </div>
+      <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-end">
+          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('clients_list') }}">Clientes</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{ title }}</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">{{ title }}</h3>
+          </div>
+          <form method="POST" action="">
+            {{ form.hidden_tag() }}
+            <div class="card-body">
+              <div class="row">
+                <div class="col-md-8">
+                  <div class="mb-3">
+                    {{ form.name.label(class="form-label") }}
+                    {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else "")) }}
+                    {% if form.name.errors %}
+                      <div class="invalid-feedback">
+                        {% for error in form.name.errors %}{{ error }}{% endfor %}
+                      </div>
+                    {% endif %}
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="mb-3">
+                    {{ form.cnpj.label(class="form-label") }}
+                    {{ form.cnpj(class="form-control" + (" is-invalid" if form.cnpj.errors else ""), placeholder="00.000.000/0000-00") }}
+                    {% if form.cnpj.errors %}
+                      <div class="invalid-feedback">
+                        {% for error in form.cnpj.errors %}{{ error }}{% endfor %}
+                      </div>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+
+              <h5 class="mt-4 mb-3">Endereço</h5>
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    {{ form.street.label(class="form-label") }}
+                    {{ form.street(class="form-control") }}
+                  </div>
+                </div>
+                <div class="col-md-2">
+                  <div class="mb-3">
+                    {{ form.number.label(class="form-label") }}
+                    {{ form.number(class="form-control") }}
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="mb-3">
+                    {{ form.district.label(class="form-label") }}
+                    {{ form.district(class="form-control") }}
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-5">
+                  <div class="mb-3">
+                    {{ form.city.label(class="form-label") }}
+                    {{ form.city(class="form-control") }}
+                  </div>
+                </div>
+                <div class="col-md-2">
+                  <div class="mb-3">
+                    {{ form.state.label(class="form-label") }}
+                    {{ form.state(class="form-control", placeholder="SC") }}
+                  </div>
+                </div>
+                <div class="col-md-5">
+                  <div class="mb-3">
+                    {{ form.zip_code.label(class="form-label") }}
+                    {{ form.zip_code(class="form-control", placeholder="00000-000") }}
+                  </div>
+                </div>
+              </div>
+
+              <h5 class="mt-4 mb-3">Filiais</h5>
+              <div class="row">
+                <div class="col-md-12">
+                  <div class="mb-3">
+                    <div class="form-check">
+                      {{ form.has_branches(class="form-check-input") }}
+                      {{ form.has_branches.label(class="form-check-label") }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-12">
+                  <div class="mb-3">
+                    {{ form.branches_description.label(class="form-label") }}
+                    {{ form.branches_description(class="form-control", rows="4", placeholder="Descreva os endereços das filiais, se houver") }}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="card-footer">
+              {{ form.submit(class="btn btn-primary") }}
+              <a href="{{ url_for('clients_list') }}" class="btn btn-secondary">Cancelar</a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

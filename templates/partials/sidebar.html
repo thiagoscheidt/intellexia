@@ -47,7 +47,8 @@
             </li>
           </ul>
         </li>
-           <li class="nav-item">
+        
+        <li class="nav-item">
           <a href="#" class="nav-link">
             <i class="nav-icon bi bi-newspaper"></i>
             <p>
@@ -57,13 +58,13 @@
           </a>
           <ul class="nav nav-treeview">
             <li class="nav-item">
-              <a href="{{ url_for('index') }}" class="nav-link">
-                <i class="nav-icon bi-list"></i>
+              <a href="{{ url_for('cases_list') }}" class="nav-link">
+                <i class="nav-icon bi bi-list"></i>
                 <p>Lista de Casos</p>
               </a>
             </li>
             <li class="nav-item">
-              <a href="{{ url_for('index2') }}" class="nav-link">
+              <a href="{{ url_for('case_new') }}" class="nav-link">
                 <i class="nav-icon bi bi-plus-square"></i>
                 <p>Novo Caso</p>
               </a>
@@ -71,8 +72,7 @@
           </ul>
         </li>
 
-          </li>
-           <li class="nav-item">
+        <li class="nav-item">
           <a href="#" class="nav-link">
             <i class="nav-icon bi bi-people"></i>
             <p>
@@ -82,30 +82,90 @@
           </a>
           <ul class="nav nav-treeview">
             <li class="nav-item">
-              <a href="{{ url_for('index') }}" class="nav-link">
-                <i class="nav-icon bi-list"></i>
+              <a href="{{ url_for('clients_list') }}" class="nav-link">
+                <i class="nav-icon bi bi-list"></i>
                 <p>Lista de Clientes</p>
               </a>
             </li>
             <li class="nav-item">
-              <a href="{{ url_for('index2') }}" class="nav-link">
+              <a href="{{ url_for('client_new') }}" class="nav-link">
                 <i class="nav-icon bi bi-building-add"></i>
-                <p>Novo Cliente (PJ)</p>
-              </a>
-            </li>
-                        <li class="nav-item">
-              <a href="{{ url_for('index2') }}" class="nav-link">
-                <i class="nav-icon bi bi-person-add"></i>
-                <p>Novo Cliente (PF)</p>
+                <p>Novo Cliente</p>
               </a>
             </li>
           </ul>
         </li>
+
         <li class="nav-item">
-          <a href="{{ url_for('static', filename='generate/theme.html') }}" class="nav-link">
-            <i class="nav-icon bi bi-palette"></i>
-            <p>Usuários</p>
+          <a href="#" class="nav-link">
+            <i class="nav-icon bi bi-briefcase"></i>
+            <p>
+              Advogados
+              <i class="nav-arrow bi bi-chevron-right"></i>
+            </p>
           </a>
+          <ul class="nav nav-treeview">
+            <li class="nav-item">
+              <a href="{{ url_for('lawyers_list') }}" class="nav-link">
+                <i class="nav-icon bi bi-list"></i>
+                <p>Lista de Advogados</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('lawyer_new') }}" class="nav-link">
+                <i class="nav-icon bi bi-plus-square"></i>
+                <p>Novo Advogado</p>
+              </a>
+            </li>
+          </ul>
+        </li>
+
+        <li class="nav-item">
+          <a href="#" class="nav-link">
+            <i class="nav-icon bi bi-bank"></i>
+            <p>
+              Varas Judiciais
+              <i class="nav-arrow bi bi-chevron-right"></i>
+            </p>
+          </a>
+          <ul class="nav nav-treeview">
+            <li class="nav-item">
+              <a href="{{ url_for('courts_list') }}" class="nav-link">
+                <i class="nav-icon bi bi-list"></i>
+                <p>Lista de Varas</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('court_new') }}" class="nav-link">
+                <i class="nav-icon bi bi-plus-square"></i>
+                <p>Nova Vara</p>
+              </a>
+            </li>
+          </ul>
+        </li>
+
+        <li class="nav-item">
+          <a href="#" class="nav-link">
+            <i class="nav-icon bi bi-card-list"></i>
+            <p>
+              Benefícios
+              <i class="nav-arrow bi bi-chevron-right"></i>
+            </p>
+          </a>
+          <ul class="nav nav-treeview">
+            <li class="nav-item">
+              <a href="{{ url_for('benefits_list') }}" class="nav-link">
+                <i class="nav-icon bi bi-list"></i>
+                <p>Lista de Benefícios</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('benefit_new') }}" class="nav-link">
+                <i class="nav-icon bi bi-plus-square"></i>
+                <p>Novo Benefício</p>
+              </a>
+            </li>
+          </ul>
         </li>
       </ul>
       <!--end::Sidebar Menu-->

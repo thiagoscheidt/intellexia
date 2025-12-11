@@ -1,0 +1,103 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Lista de Benefícios - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-sm-6">
+        <h3 class="mb-0">Benefícios</h3>
+      </div>
+      <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-end">
+          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Benefícios</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Lista de Benefícios</h3>
+            <div class="card-tools">
+              <a href="{{ url_for('benefit_new') }}" class="btn btn-primary btn-sm">
+                <i class="bi bi-plus-circle"></i> Novo Benefício
+              </a>
+            </div>
+          </div>
+          <div class="card-body">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                {% for category, message in messages %}
+                  <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                  </div>
+                {% endfor %}
+              {% endif %}
+            {% endwith %}
+
+            {% if benefits %}
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Número Benefício</th>
+                    <th>Tipo</th>
+                    <th>Segurado</th>
+                    <th>NIT</th>
+                    <th>Data Acidente</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for benefit in benefits %}
+                  <tr>
+                    <td>{{ benefit.id }}</td>
+                    <td>{{ benefit.benefit_number }}</td>
+                    <td>
+                      {% if benefit.benefit_type == 'B91' %}
+                        <span class="badge bg-info">B91</span>
+                      {% elif benefit.benefit_type == 'B94' %}
+                        <span class="badge bg-warning">B94</span>
+                      {% else %}
+                        <span class="badge bg-secondary">{{ benefit.benefit_type }}</span>
+                      {% endif %}
+                    </td>
+                    <td>{{ benefit.insured_name }}</td>
+                    <td>{{ benefit.insured_nit or '-' }}</td>
+                    <td>{{ benefit.accident_date.strftime('%d/%m/%Y') if benefit.accident_date else '-' }}</td>
+                    <td>
+                      <a href="#" class="btn btn-sm btn-info" title="Visualizar">
+                        <i class="bi bi-eye"></i>
+                      </a>
+                      <a href="#" class="btn btn-sm btn-warning" title="Editar">
+                        <i class="bi bi-pencil"></i>
+                      </a>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+              <i class="bi bi-info-circle"></i> Nenhum benefício cadastrado ainda. 
+              <a href="{{ url_for('benefit_new') }}">Cadastre o primeiro benefício</a>.
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

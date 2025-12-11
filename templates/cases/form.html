@@ -1,0 +1,155 @@
+{% extends "layout/base.html" %}
+
+{% block title %}{{ title }} - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-sm-6">
+        <h3 class="mb-0">{{ title }}</h3>
+      </div>
+      <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-end">
+          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases_list') }}">Casos</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{ title }}</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">{{ title }}</h3>
+          </div>
+          <form method="POST" action="">
+            {{ form.hidden_tag() }}
+            <div class="card-body">
+              <h5 class="mb-3">Informações Básicas</h5>
+              <div class="row">
+                <div class="col-md-12">
+                  <div class="mb-3">
+                    {{ form.title.label(class="form-label") }}
+                    {{ form.title(class="form-control" + (" is-invalid" if form.title.errors else "")) }}
+                    {% if form.title.errors %}
+                      <div class="invalid-feedback">
+                        {% for error in form.title.errors %}{{ error }}{% endfor %}
+                      </div>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    {{ form.client_id.label(class="form-label") }}
+                    {{ form.client_id(class="form-select" + (" is-invalid" if form.client_id.errors else "")) }}
+                    {% if form.client_id.errors %}
+                      <div class="invalid-feedback">
+                        {% for error in form.client_id.errors %}{{ error }}{% endfor %}
+                      </div>
+                    {% endif %}
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    {{ form.court_id.label(class="form-label") }}
+                    {{ form.court_id(class="form-select") }}
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-4">
+                  <div class="mb-3">
+                    {{ form.case_type.label(class="form-label") }}
+                    {{ form.case_type(class="form-select" + (" is-invalid" if form.case_type.errors else "")) }}
+                    {% if form.case_type.errors %}
+                      <div class="invalid-feedback">
+                        {% for error in form.case_type.errors %}{{ error }}{% endfor %}
+                      </div>
+                    {% endif %}
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="mb-3">
+                    {{ form.status.label(class="form-label") }}
+                    {{ form.status(class="form-select") }}
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="mb-3">
+                    {{ form.filing_date.label(class="form-label") }}
+                    {{ form.filing_date(class="form-control", type="date") }}
+                  </div>
+                </div>
+              </div>
+
+              <h5 class="mt-4 mb-3">Informações FAP</h5>
+              <div class="row">
+                <div class="col-md-4">
+                  <div class="mb-3">
+                    {{ form.fap_start_year.label(class="form-label") }}
+                    {{ form.fap_start_year(class="form-control", placeholder="Ex: 2020") }}
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="mb-3">
+                    {{ form.fap_end_year.label(class="form-label") }}
+                    {{ form.fap_end_year(class="form-control", placeholder="Ex: 2023") }}
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="mb-3">
+                    {{ form.value_cause.label(class="form-label") }}
+                    {{ form.value_cause(class="form-control", placeholder="0.00") }}
+                  </div>
+                </div>
+              </div>
+
+              <h5 class="mt-4 mb-3">Resumos</h5>
+              <div class="row">
+                <div class="col-md-12">
+                  <div class="mb-3">
+                    {{ form.facts_summary.label(class="form-label") }}
+                    {{ form.facts_summary(class="form-control", rows="4", placeholder="Descreva os fatos do caso...") }}
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-12">
+                  <div class="mb-3">
+                    {{ form.thesis_summary.label(class="form-label") }}
+                    {{ form.thesis_summary(class="form-control", rows="4", placeholder="Descreva as teses jurídicas...") }}
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-12">
+                  <div class="mb-3">
+                    {{ form.prescription_summary.label(class="form-label") }}
+                    {{ form.prescription_summary(class="form-control", rows="3", placeholder="Informações sobre prescrição...") }}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="card-footer">
+              {{ form.submit(class="btn btn-primary") }}
+              <a href="{{ url_for('cases_list') }}" class="btn btn-secondary">Cancelar</a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

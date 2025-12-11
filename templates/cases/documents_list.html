@@ -1,0 +1,138 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Documentos do Caso - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-sm-6">
+        <h3 class="mb-0">Documentos do Caso #{{ case_id }}</h3>
+      </div>
+      <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-end">
+          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases_list') }}">Casos</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('case_detail', case_id=case_id) }}">Caso #{{ case_id }}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Documentos</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Documentos do Caso</h3>
+            <div class="card-tools">
+              <a href="{{ url_for('case_detail', case_id=case_id) }}" class="btn btn-secondary btn-sm">
+                <i class="bi bi-arrow-left"></i> Voltar ao Caso
+              </a>
+              <a href="{{ url_for('case_document_new', case_id=case_id) }}" class="btn btn-primary btn-sm">
+                <i class="bi bi-upload"></i> Upload Documento
+              </a>
+            </div>
+          </div>
+          <div class="card-body">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                {% for category, message in messages %}
+                  <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                  </div>
+                {% endfor %}
+              {% endif %}
+            {% endwith %}
+
+            {% if documents %}
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Nome do Arquivo</th>
+                    <th>Tipo</th>
+                    <th>Benefício Relacionado</th>
+                    <th>Upload</th>
+                    <th>Usar na IA</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for doc in documents %}
+                  <tr>
+                    <td>{{ doc.id }}</td>
+                    <td>
+                      <i class="bi bi-file-earmark-pdf text-danger"></i>
+                      {{ doc.original_filename }}
+                    </td>
+                    <td>
+                      {% if doc.document_type == 'cat' %}
+                        <span class="badge bg-danger">CAT</span>
+                      {% elif doc.document_type == 'laudo_medico' %}
+                        <span class="badge bg-info">Laudo Médico</span>
+                      {% elif doc.document_type == 'infben' %}
+                        <span class="badge bg-primary">INFBEN</span>
+                      {% elif doc.document_type == 'cnis' %}
+                        <span class="badge bg-success">CNIS</span>
+                      {% elif doc.document_type == 'contrato_social' %}
+                        <span class="badge bg-warning">Contrato Social</span>
+                      {% elif doc.document_type == 'procuracao' %}
+                        <span class="badge bg-secondary">Procuração</span>
+                      {% else %}
+                        <span class="badge bg-secondary">{{ doc.document_type }}</span>
+                      {% endif %}
+                    </td>
+                    <td>{{ doc.related_benefit_number if doc.related_benefit_id else '-' }}</td>
+                    <td>
+                      <small class="text-muted">
+                        {{ doc.uploaded_at.strftime('%d/%m/%Y %H:%M') if doc.uploaded_at else '-' }}
+                      </small>
+                    </td>
+                    <td>
+                      {% if doc.use_in_ai %}
+                        <span class="badge bg-success">
+                          <i class="bi bi-check-circle"></i> Sim
+                        </span>
+                      {% else %}
+                        <span class="badge bg-secondary">
+                          <i class="bi bi-x-circle"></i> Não
+                        </span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      <a href="#" class="btn btn-sm btn-info" title="Visualizar">
+                        <i class="bi bi-eye"></i>
+                      </a>
+                      <a href="#" class="btn btn-sm btn-primary" title="Download">
+                        <i class="bi bi-download"></i>
+                      </a>
+                      <form action="{{ url_for('case_document_delete', case_id=case_id, document_id=doc.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Tem certeza que deseja excluir este documento?');">
+                        <button type="submit" class="btn btn-sm btn-danger" title="Excluir">
+                          <i class="bi bi-trash"></i>
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+              <i class="bi bi-info-circle"></i> Nenhum documento anexado ainda. 
+              <a href="{{ url_for('case_document_new', case_id=case_id) }}">Envie o primeiro documento</a>.
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

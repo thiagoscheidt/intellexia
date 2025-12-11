@@ -1,0 +1,98 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Lista de Advogados - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-sm-6">
+        <h3 class="mb-0">Advogados</h3>
+      </div>
+      <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-end">
+          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Advogados</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Lista de Advogados</h3>
+            <div class="card-tools">
+              <a href="{{ url_for('lawyer_new') }}" class="btn btn-primary btn-sm">
+                <i class="bi bi-plus-circle"></i> Novo Advogado
+              </a>
+            </div>
+          </div>
+          <div class="card-body">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                {% for category, message in messages %}
+                  <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                  </div>
+                {% endfor %}
+              {% endif %}
+            {% endwith %}
+
+            {% if lawyers %}
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Nome</th>
+                    <th>OAB</th>
+                    <th>Email</th>
+                    <th>Telefone</th>
+                    <th>Padrão Publicações</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for lawyer in lawyers %}
+                  <tr>
+                    <td>{{ lawyer.id }}</td>
+                    <td>{{ lawyer.name }}</td>
+                    <td>{{ lawyer.oab_number }}</td>
+                    <td>{{ lawyer.email or '-' }}</td>
+                    <td>{{ lawyer.phone or '-' }}</td>
+                    <td>
+                      {% if lawyer.is_default_for_publications %}
+                        <span class="badge bg-success">Sim</span>
+                      {% else %}
+                        <span class="badge bg-secondary">Não</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      <a href="{{ url_for('lawyer_edit', lawyer_id=lawyer.id) }}" class="btn btn-sm btn-warning" title="Editar">
+                        <i class="bi bi-pencil"></i>
+                      </a>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+              <i class="bi bi-info-circle"></i> Nenhum advogado cadastrado ainda. 
+              <a href="{{ url_for('lawyer_new') }}">Cadastre o primeiro advogado</a>.
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

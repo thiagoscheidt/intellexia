@@ -1,0 +1,88 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Lista de Varas - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-sm-6">
+        <h3 class="mb-0">Varas Judiciais</h3>
+      </div>
+      <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-end">
+          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Varas</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Lista de Varas Judiciais</h3>
+            <div class="card-tools">
+              <a href="{{ url_for('court_new') }}" class="btn btn-primary btn-sm">
+                <i class="bi bi-plus-circle"></i> Nova Vara
+              </a>
+            </div>
+          </div>
+          <div class="card-body">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                {% for category, message in messages %}
+                  <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                  </div>
+                {% endfor %}
+              {% endif %}
+            {% endwith %}
+
+            {% if courts %}
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Seção Judiciária</th>
+                    <th>Nome da Vara</th>
+                    <th>Cidade/UF</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for court in courts %}
+                  <tr>
+                    <td>{{ court.id }}</td>
+                    <td>{{ court.section or '-' }}</td>
+                    <td>{{ court.vara_name or '-' }}</td>
+                    <td>{{ court.city }}/{{ court.state }}</td>
+                    <td>
+                      <a href="#" class="btn btn-sm btn-warning" title="Editar">
+                        <i class="bi bi-pencil"></i>
+                      </a>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+              <i class="bi bi-info-circle"></i> Nenhuma vara cadastrada ainda. 
+              <a href="{{ url_for('court_new') }}">Cadastre a primeira vara</a>.
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

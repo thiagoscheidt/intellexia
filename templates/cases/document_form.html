@@ -1,0 +1,121 @@
+{% extends "layout/base.html" %}
+
+{% block title %}{{ title }} - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-sm-6">
+        <h3 class="mb-0">{{ title }}</h3>
+      </div>
+      <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-end">
+          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases_list') }}">Casos</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('case_detail', case_id=case_id) }}">Caso #{{ case_id }}</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('case_documents_list', case_id=case_id) }}">Documentos</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{ title }}</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">{{ title }} - Caso #{{ case_id }}</h3>
+          </div>
+          <form method="POST" action="" enctype="multipart/form-data">
+            {{ form.hidden_tag() }}
+            <div class="card-body">
+              <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i> Este documento será vinculado ao <strong>Caso #{{ case_id }}</strong>
+              </div>
+
+              <h5 class="mb-3">Tipo de Documento</h5>
+              <div class="row">
+                <div class="col-md-12">
+                  <div class="mb-3">
+                    {{ form.document_type.label(class="form-label") }}
+                    {{ form.document_type(class="form-select" + (" is-invalid" if form.document_type.errors else "")) }}
+                    {% if form.document_type.errors %}
+                      <div class="invalid-feedback">
+                        {% for error in form.document_type.errors %}{{ error }}{% endfor %}
+                      </div>
+                    {% endif %}
+                    <small class="form-text text-muted">
+                      Selecione o tipo de documento que está sendo enviado
+                    </small>
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-12">
+                  <div class="mb-3">
+                    {{ form.related_benefit_id.label(class="form-label") }}
+                    {{ form.related_benefit_id(class="form-select") }}
+                    <small class="form-text text-muted">Opcional - selecione se o documento está relacionado a um benefício específico</small>
+                  </div>
+                </div>
+              </div>
+
+              <h5 class="mt-4 mb-3">Upload do Arquivo</h5>
+              <div class="row">
+                <div class="col-md-12">
+                  <div class="mb-3">
+                    {{ form.document_file.label(class="form-label") }}
+                    {{ form.document_file(class="form-control") }}
+                    <small class="form-text text-muted">
+                      <i class="bi bi-info-circle"></i> Formatos aceitos: <strong>PDF, DOC, DOCX, JPG, JPEG, PNG</strong> (Tamanho máximo: 10MB)
+                    </small>
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-12">
+                  <div class="mb-3">
+                    {{ form.description.label(class="form-label") }}
+                    {{ form.description(class="form-control", rows="3", placeholder="Ex: CAT referente ao acidente de trajeto do segurado João Silva em 15/03/2023") }}
+                    <small class="form-text text-muted">Descrição adicional sobre o documento (opcional)</small>
+                  </div>
+                </div>
+              </div>
+
+              <h5 class="mt-4 mb-3">Configurações de IA</h5>
+              <div class="row">
+                <div class="col-md-12">
+                  <div class="mb-3">
+                    <div class="form-check form-switch">
+                      {{ form.use_in_ai(class="form-check-input", role="switch") }}
+                      {{ form.use_in_ai.label(class="form-check-label") }}
+                    </div>
+                    <small class="form-text text-muted d-block mt-2">
+                      <i class="bi bi-lightbulb"></i> Quando ativado, este documento será utilizado pela IA para:
+                      <ul class="mt-2">
+                        <li>Geração automática de petições</li>
+                        <li>Análise de contexto do caso</li>
+                        <li>Extração de informações relevantes</li>
+                      </ul>
+                    </small>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="card-footer">
+              {{ form.submit(class="btn btn-primary") }}
+              <a href="{{ url_for('case_documents_list', case_id=case_id) }}" class="btn btn-secondary">Cancelar</a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

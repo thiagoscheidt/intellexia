@@ -1,0 +1,98 @@
+{% extends "layout/base.html" %}
+
+{% block title %}{{ title }} - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-sm-6">
+        <h3 class="mb-0">{{ title }}</h3>
+      </div>
+      <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-end">
+          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('lawyers_list') }}">Advogados</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{ title }}</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">{{ title }}</h3>
+          </div>
+          <form method="POST" action="">
+            {{ form.hidden_tag() }}
+            <div class="card-body">
+              <div class="row">
+                <div class="col-md-8">
+                  <div class="mb-3">
+                    {{ form.name.label(class="form-label") }}
+                    {{ form.name(class="form-control" + (" is-invalid" if form.name.errors else "")) }}
+                    {% if form.name.errors %}
+                      <div class="invalid-feedback">
+                        {% for error in form.name.errors %}{{ error }}{% endfor %}
+                      </div>
+                    {% endif %}
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="mb-3">
+                    {{ form.oab_number.label(class="form-label") }}
+                    {{ form.oab_number(class="form-control" + (" is-invalid" if form.oab_number.errors else ""), placeholder="Ex: SC 12345") }}
+                    {% if form.oab_number.errors %}
+                      <div class="invalid-feedback">
+                        {% for error in form.oab_number.errors %}{{ error }}{% endfor %}
+                      </div>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    {{ form.email.label(class="form-label") }}
+                    {{ form.email(class="form-control", type="email") }}
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    {{ form.phone.label(class="form-label") }}
+                    {{ form.phone(class="form-control", placeholder="(00) 00000-0000") }}
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-12">
+                  <div class="mb-3">
+                    <div class="form-check">
+                      {{ form.is_default_for_publications(class="form-check-input") }}
+                      {{ form.is_default_for_publications.label(class="form-check-label") }}
+                      <small class="form-text text-muted d-block">
+                        Este advogado será usado automaticamente para receber publicações do Diário Oficial.
+                      </small>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="card-footer">
+              {{ form.submit(class="btn btn-primary") }}
+              <a href="{{ url_for('lawyers_list') }}" class="btn btn-secondary">Cancelar</a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

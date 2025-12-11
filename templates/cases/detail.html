@@ -1,0 +1,186 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Detalhes do Caso - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-sm-6">
+        <h3 class="mb-0">Detalhes do Caso #{{ case_id }}</h3>
+      </div>
+      <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-end">
+          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases_list') }}">Casos</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Detalhes</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-md-8">
+        <!-- Informações do Caso -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Informações do Caso</h3>
+            <div class="card-tools">
+              <a href="{{ url_for('case_edit', case_id=case_id) }}" class="btn btn-sm btn-primary">
+                <i class="bi bi-pencil"></i> Editar
+              </a>
+            </div>
+          </div>
+          <div class="card-body">
+            <dl class="row">
+              <dt class="col-sm-4">Título:</dt>
+              <dd class="col-sm-8">Caso de exemplo #{{ case_id }}</dd>
+
+              <dt class="col-sm-4">Cliente:</dt>
+              <dd class="col-sm-8">Cliente exemplo</dd>
+
+              <dt class="col-sm-4">Tipo de Caso:</dt>
+              <dd class="col-sm-8"><span class="badge bg-info">FAP - Trajeto</span></dd>
+
+              <dt class="col-sm-4">Status:</dt>
+              <dd class="col-sm-8"><span class="badge bg-success">Ativo</span></dd>
+
+              <dt class="col-sm-4">Valor da Causa:</dt>
+              <dd class="col-sm-8">R$ 0,00</dd>
+
+              <dt class="col-sm-4">Data de Ajuizamento:</dt>
+              <dd class="col-sm-8">-</dd>
+            </dl>
+
+            <hr>
+
+            <h5>Resumo dos Fatos</h5>
+            <p class="text-muted">Nenhum resumo cadastrado ainda.</p>
+
+            <h5>Teses Jurídicas</h5>
+            <p class="text-muted">Nenhuma tese cadastrada ainda.</p>
+
+            <h5>Informações sobre Prescrição</h5>
+            <p class="text-muted">Nenhuma informação cadastrada ainda.</p>
+          </div>
+        </div>
+
+        <!-- Benefícios -->
+        <div class="card mt-3">
+          <div class="card-header">
+            <h3 class="card-title">Benefícios</h3>
+            <div class="card-tools">
+              <button class="btn btn-sm btn-primary" disabled>
+                <i class="bi bi-plus-circle"></i> Adicionar Benefício
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="alert alert-info">
+              <i class="bi bi-info-circle"></i> Nenhum benefício cadastrado ainda.
+            </div>
+          </div>
+        </div>
+
+        <!-- Documentos -->
+        <div class="card mt-3">
+          <div class="card-header">
+            <h3 class="card-title">Documentos</h3>
+            <div class="card-tools">
+              <a href="{{ url_for('case_documents_list', case_id=case_id) }}" class="btn btn-sm btn-info">
+                <i class="bi bi-eye"></i> Ver Todos
+              </a>
+              <a href="{{ url_for('case_document_new', case_id=case_id) }}" class="btn btn-sm btn-primary">
+                <i class="bi bi-upload"></i> Upload Documento
+              </a>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="alert alert-info">
+              <i class="bi bi-info-circle"></i> Nenhum documento anexado ainda.
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-4">
+        <!-- Ações Rápidas -->
+        <div class="card">
+          <div class="card-header bg-primary">
+            <h3 class="card-title text-white">
+              <i class="bi bi-lightning-charge"></i> Ações Rápidas
+            </h3>
+          </div>
+          <div class="card-body">
+            <div class="d-grid gap-2">
+              <a href="{{ url_for('case_documents_list', case_id=case_id) }}" class="btn btn-outline-primary">
+                <i class="bi bi-file-earmark-text"></i> Gerenciar Documentos
+              </a>
+              <a href="{{ url_for('case_document_new', case_id=case_id) }}" class="btn btn-outline-success">
+                <i class="bi bi-upload"></i> Upload Documento
+              </a>
+              <button class="btn btn-outline-secondary" disabled>
+                <i class="bi bi-plus-circle"></i> Adicionar Benefício
+              </button>
+              <button class="btn btn-outline-info" disabled>
+                <i class="bi bi-robot"></i> Gerar Petição com IA
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Advogados -->
+        <div class="card mt-3">
+          <div class="card-header">
+            <h3 class="card-title">Advogados</h3>
+            <div class="card-tools">
+              <button class="btn btn-sm btn-primary" disabled>
+                <i class="bi bi-plus-circle"></i>
+              </button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div class="alert alert-info mb-0">
+              <i class="bi bi-info-circle"></i> Nenhum advogado vinculado ainda.
+            </div>
+          </div>
+        </div>
+
+        <!-- Vara Judicial -->
+        <div class="card mt-3">
+          <div class="card-header">
+            <h3 class="card-title">Vara Judicial</h3>
+          </div>
+          <div class="card-body">
+            <p class="text-muted mb-0">Nenhuma vara selecionada.</p>
+          </div>
+        </div>
+
+        <!-- Estatísticas -->
+        <div class="card mt-3">
+          <div class="card-header">
+            <h3 class="card-title">Estatísticas</h3>
+          </div>
+          <div class="card-body">
+            <div class="row text-center">
+              <div class="col-6">
+                <div class="border-end">
+                  <h4 class="mb-0">0</h4>
+                  <small class="text-muted">Documentos</small>
+                </div>
+              </div>
+              <div class="col-6">
+                <h4 class="mb-0">0</h4>
+                <small class="text-muted">Benefícios</small>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -1,0 +1,140 @@
+{% extends "layout/base.html" %}
+
+{% block title %}{{ title }} - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-sm-6">
+        <h3 class="mb-0">{{ title }}</h3>
+      </div>
+      <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-end">
+          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('benefits_list') }}">Benefícios</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{ title }}</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">{{ title }}</h3>
+          </div>
+          <form method="POST" action="">
+            {{ form.hidden_tag() }}
+            <div class="card-body">
+              <h5 class="mb-3">Informações do Caso</h5>
+              <div class="row">
+                <div class="col-md-12">
+                  <div class="mb-3">
+                    {{ form.case_id.label(class="form-label") }}
+                    {{ form.case_id(class="form-select" + (" is-invalid" if form.case_id.errors else "")) }}
+                    {% if form.case_id.errors %}
+                      <div class="invalid-feedback">
+                        {% for error in form.case_id.errors %}{{ error }}{% endfor %}
+                      </div>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+
+              <h5 class="mt-4 mb-3">Informações do Benefício</h5>
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    {{ form.benefit_number.label(class="form-label") }}
+                    {{ form.benefit_number(class="form-control" + (" is-invalid" if form.benefit_number.errors else "")) }}
+                    {% if form.benefit_number.errors %}
+                      <div class="invalid-feedback">
+                        {% for error in form.benefit_number.errors %}{{ error }}{% endfor %}
+                      </div>
+                    {% endif %}
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    {{ form.benefit_type.label(class="form-label") }}
+                    {{ form.benefit_type(class="form-select" + (" is-invalid" if form.benefit_type.errors else "")) }}
+                    {% if form.benefit_type.errors %}
+                      <div class="invalid-feedback">
+                        {% for error in form.benefit_type.errors %}{{ error }}{% endfor %}
+                      </div>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+
+              <h5 class="mt-4 mb-3">Informações do Segurado</h5>
+              <div class="row">
+                <div class="col-md-8">
+                  <div class="mb-3">
+                    {{ form.insured_name.label(class="form-label") }}
+                    {{ form.insured_name(class="form-control" + (" is-invalid" if form.insured_name.errors else "")) }}
+                    {% if form.insured_name.errors %}
+                      <div class="invalid-feedback">
+                        {% for error in form.insured_name.errors %}{{ error }}{% endfor %}
+                      </div>
+                    {% endif %}
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="mb-3">
+                    {{ form.insured_nit.label(class="form-label") }}
+                    {{ form.insured_nit(class="form-control") }}
+                  </div>
+                </div>
+              </div>
+
+              <h5 class="mt-4 mb-3">Informações do Acidente</h5>
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    {{ form.accident_date.label(class="form-label") }}
+                    {{ form.accident_date(class="form-control", type="date") }}
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    {{ form.accident_company_name.label(class="form-label") }}
+                    {{ form.accident_company_name(class="form-control") }}
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-12">
+                  <div class="mb-3">
+                    {{ form.error_reason.label(class="form-label") }}
+                    {{ form.error_reason(class="form-select") }}
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-12">
+                  <div class="mb-3">
+                    {{ form.notes.label(class="form-label") }}
+                    {{ form.notes(class="form-control", rows="4") }}
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="card-footer">
+              {{ form.submit(class="btn btn-primary") }}
+              <a href="{{ url_for('benefits_list') }}" class="btn btn-secondary">Cancelar</a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

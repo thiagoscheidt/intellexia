@@ -1,0 +1,101 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Lista de Clientes - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-sm-6">
+        <h3 class="mb-0">Clientes</h3>
+      </div>
+      <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-end">
+          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Clientes</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Lista de Clientes</h3>
+            <div class="card-tools">
+              <a href="{{ url_for('client_new') }}" class="btn btn-primary btn-sm">
+                <i class="bi bi-plus-circle"></i> Novo Cliente
+              </a>
+            </div>
+          </div>
+          <div class="card-body">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                {% for category, message in messages %}
+                  <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                  </div>
+                {% endfor %}
+              {% endif %}
+            {% endwith %}
+
+            {% if clients %}
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Razão Social</th>
+                    <th>CNPJ</th>
+                    <th>Cidade/UF</th>
+                    <th>Filiais</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for client in clients %}
+                  <tr>
+                    <td>{{ client.id }}</td>
+                    <td>{{ client.name }}</td>
+                    <td>{{ client.cnpj }}</td>
+                    <td>{{ client.city }}/{{ client.state }}</td>
+                    <td>
+                      {% if client.has_branches %}
+                        <span class="badge bg-success">Sim</span>
+                      {% else %}
+                        <span class="badge bg-secondary">Não</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      <a href="{{ url_for('client_edit', client_id=client.id) }}" class="btn btn-sm btn-warning" title="Editar">
+                        <i class="bi bi-pencil"></i>
+                      </a>
+                      <form action="{{ url_for('client_delete', client_id=client.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Tem certeza que deseja excluir este cliente?');">
+                        <button type="submit" class="btn btn-sm btn-danger" title="Excluir">
+                          <i class="bi bi-trash"></i>
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+              <i class="bi bi-info-circle"></i> Nenhum cliente cadastrado ainda. 
+              <a href="{{ url_for('client_new') }}">Cadastre o primeiro cliente</a>.
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
