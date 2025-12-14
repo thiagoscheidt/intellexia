@@ -10,7 +10,141 @@ O **IntellexIA** é uma plataforma desenvolvida para escritórios de advocacia e
 
 Auxiliar advogados na contestação de benefícios B91 (Auxílio-Acidente) e B94 (Auxílio-Doença Acidentário) que foram concedidos indevidamente pelo INSS, reduzindo assim o FAP das empresas clientes e diminuindo seus custos previdenciários.
 
-## 🚀 Funcionalidades
+## � Tecnologias
+
+- **Backend**: Flask + SQLAlchemy
+- **Banco de Dados**: SQLite (dev) / MySQL (prod)
+- **Gerenciador de Dependências**: uv
+- **Python**: 3.13+
+
+## 🚀 Instalação e Configuração
+
+### Pré-requisitos
+- Python 3.13+
+- uv (gerenciador de dependências)
+- MySQL 8.0+ (apenas para produção)
+
+### 1. Clonar o repositório
+```bash
+git clone <repository-url>
+cd intellexia
+```
+
+### 2. Instalar dependências
+```bash
+# Desenvolvimento (SQLite)
+uv sync
+
+# Produção (adicionar suporte MySQL)
+uv sync --extra production
+```
+
+### 3. Configurar ambiente
+```bash
+# Copiar arquivo de configuração
+cp .env.example .env
+
+# Editar configurações conforme necessário
+# Por padrão usa SQLite em desenvolvimento
+```
+
+### 4. Executar aplicação
+```bash
+uv run python main.py
+```
+(As tabelas serão criadas automaticamente na primeira execução)
+
+## 📁 Estrutura do Banco de Dados
+
+O sistema utiliza SQLAlchemy com os seguintes models:
+
+### 🏢 Client (Clientes)
+- Dados das empresas autoras dos processos
+- CNPJ, endereço e informações de filiais
+- Relacionamento 1:N com casos
+
+### ⚖️ Case (Casos)
+- Processos judiciais principais
+- Tipos: FAP Trajeto, FAP Outros, etc.
+- Status, valores e datas importantes
+- Relacionamentos com clientes, varas e advogados
+
+### 🏛️ Court (Varas)
+- Varas judiciais onde os processos tramitam
+- Seção judiciária, cidade e estado
+
+### 👨‍⚖️ Lawyer (Advogados)
+- Advogados responsáveis pelos casos
+- OAB, contatos e função (publicações, responsável, etc.)
+
+### 🎯 CaseBenefit (Benefícios)
+- Benefícios B91/B94 contestados
+- Dados do segurado e do acidente
+- Relacionados aos casos
+
+### 📄 Document (Documentos)
+- CATs, laudos médicos, relatórios
+- Controle de upload e uso em IA
+- Relacionados aos casos e benefícios
+
+### 📅 CaseCompetence (Competências)
+- Períodos de competência dos casos
+- Status: válido ou prescrito
+
+## ⚙️ Configuração de Ambiente
+
+O sistema utiliza um arquivo `.env` para configurar o ambiente:
+
+```bash
+# development = SQLite (padrão)
+# production = MySQL
+ENVIRONMENT=development
+
+# Configurações MySQL (apenas para produção)
+MYSQL_HOST=localhost
+MYSQL_USER=root
+MYSQL_PASSWORD=sua_senha
+MYSQL_DATABASE=intellexia
+```
+
+### 🗄️ Bancos de Dados por Ambiente:
+
+- **Desenvolvimento**: SQLite (`instance/intellexia.db`) - Zero configuração
+- **Produção**: MySQL - Requer configuração das variáveis
+
+## 💻 Uso dos Models
+
+### Exemplo básico
+```python
+from app.models import db, Client, Case, Lawyer
+
+# Criar cliente
+client = Client(
+    name="Exemplo Empresa Ltda",
+    cnpj="12.345.678/0001-90",
+    city="São Paulo",
+    state="SP"
+)
+db.session.add(client)
+db.session.commit()
+
+# Consultar casos de um cliente
+cases = Case.query.filter_by(client_id=client.id).all()
+```
+
+### Exemplo de uso
+```python
+from app.models import db, Client, Case
+from main import app
+
+with app.app_context():
+    # Criar cliente
+    client = Client(name="Empresa Teste", cnpj="12.345.678/0001-90")
+    db.session.add(client)
+    db.session.commit()
+```
+
+## �🚀 Funcionalidades
 
 ### 📁 Gestão de Clientes
 - Cadastro de empresas (Pessoas Jurídicas)
