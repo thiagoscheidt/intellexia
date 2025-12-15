@@ -174,7 +174,7 @@ class CaseBenefitForm(FlaskForm):
 class DocumentForm(FlaskForm):
     # case_id virá da URL, não precisa estar no formulário
     related_benefit_id = SelectField('Benefício Relacionado (Opcional)', coerce=int, validators=[Optional()])
-    document_file = FileField(
+    file = FileField(
         'Selecione o Arquivo',
         validators=[DataRequired(), FileAllowed(['pdf', 'doc', 'docx', 'jpg', 'jpeg', 'png'], 'Apenas documentos e imagens!')]
     )

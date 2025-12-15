@@ -8,7 +8,7 @@ class Client(db.Model):
     """Tabela clients - Empresas autoras dos casos"""
     __tablename__ = 'clients'
     
-    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)  # Razão social
     cnpj = db.Column(db.String(20), nullable=False, index=True)
     street = db.Column(db.String(255))
@@ -33,7 +33,7 @@ class Court(db.Model):
     """Tabela courts - Varas judiciais"""
     __tablename__ = 'courts'
     
-    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    id = db.Column(db.Integer, primary_key=True)
     section = db.Column(db.String(255))  # Seção judiciária
     vara_name = db.Column(db.String(255))  # Nome da vara
     city = db.Column(db.String(150))
@@ -52,7 +52,7 @@ class Lawyer(db.Model):
     """Tabela lawyers - Advogados"""
     __tablename__ = 'lawyers'
     
-    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(255), nullable=False)
     oab_number = db.Column(db.String(50), nullable=False, unique=True)
     email = db.Column(db.String(255))
@@ -72,9 +72,9 @@ class Case(db.Model):
     """Tabela cases - Casos jurídicos"""
     __tablename__ = 'cases'
     
-    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
-    client_id = db.Column(db.BigInteger, db.ForeignKey('clients.id'), nullable=False, index=True)
-    court_id = db.Column(db.BigInteger, db.ForeignKey('courts.id'), index=True)
+    id = db.Column(db.Integer, primary_key=True)
+    client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), nullable=False, index=True)
+    court_id = db.Column(db.Integer, db.ForeignKey('courts.id'), index=True)
     title = db.Column(db.String(255), nullable=False)
     case_type = db.Column(db.String(50), nullable=False)
     fap_start_year = db.Column(db.SmallInteger)
@@ -104,9 +104,9 @@ class CaseLawyer(db.Model):
     """Tabela case_lawyers - Relacionamento entre casos e advogados"""
     __tablename__ = 'case_lawyers'
     
-    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
-    case_id = db.Column(db.BigInteger, db.ForeignKey('cases.id'), nullable=False, index=True)
-    lawyer_id = db.Column(db.BigInteger, db.ForeignKey('lawyers.id'), nullable=False, index=True)
+    id = db.Column(db.Integer, primary_key=True)
+    case_id = db.Column(db.Integer, db.ForeignKey('cases.id'), nullable=False, index=True)
+    lawyer_id = db.Column(db.Integer, db.ForeignKey('lawyers.id'), nullable=False, index=True)
     role = db.Column(db.String(50))  # Função do advogado no caso
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -123,7 +123,7 @@ class CaseCompetence(db.Model):
     """Tabela case_competences - Competências dos casos"""
     __tablename__ = 'case_competences'
     
-    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    id = db.Column(db.Integer, primary_key=True)
     case_id = db.Column(db.BigInteger, db.ForeignKey('cases.id'), nullable=False, index=True)
     competence_month = db.Column(db.SmallInteger, nullable=False)  # 1 a 12
     competence_year = db.Column(db.SmallInteger, nullable=False)
@@ -142,7 +142,7 @@ class CaseBenefit(db.Model):
     """Tabela case_benefits - Benefícios relacionados aos casos"""
     __tablename__ = 'case_benefits'
     
-    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
+    id = db.Column(db.Integer, primary_key=True)
     case_id = db.Column(db.BigInteger, db.ForeignKey('cases.id'), nullable=False, index=True)
     benefit_number = db.Column(db.String(50), nullable=False, index=True)
     benefit_type = db.Column(db.String(10), nullable=False)  # B91, B94, etc.
@@ -167,15 +167,15 @@ class Document(db.Model):
     """Tabela documents - Documentos dos casos"""
     __tablename__ = 'documents'
     
-    id = db.Column(db.BigInteger, primary_key=True, autoincrement=True)
-    case_id = db.Column(db.BigInteger, db.ForeignKey('cases.id'), nullable=False, index=True)
-    related_benefit_id = db.Column(db.BigInteger, db.ForeignKey('case_benefits.id'), index=True)
+    id = db.Column(db.Integer, primary_key=True)
+    case_id = db.Column(db.Integer, db.ForeignKey('cases.id'), nullable=False, index=True)
+    related_benefit_id = db.Column(db.Integer, db.ForeignKey('case_benefits.id'), index=True)
     original_filename = db.Column(db.String(255), nullable=False)
     file_path = db.Column(db.String(500), nullable=False)
     document_type = db.Column(db.String(50), nullable=False)
     description = db.Column(db.Text)
     use_in_ai = db.Column(db.Boolean, default=True)
-    uploaded_by_user_id = db.Column(db.BigInteger)  # FK de usuário (futuro)
+    uploaded_by_user_id = db.Column(db.Integer)  # FK de usuário (futuro)
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
     
     # Relacionamentos
