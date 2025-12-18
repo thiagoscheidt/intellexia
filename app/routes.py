@@ -293,6 +293,9 @@ def case_edit(case_id):
         except Exception as e:
             db.session.rollback()
             flash(f'Erro ao atualizar caso: {str(e)}', 'danger')
+        
+    return render_template('cases/form.html', form=form, title='Editar Caso', case_id=case_id)
+
 @app.route('/cases/<int:case_id>/delete', methods=['POST'])
 def case_delete(case_id):
     case = Case.query.get_or_404(case_id)
@@ -310,10 +313,10 @@ def case_delete(case_id):
 @app.route('/cases/<int:case_id>')
 def case_detail(case_id):
     case = Case.query.get_or_404(case_id)
-    benefits = CaseBenefit.query.filter_by(case_id=case_id).all()
-    documents = Document.query.filter_by(case_id=case_id).all()
+    benefits = CaseBenefit.query.filter_by(case_id=case_id).order_by(CaseBenefit.created_at.desc()).all()
+    documents = Document.query.filter_by(case_id=case_id).order_by(Document.uploaded_at.desc()).all()
     competences = CaseCompetence.query.filter_by(case_id=case_id).all()
-    return render_template('cases/detail.html', case=case, benefits=benefits, documents=documents, competences=competences)
+    return render_template('cases/detail.html', case=case, case_id=case_id, benefits=benefits, documents=documents, competences=competences)
 
 # ========================
 # Rotas de Documentos do Caso
@@ -322,7 +325,7 @@ def case_detail(case_id):
 def case_documents_list(case_id):
     case = Case.query.get_or_404(case_id)
     documents = Document.query.filter_by(case_id=case_id).order_by(Document.uploaded_at.desc()).all()
-    return render_template('cases/documents_list.html', case=case, documents=documents)
+    return render_template('cases/documents_list.html', case=case, case_id=case_id, documents=documents)
 
 @app.route('/cases/<int:case_id>/documents/new', methods=['GET', 'POST'])
 def case_document_new(case_id):
@@ -366,7 +369,7 @@ def case_document_new(case_id):
         else:
             flash('Nenhum arquivo foi selecionado.', 'warning')
     
-    return render_template('cases/document_form.html', form=form, case=case, title='Upload Documento')
+    return render_template('cases/document_form.html', form=form, case=case, case_id=case_id, title='Upload Documento')
 
 @app.route('/cases/<int:case_id>/documents/<int:document_id>/delete', methods=['POST'])
 def case_document_delete(case_id, document_id):
@@ -481,25 +484,23 @@ def court_new():
     return render_template('courts/form.html', form=form, title='Nova Vara')
 
 # ========================
-# Rotas de Benefícios
+# Rotas de Benefícios do Caso
 # ========================
-@app.route('/benefits')
-def benefits_list():
-    benefits = CaseBenefit.query.join(Case).join(Client).order_by(CaseBenefit.created_at.desc()).all()
-    return render_template('benefits/list.html', benefits=benefits)
+@app.route('/cases/<int:case_id>/benefits')
+def case_benefits_list(case_id):
+    case = Case.query.get_or_404(case_id)
+    benefits = CaseBenefit.query.filter_by(case_id=case_id).order_by(CaseBenefit.created_at.desc()).all()
+    return render_template('cases/benefits_list.html', case=case, benefits=benefits)
 
-@app.route('/benefits/new', methods=['GET', 'POST'])
-def benefit_new():
-    from app.form import CaseBenefitForm
-    form = CaseBenefitForm()
-    
-    # Carregar opções de casos
-    cases = Case.query.join(Client).order_by(Case.title).all()
-    form.case_id.choices = [(0, 'Selecione um caso')] + [(c.id, f"{c.title} - {c.client.name}") for c in cases]
+@app.route('/cases/<int:case_id>/benefits/new', methods=['GET', 'POST'])
+def case_benefit_new(case_id):
+    from app.form import CaseBenefitContextForm
+    case = Case.query.get_or_404(case_id)
+    form = CaseBenefitContextForm()
     
     if form.validate_on_submit():
         benefit = CaseBenefit(
-            case_id=form.case_id.data,
+            case_id=case_id,  # Usar o case_id da URL
             benefit_number=form.benefit_number.data,
             benefit_type=form.benefit_type.data,
             insured_name=form.insured_name.data,
@@ -514,12 +515,12 @@ def benefit_new():
         try:
             db.session.commit()
             flash('Benefício cadastrado com sucesso!', 'success')
-            return redirect(url_for('benefits_list'))
+            return redirect(url_for('case_benefits_list', case_id=case_id))
         except Exception as e:
             db.session.rollback()
             flash(f'Erro ao cadastrar benefício: {str(e)}', 'danger')
     
-    return render_template('benefits/form.html', form=form, title='Novo Benefício')
+    return render_template('cases/benefit_form.html', form=form, case=case, title='Novo Benefício')
 
 # Rotas adicionais que faltaram
 
@@ -584,18 +585,20 @@ def court_delete(court_id):
     
     return redirect(url_for('courts_list'))
 
-@app.route('/benefits/<int:benefit_id>/edit', methods=['GET', 'POST'])
-def benefit_edit(benefit_id):
-    from app.form import CaseBenefitForm
+@app.route('/cases/<int:case_id>/benefits/<int:benefit_id>/edit', methods=['GET', 'POST'])
+def case_benefit_edit(case_id, benefit_id):
+    from app.form import CaseBenefitContextForm
+    case = Case.query.get_or_404(case_id)
     benefit = CaseBenefit.query.get_or_404(benefit_id)
-    form = CaseBenefitForm(obj=benefit)
     
-    # Carregar opções de casos
-    cases = Case.query.join(Client).order_by(Case.title).all()
-    form.case_id.choices = [(0, 'Selecione um caso')] + [(c.id, f"{c.title} - {c.client.name}") for c in cases]
+    # Verificar se o benefício pertence ao caso
+    if benefit.case_id != case_id:
+        flash('Benefício não encontrado neste caso.', 'error')
+        return redirect(url_for('case_benefits_list', case_id=case_id))
+    
+    form = CaseBenefitContextForm(obj=benefit)
     
     if form.validate_on_submit():
-        benefit.case_id = form.case_id.data
         benefit.benefit_number = form.benefit_number.data
         benefit.benefit_type = form.benefit_type.data
         benefit.insured_name = form.insured_name.data
@@ -609,16 +612,22 @@ def benefit_edit(benefit_id):
         try:
             db.session.commit()
             flash('Benefício atualizado com sucesso!', 'success')
-            return redirect(url_for('benefits_list'))
+            return redirect(url_for('case_benefits_list', case_id=case_id))
         except Exception as e:
             db.session.rollback()
             flash(f'Erro ao atualizar benefício: {str(e)}', 'danger')
     
-    return render_template('benefits/form.html', form=form, title='Editar Benefício', benefit_id=benefit_id)
+    return render_template('cases/benefit_form.html', form=form, case=case, title='Editar Benefício', benefit_id=benefit_id)
 
-@app.route('/benefits/<int:benefit_id>/delete', methods=['POST'])
-def benefit_delete(benefit_id):
+@app.route('/cases/<int:case_id>/benefits/<int:benefit_id>/delete', methods=['POST'])
+def case_benefit_delete(case_id, benefit_id):
+    case = Case.query.get_or_404(case_id)
     benefit = CaseBenefit.query.get_or_404(benefit_id)
+    
+    # Verificar se o benefício pertence ao caso
+    if benefit.case_id != case_id:
+        flash('Benefício não encontrado neste caso.', 'error')
+        return redirect(url_for('case_benefits_list', case_id=case_id))
     
     try:
         db.session.delete(benefit)
@@ -628,5 +637,14 @@ def benefit_delete(benefit_id):
         db.session.rollback()
         flash(f'Erro ao excluir benefício: {str(e)}', 'danger')
     
-    return redirect(url_for('benefits_list'))
+    return redirect(url_for('case_benefits_list', case_id=case_id))
+
+# ========================
+# Rota global de benefícios (apenas visualização)
+# ========================
+@app.route('/benefits')
+def benefits_list():
+    """Lista todos os benefícios do sistema para visualização geral"""
+    benefits = CaseBenefit.query.join(Case).join(Client).order_by(CaseBenefit.created_at.desc()).all()
+    return render_template('benefits/list.html', benefits=benefits)
 

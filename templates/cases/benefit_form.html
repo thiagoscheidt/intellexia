@@ -1,0 +1,234 @@
+{% extends "layout/base.html" %}
+
+{% block title %}{{ title }} - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-sm-6">
+        <h3 class="mb-0">{{ title }}</h3>
+      </div>
+      <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-end">
+          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases_list') }}">Casos</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('case_detail', case_id=case.id) }}">{{ case.title }}</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('case_benefits_list', case_id=case.id) }}">Benefícios</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{ title }}</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-12">
+        <!-- Informações do Caso -->
+        <div class="card mb-3">
+          <div class="card-header">
+            <h5 class="card-title mb-0">Informações do Caso</h5>
+          </div>
+          <div class="card-body">
+            <div class="row">
+              <div class="col-md-6">
+                <strong>Título:</strong> {{ case.title }}<br>
+                <strong>Cliente:</strong> {{ case.client.name if case.client else 'Não informado' }}
+              </div>
+              <div class="col-md-6">
+                <strong>Tipo:</strong> {{ case.case_type or 'Não informado' }}<br>
+                <strong>Status:</strong> 
+                <span class="badge bg-{{ 'success' if case.status == 'ativo' else 'secondary' }}">
+                  {{ case.status or 'Não informado' }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Formulário de Benefício -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">{{ title }}</h3>
+            <div class="card-tools">
+              <a href="{{ url_for('case_benefits_list', case_id=case.id) }}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Voltar para Lista
+              </a>
+            </div>
+          </div>
+          <form method="POST" action="">
+            {{ form.hidden_tag() }}
+            <div class="card-body">
+              {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                  {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                      {{ message }}
+                      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                  {% endfor %}
+                {% endif %}
+              {% endwith %}
+
+              <h5 class="mb-3">Informações do Benefício</h5>
+              
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    {{ form.benefit_number.label(class="form-label") }} <span class="text-danger">*</span>
+                    {{ form.benefit_number(class="form-control" + (" is-invalid" if form.benefit_number.errors else "")) }}
+                    {% if form.benefit_number.errors %}
+                      <div class="invalid-feedback">
+                        {% for error in form.benefit_number.errors %}{{ error }}{% endfor %}
+                      </div>
+                    {% endif %}
+                    <div class="form-text">Número do benefício no INSS (ex: 123456789)</div>
+                  </div>
+                </div>
+                
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    {{ form.benefit_type.label(class="form-label") }} <span class="text-danger">*</span>
+                    {{ form.benefit_type(class="form-select" + (" is-invalid" if form.benefit_type.errors else "")) }}
+                    {% if form.benefit_type.errors %}
+                      <div class="invalid-feedback">
+                        {% for error in form.benefit_type.errors %}{{ error }}{% endfor %}
+                      </div>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+
+              <h5 class="mt-4 mb-3">Dados do Segurado</h5>
+              
+              <div class="row">
+                <div class="col-md-8">
+                  <div class="mb-3">
+                    {{ form.insured_name.label(class="form-label") }} <span class="text-danger">*</span>
+                    {{ form.insured_name(class="form-control" + (" is-invalid" if form.insured_name.errors else "")) }}
+                    {% if form.insured_name.errors %}
+                      <div class="invalid-feedback">
+                        {% for error in form.insured_name.errors %}{{ error }}{% endfor %}
+                      </div>
+                    {% endif %}
+                  </div>
+                </div>
+                
+                <div class="col-md-4">
+                  <div class="mb-3">
+                    {{ form.insured_nit.label(class="form-label") }}
+                    {{ form.insured_nit(class="form-control" + (" is-invalid" if form.insured_nit.errors else "")) }}
+                    {% if form.insured_nit.errors %}
+                      <div class="invalid-feedback">
+                        {% for error in form.insured_nit.errors %}{{ error }}{% endfor %}
+                      </div>
+                    {% endif %}
+                    <div class="form-text">NIT/PIS/PASEP do segurado</div>
+                  </div>
+                </div>
+              </div>
+
+              <h5 class="mt-4 mb-3">Informações do Acidente</h5>
+              
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    {{ form.accident_date.label(class="form-label") }}
+                    {{ form.accident_date(class="form-control" + (" is-invalid" if form.accident_date.errors else "")) }}
+                    {% if form.accident_date.errors %}
+                      <div class="invalid-feedback">
+                        {% for error in form.accident_date.errors %}{{ error }}{% endfor %}
+                      </div>
+                    {% endif %}
+                  </div>
+                </div>
+                
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    {{ form.accident_company_name.label(class="form-label") }}
+                    {{ form.accident_company_name(class="form-control" + (" is-invalid" if form.accident_company_name.errors else "")) }}
+                    {% if form.accident_company_name.errors %}
+                      <div class="invalid-feedback">
+                        {% for error in form.accident_company_name.errors %}{{ error }}{% endfor %}
+                      </div>
+                    {% endif %}
+                    <div class="form-text">Nome da empresa onde ocorreu o acidente</div>
+                  </div>
+                </div>
+              </div>
+
+              <h5 class="mt-4 mb-3">Detalhes Adicionais</h5>
+              
+              <div class="row">
+                <div class="col-md-12">
+                  <div class="mb-3">
+                    {{ form.error_reason.label(class="form-label") }}
+                    {{ form.error_reason(class="form-control" + (" is-invalid" if form.error_reason.errors else ""), rows="3") }}
+                    {% if form.error_reason.errors %}
+                      <div class="invalid-feedback">
+                        {% for error in form.error_reason.errors %}{{ error }}{% endfor %}
+                      </div>
+                    {% endif %}
+                    <div class="form-text">Descreva o motivo do erro ou problema identificado no benefício</div>
+                  </div>
+                </div>
+              </div>
+              
+              <div class="row">
+                <div class="col-md-12">
+                  <div class="mb-3">
+                    {{ form.notes.label(class="form-label") }}
+                    {{ form.notes(class="form-control" + (" is-invalid" if form.notes.errors else ""), rows="4") }}
+                    {% if form.notes.errors %}
+                      <div class="invalid-feedback">
+                        {% for error in form.notes.errors %}{{ error }}{% endfor %}
+                      </div>
+                    {% endif %}
+                    <div class="form-text">Observações gerais sobre o benefício</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div class="card-footer">
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-check-circle"></i>
+                {% if benefit_id %}Atualizar Benefício{% else %}Cadastrar Benefício{% endif %}
+              </button>
+              <a href="{{ url_for('case_benefits_list', case_id=case.id) }}" class="btn btn-secondary ms-2">
+                <i class="bi bi-x-circle"></i> Cancelar
+              </a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// Máscara para o NIT
+document.querySelector('[name="insured_nit"]').addEventListener('input', function(e) {
+    let value = e.target.value.replace(/\D/g, '');
+    if (value.length <= 11) {
+        value = value.replace(/(\d{3})(\d{5})(\d{2})/, '$1.$2.$3-$4');
+        e.target.value = value;
+    }
+});
+
+// Validação do formulário
+document.querySelector('form').addEventListener('submit', function(e) {
+    let benefitNumber = document.querySelector('[name="benefit_number"]').value;
+    let benefitType = document.querySelector('[name="benefit_type"]').value;
+    let insuredName = document.querySelector('[name="insured_name"]').value;
+    
+    if (!benefitNumber || !benefitType || !insuredName) {
+        e.preventDefault();
+        alert('Por favor, preencha todos os campos obrigatórios (marcados com *).');
+        return false;
+    }
+});
+</script>
+{% endblock %}

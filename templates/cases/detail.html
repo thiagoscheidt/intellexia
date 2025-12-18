@@ -7,7 +7,7 @@
   <div class="container-fluid">
     <div class="row">
       <div class="col-sm-6">
-        <h3 class="mb-0">Detalhes do Caso #{{ case_id }}</h3>
+        <h3 class="mb-0">Detalhes do Caso #{{ case.id }}</h3>
       </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
@@ -37,7 +37,7 @@
           <div class="card-body">
             <dl class="row">
               <dt class="col-sm-4">Título:</dt>
-              <dd class="col-sm-8">Caso de exemplo #{{ case_id }}</dd>
+              <dd class="col-sm-8">{{ case.title }}</dd>
 
               <dt class="col-sm-4">Cliente:</dt>
               <dd class="col-sm-8">Cliente exemplo</dd>
@@ -73,15 +73,53 @@
           <div class="card-header">
             <h3 class="card-title">Benefícios</h3>
             <div class="card-tools">
-              <button class="btn btn-sm btn-primary" disabled>
+              <a href="{{ url_for('case_benefits_list', case_id=case_id) }}" class="btn btn-sm btn-info">
+                <i class="bi bi-eye"></i> Ver Todos
+              </a>
+              <a href="{{ url_for('case_benefit_new', case_id=case_id) }}" class="btn btn-sm btn-primary">
                 <i class="bi bi-plus-circle"></i> Adicionar Benefício
-              </button>
+              </a>
             </div>
           </div>
           <div class="card-body">
-            <div class="alert alert-info">
-              <i class="bi bi-info-circle"></i> Nenhum benefício cadastrado ainda.
-            </div>
+            {% if benefits %}
+              <div class="table-responsive">
+                <table class="table table-sm">
+                  <thead>
+                    <tr>
+                      <th>NB</th>
+                      <th>Tipo</th>
+                      <th>Segurado</th>
+                      <th>Data Acidente</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for benefit in benefits[:3] %}
+                    <tr>
+                      <td>{{ benefit.benefit_number }}</td>
+                      <td>{{ benefit.benefit_type }}</td>
+                      <td>{{ benefit.insured_name }}</td>
+                      <td>{{ benefit.accident_date.strftime('%d/%m/%Y') if benefit.accident_date else '-' }}</td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+              {% if benefits|length > 3 %}
+              <div class="text-center">
+                <a href="{{ url_for('case_benefits_list', case_id=case_id) }}" class="btn btn-outline-primary">
+                  <i class="bi bi-eye"></i> Ver todos os {{ benefits|length }} benefícios
+                </a>
+              </div>
+              {% endif %}
+            {% else %}
+              <div class="alert alert-info mb-0">
+                <i class="bi bi-info-circle"></i> Nenhum benefício cadastrado ainda.
+                <a href="{{ url_for('case_benefit_new', case_id=case_id) }}" class="btn btn-outline-success btn-sm ms-2">
+                  <i class="bi bi-plus-circle"></i> Adicionar primeiro benefício
+                </a>
+              </div>
+            {% endif %}
           </div>
         </div>
 

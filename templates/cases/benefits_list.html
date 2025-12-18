@@ -1,0 +1,168 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Benefícios do Caso - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-sm-6">
+        <h3 class="mb-0">Benefícios do Caso</h3>
+      </div>
+      <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-end">
+          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases_list') }}">Casos</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('case_detail', case_id=case.id) }}">{{ case.title }}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Benefícios</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-12">
+        <!-- Informações do Caso -->
+        <div class="card mb-3">
+          <div class="card-header">
+            <h5 class="card-title mb-0">Informações do Caso</h5>
+          </div>
+          <div class="card-body">
+            <div class="row">
+              <div class="col-md-6">
+                <strong>Título:</strong> {{ case.title }}<br>
+                <strong>Cliente:</strong> {{ case.client.name if case.client else 'Não informado' }}
+              </div>
+              <div class="col-md-6">
+                <strong>Tipo:</strong> {{ case.case_type or 'Não informado' }}<br>
+                <strong>Status:</strong> 
+                <span class="badge bg-{{ 'success' if case.status == 'ativo' else 'secondary' }}">
+                  {{ case.status or 'Não informado' }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Lista de Benefícios -->
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title">Benefícios do Caso</h3>
+            <div class="card-tools">
+              <a href="{{ url_for('case_benefit_new', case_id=case.id) }}" class="btn btn-primary">
+                <i class="bi bi-plus-circle"></i> Novo Benefício
+              </a>
+            </div>
+          </div>
+          <div class="card-body">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                {% for category, message in messages %}
+                  <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                  </div>
+                {% endfor %}
+              {% endif %}
+            {% endwith %}
+
+            {% if benefits %}
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Número Benefício</th>
+                    <th>Tipo</th>
+                    <th>Segurado</th>
+                    <th>NIT</th>
+                    <th>Data Acidente</th>
+                    <th>Empresa do Acidente</th>
+                    <th>Criado em</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for benefit in benefits %}
+                  <tr>
+                    <td>{{ benefit.id }}</td>
+                    <td>{{ benefit.benefit_number }}</td>
+                    <td>
+                      {% if benefit.benefit_type == 'B91' %}
+                        <span class="badge bg-info">B91 - Auxílio-Acidente</span>
+                      {% elif benefit.benefit_type == 'B94' %}
+                        <span class="badge bg-warning">B94 - Auxílio-Acidente</span>
+                      {% else %}
+                        <span class="badge bg-secondary">{{ benefit.benefit_type }}</span>
+                      {% endif %}
+                    </td>
+                    <td>{{ benefit.insured_name }}</td>
+                    <td>{{ benefit.insured_nit or '-' }}</td>
+                    <td>{{ benefit.accident_date.strftime('%d/%m/%Y') if benefit.accident_date else '-' }}</td>
+                    <td>{{ benefit.accident_company_name or '-' }}</td>
+                    <td>{{ benefit.created_at.strftime('%d/%m/%Y') if benefit.created_at else '-' }}</td>
+                    <td>
+                      <div class="btn-group" role="group">
+                        <a href="{{ url_for('case_benefit_edit', case_id=case.id, benefit_id=benefit.id) }}" 
+                           class="btn btn-sm btn-warning" title="Editar">
+                          <i class="bi bi-pencil"></i>
+                        </a>
+                        <button type="button" class="btn btn-sm btn-danger" 
+                                onclick="confirmDelete({{ benefit.id }}, '{{ benefit.benefit_number }}')" title="Excluir">
+                          <i class="bi bi-trash"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+              <i class="bi bi-info-circle"></i> Nenhum benefício cadastrado neste caso ainda.
+              <a href="{{ url_for('case_benefit_new', case_id=case.id) }}" class="btn btn-outline-primary btn-sm ms-2">
+                <i class="bi bi-plus-circle"></i> Cadastrar primeiro benefício
+              </a>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal de Confirmação de Exclusão -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Confirmar Exclusão</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p>Tem certeza que deseja excluir o benefício <strong id="benefitNumber"></strong>?</p>
+        <p class="text-danger">Esta ação não pode ser desfeita.</p>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <form id="deleteForm" method="POST" style="display: inline;">
+          <button type="submit" class="btn btn-danger">Excluir</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function confirmDelete(benefitId, benefitNumber) {
+  document.getElementById('benefitNumber').textContent = benefitNumber;
+  document.getElementById('deleteForm').action = `{{ url_for('case_benefit_delete', case_id=case.id, benefit_id=0) }}`.replace('0', benefitId);
+  new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+</script>
+{% endblock %}

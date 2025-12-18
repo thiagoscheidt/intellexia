@@ -133,10 +133,46 @@ class CaseCompetenceForm(FlaskForm):
 
 
 # ========================
-# Formulário: Case Benefits (Benefícios)
+# Formulário: Case Benefits (Benefícios) - Versão Global
 # ========================
 class CaseBenefitForm(FlaskForm):
     case_id = SelectField('Caso', coerce=int, validators=[DataRequired()])
+    benefit_number = StringField('Número do Benefício', validators=[DataRequired(), Length(max=50)])
+    benefit_type = SelectField(
+        'Tipo de Benefício',
+        choices=[
+            ('B91', 'B91 - Auxílio-Acidente'),
+            ('B94', 'B94 - Auxílio-Doença por Acidente de Trabalho'),
+            ('outros', 'Outros')
+        ],
+        validators=[DataRequired()]
+    )
+    insured_name = StringField('Nome do Segurado', validators=[DataRequired(), Length(max=255)])
+    insured_nit = StringField('NIT/PIS do Segurado', validators=[Optional(), Length(max=50)])
+    accident_date = DateField('Data do Acidente', format='%Y-%m-%d', validators=[Optional()])
+    accident_company_name = StringField(
+        'Empresa onde ocorreu o Acidente',
+        validators=[Optional(), Length(max=255)]
+    )
+    error_reason = SelectField(
+        'Motivo da Contestação',
+        choices=[
+            ('nexo_causal', 'Ausência de Nexo Causal'),
+            ('trajeto', 'Acidente de Trajeto'),
+            ('fora_empresa', 'Acidente Fora da Empresa'),
+            ('outros', 'Outros')
+        ],
+        validators=[Optional()]
+    )
+    notes = TextAreaField('Observações Adicionais', validators=[Optional()])
+    submit = SubmitField('Salvar Benefício')
+
+
+# ========================
+# Formulário: Case Benefits (Benefícios) - Versão Contextual (dentro do caso)
+# ========================
+class CaseBenefitContextForm(FlaskForm):
+    # Não inclui case_id pois será definido automaticamente pela URL
     benefit_number = StringField('Número do Benefício', validators=[DataRequired(), Length(max=50)])
     benefit_type = SelectField(
         'Tipo de Benefício',

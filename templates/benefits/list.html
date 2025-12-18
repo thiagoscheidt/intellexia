@@ -25,11 +25,9 @@
       <div class="col-12">
         <div class="card">
           <div class="card-header">
-            <h3 class="card-title">Lista de Benefícios</h3>
+            <h3 class="card-title">Todos os Benefícios do Sistema</h3>
             <div class="card-tools">
-              <a href="{{ url_for('benefit_new') }}" class="btn btn-primary btn-sm">
-                <i class="bi bi-plus-circle"></i> Novo Benefício
-              </a>
+              <small class="text-muted">Para criar benefícios, acesse a página do caso específico</small>
             </div>
           </div>
           <div class="card-body">
@@ -91,7 +89,7 @@
             {% else %}
             <div class="alert alert-info">
               <i class="bi bi-info-circle"></i> Nenhum benefício cadastrado ainda. 
-              <a href="{{ url_for('benefit_new') }}">Cadastre o primeiro benefício</a>.
+              Para cadastrar benefícios, acesse a página do caso desejado e use a aba "Benefícios".
             </div>
             {% endif %}
           </div>
