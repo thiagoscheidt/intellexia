@@ -30,19 +30,19 @@
         data-accordion="false"
         id="navigation"
       >
-        <li class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('index') else '' }}">
-          <a href="#" class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('index') else '' }}">
+        <li class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint == 'dashboard' or request.endpoint == 'index') else '' }}">
+          <a href="#" class="nav-link {{ 'active' if request.endpoint and (request.endpoint == 'dashboard' or request.endpoint == 'index') else '' }}">
             <i class="nav-icon bi bi-speedometer"></i>
             <p>
-              Dashboard's
+              Dashboard
               <i class="nav-arrow bi bi-chevron-right"></i>
             </p>
           </a>
           <ul class="nav nav-treeview">
             <li class="nav-item">
-              <a href="{{ url_for('index') }}" class="nav-link {{ 'active' if request.endpoint == 'index' else '' }}">
-                <i class="nav-icon bi bi-circle"></i>
-                <p>Dashboard (Petições)</p>
+              <a href="{{ url_for('dashboard') }}" class="nav-link {{ 'active' if request.endpoint == 'dashboard' or request.endpoint == 'index' else '' }}">
+                <i class="nav-icon bi bi-graph-up"></i>
+                <p>Dashboard Principal</p>
               </a>
             </li>
           </ul>

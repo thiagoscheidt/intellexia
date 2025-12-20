@@ -112,18 +112,77 @@ def logout():
 # Dashboard routes
 @app.route('/')
 def index():
+    """Redireciona para o dashboard principal"""
     message = request.args.get('message')
     if message:
         flash(message) 
-    return render_template('dashboard1.html')
+    return redirect(url_for('dashboard'))
 
-@app.route('/dashboard2')
-def index2():
-    return render_template('dashboard2.html')
-
-@app.route('/dashboard3')
-def index3():
-    return render_template('index3.html')
+@app.route('/dashboard')
+def dashboard():
+    """Dashboard principal com estatísticas do sistema"""
+    try:
+        # Estatísticas de Casos
+        total_cases = Case.query.count()
+        active_cases = Case.query.filter_by(status='active').count()
+        draft_cases = Case.query.filter_by(status='draft').count()
+        filed_cases = Case.query.filter(Case.filing_date.isnot(None)).count()
+        
+        # Estatísticas de Clientes
+        total_clients = Client.query.count()
+        clients_with_branches = Client.query.filter_by(has_branches=True).count()
+        
+        # Estatísticas de Benefícios
+        total_benefits = CaseBenefit.query.count()
+        benefits_b91 = CaseBenefit.query.filter_by(benefit_type='B91').count()
+        benefits_b94 = CaseBenefit.query.filter_by(benefit_type='B94').count()
+        
+        # Estatísticas de Advogados
+        total_lawyers = Lawyer.query.count()
+        
+        # Estatísticas de Documentos
+        total_documents = Document.query.count()
+        documents_for_ai = Document.query.filter_by(use_in_ai=True).count()
+        
+        # Casos recentes (últimos 5)
+        recent_cases = Case.query.order_by(Case.created_at.desc()).limit(5).all()
+        
+        # Valor total das causas
+        total_cause_value = db.session.query(db.func.sum(Case.value_cause)).scalar() or Decimal('0')
+        
+        # Casos por tipo
+        cases_by_type = db.session.query(
+            Case.case_type, 
+            db.func.count(Case.id).label('count')
+        ).group_by(Case.case_type).all()
+        
+        # Distribuição por status
+        cases_by_status = db.session.query(
+            Case.status,
+            db.func.count(Case.id).label('count')
+        ).group_by(Case.status).all()
+        
+        return render_template('dashboard.html',
+            total_cases=total_cases,
+            active_cases=active_cases,
+            draft_cases=draft_cases,
+            filed_cases=filed_cases,
+            total_clients=total_clients,
+            clients_with_branches=clients_with_branches,
+            total_benefits=total_benefits,
+            benefits_b91=benefits_b91,
+            benefits_b94=benefits_b94,
+            total_lawyers=total_lawyers,
+            total_documents=total_documents,
+            documents_for_ai=documents_for_ai,
+            recent_cases=recent_cases,
+            total_cause_value=total_cause_value,
+            cases_by_type=dict(cases_by_type),
+            cases_by_status=dict(cases_by_status)
+        )
+    except Exception as e:
+        flash(f'Erro ao carregar dashboard: {str(e)}', 'error')
+        return render_template('dashboard.html')
 
 # ========================
 # Rotas de Clientes

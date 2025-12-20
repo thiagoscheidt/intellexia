@@ -1,0 +1,287 @@
+{% extends 'layout/base.html' %}
+
+{% block title %}Dashboard do Sistema{% endblock %}
+{% block page_title %}Dashboard do Sistema{% endblock %}
+
+{% block content %}
+<!-- Verificação se há dados -->
+<div class="alert alert-info">
+  <h4><i class="bi bi-info-circle me-2"></i>Status do Sistema</h4>
+  <p>Dashboard carregado com sucesso! Este é o painel de controle do sistema Intellexia.</p>
+</div>
+
+<!-- Cards de Métricas Principais -->
+<div class="row">
+  <div class="col-lg-3 col-6">
+    <div class="small-box text-bg-primary">
+      <div class="inner">
+        <h3>{{ total_cases or 0 }}</h3>
+        <p>Total de Casos</p>
+      </div>
+      <div class="small-box-icon">
+        <i class="bi bi-briefcase-fill"></i>
+      </div>
+      <a href="{{ url_for('cases_list') }}" class="small-box-footer">
+        Ver todos <i class="bi bi-arrow-right-circle-fill"></i>
+      </a>
+    </div>
+  </div>
+  
+  <div class="col-lg-3 col-6">
+    <div class="small-box text-bg-success">
+      <div class="inner">
+        <h3>{{ active_cases or 0 }}</h3>
+        <p>Casos Ativos</p>
+      </div>
+      <div class="small-box-icon">
+        <i class="bi bi-check-circle-fill"></i>
+      </div>
+      <a href="{{ url_for('cases_list') }}" class="small-box-footer">
+        Ver ativos <i class="bi bi-arrow-right-circle-fill"></i>
+      </a>
+    </div>
+  </div>
+  
+  <div class="col-lg-3 col-6">
+    <div class="small-box text-bg-warning">
+      <div class="inner">
+        <h3>{{ total_clients or 0 }}</h3>
+        <p>Clientes</p>
+      </div>
+      <div class="small-box-icon">
+        <i class="bi bi-people-fill"></i>
+      </div>
+      <a href="{{ url_for('clients_list') }}" class="small-box-footer">
+        Ver clientes <i class="bi bi-arrow-right-circle-fill"></i>
+      </a>
+    </div>
+  </div>
+  
+  <div class="col-lg-3 col-6">
+    <div class="small-box text-bg-info">
+      <div class="inner">
+        <h3>{{ total_benefits or 0 }}</h3>
+        <p>Benefícios</p>
+      </div>
+      <div class="small-box-icon">
+        <i class="bi bi-shield-check-fill"></i>
+      </div>
+      <a href="{{ url_for('benefits_list') }}" class="small-box-footer">
+        Ver benefícios <i class="bi bi-arrow-right-circle-fill"></i>
+      </a>
+    </div>
+  </div>
+</div>
+
+<!-- Informações detalhadas em cards -->
+<div class="row">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">
+          <i class="bi bi-pie-chart me-1"></i>
+          Estatísticas de Casos
+        </h3>
+      </div>
+      <div class="card-body">
+        <dl class="row">
+          <dt class="col-sm-8">Total de Casos:</dt>
+          <dd class="col-sm-4"><span class="badge bg-primary">{{ total_cases or 0 }}</span></dd>
+          
+          <dt class="col-sm-8">Casos Ativos:</dt>
+          <dd class="col-sm-4"><span class="badge bg-success">{{ active_cases or 0 }}</span></dd>
+          
+          <dt class="col-sm-8">Rascunhos:</dt>
+          <dd class="col-sm-4"><span class="badge bg-warning">{{ draft_cases or 0 }}</span></dd>
+          
+          <dt class="col-sm-8">Casos Protocolados:</dt>
+          <dd class="col-sm-4"><span class="badge bg-info">{{ filed_cases or 0 }}</span></dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">
+          <i class="bi bi-people me-1"></i>
+          Estatísticas Gerais
+        </h3>
+      </div>
+      <div class="card-body">
+        <dl class="row">
+          <dt class="col-sm-8">Total de Clientes:</dt>
+          <dd class="col-sm-4"><span class="badge bg-primary">{{ total_clients or 0 }}</span></dd>
+          
+          <dt class="col-sm-8">Total de Advogados:</dt>
+          <dd class="col-sm-4"><span class="badge bg-secondary">{{ total_lawyers or 0 }}</span></dd>
+          
+          <dt class="col-sm-8">Total de Benefícios:</dt>
+          <dd class="col-sm-4"><span class="badge bg-info">{{ total_benefits or 0 }}</span></dd>
+          
+          <dt class="col-sm-8">Total de Documentos:</dt>
+          <dd class="col-sm-4"><span class="badge bg-warning">{{ total_documents or 0 }}</span></dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Valor total e distribuições -->
+<div class="row">
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">
+          <i class="bi bi-clock-history me-1"></i>
+          Casos Recentes
+        </h3>
+      </div>
+      <div class="card-body">
+        {% if recent_cases and recent_cases|length > 0 %}
+        <div class="table-responsive">
+          <table class="table table-striped">
+            <thead>
+              <tr>
+                <th>Título</th>
+                <th>Cliente</th>
+                <th>Status</th>
+                <th>Criado em</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for case in recent_cases %}
+              <tr>
+                <td>
+                  <strong>{{ case.title[:40] }}{% if case.title|length > 40 %}...{% endif %}</strong>
+                </td>
+                <td>{{ case.client.name[:25] if case.client else 'N/A' }}{% if case.client and case.client.name|length > 25 %}...{% endif %}</td>
+                <td>
+                  {% if case.status == 'active' %}
+                    <span class="badge bg-success">Ativo</span>
+                  {% elif case.status == 'draft' %}
+                    <span class="badge bg-warning">Rascunho</span>
+                  {% else %}
+                    <span class="badge bg-secondary">{{ case.status|title }}</span>
+                  {% endif %}
+                </td>
+                <td>{{ case.created_at.strftime('%d/%m/%Y') if case.created_at else '-' }}</td>
+                <td>
+                  <a href="{{ url_for('case_detail', case_id=case.id) }}" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-eye"></i>
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="alert alert-info">
+          <p class="mb-0">Nenhum caso encontrado. <a href="{{ url_for('case_new') }}">Criar primeiro caso</a></p>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">
+          <i class="bi bi-lightning-charge me-1"></i>
+          Ações Rápidas
+        </h3>
+      </div>
+      <div class="card-body">
+        <div class="d-grid gap-2">
+          <a href="{{ url_for('case_new') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle me-2"></i>Novo Caso
+          </a>
+          <a href="{{ url_for('client_new') }}" class="btn btn-outline-primary">
+            <i class="bi bi-building-add me-2"></i>Novo Cliente
+          </a>
+          <a href="{{ url_for('lawyer_new') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-person-plus me-2"></i>Novo Advogado
+          </a>
+          <hr>
+          <a href="{{ url_for('cases_list') }}" class="btn btn-light">
+            <i class="bi bi-list-ul me-2"></i>Todos os Casos
+          </a>
+          <a href="{{ url_for('clients_list') }}" class="btn btn-light">
+            <i class="bi bi-people me-2"></i>Todos os Clientes
+          </a>
+        </div>
+      </div>
+    </div>
+
+    {% if total_cause_value and total_cause_value > 0 %}
+    <div class="card mt-3">
+      <div class="card-header">
+        <h3 class="card-title">
+          <i class="bi bi-currency-dollar me-1"></i>
+          Valor Total das Causas
+        </h3>
+      </div>
+      <div class="card-body text-center">
+        <h4 class="text-primary">
+          R$ {{ "{:,.2f}".format(total_cause_value).replace(",", "X").replace(".", ",").replace("X", ".") }}
+        </h4>
+        <small class="text-muted">Soma de todos os valores de causa</small>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="card mt-3">
+      <div class="card-header">
+        <h3 class="card-title">
+          <i class="bi bi-bar-chart me-1"></i>
+          Distribuições
+        </h3>
+      </div>
+      <div class="card-body">
+        {% if cases_by_type %}
+        <h6>Por Tipo de Caso:</h6>
+        <ul class="list-unstyled">
+          {% for case_type, count in cases_by_type.items() %}
+          <li>
+            <span class="badge bg-secondary me-2">{{ count }}</span>
+            {% if case_type == 'fap_trajeto' %}
+              FAP Trajeto
+            {% elif case_type == 'fap_nexo' %}
+              FAP Nexo
+            {% elif case_type == 'fap_multiplos' %}
+              FAP Múltiplos
+            {% elif case_type == 'auto_infracao' %}
+              Auto Infração
+            {% else %}
+              {{ case_type|title }}
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+
+        {% if cases_by_status %}
+        <h6 class="mt-3">Por Status:</h6>
+        <ul class="list-unstyled">
+          {% for status, count in cases_by_status.items() %}
+          <li>
+            {% if status == 'active' %}
+              <span class="badge bg-success me-2">{{ count }}</span> Ativos
+            {% elif status == 'draft' %}
+              <span class="badge bg-warning me-2">{{ count }}</span> Rascunhos
+            {% else %}
+              <span class="badge bg-secondary me-2">{{ count }}</span> {{ status|title }}
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
