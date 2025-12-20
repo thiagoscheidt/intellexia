@@ -40,31 +40,67 @@
               <dd class="col-sm-8">{{ case.title }}</dd>
 
               <dt class="col-sm-4">Cliente:</dt>
-              <dd class="col-sm-8">Cliente exemplo</dd>
+              <dd class="col-sm-8">{{ case.client.name if case.client else 'Não informado' }}</dd>
 
               <dt class="col-sm-4">Tipo de Caso:</dt>
-              <dd class="col-sm-8"><span class="badge bg-info">FAP - Trajeto</span></dd>
+              <dd class="col-sm-8">
+                {% if case.case_type %}
+                  <span class="badge bg-info">{{ case.case_type }}</span>
+                {% else %}
+                  <span class="text-muted">Não informado</span>
+                {% endif %}
+              </dd>
 
               <dt class="col-sm-4">Status:</dt>
-              <dd class="col-sm-8"><span class="badge bg-success">Ativo</span></dd>
+              <dd class="col-sm-8">
+                {% if case.status %}
+                  <span class="badge bg-{{ 'success' if case.status.lower() == 'ativo' else 'secondary' }}">{{ case.status }}</span>
+                {% else %}
+                  <span class="text-muted">Não informado</span>
+                {% endif %}
+              </dd>
 
               <dt class="col-sm-4">Valor da Causa:</dt>
-              <dd class="col-sm-8">R$ 0,00</dd>
+              <dd class="col-sm-8">
+                {% if case.value_cause %}
+                  R$ {{ "{:,.2f}".format(case.value_cause).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                {% else %}
+                  <span class="text-muted">Não informado</span>
+                {% endif %}
+              </dd>
 
               <dt class="col-sm-4">Data de Ajuizamento:</dt>
-              <dd class="col-sm-8">-</dd>
+              <dd class="col-sm-8">
+                {% if case.filing_date %}
+                  {{ case.filing_date.strftime('%d/%m/%Y') }}
+                {% else %}
+                  <span class="text-muted">Não informada</span>
+                {% endif %}
+              </dd>
             </dl>
 
             <hr>
 
             <h5>Resumo dos Fatos</h5>
-            <p class="text-muted">Nenhum resumo cadastrado ainda.</p>
+            {% if case.facts_summary %}
+              <p>{{ case.facts_summary }}</p>
+            {% else %}
+              <p class="text-muted">Nenhum resumo cadastrado ainda.</p>
+            {% endif %}
 
             <h5>Teses Jurídicas</h5>
-            <p class="text-muted">Nenhuma tese cadastrada ainda.</p>
+            {% if case.thesis_summary %}
+              <p>{{ case.thesis_summary }}</p>
+            {% else %}
+              <p class="text-muted">Nenhuma tese cadastrada ainda.</p>
+            {% endif %}
 
             <h5>Informações sobre Prescrição</h5>
-            <p class="text-muted">Nenhuma informação cadastrada ainda.</p>
+            {% if case.prescription_summary %}
+              <p>{{ case.prescription_summary }}</p>
+            {% else %}
+              <p class="text-muted">Nenhuma informação cadastrada ainda.</p>
+            {% endif %}
           </div>
         </div>
 
@@ -137,9 +173,57 @@
             </div>
           </div>
           <div class="card-body">
-            <div class="alert alert-info">
-              <i class="bi bi-info-circle"></i> Nenhum documento anexado ainda.
-            </div>
+            {% if documents %}
+              <div class="table-responsive">
+                <table class="table table-sm">
+                  <thead>
+                    <tr>
+                      <th>Arquivo</th>
+                      <th>Tipo</th>
+                      <th>Upload</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for doc in documents[:3] %}
+                    <tr>
+                      <td>
+                        <i class="bi bi-file-earmark-pdf text-danger"></i>
+                        {{ doc.original_filename[:20] }}{% if doc.original_filename|length > 20 %}...{% endif %}
+                      </td>
+                      <td>
+                        {% if doc.document_type == 'cat' %}
+                          <span class="badge bg-danger">CAT</span>
+                        {% elif doc.document_type == 'laudo_medico' %}
+                          <span class="badge bg-info">Laudo</span>
+                        {% elif doc.document_type == 'infben' %}
+                          <span class="badge bg-primary">INFBEN</span>
+                        {% else %}
+                          <span class="badge bg-secondary">{{ doc.document_type[:6] }}</span>
+                        {% endif %}
+                      </td>
+                      <td>
+                        <small class="text-muted">{{ doc.uploaded_at.strftime('%d/%m') if doc.uploaded_at else '-' }}</small>
+                      </td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+              {% if documents|length > 3 %}
+              <div class="text-center">
+                <a href="{{ url_for('case_documents_list', case_id=case_id) }}" class="btn btn-outline-primary">
+                  <i class="bi bi-eye"></i> Ver todos os {{ documents|length }} documentos
+                </a>
+              </div>
+              {% endif %}
+            {% else %}
+              <div class="alert alert-info mb-0">
+                <i class="bi bi-info-circle"></i> Nenhum documento anexado ainda.
+                <a href="{{ url_for('case_document_new', case_id=case_id) }}" class="btn btn-outline-success btn-sm ms-2">
+                  <i class="bi bi-upload"></i> Enviar primeiro documento
+                </a>
+              </div>
+            {% endif %}
           </div>
         </div>
       </div>
@@ -193,7 +277,25 @@
             <h3 class="card-title">Vara Judicial</h3>
           </div>
           <div class="card-body">
-            <p class="text-muted mb-0">Nenhuma vara selecionada.</p>
+            {% if case.court %}
+              <dl class="row mb-0">
+                <dt class="col-sm-4">Vara:</dt>
+                <dd class="col-sm-8">{{ case.court.vara_name }}</dd>
+                
+                <dt class="col-sm-4">Seção:</dt>
+                <dd class="col-sm-8">{{ case.court.section or 'Não informado' }}</dd>
+                
+                <dt class="col-sm-4">Localização:</dt>
+                <dd class="col-sm-8">{{ case.court.city }}/{{ case.court.state }}</dd>
+              </dl>
+            {% else %}
+              <div class="alert alert-warning mb-0">
+                <i class="bi bi-exclamation-triangle"></i> Nenhuma vara selecionada para este caso.
+                <a href="{{ url_for('case_edit', case_id=case_id) }}" class="btn btn-outline-primary btn-sm ms-2">
+                  <i class="bi bi-pencil"></i> Editar caso
+                </a>
+              </div>
+            {% endif %}
           </div>
         </div>
 
@@ -206,12 +308,12 @@
             <div class="row text-center">
               <div class="col-6">
                 <div class="border-end">
-                  <h4 class="mb-0">0</h4>
+                  <h4 class="mb-0 text-primary">{{ documents|length }}</h4>
                   <small class="text-muted">Documentos</small>
                 </div>
               </div>
               <div class="col-6">
-                <h4 class="mb-0">0</h4>
+                <h4 class="mb-0 text-success">{{ benefits|length }}</h4>
                 <small class="text-muted">Benefícios</small>
               </div>
             </div>

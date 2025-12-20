@@ -69,8 +69,13 @@
               <div class="row">
                 <div class="col-md-12">
                   <div class="mb-3">
-                    {{ form.document_file.label(class="form-label") }}
-                    {{ form.document_file(class="form-control") }}
+                    {{ form.file.label(class="form-label") }} <span class="text-danger">*</span>
+                    {{ form.file(class="form-control" + (" is-invalid" if form.file.errors else "")) }}
+                    {% if form.file.errors %}
+                      <div class="invalid-feedback">
+                        {% for error in form.file.errors %}{{ error }}{% endfor %}
+                      </div>
+                    {% endif %}
                     <small class="form-text text-muted">
                       <i class="bi bi-info-circle"></i> Formatos aceitos: <strong>PDF, DOC, DOCX, JPG, JPEG, PNG</strong> (Tamanho máximo: 10MB)
                     </small>
