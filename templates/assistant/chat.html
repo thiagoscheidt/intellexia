@@ -1,0 +1,471 @@
+{% extends 'layout/base.html' %}
+
+{% block title %}Assistente Jurídico{% endblock %}
+{% block page_title %}Assistente Jurídico{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-12">
+    <div class="card shadow-lg" style="height: 80vh;">
+      <div class="card-header bg-primary text-white d-flex align-items-center">
+        <div class="d-flex align-items-center">
+          <div class="avatar-wrapper me-3">
+            <i class="bi bi-robot fs-1"></i>
+          </div>
+          <div>
+            <h4 class="mb-0">🤖 Assistente Jurídico IntellexIA</h4>
+            <small class="opacity-75">Especialista em Direito • Online</small>
+          </div>
+        </div>
+        <div class="ms-auto">
+          <button class="btn btn-light btn-sm" onclick="clearChat()">
+            <i class="bi bi-arrow-clockwise me-1"></i>Nova Conversa
+          </button>
+        </div>
+      </div>
+      
+      <div class="card-body p-0 d-flex flex-column">
+        <!-- Área de mensagens -->
+        <div id="chat-messages" class="flex-grow-1 p-3 overflow-auto" style="max-height: calc(80vh - 140px);">
+          <!-- Mensagem de boas-vindas -->
+          <div class="message-wrapper assistant-message mb-3">
+            <div class="d-flex">
+              <div class="avatar-sm me-2">
+                <i class="bi bi-robot text-primary fs-4"></i>
+              </div>
+              <div class="message-content">
+                <div class="message-bubble assistant-bubble">
+                  <div class="message-text">
+                    <p class="mb-2">👋 <strong>Olá! Sou o Assistente Jurídico do IntellexIA</strong></p>
+                    <p class="mb-2">Sou especializado em casos trabalhistas e posso ajudar você com:</p>
+                    <ul class="mb-2">
+                      <li>📊 Estatísticas e relatórios</li>
+                      <li>⚖️ Informações sobre casos FAP</li>
+                      <li>👥 Dados de clientes</li>
+                      <li>💰 Análise de benefícios</li>
+                      <li>📋 Consultas sobre processos</li>
+                    </ul>
+                    <p class="mb-0">O que gostaria de saber?</p>
+                  </div>
+                  <div class="message-time">
+                    <small class="text-muted" id="welcome-time"></small>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Indicador de digitação -->
+        <div id="typing-indicator" class="px-3 pb-2" style="display: none;">
+          <div class="d-flex align-items-center">
+            <div class="avatar-sm me-2">
+              <i class="bi bi-robot text-primary fs-5"></i>
+            </div>
+            <div class="typing-dots">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+            <small class="text-muted ms-2">Assistente está digitando...</small>
+          </div>
+        </div>
+        
+        <!-- Área de input -->
+        <div class="card-footer bg-light">
+          <form id="chat-form" class="d-flex align-items-end">
+            <div class="flex-grow-1 me-2">
+              <textarea 
+                id="user-message" 
+                class="form-control" 
+                placeholder="Digite sua pergunta sobre casos, clientes, benefícios..." 
+                rows="2" 
+                style="resize: none; max-height: 100px;"
+                onkeydown="handleKeyPress(event)"></textarea>
+            </div>
+            <div>
+              <button type="submit" class="btn btn-primary" id="send-btn">
+                <i class="bi bi-send-fill"></i>
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Sugestões de perguntas -->
+<div class="row mt-3">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-body">
+        <h6 class="card-title">💡 Sugestões de perguntas:</h6>
+        <div class="d-flex flex-wrap gap-2">
+          <button class="btn btn-outline-primary btn-sm suggestion-btn" onclick="sendSuggestion('Quantos casos ativos temos?')">
+            📊 Quantos casos ativos temos?
+          </button>
+          <button class="btn btn-outline-primary btn-sm suggestion-btn" onclick="sendSuggestion('Quais são os casos recentes?')">
+            📋 Quais são os casos recentes?
+          </button>
+          <button class="btn btn-outline-primary btn-sm suggestion-btn" onclick="sendSuggestion('Informações sobre casos FAP')">
+            ⚖️ Informações sobre casos FAP
+          </button>
+          <button class="btn btn-outline-primary btn-sm suggestion-btn" onclick="sendSuggestion('Tipos de casos no sistema')">
+            📂 Tipos de casos no sistema
+          </button>
+          <button class="btn btn-outline-primary btn-sm suggestion-btn" onclick="sendSuggestion('Estatísticas de clientes')">
+            👥 Estatísticas de clientes
+          </button>
+          <button class="btn btn-outline-primary btn-sm suggestion-btn" onclick="sendSuggestion('Ajuda')">
+            ❓ Ver todas as funcionalidades
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.message-wrapper {
+  animation: messageSlideIn 0.3s ease-out;
+}
+
+@keyframes messageSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.message-bubble {
+  max-width: 85%;
+  padding: 12px 16px;
+  border-radius: 18px;
+  word-wrap: break-word;
+}
+
+.user-bubble {
+  background: linear-gradient(135deg, #007bff, #0056b3);
+  color: white;
+  margin-left: auto;
+  border-bottom-right-radius: 6px;
+}
+
+.assistant-bubble {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-bottom-left-radius: 6px;
+  color: #212529;
+}
+
+.user-message {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.user-message .message-content {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.assistant-message .message-content {
+  flex-grow: 1;
+}
+
+.message-time {
+  margin-top: 4px;
+  font-size: 0.75rem;
+}
+
+.avatar-sm {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.avatar-wrapper {
+  width: 50px;
+  height: 50px;
+  background: rgba(255,255,255,0.1);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Indicador de digitação */
+.typing-dots {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  padding: 8px 12px;
+  background: #f8f9fa;
+  border-radius: 12px;
+  border: 1px solid #e9ecef;
+}
+
+.typing-dots span {
+  width: 6px;
+  height: 6px;
+  background: #6c757d;
+  border-radius: 50%;
+  animation: typingDots 1.4s infinite;
+}
+
+.typing-dots span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing-dots span:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes typingDots {
+  0%, 60%, 100% {
+    transform: initial;
+    opacity: 0.3;
+  }
+  30% {
+    transform: translateY(-4px);
+    opacity: 1;
+  }
+}
+
+.suggestion-btn {
+  transition: all 0.2s ease;
+  border-radius: 20px;
+}
+
+.suggestion-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0,123,255,0.3);
+}
+
+#chat-messages {
+  scroll-behavior: smooth;
+}
+
+#chat-messages::-webkit-scrollbar {
+  width: 6px;
+}
+
+#chat-messages::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 10px;
+}
+
+#chat-messages::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 10px;
+}
+
+#chat-messages::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+.message-text ul {
+  margin-bottom: 0;
+  padding-left: 20px;
+}
+
+.message-text li {
+  margin-bottom: 4px;
+}
+
+#user-message:focus {
+  border-color: #007bff;
+  box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.25);
+}
+</style>
+
+<script>
+let isWaitingResponse = false;
+
+document.getElementById('chat-form').addEventListener('submit', async function(e) {
+  e.preventDefault();
+  
+  if (isWaitingResponse) return;
+  
+  const messageInput = document.getElementById('user-message');
+  const message = messageInput.value.trim();
+  
+  if (!message) return;
+  
+  // Adicionar mensagem do usuário
+  addUserMessage(message);
+  messageInput.value = '';
+  
+  // Mostrar indicador de digitação
+  showTypingIndicator();
+  
+  try {
+    isWaitingResponse = true;
+    const response = await fetch('/api/assistente-juridico', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ message: message })
+    });
+    
+    const data = await response.json();
+    
+    if (response.ok) {
+      // Remover indicador de digitação
+      hideTypingIndicator();
+      
+      // Adicionar resposta da IA
+      setTimeout(() => {
+        addAssistantMessage(data.response);
+      }, 500);
+    } else {
+      hideTypingIndicator();
+      addAssistantMessage('❌ Desculpe, ocorreu um erro: ' + (data.error || 'Erro desconhecido'));
+    }
+  } catch (error) {
+    hideTypingIndicator();
+    addAssistantMessage('❌ Erro de conexão. Tente novamente.');
+  } finally {
+    isWaitingResponse = false;
+  }
+});
+
+function addUserMessage(message) {
+  const chatMessages = document.getElementById('chat-messages');
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  
+  const messageDiv = document.createElement('div');
+  messageDiv.className = 'message-wrapper user-message mb-3';
+  messageDiv.innerHTML = `
+    <div class="message-content">
+      <div class="message-bubble user-bubble">
+        <div class="message-text">${escapeHtml(message)}</div>
+        <div class="message-time">
+          <small class="text-white-50">${timeStr}</small>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  chatMessages.appendChild(messageDiv);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function addAssistantMessage(message) {
+  const chatMessages = document.getElementById('chat-messages');
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  
+  const messageDiv = document.createElement('div');
+  messageDiv.className = 'message-wrapper assistant-message mb-3';
+  messageDiv.innerHTML = `
+    <div class="d-flex">
+      <div class="avatar-sm me-2">
+        <i class="bi bi-robot text-primary fs-4"></i>
+      </div>
+      <div class="message-content">
+        <div class="message-bubble assistant-bubble">
+          <div class="message-text">${formatMessage(message)}</div>
+          <div class="message-time">
+            <small class="text-muted">${timeStr}</small>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+  
+  chatMessages.appendChild(messageDiv);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+function formatMessage(message) {
+  // Converter markdown simples para HTML
+  return message
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/\n/g, '<br>')
+    .replace(/•/g, '&bull;');
+}
+
+function showTypingIndicator() {
+  document.getElementById('typing-indicator').style.display = 'block';
+  document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight;
+}
+
+function hideTypingIndicator() {
+  document.getElementById('typing-indicator').style.display = 'none';
+}
+
+function handleKeyPress(event) {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();
+    document.getElementById('chat-form').dispatchEvent(new Event('submit'));
+  }
+}
+
+function sendSuggestion(message) {
+  document.getElementById('user-message').value = message;
+  document.getElementById('chat-form').dispatchEvent(new Event('submit'));
+}
+
+function clearChat() {
+  const chatMessages = document.getElementById('chat-messages');
+  chatMessages.innerHTML = `
+    <div class="message-wrapper assistant-message mb-3">
+      <div class="d-flex">
+        <div class="avatar-sm me-2">
+          <i class="bi bi-robot text-primary fs-4"></i>
+        </div>
+        <div class="message-content">
+          <div class="message-bubble assistant-bubble">
+            <div class="message-text">
+              <p class="mb-2">👋 <strong>Nova conversa iniciada!</strong></p>
+              <p class="mb-0">Como posso ajudar você hoje?</p>
+            </div>
+            <div class="message-time">
+              <small class="text-muted">${new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function escapeHtml(text) {
+  const map = {
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#039;'
+  };
+  return text.replace(/[&<>"']/g, function(m) { return map[m]; });
+}
+
+// Auto-resize textarea
+document.getElementById('user-message').addEventListener('input', function() {
+  this.style.height = 'auto';
+  this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+});
+
+// Definir horário da mensagem de boas-vindas
+document.addEventListener('DOMContentLoaded', function() {
+  const welcomeTime = document.getElementById('welcome-time');
+  if (welcomeTime) {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    welcomeTime.textContent = timeStr;
+  }
+});
+</script>
+{% endblock %}

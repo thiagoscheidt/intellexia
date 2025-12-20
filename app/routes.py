@@ -185,6 +185,115 @@ def dashboard():
         return render_template('dashboard.html')
 
 # ========================
+# Assistente Jurídico (IA Chat)
+# ========================
+@app.route('/assistente-juridico')
+def legal_assistant():
+    """Interface do Assistente Jurídico - Chat com IA"""
+    return render_template('assistant/chat.html')
+
+@app.route('/api/assistente-juridico', methods=['POST'])
+def legal_assistant_api():
+    """API para processar mensagens do Assistente Jurídico"""
+    try:
+        data = request.get_json()
+        user_message = data.get('message', '').strip()
+        
+        if not user_message:
+            return jsonify({'error': 'Mensagem é obrigatória'}), 400
+        
+        # Obter contexto dos dados do sistema
+        context = get_system_context()
+        
+        # Processar mensagem com IA (simulação por enquanto)
+        ai_response = process_legal_assistant_message(user_message, context)
+        
+        return jsonify({
+            'response': ai_response,
+            'timestamp': datetime.now().isoformat()
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f'Erro interno: {str(e)}'}), 500
+
+def get_system_context():
+    """Obtém contexto atual do sistema para a IA"""
+    try:
+        context = {
+            'total_cases': Case.query.count(),
+            'active_cases': Case.query.filter_by(status='active').count(),
+            'total_clients': Client.query.count(),
+            'total_benefits': CaseBenefit.query.count(),
+            'recent_cases': Case.query.order_by(Case.created_at.desc()).limit(3).all(),
+            'case_types': db.session.query(Case.case_type, db.func.count(Case.id)).group_by(Case.case_type).all(),
+            'clients_list': Client.query.all(),
+            'lawyers_list': Lawyer.query.all()
+        }
+        return context
+    except Exception as e:
+        return {'error': str(e)}
+
+def process_legal_assistant_message(message, context):
+    """Processa mensagem do usuário e gera resposta da IA"""
+    message_lower = message.lower()
+    
+    # Respostas baseadas em contexto do sistema
+    if 'quantos casos' in message_lower or 'total de casos' in message_lower:
+        total = context.get('total_cases', 0)
+        active = context.get('active_cases', 0)
+        return f"📊 **Estatísticas de Casos:**\n\n• **Total de casos:** {total}\n• **Casos ativos:** {active}\n• **Casos inativos:** {total - active}\n\nPosso ajudar com mais informações sobre algum caso específico?"
+    
+    elif 'clientes' in message_lower and ('quantos' in message_lower or 'total' in message_lower):
+        total = context.get('total_clients', 0)
+        return f"👥 **Clientes cadastrados:** {total} empresas\n\nGostaria de saber mais detalhes sobre algum cliente específico?"
+    
+    elif 'benefícios' in message_lower or 'beneficios' in message_lower:
+        total = context.get('total_benefits', 0)
+        return f"💰 **Benefícios previdenciários:** {total} cadastrados\n\nPosso ajudar a analisar benefícios por tipo (B91, B94) ou buscar informações específicas."
+    
+    elif 'fap' in message_lower:
+        fap_cases = [case for case in context.get('recent_cases', []) if case.case_type and 'fap' in case.case_type]
+        count = len(fap_cases)
+        return f"⚖️ **Casos FAP:** Encontrei {count} casos relacionados ao FAP\n\n**Tipos de FAP mais comuns:**\n• FAP Trajeto\n• FAP Nexo Causal\n• FAP Múltiplos Benefícios\n\nQuer detalhes sobre algum tipo específico?"
+    
+    elif 'casos recentes' in message_lower or 'últimos casos' in message_lower:
+        recent = context.get('recent_cases', [])
+        if recent:
+            response = "📋 **Casos mais recentes:**\n\n"
+            for case in recent[:3]:
+                status_emoji = "🟢" if case.status == 'active' else "🟡" if case.status == 'draft' else "⚪"
+                response += f"• {status_emoji} **{case.title}**\n  Cliente: {case.client.name if case.client else 'N/A'}\n  Status: {case.status}\n\n"
+            return response + "Precisa de mais detalhes sobre algum destes casos?"
+        else:
+            return "📋 Nenhum caso encontrado no sistema. Que tal criar o primeiro caso?"
+    
+    elif 'tipos de caso' in message_lower or 'case_type' in message_lower:
+        types = context.get('case_types', [])
+        if types:
+            response = "📂 **Tipos de casos no sistema:**\n\n"
+            for case_type, count in types:
+                type_name = {
+                    'fap_trajeto': 'FAP - Acidente de Trajeto',
+                    'fap_nexo': 'FAP - Nexo Causal',
+                    'fap_multiplos': 'FAP - Múltiplos Benefícios',
+                    'auto_infracao': 'Auto de Infração'
+                }.get(case_type, case_type.title())
+                response += f"• **{type_name}:** {count} casos\n"
+            return response + "\nQual tipo você gostaria de analisar em detalhes?"
+        else:
+            return "📂 Nenhum tipo de caso encontrado no sistema."
+    
+    elif 'ajuda' in message_lower or 'help' in message_lower:
+        return "🤖 **Como posso ajudar?**\n\n**Perguntas que posso responder:**\n\n📊 • Quantos casos temos?\n👥 • Informações sobre clientes\n💰 • Estatísticas de benefícios\n⚖️ • Casos FAP\n📋 • Casos recentes\n📂 • Tipos de casos\n\n**Exemplos de perguntas:**\n• \"Quantos casos ativos temos?\"\n• \"Quais são os casos recentes?\"\n• \"Informações sobre FAP\"\n• \"Tipos de casos no sistema\""
+    
+    elif 'oi' in message_lower or 'olá' in message_lower or 'hello' in message_lower:
+        return "👋 **Olá! Sou o Assistente Jurídico do IntellexIA**\n\nSou especializado em casos trabalhistas e posso ajudar você com:\n\n• 📊 Estatísticas e relatórios\n• ⚖️ Informações sobre casos FAP\n• 👥 Dados de clientes\n• 💰 Análise de benefícios\n• 📋 Consultas sobre processos\n\nO que gostaria de saber?"
+    
+    else:
+        # Resposta genérica inteligente
+        return f"🤔 Entendi sua pergunta: \"{message}\"\n\n💡 **Sugestões do que posso ajudar:**\n\n• Digite \"ajuda\" para ver todas as funcionalidades\n• Pergunte sobre \"casos\", \"clientes\" ou \"benefícios\"\n• Peça \"estatísticas\" para um resumo geral\n• Mencione \"FAP\" para casos específicos\n\nEstou aqui para ajudar com informações jurídicas do sistema! 💼⚖️"
+
+# ========================
 # Rotas de Clientes
 # ========================
 @app.route('/clients')

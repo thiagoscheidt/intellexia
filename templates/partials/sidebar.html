@@ -48,6 +48,13 @@
           </ul>
         </li>
         
+        <li class="nav-item">
+          <a href="{{ url_for('legal_assistant') }}" class="nav-link {{ 'active' if request.endpoint == 'legal_assistant' else '' }}">
+            <i class="nav-icon bi bi-robot"></i>
+            <p>Assistente Jurídico</p>
+          </a>
+        </li>
+        
         <li class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint.startswith('case') or request.endpoint.startswith('benefit') or 'case_' in request.endpoint or 'benefit' in request.endpoint or 'document' in request.endpoint) else '' }}">
           <a href="#" class="nav-link {{ 'active' if request.endpoint and (request.endpoint.startswith('case') or request.endpoint.startswith('benefit') or 'case_' in request.endpoint or 'benefit' in request.endpoint or 'document' in request.endpoint) else '' }}">
             <i class="nav-icon bi bi-newspaper"></i>
