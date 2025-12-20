@@ -1,0 +1,491 @@
+#!/usr/bin/env python3
+"""
+Script para popular dados de exemplo no sistema Intellexia
+Sistema de gerenciamento de casos jurídicos trabalhistas
+
+Execute: python populate_sample_data.py
+"""
+
+import os
+import sys
+from datetime import datetime, date
+from decimal import Decimal
+from pathlib import Path
+
+# Adicionar o diretório do projeto ao path
+project_root = Path(__file__).parent
+sys.path.insert(0, str(project_root))
+
+# Importar a aplicação e modelos
+from main import app
+from app.models import (
+    db, Client, Court, Lawyer, Case, CaseLawyer, 
+    CaseCompetence, CaseBenefit, Document
+)
+
+def create_sample_clients():
+    """Cria empresas clientes de exemplo"""
+    clients_data = [
+        {
+            'name': 'Construtora Silva & Filhos Ltda',
+            'cnpj': '12.345.678/0001-90',
+            'street': 'Rua das Construções, 123',
+            'number': '123',
+            'district': 'Centro',
+            'city': 'São Paulo',
+            'state': 'SP',
+            'zip_code': '01234-567',
+            'has_branches': True,
+            'branches_description': 'Filiais em Santos/SP e Campinas/SP'
+        },
+        {
+            'name': 'Metalúrgica Aço Forte S.A.',
+            'cnpj': '98.765.432/0001-10',
+            'street': 'Av. Industrial, 500',
+            'number': '500',
+            'district': 'Distrito Industrial',
+            'city': 'Blumenau',
+            'state': 'SC',
+            'zip_code': '89012-345',
+            'has_branches': False,
+            'branches_description': None
+        },
+        {
+            'name': 'Transportadora Rodoviária Express Ltda',
+            'cnpj': '45.123.789/0001-55',
+            'street': 'Rodovia BR-101, Km 150',
+            'number': 'S/N',
+            'district': 'Zona Rural',
+            'city': 'Joinville',
+            'state': 'SC',
+            'zip_code': '89567-890',
+            'has_branches': True,
+            'branches_description': 'Filiais em Curitiba/PR, Florianópolis/SC e Porto Alegre/RS'
+        },
+        {
+            'name': 'Indústria Têxtil Fios de Ouro S.A.',
+            'cnpj': '78.901.234/0001-33',
+            'street': 'Rua dos Tecelões, 789',
+            'number': '789',
+            'district': 'Vila Operária',
+            'city': 'Itajaí',
+            'state': 'SC',
+            'zip_code': '88300-123',
+            'has_branches': False,
+            'branches_description': None
+        }
+    ]
+    
+    clients = []
+    for data in clients_data:
+        # Verificar se já existe
+        existing = Client.query.filter_by(cnpj=data['cnpj']).first()
+        if not existing:
+            client = Client(**data)
+            db.session.add(client)
+            clients.append(client)
+            print(f"✓ Cliente criado: {data['name']}")
+        else:
+            clients.append(existing)
+            print(f"→ Cliente já existe: {existing.name}")
+    
+    return clients
+
+def create_sample_courts():
+    """Cria varas judiciais de exemplo"""
+    courts_data = [
+        {
+            'section': 'Seção Judiciária de Santa Catarina',
+            'vara_name': '1ª Vara Federal de Blumenau',
+            'city': 'Blumenau',
+            'state': 'SC'
+        },
+        {
+            'section': 'Seção Judiciária de Santa Catarina',
+            'vara_name': '2ª Vara Federal de Joinville',
+            'city': 'Joinville',
+            'state': 'SC'
+        },
+        {
+            'section': 'Seção Judiciária de Santa Catarina',
+            'vara_name': '1ª Vara Federal de Itajaí',
+            'city': 'Itajaí',
+            'state': 'SC'
+        },
+        {
+            'section': 'Seção Judiciária de São Paulo',
+            'vara_name': '3ª Vara Federal de São Paulo',
+            'city': 'São Paulo',
+            'state': 'SP'
+        },
+        {
+            'section': 'Seção Judiciária do Paraná',
+            'vara_name': '1ª Vara Federal de Curitiba',
+            'city': 'Curitiba',
+            'state': 'PR'
+        }
+    ]
+    
+    courts = []
+    for data in courts_data:
+        # Verificar se já existe
+        existing = Court.query.filter_by(vara_name=data['vara_name']).first()
+        if not existing:
+            court = Court(**data)
+            db.session.add(court)
+            courts.append(court)
+            print(f"✓ Vara criada: {data['vara_name']}")
+        else:
+            courts.append(existing)
+            print(f"→ Vara já existe: {existing.vara_name}")
+    
+    return courts
+
+def create_sample_lawyers():
+    """Cria advogados de exemplo"""
+    lawyers_data = [
+        {
+            'name': 'Dr. João Silva Santos',
+            'oab_number': 'SP 123456',
+            'email': 'joao.santos@advocacia.com.br',
+            'phone': '(11) 98765-4321',
+            'is_default_for_publications': True
+        },
+        {
+            'name': 'Dra. Maria Fernanda Costa',
+            'oab_number': 'SC 78901',
+            'email': 'maria.costa@escritorio.adv.br',
+            'phone': '(47) 99123-4567',
+            'is_default_for_publications': False
+        },
+        {
+            'name': 'Dr. Carlos Eduardo Oliveira',
+            'oab_number': 'SC 45123',
+            'email': 'carlos.oliveira@direito.com',
+            'phone': '(47) 98888-7777',
+            'is_default_for_publications': False
+        },
+        {
+            'name': 'Dra. Ana Paula Rodrigues',
+            'oab_number': 'SP 67890',
+            'email': 'ana.rodrigues@advocaciasp.com.br',
+            'phone': '(11) 97777-8888',
+            'is_default_for_publications': False
+        }
+    ]
+    
+    lawyers = []
+    for data in lawyers_data:
+        # Verificar se já existe
+        existing = Lawyer.query.filter_by(oab_number=data['oab_number']).first()
+        if not existing:
+            lawyer = Lawyer(**data)
+            db.session.add(lawyer)
+            lawyers.append(lawyer)
+            print(f"✓ Advogado criado: {data['name']} - OAB: {data['oab_number']}")
+        else:
+            lawyers.append(existing)
+            print(f"→ Advogado já existe: {existing.name}")
+    
+    return lawyers
+
+def create_sample_cases(clients, courts, lawyers):
+    """Cria casos jurídicos de exemplo"""
+    cases_data = [
+        {
+            'title': 'Revisão FAP - Acidente de Trabalho 2019-2021',
+            'case_type': 'fap_trajeto',
+            'fap_start_year': 2019,
+            'fap_end_year': 2021,
+            'facts_summary': 'Contestação do FAP em razão de acidente de trajeto classificado incorretamente como acidente típico.',
+            'thesis_summary': 'Art. 21, IV da Lei 8.213/91 - Acidente de trajeto não deve impactar no cálculo do FAP',
+            'prescription_summary': 'Não há prescrição. Pedido administrativo protocolado em 2022.',
+            'value_cause': Decimal('250000.00'),
+            'status': 'active',
+            'filing_date': date(2023, 3, 15)
+        },
+        {
+            'title': 'Revisão FAP - Nexo Causal Contestado 2020-2022',
+            'case_type': 'fap_nexo',
+            'fap_start_year': 2020,
+            'fap_end_year': 2022,
+            'facts_summary': 'Contestação de auxílio-doença acidentário concedido indevidamente sem nexo causal comprovado.',
+            'thesis_summary': 'Inexistência de nexo causal entre atividade laboral e doença alegada pelo segurado',
+            'prescription_summary': 'Prazo prescricional suspenso durante análise administrativa',
+            'value_cause': Decimal('180000.00'),
+            'status': 'active',
+            'filing_date': date(2023, 6, 22)
+        },
+        {
+            'title': 'Anulação de Auto de Infração - NR12',
+            'case_type': 'auto_infracao',
+            'fap_start_year': None,
+            'fap_end_year': None,
+            'facts_summary': 'Auto de infração lavrado por descumprimento da NR12 sem fundamentação técnica adequada.',
+            'thesis_summary': 'Vício de fundamentação e ausência de nexo entre irregularidade apontada e norma violada',
+            'prescription_summary': 'Prazo para defesa respeitado dentro do prazo legal',
+            'value_cause': Decimal('75000.00'),
+            'status': 'draft',
+            'filing_date': None
+        },
+        {
+            'title': 'Revisão FAP - Múltiplos Benefícios 2018-2020',
+            'case_type': 'fap_multiplos',
+            'fap_start_year': 2018,
+            'fap_end_year': 2020,
+            'facts_summary': 'Contestação de múltiplos benefícios acidentários concedidos incorretamente impactando FAP.',
+            'thesis_summary': 'Aplicação dos critérios do Decreto 6.042/2007 e análise individual de cada benefício',
+            'prescription_summary': 'Parcialmente prescrito para período anterior a 2018',
+            'value_cause': Decimal('420000.00'),
+            'status': 'active',
+            'filing_date': date(2023, 1, 10)
+        }
+    ]
+    
+    cases = []
+    for i, data in enumerate(cases_data):
+        # Atribuir cliente e vara
+        data['client_id'] = clients[i % len(clients)].id
+        data['court_id'] = courts[i % len(courts)].id
+        
+        # Verificar se já existe
+        existing = Case.query.filter_by(title=data['title']).first()
+        if not existing:
+            case = Case(**data)
+            db.session.add(case)
+            cases.append(case)
+            print(f"✓ Caso criado: {data['title']}")
+        else:
+            cases.append(existing)
+            print(f"→ Caso já existe: {existing.title}")
+    
+    return cases
+
+def create_case_lawyers_relations(cases, lawyers):
+    """Cria relacionamentos entre casos e advogados"""
+    relations = []
+    
+    for i, case in enumerate(cases):
+        # Verificar se já existe relação
+        existing = CaseLawyer.query.filter_by(case_id=case.id).first()
+        if not existing:
+            # Advogado responsável
+            responsible_lawyer = lawyers[i % len(lawyers)]
+            case_lawyer = CaseLawyer(
+                case_id=case.id,
+                lawyer_id=responsible_lawyer.id,
+                role='responsavel'
+            )
+            db.session.add(case_lawyer)
+            relations.append(case_lawyer)
+            
+            # Alguns casos com advogado adicional para publicações
+            if i % 2 == 0 and len(lawyers) > 1:
+                pub_lawyer = lawyers[(i + 1) % len(lawyers)]
+                if pub_lawyer.id != responsible_lawyer.id:
+                    case_lawyer_pub = CaseLawyer(
+                        case_id=case.id,
+                        lawyer_id=pub_lawyer.id,
+                        role='publicacoes'
+                    )
+                    db.session.add(case_lawyer_pub)
+                    relations.append(case_lawyer_pub)
+            
+            print(f"✓ Relação caso-advogado criada para: {case.title}")
+        else:
+            print(f"→ Relação já existe para: {case.title}")
+    
+    return relations
+
+def create_sample_benefits(cases):
+    """Cria benefícios de exemplo relacionados aos casos"""
+    benefits_data = [
+        # Caso 1 - Revisão FAP Trajeto
+        [
+            {
+                'benefit_number': '123456789-01',
+                'benefit_type': 'B91',
+                'insured_name': 'José da Silva',
+                'insured_nit': '12345678901',
+                'accident_date': date(2019, 8, 15),
+                'accident_company_name': 'Construtora Silva & Filhos Ltda',
+                'error_reason': 'acidente_trajeto',
+                'notes': 'Acidente ocorreu no trajeto casa-trabalho, classificado incorretamente como típico'
+            },
+            {
+                'benefit_number': '987654321-02',
+                'benefit_type': 'B94',
+                'insured_name': 'Maria Santos',
+                'insured_nit': '98765432101',
+                'accident_date': date(2020, 2, 10),
+                'accident_company_name': 'Construtora Silva & Filhos Ltda',
+                'error_reason': 'acidente_trajeto',
+                'notes': 'Queda de bicicleta no trajeto trabalho-casa'
+            }
+        ],
+        # Caso 2 - Revisão FAP Nexo
+        [
+            {
+                'benefit_number': '555666777-03',
+                'benefit_type': 'B31',
+                'insured_name': 'Carlos Oliveira',
+                'insured_nit': '55566677701',
+                'accident_date': date(2020, 11, 5),
+                'accident_company_name': 'Metalúrgica Aço Forte S.A.',
+                'error_reason': 'sem_nexo_causal',
+                'notes': 'Doença preexistente não relacionada ao trabalho'
+            }
+        ],
+        # Caso 3 - Auto de Infração (sem benefícios)
+        [],
+        # Caso 4 - Múltiplos Benefícios
+        [
+            {
+                'benefit_number': '111222333-04',
+                'benefit_type': 'B91',
+                'insured_name': 'Ana Costa',
+                'insured_nit': '11122233301',
+                'accident_date': date(2018, 5, 20),
+                'accident_company_name': 'Indústria Têxtil Fios de Ouro S.A.',
+                'error_reason': 'classificacao_incorreta',
+                'notes': 'Benefício concedido sem comprovação adequada'
+            },
+            {
+                'benefit_number': '444555666-05',
+                'benefit_type': 'B94',
+                'insured_name': 'Pedro Alves',
+                'insured_nit': '44455566601',
+                'accident_date': date(2019, 9, 12),
+                'accident_company_name': 'Indústria Têxtil Fios de Ouro S.A.',
+                'error_reason': 'sem_nexo_causal',
+                'notes': 'Lesão não relacionada à atividade profissional'
+            },
+            {
+                'benefit_number': '777888999-06',
+                'benefit_type': 'B31',
+                'insured_name': 'Lucia Ferreira',
+                'insured_nit': '77788899901',
+                'accident_date': date(2020, 1, 8),
+                'accident_company_name': 'Indústria Têxtil Fios de Ouro S.A.',
+                'error_reason': 'acidente_trajeto',
+                'notes': 'Acidente no trajeto, classificado como típico'
+            }
+        ]
+    ]
+    
+    all_benefits = []
+    for case_index, case_benefits in enumerate(benefits_data):
+        if case_index < len(cases):
+            case = cases[case_index]
+            for benefit_data in case_benefits:
+                benefit_data['case_id'] = case.id
+                
+                # Verificar se já existe
+                existing = CaseBenefit.query.filter_by(
+                    benefit_number=benefit_data['benefit_number']
+                ).first()
+                
+                if not existing:
+                    benefit = CaseBenefit(**benefit_data)
+                    db.session.add(benefit)
+                    all_benefits.append(benefit)
+                    print(f"✓ Benefício criado: {benefit_data['benefit_number']} - {benefit_data['insured_name']}")
+                else:
+                    all_benefits.append(existing)
+                    print(f"→ Benefício já existe: {existing.benefit_number}")
+    
+    return all_benefits
+
+def create_sample_competences(cases):
+    """Cria competências de exemplo para os casos"""
+    competences = []
+    
+    for case in cases:
+        if case.fap_start_year and case.fap_end_year:
+            # Criar competências mensais para o período do FAP
+            for year in range(case.fap_start_year, case.fap_end_year + 1):
+                for month in range(1, 13):
+                    # Verificar se já existe
+                    existing = CaseCompetence.query.filter_by(
+                        case_id=case.id,
+                        competence_month=month,
+                        competence_year=year
+                    ).first()
+                    
+                    if not existing:
+                        # Determinar status (algumas competências prescritas para exemplo)
+                        status = 'prescribed' if year < case.fap_start_year + 1 and month <= 6 else 'valid'
+                        
+                        competence = CaseCompetence(
+                            case_id=case.id,
+                            competence_month=month,
+                            competence_year=year,
+                            status=status
+                        )
+                        db.session.add(competence)
+                        competences.append(competence)
+    
+    if competences:
+        print(f"✓ Criadas {len(competences)} competências para os casos FAP")
+    
+    return competences
+
+def main():
+    """Função principal para executar a população de dados"""
+    print("🚀 Iniciando população de dados de exemplo...")
+    print("=" * 50)
+    
+    try:
+        with app.app_context():
+            # Verificar se as tabelas existem
+            db.create_all()
+            print("✓ Tabelas verificadas/criadas")
+            
+            # Criar dados de exemplo
+            print("\n📊 Criando clientes...")
+            clients = create_sample_clients()
+            
+            print("\n🏛️ Criando varas judiciais...")
+            courts = create_sample_courts()
+            
+            print("\n⚖️ Criando advogados...")
+            lawyers = create_sample_lawyers()
+            
+            # Commit dos dados básicos
+            db.session.commit()
+            print("✓ Dados básicos salvos")
+            
+            print("\n📋 Criando casos...")
+            cases = create_sample_cases(clients, courts, lawyers)
+            
+            print("\n🤝 Criando relações caso-advogado...")
+            case_lawyers = create_case_lawyers_relations(cases, lawyers)
+            
+            print("\n💰 Criando benefícios...")
+            benefits = create_sample_benefits(cases)
+            
+            print("\n📅 Criando competências...")
+            competences = create_sample_competences(cases)
+            
+            # Commit final
+            db.session.commit()
+            
+            print("\n" + "=" * 50)
+            print("✅ POPULAÇÃO DE DADOS CONCLUÍDA COM SUCESSO!")
+            print(f"📊 Resumo:")
+            print(f"   • {len(clients)} clientes")
+            print(f"   • {len(courts)} varas judiciais")
+            print(f"   • {len(lawyers)} advogados")
+            print(f"   • {len(cases)} casos")
+            print(f"   • {len(case_lawyers)} relações caso-advogado")
+            print(f"   • {len(benefits)} benefícios")
+            print(f"   • {len(competences)} competências")
+            print("=" * 50)
+            
+    except Exception as e:
+        print(f"❌ Erro durante a população de dados: {e}")
+        db.session.rollback()
+        raise
+
+if __name__ == '__main__':
+    main()
