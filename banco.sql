@@ -161,11 +161,19 @@ CREATE TABLE `documents` (
   `document_type` VARCHAR(50) NOT NULL,               -- Tipo (cat, laudo_medico, infben, etc.)
   `description` TEXT NULL,                            -- Descrição livre
   `use_in_ai` TINYINT(1) NOT NULL DEFAULT 1,          -- 1 = IA pode usar / 0 = ignorar
+  
+  -- Campos para análise de IA
+  `ai_summary` TEXT NULL,                             -- Resumo gerado pela IA sobre informações importantes
+  `ai_processed_at` DATETIME NULL,                    -- Data/hora do processamento pela IA
+  `ai_status` VARCHAR(20) NOT NULL DEFAULT 'pending', -- Status: pending, processing, completed, error
+  `ai_error_message` TEXT NULL,                       -- Mensagem de erro caso o processamento falhe
+  
   `uploaded_by_user_id` BIGINT UNSIGNED NULL,         -- FK de usuário (no futuro)
   `uploaded_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, -- Data upload
   PRIMARY KEY (`id`),
   KEY `idx_documents_case_id` (`case_id`),
   KEY `idx_documents_related_benefit_id` (`related_benefit_id`),
+  KEY `idx_documents_ai_status` (`ai_status`),        -- Índice para buscar documentos por status de IA
   CONSTRAINT `fk_documents_cases`
     FOREIGN KEY (`case_id`) REFERENCES `cases`(`id`)
     ON DELETE CASCADE ON UPDATE CASCADE,

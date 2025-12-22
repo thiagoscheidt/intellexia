@@ -141,8 +141,10 @@ class CaseBenefitForm(FlaskForm):
     benefit_type = SelectField(
         'Tipo de Benefício',
         choices=[
-            ('B91', 'B91 - Auxílio-Acidente'),
-            ('B94', 'B94 - Auxílio-Doença por Acidente de Trabalho'),
+            ('B91', 'B91 - Auxílio-doença acidentário'),
+            ('B92', 'B92 - Aposentadoria por invalidez acidentária'),
+            ('B93', 'B93 - Pensão por morte acidentária'),
+            ('B94', 'B94 - Auxílio-acidente'),
             ('outros', 'Outros')
         ],
         validators=[DataRequired()]
@@ -177,8 +179,10 @@ class CaseBenefitContextForm(FlaskForm):
     benefit_type = SelectField(
         'Tipo de Benefício',
         choices=[
-            ('B91', 'B91 - Auxílio-Acidente'),
-            ('B94', 'B94 - Auxílio-Doença por Acidente de Trabalho'),
+            ('B91', 'B91 - Auxílio-doença acidentário'),
+            ('B92', 'B92 - Aposentadoria por invalidez acidentária'),
+            ('B93', 'B93 - Pensão por morte acidentária'),
+            ('B94', 'B94 - Auxílio-acidente'),
             ('outros', 'Outros')
         ],
         validators=[DataRequired()]

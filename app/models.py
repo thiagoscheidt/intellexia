@@ -175,6 +175,13 @@ class Document(db.Model):
     document_type = db.Column(db.String(50), nullable=False)
     description = db.Column(db.Text)
     use_in_ai = db.Column(db.Boolean, default=True)
+    
+    # Campos para análise de IA
+    ai_summary = db.Column(db.Text)  # Resumo gerado pela IA sobre informações importantes
+    ai_processed_at = db.Column(db.DateTime)  # Data/hora do processamento pela IA
+    ai_status = db.Column(db.String(20), default='pending')  # pending, processing, completed, error
+    ai_error_message = db.Column(db.Text)  # Mensagem de erro caso o processamento falhe
+    
     uploaded_by_user_id = db.Column(db.Integer)  # FK de usuário (futuro)
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
     

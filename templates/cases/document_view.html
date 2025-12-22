@@ -1,0 +1,217 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Visualizar Documento - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-sm-6">
+        <h3 class="mb-0">Visualizar Documento</h3>
+      </div>
+      <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-end">
+          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases_list') }}">Casos</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('case_detail', case_id=case_id) }}">Caso #{{ case_id }}</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('case_documents_list', case_id=case_id) }}">Documentos</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Visualizar</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <!-- Informações do Documento -->
+      <div class="col-md-6">
+        <div class="card">
+          <div class="card-header bg-primary text-white">
+            <h3 class="card-title"><i class="bi bi-file-earmark-text"></i> Informações do Documento</h3>
+          </div>
+          <div class="card-body">
+            <table class="table table-bordered">
+              <tbody>
+                <tr>
+                  <th width="40%"><i class="bi bi-hash"></i> ID</th>
+                  <td>{{ document.id }}</td>
+                </tr>
+                <tr>
+                  <th><i class="bi bi-file-text"></i> Nome do Arquivo</th>
+                  <td>{{ document.original_filename }}</td>
+                </tr>
+                <tr>
+                  <th><i class="bi bi-tag"></i> Tipo de Documento</th>
+                  <td>
+                    {% if document.document_type == 'cat' %}
+                      <span class="badge bg-danger">CAT - Comunicação de Acidente</span>
+                    {% elif document.document_type == 'extrato_beneficio' %}
+                      <span class="badge bg-info">Extrato de Benefício</span>
+                    {% elif document.document_type == 'laudo_medico' %}
+                      <span class="badge bg-info">Laudo Médico</span>
+                    {% elif document.document_type == 'laudo_medico_administrativo' %}
+                      <span class="badge bg-info">Laudo Médico Administrativo (INSS)</span>
+                    {% elif document.document_type == 'laudo_pericial_judicial' %}
+                      <span class="badge bg-warning">Laudo Pericial Judicial</span>
+                    {% elif document.document_type == 'laudo_psiquiatrico' %}
+                      <span class="badge bg-warning">Laudo Psiquiátrico Judicial</span>
+                    {% elif document.document_type == 'decisao_administrativa' %}
+                      <span class="badge bg-primary">Decisão Administrativa INSS</span>
+                    {% elif document.document_type == 'sentenca_judicial' %}
+                      <span class="badge bg-success">Sentença Judicial</span>
+                    {% elif document.document_type == 'peticao_inicial' %}
+                      <span class="badge bg-secondary">Petição Inicial</span>
+                    {% elif document.document_type == 'calculo_judicial' %}
+                      <span class="badge bg-warning">Cálculo Judicial</span>
+                    {% elif document.document_type == 'infben' %}
+                      <span class="badge bg-primary">INFBEN</span>
+                    {% elif document.document_type == 'cnis' %}
+                      <span class="badge bg-success">CNIS</span>
+                    {% elif document.document_type == 'contrato_social' %}
+                      <span class="badge bg-warning">Contrato Social</span>
+                    {% elif document.document_type == 'procuracao' %}
+                      <span class="badge bg-secondary">Procuração</span>
+                    {% else %}
+                      <span class="badge bg-secondary">{{ document.document_type }}</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% if related_benefit %}
+                <tr>
+                  <th><i class="bi bi-link-45deg"></i> Benefício Relacionado</th>
+                  <td>
+                    <strong>{{ related_benefit.benefit_number }}</strong><br>
+                    <small class="text-muted">{{ related_benefit.insured_name }}</small>
+                  </td>
+                </tr>
+                {% endif %}
+                <tr>
+                  <th><i class="bi bi-calendar"></i> Upload em</th>
+                  <td>{{ document.uploaded_at.strftime('%d/%m/%Y às %H:%M') if document.uploaded_at else '-' }}</td>
+                </tr>
+                <tr>
+                  <th><i class="bi bi-robot"></i> Usar na IA</th>
+                  <td>
+                    {% if document.use_in_ai %}
+                      <span class="badge bg-success"><i class="bi bi-check-circle"></i> Sim</span>
+                    {% else %}
+                      <span class="badge bg-secondary"><i class="bi bi-x-circle"></i> Não</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% if document.description %}
+                <tr>
+                  <th><i class="bi bi-text-paragraph"></i> Descrição</th>
+                  <td>{{ document.description }}</td>
+                </tr>
+                {% endif %}
+              </tbody>
+            </table>
+            
+            <div class="d-grid gap-2">
+              <a href="#" class="btn btn-primary" disabled>
+                <i class="bi bi-download"></i> Download do Arquivo
+              </a>
+              <a href="{{ url_for('case_documents_list', case_id=case_id) }}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Voltar para Lista
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Análise da IA -->
+      <div class="col-md-6">
+        <div class="card">
+          <div class="card-header bg-info text-white">
+            <h3 class="card-title"><i class="bi bi-stars"></i> Análise da IA</h3>
+          </div>
+          <div class="card-body">
+            {% if document.ai_status == 'completed' %}
+              <!-- Status: Completado -->
+              <div class="alert alert-success">
+                <i class="bi bi-check-circle-fill"></i> Documento analisado com sucesso!
+                {% if document.ai_processed_at %}
+                  <br><small class="text-muted">Processado em: {{ document.ai_processed_at.strftime('%d/%m/%Y às %H:%M') }}</small>
+                {% endif %}
+              </div>
+              
+              {% if document.ai_summary %}
+                <div class="card">
+                  <div class="card-header bg-light">
+                    <h5 class="mb-0"><i class="bi bi-file-text"></i> Resumo Extraído</h5>
+                  </div>
+                  <div class="card-body">
+                    <div style="white-space: pre-wrap; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6;">{{ document.ai_summary }}</div>
+                  </div>
+                </div>
+              {% else %}
+                <div class="alert alert-warning">
+                  <i class="bi bi-exclamation-triangle"></i> Análise concluída mas nenhum resumo foi gerado.
+                </div>
+              {% endif %}
+              
+            {% elif document.ai_status == 'processing' %}
+              <!-- Status: Processando -->
+              <div class="alert alert-info">
+                <div class="d-flex align-items-center">
+                  <div class="spinner-border spinner-border-sm me-2" role="status">
+                    <span class="visually-hidden">Processando...</span>
+                  </div>
+                  <div>
+                    <strong>Documento sendo analisado pela IA...</strong><br>
+                    <small>Isso pode levar alguns instantes. Atualize a página para ver o resultado.</small>
+                  </div>
+                </div>
+              </div>
+              
+              <button class="btn btn-primary w-100" onclick="location.reload()">
+                <i class="bi bi-arrow-clockwise"></i> Atualizar Página
+              </button>
+              
+            {% elif document.ai_status == 'error' %}
+              <!-- Status: Erro -->
+              <div class="alert alert-danger">
+                <h5><i class="bi bi-exclamation-octagon"></i> Erro ao processar documento</h5>
+                {% if document.ai_error_message %}
+                  <hr>
+                  <p class="mb-0"><strong>Detalhes do erro:</strong></p>
+                  <pre class="mt-2 p-2 bg-light border rounded" style="font-size: 0.85rem;">{{ document.ai_error_message }}</pre>
+                {% endif %}
+              </div>
+              
+              <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i> <strong>O que fazer?</strong>
+                <ul class="mb-0 mt-2">
+                  <li>Verifique se o arquivo está corrompido</li>
+                  <li>Tente fazer upload novamente</li>
+                  <li>Entre em contato com o suporte se o erro persistir</li>
+                </ul>
+              </div>
+              
+            {% elif document.ai_status == 'pending' %}
+              <!-- Status: Pendente -->
+              <div class="alert alert-warning">
+                <i class="bi bi-hourglass-split"></i> <strong>Documento aguardando processamento</strong><br>
+                <small>O documento ainda não foi analisado pela IA.</small>
+              </div>
+              
+              <div class="alert alert-info">
+                <i class="bi bi-info-circle"></i> A análise automática será executada em breve.
+              </div>
+              
+            {% else %}
+              <!-- Status desconhecido -->
+              <div class="alert alert-secondary">
+                <i class="bi bi-question-circle"></i> Status de análise desconhecido: <strong>{{ document.ai_status }}</strong>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

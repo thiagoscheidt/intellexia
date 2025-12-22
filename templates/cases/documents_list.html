@@ -60,6 +60,7 @@
                     <th>Benefício Relacionado</th>
                     <th>Upload</th>
                     <th>Usar na IA</th>
+                    <th>Status IA</th>
                     <th>Ações</th>
                   </tr>
                 </thead>
@@ -106,7 +107,28 @@
                       {% endif %}
                     </td>
                     <td>
-                      <a href="#" class="btn btn-sm btn-info" title="Visualizar">
+                      {% if doc.ai_status == 'completed' %}
+                        <span class="badge bg-success" title="Análise concluída">
+                          <i class="bi bi-check-circle-fill"></i> Concluído
+                        </span>
+                      {% elif doc.ai_status == 'processing' %}
+                        <span class="badge bg-info" title="Processando">
+                          <i class="bi bi-hourglass-split"></i> Processando
+                        </span>
+                      {% elif doc.ai_status == 'error' %}
+                        <span class="badge bg-danger" title="Erro no processamento">
+                          <i class="bi bi-exclamation-triangle"></i> Erro
+                        </span>
+                      {% elif doc.ai_status == 'pending' %}
+                        <span class="badge bg-warning" title="Aguardando processamento">
+                          <i class="bi bi-clock"></i> Pendente
+                        </span>
+                      {% else %}
+                        <span class="badge bg-secondary">-</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      <a href="{{ url_for('case_document_view', case_id=case_id, document_id=doc.id) }}" class="btn btn-sm btn-info" title="Visualizar">
                         <i class="bi bi-eye"></i>
                       </a>
                       <a href="#" class="btn btn-sm btn-primary" title="Download">

@@ -525,13 +525,47 @@ def case_document_new(case_id):
                 file_path=file_path,
                 document_type=form.document_type.data,
                 description=form.description.data,
-                use_in_ai=form.use_in_ai.data
+                use_in_ai=form.use_in_ai.data,
+                ai_status='pending'  # Inicializa como pendente
             )
             
             db.session.add(document)
             try:
                 db.session.commit()
-                flash('Documento enviado com sucesso!', 'success')
+                
+                # Processar com IA se marcado para uso
+                if form.use_in_ai.data:
+                    try:
+                        # Atualiza status para processing
+                        document.ai_status = 'processing'
+                        db.session.commit()
+                        
+                        # Inicializa agentes
+                        file_agent = FileAgent()
+                        doc_reader = AgentDocumentReader()
+                        
+                        # Faz upload do arquivo para a OpenAI (usando caminho absoluto)
+                        file_id = file_agent.upload_file(os.path.abspath(file_path))
+                        
+                        # Analisa o documento
+                        ai_summary = doc_reader.analyze_document(file_id)
+                        
+                        # Salva o resumo e atualiza status
+                        document.ai_summary = ai_summary
+                        document.ai_processed_at = datetime.utcnow()
+                        document.ai_status = 'completed'
+                        db.session.commit()
+                        
+                        flash('Documento enviado e analisado com sucesso pela IA!', 'success')
+                    except Exception as e:
+                        # Em caso de erro na IA, registra mas não impede o upload
+                        document.ai_status = 'error'
+                        document.ai_error_message = str(e)
+                        db.session.commit()
+                        flash(f'Documento enviado, mas houve erro na análise de IA: {str(e)}', 'warning')
+                else:
+                    flash('Documento enviado com sucesso!', 'success')
+                
                 return redirect(url_for('case_documents_list', case_id=case_id))
             except Exception as e:
                 db.session.rollback()
@@ -540,6 +574,31 @@ def case_document_new(case_id):
             flash('Nenhum arquivo foi selecionado.', 'warning')
     
     return render_template('cases/document_form.html', form=form, case=case, case_id=case_id, title='Upload Documento')
+
+@app.route('/cases/<int:case_id>/documents/<int:document_id>/view', methods=['GET'])
+def case_document_view(case_id, document_id):
+    """Visualiza documento e informações extraídas pela IA"""
+    case = Case.query.get_or_404(case_id)
+    document = Document.query.get_or_404(document_id)
+    
+    # Verificar se o documento pertence ao caso
+    if document.case_id != case_id:
+        flash('Documento não pertence a este caso.', 'danger')
+        return redirect(url_for('case_documents_list', case_id=case_id))
+    
+    # Buscar benefício relacionado se existir
+    related_benefit = None
+    if document.related_benefit_id:
+        related_benefit = CaseBenefit.query.get(document.related_benefit_id)
+    
+    return render_template(
+        'cases/document_view.html',
+        case=case,
+        document=document,
+        related_benefit=related_benefit,
+        case_id=case_id,
+        title=f'Visualizar Documento - {document.original_filename}'
+    )
 
 @app.route('/cases/<int:case_id>/documents/<int:document_id>/delete', methods=['POST'])
 def case_document_delete(case_id, document_id):
