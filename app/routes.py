@@ -1,3 +1,5 @@
+from app.agents.file_agent import FileAgent
+from app.agents.agent_document_reader import AgentDocumentReader
 from main import app
 from flask import jsonify, render_template, session, request, redirect, url_for, flash
 from app.models import db, Client, Court, Lawyer, Case, CaseLawyer, CaseBenefit, Document, CaseCompetence
@@ -806,6 +808,19 @@ def case_benefit_delete(case_id, benefit_id):
         flash(f'Erro ao excluir benefício: {str(e)}', 'danger')
     
     return redirect(url_for('case_benefits_list', case_id=case_id))
+
+@app.route('/ia/test')
+def ia_test():
+    """Rota de teste para funcionalidades de IA"""
+    file_agent = FileAgent()
+    file_id = file_agent.upload_file(
+        "https://emsportal.com.br/controle/includes/anexoProtocoloDownload.php?id=372094&anexo=2025-11/1c0a60f97ee2ab4a81ff18916d451091.pdf"
+    )
+
+    agent = AgentDocumentReader()
+    result = agent.analyze_document(file_id)
+    print(result)
+    return jsonify(result)
 
 # ========================
 # Rota global de benefícios (apenas visualização)
