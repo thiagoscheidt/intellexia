@@ -1,0 +1,144 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Petições do Caso - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-sm-6">
+        <h3 class="mb-0">Petições do Caso #{{ case_id }}</h3>
+      </div>
+      <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-end">
+          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases_list') }}">Casos</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('case_detail', case_id=case_id) }}">Caso #{{ case_id }}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Petições</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header bg-info text-white">
+            <h3 class="card-title"><i class="bi bi-robot"></i> Petições Geradas com IA</h3>
+            <div class="card-tools">
+              <a href="{{ url_for('case_detail', case_id=case_id) }}" class="btn btn-sm btn-light">
+                <i class="bi bi-arrow-left"></i> Voltar ao Caso
+              </a>
+              <a href="{{ url_for('case_petition_generate', case_id=case_id) }}" class="btn btn-sm btn-warning">
+                <i class="bi bi-magic"></i> Gerar Nova Petição
+              </a>
+            </div>
+          </div>
+          <div class="card-body">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                {% for category, message in messages %}
+                  <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                  </div>
+                {% endfor %}
+              {% endif %}
+            {% endwith %}
+
+            {% if petitions %}
+            <div class="alert alert-info">
+              <i class="bi bi-info-circle"></i> <strong>{{ petitions|length }} versão(ões) gerada(s)</strong> - Você pode gerar novas versões sempre que atualizar o caso com novos documentos ou benefícios.
+            </div>
+
+            <div class="table-responsive">
+              <table class="table table-bordered table-hover">
+                <thead>
+                  <tr>
+                    <th width="80">Versão</th>
+                    <th>Título</th>
+                    <th>Gerada em</th>
+                    <th>Status</th>
+                    <th width="150">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for petition in petitions %}
+                  <tr>
+                    <td class="text-center">
+                      <span class="badge bg-primary fs-6">v{{ petition.version }}</span>
+                    </td>
+                    <td>
+                      <i class="bi bi-file-text text-info"></i>
+                      {{ petition.title }}
+                    </td>
+                    <td>
+                      {{ petition.generated_at.strftime('%d/%m/%Y às %H:%M') if petition.generated_at else '-' }}
+                    </td>
+                    <td>
+                      {% if petition.status == 'completed' %}
+                        <span class="badge bg-success">
+                          <i class="bi bi-check-circle-fill"></i> Concluída
+                        </span>
+                      {% elif petition.status == 'processing' %}
+                        <span class="badge bg-info">
+                          <i class="bi bi-hourglass-split"></i> Processando
+                        </span>
+                      {% elif petition.status == 'error' %}
+                        <span class="badge bg-danger">
+                          <i class="bi bi-exclamation-triangle"></i> Erro
+                        </span>
+                      {% else %}
+                        <span class="badge bg-secondary">{{ petition.status }}</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      <a href="{{ url_for('case_petition_view', case_id=case_id, petition_id=petition.id) }}" class="btn btn-sm btn-info" title="Visualizar">
+                        <i class="bi bi-eye"></i>
+                      </a>
+                      <button class="btn btn-sm btn-success" onclick="copyPetitionLink({{ petition.id }})" title="Copiar Link">
+                        <i class="bi bi-link-45deg"></i>
+                      </button>
+                      <form action="{{ url_for('case_petition_delete', case_id=case_id, petition_id=petition.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Tem certeza que deseja excluir esta petição?');">
+                        <button type="submit" class="btn btn-sm btn-danger" title="Excluir">
+                          <i class="bi bi-trash"></i>
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% else %}
+            <div class="alert alert-warning">
+              <i class="bi bi-stars"></i> <strong>Nenhuma petição gerada ainda.</strong>
+              <p class="mb-0 mt-2">Clique no botão abaixo para gerar sua primeira petição com IA!</p>
+            </div>
+            <div class="text-center">
+              <a href="{{ url_for('case_petition_generate', case_id=case_id) }}" class="btn btn-warning btn-lg">
+                <i class="bi bi-magic"></i> Gerar Primeira Petição com IA
+              </a>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function copyPetitionLink(petitionId) {
+  const url = window.location.origin + "{{ url_for('case_petition_view', case_id=case_id, petition_id=0) }}".replace('/0', '/' + petitionId);
+  navigator.clipboard.writeText(url).then(() => {
+    alert('Link copiado para a área de transferência!');
+  }).catch(err => {
+    alert('Erro ao copiar: ' + err);
+  });
+}
+</script>
+{% endblock %}

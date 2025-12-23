@@ -1,0 +1,180 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Visualizar Petição - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-sm-6">
+        <h3 class="mb-0">Petição - Versão {{ petition.version }}</h3>
+      </div>
+      <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-end">
+          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases_list') }}">Casos</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('case_detail', case_id=case_id) }}">Caso #{{ case_id }}</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('case_petitions_list', case_id=case_id) }}">Petições</a></li>
+          <li class="breadcrumb-item active" aria-current="page">v{{ petition.version }}</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-md-9">
+        <!-- Conteúdo da Petição -->
+        <div class="card">
+          <div class="card-header bg-info text-white">
+            <h3 class="card-title"><i class="bi bi-file-text"></i> {{ petition.title }}</h3>
+            <div class="card-tools">
+              <span class="badge bg-light text-dark">Versão {{ petition.version }}</span>
+            </div>
+          </div>
+          <div class="card-body">
+            {% if petition.status == 'completed' %}
+              <div class="petition-content" style="white-space: pre-wrap; font-family: 'Times New Roman', serif; font-size: 14px; line-height: 1.8; text-align: justify;">{{ petition.content }}</div>
+            {% elif petition.status == 'processing' %}
+              <div class="alert alert-info">
+                <div class="d-flex align-items-center">
+                  <div class="spinner-border spinner-border-sm me-2" role="status">
+                    <span class="visually-hidden">Processando...</span>
+                  </div>
+                  <div>
+                    <strong>Petição sendo gerada pela IA...</strong><br>
+                    <small>Isso pode levar alguns instantes. Atualize a página para ver o resultado.</small>
+                  </div>
+                </div>
+              </div>
+              <button class="btn btn-primary" onclick="location.reload()">
+                <i class="bi bi-arrow-clockwise"></i> Atualizar Página
+              </button>
+            {% elif petition.status == 'error' %}
+              <div class="alert alert-danger">
+                <h5><i class="bi bi-exclamation-octagon"></i> Erro ao gerar petição</h5>
+                {% if petition.error_message %}
+                  <hr>
+                  <p class="mb-0"><strong>Detalhes do erro:</strong></p>
+                  <pre class="mt-2 p-2 bg-light border rounded">{{ petition.error_message }}</pre>
+                {% endif %}
+              </div>
+            {% endif %}
+          </div>
+          <div class="card-footer">
+            <button class="btn btn-primary" onclick="window.print()">
+              <i class="bi bi-printer"></i> Imprimir
+            </button>
+            <button class="btn btn-success" onclick="copyToClipboard()">
+              <i class="bi bi-clipboard"></i> Copiar Texto
+            </button>
+            <a href="{{ url_for('case_petitions_list', case_id=case_id) }}" class="btn btn-secondary">
+              <i class="bi bi-arrow-left"></i> Voltar
+            </a>
+            <form action="{{ url_for('case_petition_delete', case_id=case_id, petition_id=petition.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Tem certeza que deseja excluir esta petição?');">
+              <button type="submit" class="btn btn-danger">
+                <i class="bi bi-trash"></i> Excluir
+              </button>
+            </form>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-3">
+        <!-- Informações da Petição -->
+        <div class="card">
+          <div class="card-header bg-primary text-white">
+            <h5 class="card-title mb-0"><i class="bi bi-info-circle"></i> Informações</h5>
+          </div>
+          <div class="card-body">
+            <dl class="mb-0">
+              <dt>Versão:</dt>
+              <dd><span class="badge bg-primary">v{{ petition.version }}</span></dd>
+
+              <dt>Status:</dt>
+              <dd>
+                {% if petition.status == 'completed' %}
+                  <span class="badge bg-success">Concluída</span>
+                {% elif petition.status == 'processing' %}
+                  <span class="badge bg-info">Processando</span>
+                {% elif petition.status == 'error' %}
+                  <span class="badge bg-danger">Erro</span>
+                {% else %}
+                  <span class="badge bg-secondary">{{ petition.status }}</span>
+                {% endif %}
+              </dd>
+
+              <dt>Gerada em:</dt>
+              <dd>{{ petition.generated_at.strftime('%d/%m/%Y às %H:%M') if petition.generated_at else '-' }}</dd>
+
+              <dt>Caso:</dt>
+              <dd><a href="{{ url_for('case_detail', case_id=case_id) }}">{{ case.title }}</a></dd>
+            </dl>
+          </div>
+        </div>
+
+        <!-- Contexto Usado -->
+        {% if petition.context_summary %}
+        <div class="card mt-3">
+          <div class="card-header">
+            <h5 class="card-title mb-0"><i class="bi bi-layers"></i> Contexto Usado</h5>
+          </div>
+          <div class="card-body">
+            <pre style="white-space: pre-wrap; font-size: 0.85rem;">{{ petition.context_summary }}</pre>
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Ações Rápidas -->
+        <div class="card mt-3">
+          <div class="card-header">
+            <h5 class="card-title mb-0"><i class="bi bi-lightning-charge"></i> Ações Rápidas</h5>
+          </div>
+          <div class="card-body">
+            <div class="d-grid gap-2">
+              <a href="{{ url_for('case_petition_generate', case_id=case_id) }}" class="btn btn-warning">
+                <i class="bi bi-magic"></i> Gerar Nova Versão
+              </a>
+              <a href="{{ url_for('case_detail', case_id=case_id) }}" class="btn btn-outline-primary">
+                <i class="bi bi-arrow-left"></i> Voltar ao Caso
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function copyToClipboard() {
+  const content = document.querySelector('.petition-content').textContent;
+  navigator.clipboard.writeText(content).then(() => {
+    alert('Conteúdo copiado para a área de transferência!');
+  }).catch(err => {
+    alert('Erro ao copiar: ' + err);
+  });
+}
+
+// Estilo para impressão
+window.onbeforeprint = function() {
+  document.body.classList.add('printing');
+};
+</script>
+
+<style>
+@media print {
+  .app-content-header, .card-header, .card-footer, .btn, .breadcrumb, .col-md-3 {
+    display: none !important;
+  }
+  .col-md-9 {
+    width: 100% !important;
+  }
+  .petition-content {
+    font-size: 12pt !important;
+  }
+}
+</style>
+{% endblock %}

@@ -1,0 +1,113 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Gerar Petição com IA - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-sm-6">
+        <h3 class="mb-0">Gerar Petição com IA</h3>
+      </div>
+      <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-end">
+          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases_list') }}">Casos</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('case_detail', case_id=case_id) }}">Caso #{{ case_id }}</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Gerar Petição</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row justify-content-center">
+      <div class="col-md-8">
+        <div class="card">
+          <div class="card-header bg-warning">
+            <h3 class="card-title"><i class="bi bi-robot"></i> Gerar Nova Petição com Inteligência Artificial</h3>
+          </div>
+          <div class="card-body">
+            <div class="alert alert-info">
+              <h5><i class="bi bi-info-circle"></i> Como funciona?</h5>
+              <p>A IA analisará todos os documentos, benefícios e informações do caso para gerar uma petição inicial completa e personalizada.</p>
+            </div>
+
+            <h5 class="mt-4">Informações do Caso</h5>
+            <dl class="row">
+              <dt class="col-sm-4">Título do Caso:</dt>
+              <dd class="col-sm-8">{{ case.title }}</dd>
+
+              <dt class="col-sm-4">Cliente:</dt>
+              <dd class="col-sm-8">{{ case.client.name if case.client else 'Não informado' }}</dd>
+
+              <dt class="col-sm-4">Tipo de Caso:</dt>
+              <dd class="col-sm-8">{{ case.case_type }}</dd>
+
+              <dt class="col-sm-4">Valor da Causa:</dt>
+              <dd class="col-sm-8">
+                {% if case.value_cause %}
+                  R$ {{ "{:,.2f}".format(case.value_cause).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                {% else %}
+                  Não informado
+                {% endif %}
+              </dd>
+            </dl>
+
+            <hr>
+
+            <h5 class="mt-4">Contexto Disponível para a IA</h5>
+            <div class="row text-center">
+              <div class="col-md-6">
+                <div class="card bg-light">
+                  <div class="card-body">
+                    <h2 class="text-primary">{{ benefits_count }}</h2>
+                    <p class="mb-0">Benefícios Cadastrados</p>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="card bg-light">
+                  <div class="card-body">
+                    <h2 class="text-success">{{ documents_count }}</h2>
+                    <p class="mb-0">Documentos com IA</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {% if benefits_count == 0 or documents_count == 0 %}
+            <div class="alert alert-warning mt-3">
+              <i class="bi bi-exclamation-triangle"></i> <strong>Atenção:</strong> 
+              Para uma petição mais completa, recomendamos cadastrar benefícios e fazer upload de documentos antes de gerar a petição.
+            </div>
+            {% endif %}
+
+            <hr>
+
+            <h5 class="mt-4">Versionamento</h5>
+            <p>Esta será a <strong>Versão {{ next_version }}</strong> da petição. Você pode gerar quantas versões precisar, cada uma será salva separadamente.</p>
+
+            <div class="alert alert-success">
+              <i class="bi bi-check-circle"></i> <strong>Você pode gerar múltiplas versões!</strong> 
+              Sempre que adicionar novos documentos ou benefícios, pode gerar uma nova petição atualizada.
+            </div>
+          </div>
+          <div class="card-footer">
+            <form method="POST" action="{{ url_for('case_petition_generate', case_id=case_id) }}">
+              <button type="submit" class="btn btn-warning btn-lg">
+                <i class="bi bi-magic"></i> Gerar Petição Versão {{ next_version }}
+              </button>
+              <a href="{{ url_for('case_detail', case_id=case_id) }}" class="btn btn-secondary btn-lg">
+                <i class="bi bi-x-circle"></i> Cancelar
+              </a>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

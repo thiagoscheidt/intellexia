@@ -95,6 +95,7 @@ class Case(db.Model):
     competences = db.relationship('CaseCompetence', back_populates='case', cascade='all, delete-orphan')
     benefits = db.relationship('CaseBenefit', back_populates='case', cascade='all, delete-orphan')
     documents = db.relationship('Document', back_populates='case', cascade='all, delete-orphan')
+    petitions = db.relationship('Petition', back_populates='case', cascade='all, delete-orphan')
     
     def __repr__(self):
         return f'<Case {self.title}>'
@@ -191,3 +192,31 @@ class Document(db.Model):
     
     def __repr__(self):
         return f'<Document {self.original_filename}>'
+
+
+class Petition(db.Model):
+    """Tabela petitions - Petições geradas pela IA"""
+    __tablename__ = 'petitions'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    case_id = db.Column(db.Integer, db.ForeignKey('cases.id'), nullable=False, index=True)
+    version = db.Column(db.Integer, nullable=False)  # Número da versão (1, 2, 3...)
+    title = db.Column(db.String(255), nullable=False)  # Título da petição
+    content = db.Column(db.Text, nullable=False)  # Conteúdo completo da petição
+    
+    # Metadados da geração
+    generated_at = db.Column(db.DateTime, default=datetime.utcnow)
+    generated_by_user_id = db.Column(db.Integer)  # FK de usuário (futuro)
+    
+    # Status da geração
+    status = db.Column(db.String(20), default='completed')  # pending, processing, completed, error
+    error_message = db.Column(db.Text)  # Mensagem de erro caso falhe
+    
+    # Contexto usado na geração (para referência)
+    context_summary = db.Column(db.Text)  # Resumo do contexto usado (docs, benefícios, etc.)
+    
+    # Relacionamentos
+    case = db.relationship('Case', back_populates='petitions')
+    
+    def __repr__(self):
+        return f'<Petition v{self.version} - Case {self.case_id}>'

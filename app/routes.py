@@ -2,7 +2,7 @@ from app.agents.file_agent import FileAgent
 from app.agents.agent_document_reader import AgentDocumentReader
 from main import app
 from flask import jsonify, render_template, session, request, redirect, url_for, flash
-from app.models import db, Client, Court, Lawyer, Case, CaseLawyer, CaseBenefit, Document, CaseCompetence
+from app.models import db, Client, Court, Lawyer, Case, CaseLawyer, CaseBenefit, Document, CaseCompetence, Petition
 import hashlib
 import uuid
 import re
@@ -480,13 +480,75 @@ def case_delete(case_id):
     
     return redirect(url_for('cases_list'))
 
+@app.route('/cases/<int:case_id>/lawyers/add', methods=['POST'])
+def case_lawyer_add(case_id):
+    """Adiciona um advogado ao caso"""
+    case = Case.query.get_or_404(case_id)
+    
+    lawyer_id = request.form.get('lawyer_id')
+    role = request.form.get('role', '')
+    
+    if not lawyer_id:
+        flash('Selecione um advogado.', 'warning')
+        return redirect(url_for('case_detail', case_id=case_id))
+    
+    # Verificar se advogado existe
+    lawyer = Lawyer.query.get_or_404(int(lawyer_id))
+    
+    # Verificar se já está vinculado
+    existing = CaseLawyer.query.filter_by(case_id=case_id, lawyer_id=lawyer_id).first()
+    if existing:
+        flash('Este advogado já está vinculado ao caso.', 'warning')
+        return redirect(url_for('case_detail', case_id=case_id))
+    
+    # Adicionar vínculo
+    case_lawyer = CaseLawyer(
+        case_id=case_id,
+        lawyer_id=lawyer_id,
+        role=role
+    )
+    
+    db.session.add(case_lawyer)
+    try:
+        db.session.commit()
+        flash(f'Advogado {lawyer.name} vinculado ao caso com sucesso!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao vincular advogado: {str(e)}', 'danger')
+    
+    return redirect(url_for('case_detail', case_id=case_id))
+
+@app.route('/cases/<int:case_id>/lawyers/<int:case_lawyer_id>/remove', methods=['POST'])
+def case_lawyer_remove(case_id, case_lawyer_id):
+    """Remove um advogado do caso"""
+    case_lawyer = CaseLawyer.query.get_or_404(case_lawyer_id)
+    
+    if case_lawyer.case_id != case_id:
+        flash('Vínculo não pertence a este caso.', 'danger')
+        return redirect(url_for('case_detail', case_id=case_id))
+    
+    lawyer_name = case_lawyer.lawyer.name
+    
+    try:
+        db.session.delete(case_lawyer)
+        db.session.commit()
+        flash(f'Advogado {lawyer_name} removido do caso.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao remover advogado: {str(e)}', 'danger')
+    
+    return redirect(url_for('case_detail', case_id=case_id))
+
 @app.route('/cases/<int:case_id>')
 def case_detail(case_id):
     case = Case.query.get_or_404(case_id)
     benefits = CaseBenefit.query.filter_by(case_id=case_id).order_by(CaseBenefit.created_at.desc()).all()
     documents = Document.query.filter_by(case_id=case_id).order_by(Document.uploaded_at.desc()).all()
     competences = CaseCompetence.query.filter_by(case_id=case_id).all()
-    return render_template('cases/detail.html', case=case, case_id=case_id, benefits=benefits, documents=documents, competences=competences)
+    petitions = Petition.query.filter_by(case_id=case_id).order_by(Petition.version.desc()).all()
+    case_lawyers = CaseLawyer.query.filter_by(case_id=case_id).all()
+    all_lawyers = Lawyer.query.order_by(Lawyer.name).all()
+    return render_template('cases/detail.html', case=case, case_id=case_id, benefits=benefits, documents=documents, competences=competences, petitions=petitions, case_lawyers=case_lawyers, all_lawyers=all_lawyers)
 
 # ========================
 # Rotas de Documentos do Caso
@@ -889,4 +951,188 @@ def benefits_list():
     """Lista todos os benefícios do sistema para visualização geral"""
     benefits = CaseBenefit.query.join(Case).join(Client).order_by(CaseBenefit.created_at.desc()).all()
     return render_template('benefits/list.html', benefits=benefits)
+
+# ========================
+# Rotas de Petições (IA)
+# ========================
+@app.route('/cases/<int:case_id>/petitions')
+def case_petitions_list(case_id):
+    """Lista todas as petições geradas para um caso"""
+    case = Case.query.get_or_404(case_id)
+    petitions = Petition.query.filter_by(case_id=case_id).order_by(Petition.version.desc()).all()
+    return render_template('cases/petitions_list.html', case=case, petitions=petitions, case_id=case_id)
+
+@app.route('/cases/<int:case_id>/petitions/generate', methods=['GET', 'POST'])
+def case_petition_generate(case_id):
+    """Gera uma nova petição com IA"""
+    case = Case.query.get_or_404(case_id)
+    
+    if request.method == 'POST':
+        try:
+            # Determinar próxima versão
+            last_petition = Petition.query.filter_by(case_id=case_id).order_by(Petition.version.desc()).first()
+            next_version = (last_petition.version + 1) if last_petition else 1
+            
+            # Coletar contexto do caso
+            benefits = CaseBenefit.query.filter_by(case_id=case_id).all()
+            documents = Document.query.filter_by(case_id=case_id, use_in_ai=True, ai_status='completed').all()
+            
+            # Preparar contexto para a IA
+            context_summary = f"""
+Contexto da Petição - Versão {next_version}:
+- Cliente: {case.client.name if case.client else 'Não informado'}
+- Tipo de Caso: {case.case_type}
+- Total de Benefícios: {len(benefits)}
+- Total de Documentos Analisados: {len(documents)}
+- Valor da Causa: R$ {case.value_cause if case.value_cause else 'Não informado'}
+"""
+            
+            # Criar petição pendente
+            petition = Petition(
+                case_id=case_id,
+                version=next_version,
+                title=f"Petição Inicial - {case.title}",
+                content="Gerando conteúdo com IA...",
+                status='processing',
+                context_summary=context_summary
+            )
+            
+            db.session.add(petition)
+            db.session.commit()
+            
+            # Gerar conteúdo com IA (simulado por enquanto)
+            try:
+                # TODO: Integrar com a IA real
+                petition_content = generate_petition_with_ai(case, benefits, documents)
+                
+                # Atualizar petição com conteúdo gerado
+                petition.content = petition_content
+                petition.status = 'completed'
+                petition.generated_at = datetime.utcnow()
+                db.session.commit()
+                
+                flash('Petição gerada com sucesso pela IA!', 'success')
+                return redirect(url_for('case_petition_view', case_id=case_id, petition_id=petition.id))
+                
+            except Exception as e:
+                petition.status = 'error'
+                petition.error_message = str(e)
+                db.session.commit()
+                flash(f'Erro ao gerar petição: {str(e)}', 'danger')
+                
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Erro ao criar petição: {str(e)}', 'danger')
+    
+    # GET - Mostrar formulário de confirmação
+    benefits_count = CaseBenefit.query.filter_by(case_id=case_id).count()
+    documents_count = Document.query.filter_by(case_id=case_id, use_in_ai=True).count()
+    last_petition = Petition.query.filter_by(case_id=case_id).order_by(Petition.version.desc()).first()
+    next_version = (last_petition.version + 1) if last_petition else 1
+    
+    return render_template(
+        'cases/petition_generate.html',
+        case=case,
+        case_id=case_id,
+        next_version=next_version,
+        benefits_count=benefits_count,
+        documents_count=documents_count
+    )
+
+@app.route('/cases/<int:case_id>/petitions/<int:petition_id>')
+def case_petition_view(case_id, petition_id):
+    """Visualiza uma petição específica"""
+    case = Case.query.get_or_404(case_id)
+    petition = Petition.query.get_or_404(petition_id)
+    
+    if petition.case_id != case_id:
+        flash('Petição não pertence a este caso.', 'danger')
+        return redirect(url_for('case_petitions_list', case_id=case_id))
+    
+    return render_template(
+        'cases/petition_view.html',
+        case=case,
+        petition=petition,
+        case_id=case_id
+    )
+
+@app.route('/cases/<int:case_id>/petitions/<int:petition_id>/delete', methods=['POST'])
+def case_petition_delete(case_id, petition_id):
+    """Exclui uma petição"""
+    petition = Petition.query.get_or_404(petition_id)
+    
+    if petition.case_id != case_id:
+        flash('Petição não pertence a este caso.', 'danger')
+        return redirect(url_for('case_petitions_list', case_id=case_id))
+    
+    try:
+        db.session.delete(petition)
+        db.session.commit()
+        flash('Petição excluída com sucesso!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao excluir petição: {str(e)}', 'danger')
+    
+    return redirect(url_for('case_petitions_list', case_id=case_id))
+
+def generate_petition_with_ai(case, benefits, documents):
+    """
+    Gera o conteúdo da petição usando IA
+    TODO: Integrar com modelo de IA real
+    """
+    # Simulação por enquanto
+    petition_content = f"""EXCELENTÍSSIMO(A) SENHOR(A) DOUTOR(A) JUIZ(A) DE DIREITO DA {case.court.vara_name if case.court else 'VARA COMPETENTE'}
+
+{case.client.name if case.client else 'EMPRESA AUTORA'}, pessoa jurídica de direito privado, inscrita no CNPJ sob nº {case.client.cnpj if case.client else 'XX.XXX.XXX/XXXX-XX'}, com sede em {case.client.city if case.client else 'CIDADE'}/{case.client.state if case.client else 'UF'}, vem, por meio de seu advogado signatário, com fundamento nos artigos da Lei nº 8.213/91 e demais legislações pertinentes, propor a presente
+
+AÇÃO DECLARATÓRIA DE INEXISTÊNCIA DE NEXO CAUSAL
+
+em face do INSTITUTO NACIONAL DO SEGURO SOCIAL – INSS, autarquia federal, pelos motivos de fato e de direito a seguir expostos:
+
+I – DOS FATOS
+
+{case.facts_summary if case.facts_summary else 'A empresa autora foi surpreendida com a vinculação indevida de benefícios acidentários que não guardam relação com suas atividades laborais.'}
+
+"""
+
+    # Adicionar informações sobre benefícios
+    if benefits:
+        petition_content += f"\n\nII – DOS BENEFÍCIOS CONTESTADOS\n\n"
+        petition_content += f"Foram vinculados à empresa os seguintes benefícios:\n\n"
+        
+        for i, benefit in enumerate(benefits, 1):
+            petition_content += f"{i}. Benefício nº {benefit.benefit_number} - {benefit.benefit_type}\n"
+            petition_content += f"   Segurado: {benefit.insured_name}\n"
+            if benefit.accident_date:
+                petition_content += f"   Data do Acidente: {benefit.accident_date.strftime('%d/%m/%Y')}\n"
+            if benefit.error_reason:
+                petition_content += f"   Motivo da Contestação: {benefit.error_reason}\n"
+            petition_content += "\n"
+    
+    petition_content += f"""
+III – DO DIREITO
+
+{case.thesis_summary if case.thesis_summary else 'A vinculação indevida de benefícios acidentários impacta diretamente no FAP (Fator Acidentário de Prevenção) da empresa, majorando indevidamente suas contribuições previdenciárias.'}
+
+IV – DOS PEDIDOS
+
+Diante do exposto, requer-se a Vossa Excelência:
+
+a) A procedência do pedido para declarar a inexistência de nexo causal entre os benefícios relacionados e as atividades da empresa autora;
+
+b) A determinação ao INSS para exclusão dos benefícios do cálculo do FAP da empresa;
+
+c) A condenação do INSS ao pagamento das custas processuais e honorários advocatícios.
+
+Termos em que,
+Pede deferimento.
+
+{case.client.city if case.client else 'Cidade'}/{case.client.state if case.client else 'UF'}, {datetime.now().strftime('%d de %B de %Y')}.
+
+___________________________________
+Advogado(a) OAB/XX XXXXX
+"""
+    
+    return petition_content
+
 

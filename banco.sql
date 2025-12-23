@@ -181,3 +181,32 @@ CREATE TABLE `documents` (
     FOREIGN KEY (`related_benefit_id`) REFERENCES `case_benefits`(`id`)
     ON DELETE SET NULL ON UPDATE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- =========================
+-- Tabela: petitions (Petições Geradas pela IA)
+-- =========================
+CREATE TABLE `petitions` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,       -- ID da petição
+  `case_id` BIGINT UNSIGNED NOT NULL,                 -- FK do caso
+  `version` INT NOT NULL,                             -- Número da versão (1, 2, 3...)
+  `title` VARCHAR(255) NOT NULL,                      -- Título da petição
+  `content` TEXT NOT NULL,                            -- Conteúdo completo da petição
+  
+  -- Metadados da geração
+  `generated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, -- Data/hora da geração
+  `generated_by_user_id` BIGINT UNSIGNED NULL,        -- FK de usuário (futuro)
+  
+  -- Status da geração
+  `status` VARCHAR(20) NOT NULL DEFAULT 'completed',  -- pending, processing, completed, error
+  `error_message` TEXT NULL,                          -- Mensagem de erro caso falhe
+  
+  -- Contexto usado na geração
+  `context_summary` TEXT NULL,                        -- Resumo do contexto usado
+  
+  PRIMARY KEY (`id`),
+  KEY `idx_petitions_case_id` (`case_id`),
+  KEY `idx_petitions_version` (`case_id`, `version`), -- Índice composto para buscar versões de um caso
+  CONSTRAINT `fk_petitions_cases`
+    FOREIGN KEY (`case_id`) REFERENCES `cases`(`id`)
+    ON DELETE CASCADE ON UPDATE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
