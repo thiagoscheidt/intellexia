@@ -5,90 +5,503 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>IntellexIA | Login</title>
 
-    <!-- Google Font: Source Sans Pro -->
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css?family=Source+Sans+Pro:300,400,400i,700&display=fallback">
-    <!-- Font Awesome -->
+    <!-- Google Font: Poppins -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap">
+    <!-- Bootstrap Icons -->
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css" crossorigin="anonymous">
     <!-- Theme style -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/adminlte.css') }}">
+    
+    <style>
+        :root {
+            --primary-color: #1e40af;
+            --secondary-color: #1e3a8a;
+            --success-color: #059669;
+            --danger-color: #dc2626;
+            --dark-color: #111827;
+            --light-color: #f9fafb;
+            --bg-dark: #0f172a;
+            --bg-darker: #020617;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 50%, #334155 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Animated background */
+        body::before {
+            content: '';
+            position: absolute;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(30,64,175,0.05) 1px, transparent 1px);
+            background-size: 50px 50px;
+            animation: moveBackground 20s linear infinite;
+            z-index: 0;
+        }
+
+        @keyframes moveBackground {
+            0% { transform: translate(0, 0); }
+            100% { transform: translate(50px, 50px); }
+        }
+
+        .login-box {
+            width: 440px;
+            max-width: 95%;
+            z-index: 1;
+            animation: slideIn 0.5s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .card {
+            border: none !important;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            border-radius: 20px !important;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+            background: rgba(255, 255, 255, 0.98) !important;
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%) !important;
+            border: none !important;
+            padding: 2rem 1.5rem;
+        }
+
+        .card-header a {
+            color: white !important;
+            text-decoration: none;
+            font-weight: 700;
+            font-size: 2rem;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            transition: transform 0.3s ease;
+            display: inline-block;
+        }
+
+        .card-header a:hover {
+            transform: scale(1.05);
+        }
+
+        .card-body {
+            padding: 2.5rem 2rem;
+        }
+
+        .login-box-msg {
+            font-size: 1.1rem;
+            color: #4a5568;
+            font-weight: 500;
+            margin-bottom: 2rem;
+        }
+
+        .form-control {
+            border: 2px solid #d1d5db;
+            border-radius: 10px;
+            padding: 0.75rem 1rem;
+            font-size: 0.95rem;
+            transition: all 0.3s ease;
+            background-color: #f9fafb;
+        }
+
+        .form-control:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(30, 64, 175, 0.15);
+            background-color: white;
+        }
+
+        .form-control.is-invalid {
+            border-color: var(--danger-color);
+        }
+
+        .form-control.is-valid {
+            border-color: var(--success-color);
+        }
+
+        .input-group {
+            position: relative;
+        }
+
+        .input-group-text {
+            background: transparent;
+            border: 2px solid #d1d5db;
+            border-left: none;
+            border-radius: 0 10px 10px 0;
+            color: #6b7280;
+            transition: all 0.3s ease;
+        }
+
+        .input-group:focus-within .input-group-text {
+            border-color: var(--primary-color);
+            color: var(--primary-color);
+        }
+
+        .password-toggle {
+            position: absolute;
+            right: 50px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            color: #6b7280;
+            z-index: 10;
+            transition: color 0.3s ease;
+        }
+
+        .password-toggle:hover {
+            color: var(--primary-color);
+        }
+
+        .form-check-input:checked {
+            background-color: var(--primary-color);
+            border-color: var(--primary-color);
+        }
+
+        .form-check-label {
+            color: #4a5568;
+            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #1e40af 0%, #1e3a8a 100%);
+            border: none;
+            border-radius: 10px;
+            padding: 0.75rem 1.5rem;
+            font-weight: 600;
+            font-size: 1rem;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(30, 64, 175, 0.5);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+        }
+
+        .btn-primary:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+
+        .btn-loading {
+            pointer-events: none;
+        }
+
+        .spinner {
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.6s linear infinite;
+            margin-right: 8px;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .card-body a {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+
+        .card-body a:hover {
+            color: var(--secondary-color);
+            text-decoration: underline;
+        }
+
+        .divider {
+            display: flex;
+            align-items: center;
+            text-align: center;
+            margin: 1.5rem 0;
+            color: #9ca3af;
+            font-size: 0.85rem;
+        }
+
+        .divider::before,
+        .divider::after {
+            content: '';
+            flex: 1;
+            border-bottom: 1px solid #d1d5db;
+        }
+
+        .divider span {
+            padding: 0 1rem;
+        }
+
+        .alert {
+            border: none;
+            border-radius: 10px;
+            animation: slideDown 0.3s ease-out;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .invalid-feedback,
+        .valid-feedback {
+            font-size: 0.85rem;
+            margin-top: 0.5rem;
+            display: none;
+        }
+
+        .invalid-feedback {
+            color: var(--danger-color);
+        }
+
+        .valid-feedback {
+            color: var(--success-color);
+        }
+
+        .form-control.is-invalid ~ .invalid-feedback,
+        .form-control.is-valid ~ .valid-feedback {
+            display: block;
+        }
+
+        /* Responsive */
+        @media (max-width: 576px) {
+            .login-box {
+                width: 100%;
+                margin: 1rem;
+            }
+            
+            .card-body {
+                padding: 1.5rem 1.25rem;
+            }
+
+            .card-header a {
+                font-size: 1.5rem;
+            }
+        }
+    </style>
 </head>
-<body class="hold-transition login-page">
+<body class="hold-transition">
 <div class="login-box">
-    <!-- /.login-logo -->
-    <div class="card card-outline card-primary">
+    <div class="card">
         <div class="card-header text-center">
-            <a href="{{ url_for('login') }}" class="h1"><b>Intellex</b>IA</a>
+            <a href="{{ url_for('login') }}"><b>Intellex</b>IA</a>
         </div>
         <div class="card-body">
-            <p class="login-box-msg">Faça login para iniciar sua sessão</p>
+            <p class="login-box-msg">Bem-vindo de volta! 👋</p>
 
-            <form action="{{ url_for('login_post') }}" method="post" id="loginForm">
-                <div class="input-group mb-3">
-                    <input type="email" class="form-control" placeholder="Email" name="email" required>
-                    <div class="input-group-text">
-                        <span class="bi bi-envelope"></span>
-                    </div>
-                </div>
-                <div class="input-group mb-3">
-                    <input type="password" class="form-control" placeholder="Senha" name="password" required>
-                    <div class="input-group-text">
-                        <span class="bi bi-lock"></span>
-                    </div>
-                </div>
-                <div class="row">
-                    <div class="col-8">
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" value="" id="remember">
-                            <label class="form-check-label" for="remember">
-                                Lembrar-me
-                            </label>
+            <form action="{{ url_for('login_post') }}" method="post" id="loginForm" novalidate>
+                <div class="mb-3">
+                    <div class="input-group">
+                        <input type="email" class="form-control" placeholder="Digite seu email" 
+                               name="email" id="email" required>
+                        <div class="input-group-text">
+                            <i class="bi bi-envelope"></i>
                         </div>
                     </div>
-                    <!-- /.col -->
-                    <div class="col-4">
-                        <button type="submit" class="btn btn-primary btn-block">Entrar</button>
-                    </div>
-                    <!-- /.col -->
+                    <div class="invalid-feedback">Por favor, insira um email válido.</div>
+                    <div class="valid-feedback">Email válido!</div>
                 </div>
-            </form>
-            <!-- /.social-auth-links -->
 
-            <p class="mb-1">
-                <a href="{{ url_for('forgot_password') }}">Esqueci minha senha</a>
-            </p>
-            <p class="mb-0">
-                <a href="{{ url_for('register') }}" class="text-center">Registrar uma nova conta</a>
-            </p>
+                <div class="mb-3">
+                    <div class="input-group">
+                        <input type="password" class="form-control" placeholder="Digite sua senha" 
+                               name="password" id="password" required minlength="6">
+                        <span class="password-toggle" id="togglePassword">
+                            <i class="bi bi-eye"></i>
+                        </span>
+                        <div class="input-group-text">
+                            <i class="bi bi-lock"></i>
+                        </div>
+                    </div>
+                    <div class="invalid-feedback">A senha deve ter pelo menos 6 caracteres.</div>
+                    <div class="valid-feedback">Senha válida!</div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" value="1" id="remember" name="remember">
+                        <label class="form-check-label" for="remember">
+                            Lembrar-me
+                        </label>
+                    </div>
+                    <a href="{{ url_for('forgot_password') }}">Esqueci minha senha</a>
+                </div>
+
+                <button type="submit" class="btn btn-primary w-100 mb-3" id="submitBtn">
+                    <span id="btnText">Entrar</span>
+                </button>
+            </form>
+
+            <div class="divider">
+                <span>Novo por aqui?</span>
+            </div>
+
+            <div class="text-center">
+                <a href="{{ url_for('register') }}">Criar uma nova conta</a>
+            </div>
 
             <!-- Alert for messages -->
             <div id="alert-container" class="mt-3" style="display: none;">
-                <div class="alert alert-danger alert-dismissible">
+                <div class="alert alert-dismissible">
                     <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    <i class="bi me-2" id="alert-icon"></i>
                     <span id="alert-message"></span>
                 </div>
             </div>
         </div>
-        <!-- /.card-body -->
     </div>
-    <!-- /.card -->
 </div>
-<!-- /.login-box -->
 
-<!-- jQuery -->
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <!-- Bootstrap 5 -->
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
-<!-- AdminLTE App -->
-<script src="{{ url_for('static', filename='js/adminlte.js') }}"></script>
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     const form = document.getElementById('loginForm');
+    const emailInput = document.getElementById('email');
+    const passwordInput = document.getElementById('password');
+    const submitBtn = document.getElementById('submitBtn');
+    const btnText = document.getElementById('btnText');
+    const togglePassword = document.getElementById('togglePassword');
     const alertContainer = document.getElementById('alert-container');
     const alertMessage = document.getElementById('alert-message');
+    const alertIcon = document.getElementById('alert-icon');
 
+    // Toggle password visibility
+    togglePassword.addEventListener('click', function() {
+        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
+        passwordInput.setAttribute('type', type);
+        
+        const icon = this.querySelector('i');
+        icon.classList.toggle('bi-eye');
+        icon.classList.toggle('bi-eye-slash');
+    });
+
+    // Email validation
+    emailInput.addEventListener('blur', function() {
+        validateEmail(this);
+    });
+
+    emailInput.addEventListener('input', function() {
+        if (this.classList.contains('is-invalid') || this.classList.contains('is-valid')) {
+            validateEmail(this);
+        }
+    });
+
+    // Password validation
+    passwordInput.addEventListener('blur', function() {
+        validatePassword(this);
+    });
+
+    passwordInput.addEventListener('input', function() {
+        if (this.classList.contains('is-invalid') || this.classList.contains('is-valid')) {
+            validatePassword(this);
+        }
+    });
+
+    function validateEmail(input) {
+        const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        const value = input.value.trim();
+        
+        if (!value) {
+            input.classList.remove('is-valid', 'is-invalid');
+            return false;
+        }
+        
+        if (emailRegex.test(value)) {
+            input.classList.remove('is-invalid');
+            input.classList.add('is-valid');
+            return true;
+        } else {
+            input.classList.remove('is-valid');
+            input.classList.add('is-invalid');
+            return false;
+        }
+    }
+
+    function validatePassword(input) {
+        const value = input.value;
+        
+        if (!value) {
+            input.classList.remove('is-valid', 'is-invalid');
+            return false;
+        }
+        
+        if (value.length >= 6) {
+            input.classList.remove('is-invalid');
+            input.classList.add('is-valid');
+            return true;
+        } else {
+            input.classList.remove('is-valid');
+            input.classList.add('is-invalid');
+            return false;
+        }
+    }
+
+    function showAlert(message, type) {
+        const alert = alertContainer.querySelector('.alert');
+        const iconClass = {
+            'success': 'bi-check-circle-fill',
+            'danger': 'bi-x-circle-fill',
+            'warning': 'bi-exclamation-triangle-fill',
+            'info': 'bi-info-circle-fill'
+        };
+
+        alertMessage.textContent = message;
+        alertIcon.className = `bi me-2 ${iconClass[type] || iconClass.info}`;
+        alert.className = `alert alert-${type || 'info'} alert-dismissible`;
+        alertContainer.style.display = 'block';
+        
+        setTimeout(() => {
+            alertContainer.style.display = 'none';
+        }, 5000);
+    }
+
+    // Form submission
     form.addEventListener('submit', function(e) {
         e.preventDefault();
+        
+        // Validate all fields
+        const isEmailValid = validateEmail(emailInput);
+        const isPasswordValid = validatePassword(passwordInput);
+        
+        if (!isEmailValid || !isPasswordValid) {
+            showAlert('Por favor, corrija os erros no formulário.', 'warning');
+            return;
+        }
+
+        // Show loading state
+        submitBtn.classList.add('btn-loading');
+        submitBtn.disabled = true;
+        btnText.innerHTML = '<span class="spinner"></span>Entrando...';
         
         const formData = new FormData(form);
         
@@ -102,27 +515,28 @@ document.addEventListener('DOMContentLoaded', function() {
         .then(response => response.json())
         .then(data => {
             if (data.success) {
-                // Redirect to dashboard on success
-                window.location.href = data.redirect || "{{ url_for('index') }}";
-            } else {
-                // Show error message
-                alertMessage.textContent = data.message || 'Erro no login. Tente novamente.';
-                alertContainer.style.display = 'block';
+                btnText.innerHTML = '<i class="bi bi-check-circle me-2"></i>Sucesso!';
+                showAlert('Login realizado com sucesso! Redirecionando...', 'success');
                 
-                // Hide alert after 5 seconds
                 setTimeout(() => {
-                    alertContainer.style.display = 'none';
-                }, 5000);
+                    window.location.href = data.redirect || "{{ url_for('index') }}";
+                }, 1000);
+            } else {
+                submitBtn.classList.remove('btn-loading');
+                submitBtn.disabled = false;
+                btnText.textContent = 'Entrar';
+                
+                showAlert(data.message || 'Email ou senha incorretos.', 'danger');
             }
         })
         .catch(error => {
             console.error('Error:', error);
-            alertMessage.textContent = 'Erro de conexão. Tente novamente.';
-            alertContainer.style.display = 'block';
             
-            setTimeout(() => {
-                alertContainer.style.display = 'none';
-            }, 5000);
+            submitBtn.classList.remove('btn-loading');
+            submitBtn.disabled = false;
+            btnText.textContent = 'Entrar';
+            
+            showAlert('Erro de conexão. Verifique sua internet e tente novamente.', 'danger');
         });
     });
 
@@ -132,15 +546,18 @@ document.addEventListener('DOMContentLoaded', function() {
     const type = urlParams.get('type');
     
     if (message) {
-        alertMessage.textContent = decodeURIComponent(message);
-        const alert = alertContainer.querySelector('.alert');
-        alert.className = `alert alert-${type || 'info'} alert-dismissible`;
-        alertContainer.style.display = 'block';
+        showAlert(decodeURIComponent(message), type || 'info');
         
-        setTimeout(() => {
-            alertContainer.style.display = 'none';
-        }, 5000);
+        // Clean URL
+        window.history.replaceState({}, document.title, window.location.pathname);
     }
+
+    // Add enter key support for better UX
+    emailInput.addEventListener('keypress', function(e) {
+        if (e.key === 'Enter') {
+            passwordInput.focus();
+        }
+    });
 });
 </script>
 
