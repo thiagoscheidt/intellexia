@@ -2,7 +2,7 @@ from app.agents.file_agent import FileAgent
 from app.agents.agent_document_reader import AgentDocumentReader
 from main import app
 from flask import jsonify, render_template, session, request, redirect, url_for, flash
-from app.models import db, Client, Court, Lawyer, Case, CaseLawyer, CaseBenefit, Document, CaseCompetence, Petition
+from app.models import db, Client, Court, Lawyer, Case, CaseLawyer, CaseBenefit, Document, CaseCompetence, Petition, User, LawFirm
 import hashlib
 import uuid
 import re
@@ -10,6 +10,23 @@ from datetime import datetime, date
 from decimal import Decimal
 import os
 from werkzeug.utils import secure_filename
+from functools import wraps
+
+# Helper function to get current law_firm_id
+def get_current_law_firm_id():
+    """Retorna o law_firm_id do usuário logado"""
+    return session.get('law_firm_id')
+
+# Decorator to ensure law_firm context
+def require_law_firm(f):
+    """Decorator para garantir que o usuário tem um escritório associado"""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not get_current_law_firm_id():
+            flash('Escritório não encontrado. Faça login novamente.', 'danger')
+            return redirect(url_for('login'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 @app.before_request
 def check_session():
@@ -20,6 +37,13 @@ def check_session():
             return jsonify({"error": "Unauthorized"}), 401
         else:
             return redirect(url_for('login'))
+    
+    # Se está autenticado, atualizar última atividade
+    if 'user_id' in session and request.endpoint not in public_endpoints:
+        user = User.query.get(session['user_id'])
+        if user:
+            user.last_activity = datetime.utcnow()
+            db.session.commit()
 
 @app.route('/api/health', methods=['GET'])
 def health_check():
@@ -36,19 +60,51 @@ def login():
 def login_post():
     email = request.form.get('email')
     password = request.form.get('password')
+    remember = request.form.get('remember')
     
-    # Simple validation (in production, use proper authentication)
+    # Validação básica
     if not email or not password:
         return jsonify({"success": False, "message": "Email e senha são obrigatórios"})
     
-    # Demo user for testing (replace with real database authentication)
-    if email == "admin@intellexia.com.br" and password == "admin123":
-        session['user_id'] = str(uuid.uuid4())
-        session['user_email'] = email
-        session['user_name'] = "Administrador"
-        return jsonify({"success": True, "redirect": url_for('index')})
-    else:
-        return jsonify({"success": False, "message": "Email ou senha inválidos"})
+    # Buscar usuário no banco de dados
+    user = User.query.filter_by(email=email).first()
+    
+    if not user:
+        return jsonify({"success": False, "message": "Email ou senha incorretos"})
+    
+    # Verificar se o usuário está ativo
+    if not user.is_active:
+        return jsonify({"success": False, "message": "Sua conta está inativa. Entre em contato com o suporte."})
+    
+    # Verificar se o escritório está ativo
+    if not user.law_firm.is_active:
+        return jsonify({"success": False, "message": "O escritório está inativo. Entre em contato com o suporte."})
+    
+    # Verificar senha
+    if not user.check_password(password):
+        return jsonify({"success": False, "message": "Email ou senha incorretos"})
+    
+    # Atualizar último login
+    user.last_login = datetime.utcnow()
+    user.last_activity = datetime.utcnow()
+    db.session.commit()
+    
+    # Criar sessão
+    session['user_id'] = user.id
+    session['user_email'] = user.email
+    session['user_name'] = user.name
+    session['user_role'] = user.role
+    session['law_firm_id'] = user.law_firm_id
+    session['law_firm_name'] = user.law_firm.name
+    
+    if remember:
+        session.permanent = True
+    
+    return jsonify({
+        "success": True, 
+        "redirect": url_for('index'),
+        "user": user.to_dict()
+    })
 
 @app.route('/register', methods=['GET'])
 def register():
@@ -63,10 +119,13 @@ def register_post():
     password = request.form.get('password')
     password_confirm = request.form.get('password_confirm')
     terms = request.form.get('terms')
+    law_firm_name = request.form.get('law_firm_name')
+    law_firm_cnpj = request.form.get('law_firm_cnpj')
+    oab_number = request.form.get('oab_number')
     
-    # Validation
-    if not all([full_name, email, password, password_confirm]):
-        return jsonify({"success": False, "message": "Todos os campos são obrigatórios"})
+    # Validação
+    if not all([full_name, email, password, password_confirm, law_firm_name, law_firm_cnpj]):
+        return jsonify({"success": False, "message": "Todos os campos obrigatórios devem ser preenchidos"})
     
     if password != password_confirm:
         return jsonify({"success": False, "message": "As senhas não coincidem"})
@@ -82,9 +141,49 @@ def register_post():
     if not email_pattern.match(email):
         return jsonify({"success": False, "message": "Email inválido"})
     
-    # In production, save to database
-    # For demo purposes, just return success
-    return jsonify({"success": True, "message": "Conta criada com sucesso! Faça login para continuar."})
+    # Verificar se email já existe
+    if User.query.filter_by(email=email).first():
+        return jsonify({"success": False, "message": "Este email já está cadastrado"})
+    
+    # Verificar se CNPJ já existe
+    if LawFirm.query.filter_by(cnpj=law_firm_cnpj).first():
+        return jsonify({"success": False, "message": "Este CNPJ já está cadastrado"})
+    
+    try:
+        # Criar escritório
+        law_firm = LawFirm(
+            name=law_firm_name,
+            cnpj=law_firm_cnpj,
+            is_active=True,
+            subscription_plan='trial'
+        )
+        db.session.add(law_firm)
+        db.session.flush()  # Para obter o ID
+        
+        # Criar usuário
+        user = User(
+            law_firm_id=law_firm.id,
+            name=full_name,
+            email=email,
+            role='admin',  # Primeiro usuário é admin
+            oab_number=oab_number,
+            is_active=True,
+            is_verified=False
+        )
+        user.set_password(password)
+        db.session.add(user)
+        db.session.commit()
+        
+        return jsonify({
+            "success": True, 
+            "message": "Conta criada com sucesso! Faça login para continuar."
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            "success": False, 
+            "message": f"Erro ao criar conta: {str(e)}"
+        })
 
 @app.route('/forgot-password', methods=['GET'])
 def forgot_password():
@@ -109,60 +208,157 @@ def forgot_password_post():
 @app.route('/logout')
 def logout():
     session.clear()
+    flash('Você saiu do sistema com sucesso.', 'info')
     return redirect(url_for('login'))
+
+# Law Firm Settings (Admin only)
+@app.route('/settings/law-firm', methods=['GET'])
+def law_firm_settings():
+    """Página de configurações do escritório (apenas admin)"""
+    if session.get('user_role') != 'admin':
+        flash('Acesso negado. Apenas administradores podem acessar esta página.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    law_firm_id = session.get('law_firm_id')
+    if not law_firm_id:
+        flash('Escritório não encontrado.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    law_firm = LawFirm.query.get(law_firm_id)
+    if not law_firm:
+        flash('Escritório não encontrado.', 'danger')
+        return redirect(url_for('dashboard'))
+    
+    return render_template('settings/law_firm.html', law_firm=law_firm)
+
+@app.route('/settings/law-firm', methods=['POST'])
+def law_firm_settings_post():
+    """Atualizar dados do escritório (apenas admin)"""
+    if session.get('user_role') != 'admin':
+        return jsonify({"success": False, "message": "Acesso negado"}), 403
+    
+    law_firm_id = session.get('law_firm_id')
+    if not law_firm_id:
+        return jsonify({"success": False, "message": "Escritório não encontrado"}), 404
+    
+    law_firm = LawFirm.query.get(law_firm_id)
+    if not law_firm:
+        return jsonify({"success": False, "message": "Escritório não encontrado"}), 404
+    
+    try:
+        # Dados básicos
+        law_firm.name = request.form.get('name', law_firm.name)
+        law_firm.trade_name = request.form.get('trade_name', law_firm.trade_name)
+        law_firm.cnpj = request.form.get('cnpj', law_firm.cnpj)
+        
+        # Endereço
+        law_firm.street = request.form.get('street', law_firm.street)
+        law_firm.number = request.form.get('number', law_firm.number)
+        law_firm.complement = request.form.get('complement', law_firm.complement)
+        law_firm.district = request.form.get('district', law_firm.district)
+        law_firm.city = request.form.get('city', law_firm.city)
+        law_firm.state = request.form.get('state', law_firm.state)
+        law_firm.zip_code = request.form.get('zip_code', law_firm.zip_code)
+        
+        # Contato
+        law_firm.phone = request.form.get('phone', law_firm.phone)
+        law_firm.email = request.form.get('email', law_firm.email)
+        law_firm.website = request.form.get('website', law_firm.website)
+        
+        law_firm.updated_at = datetime.utcnow()
+        
+        db.session.commit()
+        
+        # Atualizar nome do escritório na sessão
+        session['law_firm_name'] = law_firm.name
+        
+        return jsonify({
+            "success": True, 
+            "message": "Dados do escritório atualizados com sucesso!"
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({
+            "success": False, 
+            "message": f"Erro ao atualizar dados: {str(e)}"
+        }), 500
 
 # Dashboard routes
 @app.route('/')
 def index():
     """Redireciona para o dashboard principal"""
+    # Buscar dados do usuário e escritório
+    user = User.query.get(session.get('user_id'))
+    law_firm = user.law_firm if user else None
+    
+    # Estatísticas do escritório
+    stats = {
+        'total_cases': Case.query.count(),
+        'total_clients': Client.query.count(),
+        'total_users': User.query.filter_by(law_firm_id=session.get('law_firm_id')).count() if session.get('law_firm_id') else 0,
+        'active_cases': Case.query.filter_by(status='active').count()
+    }
+    
     message = request.args.get('message')
     if message:
         flash(message) 
     return redirect(url_for('dashboard'))
 
 @app.route('/dashboard')
+@require_law_firm
 def dashboard():
     """Dashboard principal com estatísticas do sistema"""
     try:
-        # Estatísticas de Casos
-        total_cases = Case.query.count()
-        active_cases = Case.query.filter_by(status='active').count()
-        draft_cases = Case.query.filter_by(status='draft').count()
-        filed_cases = Case.query.filter(Case.filing_date.isnot(None)).count()
+        # Buscar dados do usuário e escritório
+        user = User.query.get(session.get('user_id'))
+        law_firm = user.law_firm if user else None
+        law_firm_id = get_current_law_firm_id()
         
-        # Estatísticas de Clientes
-        total_clients = Client.query.count()
-        clients_with_branches = Client.query.filter_by(has_branches=True).count()
+        # Estatísticas de Casos (filtradas por escritório)
+        total_cases = Case.query.filter_by(law_firm_id=law_firm_id).count()
+        active_cases = Case.query.filter_by(law_firm_id=law_firm_id, status='active').count()
+        draft_cases = Case.query.filter_by(law_firm_id=law_firm_id, status='draft').count()
+        filed_cases = Case.query.filter_by(law_firm_id=law_firm_id).filter(Case.filing_date.isnot(None)).count()
         
-        # Estatísticas de Benefícios
-        total_benefits = CaseBenefit.query.count()
-        benefits_b91 = CaseBenefit.query.filter_by(benefit_type='B91').count()
-        benefits_b94 = CaseBenefit.query.filter_by(benefit_type='B94').count()
+        # Estatísticas de Clientes (filtradas por escritório)
+        total_clients = Client.query.filter_by(law_firm_id=law_firm_id).count()
+        clients_with_branches = Client.query.filter_by(law_firm_id=law_firm_id, has_branches=True).count()
         
-        # Estatísticas de Advogados
-        total_lawyers = Lawyer.query.count()
+        # Estatísticas de Benefícios (filtradas por escritório através dos casos)
+        total_benefits = CaseBenefit.query.join(Case).filter(Case.law_firm_id == law_firm_id).count()
+        benefits_b91 = CaseBenefit.query.join(Case).filter(Case.law_firm_id == law_firm_id, CaseBenefit.benefit_type == 'B91').count()
+        benefits_b94 = CaseBenefit.query.join(Case).filter(Case.law_firm_id == law_firm_id, CaseBenefit.benefit_type == 'B94').count()
         
-        # Estatísticas de Documentos
-        total_documents = Document.query.count()
-        documents_for_ai = Document.query.filter_by(use_in_ai=True).count()
+        # Estatísticas de Advogados (filtradas por escritório)
+        total_lawyers = Lawyer.query.filter_by(law_firm_id=law_firm_id).count()
         
-        # Casos recentes (últimos 5)
-        recent_cases = Case.query.order_by(Case.created_at.desc()).limit(5).all()
+        # Estatísticas de Documentos (filtradas por escritório através dos casos)
+        total_documents = Document.query.join(Case).filter(Case.law_firm_id == law_firm_id).count()
+        documents_for_ai = Document.query.join(Case).filter(Case.law_firm_id == law_firm_id, Document.use_in_ai == True).count()
         
-        # Valor total das causas
-        total_cause_value = db.session.query(db.func.sum(Case.value_cause)).scalar() or Decimal('0')
+        # Casos recentes (últimos 5, filtrados por escritório)
+        recent_cases = Case.query.filter_by(law_firm_id=law_firm_id).order_by(Case.created_at.desc()).limit(5).all()
         
-        # Casos por tipo
-        cases_by_type = db.session.query(
+        # Valor total das causas (filtrado por escritório)
+        total_cause_value = db.session.query(db.func.sum(Case.value_cause)).filter(Case.law_firm_id == law_firm_id).scalar() or Decimal('0')
+        
+        # Casos por tipo (filtrados por escritório)
+        cases_by_type_result = db.session.query(
             Case.case_type, 
             db.func.count(Case.id).label('count')
-        ).group_by(Case.case_type).all()
+        ).filter(Case.law_firm_id == law_firm_id).group_by(Case.case_type).all()
+        cases_by_type = {case_type: count for case_type, count in cases_by_type_result}
         
-        # Distribuição por status
-        cases_by_status = db.session.query(
+        # Distribuição por status (filtrados por escritório)
+        cases_by_status_result = db.session.query(
             Case.status,
             db.func.count(Case.id).label('count')
-        ).group_by(Case.status).all()
+        ).filter(Case.law_firm_id == law_firm_id).group_by(Case.status).all()
+        cases_by_status = {status: count for status, count in cases_by_status_result}
+        
+        # Estatísticas de usuários do escritório
+        total_users = User.query.filter_by(law_firm_id=law_firm_id).count()
+        total_courts = Court.query.filter_by(law_firm_id=law_firm_id).count()
         
         return render_template('dashboard.html',
             total_cases=total_cases,
@@ -179,12 +375,32 @@ def dashboard():
             documents_for_ai=documents_for_ai,
             recent_cases=recent_cases,
             total_cause_value=total_cause_value,
-            cases_by_type=dict(cases_by_type),
-            cases_by_status=dict(cases_by_status)
+            cases_by_type=cases_by_type,
+            cases_by_status=cases_by_status,
+            total_users=total_users,
+            total_courts=total_courts,
+            user=user,
+            law_firm=law_firm
         )
     except Exception as e:
-        flash(f'Erro ao carregar dashboard: {str(e)}', 'error')
-        return render_template('dashboard.html')
+        print(f"Erro no dashboard: {str(e)}")
+        flash(f'Erro ao carregar dashboard: {str(e)}', 'danger')
+        return render_template('dashboard.html',
+            total_cases=0,
+            active_cases=0,
+            draft_cases=0,
+            filed_cases=0,
+            total_clients=0,
+            total_benefits=0,
+            total_lawyers=0,
+            total_documents=0,
+            recent_cases=[],
+            total_cause_value=0,
+            cases_by_type={},
+            cases_by_status={},
+            user=user if 'user' in locals() else None,
+            law_firm=law_firm if 'law_firm' in locals() else None
+        )
 
 # ========================
 # Assistente Jurídico (IA Chat)
@@ -299,17 +515,21 @@ def process_legal_assistant_message(message, context):
 # Rotas de Clientes
 # ========================
 @app.route('/clients')
+@require_law_firm
 def clients_list():
-    clients = Client.query.order_by(Client.created_at.desc()).all()
+    law_firm_id = get_current_law_firm_id()
+    clients = Client.query.filter_by(law_firm_id=law_firm_id).order_by(Client.created_at.desc()).all()
     return render_template('clients/list.html', clients=clients)
 
 @app.route('/clients/new', methods=['GET', 'POST'])
+@require_law_firm
 def client_new():
     from app.form import ClientForm
     form = ClientForm()
     
     if form.validate_on_submit():
         client = Client(
+            law_firm_id=get_current_law_firm_id(),
             name=form.name.data,
             cnpj=form.cnpj.data,
             street=form.street.data,
@@ -334,9 +554,11 @@ def client_new():
     return render_template('clients/form.html', form=form, title='Novo Cliente')
 
 @app.route('/clients/<int:client_id>/edit', methods=['GET', 'POST'])
+@require_law_firm
 def client_edit(client_id):
     from app.form import ClientForm
-    client = Client.query.get_or_404(client_id)
+    law_firm_id = get_current_law_firm_id()
+    client = Client.query.filter_by(id=client_id, law_firm_id=law_firm_id).first_or_404()
     form = ClientForm(obj=client)
     
     if form.validate_on_submit():
@@ -363,8 +585,10 @@ def client_edit(client_id):
     return render_template('clients/form.html', form=form, title='Editar Cliente', client_id=client_id)
 
 @app.route('/clients/<int:client_id>/delete', methods=['POST'])
+@require_law_firm
 def client_delete(client_id):
-    client = Client.query.get_or_404(client_id)
+    law_firm_id = get_current_law_firm_id()
+    client = Client.query.filter_by(id=client_id, law_firm_id=law_firm_id).first_or_404()
     
     # Verificar se cliente tem casos associados
     if client.cases:
@@ -385,24 +609,30 @@ def client_delete(client_id):
 # Rotas de Casos
 # ========================
 @app.route('/cases')
+@require_law_firm
 def cases_list():
-    cases = Case.query.join(Client).order_by(Case.created_at.desc()).all()
+    law_firm_id = get_current_law_firm_id()
+    cases = Case.query.filter_by(law_firm_id=law_firm_id).join(Client).order_by(Case.created_at.desc()).all()
     return render_template('cases/list.html', cases=cases)
 
 @app.route('/cases/new', methods=['GET', 'POST'])
+@require_law_firm
 def case_new():
     from app.form import CaseForm
     form = CaseForm()
     
-    # Carregar opções de clientes e varas
-    clients = Client.query.order_by(Client.name).all()
-    courts = Court.query.order_by(Court.vara_name).all()
+    law_firm_id = get_current_law_firm_id()
+    
+    # Carregar opções de clientes e varas do escritório
+    clients = Client.query.filter_by(law_firm_id=law_firm_id).order_by(Client.name).all()
+    courts = Court.query.filter_by(law_firm_id=law_firm_id).order_by(Court.vara_name).all()
     
     form.client_id.choices = [(0, 'Selecione um cliente')] + [(c.id, c.name) for c in clients]
     form.court_id.choices = [(0, 'Selecione uma vara')] + [(c.id, f"{c.vara_name} - {c.city}/{c.state}") for c in courts]
     
     if form.validate_on_submit():
         case = Case(
+            law_firm_id=get_current_law_firm_id(),
             client_id=form.client_id.data if form.client_id.data != 0 else None,
             court_id=form.court_id.data if form.court_id.data != 0 else None,
             title=form.title.data,
@@ -429,14 +659,16 @@ def case_new():
     return render_template('cases/form.html', form=form, title='Novo Caso')
 
 @app.route('/cases/<int:case_id>/edit', methods=['GET', 'POST'])
+@require_law_firm
 def case_edit(case_id):
     from app.form import CaseForm
-    case = Case.query.get_or_404(case_id)
+    law_firm_id = get_current_law_firm_id()
+    case = Case.query.filter_by(id=case_id, law_firm_id=law_firm_id).first_or_404()
     form = CaseForm(obj=case)
     
-    # Carregar opções de clientes e varas
-    clients = Client.query.order_by(Client.name).all()
-    courts = Court.query.order_by(Court.vara_name).all()
+    # Carregar opções de clientes e varas do escritório
+    clients = Client.query.filter_by(law_firm_id=law_firm_id).order_by(Client.name).all()
+    courts = Court.query.filter_by(law_firm_id=law_firm_id).order_by(Court.vara_name).all()
     
     form.client_id.choices = [(0, 'Selecione um cliente')] + [(c.id, c.name) for c in clients]
     form.court_id.choices = [(0, 'Selecione uma vara')] + [(c.id, f"{c.vara_name} - {c.city}/{c.state}") for c in courts]
@@ -689,17 +921,21 @@ def case_document_delete(case_id, document_id):
 # Rotas de Advogados
 # ========================
 @app.route('/lawyers')
+@require_law_firm
 def lawyers_list():
-    lawyers = Lawyer.query.order_by(Lawyer.name).all()
+    law_firm_id = get_current_law_firm_id()
+    lawyers = Lawyer.query.filter_by(law_firm_id=law_firm_id).order_by(Lawyer.name).all()
     return render_template('lawyers/list.html', lawyers=lawyers)
 
 @app.route('/lawyers/new', methods=['GET', 'POST'])
+@require_law_firm
 def lawyer_new():
     from app.form import LawyerForm
     form = LawyerForm()
     
     if form.validate_on_submit():
         lawyer = Lawyer(
+            law_firm_id=get_current_law_firm_id(),
             name=form.name.data,
             oab_number=form.oab_number.data,
             email=form.email.data,
@@ -719,9 +955,11 @@ def lawyer_new():
     return render_template('lawyers/form.html', form=form, title='Novo Advogado')
 
 @app.route('/lawyers/<int:lawyer_id>/edit', methods=['GET', 'POST'])
+@require_law_firm
 def lawyer_edit(lawyer_id):
     from app.form import LawyerForm
-    lawyer = Lawyer.query.get_or_404(lawyer_id)
+    law_firm_id = get_current_law_firm_id()
+    lawyer = Lawyer.query.filter_by(id=lawyer_id, law_firm_id=law_firm_id).first_or_404()
     form = LawyerForm(obj=lawyer)
     
     if form.validate_on_submit():
@@ -746,17 +984,21 @@ def lawyer_edit(lawyer_id):
 # Rotas de Varas
 # ========================
 @app.route('/courts')
+@require_law_firm
 def courts_list():
-    courts = Court.query.order_by(Court.vara_name).all()
+    law_firm_id = get_current_law_firm_id()
+    courts = Court.query.filter_by(law_firm_id=law_firm_id).order_by(Court.vara_name).all()
     return render_template('courts/list.html', courts=courts)
 
 @app.route('/courts/new', methods=['GET', 'POST'])
+@require_law_firm
 def court_new():
     from app.form import CourtForm
     form = CourtForm()
     
     if form.validate_on_submit():
         court = Court(
+            law_firm_id=get_current_law_firm_id(),
             section=form.section.data,
             vara_name=form.vara_name.data,
             city=form.city.data,
@@ -835,9 +1077,11 @@ def lawyer_delete(lawyer_id):
     return redirect(url_for('lawyers_list'))
 
 @app.route('/courts/<int:court_id>/edit', methods=['GET', 'POST'])
+@require_law_firm
 def court_edit(court_id):
     from app.form import CourtForm
-    court = Court.query.get_or_404(court_id)
+    law_firm_id = get_current_law_firm_id()
+    court = Court.query.filter_by(id=court_id, law_firm_id=law_firm_id).first_or_404()
     form = CourtForm(obj=court)
     
     if form.validate_on_submit():
@@ -858,8 +1102,10 @@ def court_edit(court_id):
     return render_template('courts/form.html', form=form, title='Editar Vara', court_id=court_id)
 
 @app.route('/courts/<int:court_id>/delete', methods=['POST'])
+@require_law_firm
 def court_delete(court_id):
-    court = Court.query.get_or_404(court_id)
+    law_firm_id = get_current_law_firm_id()
+    court = Court.query.filter_by(id=court_id, law_firm_id=law_firm_id).first_or_404()
     
     # Verificar se vara tem casos associados
     if court.cases:

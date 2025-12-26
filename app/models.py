@@ -1,14 +1,122 @@
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from decimal import Decimal
+from werkzeug.security import generate_password_hash, check_password_hash
 
 db = SQLAlchemy()
+
+
+class LawFirm(db.Model):
+    """Tabela law_firms - Escritórios de advocacia que usam o sistema"""
+    __tablename__ = 'law_firms'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), nullable=False)  # Razão social
+    trade_name = db.Column(db.String(255))  # Nome fantasia
+    cnpj = db.Column(db.String(20), unique=True, nullable=False, index=True)
+    
+    # Endereço
+    street = db.Column(db.String(255))
+    number = db.Column(db.String(20))
+    complement = db.Column(db.String(100))
+    district = db.Column(db.String(150))
+    city = db.Column(db.String(150))
+    state = db.Column(db.String(50))
+    zip_code = db.Column(db.String(20))
+    
+    # Contato
+    phone = db.Column(db.String(50))
+    email = db.Column(db.String(255))
+    website = db.Column(db.String(255))
+    
+    # Status e configurações
+    is_active = db.Column(db.Boolean, default=True)
+    subscription_plan = db.Column(db.String(50), default='trial')  # trial, basic, premium, enterprise
+    subscription_expires_at = db.Column(db.DateTime)
+    max_users = db.Column(db.Integer, default=5)
+    max_cases = db.Column(db.Integer, default=50)
+    
+    # Auditoria
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relacionamentos
+    users = db.relationship('User', back_populates='law_firm', cascade='all, delete-orphan')
+    
+    def __repr__(self):
+        return f'<LawFirm {self.name}>'
+
+
+class User(db.Model):
+    """Tabela users - Usuários do sistema"""
+    __tablename__ = 'users'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    
+    # Dados pessoais
+    name = db.Column(db.String(255), nullable=False)
+    email = db.Column(db.String(255), unique=True, nullable=False, index=True)
+    password_hash = db.Column(db.String(255), nullable=False)
+    
+    # Dados profissionais
+    oab_number = db.Column(db.String(50))  # Opcional, só para advogados
+    phone = db.Column(db.String(50))
+    
+    # Permissões e status
+    role = db.Column(db.String(30), nullable=False, default='user')  # admin, lawyer, assistant, user
+    is_active = db.Column(db.Boolean, default=True)
+    is_verified = db.Column(db.Boolean, default=False)
+    
+    # Controle de sessão
+    last_login = db.Column(db.DateTime)
+    last_activity = db.Column(db.DateTime)
+    
+    # Auditoria
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relacionamentos
+    law_firm = db.relationship('LawFirm', back_populates='users')
+    
+    def set_password(self, password):
+        """Define a senha do usuário (hash)"""
+        self.password_hash = generate_password_hash(password)
+    
+    def check_password(self, password):
+        """Verifica se a senha está correta"""
+        return check_password_hash(self.password_hash, password)
+    
+    def to_dict(self):
+        """Retorna um dicionário com os dados do usuário"""
+        return {
+            'id': self.id,
+            'name': self.name,
+            'email': self.email,
+            'role': self.role,
+            'oab_number': self.oab_number,
+            'phone': self.phone,
+            'is_active': self.is_active,
+            'law_firm': {
+                'id': self.law_firm.id,
+                'name': self.law_firm.name,
+                'trade_name': self.law_firm.trade_name,
+                'cnpj': self.law_firm.cnpj
+            } if self.law_firm else None,
+            'last_login': self.last_login.isoformat() if self.last_login else None,
+            'created_at': self.created_at.isoformat() if self.created_at else None
+        }
+    
+    def __repr__(self):
+        return f'<User {self.email}>'
+
 
 class Client(db.Model):
     """Tabela clients - Empresas autoras dos casos"""
     __tablename__ = 'clients'
     
     id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
     name = db.Column(db.String(255), nullable=False)  # Razão social
     cnpj = db.Column(db.String(20), nullable=False, index=True)
     street = db.Column(db.String(255))
@@ -23,6 +131,7 @@ class Client(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relacionamentos
+    law_firm = db.relationship('LawFirm')
     cases = db.relationship('Case', back_populates='client')
     
     def __repr__(self):
@@ -34,6 +143,7 @@ class Court(db.Model):
     __tablename__ = 'courts'
     
     id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
     section = db.Column(db.String(255))  # Seção judiciária
     vara_name = db.Column(db.String(255))  # Nome da vara
     city = db.Column(db.String(150))
@@ -42,6 +152,7 @@ class Court(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relacionamentos
+    law_firm = db.relationship('LawFirm')
     cases = db.relationship('Case', back_populates='court')
     
     def __repr__(self):
@@ -53,6 +164,7 @@ class Lawyer(db.Model):
     __tablename__ = 'lawyers'
     
     id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
     name = db.Column(db.String(255), nullable=False)
     oab_number = db.Column(db.String(50), nullable=False, unique=True)
     email = db.Column(db.String(255))
@@ -62,6 +174,7 @@ class Lawyer(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relacionamentos
+    law_firm = db.relationship('LawFirm')
     case_lawyers = db.relationship('CaseLawyer', back_populates='lawyer')
     
     def __repr__(self):
@@ -73,6 +186,7 @@ class Case(db.Model):
     __tablename__ = 'cases'
     
     id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
     client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), nullable=False, index=True)
     court_id = db.Column(db.Integer, db.ForeignKey('courts.id'), index=True)
     title = db.Column(db.String(255), nullable=False)
@@ -89,6 +203,7 @@ class Case(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Relacionamentos
+    law_firm = db.relationship('LawFirm')
     client = db.relationship('Client', back_populates='cases')
     court = db.relationship('Court', back_populates='cases')
     case_lawyers = db.relationship('CaseLawyer', back_populates='case', cascade='all, delete-orphan')

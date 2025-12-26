@@ -173,8 +173,30 @@
           <!--end::User Image-->
           <!--begin::Menu Body-->
           <li class="user-body">
-            <!--begin::Row-->
-            <!--end::Row-->
+            <div class="row">
+              <div class="col-12 text-center">
+                <strong><i class="bi bi-building me-1"></i> Escritório</strong>
+                <p class="text-muted mb-0">{{ session.get('law_firm_name', 'Não definido') }}</p>
+              </div>
+            </div>
+            {% if session.get('user_role') %}
+            <div class="row mt-2">
+              <div class="col-12 text-center">
+                <strong><i class="bi bi-person-badge me-1"></i> Perfil</strong>
+                <p class="text-muted mb-0">
+                  {% if session.get('user_role') == 'admin' %}
+                    Administrador
+                  {% elif session.get('user_role') == 'lawyer' %}
+                    Advogado
+                  {% elif session.get('user_role') == 'assistant' %}
+                    Assistente
+                  {% else %}
+                    Usuário
+                  {% endif %}
+                </p>
+              </div>
+            </div>
+            {% endif %}
           </li>
           <!--end::Menu Body-->
           <!--begin::Menu Footer-->

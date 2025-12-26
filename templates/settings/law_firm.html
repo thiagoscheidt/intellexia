@@ -1,0 +1,368 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Configurações do Escritório{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-sm-6">
+        <h3 class="mb-0">Configurações do Escritório</h3>
+      </div>
+      <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-end">
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Dashboard</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Configurações</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-md-12">
+        <!-- Alert Container -->
+        <div id="alert-container" style="display: none;">
+          <div class="alert alert-dismissible fade show" role="alert">
+            <i class="bi me-2" id="alert-icon"></i>
+            <span id="alert-message"></span>
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+          </div>
+        </div>
+
+        <div class="card card-primary card-outline">
+          <div class="card-header">
+            <h3 class="card-title">
+              <i class="bi bi-building me-2"></i>
+              Dados do Escritório
+            </h3>
+          </div>
+          
+          <form id="lawFirmForm" method="POST" action="{{ url_for('law_firm_settings_post') }}">
+            <div class="card-body">
+              <!-- Informações Básicas -->
+              <h5 class="mb-3"><i class="bi bi-info-circle me-2"></i>Informações Básicas</h5>
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    <label for="name" class="form-label">Razão Social <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="name" name="name" 
+                           value="{{ law_firm.name }}" required>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    <label for="trade_name" class="form-label">Nome Fantasia</label>
+                    <input type="text" class="form-control" id="trade_name" name="trade_name" 
+                           value="{{ law_firm.trade_name or '' }}">
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    <label for="cnpj" class="form-label">CNPJ <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" id="cnpj" name="cnpj" 
+                           value="{{ law_firm.cnpj }}" required maxlength="20">
+                    <small class="text-muted">Formato: 00.000.000/0000-00</small>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    <label for="subscription_plan" class="form-label">Plano de Assinatura</label>
+                    <input type="text" class="form-control" id="subscription_plan" 
+                           value="{{ law_firm.subscription_plan|title }}" disabled readonly>
+                    <small class="text-muted">Entre em contato para alterar o plano</small>
+                  </div>
+                </div>
+              </div>
+
+              <hr class="my-4">
+
+              <!-- Endereço -->
+              <h5 class="mb-3"><i class="bi bi-geo-alt me-2"></i>Endereço</h5>
+              <div class="row">
+                <div class="col-md-4">
+                  <div class="mb-3">
+                    <label for="zip_code" class="form-label">CEP</label>
+                    <input type="text" class="form-control" id="zip_code" name="zip_code" 
+                           value="{{ law_firm.zip_code or '' }}" maxlength="10">
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    <label for="street" class="form-label">Logradouro</label>
+                    <input type="text" class="form-control" id="street" name="street" 
+                           value="{{ law_firm.street or '' }}">
+                  </div>
+                </div>
+                <div class="col-md-2">
+                  <div class="mb-3">
+                    <label for="number" class="form-label">Número</label>
+                    <input type="text" class="form-control" id="number" name="number" 
+                           value="{{ law_firm.number or '' }}">
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-4">
+                  <div class="mb-3">
+                    <label for="complement" class="form-label">Complemento</label>
+                    <input type="text" class="form-control" id="complement" name="complement" 
+                           value="{{ law_firm.complement or '' }}">
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="mb-3">
+                    <label for="district" class="form-label">Bairro</label>
+                    <input type="text" class="form-control" id="district" name="district" 
+                           value="{{ law_firm.district or '' }}">
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="mb-3">
+                    <label for="city" class="form-label">Cidade</label>
+                    <input type="text" class="form-control" id="city" name="city" 
+                           value="{{ law_firm.city or '' }}">
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-4">
+                  <div class="mb-3">
+                    <label for="state" class="form-label">Estado</label>
+                    <select class="form-select" id="state" name="state">
+                      <option value="">Selecione...</option>
+                      <option value="AC" {% if law_firm.state == 'AC' %}selected{% endif %}>Acre</option>
+                      <option value="AL" {% if law_firm.state == 'AL' %}selected{% endif %}>Alagoas</option>
+                      <option value="AP" {% if law_firm.state == 'AP' %}selected{% endif %}>Amapá</option>
+                      <option value="AM" {% if law_firm.state == 'AM' %}selected{% endif %}>Amazonas</option>
+                      <option value="BA" {% if law_firm.state == 'BA' %}selected{% endif %}>Bahia</option>
+                      <option value="CE" {% if law_firm.state == 'CE' %}selected{% endif %}>Ceará</option>
+                      <option value="DF" {% if law_firm.state == 'DF' %}selected{% endif %}>Distrito Federal</option>
+                      <option value="ES" {% if law_firm.state == 'ES' %}selected{% endif %}>Espírito Santo</option>
+                      <option value="GO" {% if law_firm.state == 'GO' %}selected{% endif %}>Goiás</option>
+                      <option value="MA" {% if law_firm.state == 'MA' %}selected{% endif %}>Maranhão</option>
+                      <option value="MT" {% if law_firm.state == 'MT' %}selected{% endif %}>Mato Grosso</option>
+                      <option value="MS" {% if law_firm.state == 'MS' %}selected{% endif %}>Mato Grosso do Sul</option>
+                      <option value="MG" {% if law_firm.state == 'MG' %}selected{% endif %}>Minas Gerais</option>
+                      <option value="PA" {% if law_firm.state == 'PA' %}selected{% endif %}>Pará</option>
+                      <option value="PB" {% if law_firm.state == 'PB' %}selected{% endif %}>Paraíba</option>
+                      <option value="PR" {% if law_firm.state == 'PR' %}selected{% endif %}>Paraná</option>
+                      <option value="PE" {% if law_firm.state == 'PE' %}selected{% endif %}>Pernambuco</option>
+                      <option value="PI" {% if law_firm.state == 'PI' %}selected{% endif %}>Piauí</option>
+                      <option value="RJ" {% if law_firm.state == 'RJ' %}selected{% endif %}>Rio de Janeiro</option>
+                      <option value="RN" {% if law_firm.state == 'RN' %}selected{% endif %}>Rio Grande do Norte</option>
+                      <option value="RS" {% if law_firm.state == 'RS' %}selected{% endif %}>Rio Grande do Sul</option>
+                      <option value="RO" {% if law_firm.state == 'RO' %}selected{% endif %}>Rondônia</option>
+                      <option value="RR" {% if law_firm.state == 'RR' %}selected{% endif %}>Roraima</option>
+                      <option value="SC" {% if law_firm.state == 'SC' %}selected{% endif %}>Santa Catarina</option>
+                      <option value="SP" {% if law_firm.state == 'SP' %}selected{% endif %}>São Paulo</option>
+                      <option value="SE" {% if law_firm.state == 'SE' %}selected{% endif %}>Sergipe</option>
+                      <option value="TO" {% if law_firm.state == 'TO' %}selected{% endif %}>Tocantins</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              <hr class="my-4">
+
+              <!-- Contato -->
+              <h5 class="mb-3"><i class="bi bi-telephone me-2"></i>Contato</h5>
+              <div class="row">
+                <div class="col-md-4">
+                  <div class="mb-3">
+                    <label for="phone" class="form-label">Telefone</label>
+                    <input type="text" class="form-control" id="phone" name="phone" 
+                           value="{{ law_firm.phone or '' }}" placeholder="(00) 00000-0000">
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="mb-3">
+                    <label for="email" class="form-label">E-mail</label>
+                    <input type="email" class="form-control" id="email" name="email" 
+                           value="{{ law_firm.email or '' }}">
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="mb-3">
+                    <label for="website" class="form-label">Website</label>
+                    <input type="url" class="form-control" id="website" name="website" 
+                           value="{{ law_firm.website or '' }}" placeholder="https://www.exemplo.com.br">
+                  </div>
+                </div>
+              </div>
+
+              <hr class="my-4">
+
+              <!-- Informações da Conta -->
+              <h5 class="mb-3"><i class="bi bi-info-square me-2"></i>Informações da Conta</h5>
+              <div class="row">
+                <div class="col-md-4">
+                  <div class="alert alert-info">
+                    <strong><i class="bi bi-people me-1"></i> Usuários:</strong><br>
+                    Limite: {{ law_firm.max_users }}<br>
+                    <small class="text-muted">Atuais: {{ law_firm.users|length }}</small>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="alert alert-info">
+                    <strong><i class="bi bi-folder me-1"></i> Casos:</strong><br>
+                    Limite: {{ law_firm.max_cases }}<br>
+                    <small class="text-muted">Entre em contato para aumentar</small>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="alert alert-{{ 'success' if law_firm.is_active else 'danger' }}">
+                    <strong><i class="bi bi-{{ 'check-circle' if law_firm.is_active else 'x-circle' }} me-1"></i> Status:</strong><br>
+                    {{ 'Ativo' if law_firm.is_active else 'Inativo' }}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card-footer">
+              <button type="submit" class="btn btn-primary" id="submitBtn">
+                <i class="bi bi-save me-2"></i>
+                <span id="btnText">Salvar Alterações</span>
+              </button>
+              <a href="{{ url_for('dashboard') }}" class="btn btn-secondary">
+                <i class="bi bi-x-circle me-2"></i>
+                Cancelar
+              </a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const form = document.getElementById('lawFirmForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const btnText = document.getElementById('btnText');
+    const alertContainer = document.getElementById('alert-container');
+    const alertMessage = document.getElementById('alert-message');
+    const alertIcon = document.getElementById('alert-icon');
+
+    // Máscaras
+    const cnpjInput = document.getElementById('cnpj');
+    const phoneInput = document.getElementById('phone');
+    const zipCodeInput = document.getElementById('zip_code');
+
+    // Máscara CNPJ
+    cnpjInput.addEventListener('input', function(e) {
+        let value = e.target.value.replace(/\D/g, '');
+        if (value.length <= 14) {
+            value = value.replace(/^(\d{2})(\d)/, '$1.$2');
+            value = value.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
+            value = value.replace(/\.(\d{3})(\d)/, '.$1/$2');
+            value = value.replace(/(\d{4})(\d)/, '$1-$2');
+            e.target.value = value;
+        }
+    });
+
+    // Máscara Telefone
+    phoneInput.addEventListener('input', function(e) {
+        let value = e.target.value.replace(/\D/g, '');
+        if (value.length <= 11) {
+            value = value.replace(/^(\d{2})(\d)/, '($1) $2');
+            value = value.replace(/(\d{5})(\d)/, '$1-$2');
+            e.target.value = value;
+        }
+    });
+
+    // Máscara CEP
+    zipCodeInput.addEventListener('input', function(e) {
+        let value = e.target.value.replace(/\D/g, '');
+        if (value.length <= 8) {
+            value = value.replace(/^(\d{5})(\d)/, '$1-$2');
+            e.target.value = value;
+        }
+    });
+
+    // Buscar CEP
+    zipCodeInput.addEventListener('blur', function() {
+        const cep = this.value.replace(/\D/g, '');
+        if (cep.length === 8) {
+            fetch(`https://viacep.com.br/ws/${cep}/json/`)
+                .then(response => response.json())
+                .then(data => {
+                    if (!data.erro) {
+                        document.getElementById('street').value = data.logradouro || '';
+                        document.getElementById('district').value = data.bairro || '';
+                        document.getElementById('city').value = data.localidade || '';
+                        document.getElementById('state').value = data.uf || '';
+                    }
+                })
+                .catch(error => console.error('Erro ao buscar CEP:', error));
+        }
+    });
+
+    function showAlert(message, type) {
+        const iconClass = {
+            'success': 'bi-check-circle-fill',
+            'danger': 'bi-x-circle-fill',
+            'warning': 'bi-exclamation-triangle-fill',
+            'info': 'bi-info-circle-fill'
+        };
+
+        const alert = alertContainer.querySelector('.alert');
+        alertMessage.textContent = message;
+        alertIcon.className = `bi me-2 ${iconClass[type] || iconClass.info}`;
+        alert.className = `alert alert-${type || 'info'} alert-dismissible fade show`;
+        alertContainer.style.display = 'block';
+        
+        // Scroll to alert
+        alertContainer.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        
+        setTimeout(() => {
+            alertContainer.style.display = 'none';
+        }, 5000);
+    }
+
+    // Submit form
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        
+        // Show loading
+        submitBtn.disabled = true;
+        btnText.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Salvando...';
+        
+        const formData = new FormData(form);
+        
+        fetch(form.action, {
+            method: 'POST',
+            body: formData,
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+            }
+        })
+        .then(response => response.json())
+        .then(data => {
+            submitBtn.disabled = false;
+            btnText.innerHTML = '<i class="bi bi-save me-2"></i>Salvar Alterações';
+            
+            if (data.success) {
+                showAlert(data.message, 'success');
+            } else {
+                showAlert(data.message || 'Erro ao salvar alterações.', 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            submitBtn.disabled = false;
+            btnText.innerHTML = '<i class="bi bi-save me-2"></i>Salvar Alterações';
+            showAlert('Erro de conexão. Verifique sua internet e tente novamente.', 'danger');
+        });
+    });
+});
+</script>
+{% endblock %}

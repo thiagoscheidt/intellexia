@@ -168,6 +168,17 @@
             </li>
           </ul>
         </li>
+
+        {% if session.get('user_role') == 'admin' %}
+        <li class="nav-header">ADMINISTRAÇÃO</li>
+        
+        <li class="nav-item">
+          <a href="{{ url_for('law_firm_settings') }}" class="nav-link {{ 'active' if request.endpoint == 'law_firm_settings' else '' }}">
+            <i class="nav-icon bi bi-gear"></i>
+            <p>Configurações do Escritório</p>
+          </a>
+        </li>
+        {% endif %}
       </ul>
       <!--end::Sidebar Menu-->
     </nav>
