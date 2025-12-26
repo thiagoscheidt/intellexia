@@ -7,7 +7,7 @@
   <div class="container-fluid">
     <div class="row">
       <div class="col-sm-6">
-        <h3 class="mb-0">Advogados</h3>
+        <h3 class="mb-0"><i class="bi bi-person-badge"></i> Advogados</h3>
       </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
@@ -23,11 +23,11 @@
   <div class="container-fluid">
     <div class="row">
       <div class="col-12">
-        <div class="card">
+        <div class="card card-info card-outline">
           <div class="card-header">
-            <h3 class="card-title">Lista de Advogados</h3>
+            <h3 class="card-title"><i class="bi bi-list-ul"></i> Lista de Advogados</h3>
             <div class="card-tools">
-              <a href="{{ url_for('lawyer_new') }}" class="btn btn-primary btn-sm">
+              <a href="{{ url_for('lawyer_new') }}" class="btn btn-info btn-sm">
                 <i class="bi bi-plus-circle"></i> Novo Advogado
               </a>
             </div>
@@ -37,7 +37,7 @@
               {% if messages %}
                 {% for category, message in messages %}
                   <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                    {{ message }}
+                    <i class="bi bi-info-circle"></i> {{ message }}
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                   </div>
                 {% endfor %}
@@ -46,37 +46,55 @@
 
             {% if lawyers %}
             <div class="table-responsive">
-              <table class="table table-bordered table-hover">
-                <thead>
+              <table id="lawyersTable" class="table table-bordered table-striped table-hover">
+                <thead class="table-light">
                   <tr>
-                    <th>ID</th>
+                    <th style="width: 60px;">ID</th>
                     <th>Nome</th>
-                    <th>OAB</th>
-                    <th>Email</th>
-                    <th>Telefone</th>
-                    <th>Padrão Publicações</th>
-                    <th>Ações</th>
+                    <th style="width: 140px;">OAB</th>
+                    <th style="width: 220px;">Email</th>
+                    <th style="width: 150px;">Telefone</th>
+                    <th style="width: 140px;" class="text-center">Padrão Public.</th>
+                    <th style="width: 100px;" class="text-center">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {% for lawyer in lawyers %}
                   <tr>
-                    <td>{{ lawyer.id }}</td>
-                    <td>{{ lawyer.name }}</td>
-                    <td>{{ lawyer.oab_number }}</td>
-                    <td>{{ lawyer.email or '-' }}</td>
-                    <td>{{ lawyer.phone or '-' }}</td>
+                    <td><strong>{{ lawyer.id }}</strong></td>
                     <td>
-                      {% if lawyer.is_default_for_publications %}
-                        <span class="badge bg-success">Sim</span>
+                      <i class="bi bi-person-badge text-info"></i> <strong>{{ lawyer.name }}</strong>
+                    </td>
+                    <td>
+                      <span class="badge bg-dark"><i class="bi bi-award"></i> {{ lawyer.oab_number }}</span>
+                    </td>
+                    <td>
+                      {% if lawyer.email %}
+                        <i class="bi bi-envelope"></i> <a href="mailto:{{ lawyer.email }}">{{ lawyer.email }}</a>
                       {% else %}
-                        <span class="badge bg-secondary">Não</span>
+                        <span class="text-muted">-</span>
                       {% endif %}
                     </td>
                     <td>
-                      <a href="{{ url_for('lawyer_edit', lawyer_id=lawyer.id) }}" class="btn btn-sm btn-warning" title="Editar">
-                        <i class="bi bi-pencil"></i>
-                      </a>
+                      {% if lawyer.phone %}
+                        <i class="bi bi-telephone"></i> {{ lawyer.phone }}
+                      {% else %}
+                        <span class="text-muted">-</span>
+                      {% endif %}
+                    </td>
+                    <td class="text-center">
+                      {% if lawyer.is_default_for_publications %}
+                        <span class="badge bg-success"><i class="bi bi-star-fill"></i> Sim</span>
+                      {% else %}
+                        <span class="badge bg-secondary"><i class="bi bi-star"></i> Não</span>
+                      {% endif %}
+                    </td>
+                    <td class="text-center">
+                      <div class="btn-group" role="group">
+                        <a href="{{ url_for('lawyer_edit', lawyer_id=lawyer.id) }}" class="btn btn-sm btn-warning" title="Editar">
+                          <i class="bi bi-pencil"></i>
+                        </a>
+                      </div>
                     </td>
                   </tr>
                   {% endfor %}
@@ -84,15 +102,44 @@
               </table>
             </div>
             {% else %}
-            <div class="alert alert-info">
-              <i class="bi bi-info-circle"></i> Nenhum advogado cadastrado ainda. 
-              <a href="{{ url_for('lawyer_new') }}">Cadastre o primeiro advogado</a>.
+            <div class="alert alert-info mb-0">
+              <h5><i class="bi bi-info-circle"></i> Nenhum advogado cadastrado</h5>
+              <p class="mb-0">Você ainda não possui advogados cadastrados. <a href="{{ url_for('lawyer_new') }}" class="alert-link">Clique aqui para cadastrar o primeiro advogado</a>.</p>
             </div>
             {% endif %}
           </div>
+          {% if lawyers %}
+          <div class="card-footer clearfix">
+            <div class="float-end">
+              <span class="badge bg-info">Total: {{ lawyers|length }} advogado(s)</span>
+            </div>
+          </div>
+          {% endif %}
         </div>
       </div>
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{% if lawyers %}
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+<script>
+$(document).ready(function() {
+  $('#lawyersTable').DataTable({
+    "language": {
+      "url": "//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json"
+    },
+    "pageLength": 25,
+    "order": [[0, "desc"]],
+    "columnDefs": [
+      { "orderable": false, "targets": 6 }
+    ]
+  });
+});
+</script>
+{% endif %}
 {% endblock %}

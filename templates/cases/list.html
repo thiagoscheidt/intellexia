@@ -7,7 +7,7 @@
   <div class="container-fluid">
     <div class="row">
       <div class="col-sm-6">
-        <h3 class="mb-0">Casos</h3>
+        <h3 class="mb-0"><i class="bi bi-briefcase"></i> Casos</h3>
       </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
@@ -23,9 +23,9 @@
   <div class="container-fluid">
     <div class="row">
       <div class="col-12">
-        <div class="card">
+        <div class="card card-primary card-outline">
           <div class="card-header">
-            <h3 class="card-title">Lista de Casos</h3>
+            <h3 class="card-title"><i class="bi bi-list-ul"></i> Lista de Casos</h3>
             <div class="card-tools">
               <a href="{{ url_for('case_new') }}" class="btn btn-primary btn-sm">
                 <i class="bi bi-plus-circle"></i> Novo Caso
@@ -37,7 +37,7 @@
               {% if messages %}
                 {% for category, message in messages %}
                   <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                    {{ message }}
+                    <i class="bi bi-info-circle"></i> {{ message }}
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                   </div>
                 {% endfor %}
@@ -46,70 +46,72 @@
 
             {% if cases %}
             <div class="table-responsive">
-              <table class="table table-bordered table-hover">
-                <thead>
+              <table id="casesTable" class="table table-bordered table-striped table-hover">
+                <thead class="table-light">
                   <tr>
-                    <th>ID</th>
+                    <th style="width: 60px;">ID</th>
                     <th>Título</th>
                     <th>Cliente</th>
-                    <th>Tipo</th>
-                    <th>Status</th>
-                    <th>Valor da Causa</th>
-                    <th>Data Ajuizamento</th>
-                    <th style="width: 220px;">Ações</th>
+                    <th style="width: 140px;">Tipo</th>
+                    <th style="width: 120px;">Status</th>
+                    <th style="width: 130px;">Valor da Causa</th>
+                    <th style="width: 130px;">Data Ajuiz.</th>
+                    <th style="width: 180px;" class="text-center">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {% for case in cases %}
                   <tr>
-                    <td>{{ case.id }}</td>
+                    <td><strong>{{ case.id }}</strong></td>
                     <td>
-                      <a href="{{ url_for('case_detail', case_id=case.id) }}">{{ case.title }}</a>
+                      <a href="{{ url_for('case_detail', case_id=case.id) }}" class="text-decoration-none">
+                        <strong>{{ case.title }}</strong>
+                      </a>
                     </td>
-                    <td>{{ case.client_name }}</td>
+                    <td><i class="bi bi-person"></i> {{ case.client_name }}</td>
                     <td>
                       {% if case.case_type == 'fap_trajeto' %}
-                        <span class="badge bg-info">FAP - Trajeto</span>
+                        <span class="badge bg-info text-dark"><i class="bi bi-truck"></i> FAP - Trajeto</span>
                       {% elif case.case_type == 'fap_outros' %}
-                        <span class="badge bg-info">FAP - Outros</span>
+                        <span class="badge bg-info text-dark"><i class="bi bi-file-text"></i> FAP - Outros</span>
                       {% elif case.case_type == 'previdenciario' %}
-                        <span class="badge bg-primary">Previdenciário</span>
+                        <span class="badge bg-primary"><i class="bi bi-shield-check"></i> Previdenciário</span>
                       {% elif case.case_type == 'trabalhista' %}
-                        <span class="badge bg-warning">Trabalhista</span>
+                        <span class="badge bg-warning text-dark"><i class="bi bi-building"></i> Trabalhista</span>
                       {% else %}
                         <span class="badge bg-secondary">{{ case.case_type }}</span>
                       {% endif %}
                     </td>
                     <td>
                       {% if case.status == 'draft' %}
-                        <span class="badge bg-secondary">Rascunho</span>
+                        <span class="badge bg-secondary"><i class="bi bi-pencil-square"></i> Rascunho</span>
                       {% elif case.status == 'active' %}
-                        <span class="badge bg-success">Ativo</span>
+                        <span class="badge bg-success"><i class="bi bi-check-circle"></i> Ativo</span>
                       {% elif case.status == 'suspended' %}
-                        <span class="badge bg-warning">Suspenso</span>
+                        <span class="badge bg-warning text-dark"><i class="bi bi-pause-circle"></i> Suspenso</span>
                       {% elif case.status == 'closed' %}
-                        <span class="badge bg-danger">Encerrado</span>
+                        <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Encerrado</span>
                       {% elif case.status == 'archived' %}
-                        <span class="badge bg-dark">Arquivado</span>
+                        <span class="badge bg-dark"><i class="bi bi-archive"></i> Arquivado</span>
                       {% endif %}
                     </td>
-                    <td>R$ {{ "%.2f"|format(case.value_cause|float) if case.value_cause else '-' }}</td>
+                    <td><strong>R$ {{ "%.2f"|format(case.value_cause|float) if case.value_cause else '-' }}</strong></td>
                     <td>{{ case.filing_date.strftime('%d/%m/%Y') if case.filing_date else '-' }}</td>
-                    <td>
-                      <a href="{{ url_for('case_detail', case_id=case.id) }}" class="btn btn-sm btn-info" title="Visualizar">
-                        <i class="bi bi-eye"></i>
-                      </a>
-                      <a href="{{ url_for('case_documents_list', case_id=case.id) }}" class="btn btn-sm btn-secondary" title="Documentos">
-                        <i class="bi bi-file-earmark-text"></i>
-                      </a>
-                      <a href="{{ url_for('case_edit', case_id=case.id) }}" class="btn btn-sm btn-warning" title="Editar">
-                        <i class="bi bi-pencil"></i>
-                      </a>
-                      <form action="{{ url_for('case_delete', case_id=case.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Tem certeza que deseja excluir este caso?');">
-                        <button type="submit" class="btn btn-sm btn-danger" title="Excluir">
+                    <td class="text-center">
+                      <div class="btn-group" role="group">
+                        <a href="{{ url_for('case_detail', case_id=case.id) }}" class="btn btn-sm btn-info" title="Visualizar">
+                          <i class="bi bi-eye"></i>
+                        </a>
+                        <a href="{{ url_for('case_documents_list', case_id=case.id) }}" class="btn btn-sm btn-secondary" title="Documentos">
+                          <i class="bi bi-file-earmark-text"></i>
+                        </a>
+                        <a href="{{ url_for('case_edit', case_id=case.id) }}" class="btn btn-sm btn-warning" title="Editar">
+                          <i class="bi bi-pencil"></i>
+                        </a>
+                        <button type="button" class="btn btn-sm btn-danger" title="Excluir" onclick="confirmDelete('{{ url_for('case_delete', case_id=case.id) }}')">
                           <i class="bi bi-trash"></i>
                         </button>
-                      </form>
+                      </div>
                     </td>
                   </tr>
                   {% endfor %}
@@ -117,15 +119,54 @@
               </table>
             </div>
             {% else %}
-            <div class="alert alert-info">
-              <i class="bi bi-info-circle"></i> Nenhum caso cadastrado ainda. 
-              <a href="{{ url_for('case_new') }}">Cadastre o primeiro caso</a>.
+            <div class="alert alert-info mb-0">
+              <h5><i class="bi bi-info-circle"></i> Nenhum caso cadastrado</h5>
+              <p class="mb-0">Você ainda não possui casos cadastrados. <a href="{{ url_for('case_new') }}" class="alert-link">Clique aqui para cadastrar o primeiro caso</a>.</p>
             </div>
             {% endif %}
           </div>
+          {% if cases %}
+          <div class="card-footer clearfix">
+            <div class="float-end">
+              <span class="badge bg-primary">Total: {{ cases|length }} caso(s)</span>
+            </div>
+          </div>
+          {% endif %}
         </div>
       </div>
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{% if cases %}
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+<script>
+$(document).ready(function() {
+  $('#casesTable').DataTable({
+    "language": {
+      "url": "//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json"
+    },
+    "pageLength": 25,
+    "order": [[0, "desc"]],
+    "columnDefs": [
+      { "orderable": false, "targets": 7 }
+    ]
+  });
+});
+
+function confirmDelete(url) {
+  if (confirm('Tem certeza que deseja excluir este caso? Esta ação não pode ser desfeita.')) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = url;
+    document.body.appendChild(form);
+    form.submit();
+  }
+}
+</script>
+{% endif %}
 {% endblock %}

@@ -7,7 +7,7 @@
   <div class="container-fluid">
     <div class="row">
       <div class="col-sm-6">
-        <h3 class="mb-0">Benefícios</h3>
+        <h3 class="mb-0"><i class="bi bi-shield-check"></i> Benefícios</h3>
       </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
@@ -23,11 +23,11 @@
   <div class="container-fluid">
     <div class="row">
       <div class="col-12">
-        <div class="card">
+        <div class="card card-secondary card-outline">
           <div class="card-header">
-            <h3 class="card-title">Todos os Benefícios do Sistema</h3>
+            <h3 class="card-title"><i class="bi bi-list-ul"></i> Todos os Benefícios do Sistema</h3>
             <div class="card-tools">
-              <small class="text-muted">Para criar benefícios, acesse a página do caso específico</small>
+              <small class="text-muted"><i class="bi bi-info-circle"></i> Para criar benefícios, acesse a página do caso específico</small>
             </div>
           </div>
           <div class="card-body">
@@ -35,7 +35,7 @@
               {% if messages %}
                 {% for category, message in messages %}
                   <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                    {{ message }}
+                    <i class="bi bi-info-circle"></i> {{ message }}
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                   </div>
                 {% endfor %}
@@ -44,42 +44,60 @@
 
             {% if benefits %}
             <div class="table-responsive">
-              <table class="table table-bordered table-hover">
-                <thead>
+              <table id="benefitsTable" class="table table-bordered table-striped table-hover">
+                <thead class="table-light">
                   <tr>
-                    <th>ID</th>
-                    <th>Número Benefício</th>
-                    <th>Tipo</th>
-                    <th>Segurado</th>
-                    <th>NIT</th>
-                    <th>Data Acidente</th>
-                    <th>Ações</th>
+                    <th style="width: 60px;">ID</th>
+                    <th style="width: 160px;">Número Benefício</th>
+                    <th style="width: 120px;" class="text-center">Tipo</th>
+                    <th>Nome do Segurado</th>
+                    <th style="width: 150px;">NIT</th>
+                    <th style="width: 130px;">Data Acidente</th>
+                    <th style="width: 120px;" class="text-center">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {% for benefit in benefits %}
                   <tr>
-                    <td>{{ benefit.id }}</td>
-                    <td>{{ benefit.benefit_number }}</td>
+                    <td><strong>{{ benefit.id }}</strong></td>
                     <td>
+                      <code class="text-primary">{{ benefit.benefit_number }}</code>
+                    </td>
+                    <td class="text-center">
                       {% if benefit.benefit_type == 'B91' %}
-                        <span class="badge bg-info">B91</span>
+                        <span class="badge bg-info text-dark"><i class="bi bi-clipboard-check"></i> B91</span>
                       {% elif benefit.benefit_type == 'B94' %}
-                        <span class="badge bg-warning">B94</span>
+                        <span class="badge bg-warning text-dark"><i class="bi bi-clipboard-plus"></i> B94</span>
                       {% else %}
-                        <span class="badge bg-secondary">{{ benefit.benefit_type }}</span>
+                        <span class="badge bg-secondary"><i class="bi bi-clipboard"></i> {{ benefit.benefit_type }}</span>
                       {% endif %}
                     </td>
-                    <td>{{ benefit.insured_name }}</td>
-                    <td>{{ benefit.insured_nit or '-' }}</td>
-                    <td>{{ benefit.accident_date.strftime('%d/%m/%Y') if benefit.accident_date else '-' }}</td>
                     <td>
-                      <a href="#" class="btn btn-sm btn-info" title="Visualizar">
-                        <i class="bi bi-eye"></i>
-                      </a>
-                      <a href="#" class="btn btn-sm btn-warning" title="Editar">
-                        <i class="bi bi-pencil"></i>
-                      </a>
+                      <i class="bi bi-person"></i> <strong>{{ benefit.insured_name }}</strong>
+                    </td>
+                    <td>
+                      {% if benefit.insured_nit %}
+                        <code>{{ benefit.insured_nit }}</code>
+                      {% else %}
+                        <span class="text-muted">-</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if benefit.accident_date %}
+                        <i class="bi bi-calendar-event"></i> {{ benefit.accident_date.strftime('%d/%m/%Y') }}
+                      {% else %}
+                        <span class="text-muted">-</span>
+                      {% endif %}
+                    </td>
+                    <td class="text-center">
+                      <div class="btn-group" role="group">
+                        <a href="#" class="btn btn-sm btn-info" title="Visualizar">
+                          <i class="bi bi-eye"></i>
+                        </a>
+                        <a href="#" class="btn btn-sm btn-warning" title="Editar">
+                          <i class="bi bi-pencil"></i>
+                        </a>
+                      </div>
                     </td>
                   </tr>
                   {% endfor %}
@@ -87,15 +105,44 @@
               </table>
             </div>
             {% else %}
-            <div class="alert alert-info">
-              <i class="bi bi-info-circle"></i> Nenhum benefício cadastrado ainda. 
-              Para cadastrar benefícios, acesse a página do caso desejado e use a aba "Benefícios".
+            <div class="alert alert-info mb-0">
+              <h5><i class="bi bi-info-circle"></i> Nenhum benefício cadastrado</h5>
+              <p class="mb-0">Você ainda não possui benefícios cadastrados. Para cadastrar benefícios, acesse a página do caso desejado e use a aba <strong>"Benefícios"</strong>.</p>
             </div>
             {% endif %}
           </div>
+          {% if benefits %}
+          <div class="card-footer clearfix">
+            <div class="float-end">
+              <span class="badge bg-secondary">Total: {{ benefits|length }} benefício(s)</span>
+            </div>
+          </div>
+          {% endif %}
         </div>
       </div>
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{% if benefits %}
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+<script>
+$(document).ready(function() {
+  $('#benefitsTable').DataTable({
+    "language": {
+      "url": "//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json"
+    },
+    "pageLength": 25,
+    "order": [[0, "desc"]],
+    "columnDefs": [
+      { "orderable": false, "targets": 6 }
+    ]
+  });
+});
+</script>
+{% endif %}
 {% endblock %}

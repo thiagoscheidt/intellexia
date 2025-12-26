@@ -7,7 +7,7 @@
   <div class="container-fluid">
     <div class="row">
       <div class="col-sm-6">
-        <h3 class="mb-0">Varas Judiciais</h3>
+        <h3 class="mb-0"><i class="bi bi-bank"></i> Varas Judiciais</h3>
       </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
@@ -23,11 +23,11 @@
   <div class="container-fluid">
     <div class="row">
       <div class="col-12">
-        <div class="card">
+        <div class="card card-warning card-outline">
           <div class="card-header">
-            <h3 class="card-title">Lista de Varas Judiciais</h3>
+            <h3 class="card-title"><i class="bi bi-list-ul"></i> Lista de Varas Judiciais</h3>
             <div class="card-tools">
-              <a href="{{ url_for('court_new') }}" class="btn btn-primary btn-sm">
+              <a href="{{ url_for('court_new') }}" class="btn btn-warning btn-sm">
                 <i class="bi bi-plus-circle"></i> Nova Vara
               </a>
             </div>
@@ -37,7 +37,7 @@
               {% if messages %}
                 {% for category, message in messages %}
                   <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                    {{ message }}
+                    <i class="bi bi-info-circle"></i> {{ message }}
                     <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                   </div>
                 {% endfor %}
@@ -46,27 +46,43 @@
 
             {% if courts %}
             <div class="table-responsive">
-              <table class="table table-bordered table-hover">
-                <thead>
+              <table id="courtsTable" class="table table-bordered table-striped table-hover">
+                <thead class="table-light">
                   <tr>
-                    <th>ID</th>
-                    <th>Seção Judiciária</th>
+                    <th style="width: 60px;">ID</th>
+                    <th style="width: 250px;">Seção Judiciária</th>
                     <th>Nome da Vara</th>
-                    <th>Cidade/UF</th>
-                    <th>Ações</th>
+                    <th style="width: 180px;">Cidade/UF</th>
+                    <th style="width: 100px;" class="text-center">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {% for court in courts %}
                   <tr>
-                    <td>{{ court.id }}</td>
-                    <td>{{ court.section or '-' }}</td>
-                    <td>{{ court.vara_name or '-' }}</td>
-                    <td>{{ court.city }}/{{ court.state }}</td>
+                    <td><strong>{{ court.id }}</strong></td>
                     <td>
-                      <a href="#" class="btn btn-sm btn-warning" title="Editar">
-                        <i class="bi bi-pencil"></i>
-                      </a>
+                      {% if court.section %}
+                        <i class="bi bi-diagram-3"></i> {{ court.section }}
+                      {% else %}
+                        <span class="text-muted">-</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if court.vara_name %}
+                        <i class="bi bi-bank text-warning"></i> <strong>{{ court.vara_name }}</strong>
+                      {% else %}
+                        <span class="text-muted">-</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      <i class="bi bi-geo-alt"></i> {{ court.city }}/{{ court.state }}
+                    </td>
+                    <td class="text-center">
+                      <div class="btn-group" role="group">
+                        <a href="#" class="btn btn-sm btn-warning" title="Editar">
+                          <i class="bi bi-pencil"></i>
+                        </a>
+                      </div>
                     </td>
                   </tr>
                   {% endfor %}
@@ -74,15 +90,44 @@
               </table>
             </div>
             {% else %}
-            <div class="alert alert-info">
-              <i class="bi bi-info-circle"></i> Nenhuma vara cadastrada ainda. 
-              <a href="{{ url_for('court_new') }}">Cadastre a primeira vara</a>.
+            <div class="alert alert-info mb-0">
+              <h5><i class="bi bi-info-circle"></i> Nenhuma vara cadastrada</h5>
+              <p class="mb-0">Você ainda não possui varas cadastradas. <a href="{{ url_for('court_new') }}" class="alert-link">Clique aqui para cadastrar a primeira vara</a>.</p>
             </div>
             {% endif %}
           </div>
+          {% if courts %}
+          <div class="card-footer clearfix">
+            <div class="float-end">
+              <span class="badge bg-warning text-dark">Total: {{ courts|length }} vara(s)</span>
+            </div>
+          </div>
+          {% endif %}
         </div>
       </div>
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{% if courts %}
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+<script>
+$(document).ready(function() {
+  $('#courtsTable').DataTable({
+    "language": {
+      "url": "//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json"
+    },
+    "pageLength": 25,
+    "order": [[0, "desc"]],
+    "columnDefs": [
+      { "orderable": false, "targets": 4 }
+    ]
+  });
+});
+</script>
+{% endif %}
 {% endblock %}
