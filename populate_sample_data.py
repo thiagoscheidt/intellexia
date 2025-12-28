@@ -16,17 +16,109 @@ from pathlib import Path
 project_root = Path(__file__).parent
 sys.path.insert(0, str(project_root))
 
-# Importar a aplicação e modelos
-from main import app
-from app.models import (
-    db, Client, Court, Lawyer, Case, CaseLawyer, 
-    CaseCompetence, CaseBenefit, Document
-)
+def import_models():
+    """Importa modelos apenas quando necessário"""
+    from main import app
+    from app.models import (
+        db, LawFirm, User, Client, Court, Lawyer, Case, CaseLawyer, 
+        CaseCompetence, CaseBenefit, Document
+    )
+    return app, db, LawFirm, User, Client, Court, Lawyer, Case, CaseLawyer, CaseCompetence, CaseBenefit, Document
+def create_sample_law_firm(db, LawFirm):
+    """Cria escritório de advocacia de exemplo"""
+    from datetime import datetime, timedelta, timezone
+    
+    law_firm_data = {
+        'name': 'Silva & Associados Advocacia',
+        'trade_name': 'Silva Advocacia',
+        'cnpj': '11.222.333/0001-44',
+        'street': 'Av. Paulista, 1000',
+        'number': '1000',
+        'complement': 'Sala 1501',
+        'district': 'Bela Vista',
+        'city': 'São Paulo',
+        'state': 'SP',
+        'zip_code': '01310-100',
+        'phone': '(11) 3456-7890',
+        'email': 'contato@silvaadvocacia.com.br',
+        'website': 'www.silvaadvocacia.com.br',
+        'is_active': True,
+        'subscription_plan': 'premium',
+        'subscription_expires_at': datetime.now(timezone.utc) + timedelta(days=365),
+        'max_users': 50,
+        'max_cases': 1000
+    }
+    
+    # Verificar se já existe
+    existing = LawFirm.query.filter_by(cnpj=law_firm_data['cnpj']).first()
+    if not existing:
+        law_firm = LawFirm(**law_firm_data)
+        db.session.add(law_firm)
+        db.session.flush()  # Garantir que o ID seja atribuído
+        print(f"✓ Escritório criado: {law_firm_data['name']}")
+        return law_firm
+    else:
+        print(f"→ Escritório já existe: {existing.name}")
+        return existing
 
-def create_sample_clients():
+def create_sample_users(db, User, law_firm):
+    """Cria usuários de exemplo"""
+    users_data = [
+        {
+            'law_firm_id': law_firm.id,
+            'name': 'João Silva Santos',
+            'email': 'joao@silvaadvocacia.com.br',
+            'oab_number': 'SP 123456',
+            'phone': '(11) 98765-4321',
+            'role': 'admin',
+            'is_active': True,
+            'is_verified': True
+        },
+        {
+            'law_firm_id': law_firm.id,
+            'name': 'Maria Fernanda Costa',
+            'email': 'maria@silvaadvocacia.com.br',
+            'oab_number': 'SC 78901',
+            'phone': '(47) 99123-4567',
+            'role': 'lawyer',
+            'is_active': True,
+            'is_verified': True
+        },
+        {
+            'law_firm_id': law_firm.id,
+            'name': 'Ana Beatriz Assistente',
+            'email': 'ana@silvaadvocacia.com.br',
+            'phone': '(11) 94567-8901',
+            'role': 'assistant',
+            'is_active': True,
+            'is_verified': True
+        }
+    ]
+    
+    users = []
+    for data in users_data:
+        # Debug: verificar se law_firm_id está correto
+        print(f"   Criando usuário: {data['name']} com law_firm_id: {data['law_firm_id']}")
+        
+        # Verificar se já existe
+        existing = User.query.filter_by(email=data['email']).first()
+        if not existing:
+            user = User(**data)
+            # Definir senha padrão para todos os usuários
+            user.set_password('123456')
+            db.session.add(user)
+            users.append(user)
+            print(f"✓ Usuário criado: {data['name']} ({data['role']})")
+        else:
+            users.append(existing)
+            print(f"→ Usuário já existe: {existing.name}")
+    
+    return users
+def create_sample_clients(db, Client, law_firm):
     """Cria empresas clientes de exemplo"""
     clients_data = [
         {
+            'law_firm_id': law_firm.id,
             'name': 'Construtora Silva & Filhos Ltda',
             'cnpj': '12.345.678/0001-90',
             'street': 'Rua das Construções, 123',
@@ -39,6 +131,7 @@ def create_sample_clients():
             'branches_description': 'Filiais em Santos/SP e Campinas/SP'
         },
         {
+            'law_firm_id': law_firm.id,
             'name': 'Metalúrgica Aço Forte S.A.',
             'cnpj': '98.765.432/0001-10',
             'street': 'Av. Industrial, 500',
@@ -51,6 +144,7 @@ def create_sample_clients():
             'branches_description': None
         },
         {
+            'law_firm_id': law_firm.id,
             'name': 'Transportadora Rodoviária Express Ltda',
             'cnpj': '45.123.789/0001-55',
             'street': 'Rodovia BR-101, Km 150',
@@ -63,6 +157,7 @@ def create_sample_clients():
             'branches_description': 'Filiais em Curitiba/PR, Florianópolis/SC e Porto Alegre/RS'
         },
         {
+            'law_firm_id': law_firm.id,
             'name': 'Indústria Têxtil Fios de Ouro S.A.',
             'cnpj': '78.901.234/0001-33',
             'street': 'Rua dos Tecelões, 789',
@@ -91,34 +186,39 @@ def create_sample_clients():
     
     return clients
 
-def create_sample_courts():
+def create_sample_courts(db, Court, law_firm):
     """Cria varas judiciais de exemplo"""
     courts_data = [
         {
+            'law_firm_id': law_firm.id,
             'section': 'Seção Judiciária de Santa Catarina',
             'vara_name': '1ª Vara Federal de Blumenau',
             'city': 'Blumenau',
             'state': 'SC'
         },
         {
+            'law_firm_id': law_firm.id,
             'section': 'Seção Judiciária de Santa Catarina',
             'vara_name': '2ª Vara Federal de Joinville',
             'city': 'Joinville',
             'state': 'SC'
         },
         {
+            'law_firm_id': law_firm.id,
             'section': 'Seção Judiciária de Santa Catarina',
             'vara_name': '1ª Vara Federal de Itajaí',
             'city': 'Itajaí',
             'state': 'SC'
         },
         {
+            'law_firm_id': law_firm.id,
             'section': 'Seção Judiciária de São Paulo',
             'vara_name': '3ª Vara Federal de São Paulo',
             'city': 'São Paulo',
             'state': 'SP'
         },
         {
+            'law_firm_id': law_firm.id,
             'section': 'Seção Judiciária do Paraná',
             'vara_name': '1ª Vara Federal de Curitiba',
             'city': 'Curitiba',
@@ -141,10 +241,11 @@ def create_sample_courts():
     
     return courts
 
-def create_sample_lawyers():
+def create_sample_lawyers(db, Lawyer, law_firm):
     """Cria advogados de exemplo"""
     lawyers_data = [
         {
+            'law_firm_id': law_firm.id,
             'name': 'Dr. João Silva Santos',
             'oab_number': 'SP 123456',
             'email': 'joao.santos@advocacia.com.br',
@@ -152,6 +253,7 @@ def create_sample_lawyers():
             'is_default_for_publications': True
         },
         {
+            'law_firm_id': law_firm.id,
             'name': 'Dra. Maria Fernanda Costa',
             'oab_number': 'SC 78901',
             'email': 'maria.costa@escritorio.adv.br',
@@ -159,6 +261,7 @@ def create_sample_lawyers():
             'is_default_for_publications': False
         },
         {
+            'law_firm_id': law_firm.id,
             'name': 'Dr. Carlos Eduardo Oliveira',
             'oab_number': 'SC 45123',
             'email': 'carlos.oliveira@direito.com',
@@ -166,6 +269,7 @@ def create_sample_lawyers():
             'is_default_for_publications': False
         },
         {
+            'law_firm_id': law_firm.id,
             'name': 'Dra. Ana Paula Rodrigues',
             'oab_number': 'SP 67890',
             'email': 'ana.rodrigues@advocaciasp.com.br',
@@ -189,10 +293,11 @@ def create_sample_lawyers():
     
     return lawyers
 
-def create_sample_cases(clients, courts, lawyers):
+def create_sample_cases(db, Case, law_firm, clients, courts, lawyers):
     """Cria casos jurídicos de exemplo"""
     cases_data = [
         {
+            'law_firm_id': law_firm.id,
             'title': 'Revisão FAP - Acidente de Trabalho 2019-2021',
             'case_type': 'fap_trajeto',
             'fap_start_year': 2019,
@@ -205,6 +310,7 @@ def create_sample_cases(clients, courts, lawyers):
             'filing_date': date(2023, 3, 15)
         },
         {
+            'law_firm_id': law_firm.id,
             'title': 'Revisão FAP - Nexo Causal Contestado 2020-2022',
             'case_type': 'fap_nexo',
             'fap_start_year': 2020,
@@ -217,6 +323,7 @@ def create_sample_cases(clients, courts, lawyers):
             'filing_date': date(2023, 6, 22)
         },
         {
+            'law_firm_id': law_firm.id,
             'title': 'Anulação de Auto de Infração - NR12',
             'case_type': 'auto_infracao',
             'fap_start_year': None,
@@ -229,6 +336,7 @@ def create_sample_cases(clients, courts, lawyers):
             'filing_date': None
         },
         {
+            'law_firm_id': law_firm.id,
             'title': 'Revisão FAP - Múltiplos Benefícios 2018-2020',
             'case_type': 'fap_multiplos',
             'fap_start_year': 2018,
@@ -261,7 +369,7 @@ def create_sample_cases(clients, courts, lawyers):
     
     return cases
 
-def create_case_lawyers_relations(cases, lawyers):
+def create_case_lawyers_relations(db, CaseLawyer, cases, lawyers):
     """Cria relacionamentos entre casos e advogados"""
     relations = []
     
@@ -297,7 +405,7 @@ def create_case_lawyers_relations(cases, lawyers):
     
     return relations
 
-def create_sample_benefits(cases):
+def create_sample_benefits(db, CaseBenefit, cases):
     """Cria benefícios de exemplo relacionados aos casos"""
     benefits_data = [
         # Caso 1 - Revisão FAP Trajeto
@@ -396,7 +504,7 @@ def create_sample_benefits(cases):
     
     return all_benefits
 
-def create_sample_competences(cases):
+def create_sample_competences(db, CaseCompetence, cases):
     """Cria competências de exemplo para os casos"""
     competences = []
     
@@ -435,37 +543,58 @@ def main():
     print("🚀 Iniciando população de dados de exemplo...")
     print("=" * 50)
     
+    # Importar modelos no contexto correto
+    app, db, LawFirm, User, Client, Court, Lawyer, Case, CaseLawyer, CaseCompetence, CaseBenefit, Document = import_models()
+    
+    # Garantir que o app seja configurado corretamente
+    app.config.update({
+        'SQLALCHEMY_TRACK_MODIFICATIONS': False,
+        'SQLALCHEMY_DATABASE_URI': app.config.get('SQLALCHEMY_DATABASE_URI', 'sqlite:///intellexia.db')
+    })
+    
     try:
         with app.app_context():
             # Verificar se as tabelas existem
             db.create_all()
             print("✓ Tabelas verificadas/criadas")
             
+            # Criar escritório de advocacia
+            print("\n🏢 Criando escritório de advocacia...")
+            law_firm = create_sample_law_firm(db, LawFirm)
+            
+            # Criar usuários do sistema
+            print("\n👤 Criando usuários...")
+            users = create_sample_users(db, User, law_firm)
+            
+            # Commit dos dados básicos
+            db.session.commit()
+            print("✓ Escritório e usuários salvos")
+            
             # Criar dados de exemplo
             print("\n📊 Criando clientes...")
-            clients = create_sample_clients()
+            clients = create_sample_clients(db, Client, law_firm)
             
             print("\n🏛️ Criando varas judiciais...")
-            courts = create_sample_courts()
+            courts = create_sample_courts(db, Court, law_firm)
             
             print("\n⚖️ Criando advogados...")
-            lawyers = create_sample_lawyers()
+            lawyers = create_sample_lawyers(db, Lawyer, law_firm)
             
             # Commit dos dados básicos
             db.session.commit()
             print("✓ Dados básicos salvos")
             
             print("\n📋 Criando casos...")
-            cases = create_sample_cases(clients, courts, lawyers)
+            cases = create_sample_cases(db, Case, law_firm, clients, courts, lawyers)
             
             print("\n🤝 Criando relações caso-advogado...")
-            case_lawyers = create_case_lawyers_relations(cases, lawyers)
+            case_lawyers = create_case_lawyers_relations(db, CaseLawyer, cases, lawyers)
             
             print("\n💰 Criando benefícios...")
-            benefits = create_sample_benefits(cases)
+            benefits = create_sample_benefits(db, CaseBenefit, cases)
             
             print("\n📅 Criando competências...")
-            competences = create_sample_competences(cases)
+            competences = create_sample_competences(db, CaseCompetence, cases)
             
             # Commit final
             db.session.commit()
@@ -473,6 +602,8 @@ def main():
             print("\n" + "=" * 50)
             print("✅ POPULAÇÃO DE DADOS CONCLUÍDA COM SUCESSO!")
             print(f"📊 Resumo:")
+            print(f"   • 1 escritório de advocacia")
+            print(f"   • {len(users)} usuários")
             print(f"   • {len(clients)} clientes")
             print(f"   • {len(courts)} varas judiciais")
             print(f"   • {len(lawyers)} advogados")
@@ -484,8 +615,18 @@ def main():
             
     except Exception as e:
         print(f"❌ Erro durante a população de dados: {e}")
-        db.session.rollback()
+        try:
+            db.session.rollback()
+        except Exception as rollback_error:
+            print(f"⚠️  Erro no rollback: {rollback_error}")
         raise
 
 if __name__ == '__main__':
-    main()
+    try:
+        main()
+    except Exception as e:
+        import traceback
+        print(f"\n❌ ERRO FATAL: {e}")
+        print("\n📝 Detalhes do erro:")
+        traceback.print_exc()
+        sys.exit(1)

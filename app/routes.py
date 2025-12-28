@@ -521,6 +521,45 @@ def clients_list():
     clients = Client.query.filter_by(law_firm_id=law_firm_id).order_by(Client.created_at.desc()).all()
     return render_template('clients/list.html', clients=clients)
 
+@app.route('/clients/<int:client_id>')
+@require_law_firm
+def client_detail(client_id):
+    """Visualiza detalhes de um cliente específico e seus casos"""
+    law_firm_id = get_current_law_firm_id()
+    client = Client.query.filter_by(id=client_id, law_firm_id=law_firm_id).first_or_404()
+    
+    # Buscar todos os casos deste cliente
+    client_cases = Case.query.filter_by(client_id=client_id, law_firm_id=law_firm_id).order_by(Case.created_at.desc()).all()
+    
+    # Estatísticas dos casos
+    active_cases_count = len([case for case in client_cases if case.status == 'active'])
+    
+    # Contar benefícios de todos os casos do cliente
+    total_benefits_count = 0
+    for case in client_cases:
+        total_benefits_count += len(case.benefits)
+    
+    # Somar valores de todas as causas
+    from decimal import Decimal
+    total_case_value = sum([case.value_cause or Decimal('0') for case in client_cases])
+    
+    # Resumo por tipos de caso
+    case_types_summary = {}
+    for case in client_cases:
+        case_type = case.case_type
+        if case_type in case_types_summary:
+            case_types_summary[case_type] += 1
+        else:
+            case_types_summary[case_type] = 1
+    
+    return render_template('clients/detail.html', 
+                         client=client,
+                         client_cases=client_cases,
+                         active_cases_count=active_cases_count,
+                         total_benefits_count=total_benefits_count,
+                         total_case_value=total_case_value,
+                         case_types_summary=case_types_summary)
+
 @app.route('/clients/new', methods=['GET', 'POST'])
 @require_law_firm
 def client_new():
@@ -612,8 +651,98 @@ def client_delete(client_id):
 @require_law_firm
 def cases_list():
     law_firm_id = get_current_law_firm_id()
-    cases = Case.query.filter_by(law_firm_id=law_firm_id).join(Client).order_by(Case.created_at.desc()).all()
-    return render_template('cases/list.html', cases=cases)
+    
+    # Buscar dados para os filtros
+    clients = Client.query.filter_by(law_firm_id=law_firm_id).order_by(Client.name).all()
+    courts = Court.query.filter_by(law_firm_id=law_firm_id).order_by(Court.vara_name).all()
+    
+    # Query base filtrada por escritório
+    query = Case.query.filter_by(law_firm_id=law_firm_id).join(Client)
+    
+    # Aplicar filtros baseados nos parâmetros da URL
+    client_id = request.args.get('client_id')
+    if client_id:
+        query = query.filter(Case.client_id == client_id)
+    
+    case_type = request.args.get('case_type')
+    if case_type:
+        query = query.filter(Case.case_type == case_type)
+    
+    status = request.args.get('status')
+    if status:
+        query = query.filter(Case.status == status)
+    
+    court_id = request.args.get('court_id')
+    if court_id:
+        query = query.filter(Case.court_id == court_id)
+    
+    fap_year = request.args.get('fap_year')
+    if fap_year:
+        try:
+            year = int(fap_year)
+            query = query.filter(
+                db.or_(
+                    Case.fap_start_year == year,
+                    Case.fap_end_year == year,
+                    db.and_(Case.fap_start_year <= year, Case.fap_end_year >= year)
+                )
+            )
+        except ValueError:
+            pass
+    
+    # Filtros por valor da causa
+    value_min = request.args.get('value_min')
+    if value_min:
+        try:
+            min_val = float(value_min)
+            query = query.filter(Case.value_cause >= min_val)
+        except (ValueError, TypeError):
+            pass
+    
+    value_max = request.args.get('value_max')
+    if value_max:
+        try:
+            max_val = float(value_max)
+            query = query.filter(Case.value_cause <= max_val)
+        except (ValueError, TypeError):
+            pass
+    
+    # Filtro por busca de texto
+    search_text = request.args.get('search')
+    if search_text:
+        search_pattern = f"%{search_text}%"
+        query = query.filter(
+            db.or_(
+                Case.title.ilike(search_pattern),
+                Case.facts_summary.ilike(search_pattern),
+                Case.thesis_summary.ilike(search_pattern),
+                Client.name.ilike(search_pattern)
+            )
+        )
+    
+    # Filtros por data
+    date_from = request.args.get('date_from')
+    if date_from:
+        try:
+            from datetime import datetime
+            date_obj = datetime.strptime(date_from, '%Y-%m-%d').date()
+            query = query.filter(Case.filing_date >= date_obj)
+        except ValueError:
+            pass
+    
+    date_to = request.args.get('date_to')
+    if date_to:
+        try:
+            from datetime import datetime
+            date_obj = datetime.strptime(date_to, '%Y-%m-%d').date()
+            query = query.filter(Case.filing_date <= date_obj)
+        except ValueError:
+            pass
+    
+    # Ordenar resultados
+    cases = query.order_by(Case.created_at.desc()).all()
+    
+    return render_template('cases/list.html', cases=cases, clients=clients, courts=courts)
 
 @app.route('/cases/new', methods=['GET', 'POST'])
 @require_law_firm
@@ -1197,6 +1326,25 @@ def benefits_list():
     """Lista todos os benefícios do sistema para visualização geral"""
     benefits = CaseBenefit.query.join(Case).join(Client).order_by(CaseBenefit.created_at.desc()).all()
     return render_template('benefits/list.html', benefits=benefits)
+
+@app.route('/benefits/<int:benefit_id>')
+def benefit_detail(benefit_id):
+    """Visualiza detalhes de um benefício específico e casos vinculados"""
+    benefit = CaseBenefit.query.get_or_404(benefit_id)
+    
+    # Buscar casos que contenham este benefício
+    # Como um benefício pode estar em vários casos, vamos buscar todos os casos relacionados
+    related_cases = Case.query.filter(
+        Case.benefits.any(CaseBenefit.id == benefit_id)
+    ).order_by(Case.created_at.desc()).all()
+    
+    # Buscar documentos relacionados a este benefício
+    related_documents = Document.query.filter_by(related_benefit_id=benefit_id).all()
+    
+    return render_template('benefits/detail.html', 
+                         benefit=benefit, 
+                         related_cases=related_cases,
+                         documents=related_documents)
 
 # ========================
 # Rotas de Petições (IA)

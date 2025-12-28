@@ -90,14 +90,9 @@
                       {% endif %}
                     </td>
                     <td class="text-center">
-                      <div class="btn-group" role="group">
-                        <a href="#" class="btn btn-sm btn-info" title="Visualizar">
-                          <i class="bi bi-eye"></i>
-                        </a>
-                        <a href="#" class="btn btn-sm btn-warning" title="Editar">
-                          <i class="bi bi-pencil"></i>
-                        </a>
-                      </div>
+                      <a href="{{ url_for('benefit_detail', benefit_id=benefit.id) }}" class="btn btn-sm btn-info" title="Visualizar">
+                        <i class="bi bi-eye"></i> Visualizar
+                      </a>
                     </td>
                   </tr>
                   {% endfor %}

@@ -44,14 +44,231 @@
               {% endif %}
             {% endwith %}
 
+            <!-- Filtros Avançados -->
+            <div class="card card-light mb-4">
+              <div class="card-header">
+                <h5 class="card-title mb-0">
+                  <i class="bi bi-funnel"></i> Filtros
+                  <button class="btn btn-sm btn-outline-secondary ms-2" type="button" data-bs-toggle="collapse" data-bs-target="#filtersCollapse" aria-expanded="false">
+                    <i class="bi bi-chevron-down"></i>
+                  </button>
+                </h5>
+              </div>
+              <div class="collapse" id="filtersCollapse">
+                <div class="card-body">
+                  <form method="GET" id="filtersForm" class="row g-3">
+                    <!-- Filtro por Cliente -->
+                    <div class="col-md-3">
+                      <label for="client_filter" class="form-label">
+                        <i class="bi bi-person"></i> Cliente
+                      </label>
+                      <select class="form-select" id="client_filter" name="client_id">
+                        <option value="">Todos os clientes</option>
+                        {% if clients %}
+                          {% for client in clients %}
+                            <option value="{{ client.id }}" 
+                              {% if request.args.get('client_id')|int == client.id %}selected{% endif %}>
+                              {{ client.name }}
+                            </option>
+                          {% endfor %}
+                        {% endif %}
+                      </select>
+                    </div>
+
+                    <!-- Filtro por Tipo de Caso -->
+                    <div class="col-md-3">
+                      <label for="type_filter" class="form-label">
+                        <i class="bi bi-tag"></i> Tipo do Caso
+                      </label>
+                      <select class="form-select" id="type_filter" name="case_type">
+                        <option value="">Todos os tipos</option>
+                        <option value="fap_trajeto" {% if request.args.get('case_type') == 'fap_trajeto' %}selected{% endif %}>
+                          FAP - Trajeto
+                        </option>
+                        <option value="fap_nexo" {% if request.args.get('case_type') == 'fap_nexo' %}selected{% endif %}>
+                          FAP - Nexo Causal
+                        </option>
+                        <option value="fap_multiplos" {% if request.args.get('case_type') == 'fap_multiplos' %}selected{% endif %}>
+                          FAP - Múltiplos
+                        </option>
+                        <option value="auto_infracao" {% if request.args.get('case_type') == 'auto_infracao' %}selected{% endif %}>
+                          Auto de Infração
+                        </option>
+                        <option value="previdenciario" {% if request.args.get('case_type') == 'previdenciario' %}selected{% endif %}>
+                          Previdenciário
+                        </option>
+                        <option value="trabalhista" {% if request.args.get('case_type') == 'trabalhista' %}selected{% endif %}>
+                          Trabalhista
+                        </option>
+                      </select>
+                    </div>
+
+                    <!-- Filtro por Status -->
+                    <div class="col-md-3">
+                      <label for="status_filter" class="form-label">
+                        <i class="bi bi-flag"></i> Status
+                      </label>
+                      <select class="form-select" id="status_filter" name="status">
+                        <option value="">Todos os status</option>
+                        <option value="draft" {% if request.args.get('status') == 'draft' %}selected{% endif %}>
+                          Rascunho
+                        </option>
+                        <option value="active" {% if request.args.get('status') == 'active' %}selected{% endif %}>
+                          Ativo
+                        </option>
+                        <option value="suspended" {% if request.args.get('status') == 'suspended' %}selected{% endif %}>
+                          Suspenso
+                        </option>
+                        <option value="closed" {% if request.args.get('status') == 'closed' %}selected{% endif %}>
+                          Encerrado
+                        </option>
+                        <option value="archived" {% if request.args.get('status') == 'archived' %}selected{% endif %}>
+                          Arquivado
+                        </option>
+                      </select>
+                    </div>
+
+                    <!-- Filtro por Vara -->
+                    <div class="col-md-3">
+                      <label for="court_filter" class="form-label">
+                        <i class="bi bi-building"></i> Vara
+                      </label>
+                      <select class="form-select" id="court_filter" name="court_id">
+                        <option value="">Todas as varas</option>
+                        {% if courts %}
+                          {% for court in courts %}
+                            <option value="{{ court.id }}" 
+                              {% if request.args.get('court_id')|int == court.id %}selected{% endif %}>
+                              {{ court.vara_name }}
+                            </option>
+                          {% endfor %}
+                        {% endif %}
+                      </select>
+                    </div>
+
+                    <!-- Filtro por Período FAP -->
+                    <div class="col-md-3">
+                      <label for="fap_year_filter" class="form-label">
+                        <i class="bi bi-calendar"></i> Ano FAP
+                      </label>
+                      <select class="form-select" id="fap_year_filter" name="fap_year">
+                        <option value="">Todos os anos</option>
+                        {% for year in range(2015, 2025) %}
+                          <option value="{{ year }}" {% if request.args.get('fap_year')|int == year %}selected{% endif %}>
+                            {{ year }}
+                          </option>
+                        {% endfor %}
+                      </select>
+                    </div>
+
+                    <!-- Filtro por Valor da Causa -->
+                    <div class="col-md-3">
+                      <label for="value_min" class="form-label">
+                        <i class="bi bi-currency-dollar"></i> Valor Mínimo
+                      </label>
+                      <input type="number" class="form-control" id="value_min" name="value_min" 
+                        placeholder="R$ 0,00" step="0.01" value="{{ request.args.get('value_min', '') }}">
+                    </div>
+
+                    <div class="col-md-3">
+                      <label for="value_max" class="form-label">
+                        <i class="bi bi-currency-dollar"></i> Valor Máximo
+                      </label>
+                      <input type="number" class="form-control" id="value_max" name="value_max" 
+                        placeholder="R$ 999.999,99" step="0.01" value="{{ request.args.get('value_max', '') }}">
+                    </div>
+
+                    <!-- Filtro por Texto -->
+                    <div class="col-md-3">
+                      <label for="search_text" class="form-label">
+                        <i class="bi bi-search"></i> Buscar Texto
+                      </label>
+                      <input type="text" class="form-control" id="search_text" name="search" 
+                        placeholder="Buscar em título, fatos..." value="{{ request.args.get('search', '') }}">
+                    </div>
+
+                    <!-- Botões de Ação -->
+                    <div class="col-12">
+                      <div class="d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                          <i class="bi bi-search"></i> Filtrar
+                        </button>
+                        <a href="{{ url_for('cases_list') }}" class="btn btn-outline-secondary">
+                          <i class="bi bi-x-circle"></i> Limpar Filtros
+                        </a>
+                        <button type="button" class="btn btn-outline-info" onclick="toggleAdvancedSearch()">
+                          <i class="bi bi-gear"></i> Busca Avançada
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- Busca Avançada (Oculta por padrão) -->
+                    <div class="col-12 d-none" id="advancedSearchSection">
+                      <hr>
+                      <h6><i class="bi bi-search"></i> Busca Avançada</h6>
+                      <div class="row g-3">
+                        <div class="col-md-6">
+                          <label for="date_from" class="form-label">Data de Ajuizamento (De)</label>
+                          <input type="date" class="form-control" id="date_from" name="date_from" 
+                            value="{{ request.args.get('date_from', '') }}">
+                        </div>
+                        <div class="col-md-6">
+                          <label for="date_to" class="form-label">Data de Ajuizamento (Até)</label>
+                          <input type="date" class="form-control" id="date_to" name="date_to" 
+                            value="{{ request.args.get('date_to', '') }}">
+                        </div>
+                      </div>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+
+            <!-- Resumo dos Filtros Aplicados -->
+            {% set has_filters = request.args.get('client_id') or request.args.get('case_type') or 
+                                request.args.get('status') or request.args.get('court_id') or 
+                                request.args.get('fap_year') or request.args.get('value_min') or 
+                                request.args.get('value_max') or request.args.get('search') or
+                                request.args.get('date_from') or request.args.get('date_to') %}
+            {% if has_filters %}
+            <div class="alert alert-info">
+              <h6><i class="bi bi-filter"></i> Filtros Aplicados:</h6>
+              <div class="d-flex flex-wrap gap-2">
+                {% if request.args.get('client_id') %}
+                  {% for client in clients %}
+                    {% if client.id|string == request.args.get('client_id') %}
+                      <span class="badge bg-primary">Cliente: {{ client.name }}</span>
+                    {% endif %}
+                  {% endfor %}
+                {% endif %}
+                {% if request.args.get('case_type') %}
+                  <span class="badge bg-info">Tipo: {{ request.args.get('case_type') }}</span>
+                {% endif %}
+                {% if request.args.get('status') %}
+                  <span class="badge bg-success">Status: {{ request.args.get('status') }}</span>
+                {% endif %}
+                {% if request.args.get('search') %}
+                  <span class="badge bg-warning text-dark">Busca: "{{ request.args.get('search') }}"</span>
+                {% endif %}
+                {% if request.args.get('value_min') or request.args.get('value_max') %}
+                  <span class="badge bg-secondary">
+                    Valor: 
+                    {% if request.args.get('value_min') %}R$ {{ request.args.get('value_min') }}{% endif %}
+                    {% if request.args.get('value_min') and request.args.get('value_max') %} - {% endif %}
+                    {% if request.args.get('value_max') %}R$ {{ request.args.get('value_max') }}{% endif %}
+                  </span>
+                {% endif %}
+              </div>
+            </div>
+            {% endif %}
+
             {% if cases %}
             <div class="table-responsive">
               <table id="casesTable" class="table table-bordered table-striped table-hover">
                 <thead class="table-light">
                   <tr>
                     <th style="width: 60px;">ID</th>
-                    <th>Título</th>
-                    <th>Cliente</th>
+                    <th>Título / Cliente</th>
                     <th style="width: 140px;">Tipo</th>
                     <th style="width: 120px;">Status</th>
                     <th style="width: 130px;">Valor da Causa</th>
@@ -67,8 +284,11 @@
                       <a href="{{ url_for('case_detail', case_id=case.id) }}" class="text-decoration-none">
                         <strong>{{ case.title }}</strong>
                       </a>
+                      <br>
+                      <small class="text-muted">
+                        <i class="bi bi-person"></i> {{ case.client.name if case.client else 'Cliente não definido' }}
+                      </small>
                     </td>
-                    <td><i class="bi bi-person"></i> {{ case.client_name }}</td>
                     <td>
                       {% if case.case_type == 'fap_trajeto' %}
                         <span class="badge bg-info text-dark"><i class="bi bi-truck"></i> FAP - Trajeto</span>
@@ -154,7 +374,25 @@ $(document).ready(function() {
     "order": [[0, "desc"]],
     "columnDefs": [
       { "orderable": false, "targets": 7 }
-    ]
+    ],
+    "dom": 't<"row"<"col-sm-12 col-md-5"i><"col-sm-12 col-md-7"p>>'
+  });
+  
+  // Auto-expandir filtros se houver filtros aplicados
+  {% if has_filters %}
+    $('#filtersCollapse').addClass('show');
+  {% endif %}
+  
+  // Aplicar filtros automaticamente quando campos mudarem
+  $('#client_filter, #type_filter, #status_filter, #court_filter, #fap_year_filter').change(function() {
+    $('#filtersForm').submit();
+  });
+  
+  // Submeter form ao pressionar Enter nos campos de busca
+  $('#search_text, #value_min, #value_max').keypress(function(e) {
+    if (e.which == 13) {
+      $('#filtersForm').submit();
+    }
   });
 });
 
@@ -165,6 +403,23 @@ function confirmDelete(url) {
     form.action = url;
     document.body.appendChild(form);
     form.submit();
+  }
+}
+
+function toggleAdvancedSearch() {
+  const section = document.getElementById('advancedSearchSection');
+  const button = event.target;
+  
+  if (section.classList.contains('d-none')) {
+    section.classList.remove('d-none');
+    button.innerHTML = '<i class="bi bi-chevron-up"></i> Ocultar Busca Avançada';
+    button.classList.remove('btn-outline-info');
+    button.classList.add('btn-outline-warning');
+  } else {
+    section.classList.add('d-none');
+    button.innerHTML = '<i class="bi bi-gear"></i> Busca Avançada';
+    button.classList.remove('btn-outline-warning');
+    button.classList.add('btn-outline-info');
   }
 }
 </script>

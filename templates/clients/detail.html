@@ -1,0 +1,331 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Detalhes do Cliente - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-sm-6">
+        <h3 class="mb-0"><i class="bi bi-building"></i> Detalhes do Cliente</h3>
+      </div>
+      <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-end">
+          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('clients_list') }}">Clientes</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{ client.name }}</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <!-- Informações do Cliente -->
+      <div class="col-md-6">
+        <div class="card card-success card-outline">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-info-circle"></i> Informações da Empresa</h3>
+          </div>
+          <div class="card-body">
+            <table class="table table-borderless">
+              <tbody>
+                <tr>
+                  <td><strong>Razão Social:</strong></td>
+                  <td>
+                    <i class="bi bi-building text-primary"></i> <strong>{{ client.name }}</strong>
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>CNPJ:</strong></td>
+                  <td>
+                    <code class="fs-6">{{ client.cnpj }}</code>
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Endereço:</strong></td>
+                  <td>
+                    {% if client.street %}
+                      <i class="bi bi-geo-alt"></i> {{ client.street }}
+                      {% if client.number %}, {{ client.number }}{% endif %}
+                      {% if client.district %}<br><small class="text-muted">{{ client.district }}</small>{% endif %}
+                    {% else %}
+                      <span class="text-muted">Não informado</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Cidade/UF:</strong></td>
+                  <td>
+                    {% if client.city and client.state %}
+                      <i class="bi bi-pin-map"></i> {{ client.city }}/{{ client.state }}
+                      {% if client.zip_code %}<br><small class="text-muted">CEP: {{ client.zip_code }}</small>{% endif %}
+                    {% else %}
+                      <span class="text-muted">Não informado</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Possui Filiais:</strong></td>
+                  <td>
+                    {% if client.has_branches %}
+                      <span class="badge bg-success"><i class="bi bi-check-circle"></i> Sim</span>
+                    {% else %}
+                      <span class="badge bg-secondary"><i class="bi bi-x-circle"></i> Não</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                {% if client.has_branches and client.branches_description %}
+                <tr>
+                  <td><strong>Descrição das Filiais:</strong></td>
+                  <td>
+                    <div class="alert alert-info mb-0 p-2">
+                      <small>{{ client.branches_description }}</small>
+                    </div>
+                  </td>
+                </tr>
+                {% endif %}
+                <tr>
+                  <td><strong>Data de Cadastro:</strong></td>
+                  <td>
+                    <i class="bi bi-calendar-plus"></i> {{ client.created_at.strftime('%d/%m/%Y às %H:%M') if client.created_at else 'N/A' }}
+                  </td>
+                </tr>
+                {% if client.updated_at and client.updated_at != client.created_at %}
+                <tr>
+                  <td><strong>Última Atualização:</strong></td>
+                  <td>
+                    <i class="bi bi-calendar-check"></i> {{ client.updated_at.strftime('%d/%m/%Y às %H:%M') }}
+                  </td>
+                </tr>
+                {% endif %}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Estatísticas do Cliente -->
+      <div class="col-md-6">
+        <div class="card card-primary card-outline">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-bar-chart"></i> Estatísticas</h3>
+          </div>
+          <div class="card-body">
+            <div class="row">
+              <div class="col-6">
+                <div class="text-center">
+                  <h4 class="text-primary">{{ client_cases|length }}</h4>
+                  <p class="text-sm text-muted mb-0">
+                    <i class="bi bi-briefcase"></i> Total de Casos
+                  </p>
+                </div>
+              </div>
+              <div class="col-6">
+                <div class="text-center">
+                  <h4 class="text-success">{{ active_cases_count }}</h4>
+                  <p class="text-sm text-muted mb-0">
+                    <i class="bi bi-check-circle"></i> Casos Ativos
+                  </p>
+                </div>
+              </div>
+              <div class="col-6">
+                <div class="text-center">
+                  <h4 class="text-warning">{{ total_benefits_count }}</h4>
+                  <p class="text-sm text-muted mb-0">
+                    <i class="bi bi-shield-check"></i> Benefícios
+                  </p>
+                </div>
+              </div>
+              <div class="col-6">
+                <div class="text-center">
+                  <h4 class="text-info">R$ {{ "%.2f"|format(total_case_value|float) if total_case_value else '0,00' }}</h4>
+                  <p class="text-sm text-muted mb-0">
+                    <i class="bi bi-currency-dollar"></i> Valor Total
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            {% if case_types_summary %}
+            <hr>
+            <h6><i class="bi bi-pie-chart"></i> Tipos de Casos</h6>
+            <div class="row">
+              {% for case_type, count in case_types_summary.items() %}
+              <div class="col-12 mb-1">
+                <div class="d-flex justify-content-between align-items-center">
+                  <small>
+                    {% if case_type == 'fap_trajeto' %}
+                      <i class="bi bi-truck"></i> FAP - Trajeto
+                    {% elif case_type == 'fap_nexo' %}
+                      <i class="bi bi-link"></i> FAP - Nexo
+                    {% elif case_type == 'fap_multiplos' %}
+                      <i class="bi bi-layers"></i> FAP - Múltiplos
+                    {% elif case_type == 'auto_infracao' %}
+                      <i class="bi bi-exclamation-triangle"></i> Auto Infração
+                    {% else %}
+                      <i class="bi bi-folder"></i> {{ case_type|title }}
+                    {% endif %}
+                  </small>
+                  <span class="badge bg-primary">{{ count }}</span>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Lista de Casos -->
+    <div class="row mt-4">
+      <div class="col-12">
+        <div class="card card-info card-outline">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-briefcase"></i> Casos do Cliente</h3>
+            <div class="card-tools">
+              <span class="badge bg-info">{{ client_cases|length }} caso(s)</span>
+              <a href="{{ url_for('case_new') }}?client_id={{ client.id }}" class="btn btn-primary btn-sm ms-2">
+                <i class="bi bi-plus-circle"></i> Novo Caso
+              </a>
+            </div>
+          </div>
+          <div class="card-body">
+            {% if client_cases %}
+              <div class="table-responsive">
+                <table class="table table-bordered table-striped table-hover">
+                  <thead class="table-light">
+                    <tr>
+                      <th style="width: 60px;">ID</th>
+                      <th>Título</th>
+                      <th style="width: 140px;">Tipo</th>
+                      <th style="width: 120px;">Status</th>
+                      <th style="width: 130px;">Valor da Causa</th>
+                      <th style="width: 130px;">Data Ajuiz.</th>
+                      <th style="width: 150px;" class="text-center">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for case in client_cases %}
+                    <tr>
+                      <td><strong>{{ case.id }}</strong></td>
+                      <td>
+                        <a href="{{ url_for('case_detail', case_id=case.id) }}" class="text-decoration-none">
+                          <strong>{{ case.title }}</strong>
+                        </a>
+                      </td>
+                      <td>
+                        {% if case.case_type == 'fap_trajeto' %}
+                          <span class="badge bg-info text-dark"><i class="bi bi-truck"></i> FAP - Trajeto</span>
+                        {% elif case.case_type == 'fap_nexo' %}
+                          <span class="badge bg-info text-dark"><i class="bi bi-link"></i> FAP - Nexo</span>
+                        {% elif case.case_type == 'fap_multiplos' %}
+                          <span class="badge bg-info text-dark"><i class="bi bi-layers"></i> FAP - Múltiplos</span>
+                        {% elif case.case_type == 'auto_infracao' %}
+                          <span class="badge bg-danger"><i class="bi bi-exclamation-triangle"></i> Auto Infração</span>
+                        {% elif case.case_type == 'previdenciario' %}
+                          <span class="badge bg-primary"><i class="bi bi-shield-check"></i> Previdenciário</span>
+                        {% elif case.case_type == 'trabalhista' %}
+                          <span class="badge bg-warning text-dark"><i class="bi bi-building"></i> Trabalhista</span>
+                        {% else %}
+                          <span class="badge bg-secondary">{{ case.case_type }}</span>
+                        {% endif %}
+                      </td>
+                      <td>
+                        {% if case.status == 'draft' %}
+                          <span class="badge bg-secondary"><i class="bi bi-pencil-square"></i> Rascunho</span>
+                        {% elif case.status == 'active' %}
+                          <span class="badge bg-success"><i class="bi bi-check-circle"></i> Ativo</span>
+                        {% elif case.status == 'suspended' %}
+                          <span class="badge bg-warning text-dark"><i class="bi bi-pause-circle"></i> Suspenso</span>
+                        {% elif case.status == 'closed' %}
+                          <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Encerrado</span>
+                        {% elif case.status == 'archived' %}
+                          <span class="badge bg-dark"><i class="bi bi-archive"></i> Arquivado</span>
+                        {% endif %}
+                      </td>
+                      <td>
+                        <strong>R$ {{ "%.2f"|format(case.value_cause|float) if case.value_cause else '-' }}</strong>
+                      </td>
+                      <td>
+                        {{ case.filing_date.strftime('%d/%m/%Y') if case.filing_date else '-' }}
+                      </td>
+                      <td class="text-center">
+                        <div class="btn-group" role="group">
+                          <a href="{{ url_for('case_detail', case_id=case.id) }}" class="btn btn-sm btn-info" title="Ver Caso">
+                            <i class="bi bi-eye"></i>
+                          </a>
+                          <a href="{{ url_for('case_documents_list', case_id=case.id) }}" class="btn btn-sm btn-secondary" title="Documentos">
+                            <i class="bi bi-file-earmark-text"></i>
+                          </a>
+                        </div>
+                      </td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+            {% else %}
+              <div class="alert alert-info mb-0">
+                <h6><i class="bi bi-info-circle"></i> Nenhum caso cadastrado</h6>
+                <p class="mb-2">Este cliente ainda não possui casos jurídicos cadastrados.</p>
+                <a href="{{ url_for('case_new') }}?client_id={{ client.id }}" class="btn btn-primary btn-sm">
+                  <i class="bi bi-plus-circle"></i> Criar Primeiro Caso
+                </a>
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Botões de Ação -->
+    <div class="row mt-4">
+      <div class="col-12">
+        <div class="d-flex gap-2">
+          <a href="{{ url_for('clients_list') }}" class="btn btn-secondary">
+            <i class="bi bi-arrow-left"></i> Voltar à Lista
+          </a>
+          <a href="{{ url_for('client_edit', client_id=client.id) }}" class="btn btn-warning">
+            <i class="bi bi-pencil"></i> Editar Cliente
+          </a>
+          <a href="{{ url_for('case_new') }}?client_id={{ client.id }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Novo Caso
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+.text-sm {
+  font-size: 0.875rem;
+}
+</style>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+<script>
+$(document).ready(function() {
+  $('table').DataTable({
+    "language": {
+      "url": "//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json"
+    },
+    "pageLength": 10,
+    "order": [[0, "desc"]],
+    "columnDefs": [
+      { "orderable": false, "targets": 6 }
+    ]
+  });
+});
+</script>
+{% endblock %}
