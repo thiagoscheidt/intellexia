@@ -119,10 +119,36 @@
         {% if petition.context_summary %}
         <div class="card mt-3">
           <div class="card-header">
-            <h5 class="card-title mb-0"><i class="bi bi-layers"></i> Contexto Usado</h5>
+            <h5 class="card-title mb-0">
+              <i class="bi bi-layers"></i> Contexto de Geração
+              {% if 'Estruturado' in petition.context_summary %}
+                <span class="badge bg-success ms-1">Estruturado</span>
+              {% elif 'Básico' in petition.context_summary %}
+                <span class="badge bg-warning ms-1">Básico</span>
+              {% endif %}
+            </h5>
           </div>
           <div class="card-body">
-            <pre style="white-space: pre-wrap; font-size: 0.85rem;">{{ petition.context_summary }}</pre>
+            <div style="font-size: 0.85rem; line-height: 1.4;">
+              {% set context_lines = petition.context_summary.split('\n') %}
+              {% for line in context_lines %}
+                {% if line.strip() %}
+                  {% if line.startswith('- ') %}
+                    <div class="text-muted mb-1">
+                      <i class="bi bi-dot"></i> {{ line[2:] }}
+                    </div>
+                  {% elif 'Versão' in line %}
+                    <div class="fw-bold text-primary mb-2">{{ line }}</div>
+                  {% elif 'Aviso:' in line or 'Erro' in line %}
+                    <div class="text-danger mb-1">
+                      <i class="bi bi-exclamation-triangle"></i> {{ line }}
+                    </div>
+                  {% else %}
+                    <div class="mb-1">{{ line }}</div>
+                  {% endif %}
+                {% endif %}
+              {% endfor %}
+            </div>
           </div>
         </div>
         {% endif %}

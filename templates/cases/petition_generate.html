@@ -94,10 +94,47 @@
               <i class="bi bi-check-circle"></i> <strong>Você pode gerar múltiplas versões!</strong> 
               Sempre que adicionar novos documentos ou benefícios, pode gerar uma nova petição atualizada.
             </div>
+
+            <hr>
+
+            <h5 class="mt-4">Opções de Geração</h5>
+            <div class="row">
+              <div class="col-md-12">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" value="" id="use-template-checkbox">
+                  <label class="form-check-label fw-bold" for="use-template-checkbox">
+                    <i class="bi bi-file-earmark-text"></i> Usar Modelo Personalizado
+                  </label>
+                  <div class="form-text">Carregue um arquivo modelo (PDF, DOCX, TXT, MD) para gerar a petição baseada na sua estrutura</div>
+                </div>
+              </div>
+            </div>
           </div>
           <div class="card-footer">
-            <form method="POST" action="{{ url_for('case_petition_generate', case_id=case_id) }}">
-              <button type="submit" class="btn btn-warning btn-lg">
+            <form method="POST" action="{{ url_for('case_petition_generate', case_id=case_id) }}" 
+                  enctype="multipart/form-data" id="petition-form">
+              
+              <!-- Template upload section dentro do form -->
+              <div id="template-upload-section-form" class="mb-3" style="display: none;">
+                <div class="card bg-light">
+                  <div class="card-body">
+                    <h6><i class="bi bi-upload"></i> Upload do Modelo</h6>
+                    <div class="mb-3">
+                      <input type="file" class="form-control" id="template-file" name="template_file" 
+                             accept=".pdf,.docx,.doc,.txt,.md">
+                      <div class="form-text">
+                        <strong>Formatos aceitos:</strong> PDF, DOCX, DOC, TXT, MD
+                      </div>
+                    </div>
+                    <div class="alert alert-info mb-0">
+                      <i class="bi bi-info-circle"></i> 
+                      <strong>Como funciona:</strong> A IA analisará a estrutura do seu modelo e gerará a petição seguindo o mesmo formato, preenchendo com os dados do caso.
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <button type="submit" class="btn btn-warning btn-lg" id="generate-btn">
                 <i class="bi bi-magic"></i> Gerar Petição Versão {{ next_version }}
               </button>
               <a href="{{ url_for('case_detail', case_id=case_id) }}" class="btn btn-secondary btn-lg">
@@ -110,4 +147,59 @@
     </div>
   </div>
 </div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const useTemplateCheckbox = document.getElementById('use-template-checkbox');
+    const templateUploadSection = document.getElementById('template-upload-section-form');
+    const templateFileInput = document.getElementById('template-file');
+    const generateBtn = document.getElementById('generate-btn');
+    const petitionForm = document.getElementById('petition-form');
+
+    // Controlar exibição da seção de upload
+    useTemplateCheckbox.addEventListener('change', function() {
+        if (this.checked) {
+            templateUploadSection.style.display = 'block';
+        } else {
+            templateUploadSection.style.display = 'none';
+            templateFileInput.value = '';
+        }
+    });
+
+    // Validação do formulário
+    petitionForm.addEventListener('submit', function(e) {
+        if (useTemplateCheckbox.checked && !templateFileInput.files.length) {
+            e.preventDefault();
+            alert('Selecione um arquivo modelo ou desmarque a opção "Usar Modelo Personalizado"');
+            return false;
+        }
+
+        // Alterar texto do botão durante geração
+        generateBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Gerando Petição...';
+        generateBtn.disabled = true;
+    });
+
+    // Validação de arquivo
+    templateFileInput.addEventListener('change', function() {
+        if (this.files.length > 0) {
+            const file = this.files[0];
+            const allowedExtensions = ['.pdf', '.docx', '.doc', '.txt', '.md'];
+            const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
+            
+            if (!allowedExtensions.includes(fileExtension)) {
+                alert('Tipo de arquivo não suportado. Use: PDF, DOCX, DOC, TXT ou MD');
+                this.value = '';
+                return;
+            }
+
+            // Verificar tamanho (máximo 10MB)
+            if (file.size > 10 * 1024 * 1024) {
+                alert('Arquivo muito grande. Máximo 10MB permitido.');
+                this.value = '';
+                return;
+            }
+        }
+    });
+});
+</script>
 {% endblock %}

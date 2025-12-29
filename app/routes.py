@@ -1363,6 +1363,35 @@ def case_petition_generate(case_id):
     
     if request.method == 'POST':
         try:
+            # Verificar se foi enviado um arquivo modelo
+            use_template = 'template_file' in request.files and request.files['template_file'].filename != ''
+            template_file_id = None
+            
+            if use_template:
+                # Upload do arquivo modelo
+                file = request.files['template_file']
+                filename = secure_filename(file.filename)
+                
+                # Verificar extensão
+                allowed_extensions = {'.pdf', '.docx', '.doc', '.txt', '.md'}
+                file_extension = os.path.splitext(filename)[1].lower()
+                
+                if file_extension not in allowed_extensions:
+                    flash(f'Tipo de arquivo não suportado. Use: {", ".join(allowed_extensions)}', 'danger')
+                    return redirect(url_for('case_petition_generate', case_id=case_id))
+                
+                # Salvar temporariamente e fazer upload
+                temp_path = os.path.join('uploads', 'temp', filename)
+                os.makedirs(os.path.dirname(temp_path), exist_ok=True)
+                file.save(temp_path)
+                
+                # Upload para OpenAI
+                file_agent = FileAgent()
+                template_file_id = file_agent.upload_file(os.path.abspath(temp_path))
+                
+                # Limpar arquivo temporário
+                os.remove(temp_path)
+            
             # Determinar próxima versão
             last_petition = Petition.query.filter_by(case_id=case_id).order_by(Petition.version.desc()).first()
             next_version = (last_petition.version + 1) if last_petition else 1
@@ -1371,14 +1400,16 @@ def case_petition_generate(case_id):
             benefits = CaseBenefit.query.filter_by(case_id=case_id).all()
             documents = Document.query.filter_by(case_id=case_id, use_in_ai=True, ai_status='completed').all()
             
-            # Preparar contexto para a IA
+            # Preparar contexto resumido para exibição
             context_summary = f"""
-Contexto da Petição - Versão {next_version}:
+Contexto da Petição - Versão {next_version} {"(Com Modelo)" if use_template else "(Padrão)"}:
 - Cliente: {case.client.name if case.client else 'Não informado'}
 - Tipo de Caso: {case.case_type}
 - Total de Benefícios: {len(benefits)}
 - Total de Documentos Analisados: {len(documents)}
 - Valor da Causa: R$ {case.value_cause if case.value_cause else 'Não informado'}
+- Modelo Usado: {filename if use_template else 'Template padrão'}
+- Sistema: Intellexia - Geração com IA v2.0
 """
             
             # Criar petição pendente
@@ -1394,10 +1425,52 @@ Contexto da Petição - Versão {next_version}:
             db.session.add(petition)
             db.session.commit()
             
-            # Gerar conteúdo com IA (simulado por enquanto)
+            # Gerar conteúdo com IA
             try:
-                # TODO: Integrar com a IA real
-                petition_content = generate_petition_with_ai(case, benefits, documents)
+                from app.agents.agent_text_generator import AgentTextGenerator
+                agent = AgentTextGenerator()
+                
+                # Preparar dados do caso
+                case_data = {
+                    'title': case.title,
+                    'client_name': case.client.name if case.client else '',
+                    'client_cnpj': case.client.cnpj if case.client else '',
+                    'case_type': case.case_type,
+                    'value_cause': str(case.value_cause) if case.value_cause else '',
+                    'facts_summary': case.facts_summary or '',
+                    'thesis_summary': case.thesis_summary or '',
+                    'court_name': case.court.vara_name if case.court else '',
+                    'court_city': case.court.city if case.court else '',
+                    'court_state': case.court.state if case.court else ''
+                }
+                
+                benefits_data = []
+                for benefit in benefits:
+                    benefits_data.append({
+                        'benefit_number': benefit.benefit_number,
+                        'benefit_type': benefit.benefit_type,
+                        'insured_name': benefit.insured_name,
+                        'insured_nit': benefit.insured_nit,
+                        'accident_date': str(benefit.accident_date) if benefit.accident_date else '',
+                        'error_reason': benefit.error_reason
+                    })
+                
+                documents_data = []
+                for doc in documents:
+                    documents_data.append({
+                        'original_filename': doc.original_filename,
+                        'ai_summary': doc.ai_summary or ''
+                    })
+                
+                # Gerar petição
+                if use_template and template_file_id:
+                    agent.set_template_file(template_file_id)
+                    petition_content = agent.generate_petition_with_template(case_data, benefits_data, documents_data)
+                    flash('Petição gerada com sucesso usando modelo personalizado!', 'success')
+                else:
+                    petition_content = agent.generate_simple_petition(case_data, benefits_data)
+                    flash('Petição gerada com sucesso usando template padrão!', 'success')
+                
                 
                 # Atualizar petição com conteúdo gerado
                 petition.content = petition_content
@@ -1405,7 +1478,6 @@ Contexto da Petição - Versão {next_version}:
                 petition.generated_at = datetime.utcnow()
                 db.session.commit()
                 
-                flash('Petição gerada com sucesso pela IA!', 'success')
                 return redirect(url_for('case_petition_view', case_id=case_id, petition_id=petition.id))
                 
             except Exception as e:
@@ -1469,64 +1541,6 @@ def case_petition_delete(case_id, petition_id):
     
     return redirect(url_for('case_petitions_list', case_id=case_id))
 
-def generate_petition_with_ai(case, benefits, documents):
-    """
-    Gera o conteúdo da petição usando IA
-    TODO: Integrar com modelo de IA real
-    """
-    # Simulação por enquanto
-    petition_content = f"""EXCELENTÍSSIMO(A) SENHOR(A) DOUTOR(A) JUIZ(A) DE DIREITO DA {case.court.vara_name if case.court else 'VARA COMPETENTE'}
-
-{case.client.name if case.client else 'EMPRESA AUTORA'}, pessoa jurídica de direito privado, inscrita no CNPJ sob nº {case.client.cnpj if case.client else 'XX.XXX.XXX/XXXX-XX'}, com sede em {case.client.city if case.client else 'CIDADE'}/{case.client.state if case.client else 'UF'}, vem, por meio de seu advogado signatário, com fundamento nos artigos da Lei nº 8.213/91 e demais legislações pertinentes, propor a presente
-
-AÇÃO DECLARATÓRIA DE INEXISTÊNCIA DE NEXO CAUSAL
-
-em face do INSTITUTO NACIONAL DO SEGURO SOCIAL – INSS, autarquia federal, pelos motivos de fato e de direito a seguir expostos:
-
-I – DOS FATOS
-
-{case.facts_summary if case.facts_summary else 'A empresa autora foi surpreendida com a vinculação indevida de benefícios acidentários que não guardam relação com suas atividades laborais.'}
-
-"""
-
-    # Adicionar informações sobre benefícios
-    if benefits:
-        petition_content += f"\n\nII – DOS BENEFÍCIOS CONTESTADOS\n\n"
-        petition_content += f"Foram vinculados à empresa os seguintes benefícios:\n\n"
-        
-        for i, benefit in enumerate(benefits, 1):
-            petition_content += f"{i}. Benefício nº {benefit.benefit_number} - {benefit.benefit_type}\n"
-            petition_content += f"   Segurado: {benefit.insured_name}\n"
-            if benefit.accident_date:
-                petition_content += f"   Data do Acidente: {benefit.accident_date.strftime('%d/%m/%Y')}\n"
-            if benefit.error_reason:
-                petition_content += f"   Motivo da Contestação: {benefit.error_reason}\n"
-            petition_content += "\n"
-    
-    petition_content += f"""
-III – DO DIREITO
-
-{case.thesis_summary if case.thesis_summary else 'A vinculação indevida de benefícios acidentários impacta diretamente no FAP (Fator Acidentário de Prevenção) da empresa, majorando indevidamente suas contribuições previdenciárias.'}
-
-IV – DOS PEDIDOS
-
-Diante do exposto, requer-se a Vossa Excelência:
-
-a) A procedência do pedido para declarar a inexistência de nexo causal entre os benefícios relacionados e as atividades da empresa autora;
-
-b) A determinação ao INSS para exclusão dos benefícios do cálculo do FAP da empresa;
-
-c) A condenação do INSS ao pagamento das custas processuais e honorários advocatícios.
-
-Termos em que,
-Pede deferimento.
-
-{case.client.city if case.client else 'Cidade'}/{case.client.state if case.client else 'UF'}, {datetime.now().strftime('%d de %B de %Y')}.
-
-___________________________________
-Advogado(a) OAB/XX XXXXX
-"""
-    
-    return petition_content
+    return redirect(url_for('case_petitions_list', case_id=case_id))
 
 
