@@ -1541,6 +1541,3 @@ def case_petition_delete(case_id, petition_id):
     
     return redirect(url_for('case_petitions_list', case_id=case_id))
 
-    return redirect(url_for('case_petitions_list', case_id=case_id))
-
-
