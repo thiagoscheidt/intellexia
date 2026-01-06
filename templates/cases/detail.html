@@ -51,6 +51,21 @@
                 {% endif %}
               </dd>
 
+              {% if case.case_type in ['fap_trajeto', 'fap_outros'] and case.fap_reason %}
+              <dt class="col-sm-4">Motivo / Enquadramento:</dt>
+              <dd class="col-sm-8">
+                {% if case.fap_reason == 'inclusao_indevida_trajeto' %}
+                  Inclusão indevida de benefício de trajeto
+                {% elif case.fap_reason == 'erro_material_cat' %}
+                  Erro material no preenchimento da CAT
+                {% elif case.fap_reason == 'cat_trajeto_extemporanea' %}
+                  CAT de trajeto transmitida extemporaneamente
+                {% else %}
+                  {{ case.fap_reason }}
+                {% endif %}
+              </dd>
+              {% endif %}
+
               <dt class="col-sm-4">Status:</dt>
               <dd class="col-sm-8">
                 {% if case.status %}

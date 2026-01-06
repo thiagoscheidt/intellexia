@@ -54,22 +54,41 @@ for table_idx, table in enumerate(document.tables):
             for paragraph in cell.paragraphs:
                 print(paragraph.text)
     
-    # Adiciona nova linha na tabela
+    # Adiciona nova linha na tabela com dados do sistema
     new_row = table.add_row()
+    
+    # Simular dados de um caso real do sistema
+    # Em produção, esses dados viriam do banco de dados
+    mock_case_data = {
+        'id': 1,
+        'benefit_number': '123456789',
+        'insured_name': 'João da Silva Santos',
+        'insured_nit': '123.45678.90-1',
+        'accident_date': '15/03/2024',
+        'benefit_type': 'B91',
+        'status': 'Ativo',
+        'value': 'R$ 1.500,00',
+        'company': 'Empresa XYZ Ltda',
+        'fap_reason': 'Trajeto de Ida ao Trabalho'
+    }
+    
     for i, cell in enumerate(new_row.cells):
         if i == 0:
-            # Primeira coluna: ID incremental
-            cell.text = "1"
+            # Primeira coluna: ID
+            cell.text = str(mock_case_data['id'])
+        elif i == 1:
+            cell.text = mock_case_data['benefit_number']
+        elif i == 2:
+            cell.text = mock_case_data['insured_name']
+        elif i == 3:
+            cell.text = mock_case_data['insured_nit']
+        elif i == 4:
+            cell.text = mock_case_data['accident_date']
+        elif i == 5:
+            cell.text = mock_case_data['benefit_type']
         else:
-            # Outras colunas: dados mockados
-            mock_data = {
-                1: "João Silva",
-                2: "123.456.789-00",
-                3: "15/01/2025",
-                4: "R$ 1.500,00",
-                5: "Ativo"
-            }
-            cell.text = mock_data.get(i, f"Dado {i}")
+            # Colunas adicionais
+            cell.text = mock_case_data.get('status', f"Dado coluna {i+1}")
 
 for p in document.paragraphs:
     if p.text.startswith("{{") and p.text.endswith("}}"):

@@ -70,7 +70,7 @@
                 <div class="col-md-4">
                   <div class="mb-3">
                     {{ form.case_type.label(class="form-label") }}
-                    {{ form.case_type(class="form-select" + (" is-invalid" if form.case_type.errors else "")) }}
+                    {{ form.case_type(class="form-select" + (" is-invalid" if form.case_type.errors else ""), id="case_type") }}
                     {% if form.case_type.errors %}
                       <div class="invalid-feedback">
                         {% for error in form.case_type.errors %}{{ error }}{% endfor %}
@@ -88,6 +88,16 @@
                   <div class="mb-3">
                     {{ form.filing_date.label(class="form-label") }}
                     {{ form.filing_date(class="form-control", type="date") }}
+                  </div>
+                </div>
+              </div>
+
+              <div class="row" id="fap_reason_container" style="display: none;">
+                <div class="col-md-12">
+                  <div class="mb-3">
+                    {{ form.fap_reason.label(class="form-label") }}
+                    {{ form.fap_reason(class="form-select") }}
+                    <div class="form-text">Selecione o motivo ou enquadramento para casos FAP</div>
                   </div>
                 </div>
               </div>
@@ -152,4 +162,27 @@
     </div>
   </div>
 </div>
+
+<script>
+// Mostrar/ocultar campo Motivo/Enquadramento baseado no tipo de caso
+document.addEventListener('DOMContentLoaded', function() {
+  const caseTypeSelect = document.getElementById('case_type');
+  const fapReasonContainer = document.getElementById('fap_reason_container');
+  
+  function toggleFapReason() {
+    const selectedValue = caseTypeSelect.value;
+    if (selectedValue === 'fap_trajeto' || selectedValue === 'fap_outros') {
+      fapReasonContainer.style.display = 'block';
+    } else {
+      fapReasonContainer.style.display = 'none';
+    }
+  }
+  
+  // Verificar no carregamento da página
+  toggleFapReason();
+  
+  // Verificar quando mudar a seleção
+  caseTypeSelect.addEventListener('change', toggleFapReason);
+});
+</script>
 {% endblock %}

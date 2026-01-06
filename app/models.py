@@ -193,6 +193,7 @@ class Case(db.Model):
     case_type = db.Column(db.String(50), nullable=False)
     fap_start_year = db.Column(db.SmallInteger)
     fap_end_year = db.Column(db.SmallInteger)
+    fap_reason = db.Column(db.String(100))  # Motivo/Enquadramento para casos FAP
     facts_summary = db.Column(db.Text)
     thesis_summary = db.Column(db.Text)
     prescription_summary = db.Column(db.Text)

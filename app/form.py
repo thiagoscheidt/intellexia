@@ -66,6 +66,16 @@ class CaseForm(FlaskForm):
         ],
         validators=[DataRequired()]
     )
+    fap_reason = SelectField(
+        'Motivo / Enquadramento',
+        choices=[
+            ('', 'Selecione um motivo'),
+            ('inclusao_indevida_trajeto', 'Inclusão indevida de benefício de trajeto'),
+            ('erro_material_cat', 'Erro material no preenchimento da CAT'),
+            ('cat_trajeto_extemporanea', 'CAT de trajeto transmitida extemporaneamente')
+        ],
+        validators=[Optional()]
+    )
     fap_start_year = IntegerField(
         'Ano Inicial FAP',
         validators=[Optional(), NumberRange(min=1900, max=2100)]
