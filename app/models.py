@@ -320,6 +320,9 @@ class Petition(db.Model):
     title = db.Column(db.String(255), nullable=False)  # Título da petição
     content = db.Column(db.Text, nullable=False)  # Conteúdo completo da petição
     
+    # Arquivo DOCX gerado
+    file_path = db.Column(db.String(500))  # Caminho do arquivo DOCX (para casos FAP)
+    
     # Metadados da geração
     generated_at = db.Column(db.DateTime, default=datetime.utcnow)
     generated_by_user_id = db.Column(db.Integer)  # FK de usuário (futuro)

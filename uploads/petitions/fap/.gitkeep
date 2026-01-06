@@ -1,0 +1,2 @@
+# Diretório para armazenar petições FAP geradas em formato DOCX
+# Arquivos são nomeados como: peticao_caso_{case_id}_versao_{version}.docx

@@ -1463,19 +1463,18 @@ Contexto da Petição - Versão {next_version} {"(Com Modelo)" if use_template e
                     # Gerar documento DOCX - template é selecionado automaticamente baseado no fap_reason
                     docx_document = agent.generate_fap_petition(case_id)
                     
-                    # Salvar documento temporariamente e extrair conteúdo
-                    import tempfile
-                    with tempfile.NamedTemporaryFile(suffix='.docx', delete=False) as tmp:
-                        docx_document.save(tmp.name)
-                        
-                        # Extrair texto do documento para salvar no banco
-                        petition_content = _extract_text_from_docx(docx_document)
-                        
-                        # Também podemos salvar o arquivo DOCX para download
-                        output_filename = f"peticao_fap_caso_{case_id}_v{next_version}.docx"
-                        output_path = os.path.join('uploads', 'petitions', output_filename)
-                        os.makedirs(os.path.dirname(output_path), exist_ok=True)
-                        docx_document.save(output_path)
+                    # Definir pasta e nome do arquivo
+                    petitions_folder = os.path.join('uploads', 'petitions', 'fap')
+                    os.makedirs(petitions_folder, exist_ok=True)
+                    
+                    output_filename = f"peticao_caso_{case_id}_versao_{next_version}.docx"
+                    output_path = os.path.join(petitions_folder, output_filename)
+                    
+                    # Salvar documento DOCX
+                    docx_document.save(output_path)
+                    
+                    # Extrair texto do documento para salvar no banco
+                    petition_content = _extract_text_from_docx(docx_document)
                     
                     # Obter nome do template usado para feedback ao usuário
                     template_name = agent._select_template_by_fap_reason(case.fap_reason).split('/')[-1]
@@ -1531,6 +1530,11 @@ Contexto da Petição - Versão {next_version} {"(Com Modelo)" if use_template e
                 petition.content = petition_content
                 petition.status = 'completed'
                 petition.generated_at = datetime.utcnow()
+                
+                # Se for caso FAP, salvar caminho do arquivo DOCX
+                if is_fap_case:
+                    petition.file_path = output_path
+                
                 db.session.commit()
                 
                 return redirect(url_for('case_petition_view', case_id=case_id, petition_id=petition.id))
@@ -1587,6 +1591,10 @@ def case_petition_delete(case_id, petition_id):
         return redirect(url_for('case_petitions_list', case_id=case_id))
     
     try:
+        # Excluir arquivo DOCX se existir
+        if petition.file_path and os.path.exists(petition.file_path):
+            os.remove(petition.file_path)
+        
         db.session.delete(petition)
         db.session.commit()
         flash('Petição excluída com sucesso!', 'success')
@@ -1594,5 +1602,30 @@ def case_petition_delete(case_id, petition_id):
         db.session.rollback()
         flash(f'Erro ao excluir petição: {str(e)}', 'danger')
     
+    return redirect(url_for('case_petitions_list', case_id=case_id))
+
+@app.route('/cases/<int:case_id>/petitions/<int:petition_id>/download')
+def case_petition_download(case_id, petition_id):
+    """Faz download do arquivo DOCX da petição"""
+    petition = Petition.query.get_or_404(petition_id)
+    
+    if petition.case_id != case_id:
+        flash('Petição não pertence a este caso.', 'danger')
+        return redirect(url_for('case_petitions_list', case_id=case_id))
+    
+    # Verificar se existe arquivo DOCX
+    if not petition.file_path or not os.path.exists(petition.file_path):
+        flash('Arquivo DOCX não encontrado para esta petição.', 'warning')
+        return redirect(url_for('case_petition_view', case_id=case_id, petition_id=petition_id))
+    
+    # Fazer download
+    from flask import send_file
+    return send_file(
+        petition.file_path,
+        as_attachment=True,
+        download_name=f"peticao_caso_{case_id}_v{petition.version}.docx",
+        mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    )
+
     return redirect(url_for('case_petitions_list', case_id=case_id))
 

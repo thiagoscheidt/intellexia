@@ -36,7 +36,35 @@
           </div>
           <div class="card-body">
             {% if petition.status == 'completed' %}
-              <div class="petition-content" style="white-space: pre-wrap; font-family: 'Times New Roman', serif; font-size: 14px; line-height: 1.8; text-align: justify;">{{ petition.content }}</div>
+              {% if petition.file_path %}
+                <!-- Visualização para petições DOCX (casos FAP) -->
+                <div class="alert alert-info mb-3">
+                  <i class="bi bi-info-circle"></i> 
+                  <strong>Petição FAP gerada em formato DOCX</strong>
+                  <p class="mb-0 mt-2">
+                    Para visualizar o documento com formatação completa (tabelas, negrito, etc.), 
+                    faça o download do arquivo DOCX.
+                  </p>
+                </div>
+                
+                <div class="text-center mb-4">
+                  <a href="{{ url_for('case_petition_download', case_id=case_id, petition_id=petition.id) }}" class="btn btn-primary btn-lg">
+                    <i class="bi bi-download"></i> Baixar Documento DOCX
+                  </a>
+                </div>
+                
+                <hr>
+                
+                <details>
+                  <summary class="btn btn-outline-secondary mb-3">
+                    <i class="bi bi-eye"></i> Ver prévia em texto simples (sem formatação)
+                  </summary>
+                  <div class="petition-content mt-3" style="white-space: pre-wrap; font-family: 'Times New Roman', serif; font-size: 14px; line-height: 1.8; text-align: justify; background: #f8f9fa; padding: 20px; border-radius: 5px;">{{ petition.content }}</div>
+                </details>
+              {% else %}
+                <!-- Visualização normal para petições de texto (geradas por IA) -->
+                <div class="petition-content" style="white-space: pre-wrap; font-family: 'Times New Roman', serif; font-size: 14px; line-height: 1.8; text-align: justify;">{{ petition.content }}</div>
+              {% endif %}
             {% elif petition.status == 'processing' %}
               <div class="alert alert-info">
                 <div class="d-flex align-items-center">
