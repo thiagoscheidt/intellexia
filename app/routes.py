@@ -17,6 +17,29 @@ def get_current_law_firm_id():
     """Retorna o law_firm_id do usuário logado"""
     return session.get('law_firm_id')
 
+# Helper function to extract text from DOCX
+def _extract_text_from_docx(document):
+    """Extrai texto completo de um documento DOCX"""
+    text_parts = []
+    
+    # Extrair texto dos parágrafos
+    for paragraph in document.paragraphs:
+        if paragraph.text.strip():
+            text_parts.append(paragraph.text)
+    
+    # Extrair texto das tabelas
+    for table in document.tables:
+        for row in table.rows:
+            row_text = []
+            for cell in row.cells:
+                cell_text = ' '.join([p.text for p in cell.paragraphs if p.text.strip()])
+                if cell_text:
+                    row_text.append(cell_text)
+            if row_text:
+                text_parts.append(' | '.join(row_text))
+    
+    return '\n\n'.join(text_parts)
+
 # Decorator to ensure law_firm context
 def require_law_firm(f):
     """Decorator para garantir que o usuário tem um escritório associado"""
@@ -1429,49 +1452,79 @@ Contexto da Petição - Versão {next_version} {"(Com Modelo)" if use_template e
             
             # Gerar conteúdo com IA
             try:
-                from app.agents.agent_text_generator import AgentTextGenerator
-                agent = AgentTextGenerator()
+                # Verificar se é caso FAP e usar agente especializado
+                is_fap_case = case.case_type in ['fap_trajeto', 'fap_outros']
                 
-                # Preparar dados do caso
-                case_data = {
-                    'title': case.title,
-                    'client_name': case.client.name if case.client else '',
-                    'client_cnpj': case.client.cnpj if case.client else '',
-                    'case_type': case.case_type,
-                    'value_cause': str(case.value_cause) if case.value_cause else '',
-                    'facts_summary': case.facts_summary or '',
-                    'thesis_summary': case.thesis_summary or '',
-                    'court_name': case.court.vara_name if case.court else '',
-                    'court_city': case.court.city if case.court else '',
-                    'court_state': case.court.state if case.court else ''
-                }
-                
-                benefits_data = []
-                for benefit in benefits:
-                    benefits_data.append({
-                        'benefit_number': benefit.benefit_number,
-                        'benefit_type': benefit.benefit_type,
-                        'insured_name': benefit.insured_name,
-                        'insured_nit': benefit.insured_nit,
-                        'accident_date': str(benefit.accident_date) if benefit.accident_date else '',
-                        'error_reason': benefit.error_reason
-                    })
-                
-                documents_data = []
-                for doc in documents:
-                    documents_data.append({
-                        'original_filename': doc.original_filename,
-                        'ai_summary': doc.ai_summary or ''
-                    })
-                
-                # Gerar petição
-                if use_template and template_file_id:
-                    agent.set_template_file(template_file_id)
-                    petition_content = agent.generate_petition_with_template(case_data, benefits_data, documents_data)
-                    flash('Petição gerada com sucesso usando modelo personalizado!', 'success')
+                if is_fap_case:
+                    # Usar AgentDocumentGenerator para casos FAP
+                    from agent_document_generator import AgentDocumentGenerator
+                    agent = AgentDocumentGenerator()
+                    
+                    # Gerar documento DOCX - template é selecionado automaticamente baseado no fap_reason
+                    docx_document = agent.generate_fap_petition(case_id)
+                    
+                    # Salvar documento temporariamente e extrair conteúdo
+                    import tempfile
+                    with tempfile.NamedTemporaryFile(suffix='.docx', delete=False) as tmp:
+                        docx_document.save(tmp.name)
+                        
+                        # Extrair texto do documento para salvar no banco
+                        petition_content = _extract_text_from_docx(docx_document)
+                        
+                        # Também podemos salvar o arquivo DOCX para download
+                        output_filename = f"peticao_fap_caso_{case_id}_v{next_version}.docx"
+                        output_path = os.path.join('uploads', 'petitions', output_filename)
+                        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+                        docx_document.save(output_path)
+                    
+                    # Obter nome do template usado para feedback ao usuário
+                    template_name = agent._select_template_by_fap_reason(case.fap_reason).split('/')[-1]
+                    flash(f'Petição FAP gerada com sucesso usando template: {template_name}!', 'success')
                 else:
-                    petition_content = agent.generate_simple_petition(case_data, benefits_data)
-                    flash('Petição gerada com sucesso usando template padrão!', 'success')
+                    # Usar AgentTextGenerator para outros tipos de casos
+                    from app.agents.agent_text_generator import AgentTextGenerator
+                    agent = AgentTextGenerator()
+                    
+                    # Preparar dados do caso
+                    case_data = {
+                        'title': case.title,
+                        'client_name': case.client.name if case.client else '',
+                        'client_cnpj': case.client.cnpj if case.client else '',
+                        'case_type': case.case_type,
+                        'value_cause': str(case.value_cause) if case.value_cause else '',
+                        'facts_summary': case.facts_summary or '',
+                        'thesis_summary': case.thesis_summary or '',
+                        'court_name': case.court.vara_name if case.court else '',
+                        'court_city': case.court.city if case.court else '',
+                        'court_state': case.court.state if case.court else ''
+                    }
+                    
+                    benefits_data = []
+                    for benefit in benefits:
+                        benefits_data.append({
+                            'benefit_number': benefit.benefit_number,
+                            'benefit_type': benefit.benefit_type,
+                            'insured_name': benefit.insured_name,
+                            'insured_nit': benefit.insured_nit,
+                            'accident_date': str(benefit.accident_date) if benefit.accident_date else '',
+                            'error_reason': benefit.error_reason
+                        })
+                    
+                    documents_data = []
+                    for doc in documents:
+                        documents_data.append({
+                            'original_filename': doc.original_filename,
+                            'ai_summary': doc.ai_summary or ''
+                        })
+                    
+                    # Gerar petição
+                    if use_template and template_file_id:
+                        agent.set_template_file(template_file_id)
+                        petition_content = agent.generate_petition_with_template(case_data, benefits_data, documents_data)
+                        flash('Petição gerada com sucesso usando modelo personalizado!', 'success')
+                    else:
+                        petition_content = agent.generate_simple_petition(case_data, benefits_data)
+                        flash('Petição gerada com sucesso usando template padrão!', 'success')
                 
                 
                 # Atualizar petição com conteúdo gerado

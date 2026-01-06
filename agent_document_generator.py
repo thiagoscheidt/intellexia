@@ -5,19 +5,26 @@ from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
 from docx import Document
 from docx.shared import Inches
+from app.models import Case, CaseBenefit
+from datetime import datetime
 
 _ = load_dotenv()
 
 
 class AgentDocumentGenerator:
+    """
+    Agente especializado para geração de petições FAP usando modelos DOCX
+    Processa templates Word e preenche com dados do banco de dados
+    """
     model = None
     prompt = None
 
-    def __init__(self, model_name="gpt-5.2"):
+    def __init__(self, model_name="gpt-4o"):
         self.model = ChatOpenAI(model=model_name)
         self.prompt = DocumentReaderPrompt()
 
     def generate(self, file_id):
+        """Gera resumo de documento usando IA"""
         result = self.model.invoke(
             [
                 {"role": "system", "content": self.prompt.prompt_template()},
@@ -34,68 +41,422 @@ class AgentDocumentGenerator:
             ]
         )
         return result.content
-
-template_text = """
-"""
-
-document = Document("modelo_acidente_trajeto.docx")
-document.add_heading("Modelo de Documento", 0)
-
-
-# for table in document.tables:
-#     for row in table.rows:
-#         for cell in row.cells:
-#             for paragraph in cell.paragraphs:
-#                 print(paragraph.text)
-
-for table_idx, table in enumerate(document.tables):
-    for row in table.rows:
-        for cell in row.cells:
-            for paragraph in cell.paragraphs:
-                print(paragraph.text)
     
-    # Adiciona nova linha na tabela com dados do sistema
-    new_row = table.add_row()
+    def generate_fap_petition(self, case_id, template_path=None):
+        """
+        Gera petição FAP preenchendo template DOCX com dados do banco
+        Seleciona automaticamente o template correto baseado no fap_reason
+        
+        Args:
+            case_id: ID do caso no banco de dados
+            template_path: Caminho para o template DOCX (opcional, se não fornecido, seleciona automaticamente)
+            
+        Returns:
+            Document: Documento DOCX preenchido
+        """
+        # Buscar dados do caso
+        case = Case.query.get(case_id)
+        if not case:
+            raise ValueError(f"Caso {case_id} não encontrado")
+        
+        # Buscar benefícios do caso
+        benefits = CaseBenefit.query.filter_by(case_id=case_id).all()
+        
+        # Selecionar template baseado no fap_reason se não foi especificado
+        if template_path is None:
+            template_path = self._select_template_by_fap_reason(case.fap_reason)
+        
+        # Carregar template
+        document = Document(template_path)
+        
+        # Preencher campos do template com dados do caso
+        self._replace_placeholders_in_document(document, case, benefits)
+        
+        # Adicionar benefícios nas tabelas
+        self._add_benefits_to_tables(document, benefits)
+        
+        return document
     
-    # Simular dados de um caso real do sistema
-    # Em produção, esses dados viriam do banco de dados
-    mock_case_data = {
-        'id': 1,
-        'benefit_number': '123456789',
-        'insured_name': 'João da Silva Santos',
-        'insured_nit': '123.45678.90-1',
-        'accident_date': '15/03/2024',
-        'benefit_type': 'B91',
-        'status': 'Ativo',
-        'value': 'R$ 1.500,00',
-        'company': 'Empresa XYZ Ltda',
-        'fap_reason': 'Trajeto de Ida ao Trabalho'
-    }
+    def _select_template_by_fap_reason(self, fap_reason):
+        """
+        Seleciona o template correto baseado no motivo FAP
+        
+        Args:
+            fap_reason: Código do motivo FAP
+            
+        Returns:
+            str: Caminho para o template DOCX apropriado
+        """
+        # Mapeamento de motivos para templates
+        template_mapping = {
+            'inclusao_indevida_trajeto': 'templates_docx/modelo_acidente_trajeto.docx',
+            'erro_material_cat': 'templates_docx/modelo_acidente_trajeto_erro_material.docx',
+            'cat_trajeto_extemporanea': 'templates_docx/modelo_acidente_trajeto_extemporanea.docx'
+        }
+        
+        # Retornar template específico ou padrão
+        return template_mapping.get(fap_reason, 'templates_docx/modelo_acidente_trajeto.docx')
     
-    for i, cell in enumerate(new_row.cells):
-        if i == 0:
-            # Primeira coluna: ID
-            cell.text = str(mock_case_data['id'])
-        elif i == 1:
-            cell.text = mock_case_data['benefit_number']
-        elif i == 2:
-            cell.text = mock_case_data['insured_name']
-        elif i == 3:
-            cell.text = mock_case_data['insured_nit']
-        elif i == 4:
-            cell.text = mock_case_data['accident_date']
-        elif i == 5:
-            cell.text = mock_case_data['benefit_type']
-        else:
-            # Colunas adicionais
-            cell.text = mock_case_data.get('status', f"Dado coluna {i+1}")
+    def _replace_placeholders_in_document(self, document, case, benefits):
+        """
+        Substitui placeholders {{variavel}} no documento pelos dados reais
+        Procura em todo o documento: parágrafos, tabelas, cabeçalhos e rodapés
+        """
+        replacements = {
+            # Dados do Cliente
+            '{{cliente_nome}}': case.client.name if case.client else '',
+            '{{cliente_cnpj}}': case.client.cnpj if case.client else '',
+            '{{cliente_endereco}}': self._format_address(case.client) if case.client else '',
+            '{{cliente_cidade}}': case.client.city if case.client else '',
+            '{{cliente_estado}}': case.client.state if case.client else '',
+            
+            # Dados do Caso
+            '{{caso_titulo}}': case.title,
+            '{{caso_tipo}}': case.case_type,
+            '{{caso_numero}}': str(case.id),
+            
+            # Dados FAP
+            '{{fap_motivo}}': self._get_fap_reason_text(case.fap_reason) if case.fap_reason else '',
+            '{{ano_inicial_fap}}': str(case.fap_start_year) if case.fap_start_year else '',
+            '{{ano_final_fap}}': str(case.fap_end_year) if case.fap_end_year else '',
+            '{{anos_fap}}': self._format_years_range(case.fap_start_year, case.fap_end_year),
+            
+            # Dados de Benefícios
+            '{{total_beneficios}}': str(len(benefits)),
+            '{{lista_beneficios}}': self._format_benefits_list(benefits),
+            
+            # Valores
+            '{{valor_causa}}': self._format_currency(case.value_cause) if case.value_cause else '',
+            '{{valor_causa_extenso}}': self._value_to_words(case.value_cause) if case.value_cause else '',
+            
+            # Datas
+            '{{data_ajuizamento}}': case.filing_date.strftime('%d/%m/%Y') if case.filing_date else '',
+            '{{data_atual}}': datetime.now().strftime('%d/%m/%Y'),
+            '{{mes_ano_atual}}': datetime.now().strftime('%B de %Y'),
+            
+            # Dados da Vara
+            '{{vara_nome}}': case.court.vara_name if case.court else '',
+            '{{vara_cidade}}': case.court.city if case.court else '',
+            '{{vara_estado}}': case.court.state if case.court else '',
+            '{{vara_completo}}': self._format_court(case.court) if case.court else '',
+            
+            # Resumos
+            '{{fatos_resumo}}': case.facts_summary or '',
+            '{{teses_resumo}}': case.thesis_summary or '',
+            '{{prescricao_resumo}}': case.prescription_summary or '',
+        }
+        
+        # Substituir em parágrafos do corpo do documento
+        for paragraph in document.paragraphs:
+            self._replace_in_paragraph(paragraph, replacements)
+        
+        # Substituir em tabelas
+        for table in document.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for paragraph in cell.paragraphs:
+                        self._replace_in_paragraph(paragraph, replacements)
+        
+        # Substituir em cabeçalhos
+        for section in document.sections:
+            header = section.header
+            for paragraph in header.paragraphs:
+                self._replace_in_paragraph(paragraph, replacements)
+            for table in header.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        for paragraph in cell.paragraphs:
+                            self._replace_in_paragraph(paragraph, replacements)
+        
+        # Substituir em rodapés
+        for section in document.sections:
+            footer = section.footer
+            for paragraph in footer.paragraphs:
+                self._replace_in_paragraph(paragraph, replacements)
+            for table in footer.tables:
+                for row in table.rows:
+                    for cell in row.cells:
+                        for paragraph in cell.paragraphs:
+                            self._replace_in_paragraph(paragraph, replacements)
+    
+    def _replace_in_paragraph(self, paragraph, replacements):
+        """
+        Substitui placeholders em um parágrafo específico
+        Lida com placeholders que podem estar divididos entre múltiplos runs
+        """
+        # Primeiro, verificar se há placeholders no texto completo
+        full_text = paragraph.text
+        
+        # Para cada placeholder
+        for key, value in replacements.items():
+            if key in full_text:
+                # Abordagem 1: Tentar substituir run por run (mais seguro para formatação)
+                replaced = False
+                for run in paragraph.runs:
+                    if key in run.text:
+                        run.text = run.text.replace(key, value)
+                        replaced = True
+                
+                # Abordagem 2: Se o placeholder está dividido entre runs
+                if not replaced and key in full_text:
+                    # Reconstruir o parágrafo mantendo apenas o primeiro run
+                    if paragraph.runs:
+                        # Pegar formatação do primeiro run
+                        first_run = paragraph.runs[0]
+                        
+                        # Substituir texto no parágrafo completo
+                        new_text = full_text.replace(key, value)
+                        
+                        # Limpar todos os runs
+                        for run in paragraph.runs:
+                            run.text = ''
+                        
+                        # Adicionar texto no primeiro run
+                        first_run.text = new_text
+                        full_text = new_text
+    
+    def _format_address(self, client):
+        """Formata endereço completo do cliente"""
+        if not client:
+            return ''
+        parts = []
+        if client.street:
+            parts.append(client.street)
+        if client.number:
+            parts.append(f"nº {client.number}")
+        if client.district:
+            parts.append(client.district)
+        if client.city and client.state:
+            parts.append(f"{client.city}/{client.state}")
+        if client.zip_code:
+            parts.append(f"CEP {client.zip_code}")
+        return ', '.join(parts)
+    
+    def _format_currency(self, value):
+        """Formata valor monetário"""
+        return f"R$ {value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+    
+    def _format_years_range(self, start_year, end_year):
+        """Formata range de anos para FAP"""
+        if start_year and end_year:
+            if start_year == end_year:
+                return str(start_year)
+            return f"{start_year} a {end_year}"
+        return ''
+    
+    def _format_benefits_list(self, benefits):
+        """Formata lista de benefícios para inserção no texto"""
+        if not benefits:
+            return ''
+        lines = []
+        for idx, benefit in enumerate(benefits, start=1):
+            line = f"{idx}. NB {benefit.benefit_number} - {benefit.insured_name}"
+            if benefit.benefit_type:
+                line += f" ({benefit.benefit_type})"
+            lines.append(line)
+        return '\n'.join(lines)
+    
+    def _format_court(self, court):
+        """Formata nome completo da vara"""
+        if not court:
+            return ''
+        parts = []
+        if court.vara_name:
+            parts.append(court.vara_name)
+        if court.city and court.state:
+            parts.append(f"{court.city}/{court.state}")
+        return ' - '.join(parts)
+    
+    def _value_to_words(self, value):
+        """Converte valor numérico para extenso (simplificado)"""
+        # Implementação simplificada - pode ser expandida
+        return f"{value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+    
+    def find_placeholders_in_document(self, document):
+        """
+        Método de debug: encontra todos os placeholders no documento
+        
+        Args:
+            document: Documento DOCX carregado
+            
+        Returns:
+            list: Lista de placeholders únicos encontrados
+        """
+        import re
+        placeholders = set()
+        pattern = r'\{\{[^}]+\}\}'
+        
+        # Procurar em parágrafos
+        for paragraph in document.paragraphs:
+            matches = re.findall(pattern, paragraph.text)
+            placeholders.update(matches)
+        
+        # Procurar em tabelas
+        for table in document.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for paragraph in cell.paragraphs:
+                        matches = re.findall(pattern, paragraph.text)
+                        placeholders.update(matches)
+        
+        # Procurar em cabeçalhos e rodapés
+        for section in document.sections:
+            for paragraph in section.header.paragraphs:
+                matches = re.findall(pattern, paragraph.text)
+                placeholders.update(matches)
+            for paragraph in section.footer.paragraphs:
+                matches = re.findall(pattern, paragraph.text)
+                placeholders.update(matches)
+        
+        return sorted(list(placeholders))
+    
+    def _get_fap_reason_text(self, fap_reason_code):
+        """Converte código do motivo FAP em texto legível"""
+        reasons = {
+            'inclusao_indevida_trajeto': 'Inclusão indevida de benefício de trajeto',
+            'erro_material_cat': 'Erro material no preenchimento da CAT',
+            'cat_trajeto_extemporanea': 'CAT de trajeto transmitida extemporaneamente'
+        }
+        return reasons.get(fap_reason_code, fap_reason_code)
+    
+    def _add_benefits_to_tables(self, document, benefits):
+        """
+        Adiciona linhas com dados dos benefícios nas tabelas do documento
+        Procura por tabelas que contenham marcadores específicos ou cabeçalhos
+        """
+        if not benefits:
+            return
+        
+        # Procurar a tabela de benefícios (identificada por cabeçalhos específicos)
+        benefit_table = None
+        for table in document.tables:
+            # Verificar se é a tabela de benefícios pelos cabeçalhos
+            if len(table.rows) > 0:
+                first_row_text = ' '.join([cell.text.lower() for cell in table.rows[0].cells])
+                # Procurar por palavras-chave que indicam tabela de benefícios
+                keywords = ['benefício', 'nb', 'segurado', 'nit', 'acidente']
+                if any(keyword in first_row_text for keyword in keywords):
+                    benefit_table = table
+                    break
+        
+        # Se não encontrou tabela específica, usar a primeira tabela com 6+ colunas
+        if benefit_table is None:
+            for table in document.tables:
+                if len(table.rows) > 0 and len(table.rows[0].cells) >= 6:
+                    benefit_table = table
+                    break
+        
+        # Adicionar benefícios na tabela encontrada
+        if benefit_table:
+            for idx, benefit in enumerate(benefits, start=1):
+                new_row = benefit_table.add_row()
+                cells = new_row.cells
+                
+                # Preencher células com dados do benefício
+                if len(cells) >= 1:
+                    cells[0].text = str(idx)  # ID/Número sequencial
+                if len(cells) >= 2:
+                    cells[1].text = benefit.benefit_number or ''
+                if len(cells) >= 3:
+                    cells[2].text = benefit.insured_name or ''
+                if len(cells) >= 4:
+                    cells[3].text = benefit.insured_nit or ''
+                if len(cells) >= 5:
+                    cells[4].text = benefit.accident_date.strftime('%d/%m/%Y') if benefit.accident_date else ''
+                if len(cells) >= 6:
+                    cells[5].text = benefit.benefit_type or ''
+                
+                # Colunas opcionais
+                if len(cells) >= 7:
+                    cells[6].text = benefit.error_reason or ''
+                if len(cells) >= 8:
+                    cells[7].text = benefit.accident_company_name or ''
+                if len(cells) >= 9:
+                    cells[8].text = benefit.notes or ''
 
-for p in document.paragraphs:
-    if p.text.startswith("{{") and p.text.endswith("}}"):
-        print("\n", p.text)
-    # for run in p.runs:
-    #     print(run.text)
-# agent = AgentDocumentGenerator()
-# response = agent.generate()
 
-document.save("modelo_acidente_trajeto_edit.docx")
+# =====================================
+# Script de Teste e Desenvolvimento
+# =====================================
+if __name__ == "__main__":
+    """Script de teste - roda apenas quando executado diretamente"""
+    print("=== Teste do AgentDocumentGenerator ===\n")
+    
+    # Carregar template de exemplo
+    document = Document("modelo_acidente_trajeto.docx")
+    document.add_heading("Modelo de Documento - TESTE", 0)
+    
+    # Testar iteração sobre tabelas
+    print("Conteúdo das tabelas:")
+    for table_idx, table in enumerate(document.tables):
+        print(f"\nTabela {table_idx + 1}:")
+        for row in table.rows:
+            for cell in row.cells:
+                for paragraph in cell.paragraphs:
+                    if paragraph.text.strip():
+                        print(f"  {paragraph.text}")
+        
+        # Adicionar linha de teste
+        new_row = table.add_row()
+        mock_data = {
+            'id': 1,
+            'benefit_number': '123456789',
+            'insured_name': 'João da Silva Santos',
+            'insured_nit': '123.45678.90-1',
+            'accident_date': '15/03/2024',
+            'benefit_type': 'B91'
+        }
+        
+        for i, cell in enumerate(new_row.cells):
+            if i == 0: 
+                cell.text = str(mock_data['id'])
+            elif i == 1: 
+                cell.text = mock_data['benefit_number']
+            elif i == 2: 
+                cell.text = mock_data['insured_name']
+            elif i == 3: 
+                cell.text = mock_data['insured_nit']
+            elif i == 4: 
+                cell.text = mock_data['accident_date']
+            elif i == 5: 
+                cell.text = mock_data['benefit_type']
+            else: 
+                cell.text = f"Dado {i+1}"
+        print(f"  ✓ Linha de teste adicionada")
+    
+    # Buscar placeholders
+    print("\nPlaceholders encontrados:")
+    for p in document.paragraphs:
+        if "{{" in p.text and "}}" in p.text:
+            print(f"  {p.text}")
+    
+    # Salvar
+    output_path = "modelo_acidente_trajeto_edit.docx"
+    document.save(output_path)
+    print(f"\n✓ Documento salvo em: {output_path}")
+    
+    # Instruções
+    print("\n=== Uso em Produção ===")
+    print("""
+Para usar a classe em produção:
+
+from agent_document_generator import AgentDocumentGenerator
+
+agent = AgentDocumentGenerator()
+
+# Forma 1: Seleção automática de template baseada no fap_reason
+document = agent.generate_fap_petition(case_id=123)
+
+# Forma 2: Template específico (override)
+document = agent.generate_fap_petition(
+    case_id=123,
+    template_path="templates_docx/modelo_acidente_trajeto.docx"
+)
+
+document.save("peticao_gerada.docx")
+
+Templates disponíveis:
+- inclusao_indevida_trajeto → modelo_acidente_trajeto.docx
+- erro_material_cat → modelo_acidente_trajeto_erro_material.docx
+- cat_trajeto_extemporanea → modelo_acidente_trajeto_extemporanea.docx
+""")
