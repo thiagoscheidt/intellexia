@@ -1,6 +1,13 @@
 """
 Script para adicionar a tabela ai_document_summaries ao banco de dados existente
 """
+
+import sys
+from pathlib import Path
+
+# Adicionar o diretório raiz ao path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from main import app
 from app.models import db, AiDocumentSummary
 

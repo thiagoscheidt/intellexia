@@ -3,6 +3,12 @@ Script para adicionar a coluna file_path na tabela petitions
 Execute este script para atualizar o banco de dados existente
 """
 
+import sys
+from pathlib import Path
+
+# Adicionar o diretório raiz ao path
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from main import app
 from app.models import db
 from sqlalchemy import text
