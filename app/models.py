@@ -339,3 +339,35 @@ class Petition(db.Model):
     
     def __repr__(self):
         return f'<Petition v{self.version} - Case {self.case_id}>'
+
+
+class AiDocumentSummary(db.Model):
+    """Tabela ai_document_summaries - Documentos para resumo por IA"""
+    __tablename__ = 'ai_document_summaries'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    
+    # Informações do arquivo
+    original_filename = db.Column(db.String(255), nullable=False)
+    file_path = db.Column(db.String(500), nullable=False)
+    file_size = db.Column(db.Integer)  # Tamanho em bytes
+    file_type = db.Column(db.String(50))  # PDF, DOCX, TXT, etc.
+    
+    # Status e resumo
+    status = db.Column(db.String(20), default='pending')  # pending, processing, completed, error
+    summary_text = db.Column(db.Text)  # Resumo gerado pela IA
+    error_message = db.Column(db.Text)  # Mensagem de erro caso falhe
+    
+    # Metadados
+    processed_at = db.Column(db.DateTime)  # Data/hora do processamento
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relacionamentos
+    user = db.relationship('User')
+    law_firm = db.relationship('LawFirm')
+    
+    def __repr__(self):
+        return f'<AiDocumentSummary {self.original_filename}>'

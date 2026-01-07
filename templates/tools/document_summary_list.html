@@ -1,0 +1,154 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Resumo de Documentos - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-sm-6">
+        <h3 class="mb-0"><i class="bi bi-file-earmark-text"></i> Resumo de Documentos</h3>
+      </div>
+      <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-end">
+          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="#">Ferramentas</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Resumo de Documentos</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-12">
+        <div class="card card-primary card-outline">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-robot"></i> Documentos para Resumo por IA</h3>
+            <div class="card-tools">
+              <a href="{{ url_for('tools_document_summary_upload') }}" class="btn btn-primary btn-sm">
+                <i class="bi bi-cloud-upload"></i> Enviar Documento
+              </a>
+            </div>
+          </div>
+          <div class="card-body">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                {% for category, message in messages %}
+                  <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    <i class="bi bi-info-circle"></i> {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                  </div>
+                {% endfor %}
+              {% endif %}
+            {% endwith %}
+
+            {% if documents %}
+            <div class="table-responsive">
+              <table id="documentsTable" class="table table-bordered table-striped table-hover">
+                <thead class="table-light">
+                  <tr>
+                    <th width="5%">ID</th>
+                    <th width="25%">Nome do Arquivo</th>
+                    <th width="10%">Tipo</th>
+                    <th width="10%">Tamanho</th>
+                    <th width="15%">Data de Upload</th>
+                    <th width="15%">Status</th>
+                    <th width="20%">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for doc in documents %}
+                  <tr>
+                    <td>{{ doc.id }}</td>
+                    <td>
+                      <i class="bi bi-file-earmark-{{ doc.file_type|lower }}"></i>
+                      {{ doc.original_filename }}
+                    </td>
+                    <td>
+                      <span class="badge bg-secondary">{{ doc.file_type }}</span>
+                    </td>
+                    <td>
+                      {% if doc.file_size %}
+                        {% if doc.file_size < 1024 %}
+                          {{ doc.file_size }} B
+                        {% elif doc.file_size < 1048576 %}
+                          {{ "%.2f"|format(doc.file_size / 1024) }} KB
+                        {% else %}
+                          {{ "%.2f"|format(doc.file_size / 1048576) }} MB
+                        {% endif %}
+                      {% else %}
+                        -
+                      {% endif %}
+                    </td>
+                    <td>{{ doc.uploaded_at.strftime('%d/%m/%Y %H:%M') if doc.uploaded_at else '-' }}</td>
+                    <td>
+                      {% if doc.status == 'pending' %}
+                        <span class="badge bg-warning">
+                          <i class="bi bi-hourglass-split"></i> Pendente
+                        </span>
+                      {% elif doc.status == 'processing' %}
+                        <span class="badge bg-info">
+                          <i class="bi bi-arrow-repeat"></i> Processando
+                        </span>
+                      {% elif doc.status == 'completed' %}
+                        <span class="badge bg-success">
+                          <i class="bi bi-check-circle"></i> Processado
+                        </span>
+                      {% elif doc.status == 'error' %}
+                        <span class="badge bg-danger">
+                          <i class="bi bi-exclamation-triangle"></i> Erro
+                        </span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      <a href="{{ url_for('tools_document_summary_detail', document_id=doc.id) }}" 
+                         class="btn btn-info btn-sm" 
+                         title="Visualizar">
+                        <i class="bi bi-eye"></i>
+                      </a>
+                      <form method="POST" 
+                            action="{{ url_for('tools_document_summary_delete', document_id=doc.id) }}" 
+                            style="display: inline;"
+                            onsubmit="return confirm('Tem certeza que deseja excluir este documento?');">
+                        <button type="submit" class="btn btn-danger btn-sm" title="Excluir">
+                          <i class="bi bi-trash"></i>
+                        </button>
+                      </form>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">
+              <i class="bi bi-info-circle"></i>
+              Nenhum documento enviado ainda. 
+              <a href="{{ url_for('tools_document_summary_upload') }}" class="alert-link">Envie seu primeiro documento</a> 
+              para gerar resumos com IA.
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if documents %}
+<script>
+  $(document).ready(function() {
+    $('#documentsTable').DataTable({
+      "responsive": true,
+      "language": {
+        "url": "//cdn.datatables.net/plug-ins/1.13.6/i18n/pt-BR.json"
+      },
+      "order": [[0, "desc"]]
+    });
+  });
+</script>
+{% endif %}
+{% endblock %}

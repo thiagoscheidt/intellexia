@@ -1,0 +1,94 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Enviar Documento - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-sm-6">
+        <h3 class="mb-0"><i class="bi bi-cloud-upload"></i> Enviar Documento</h3>
+      </div>
+      <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-end">
+          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="#">Ferramentas</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('tools_document_summary_list') }}">Resumo de Documentos</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Enviar Documento</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-md-8 offset-md-2">
+        <div class="card card-primary card-outline">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-robot"></i> Upload para Resumo por IA</h3>
+          </div>
+          <form method="POST" enctype="multipart/form-data">
+            {{ form.hidden_tag() }}
+            <div class="card-body">
+              {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                  {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                      <i class="bi bi-info-circle"></i> {{ message }}
+                      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                  {% endfor %}
+                {% endif %}
+              {% endwith %}
+
+              <div class="alert alert-info">
+                <i class="bi bi-lightbulb"></i>
+                <strong>Como funciona:</strong>
+                <ul class="mb-0 mt-2">
+                  <li>Envie documentos em PDF, DOCX ou TXT</li>
+                  <li>A IA irá processar e gerar um resumo automático</li>
+                  <li>Você poderá visualizar o resumo na lista de documentos</li>
+                  <li>Tamanho máximo: 16 MB por arquivo</li>
+                </ul>
+              </div>
+
+              <div class="mb-3">
+                {{ form.file.label(class="form-label") }}
+                <span class="text-danger">*</span>
+                {{ form.file(class="form-control", accept=".pdf,.docx,.doc,.txt") }}
+                {% if form.file.errors %}
+                  <div class="text-danger mt-1">
+                    {% for error in form.file.errors %}
+                      <small>{{ error }}</small><br>
+                    {% endfor %}
+                  </div>
+                {% endif %}
+                <small class="form-text text-muted">
+                  Formatos aceitos: PDF, DOCX, TXT
+                </small>
+              </div>
+
+              <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle"></i>
+                <strong>Atenção:</strong> O resumo será gerado automaticamente após o upload. 
+                Este processo pode levar alguns minutos dependendo do tamanho do documento.
+              </div>
+            </div>
+
+            <div class="card-footer">
+              <div class="d-flex justify-content-between">
+                <a href="{{ url_for('tools_document_summary_list') }}" class="btn btn-secondary">
+                  <i class="bi bi-arrow-left"></i> Voltar
+                </a>
+                {{ form.submit(class="btn btn-primary") }}
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

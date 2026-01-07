@@ -55,6 +55,24 @@
           </a>
         </li>
         
+        <li class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('tools_') else '' }}">
+          <a href="#" class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('tools_') else '' }}">
+            <i class="nav-icon bi bi-tools"></i>
+            <p>
+              Ferramentas
+              <i class="nav-arrow bi bi-chevron-right"></i>
+            </p>
+          </a>
+          <ul class="nav nav-treeview">
+            <li class="nav-item">
+              <a href="{{ url_for('tools_document_summary_list') }}" class="nav-link {{ 'active' if request.endpoint and 'document_summary' in request.endpoint else '' }}">
+                <i class="nav-icon bi bi-brain"></i>
+                <p>Resumo de Documento</p>
+              </a>
+            </li>
+          </ul>
+        </li>
+        
         <li class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint.startswith('case') or request.endpoint.startswith('benefit') or 'case_' in request.endpoint or 'benefit' in request.endpoint or 'document' in request.endpoint) else '' }}">
           <a href="#" class="nav-link {{ 'active' if request.endpoint and (request.endpoint.startswith('case') or request.endpoint.startswith('benefit') or 'case_' in request.endpoint or 'benefit' in request.endpoint or 'document' in request.endpoint) else '' }}">
             <i class="nav-icon bi bi-newspaper"></i>

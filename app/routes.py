@@ -1629,3 +1629,121 @@ def case_petition_download(case_id, petition_id):
 
     return redirect(url_for('case_petitions_list', case_id=case_id))
 
+
+# ========================
+# Rotas de Ferramentas - Resumo de Documentos por IA
+# ========================
+@app.route('/tools/document-summary')
+@require_law_firm
+def tools_document_summary_list():
+    """Lista todos os documentos enviados para resumo"""
+    from app.models import AiDocumentSummary
+    
+    user_id = session.get('user_id')
+    law_firm_id = get_current_law_firm_id()
+    
+    # Buscar documentos do usuário/escritório
+    documents = AiDocumentSummary.query.filter_by(
+        law_firm_id=law_firm_id
+    ).order_by(AiDocumentSummary.uploaded_at.desc()).all()
+    
+    return render_template('tools/document_summary_list.html', documents=documents)
+
+
+@app.route('/tools/document-summary/upload', methods=['GET', 'POST'])
+@require_law_firm
+def tools_document_summary_upload():
+    """Upload de documento para resumo por IA"""
+    from app.form import AiDocumentSummaryForm
+    from app.models import AiDocumentSummary
+    
+    form = AiDocumentSummaryForm()
+    
+    if form.validate_on_submit():
+        file = form.file.data
+        
+        if file:
+            try:
+                # Criar nome único para o arquivo
+                filename = secure_filename(file.filename)
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                unique_filename = f"{timestamp}_{filename}"
+                
+                # Definir caminho de upload
+                upload_dir = os.path.join('uploads', 'ai_summaries')
+                os.makedirs(upload_dir, exist_ok=True)
+                file_path = os.path.join(upload_dir, unique_filename)
+                
+                # Salvar arquivo
+                file.save(file_path)
+                
+                # Obter tamanho e tipo do arquivo
+                file_size = os.path.getsize(file_path)
+                file_extension = os.path.splitext(filename)[1].lower().replace('.', '')
+                
+                # Criar registro no banco
+                document = AiDocumentSummary(
+                    user_id=session.get('user_id'),
+                    law_firm_id=get_current_law_firm_id(),
+                    original_filename=filename,
+                    file_path=file_path,
+                    file_size=file_size,
+                    file_type=file_extension.upper(),
+                    status='pending'
+                )
+                
+                db.session.add(document)
+                db.session.commit()
+                
+                flash('Documento enviado com sucesso! O resumo será gerado em breve.', 'success')
+                return redirect(url_for('tools_document_summary_detail', document_id=document.id))
+                
+            except Exception as e:
+                db.session.rollback()
+                flash(f'Erro ao enviar documento: {str(e)}', 'danger')
+    
+    return render_template('tools/document_summary_upload.html', form=form)
+
+
+@app.route('/tools/document-summary/<int:document_id>')
+@require_law_firm
+def tools_document_summary_detail(document_id):
+    """Visualiza detalhes e resumo de um documento"""
+    from app.models import AiDocumentSummary
+    
+    law_firm_id = get_current_law_firm_id()
+    document = AiDocumentSummary.query.filter_by(
+        id=document_id,
+        law_firm_id=law_firm_id
+    ).first_or_404()
+    
+    return render_template('tools/document_summary_detail.html', document=document)
+
+
+@app.route('/tools/document-summary/<int:document_id>/delete', methods=['POST'])
+@require_law_firm
+def tools_document_summary_delete(document_id):
+    """Exclui um documento de resumo"""
+    from app.models import AiDocumentSummary
+    
+    law_firm_id = get_current_law_firm_id()
+    document = AiDocumentSummary.query.filter_by(
+        id=document_id,
+        law_firm_id=law_firm_id
+    ).first_or_404()
+    
+    try:
+        # Remover arquivo físico se existir
+        if document.file_path and os.path.exists(document.file_path):
+            os.remove(document.file_path)
+        
+        # Remover registro do banco
+        db.session.delete(document)
+        db.session.commit()
+        
+        flash('Documento excluído com sucesso!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao excluir documento: {str(e)}', 'danger')
+    
+    return redirect(url_for('tools_document_summary_list'))

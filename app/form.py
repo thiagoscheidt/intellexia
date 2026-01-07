@@ -274,3 +274,17 @@ class RegisterForm(FlaskForm):
 class ForgotPasswordForm(FlaskForm):
     email = StringField('Email', validators=[DataRequired(), Email(), Length(max=255)])
     submit = SubmitField('Enviar Link de Recuperação')
+
+
+# ========================
+# Formulário: AI Document Summary
+# ========================
+class AiDocumentSummaryForm(FlaskForm):
+    file = FileField(
+        'Documento',
+        validators=[
+            DataRequired(),
+            FileAllowed(['pdf', 'docx', 'txt', 'doc'], 'Somente arquivos PDF, DOCX ou TXT são permitidos!')
+        ]
+    )
+    submit = SubmitField('Enviar para Resumo')
