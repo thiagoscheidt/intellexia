@@ -13,7 +13,8 @@
         <ol class="breadcrumb float-sm-end">
           <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
           <li class="breadcrumb-item"><a href="#">Ferramentas</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('tools.tools_document_summary_list') }}">Resumo de Documentos</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('tools.tools_document_summary_list') }}">Resumo de
+              Documentos</a></li>
           <li class="breadcrumb-item active" aria-current="page">Detalhes</li>
         </ol>
       </div>
@@ -24,14 +25,14 @@
 <div class="app-content">
   <div class="container-fluid">
     {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        {% for category, message in messages %}
-          <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-            <i class="bi bi-info-circle"></i> {{ message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-          </div>
-        {% endfor %}
-      {% endif %}
+    {% if messages %}
+    {% for category, message in messages %}
+    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+      <i class="bi bi-info-circle"></i> {{ message }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+    {% endfor %}
+    {% endif %}
     {% endwith %}
 
     <div class="row">
@@ -57,17 +58,9 @@
               <dt class="col-sm-4">Tamanho:</dt>
               <dd class="col-sm-8">
                 {% if document.file_size %}
-                  {% if document.file_size < 1024 %}
-                    {{ document.file_size }} B
-                  {% elif document.file_size < 1048576 %}
-                    {{ "%.2f"|format(document.file_size / 1024) }} KB
-                  {% else %}
-                    {{ "%.2f"|format(document.file_size / 1048576) }} MB
-                  {% endif %}
-                {% else %}
-                  -
-                {% endif %}
-              </dd>
+                {% if document.file_size < 1024 %} {{ document.file_size }} B {% elif document.file_size < 1048576 %}
+                  {{ "%.2f" |format(document.file_size / 1024) }} KB {% else %} {{ "%.2f" |format(document.file_size /
+                  1048576) }} MB {% endif %} {% else %} - {% endif %} </dd>
 
               <dt class="col-sm-4">Upload:</dt>
               <dd class="col-sm-8">
@@ -77,21 +70,21 @@
               <dt class="col-sm-4">Status:</dt>
               <dd class="col-sm-8">
                 {% if document.status == 'pending' %}
-                  <span class="badge bg-warning">
-                    <i class="bi bi-hourglass-split"></i> Pendente
-                  </span>
+                <span class="badge bg-warning">
+                  <i class="bi bi-hourglass-split"></i> Pendente
+                </span>
                 {% elif document.status == 'processing' %}
-                  <span class="badge bg-info">
-                    <i class="bi bi-arrow-repeat"></i> Processando
-                  </span>
+                <span class="badge bg-info">
+                  <i class="bi bi-arrow-repeat"></i> Processando
+                </span>
                 {% elif document.status == 'completed' %}
-                  <span class="badge bg-success">
-                    <i class="bi bi-check-circle"></i> Processado
-                  </span>
+                <span class="badge bg-success">
+                  <i class="bi bi-check-circle"></i> Processado
+                </span>
                 {% elif document.status == 'error' %}
-                  <span class="badge bg-danger">
-                    <i class="bi bi-exclamation-triangle"></i> Erro
-                  </span>
+                <span class="badge bg-danger">
+                  <i class="bi bi-exclamation-triangle"></i> Erro
+                </span>
                 {% endif %}
               </dd>
 
@@ -111,9 +104,8 @@
             <hr>
 
             <div class="d-grid gap-2">
-              <form method="POST" 
-                    action="{{ url_for('tools.tools_document_summary_delete', document_id=document.id) }}" 
-                    onsubmit="return confirm('Tem certeza que deseja excluir este documento?');">
+              <form method="POST" action="{{ url_for('tools.tools_document_summary_delete', document_id=document.id) }}"
+                onsubmit="return confirm('Tem certeza que deseja excluir este documento?');">
                 <button type="submit" class="btn btn-danger w-100">
                   <i class="bi bi-trash"></i> Excluir Documento
                 </button>
@@ -131,55 +123,61 @@
           </div>
           <div class="card-body">
             {% if document.status == 'pending' %}
-              <div class="alert alert-warning">
-                <i class="bi bi-hourglass-split"></i>
-                <strong>Aguardando Processamento</strong>
-                <p class="mb-0 mt-2">
-                  O documento foi enviado com sucesso e está na fila para processamento. 
-                  O resumo será gerado em breve pela IA.
-                </p>
-              </div>
+            <div class="alert alert-warning">
+              <i class="bi bi-hourglass-split"></i>
+              <strong>Aguardando Processamento</strong>
+              <p class="mb-0 mt-2">
+                O documento foi enviado com sucesso e está na fila para processamento.
+                O resumo será gerado em breve pela IA.
+              </p>
+            </div>
             {% elif document.status == 'processing' %}
-              <div class="alert alert-info">
-                <i class="bi bi-arrow-repeat"></i>
-                <strong>Processando...</strong>
-                <p class="mb-0 mt-2">
-                  A IA está analisando o documento e gerando o resumo. 
-                  Este processo pode levar alguns minutos.
-                </p>
-              </div>
+            <div class="alert alert-info">
+              <i class="bi bi-arrow-repeat"></i>
+              <strong>Processando...</strong>
+              <p class="mb-0 mt-2">
+                A IA está analisando o documento e gerando o resumo.
+                Este processo pode levar alguns minutos.
+              </p>
+            </div>
             {% elif document.status == 'completed' %}
-              {% if document.summary_text %}
-                <div class="alert alert-success">
-                  <i class="bi bi-check-circle"></i>
-                  <strong>Resumo Concluído</strong>
-                </div>
-                <div class="summary-content p-3 bg-light rounded">
-                  {{ document.summary_text|safe }}
-                </div>
-              {% else %}
-                <div class="alert alert-warning">
-                  <i class="bi bi-exclamation-triangle"></i>
-                  <strong>Resumo não disponível</strong>
-                  <p class="mb-0 mt-2">
-                    O documento foi processado, mas o resumo não foi gerado. 
-                    Por favor, tente novamente.
-                  </p>
-                </div>
-              {% endif %}
+            {% if document.summary_text %}
+            <div class="alert alert-success">
+              <i class="bi bi-check-circle"></i>
+              <strong>Resumo Concluído</strong>
+            </div>
+            <div id="summaryContent" class="summary-content markdown-content p-3 bg-light rounded">
+              {{ document.summary_text }}
+            </div>
+            {% else %}
+            <div class="alert alert-warning">
+              <i class="bi bi-exclamation-triangle"></i>
+              <strong>Resumo não disponível</strong>
+              <p class="mb-0 mt-2">
+                O documento foi processado, mas o resumo não foi gerado.
+                Por favor, tente novamente.
+              </p>
+            </div>
+            {% endif %}
             {% elif document.status == 'error' %}
-              <div class="alert alert-danger">
-                <i class="bi bi-exclamation-triangle"></i>
-                <strong>Erro no Processamento</strong>
-                {% if document.error_message %}
-                  <p class="mb-0 mt-2">{{ document.error_message }}</p>
-                {% else %}
-                  <p class="mb-0 mt-2">
-                    Ocorreu um erro ao processar o documento. 
-                    Por favor, tente enviar novamente.
-                  </p>
-                {% endif %}
-              </div>
+            <div class="alert alert-danger">
+              <i class="bi bi-exclamation-triangle"></i>
+              <strong>Erro no Processamento</strong>
+              {% if document.error_message %}
+              <p class="mb-0 mt-2">{{ document.error_message }}</p>
+              {% else %}
+              <p class="mb-0 mt-2">
+                Ocorreu um erro ao processar o documento.
+              </p>
+              {% endif %}
+            </div>
+
+            <form method="POST"
+              action="{{ url_for('tools.tools_document_summary_reprocess', document_id=document.id) }}">
+              <button type="submit" class="btn btn-warning w-100">
+                <i class="bi bi-arrow-repeat"></i> Reprocessar Documento
+              </button>
+            </form>
             {% endif %}
           </div>
         </div>
@@ -196,11 +194,132 @@
   </div>
 </div>
 
+<!-- Marked.js para renderizar Markdown -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+  // Configurar marked
+  marked.setOptions({
+    breaks: true,
+    gfm: true
+  });
+
+  // Renderizar Markdown do resumo
+  const summaryEl = document.getElementById('summaryContent');
+  if (summaryEl) {
+    const markdownText = summaryEl.textContent;
+    summaryEl.innerHTML = marked.parse(markdownText);
+  }
+</script>
+
 <style>
-.summary-content {
-  white-space: pre-wrap;
-  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-  line-height: 1.6;
-}
+  .markdown-content h1,
+  .markdown-content h2,
+  .markdown-content h3,
+  .markdown-content h4,
+  .markdown-content h5,
+  .markdown-content h6 {
+    margin-top: 1.5rem;
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+  }
+
+  .markdown-content h1 {
+    font-size: 1.75rem;
+  }
+
+  .markdown-content h2 {
+    font-size: 1.5rem;
+  }
+
+  .markdown-content h3 {
+    font-size: 1.25rem;
+  }
+
+  .markdown-content h4 {
+    font-size: 1.1rem;
+  }
+
+  .markdown-content p {
+    margin-bottom: 1rem;
+  }
+
+  .markdown-content ul,
+  .markdown-content ol {
+    margin-bottom: 1rem;
+    padding-left: 2rem;
+  }
+
+  .markdown-content li {
+    margin-bottom: 0.5rem;
+  }
+
+  .markdown-content strong {
+    font-weight: 600;
+    color: #2c3e50;
+  }
+
+  .markdown-content em {
+    font-style: italic;
+  }
+
+  .markdown-content code {
+    background-color: #f4f4f4;
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+    color: #e83e8c;
+  }
+
+  .markdown-content pre {
+    background-color: #f4f4f4;
+    padding: 1rem;
+    border-radius: 5px;
+    overflow-x: auto;
+    margin-bottom: 1rem;
+  }
+
+  .markdown-content pre code {
+    background-color: transparent;
+    padding: 0;
+    color: inherit;
+  }
+
+  .markdown-content blockquote {
+    border-left: 4px solid #0d6efd;
+    padding-left: 1rem;
+    margin-left: 0;
+    margin-bottom: 1rem;
+    color: #6c757d;
+  }
+
+  .markdown-content hr {
+    margin: 1.5rem 0;
+    border: 0;
+    border-top: 1px solid #dee2e6;
+  }
+
+  .markdown-content table {
+    width: 100%;
+    margin-bottom: 1rem;
+    border-collapse: collapse;
+  }
+
+  .markdown-content table th,
+  .markdown-content table td {
+    padding: 0.75rem;
+    border: 1px solid #dee2e6;
+  }
+
+  .markdown-content table th {
+    background-color: #e9ecef;
+    font-weight: 600;
+  }
+
+  .summary-content {
+    white-space: pre-wrap;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    line-height: 1.6;
+  }
 </style>
 {% endblock %}

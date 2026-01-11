@@ -11,24 +11,26 @@ class AgentDocumentReader:
     model = None
     prompt = None
 
-    def __init__(self, model_name="gpt-5.2"):
+    def __init__(self, model_name="gpt-4o"):
         self.model = ChatOpenAI(model=model_name)
         self.prompt = DocumentReaderPrompt()
 
     def analyze_document(self, file_id):
         result = self.model.invoke(
             [
-                {"role": "system", "content": self.prompt.prompt_template()},
+            {"role": "system", "content": self.prompt.prompt_template()},
+            {
+                "role": "user",
+                "content": [
                 {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": "Analise o documento e gere um resumo objetivo.",
-                        },
-                        {"type": "file", "file_id": file_id},
-                    ],
+                    "type": "text",
+                    "text": """Analise o documento a seguir com olhar técnico-jurídico, como um advogado experiente.
+                    Extraia e organize as informações juridicamente relevantes, identificando fatos essenciais, partes envolvidas, objeto do documento, fundamentos legais, pedidos, prazos, riscos, obrigações e possíveis impactos.
+                    Em seguida, gere um resumo objetivo, claro e estruturado, destacando apenas o que é útil para tomada de decisão jurídica.""",
                 },
+                {"type": "file", "file_id": file_id},
+                ],
+            },
             ]
         )
         return result.content

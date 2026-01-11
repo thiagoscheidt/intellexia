@@ -127,3 +127,40 @@ def case_document_delete(case_id, document_id):
         flash(f'Erro ao excluir documento: {str(e)}', 'danger')
     
     return redirect(url_for('documents.case_documents_list', case_id=case_id))
+
+@documents_bp.route('/<int:document_id>/reprocess', methods=['POST'])
+def case_document_reprocess(case_id, document_id):
+    """Reprocessa um documento com a IA"""
+    document = Document.query.get_or_404(document_id)
+    
+    if document.case_id != case_id:
+        flash('Documento não encontrado neste caso.', 'error')
+        return redirect(url_for('documents.case_documents_list', case_id=case_id))
+    
+    try:
+        # Resetar status
+        document.ai_status = 'processing'
+        document.ai_error_message = None
+        db.session.commit()
+        
+        # Processar com IA
+        file_agent = FileAgent()
+        doc_reader = AgentDocumentReader()
+        
+        file_id = file_agent.upload_file(os.path.abspath(document.file_path))
+        ai_summary = doc_reader.analyze_document(file_id)
+        
+        # Atualizar documento
+        document.ai_summary = ai_summary
+        document.ai_processed_at = datetime.utcnow()
+        document.ai_status = 'completed'
+        db.session.commit()
+        
+        flash('Documento reprocessado com sucesso!', 'success')
+    except Exception as e:
+        document.ai_status = 'error'
+        document.ai_error_message = str(e)
+        db.session.commit()
+        flash(f'Erro ao reprocessar documento: {str(e)}', 'danger')
+    
+    return redirect(url_for('documents.case_document_view', case_id=case_id, document_id=document_id))

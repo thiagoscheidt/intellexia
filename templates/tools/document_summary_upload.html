@@ -13,7 +13,8 @@
         <ol class="breadcrumb float-sm-end">
           <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
           <li class="breadcrumb-item"><a href="#">Ferramentas</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('tools.tools_document_summary_list') }}">Resumo de Documentos</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('tools.tools_document_summary_list') }}">Resumo de
+              Documentos</a></li>
           <li class="breadcrumb-item active" aria-current="page">Enviar Documento</li>
         </ol>
       </div>
@@ -29,18 +30,18 @@
           <div class="card-header">
             <h3 class="card-title"><i class="bi bi-robot"></i> Upload para Resumo por IA</h3>
           </div>
-          <form method="POST" enctype="multipart/form-data">
+          <form method="POST" enctype="multipart/form-data" id="uploadForm">
             {{ form.hidden_tag() }}
             <div class="card-body">
               {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                  {% for category, message in messages %}
-                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                      <i class="bi bi-info-circle"></i> {{ message }}
-                      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
-                  {% endfor %}
-                {% endif %}
+              {% if messages %}
+              {% for category, message in messages %}
+              <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                <i class="bi bi-info-circle"></i> {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+              </div>
+              {% endfor %}
+              {% endif %}
               {% endwith %}
 
               <div class="alert alert-info">
@@ -59,11 +60,11 @@
                 <span class="text-danger">*</span>
                 {{ form.file(class="form-control", accept=".pdf,.docx,.doc,.txt") }}
                 {% if form.file.errors %}
-                  <div class="text-danger mt-1">
-                    {% for error in form.file.errors %}
-                      <small>{{ error }}</small><br>
-                    {% endfor %}
-                  </div>
+                <div class="text-danger mt-1">
+                  {% for error in form.file.errors %}
+                  <small>{{ error }}</small><br>
+                  {% endfor %}
+                </div>
                 {% endif %}
                 <small class="form-text text-muted">
                   Formatos aceitos: PDF, DOCX, TXT
@@ -72,7 +73,7 @@
 
               <div class="alert alert-warning">
                 <i class="bi bi-exclamation-triangle"></i>
-                <strong>Atenção:</strong> O resumo será gerado automaticamente após o upload. 
+                <strong>Atenção:</strong> O resumo será gerado automaticamente após o upload.
                 Este processo pode levar alguns minutos dependendo do tamanho do documento.
               </div>
             </div>
@@ -82,7 +83,15 @@
                 <a href="{{ url_for('tools.tools_document_summary_list') }}" class="btn btn-secondary">
                   <i class="bi bi-arrow-left"></i> Voltar
                 </a>
-                {{ form.submit(class="btn btn-primary") }}
+                <button type="submit" class="btn btn-primary" id="submitBtn">
+                  <span id="btnText">
+                    <i class="bi bi-cloud-upload"></i> {{ form.submit.label.text }}
+                  </span>
+                  <span id="btnLoading" style="display: none;">
+                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    Enviando e processando...
+                  </span>
+                </button>
               </div>
             </div>
           </form>
@@ -91,4 +100,28 @@
     </div>
   </div>
 </div>
+
+<script>
+  document.getElementById('uploadForm').addEventListener('submit', function (e) {
+    const submitBtn = document.getElementById('submitBtn');
+    const btnText = document.getElementById('btnText');
+    const btnLoading = document.getElementById('btnLoading');
+    const fileInput = document.querySelector('input[type="file"]');
+
+    // Validar se arquivo foi selecionado
+    if (!fileInput.files || fileInput.files.length === 0) {
+      e.preventDefault();
+      alert('Por favor, selecione um arquivo antes de enviar.');
+      return false;
+    }
+
+    // Desabilitar botão e mostrar loading
+    submitBtn.disabled = true;
+    btnText.style.display = 'none';
+    btnLoading.style.display = 'inline-block';
+
+    // Adicionar classe de loading
+    submitBtn.classList.add('disabled');
+  });
+</script>
 {% endblock %}

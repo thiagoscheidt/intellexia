@@ -1,5 +1,7 @@
 from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify
 from app.models import db, AiDocumentSummary
+from app.agents.file_agent import FileAgent
+from app.agents.agent_document_reader import AgentDocumentReader
 from datetime import datetime
 from functools import wraps
 from werkzeug.utils import secure_filename
@@ -72,7 +74,34 @@ def tools_document_summary_upload():
                 db.session.add(document)
                 db.session.commit()
                 
-                flash('Documento enviado com sucesso! O resumo será gerado em breve.', 'success')
+                # Processar com IA imediatamente
+                try:
+                    document.status = 'processing'
+                    db.session.commit()
+                    
+                    # Inicializar agentes
+                    file_agent = FileAgent()
+                    doc_reader = AgentDocumentReader()
+                    
+                    # Upload do arquivo para OpenAI
+                    file_id = file_agent.upload_file(os.path.abspath(file_path))
+                    
+                    # Analisar documento
+                    ai_summary = doc_reader.analyze_document(file_id)
+                    
+                    # Salvar resultado
+                    document.summary_text = ai_summary
+                    document.processed_at = datetime.utcnow()
+                    document.status = 'completed'
+                    db.session.commit()
+                    
+                    flash('Documento analisado com sucesso pela IA!', 'success')
+                except Exception as e:
+                    document.status = 'error'
+                    document.error_message = str(e)
+                    db.session.commit()
+                    flash(f'Erro ao analisar documento: {str(e)}', 'danger')
+                
                 return redirect(url_for('tools.tools_document_summary_detail', document_id=document.id))
                 
             except Exception as e:
@@ -116,3 +145,41 @@ def tools_document_summary_delete(document_id):
         flash(f'Erro ao excluir documento: {str(e)}', 'danger')
     
     return redirect(url_for('tools.tools_document_summary_list'))
+
+@tools_bp.route('/document-summary/<int:document_id>/reprocess', methods=['POST'])
+@require_law_firm
+def tools_document_summary_reprocess(document_id):
+    """Reprocessa um documento com a IA"""
+    law_firm_id = get_current_law_firm_id()
+    document = AiDocumentSummary.query.filter_by(
+        id=document_id,
+        law_firm_id=law_firm_id
+    ).first_or_404()
+    
+    try:
+        # Resetar status
+        document.status = 'processing'
+        document.error_message = None
+        db.session.commit()
+        
+        # Processar com IA
+        file_agent = FileAgent()
+        doc_reader = AgentDocumentReader()
+        
+        file_id = file_agent.upload_file(os.path.abspath(document.file_path))
+        ai_summary = doc_reader.analyze_document(file_id)
+        
+        # Atualizar documento
+        document.summary_text = ai_summary
+        document.processed_at = datetime.utcnow()
+        document.status = 'completed'
+        db.session.commit()
+        
+        flash('Documento reprocessado com sucesso!', 'success')
+    except Exception as e:
+        document.status = 'error'
+        document.error_message = str(e)
+        db.session.commit()
+        flash(f'Erro ao reprocessar documento: {str(e)}', 'danger')
+    
+    return redirect(url_for('tools.tools_document_summary_detail', document_id=document_id))

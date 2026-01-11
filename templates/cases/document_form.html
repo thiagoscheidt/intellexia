@@ -13,8 +13,10 @@
         <ol class="breadcrumb float-sm-end">
           <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
           <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_list') }}">Casos</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('cases.case_detail', case_id=case_id) }}">Caso #{{ case_id }}</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('documents.case_documents_list', case_id=case_id) }}">Documentos</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases.case_detail', case_id=case_id) }}">Caso #{{ case_id
+              }}</a></li>
+          <li class="breadcrumb-item"><a
+              href="{{ url_for('documents.case_documents_list', case_id=case_id) }}">Documentos</a></li>
           <li class="breadcrumb-item active" aria-current="page">{{ title }}</li>
         </ol>
       </div>
@@ -30,7 +32,7 @@
           <div class="card-header">
             <h3 class="card-title">{{ title }} - Caso #{{ case_id }}</h3>
           </div>
-          <form method="POST" action="" enctype="multipart/form-data">
+          <form method="POST" action="" enctype="multipart/form-data" id="uploadDocForm">
             {{ form.hidden_tag() }}
             <div class="card-body">
               <div class="alert alert-info">
@@ -44,9 +46,9 @@
                     {{ form.document_type.label(class="form-label") }}
                     {{ form.document_type(class="form-select" + (" is-invalid" if form.document_type.errors else "")) }}
                     {% if form.document_type.errors %}
-                      <div class="invalid-feedback">
-                        {% for error in form.document_type.errors %}{{ error }}{% endfor %}
-                      </div>
+                    <div class="invalid-feedback">
+                      {% for error in form.document_type.errors %}{{ error }}{% endfor %}
+                    </div>
                     {% endif %}
                     <small class="form-text text-muted">
                       Selecione o tipo de documento que está sendo enviado
@@ -60,7 +62,8 @@
                   <div class="mb-3">
                     {{ form.related_benefit_id.label(class="form-label") }}
                     {{ form.related_benefit_id(class="form-select") }}
-                    <small class="form-text text-muted">Opcional - selecione se o documento está relacionado a um benefício específico</small>
+                    <small class="form-text text-muted">Opcional - selecione se o documento está relacionado a um
+                      benefício específico</small>
                   </div>
                 </div>
               </div>
@@ -72,12 +75,13 @@
                     {{ form.file.label(class="form-label") }} <span class="text-danger">*</span>
                     {{ form.file(class="form-control" + (" is-invalid" if form.file.errors else "")) }}
                     {% if form.file.errors %}
-                      <div class="invalid-feedback">
-                        {% for error in form.file.errors %}{{ error }}{% endfor %}
-                      </div>
+                    <div class="invalid-feedback">
+                      {% for error in form.file.errors %}{{ error }}{% endfor %}
+                    </div>
                     {% endif %}
                     <small class="form-text text-muted">
-                      <i class="bi bi-info-circle"></i> Formatos aceitos: <strong>PDF, DOC, DOCX, JPG, JPEG, PNG</strong> (Tamanho máximo: 10MB)
+                      <i class="bi bi-info-circle"></i> Formatos aceitos: <strong>PDF, DOC, DOCX, JPG, JPEG,
+                        PNG</strong> (Tamanho máximo: 10MB)
                     </small>
                   </div>
                 </div>
@@ -87,7 +91,8 @@
                 <div class="col-md-12">
                   <div class="mb-3">
                     {{ form.description.label(class="form-label") }}
-                    {{ form.description(class="form-control", rows="3", placeholder="Ex: CAT referente ao acidente de trajeto do segurado João Silva em 15/03/2023") }}
+                    {{ form.description(class="form-control", rows="3", placeholder="Ex: CAT referente ao acidente de
+                    trajeto do segurado João Silva em 15/03/2023") }}
                     <small class="form-text text-muted">Descrição adicional sobre o documento (opcional)</small>
                   </div>
                 </div>
@@ -114,8 +119,17 @@
               </div>
             </div>
             <div class="card-footer">
-              {{ form.submit(class="btn btn-primary") }}
-              <a href="{{ url_for('documents.case_documents_list', case_id=case_id) }}" class="btn btn-secondary">Cancelar</a>
+              <button type="submit" class="btn btn-primary" id="submitDocBtn">
+                <span id="docBtnText">
+                  <i class="bi bi-cloud-upload"></i> {{ form.submit.label.text }}
+                </span>
+                <span id="docBtnLoading" style="display: none;">
+                  <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                  Enviando e processando...
+                </span>
+              </button>
+              <a href="{{ url_for('documents.case_documents_list', case_id=case_id) }}"
+                class="btn btn-secondary">Cancelar</a>
             </div>
           </form>
         </div>
@@ -123,4 +137,28 @@
     </div>
   </div>
 </div>
+
+<script>
+  document.getElementById('uploadDocForm').addEventListener('submit', function (e) {
+    const submitBtn = document.getElementById('submitDocBtn');
+    const btnText = document.getElementById('docBtnText');
+    const btnLoading = document.getElementById('docBtnLoading');
+    const fileInput = document.querySelector('input[type="file"]');
+
+    // Validar se arquivo foi selecionado
+    if (!fileInput.files || fileInput.files.length === 0) {
+      e.preventDefault();
+      alert('Por favor, selecione um arquivo antes de enviar.');
+      return false;
+    }
+
+    // Desabilitar botão e mostrar loading
+    submitBtn.disabled = true;
+    btnText.style.display = 'none';
+    btnLoading.style.display = 'inline-block';
+
+    // Adicionar classe de loading
+    submitBtn.classList.add('disabled');
+  });
+</script>
 {% endblock %}
