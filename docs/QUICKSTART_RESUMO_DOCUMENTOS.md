@@ -1,4 +1,4 @@
-# 🚀 Quick Start - Módulo Resumo de Documentos
+# 🚀 Quick Start - MóduloAnálise de Documentos
 
 ## ⚡ Início Rápido (3 passos)
 
@@ -44,17 +44,17 @@ python main.py
 
 ## 🎯 Funcionalidades
 
-| Funcionalidade | Status |
-|----------------|--------|
-| ✅ Upload de documentos | Implementado |
-| ✅ Lista de documentos | Implementado |
-| ✅ Visualização de detalhes | Implementado |
-| ✅ Exclusão de documentos | Implementado |
-| ✅ Sistema de status | Implementado |
-| ✅ Isolamento por escritório | Implementado |
-| ✅ Interface responsiva | Implementado |
-| ⏳ Resumo por IA | **NÃO implementado** |
-| ⏳ Processamento assíncrono | **NÃO implementado** |
+| Funcionalidade              | Status               |
+| --------------------------- | -------------------- |
+| ✅ Upload de documentos      | Implementado         |
+| ✅ Lista de documentos       | Implementado         |
+| ✅ Visualização de detalhes  | Implementado         |
+| ✅ Exclusão de documentos    | Implementado         |
+| ✅ Sistema de status         | Implementado         |
+| ✅ Isolamento por escritório | Implementado         |
+| ✅ Interface responsiva      | Implementado         |
+| ⏳ Resumo por IA             | **NÃO implementado** |
+| ⏳ Processamento assíncrono  | **NÃO implementado** |
 
 ---
 

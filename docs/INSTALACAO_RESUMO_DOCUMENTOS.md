@@ -1,4 +1,4 @@
-# 🚀 Guia de Instalação - Módulo Resumo de Documentos
+# 🚀 Guia de Instalação - MóduloAnálise de Documentos
 
 ## Passo a Passo para Ativar o Módulo
 

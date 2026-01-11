@@ -23,7 +23,7 @@
           </button>
         </div>
       </div>
-      
+
       <div class="card-body p-0 d-flex flex-column">
         <!-- Área de mensagens -->
         <div id="chat-messages" class="flex-grow-1 p-3 overflow-auto" style="max-height: calc(80vh - 140px);">
@@ -55,7 +55,7 @@
             </div>
           </div>
         </div>
-        
+
         <!-- Indicador de digitação -->
         <div id="typing-indicator" class="px-3 pb-2" style="display: none;">
           <div class="d-flex align-items-center">
@@ -70,18 +70,14 @@
             <small class="text-muted ms-2">Assistente está digitando...</small>
           </div>
         </div>
-        
+
         <!-- Área de input -->
         <div class="card-footer bg-light">
           <form id="chat-form" class="d-flex align-items-end">
             <div class="flex-grow-1 me-2">
-              <textarea 
-                id="user-message" 
-                class="form-control" 
-                placeholder="Digite sua pergunta sobre casos, clientes, benefícios..." 
-                rows="2" 
-                style="resize: none; max-height: 100px;"
-                onkeydown="handleKeyPress(event)"></textarea>
+              <textarea id="user-message" class="form-control"
+                placeholder="Digite sua pergunta sobre casos, clientes, benefícios..." rows="2"
+                style="resize: none; max-height: 100px;" onkeydown="handleKeyPress(event)"></textarea>
             </div>
             <div>
               <button type="submit" class="btn btn-primary" id="send-btn">
@@ -102,19 +98,24 @@
       <div class="card-body">
         <h6 class="card-title">💡 Sugestões de perguntas:</h6>
         <div class="d-flex flex-wrap gap-2">
-          <button class="btn btn-outline-primary btn-sm suggestion-btn" onclick="sendSuggestion('Quantos casos ativos temos?')">
+          <button class="btn btn-outline-primary btn-sm suggestion-btn"
+            onclick="sendSuggestion('Quantos casos ativos temos?')">
             📊 Quantos casos ativos temos?
           </button>
-          <button class="btn btn-outline-primary btn-sm suggestion-btn" onclick="sendSuggestion('Quais são os casos recentes?')">
+          <button class="btn btn-outline-primary btn-sm suggestion-btn"
+            onclick="sendSuggestion('Quais são os casos recentes?')">
             📋 Quais são os casos recentes?
           </button>
-          <button class="btn btn-outline-primary btn-sm suggestion-btn" onclick="sendSuggestion('Informações sobre casos FAP')">
+          <button class="btn btn-outline-primary btn-sm suggestion-btn"
+            onclick="sendSuggestion('Informações sobre casos FAP')">
             ⚖️ Informações sobre casos FAP
           </button>
-          <button class="btn btn-outline-primary btn-sm suggestion-btn" onclick="sendSuggestion('Tipos de casos no sistema')">
+          <button class="btn btn-outline-primary btn-sm suggestion-btn"
+            onclick="sendSuggestion('Tipos de casos no sistema')">
             📂 Tipos de casos no sistema
           </button>
-          <button class="btn btn-outline-primary btn-sm suggestion-btn" onclick="sendSuggestion('Estatísticas de clientes')">
+          <button class="btn btn-outline-primary btn-sm suggestion-btn"
+            onclick="sendSuggestion('Estatísticas de clientes')">
             👥 Estatísticas de clientes
           </button>
           <button class="btn btn-outline-primary btn-sm suggestion-btn" onclick="sendSuggestion('Ajuda')">
@@ -127,225 +128,230 @@
 </div>
 
 <style>
-.message-wrapper {
-  animation: messageSlideIn 0.3s ease-out;
-}
-
-@keyframes messageSlideIn {
-  from {
-    opacity: 0;
-    transform: translateY(10px);
+  .message-wrapper {
+    animation: messageSlideIn 0.3s ease-out;
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
+
+  @keyframes messageSlideIn {
+    from {
+      opacity: 0;
+      transform: translateY(10px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
   }
-}
 
-.message-bubble {
-  max-width: 85%;
-  padding: 12px 16px;
-  border-radius: 18px;
-  word-wrap: break-word;
-}
-
-.user-bubble {
-  background: linear-gradient(135deg, #007bff, #0056b3);
-  color: white;
-  margin-left: auto;
-  border-bottom-right-radius: 6px;
-}
-
-.assistant-bubble {
-  background: #f8f9fa;
-  border: 1px solid #e9ecef;
-  border-bottom-left-radius: 6px;
-  color: #212529;
-}
-
-.user-message {
-  justify-content: flex-end;
-  text-align: right;
-}
-
-.user-message .message-content {
-  display: flex;
-  justify-content: flex-end;
-}
-
-.assistant-message .message-content {
-  flex-grow: 1;
-}
-
-.message-time {
-  margin-top: 4px;
-  font-size: 0.75rem;
-}
-
-.avatar-sm {
-  width: 32px;
-  height: 32px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.avatar-wrapper {
-  width: 50px;
-  height: 50px;
-  background: rgba(255,255,255,0.1);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* Indicador de digitação */
-.typing-dots {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-  padding: 8px 12px;
-  background: #f8f9fa;
-  border-radius: 12px;
-  border: 1px solid #e9ecef;
-}
-
-.typing-dots span {
-  width: 6px;
-  height: 6px;
-  background: #6c757d;
-  border-radius: 50%;
-  animation: typingDots 1.4s infinite;
-}
-
-.typing-dots span:nth-child(2) {
-  animation-delay: 0.2s;
-}
-
-.typing-dots span:nth-child(3) {
-  animation-delay: 0.4s;
-}
-
-@keyframes typingDots {
-  0%, 60%, 100% {
-    transform: initial;
-    opacity: 0.3;
+  .message-bubble {
+    max-width: 85%;
+    padding: 12px 16px;
+    border-radius: 18px;
+    word-wrap: break-word;
   }
-  30% {
-    transform: translateY(-4px);
-    opacity: 1;
+
+  .user-bubble {
+    background: linear-gradient(135deg, #007bff, #0056b3);
+    color: white;
+    margin-left: auto;
+    border-bottom-right-radius: 6px;
   }
-}
 
-.suggestion-btn {
-  transition: all 0.2s ease;
-  border-radius: 20px;
-}
+  .assistant-bubble {
+    background: #f8f9fa;
+    border: 1px solid #e9ecef;
+    border-bottom-left-radius: 6px;
+    color: #212529;
+  }
 
-.suggestion-btn:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 2px 8px rgba(0,123,255,0.3);
-}
+  .user-message {
+    justify-content: flex-end;
+    text-align: right;
+  }
 
-#chat-messages {
-  scroll-behavior: smooth;
-}
+  .user-message .message-content {
+    display: flex;
+    justify-content: flex-end;
+  }
 
-#chat-messages::-webkit-scrollbar {
-  width: 6px;
-}
+  .assistant-message .message-content {
+    flex-grow: 1;
+  }
 
-#chat-messages::-webkit-scrollbar-track {
-  background: #f1f1f1;
-  border-radius: 10px;
-}
+  .message-time {
+    margin-top: 4px;
+    font-size: 0.75rem;
+  }
 
-#chat-messages::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
-  border-radius: 10px;
-}
+  .avatar-sm {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
 
-#chat-messages::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
-}
+  .avatar-wrapper {
+    width: 50px;
+    height: 50px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
 
-.message-text ul {
-  margin-bottom: 0;
-  padding-left: 20px;
-}
+  /* Indicador de digitação */
+  .typing-dots {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border-radius: 12px;
+    border: 1px solid #e9ecef;
+  }
 
-.message-text li {
-  margin-bottom: 4px;
-}
+  .typing-dots span {
+    width: 6px;
+    height: 6px;
+    background: #6c757d;
+    border-radius: 50%;
+    animation: typingDots 1.4s infinite;
+  }
 
-#user-message:focus {
-  border-color: #007bff;
-  box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.25);
-}
+  .typing-dots span:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  .typing-dots span:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+
+  @keyframes typingDots {
+
+    0%,
+    60%,
+    100% {
+      transform: initial;
+      opacity: 0.3;
+    }
+
+    30% {
+      transform: translateY(-4px);
+      opacity: 1;
+    }
+  }
+
+  .suggestion-btn {
+    transition: all 0.2s ease;
+    border-radius: 20px;
+  }
+
+  .suggestion-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
+  }
+
+  #chat-messages {
+    scroll-behavior: smooth;
+  }
+
+  #chat-messages::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  #chat-messages::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+  }
+
+  #chat-messages::-webkit-scrollbar-thumb {
+    background: #c1c1c1;
+    border-radius: 10px;
+  }
+
+  #chat-messages::-webkit-scrollbar-thumb:hover {
+    background: #a8a8a8;
+  }
+
+  .message-text ul {
+    margin-bottom: 0;
+    padding-left: 20px;
+  }
+
+  .message-text li {
+    margin-bottom: 4px;
+  }
+
+  #user-message:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+  }
 </style>
 
 <script>
-let isWaitingResponse = false;
+  let isWaitingResponse = false;
 
-document.getElementById('chat-form').addEventListener('submit', async function(e) {
-  e.preventDefault();
-  
-  if (isWaitingResponse) return;
-  
-  const messageInput = document.getElementById('user-message');
-  const message = messageInput.value.trim();
-  
-  if (!message) return;
-  
-  // Adicionar mensagem do usuário
-  addUserMessage(message);
-  messageInput.value = '';
-  
-  // Mostrar indicador de digitação
-  showTypingIndicator();
-  
-  try {
-    isWaitingResponse = true;
-    const response = await fetch('/api/assistente-juridico', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ message: message })
-    });
-    
-    const data = await response.json();
-    
-    if (response.ok) {
-      // Remover indicador de digitação
+  document.getElementById('chat-form').addEventListener('submit', async function (e) {
+    e.preventDefault();
+
+    if (isWaitingResponse) return;
+
+    const messageInput = document.getElementById('user-message');
+    const message = messageInput.value.trim();
+
+    if (!message) return;
+
+    // Adicionar mensagem do usuário
+    addUserMessage(message);
+    messageInput.value = '';
+
+    // Mostrar indicador de digitação
+    showTypingIndicator();
+
+    try {
+      isWaitingResponse = true;
+      const response = await fetch('/assistente-juridico/api', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ message: message })
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        // Remover indicador de digitação
+        hideTypingIndicator();
+
+        // Adicionar resposta da IA
+        setTimeout(() => {
+          addAssistantMessage(data.response);
+        }, 500);
+      } else {
+        hideTypingIndicator();
+        addAssistantMessage('❌ Desculpe, ocorreu um erro: ' + (data.error || 'Erro desconhecido'));
+      }
+    } catch (error) {
       hideTypingIndicator();
-      
-      // Adicionar resposta da IA
-      setTimeout(() => {
-        addAssistantMessage(data.response);
-      }, 500);
-    } else {
-      hideTypingIndicator();
-      addAssistantMessage('❌ Desculpe, ocorreu um erro: ' + (data.error || 'Erro desconhecido'));
+      addAssistantMessage('❌ Erro de conexão. Tente novamente.');
+    } finally {
+      isWaitingResponse = false;
     }
-  } catch (error) {
-    hideTypingIndicator();
-    addAssistantMessage('❌ Erro de conexão. Tente novamente.');
-  } finally {
-    isWaitingResponse = false;
-  }
-});
+  });
 
-function addUserMessage(message) {
-  const chatMessages = document.getElementById('chat-messages');
-  const now = new Date();
-  const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-  
-  const messageDiv = document.createElement('div');
-  messageDiv.className = 'message-wrapper user-message mb-3';
-  messageDiv.innerHTML = `
+  function addUserMessage(message) {
+    const chatMessages = document.getElementById('chat-messages');
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message-wrapper user-message mb-3';
+    messageDiv.innerHTML = `
     <div class="message-content">
       <div class="message-bubble user-bubble">
         <div class="message-text">${escapeHtml(message)}</div>
@@ -355,19 +361,19 @@ function addUserMessage(message) {
       </div>
     </div>
   `;
-  
-  chatMessages.appendChild(messageDiv);
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-}
 
-function addAssistantMessage(message) {
-  const chatMessages = document.getElementById('chat-messages');
-  const now = new Date();
-  const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-  
-  const messageDiv = document.createElement('div');
-  messageDiv.className = 'message-wrapper assistant-message mb-3';
-  messageDiv.innerHTML = `
+    chatMessages.appendChild(messageDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
+
+  function addAssistantMessage(message) {
+    const chatMessages = document.getElementById('chat-messages');
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+
+    const messageDiv = document.createElement('div');
+    messageDiv.className = 'message-wrapper assistant-message mb-3';
+    messageDiv.innerHTML = `
     <div class="d-flex">
       <div class="avatar-sm me-2">
         <i class="bi bi-robot text-primary fs-4"></i>
@@ -382,44 +388,44 @@ function addAssistantMessage(message) {
       </div>
     </div>
   `;
-  
-  chatMessages.appendChild(messageDiv);
-  chatMessages.scrollTop = chatMessages.scrollHeight;
-}
 
-function formatMessage(message) {
-  // Converter markdown simples para HTML
-  return message
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/\n/g, '<br>')
-    .replace(/•/g, '&bull;');
-}
+    chatMessages.appendChild(messageDiv);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+  }
 
-function showTypingIndicator() {
-  document.getElementById('typing-indicator').style.display = 'block';
-  document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight;
-}
+  function formatMessage(message) {
+    // Converter markdown simples para HTML
+    return message
+      .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(.*?)\*/g, '<em>$1</em>')
+      .replace(/\n/g, '<br>')
+      .replace(/•/g, '&bull;');
+  }
 
-function hideTypingIndicator() {
-  document.getElementById('typing-indicator').style.display = 'none';
-}
+  function showTypingIndicator() {
+    document.getElementById('typing-indicator').style.display = 'block';
+    document.getElementById('chat-messages').scrollTop = document.getElementById('chat-messages').scrollHeight;
+  }
 
-function handleKeyPress(event) {
-  if (event.key === 'Enter' && !event.shiftKey) {
-    event.preventDefault();
+  function hideTypingIndicator() {
+    document.getElementById('typing-indicator').style.display = 'none';
+  }
+
+  function handleKeyPress(event) {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      document.getElementById('chat-form').dispatchEvent(new Event('submit'));
+    }
+  }
+
+  function sendSuggestion(message) {
+    document.getElementById('user-message').value = message;
     document.getElementById('chat-form').dispatchEvent(new Event('submit'));
   }
-}
 
-function sendSuggestion(message) {
-  document.getElementById('user-message').value = message;
-  document.getElementById('chat-form').dispatchEvent(new Event('submit'));
-}
-
-function clearChat() {
-  const chatMessages = document.getElementById('chat-messages');
-  chatMessages.innerHTML = `
+  function clearChat() {
+    const chatMessages = document.getElementById('chat-messages');
+    chatMessages.innerHTML = `
     <div class="message-wrapper assistant-message mb-3">
       <div class="d-flex">
         <div class="avatar-sm me-2">
@@ -439,33 +445,33 @@ function clearChat() {
       </div>
     </div>
   `;
-}
-
-function escapeHtml(text) {
-  const map = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#039;'
-  };
-  return text.replace(/[&<>"']/g, function(m) { return map[m]; });
-}
-
-// Auto-resize textarea
-document.getElementById('user-message').addEventListener('input', function() {
-  this.style.height = 'auto';
-  this.style.height = Math.min(this.scrollHeight, 100) + 'px';
-});
-
-// Definir horário da mensagem de boas-vindas
-document.addEventListener('DOMContentLoaded', function() {
-  const welcomeTime = document.getElementById('welcome-time');
-  if (welcomeTime) {
-    const now = new Date();
-    const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-    welcomeTime.textContent = timeStr;
   }
-});
+
+  function escapeHtml(text) {
+    const map = {
+      '&': '&amp;',
+      '<': '&lt;',
+      '>': '&gt;',
+      '"': '&quot;',
+      "'": '&#039;'
+    };
+    return text.replace(/[&<>"']/g, function (m) { return map[m]; });
+  }
+
+  // Auto-resize textarea
+  document.getElementById('user-message').addEventListener('input', function () {
+    this.style.height = 'auto';
+    this.style.height = Math.min(this.scrollHeight, 100) + 'px';
+  });
+
+  // Definir horário da mensagem de boas-vindas
+  document.addEventListener('DOMContentLoaded', function () {
+    const welcomeTime = document.getElementById('welcome-time');
+    if (welcomeTime) {
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      welcomeTime.textContent = timeStr;
+    }
+  });
 </script>
 {% endblock %}

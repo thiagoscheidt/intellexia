@@ -72,15 +72,15 @@ def case_petition_generate(case_id):
             documents = Document.query.filter_by(case_id=case_id, use_in_ai=True, ai_status='completed').all()
             
             context_summary = f"""
-Contexto da Petição - Versão {next_version} {"(Com Modelo)" if use_template else "(Padrão)"}:
-- Cliente: {case.client.name if case.client else 'Não informado'}
-- Tipo de Caso: {case.case_type}
-- Total de Benefícios: {len(benefits)}
-- Total de Documentos Analisados: {len(documents)}
-- Valor da Causa: R$ {case.value_cause if case.value_cause else 'Não informado'}
-- Modelo Usado: {filename if use_template else 'Template padrão'}
-- Sistema: Intellexia - Geração com IA v2.0
-"""
+                Contexto da Petição - Versão {next_version} {"(Com Modelo)" if use_template else "(Padrão)"}:
+                - Cliente: {case.client.name if case.client else 'Não informado'}
+                - Tipo de Caso: {case.case_type}
+                - Total de Benefícios: {len(benefits)}
+                - Total de Documentos Analisados: {len(documents)}
+                - Valor da Causa: R$ {case.value_cause if case.value_cause else 'Não informado'}
+                - Modelo Usado: {filename if use_template else 'Template padrão'}
+                - Sistema: Intellexia - Geração com IA v2.0
+                """
             
             petition = Petition(
                 case_id=case_id,

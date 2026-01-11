@@ -1,4 +1,4 @@
-# 🗺️ Arquitetura do Módulo Resumo de Documentos
+# 🗺️ Arquitetura do MóduloAnálise de Documentos
 
 ## 📐 Fluxo de Dados
 

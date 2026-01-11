@@ -1,4 +1,4 @@
-# Módulo de Resumo de Documentos por IA
+# Módulo deAnálise de Documentos por IA
 
 ## 📋 Descrição
 
@@ -41,21 +41,21 @@ Este módulo permite que usuários façam upload de documentos (PDF, DOCX, TXT) 
 
 ### Tabela: `ai_document_summaries`
 
-| Campo | Tipo | Descrição |
-|-------|------|-----------|
-| id | Integer | Chave primária |
-| user_id | Integer | FK para usuário que enviou |
-| law_firm_id | Integer | FK para escritório |
-| original_filename | String(255) | Nome original do arquivo |
-| file_path | String(500) | Caminho do arquivo no servidor |
-| file_size | Integer | Tamanho em bytes |
-| file_type | String(50) | Tipo do arquivo (PDF, DOCX, TXT) |
-| status | String(20) | Status: pending, processing, completed, error |
-| summary_text | Text | Resumo gerado pela IA |
-| error_message | Text | Mensagem de erro (se houver) |
-| processed_at | DateTime | Data/hora do processamento |
-| uploaded_at | DateTime | Data/hora do upload |
-| updated_at | DateTime | Data/hora da última atualização |
+| Campo             | Tipo        | Descrição                                     |
+| ----------------- | ----------- | --------------------------------------------- |
+| id                | Integer     | Chave primária                                |
+| user_id           | Integer     | FK para usuário que enviou                    |
+| law_firm_id       | Integer     | FK para escritório                            |
+| original_filename | String(255) | Nome original do arquivo                      |
+| file_path         | String(500) | Caminho do arquivo no servidor                |
+| file_size         | Integer     | Tamanho em bytes                              |
+| file_type         | String(50)  | Tipo do arquivo (PDF, DOCX, TXT)              |
+| status            | String(20)  | Status: pending, processing, completed, error |
+| summary_text      | Text        | Resumo gerado pela IA                         |
+| error_message     | Text        | Mensagem de erro (se houver)                  |
+| processed_at      | DateTime    | Data/hora do processamento                    |
+| uploaded_at       | DateTime    | Data/hora do upload                           |
+| updated_at        | DateTime    | Data/hora da última atualização               |
 
 ## 📁 Estrutura de Arquivos
 

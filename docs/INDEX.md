@@ -24,7 +24,7 @@ Bem-vindo à documentação do **IntellexIA**! Aqui você encontrará guias, tut
 - **[INSTRUCOES_PARA_IA.md](INSTRUCOES_PARA_IA.md)** - Guia para integração com IA
 
 ### Instalação e Setup
-- **[INSTALACAO_RESUMO_DOCUMENTOS.md](INSTALACAO_RESUMO_DOCUMENTOS.md)** - Instalação e configuração de resumo de documentos
+- **[INSTALACAO_RESUMO_DOCUMENTOS.md](INSTALACAO_RESUMO_DOCUMENTOS.md)** - Instalação e configuração deAnálise de Documentos
 - **[QUICKSTART_RESUMO_DOCUMENTOS.md](QUICKSTART_RESUMO_DOCUMENTOS.md)** - Início rápido com resumos
 
 ### Resumos
