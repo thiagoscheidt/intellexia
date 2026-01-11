@@ -21,7 +21,7 @@
       <div class="small-box-icon">
         <i class="bi bi-briefcase-fill"></i>
       </div>
-      <a href="{{ url_for('cases_list') }}" class="small-box-footer">
+      <a href="{{ url_for('cases.cases_list') }}" class="small-box-footer">
         Ver todos <i class="bi bi-arrow-right-circle-fill"></i>
       </a>
     </div>
@@ -36,7 +36,7 @@
       <div class="small-box-icon">
         <i class="bi bi-check-circle-fill"></i>
       </div>
-      <a href="{{ url_for('cases_list') }}" class="small-box-footer">
+      <a href="{{ url_for('cases.cases_list') }}" class="small-box-footer">
         Ver ativos <i class="bi bi-arrow-right-circle-fill"></i>
       </a>
     </div>
@@ -51,7 +51,7 @@
       <div class="small-box-icon">
         <i class="bi bi-people-fill"></i>
       </div>
-      <a href="{{ url_for('clients_list') }}" class="small-box-footer">
+      <a href="{{ url_for('clients.clients_list') }}" class="small-box-footer">
         Ver clientes <i class="bi bi-arrow-right-circle-fill"></i>
       </a>
     </div>
@@ -66,7 +66,7 @@
       <div class="small-box-icon">
         <i class="bi bi-shield-check-fill"></i>
       </div>
-      <a href="{{ url_for('benefits_list') }}" class="small-box-footer">
+      <a href="{{ url_for('benefits.benefits_list') }}" class="small-box-footer">
         Ver benefícios <i class="bi bi-arrow-right-circle-fill"></i>
       </a>
     </div>
@@ -169,7 +169,7 @@
                 </td>
                 <td>{{ case.created_at.strftime('%d/%m/%Y') if case.created_at else '-' }}</td>
                 <td>
-                  <a href="{{ url_for('case_detail', case_id=case.id) }}" class="btn btn-sm btn-outline-primary">
+                  <a href="{{ url_for('cases.case_detail', case_id=case.id) }}" class="btn btn-sm btn-outline-primary">
                     <i class="bi bi-eye"></i>
                   </a>
                 </td>
@@ -180,7 +180,7 @@
         </div>
         {% else %}
         <div class="alert alert-info">
-          <p class="mb-0">Nenhum caso encontrado. <a href="{{ url_for('case_new') }}">Criar primeiro caso</a></p>
+          <p class="mb-0">Nenhum caso encontrado. <a href="{{ url_for('cases.case_new') }}">Criar primeiro caso</a></p>
         </div>
         {% endif %}
       </div>
@@ -197,23 +197,23 @@
       </div>
       <div class="card-body">
         <div class="d-grid gap-2">
-          <a href="{{ url_for('case_new') }}" class="btn btn-primary">
+          <a href="{{ url_for('cases.case_new') }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-2"></i>Novo Caso
           </a>
-          <a href="{{ url_for('legal_assistant') }}" class="btn btn-success">
+          <a href="{{ url_for('assistant.legal_assistant') }}" class="btn btn-success">
             <i class="bi bi-robot me-2"></i>Assistente Jurídico
           </a>
-          <a href="{{ url_for('client_new') }}" class="btn btn-outline-primary">
+          <a href="{{ url_for('clients.client_new') }}" class="btn btn-outline-primary">
             <i class="bi bi-building-add me-2"></i>Novo Cliente
           </a>
-          <a href="{{ url_for('lawyer_new') }}" class="btn btn-outline-secondary">
+          <a href="{{ url_for('lawyers.lawyer_new') }}" class="btn btn-outline-secondary">
             <i class="bi bi-person-plus me-2"></i>Novo Advogado
           </a>
           <hr>
-          <a href="{{ url_for('cases_list') }}" class="btn btn-light">
+          <a href="{{ url_for('cases.cases_list') }}" class="btn btn-light">
             <i class="bi bi-list-ul me-2"></i>Todos os Casos
           </a>
-          <a href="{{ url_for('clients_list') }}" class="btn btn-light">
+          <a href="{{ url_for('clients.clients_list') }}" class="btn btn-light">
             <i class="bi bi-people me-2"></i>Todos os Clientes
           </a>
         </div>

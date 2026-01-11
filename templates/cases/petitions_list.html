@@ -11,9 +11,9 @@
       </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
-          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('cases_list') }}">Casos</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('case_detail', case_id=case_id) }}">Caso #{{ case_id }}</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_list') }}">Casos</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases.case_detail', case_id=case_id) }}">Caso #{{ case_id }}</a></li>
           <li class="breadcrumb-item active" aria-current="page">Petições</li>
         </ol>
       </div>
@@ -29,10 +29,10 @@
           <div class="card-header bg-info text-white">
             <h3 class="card-title"><i class="bi bi-robot"></i> Petições Geradas com IA</h3>
             <div class="card-tools">
-              <a href="{{ url_for('case_detail', case_id=case_id) }}" class="btn btn-sm btn-light">
+              <a href="{{ url_for('cases.case_detail', case_id=case_id) }}" class="btn btn-sm btn-light">
                 <i class="bi bi-arrow-left"></i> Voltar ao Caso
               </a>
-              <a href="{{ url_for('case_petition_generate', case_id=case_id) }}" class="btn btn-sm btn-warning">
+              <a href="{{ url_for('petitions.case_petition_generate', case_id=case_id) }}" class="btn btn-sm btn-warning">
                 <i class="bi bi-magic"></i> Gerar Nova Petição
               </a>
             </div>
@@ -96,13 +96,13 @@
                       {% endif %}
                     </td>
                     <td>
-                      <a href="{{ url_for('case_petition_view', case_id=case_id, petition_id=petition.id) }}" class="btn btn-sm btn-info" title="Visualizar">
+                      <a href="{{ url_for('petitions.case_petition_view', case_id=case_id, petition_id=petition.id) }}" class="btn btn-sm btn-info" title="Visualizar">
                         <i class="bi bi-eye"></i>
                       </a>
                       <button class="btn btn-sm btn-success" onclick="copyPetitionLink({{ petition.id }})" title="Copiar Link">
                         <i class="bi bi-link-45deg"></i>
                       </button>
-                      <form action="{{ url_for('case_petition_delete', case_id=case_id, petition_id=petition.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Tem certeza que deseja excluir esta petição?');">
+                      <form action="{{ url_for('petitions.case_petition_delete', case_id=case_id, petition_id=petition.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Tem certeza que deseja excluir esta petição?');">
                         <button type="submit" class="btn btn-sm btn-danger" title="Excluir">
                           <i class="bi bi-trash"></i>
                         </button>
@@ -119,7 +119,7 @@
               <p class="mb-0 mt-2">Clique no botão abaixo para gerar sua primeira petição com IA!</p>
             </div>
             <div class="text-center">
-              <a href="{{ url_for('case_petition_generate', case_id=case_id) }}" class="btn btn-warning btn-lg">
+              <a href="{{ url_for('petitions.case_petition_generate', case_id=case_id) }}" class="btn btn-warning btn-lg">
                 <i class="bi bi-magic"></i> Gerar Primeira Petição com IA
               </a>
             </div>
@@ -133,7 +133,7 @@
 
 <script>
 function copyPetitionLink(petitionId) {
-  const url = window.location.origin + "{{ url_for('case_petition_view', case_id=case_id, petition_id=0) }}".replace('/0', '/' + petitionId);
+  const url = window.location.origin + "{{ url_for('petitions.case_petition_view', case_id=case_id, petition_id=0) }}".replace('/0', '/' + petitionId);
   navigator.clipboard.writeText(url).then(() => {
     alert('Link copiado para a área de transferência!');
   }).catch(err => {

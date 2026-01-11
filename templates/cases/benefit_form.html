@@ -11,10 +11,10 @@
       </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
-          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('cases_list') }}">Casos</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('case_detail', case_id=case.id) }}">{{ case.title }}</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('case_benefits_list', case_id=case.id) }}">Benefícios</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_list') }}">Casos</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases.case_detail', case_id=case.id) }}">{{ case.title }}</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('benefits.case_benefits_list', case_id=case.id) }}">Benefícios</a></li>
           <li class="breadcrumb-item active" aria-current="page">{{ title }}</li>
         </ol>
       </div>
@@ -53,7 +53,7 @@
           <div class="card-header">
             <h3 class="card-title">{{ title }}</h3>
             <div class="card-tools">
-              <a href="{{ url_for('case_benefits_list', case_id=case.id) }}" class="btn btn-secondary">
+              <a href="{{ url_for('benefits.case_benefits_list', case_id=case.id) }}" class="btn btn-secondary">
                 <i class="bi bi-arrow-left"></i> Voltar para Lista
               </a>
             </div>
@@ -197,7 +197,7 @@
                 <i class="bi bi-check-circle"></i>
                 {% if benefit_id %}Atualizar Benefício{% else %}Cadastrar Benefício{% endif %}
               </button>
-              <a href="{{ url_for('case_benefits_list', case_id=case.id) }}" class="btn btn-secondary ms-2">
+              <a href="{{ url_for('benefits.case_benefits_list', case_id=case.id) }}" class="btn btn-secondary ms-2">
                 <i class="bi bi-x-circle"></i> Cancelar
               </a>
             </div>

@@ -11,9 +11,9 @@
       </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
-          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('cases_list') }}">Casos</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('case_detail', case_id=case_id) }}">Caso #{{ case_id }}</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_list') }}">Casos</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases.case_detail', case_id=case_id) }}">Caso #{{ case_id }}</a></li>
           <li class="breadcrumb-item active" aria-current="page">Gerar Petição</li>
         </ol>
       </div>
@@ -111,7 +111,7 @@
             </div>
           </div>
           <div class="card-footer">
-            <form method="POST" action="{{ url_for('case_petition_generate', case_id=case_id) }}" 
+            <form method="POST" action="{{ url_for('petitions.case_petition_generate', case_id=case_id) }}" 
                   enctype="multipart/form-data" id="petition-form">
               
               <!-- Template upload section dentro do form -->
@@ -137,7 +137,7 @@
               <button type="submit" class="btn btn-warning btn-lg" id="generate-btn">
                 <i class="bi bi-magic"></i> Gerar Petição Versão {{ next_version }}
               </button>
-              <a href="{{ url_for('case_detail', case_id=case_id) }}" class="btn btn-secondary btn-lg">
+              <a href="{{ url_for('cases.case_detail', case_id=case_id) }}" class="btn btn-secondary btn-lg">
                 <i class="bi bi-x-circle"></i> Cancelar
               </a>
             </form>

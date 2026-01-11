@@ -11,10 +11,10 @@
       </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
-          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('cases_list') }}">Casos</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('case_detail', case_id=case_id) }}">Caso #{{ case_id }}</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('case_petitions_list', case_id=case_id) }}">Petições</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_list') }}">Casos</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases.case_detail', case_id=case_id) }}">Caso #{{ case_id }}</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('petitions.case_petitions_list', case_id=case_id) }}">Petições</a></li>
           <li class="breadcrumb-item active" aria-current="page">v{{ petition.version }}</li>
         </ol>
       </div>
@@ -48,7 +48,7 @@
                 </div>
                 
                 <div class="text-center mb-4">
-                  <a href="{{ url_for('case_petition_download', case_id=case_id, petition_id=petition.id) }}" class="btn btn-primary btn-lg">
+                  <a href="{{ url_for('petitions.case_petition_download', case_id=case_id, petition_id=petition.id) }}" class="btn btn-primary btn-lg">
                     <i class="bi bi-download"></i> Baixar Documento DOCX
                   </a>
                 </div>
@@ -98,10 +98,10 @@
             <button class="btn btn-success" onclick="copyToClipboard()">
               <i class="bi bi-clipboard"></i> Copiar Texto
             </button>
-            <a href="{{ url_for('case_petitions_list', case_id=case_id) }}" class="btn btn-secondary">
+            <a href="{{ url_for('petitions.case_petitions_list', case_id=case_id) }}" class="btn btn-secondary">
               <i class="bi bi-arrow-left"></i> Voltar
             </a>
-            <form action="{{ url_for('case_petition_delete', case_id=case_id, petition_id=petition.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Tem certeza que deseja excluir esta petição?');">
+            <form action="{{ url_for('petitions.case_petition_delete', case_id=case_id, petition_id=petition.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Tem certeza que deseja excluir esta petição?');">
               <button type="submit" class="btn btn-danger">
                 <i class="bi bi-trash"></i> Excluir
               </button>
@@ -138,7 +138,7 @@
               <dd>{{ petition.generated_at.strftime('%d/%m/%Y às %H:%M') if petition.generated_at else '-' }}</dd>
 
               <dt>Caso:</dt>
-              <dd><a href="{{ url_for('case_detail', case_id=case_id) }}">{{ case.title }}</a></dd>
+              <dd><a href="{{ url_for('cases.case_detail', case_id=case_id) }}">{{ case.title }}</a></dd>
             </dl>
           </div>
         </div>
@@ -188,10 +188,10 @@
           </div>
           <div class="card-body">
             <div class="d-grid gap-2">
-              <a href="{{ url_for('case_petition_generate', case_id=case_id) }}" class="btn btn-warning">
+              <a href="{{ url_for('petitions.case_petition_generate', case_id=case_id) }}" class="btn btn-warning">
                 <i class="bi bi-magic"></i> Gerar Nova Versão
               </a>
-              <a href="{{ url_for('case_detail', case_id=case_id) }}" class="btn btn-outline-primary">
+              <a href="{{ url_for('cases.case_detail', case_id=case_id) }}" class="btn btn-outline-primary">
                 <i class="bi bi-arrow-left"></i> Voltar ao Caso
               </a>
             </div>

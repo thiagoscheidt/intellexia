@@ -11,8 +11,8 @@
       </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
-          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('clients_list') }}">Clientes</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('clients.clients_list') }}">Clientes</a></li>
           <li class="breadcrumb-item active" aria-current="page">{{ client.name }}</li>
         </ol>
       </div>
@@ -188,7 +188,7 @@
             <h3 class="card-title"><i class="bi bi-briefcase"></i> Casos do Cliente</h3>
             <div class="card-tools">
               <span class="badge bg-info">{{ client_cases|length }} caso(s)</span>
-              <a href="{{ url_for('case_new') }}?client_id={{ client.id }}" class="btn btn-primary btn-sm ms-2">
+              <a href="{{ url_for('cases.case_new') }}?client_id={{ client.id }}" class="btn btn-primary btn-sm ms-2">
                 <i class="bi bi-plus-circle"></i> Novo Caso
               </a>
             </div>
@@ -213,7 +213,7 @@
                     <tr>
                       <td><strong>{{ case.id }}</strong></td>
                       <td>
-                        <a href="{{ url_for('case_detail', case_id=case.id) }}" class="text-decoration-none">
+                        <a href="{{ url_for('cases.case_detail', case_id=case.id) }}" class="text-decoration-none">
                           <strong>{{ case.title }}</strong>
                         </a>
                       </td>
@@ -255,10 +255,10 @@
                       </td>
                       <td class="text-center">
                         <div class="btn-group" role="group">
-                          <a href="{{ url_for('case_detail', case_id=case.id) }}" class="btn btn-sm btn-info" title="Ver Caso">
+                          <a href="{{ url_for('cases.case_detail', case_id=case.id) }}" class="btn btn-sm btn-info" title="Ver Caso">
                             <i class="bi bi-eye"></i>
                           </a>
-                          <a href="{{ url_for('case_documents_list', case_id=case.id) }}" class="btn btn-sm btn-secondary" title="Documentos">
+                          <a href="{{ url_for('documents.case_documents_list', case_id=case.id) }}" class="btn btn-sm btn-secondary" title="Documentos">
                             <i class="bi bi-file-earmark-text"></i>
                           </a>
                         </div>
@@ -272,7 +272,7 @@
               <div class="alert alert-info mb-0">
                 <h6><i class="bi bi-info-circle"></i> Nenhum caso cadastrado</h6>
                 <p class="mb-2">Este cliente ainda não possui casos jurídicos cadastrados.</p>
-                <a href="{{ url_for('case_new') }}?client_id={{ client.id }}" class="btn btn-primary btn-sm">
+                <a href="{{ url_for('cases.case_new') }}?client_id={{ client.id }}" class="btn btn-primary btn-sm">
                   <i class="bi bi-plus-circle"></i> Criar Primeiro Caso
                 </a>
               </div>
@@ -286,13 +286,13 @@
     <div class="row mt-4">
       <div class="col-12">
         <div class="d-flex gap-2">
-          <a href="{{ url_for('clients_list') }}" class="btn btn-secondary">
+          <a href="{{ url_for('clients.clients_list') }}" class="btn btn-secondary">
             <i class="bi bi-arrow-left"></i> Voltar à Lista
           </a>
-          <a href="{{ url_for('client_edit', client_id=client.id) }}" class="btn btn-warning">
+          <a href="{{ url_for('clients.client_edit', client_id=client.id) }}" class="btn btn-warning">
             <i class="bi bi-pencil"></i> Editar Cliente
           </a>
-          <a href="{{ url_for('case_new') }}?client_id={{ client.id }}" class="btn btn-primary">
+          <a href="{{ url_for('cases.case_new') }}?client_id={{ client.id }}" class="btn btn-primary">
             <i class="bi bi-plus-circle"></i> Novo Caso
           </a>
         </div>

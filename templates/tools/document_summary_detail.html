@@ -11,9 +11,9 @@
       </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
-          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
           <li class="breadcrumb-item"><a href="#">Ferramentas</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('tools_document_summary_list') }}">Resumo de Documentos</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('tools.tools_document_summary_list') }}">Resumo de Documentos</a></li>
           <li class="breadcrumb-item active" aria-current="page">Detalhes</li>
         </ol>
       </div>
@@ -112,7 +112,7 @@
 
             <div class="d-grid gap-2">
               <form method="POST" 
-                    action="{{ url_for('tools_document_summary_delete', document_id=document.id) }}" 
+                    action="{{ url_for('tools.tools_document_summary_delete', document_id=document.id) }}" 
                     onsubmit="return confirm('Tem certeza que deseja excluir este documento?');">
                 <button type="submit" class="btn btn-danger w-100">
                   <i class="bi bi-trash"></i> Excluir Documento
@@ -188,7 +188,7 @@
 
     <div class="row mt-3">
       <div class="col-12">
-        <a href="{{ url_for('tools_document_summary_list') }}" class="btn btn-secondary">
+        <a href="{{ url_for('tools.tools_document_summary_list') }}" class="btn btn-secondary">
           <i class="bi bi-arrow-left"></i> Voltar para Lista
         </a>
       </div>

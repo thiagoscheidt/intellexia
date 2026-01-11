@@ -11,8 +11,8 @@
       </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
-          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('cases_list') }}">Casos</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_list') }}">Casos</a></li>
           <li class="breadcrumb-item active" aria-current="page">Detalhes</li>
         </ol>
       </div>
@@ -29,7 +29,7 @@
           <div class="card-header">
             <h3 class="card-title">Informações do Caso</h3>
             <div class="card-tools">
-              <a href="{{ url_for('case_edit', case_id=case_id) }}" class="btn btn-sm btn-primary">
+              <a href="{{ url_for('cases.case_edit', case_id=case_id) }}" class="btn btn-sm btn-primary">
                 <i class="bi bi-pencil"></i> Editar
               </a>
             </div>
@@ -124,10 +124,10 @@
           <div class="card-header">
             <h3 class="card-title">Benefícios</h3>
             <div class="card-tools">
-              <a href="{{ url_for('case_benefits_list', case_id=case_id) }}" class="btn btn-sm btn-info">
+              <a href="{{ url_for('benefits.case_benefits_list', case_id=case_id) }}" class="btn btn-sm btn-info">
                 <i class="bi bi-eye"></i> Ver Todos
               </a>
-              <a href="{{ url_for('case_benefit_new', case_id=case_id) }}" class="btn btn-sm btn-primary">
+              <a href="{{ url_for('benefits.case_benefit_new', case_id=case_id) }}" class="btn btn-sm btn-primary">
                 <i class="bi bi-plus-circle"></i> Adicionar Benefício
               </a>
             </div>
@@ -158,7 +158,7 @@
               </div>
               {% if benefits|length > 3 %}
               <div class="text-center">
-                <a href="{{ url_for('case_benefits_list', case_id=case_id) }}" class="btn btn-outline-primary">
+                <a href="{{ url_for('benefits.case_benefits_list', case_id=case_id) }}" class="btn btn-outline-primary">
                   <i class="bi bi-eye"></i> Ver todos os {{ benefits|length }} benefícios
                 </a>
               </div>
@@ -166,7 +166,7 @@
             {% else %}
               <div class="alert alert-info mb-0">
                 <i class="bi bi-info-circle"></i> Nenhum benefício cadastrado ainda.
-                <a href="{{ url_for('case_benefit_new', case_id=case_id) }}" class="btn btn-outline-success btn-sm ms-2">
+                <a href="{{ url_for('benefits.case_benefit_new', case_id=case_id) }}" class="btn btn-outline-success btn-sm ms-2">
                   <i class="bi bi-plus-circle"></i> Adicionar primeiro benefício
                 </a>
               </div>
@@ -179,10 +179,10 @@
           <div class="card-header">
             <h3 class="card-title">Documentos</h3>
             <div class="card-tools">
-              <a href="{{ url_for('case_documents_list', case_id=case_id) }}" class="btn btn-sm btn-info">
+              <a href="{{ url_for('documents.case_documents_list', case_id=case_id) }}" class="btn btn-sm btn-info">
                 <i class="bi bi-eye"></i> Ver Todos
               </a>
-              <a href="{{ url_for('case_document_new', case_id=case_id) }}" class="btn btn-sm btn-primary">
+              <a href="{{ url_for('documents.case_document_new', case_id=case_id) }}" class="btn btn-sm btn-primary">
                 <i class="bi bi-upload"></i> Upload Documento
               </a>
             </div>
@@ -226,7 +226,7 @@
               </div>
               {% if documents|length > 3 %}
               <div class="text-center">
-                <a href="{{ url_for('case_documents_list', case_id=case_id) }}" class="btn btn-outline-primary">
+                <a href="{{ url_for('documents.case_documents_list', case_id=case_id) }}" class="btn btn-outline-primary">
                   <i class="bi bi-eye"></i> Ver todos os {{ documents|length }} documentos
                 </a>
               </div>
@@ -234,7 +234,7 @@
             {% else %}
               <div class="alert alert-info mb-0">
                 <i class="bi bi-info-circle"></i> Nenhum documento anexado ainda.
-                <a href="{{ url_for('case_document_new', case_id=case_id) }}" class="btn btn-outline-success btn-sm ms-2">
+                <a href="{{ url_for('documents.case_document_new', case_id=case_id) }}" class="btn btn-outline-success btn-sm ms-2">
                   <i class="bi bi-upload"></i> Enviar primeiro documento
                 </a>
               </div>
@@ -248,11 +248,11 @@
             <h3 class="card-title"><i class="bi bi-robot"></i> Petições Geradas com IA</h3>
             <div class="card-tools">
               {% if petitions %}
-              <a href="{{ url_for('case_petitions_list', case_id=case_id) }}" class="btn btn-sm btn-light">
+              <a href="{{ url_for('petitions.case_petitions_list', case_id=case_id) }}" class="btn btn-sm btn-light">
                 <i class="bi bi-eye"></i> Ver Todas
               </a>
               {% endif %}
-              <a href="{{ url_for('case_petition_generate', case_id=case_id) }}" class="btn btn-sm btn-warning">
+              <a href="{{ url_for('petitions.case_petition_generate', case_id=case_id) }}" class="btn btn-sm btn-warning">
                 <i class="bi bi-magic"></i> Gerar Nova Petição
               </a>
             </div>
@@ -290,7 +290,7 @@
                         {% endif %}
                       </td>
                       <td>
-                        <a href="{{ url_for('case_petition_view', case_id=case_id, petition_id=petition.id) }}" class="btn btn-xs btn-info" title="Visualizar">
+                        <a href="{{ url_for('petitions.case_petition_view', case_id=case_id, petition_id=petition.id) }}" class="btn btn-xs btn-info" title="Visualizar">
                           <i class="bi bi-eye"></i>
                         </a>
                       </td>
@@ -301,7 +301,7 @@
               </div>
               {% if petitions|length > 3 %}
               <div class="text-center">
-                <a href="{{ url_for('case_petitions_list', case_id=case_id) }}" class="btn btn-outline-info">
+                <a href="{{ url_for('petitions.case_petitions_list', case_id=case_id) }}" class="btn btn-outline-info">
                   <i class="bi bi-eye"></i> Ver todas as {{ petitions|length }} petições
                 </a>
               </div>
@@ -309,7 +309,7 @@
             {% else %}
               <div class="alert alert-warning mb-0">
                 <i class="bi bi-stars"></i> Nenhuma petição gerada ainda.
-                <a href="{{ url_for('case_petition_generate', case_id=case_id) }}" class="btn btn-outline-warning btn-sm ms-2">
+                <a href="{{ url_for('petitions.case_petition_generate', case_id=case_id) }}" class="btn btn-outline-warning btn-sm ms-2">
                   <i class="bi bi-magic"></i> Gerar primeira petição com IA
                 </a>
               </div>
@@ -328,16 +328,16 @@
           </div>
           <div class="card-body">
             <div class="d-grid gap-2">
-              <a href="{{ url_for('case_documents_list', case_id=case_id) }}" class="btn btn-outline-primary">
+              <a href="{{ url_for('documents.case_documents_list', case_id=case_id) }}" class="btn btn-outline-primary">
                 <i class="bi bi-file-earmark-text"></i> Gerenciar Documentos
               </a>
-              <a href="{{ url_for('case_document_new', case_id=case_id) }}" class="btn btn-outline-success">
+              <a href="{{ url_for('documents.case_document_new', case_id=case_id) }}" class="btn btn-outline-success">
                 <i class="bi bi-upload"></i> Upload Documento
               </a>
-              <a href="{{ url_for('case_benefit_new', case_id=case_id) }}" class="btn btn-outline-secondary">
+              <a href="{{ url_for('benefits.case_benefit_new', case_id=case_id) }}" class="btn btn-outline-secondary">
                 <i class="bi bi-plus-circle"></i> Adicionar Benefício
               </a>
-              <a href="{{ url_for('case_petition_generate', case_id=case_id) }}" class="btn btn-outline-warning">
+              <a href="{{ url_for('petitions.case_petition_generate', case_id=case_id) }}" class="btn btn-outline-warning">
                 <i class="bi bi-robot"></i> Gerar Petição com IA
               </a>
             </div>
@@ -373,7 +373,7 @@
                       <br><small class="text-muted"><i class="bi bi-envelope"></i> {{ case_lawyer.lawyer.email }}</small>
                     {% endif %}
                   </div>
-                  <form action="{{ url_for('case_lawyer_remove', case_id=case_id, case_lawyer_id=case_lawyer.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Tem certeza que deseja remover este advogado do caso?');">
+                  <form action="{{ url_for('cases.case_lawyer_remove', case_id=case_id, case_lawyer_id=case_lawyer.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Tem certeza que deseja remover este advogado do caso?');">
                     <button type="submit" class="btn btn-sm btn-danger" title="Remover">
                       <i class="bi bi-trash"></i>
                     </button>
@@ -402,7 +402,7 @@
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
               </div>
-              <form action="{{ url_for('case_lawyer_add', case_id=case_id) }}" method="POST">
+              <form action="{{ url_for('cases.case_lawyer_add', case_id=case_id) }}" method="POST">
                 <div class="modal-body">
                   {% if all_lawyers %}
                     <div class="mb-3">
@@ -423,7 +423,7 @@
                   {% else %}
                     <div class="alert alert-warning">
                       <i class="bi bi-exclamation-triangle"></i> Nenhum advogado cadastrado no sistema.
-                      <a href="{{ url_for('lawyer_new') }}" class="btn btn-outline-primary btn-sm ms-2" target="_blank">
+                      <a href="{{ url_for('lawyers.lawyer_new') }}" class="btn btn-outline-primary btn-sm ms-2" target="_blank">
                         <i class="bi bi-plus-circle"></i> Cadastrar Advogado
                       </a>
                     </div>
@@ -464,7 +464,7 @@
             {% else %}
               <div class="alert alert-warning mb-0">
                 <i class="bi bi-exclamation-triangle"></i> Nenhuma vara selecionada para este caso.
-                <a href="{{ url_for('case_edit', case_id=case_id) }}" class="btn btn-outline-primary btn-sm ms-2">
+                <a href="{{ url_for('cases.case_edit', case_id=case_id) }}" class="btn btn-outline-primary btn-sm ms-2">
                   <i class="bi bi-pencil"></i> Editar caso
                 </a>
               </div>

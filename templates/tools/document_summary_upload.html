@@ -11,9 +11,9 @@
       </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
-          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
           <li class="breadcrumb-item"><a href="#">Ferramentas</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('tools_document_summary_list') }}">Resumo de Documentos</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('tools.tools_document_summary_list') }}">Resumo de Documentos</a></li>
           <li class="breadcrumb-item active" aria-current="page">Enviar Documento</li>
         </ol>
       </div>
@@ -79,7 +79,7 @@
 
             <div class="card-footer">
               <div class="d-flex justify-content-between">
-                <a href="{{ url_for('tools_document_summary_list') }}" class="btn btn-secondary">
+                <a href="{{ url_for('tools.tools_document_summary_list') }}" class="btn btn-secondary">
                   <i class="bi bi-arrow-left"></i> Voltar
                 </a>
                 {{ form.submit(class="btn btn-primary") }}

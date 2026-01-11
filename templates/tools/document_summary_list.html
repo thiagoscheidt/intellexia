@@ -11,7 +11,7 @@
       </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
-          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
           <li class="breadcrumb-item"><a href="#">Ferramentas</a></li>
           <li class="breadcrumb-item active" aria-current="page">Resumo de Documentos</li>
         </ol>
@@ -28,7 +28,7 @@
           <div class="card-header">
             <h3 class="card-title"><i class="bi bi-robot"></i> Documentos para Resumo por IA</h3>
             <div class="card-tools">
-              <a href="{{ url_for('tools_document_summary_upload') }}" class="btn btn-primary btn-sm">
+              <a href="{{ url_for('tools.tools_document_summary_upload') }}" class="btn btn-primary btn-sm">
                 <i class="bi bi-cloud-upload"></i> Enviar Documento
               </a>
             </div>
@@ -104,13 +104,13 @@
                       {% endif %}
                     </td>
                     <td>
-                      <a href="{{ url_for('tools_document_summary_detail', document_id=doc.id) }}" 
+                      <a href="{{ url_for('tools.tools_document_summary_detail', document_id=doc.id) }}" 
                          class="btn btn-info btn-sm" 
                          title="Visualizar">
                         <i class="bi bi-eye"></i>
                       </a>
                       <form method="POST" 
-                            action="{{ url_for('tools_document_summary_delete', document_id=doc.id) }}" 
+                            action="{{ url_for('tools.tools_document_summary_delete', document_id=doc.id) }}" 
                             style="display: inline;"
                             onsubmit="return confirm('Tem certeza que deseja excluir este documento?');">
                         <button type="submit" class="btn btn-danger btn-sm" title="Excluir">
@@ -127,7 +127,7 @@
             <div class="alert alert-info">
               <i class="bi bi-info-circle"></i>
               Nenhum documento enviado ainda. 
-              <a href="{{ url_for('tools_document_summary_upload') }}" class="alert-link">Envie seu primeiro documento</a> 
+              <a href="{{ url_for('tools.tools_document_summary_upload') }}" class="alert-link">Envie seu primeiro documento</a> 
               para gerar resumos com IA.
             </div>
             {% endif %}

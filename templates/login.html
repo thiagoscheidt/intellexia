@@ -312,12 +312,12 @@
 <div class="login-box">
     <div class="card">
         <div class="card-header text-center">
-            <a href="{{ url_for('login') }}"><b>Intellex</b>IA</a>
+            <a href="{{ url_for('auth.login') }}"><b>Intellex</b>IA</a>
         </div>
         <div class="card-body">
             <p class="login-box-msg">Bem-vindo de volta! 👋</p>
 
-            <form action="{{ url_for('login_post') }}" method="post" id="loginForm" novalidate>
+            <form action="{{ url_for('auth.login_post') }}" method="post" id="loginForm" novalidate>
                 <div class="mb-3">
                     <div class="input-group">
                         <input type="email" class="form-control" placeholder="Digite seu email" 
@@ -352,7 +352,7 @@
                             Lembrar-me
                         </label>
                     </div>
-                    <a href="{{ url_for('forgot_password') }}">Esqueci minha senha</a>
+                    <a href="{{ url_for('auth.forgot_password') }}">Esqueci minha senha</a>
                 </div>
 
                 <button type="submit" class="btn btn-primary w-100 mb-3" id="submitBtn">
@@ -365,7 +365,7 @@
             </div>
 
             <div class="text-center">
-                <a href="{{ url_for('register') }}">Criar uma nova conta</a>
+                <a href="{{ url_for('auth.register') }}">Criar uma nova conta</a>
             </div>
 
             <!-- Alert for messages -->
@@ -519,7 +519,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 showAlert('Login realizado com sucesso! Redirecionando...', 'success');
                 
                 setTimeout(() => {
-                    window.location.href = data.redirect || "{{ url_for('index') }}";
+                    window.location.href = data.redirect || "{{ url_for('dashboard.dashboard') }}";
                 }, 1000);
             } else {
                 submitBtn.classList.remove('btn-loading');

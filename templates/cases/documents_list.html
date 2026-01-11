@@ -11,9 +11,9 @@
       </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
-          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('cases_list') }}">Casos</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('case_detail', case_id=case_id) }}">Caso #{{ case_id }}</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_list') }}">Casos</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases.case_detail', case_id=case_id) }}">Caso #{{ case_id }}</a></li>
           <li class="breadcrumb-item active" aria-current="page">Documentos</li>
         </ol>
       </div>
@@ -29,10 +29,10 @@
           <div class="card-header">
             <h3 class="card-title">Documentos do Caso</h3>
             <div class="card-tools">
-              <a href="{{ url_for('case_detail', case_id=case_id) }}" class="btn btn-secondary btn-sm">
+              <a href="{{ url_for('cases.case_detail', case_id=case_id) }}" class="btn btn-secondary btn-sm">
                 <i class="bi bi-arrow-left"></i> Voltar ao Caso
               </a>
-              <a href="{{ url_for('case_document_new', case_id=case_id) }}" class="btn btn-primary btn-sm">
+              <a href="{{ url_for('documents.case_document_new', case_id=case_id) }}" class="btn btn-primary btn-sm">
                 <i class="bi bi-upload"></i> Upload Documento
               </a>
             </div>
@@ -128,13 +128,13 @@
                       {% endif %}
                     </td>
                     <td>
-                      <a href="{{ url_for('case_document_view', case_id=case_id, document_id=doc.id) }}" class="btn btn-sm btn-info" title="Visualizar">
+                      <a href="{{ url_for('documents.case_document_view', case_id=case_id, document_id=doc.id) }}" class="btn btn-sm btn-info" title="Visualizar">
                         <i class="bi bi-eye"></i>
                       </a>
                       <a href="#" class="btn btn-sm btn-primary" title="Download">
                         <i class="bi bi-download"></i>
                       </a>
-                      <form action="{{ url_for('case_document_delete', case_id=case_id, document_id=doc.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Tem certeza que deseja excluir este documento?');">
+                      <form action="{{ url_for('documents.case_document_delete', case_id=case_id, document_id=doc.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Tem certeza que deseja excluir este documento?');">
                         <button type="submit" class="btn btn-sm btn-danger" title="Excluir">
                           <i class="bi bi-trash"></i>
                         </button>
@@ -148,7 +148,7 @@
             {% else %}
             <div class="alert alert-info">
               <i class="bi bi-info-circle"></i> Nenhum documento anexado ainda. 
-              <a href="{{ url_for('case_document_new', case_id=case_id) }}">Envie o primeiro documento</a>.
+              <a href="{{ url_for('documents.case_document_new', case_id=case_id) }}">Envie o primeiro documento</a>.
             </div>
             {% endif %}
           </div>

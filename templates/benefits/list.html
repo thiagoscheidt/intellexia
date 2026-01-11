@@ -11,7 +11,7 @@
       </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
-          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
           <li class="breadcrumb-item active" aria-current="page">Benefícios</li>
         </ol>
       </div>
@@ -90,7 +90,7 @@
                       {% endif %}
                     </td>
                     <td class="text-center">
-                      <a href="{{ url_for('benefit_detail', benefit_id=benefit.id) }}" class="btn btn-sm btn-info" title="Visualizar">
+                      <a href="{{ url_for('benefits.benefit_detail', benefit_id=benefit.id) }}" class="btn btn-sm btn-info" title="Visualizar">
                         <i class="bi bi-eye"></i> Visualizar
                       </a>
                     </td>

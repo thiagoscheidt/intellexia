@@ -11,7 +11,7 @@
       </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
-          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
           <li class="breadcrumb-item active" aria-current="page">Clientes</li>
         </ol>
       </div>
@@ -27,7 +27,7 @@
           <div class="card-header">
             <h3 class="card-title"><i class="bi bi-list-ul"></i> Lista de Clientes</h3>
             <div class="card-tools">
-              <a href="{{ url_for('client_new') }}" class="btn btn-success btn-sm">
+              <a href="{{ url_for('clients.client_new') }}" class="btn btn-success btn-sm">
                 <i class="bi bi-plus-circle"></i> Novo Cliente
               </a>
             </div>
@@ -77,10 +77,10 @@
                     </td>
                     <td class="text-center">
                       <div class="btn-group" role="group">
-                        <a href="{{ url_for('client_edit', client_id=client.id) }}" class="btn btn-sm btn-warning" title="Editar">
+                        <a href="{{ url_for('clients.client_edit', client_id=client.id) }}" class="btn btn-sm btn-warning" title="Editar">
                           <i class="bi bi-pencil"></i>
                         </a>
-                        <button type="button" class="btn btn-sm btn-danger" title="Excluir" onclick="confirmDelete('{{ url_for('client_delete', client_id=client.id) }}')">
+                        <button type="button" class="btn btn-sm btn-danger" title="Excluir" onclick="confirmDelete('{{ url_for('clients.client_delete', client_id=client.id) }}')">
                           <i class="bi bi-trash"></i>
                         </button>
                       </div>
@@ -93,7 +93,7 @@
             {% else %}
             <div class="alert alert-info mb-0">
               <h5><i class="bi bi-info-circle"></i> Nenhum cliente cadastrado</h5>
-              <p class="mb-0">Você ainda não possui clientes cadastrados. <a href="{{ url_for('client_new') }}" class="alert-link">Clique aqui para cadastrar o primeiro cliente</a>.</p>
+              <p class="mb-0">Você ainda não possui clientes cadastrados. <a href="{{ url_for('clients.client_new') }}" class="alert-link">Clique aqui para cadastrar o primeiro cliente</a>.</p>
             </div>
             {% endif %}
           </div>

@@ -11,10 +11,10 @@
       </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
-          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('cases_list') }}">Casos</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('case_detail', case_id=case_id) }}">Caso #{{ case_id }}</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('case_documents_list', case_id=case_id) }}">Documentos</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_list') }}">Casos</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases.case_detail', case_id=case_id) }}">Caso #{{ case_id }}</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('documents.case_documents_list', case_id=case_id) }}">Documentos</a></li>
           <li class="breadcrumb-item active" aria-current="page">{{ title }}</li>
         </ol>
       </div>
@@ -115,7 +115,7 @@
             </div>
             <div class="card-footer">
               {{ form.submit(class="btn btn-primary") }}
-              <a href="{{ url_for('case_documents_list', case_id=case_id) }}" class="btn btn-secondary">Cancelar</a>
+              <a href="{{ url_for('documents.case_documents_list', case_id=case_id) }}" class="btn btn-secondary">Cancelar</a>
             </div>
           </form>
         </div>

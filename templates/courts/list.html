@@ -11,7 +11,7 @@
       </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
-          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
           <li class="breadcrumb-item active" aria-current="page">Varas</li>
         </ol>
       </div>
@@ -27,7 +27,7 @@
           <div class="card-header">
             <h3 class="card-title"><i class="bi bi-list-ul"></i> Lista de Varas Judiciais</h3>
             <div class="card-tools">
-              <a href="{{ url_for('court_new') }}" class="btn btn-warning btn-sm">
+              <a href="{{ url_for('courts.court_new') }}" class="btn btn-warning btn-sm">
                 <i class="bi bi-plus-circle"></i> Nova Vara
               </a>
             </div>
@@ -92,7 +92,7 @@
             {% else %}
             <div class="alert alert-info mb-0">
               <h5><i class="bi bi-info-circle"></i> Nenhuma vara cadastrada</h5>
-              <p class="mb-0">Você ainda não possui varas cadastradas. <a href="{{ url_for('court_new') }}" class="alert-link">Clique aqui para cadastrar a primeira vara</a>.</p>
+              <p class="mb-0">Você ainda não possui varas cadastradas. <a href="{{ url_for('courts.court_new') }}" class="alert-link">Clique aqui para cadastrar a primeira vara</a>.</p>
             </div>
             {% endif %}
           </div>

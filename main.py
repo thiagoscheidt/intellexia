@@ -37,8 +37,30 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 from app.models import db
 db.init_app(app)
 
-# Importar rotas
-from app.routes import *
+# Importar e registrar blueprints
+from app.blueprints import (
+    auth_bp, dashboard_bp, cases_bp, clients_bp, 
+    lawyers_bp, courts_bp, benefits_bp, documents_bp,
+    petitions_bp, assistant_bp, tools_bp, settings_bp
+)
+
+# Registrar todos os blueprints
+app.register_blueprint(auth_bp)
+app.register_blueprint(dashboard_bp)
+app.register_blueprint(cases_bp)
+app.register_blueprint(clients_bp)
+app.register_blueprint(lawyers_bp)
+app.register_blueprint(courts_bp)
+app.register_blueprint(benefits_bp)
+app.register_blueprint(documents_bp)
+app.register_blueprint(petitions_bp)
+app.register_blueprint(assistant_bp)
+app.register_blueprint(tools_bp)
+app.register_blueprint(settings_bp)
+
+# Importar middlewares e contexto (mantém funcionalidade anterior)
+from app.middlewares import init_app_middlewares
+init_app_middlewares(app)
 
 if __name__ == '__main__':
     # Criar tabelas apenas quando executando diretamente

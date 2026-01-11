@@ -11,9 +11,9 @@
       </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
-          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('cases_list') }}">Casos</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('case_detail', case_id=case.id) }}">{{ case.title }}</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_list') }}">Casos</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases.case_detail', case_id=case.id) }}">{{ case.title }}</a></li>
           <li class="breadcrumb-item active" aria-current="page">Benefícios</li>
         </ol>
       </div>
@@ -52,7 +52,7 @@
           <div class="card-header">
             <h3 class="card-title">Benefícios do Caso</h3>
             <div class="card-tools">
-              <a href="{{ url_for('case_benefit_new', case_id=case.id) }}" class="btn btn-primary">
+              <a href="{{ url_for('benefits.case_benefit_new', case_id=case.id) }}" class="btn btn-primary">
                 <i class="bi bi-plus-circle"></i> Novo Benefício
               </a>
             </div>
@@ -106,7 +106,7 @@
                     <td>{{ benefit.created_at.strftime('%d/%m/%Y') if benefit.created_at else '-' }}</td>
                     <td>
                       <div class="btn-group" role="group">
-                        <a href="{{ url_for('case_benefit_edit', case_id=case.id, benefit_id=benefit.id) }}" 
+                        <a href="{{ url_for('benefits.case_benefit_edit', case_id=case.id, benefit_id=benefit.id) }}" 
                            class="btn btn-sm btn-warning" title="Editar">
                           <i class="bi bi-pencil"></i>
                         </a>
@@ -124,7 +124,7 @@
             {% else %}
             <div class="alert alert-info">
               <i class="bi bi-info-circle"></i> Nenhum benefício cadastrado neste caso ainda.
-              <a href="{{ url_for('case_benefit_new', case_id=case.id) }}" class="btn btn-outline-primary btn-sm ms-2">
+              <a href="{{ url_for('benefits.case_benefit_new', case_id=case.id) }}" class="btn btn-outline-primary btn-sm ms-2">
                 <i class="bi bi-plus-circle"></i> Cadastrar primeiro benefício
               </a>
             </div>
@@ -161,7 +161,7 @@
 <script>
 function confirmDelete(benefitId, benefitNumber) {
   document.getElementById('benefitNumber').textContent = benefitNumber;
-  document.getElementById('deleteForm').action = `{{ url_for('case_benefit_delete', case_id=case.id, benefit_id=0) }}`.replace('0', benefitId);
+  document.getElementById('deleteForm').action = `{{ url_for('benefits.case_benefit_delete', case_id=case.id, benefit_id=0) }}`.replace('0', benefitId);
   new bootstrap.Modal(document.getElementById('deleteModal')).show();
 }
 </script>

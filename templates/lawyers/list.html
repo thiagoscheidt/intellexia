@@ -11,7 +11,7 @@
       </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
-          <li class="breadcrumb-item"><a href="{{ url_for('index') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
           <li class="breadcrumb-item active" aria-current="page">Advogados</li>
         </ol>
       </div>
@@ -27,7 +27,7 @@
           <div class="card-header">
             <h3 class="card-title"><i class="bi bi-list-ul"></i> Lista de Advogados</h3>
             <div class="card-tools">
-              <a href="{{ url_for('lawyer_new') }}" class="btn btn-info btn-sm">
+              <a href="{{ url_for('lawyers.lawyer_new') }}" class="btn btn-info btn-sm">
                 <i class="bi bi-plus-circle"></i> Novo Advogado
               </a>
             </div>
@@ -91,7 +91,7 @@
                     </td>
                     <td class="text-center">
                       <div class="btn-group" role="group">
-                        <a href="{{ url_for('lawyer_edit', lawyer_id=lawyer.id) }}" class="btn btn-sm btn-warning" title="Editar">
+                        <a href="{{ url_for('lawyers.lawyer_edit', lawyer_id=lawyer.id) }}" class="btn btn-sm btn-warning" title="Editar">
                           <i class="bi bi-pencil"></i>
                         </a>
                       </div>
@@ -104,7 +104,7 @@
             {% else %}
             <div class="alert alert-info mb-0">
               <h5><i class="bi bi-info-circle"></i> Nenhum advogado cadastrado</h5>
-              <p class="mb-0">Você ainda não possui advogados cadastrados. <a href="{{ url_for('lawyer_new') }}" class="alert-link">Clique aqui para cadastrar o primeiro advogado</a>.</p>
+              <p class="mb-0">Você ainda não possui advogados cadastrados. <a href="{{ url_for('lawyers.lawyer_new') }}" class="alert-link">Clique aqui para cadastrar o primeiro advogado</a>.</p>
             </div>
             {% endif %}
           </div>

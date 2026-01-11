@@ -2,7 +2,20 @@
 
 Sistema inteligente de gestão jurídica para casos de revisão de FAP (Fator Acidentário de Prevenção) e contestação de benefícios acidentários.
 
-## 📋 Sobre o Sistema
+## � Documentação
+
+Toda a documentação do projeto está organizada na pasta [`docs/`](docs/):
+
+- **[ESTRUTURA_BLUEPRINTS.md](docs/ESTRUTURA_BLUEPRINTS.md)** - Guia completo de todas as rotas do sistema
+- **[MIGRACAO_ROTAS.md](docs/MIGRACAO_ROTAS.md)** - Como adicionar novas rotas e blueprints
+- **[REORGANIZACAO_ROTAS.md](docs/REORGANIZACAO_ROTAS.md)** - O que mudou na estrutura de rotas
+- **[ARQUITETURA_VISUAL.md](docs/ARQUITETURA_VISUAL.md)** - Diagramas e fluxos visuais da arquitetura
+- **[TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** - FAQ e solução de problemas
+- **[RESUMO_REORGANIZACAO.md](docs/RESUMO_REORGANIZACAO.md)** - Resumo completo da reorganização
+
+Veja a pasta [`docs/`](docs/) para documentação adicional sobre funcionalidades, autenticação, dashboards e mais.
+
+## �📋 Sobre o Sistema
 
 O **IntellexIA** é uma plataforma desenvolvida para escritórios de advocacia especializados em direito previdenciário e trabalhista, focada na gestão de casos de contestação de benefícios acidentários que impactam o FAP das empresas.
 

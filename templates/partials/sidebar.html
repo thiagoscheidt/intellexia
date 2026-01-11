@@ -3,13 +3,10 @@
   <!--begin::Sidebar Brand-->
   <div class="sidebar-brand">
     <!--begin::Brand Link-->
-    <a href="{{ url_for('index') }}" class="brand-link">
+    <a href="{{ url_for('dashboard.dashboard') }}" class="brand-link">
       <!--begin::Brand Image-->
-      <img
-        src="{{ url_for('static', filename='assets/img/AdminLTELogo.png') }}"
-        alt="AdminLTE Logo"
-        class="brand-image opacity-75 shadow"
-      />
+      <img src="{{ url_for('static', filename='assets/img/AdminLTELogo.png') }}" alt="AdminLTE Logo"
+        class="brand-image opacity-75 shadow" />
       <!--end::Brand Image-->
       <!--begin::Brand Text-->
       <span class="brand-text fw-light">IntellexIA</span>
@@ -22,16 +19,12 @@
   <div class="sidebar-wrapper">
     <nav class="mt-2">
       <!--begin::Sidebar Menu-->
-      <ul
-        class="nav sidebar-menu flex-column"
-        data-lte-toggle="treeview"
-        role="navigation"
-        aria-label="Main navigation"
-        data-accordion="false"
-        id="navigation"
-      >
-        <li class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint == 'dashboard' or request.endpoint == 'index') else '' }}">
-          <a href="#" class="nav-link {{ 'active' if request.endpoint and (request.endpoint == 'dashboard' or request.endpoint == 'index') else '' }}">
+      <ul class="nav sidebar-menu flex-column" data-lte-toggle="treeview" role="navigation" aria-label="Main navigation"
+        data-accordion="false" id="navigation">
+        <li
+          class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('dashboard.') else '' }}">
+          <a href="#"
+            class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('dashboard.') else '' }}">
             <i class="nav-icon bi bi-speedometer"></i>
             <p>
               Dashboard
@@ -40,23 +33,26 @@
           </a>
           <ul class="nav nav-treeview">
             <li class="nav-item">
-              <a href="{{ url_for('dashboard') }}" class="nav-link {{ 'active' if request.endpoint == 'dashboard' or request.endpoint == 'index' else '' }}">
+              <a href="{{ url_for('dashboard.dashboard') }}"
+                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('dashboard.') else '' }}">
                 <i class="nav-icon bi bi-graph-up"></i>
                 <p>Dashboard Principal</p>
               </a>
             </li>
           </ul>
         </li>
-        
+
         <li class="nav-item">
-          <a href="{{ url_for('legal_assistant') }}" class="nav-link {{ 'active' if request.endpoint == 'legal_assistant' else '' }}">
+          <a href="{{ url_for('assistant.legal_assistant') }}"
+            class="nav-link {{ 'active' if request.endpoint == 'assistant.legal_assistant' else '' }}">
             <i class="nav-icon bi bi-robot"></i>
             <p>Assistente Jurídico</p>
           </a>
         </li>
-        
-        <li class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('tools_') else '' }}">
-          <a href="#" class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('tools_') else '' }}">
+
+        <li class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('tools.') else '' }}">
+          <a href="#"
+            class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('tools.') else '' }}">
             <i class="nav-icon bi bi-tools"></i>
             <p>
               Ferramentas
@@ -65,16 +61,19 @@
           </a>
           <ul class="nav nav-treeview">
             <li class="nav-item">
-              <a href="{{ url_for('tools_document_summary_list') }}" class="nav-link {{ 'active' if request.endpoint and 'document_summary' in request.endpoint else '' }}">
+              <a href="{{ url_for('tools.tools_document_summary_list') }}"
+                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('tools.tools_document_summary') else '' }}">
                 <i class="nav-icon bi bi-brain"></i>
                 <p>Resumo de Documento</p>
               </a>
             </li>
           </ul>
         </li>
-        
-        <li class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint.startswith('case') or request.endpoint.startswith('benefit') or 'case_' in request.endpoint or 'benefit' in request.endpoint or 'document' in request.endpoint) else '' }}">
-          <a href="#" class="nav-link {{ 'active' if request.endpoint and (request.endpoint.startswith('case') or request.endpoint.startswith('benefit') or 'case_' in request.endpoint or 'benefit' in request.endpoint or 'document' in request.endpoint) else '' }}">
+
+        <li
+          class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint.startswith('cases.') or request.endpoint.startswith('benefits.') or request.endpoint.startswith('documents.') or request.endpoint.startswith('petitions.')) else '' }}">
+          <a href="#"
+            class="nav-link {{ 'active' if request.endpoint and (request.endpoint.startswith('cases.') or request.endpoint.startswith('benefits.') or request.endpoint.startswith('documents.') or request.endpoint.startswith('petitions.')) else '' }}">
             <i class="nav-icon bi bi-newspaper"></i>
             <p>
               Casos
@@ -83,13 +82,15 @@
           </a>
           <ul class="nav nav-treeview">
             <li class="nav-item">
-              <a href="{{ url_for('cases_list') }}" class="nav-link {{ 'active' if request.endpoint == 'cases_list' else '' }}">
+              <a href="{{ url_for('cases.cases_list') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'cases.cases_list' else '' }}">
                 <i class="nav-icon bi bi-list"></i>
                 <p>Lista de Casos</p>
               </a>
             </li>
             <li class="nav-item">
-              <a href="{{ url_for('case_new') }}" class="nav-link {{ 'active' if request.endpoint == 'case_new' else '' }}">
+              <a href="{{ url_for('cases.case_new') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'cases.case_new' else '' }}">
                 <i class="nav-icon bi bi-plus-square"></i>
                 <p>Novo Caso</p>
               </a>
@@ -97,8 +98,9 @@
           </ul>
         </li>
 
-        <li class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('client') else '' }}">
-          <a href="#" class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('client') else '' }}">
+        <li class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('clients.') else '' }}">
+          <a href="#"
+            class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('clients.') else '' }}">
             <i class="nav-icon bi bi-people"></i>
             <p>
               Clientes
@@ -107,13 +109,15 @@
           </a>
           <ul class="nav nav-treeview">
             <li class="nav-item">
-              <a href="{{ url_for('clients_list') }}" class="nav-link {{ 'active' if request.endpoint == 'clients_list' else '' }}">
+              <a href="{{ url_for('clients.clients_list') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'clients.clients_list' else '' }}">
                 <i class="nav-icon bi bi-list"></i>
                 <p>Lista de Clientes</p>
               </a>
             </li>
             <li class="nav-item">
-              <a href="{{ url_for('client_new') }}" class="nav-link {{ 'active' if request.endpoint == 'client_new' else '' }}">
+              <a href="{{ url_for('clients.client_new') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'clients.client_new' else '' }}">
                 <i class="nav-icon bi bi-building-add"></i>
                 <p>Novo Cliente</p>
               </a>
@@ -121,8 +125,9 @@
           </ul>
         </li>
 
-        <li class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('lawyer') else '' }}">
-          <a href="#" class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('lawyer') else '' }}">
+        <li class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('lawyers.') else '' }}">
+          <a href="#"
+            class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('lawyers.') else '' }}">
             <i class="nav-icon bi bi-briefcase"></i>
             <p>
               Advogados
@@ -131,13 +136,15 @@
           </a>
           <ul class="nav nav-treeview">
             <li class="nav-item">
-              <a href="{{ url_for('lawyers_list') }}" class="nav-link {{ 'active' if request.endpoint == 'lawyers_list' else '' }}">
+              <a href="{{ url_for('lawyers.lawyers_list') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'lawyers.lawyers_list' else '' }}">
                 <i class="nav-icon bi bi-list"></i>
                 <p>Lista de Advogados</p>
               </a>
             </li>
             <li class="nav-item">
-              <a href="{{ url_for('lawyer_new') }}" class="nav-link {{ 'active' if request.endpoint == 'lawyer_new' else '' }}">
+              <a href="{{ url_for('lawyers.lawyer_new') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'lawyers.lawyer_new' else '' }}">
                 <i class="nav-icon bi bi-plus-square"></i>
                 <p>Novo Advogado</p>
               </a>
@@ -145,8 +152,9 @@
           </ul>
         </li>
 
-        <li class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('court') else '' }}">
-          <a href="#" class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('court') else '' }}">
+        <li class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('courts.') else '' }}">
+          <a href="#"
+            class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('courts.') else '' }}">
             <i class="nav-icon bi bi-bank"></i>
             <p>
               Varas Judiciais
@@ -155,13 +163,15 @@
           </a>
           <ul class="nav nav-treeview">
             <li class="nav-item">
-              <a href="{{ url_for('courts_list') }}" class="nav-link {{ 'active' if request.endpoint == 'courts_list' else '' }}">
+              <a href="{{ url_for('courts.courts_list') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'courts.courts_list' else '' }}">
                 <i class="nav-icon bi bi-list"></i>
                 <p>Lista de Varas</p>
               </a>
             </li>
             <li class="nav-item">
-              <a href="{{ url_for('court_new') }}" class="nav-link {{ 'active' if request.endpoint == 'court_new' else '' }}">
+              <a href="{{ url_for('courts.court_new') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'courts.court_new' else '' }}">
                 <i class="nav-icon bi bi-plus-square"></i>
                 <p>Nova Vara</p>
               </a>
@@ -169,8 +179,9 @@
           </ul>
         </li>
 
-        <li class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('benefit') else '' }}">
-          <a href="#" class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('benefit') else '' }}">
+        <li class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('benefits.') else '' }}">
+          <a href="#"
+            class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('benefits.') else '' }}">
             <i class="nav-icon bi bi-card-list"></i>
             <p>
               Benefícios
@@ -179,7 +190,8 @@
           </a>
           <ul class="nav nav-treeview">
             <li class="nav-item">
-              <a href="{{ url_for('benefits_list') }}" class="nav-link {{ 'active' if request.endpoint == 'benefits_list' else '' }}">
+              <a href="{{ url_for('benefits.benefits_list') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'benefits.benefits_list' else '' }}">
                 <i class="nav-icon bi bi-list"></i>
                 <p>Todos os Benefícios</p>
               </a>
@@ -189,9 +201,10 @@
 
         {% if session.get('user_role') == 'admin' %}
         <li class="nav-header">ADMINISTRAÇÃO</li>
-        
+
         <li class="nav-item">
-          <a href="{{ url_for('law_firm_settings') }}" class="nav-link {{ 'active' if request.endpoint == 'law_firm_settings' else '' }}">
+          <a href="{{ url_for('settings.law_firm_settings') }}"
+            class="nav-link {{ 'active' if request.endpoint == 'settings.law_firm_settings' else '' }}">
             <i class="nav-icon bi bi-gear"></i>
             <p>Configurações do Escritório</p>
           </a>
