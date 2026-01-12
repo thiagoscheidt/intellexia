@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, sessio
 from app.models import db, Document, Case, CaseBenefit, Petition, AiDocumentSummary
 from app.agents.file_agent import FileAgent
 from app.agents.agent_document_reader import AgentDocumentReader
+from app.utils.document_utils import extract_text_from_docx, is_docx_file
 from datetime import datetime
 from functools import wraps
 from werkzeug.utils import secure_filename
@@ -56,11 +57,18 @@ def case_document_new(case_id):
                         document.ai_status = 'processing'
                         db.session.commit()
                         
-                        file_agent = FileAgent()
                         doc_reader = AgentDocumentReader()
                         
-                        file_id = file_agent.upload_file(os.path.abspath(file_path))
-                        ai_summary = doc_reader.analyze_document(file_id)
+                        # Verificar se é DOCX
+                        if is_docx_file(file_path):
+                            # Para DOCX: extrair texto e enviar diretamente
+                            text_content = extract_text_from_docx(os.path.abspath(file_path))
+                            ai_summary = doc_reader.analyze_document(text_content=text_content)
+                        else:
+                            # Para PDF e outros: usar file_id
+                            file_agent = FileAgent()
+                            file_id = file_agent.upload_file(os.path.abspath(file_path))
+                            ai_summary = doc_reader.analyze_document(file_id=file_id)
                         
                         document.ai_summary = ai_summary
                         document.ai_processed_at = datetime.utcnow()
@@ -144,11 +152,18 @@ def case_document_reprocess(case_id, document_id):
         db.session.commit()
         
         # Processar com IA
-        file_agent = FileAgent()
         doc_reader = AgentDocumentReader()
         
-        file_id = file_agent.upload_file(os.path.abspath(document.file_path))
-        ai_summary = doc_reader.analyze_document(file_id)
+        # Verificar se é DOCX
+        if is_docx_file(document.file_path):
+            # Para DOCX: extrair texto e enviar diretamente
+            text_content = extract_text_from_docx(os.path.abspath(document.file_path))
+            ai_summary = doc_reader.analyze_document(text_content=text_content)
+        else:
+            # Para PDF e outros: usar file_id
+            file_agent = FileAgent()
+            file_id = file_agent.upload_file(os.path.abspath(document.file_path))
+            ai_summary = doc_reader.analyze_document(file_id=file_id)
         
         # Atualizar documento
         document.ai_summary = ai_summary

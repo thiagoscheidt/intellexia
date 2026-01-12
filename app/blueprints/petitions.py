@@ -26,6 +26,19 @@ def _extract_text_from_docx(document):
     
     return '\n\n'.join(text_parts)
 
+@petitions_bp.route('/api/placeholders-preview')
+def get_placeholders_preview(case_id):
+    """Retorna JSON com prévia dos placeholders que serão substituídos"""
+    case = Case.query.get_or_404(case_id)
+    from app.models import CaseBenefit
+    benefits = CaseBenefit.query.filter_by(case_id=case_id).all()
+    
+    from agent_document_generator import AgentDocumentGenerator
+    agent = AgentDocumentGenerator()
+    placeholders = agent.get_placeholders_preview(case, benefits)
+    
+    return jsonify(placeholders)
+
 @petitions_bp.route('/')
 def case_petitions_list(case_id):
     """Lista todas as petições geradas para um caso"""

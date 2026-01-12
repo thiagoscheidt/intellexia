@@ -13,7 +13,8 @@
         <ol class="breadcrumb float-sm-end">
           <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
           <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_list') }}">Casos</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('cases.case_detail', case_id=case_id) }}">Caso #{{ case_id }}</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases.case_detail', case_id=case_id) }}">Caso #{{ case_id
+              }}</a></li>
           <li class="breadcrumb-item active" aria-current="page">Gerar Petição</li>
         </ol>
       </div>
@@ -32,7 +33,8 @@
           <div class="card-body">
             <div class="alert alert-info">
               <h5><i class="bi bi-info-circle"></i> Como funciona?</h5>
-              <p>A IA analisará todos os documentos, benefícios e informações do caso para gerar uma petição inicial completa e personalizada.</p>
+              <p>A IA analisará todos os documentos, benefícios e informações do caso para gerar uma petição inicial
+                completa e personalizada.</p>
             </div>
 
             <h5 class="mt-4">Informações do Caso</h5>
@@ -44,14 +46,33 @@
               <dd class="col-sm-8">{{ case.client.name if case.client else 'Não informado' }}</dd>
 
               <dt class="col-sm-4">Tipo de Caso:</dt>
-              <dd class="col-sm-8">{{ case.case_type }}</dd>
+              <dd class="col-sm-8">
+                {% set case_type_map = {
+                'fap_trajeto': 'FAP - Acidente de Trajeto',
+                'fap_outros': 'FAP - Outros Acidentes',
+                'acao_ordinaria': 'Ação Ordinária',
+                'acao_trabalhista': 'Ação Trabalhista',
+                'recurso': 'Recurso'
+                } %}
+                {{ case_type_map.get(case.case_type, case.case_type) }}
+              </dd>
+
+              <dt class="col-sm-4">Motivo FAP:</dt>
+              <dd class="col-sm-8">
+                {% set fap_reason_map = {
+                'inclusao_indevida_trajeto': 'Inclusão indevida de benefício de trajeto',
+                'erro_material_cat': 'Erro material no preenchimento da CAT',
+                'cat_trajeto_extemporanea': 'CAT de trajeto transmitida extemporaneamente'
+                } %}
+                {{ fap_reason_map.get(case.fap_reason, case.fap_reason if case.fap_reason else 'Não informado') }}
+              </dd>
 
               <dt class="col-sm-4">Valor da Causa:</dt>
               <dd class="col-sm-8">
                 {% if case.value_cause %}
-                  R$ {{ "{:,.2f}".format(case.value_cause).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                R$ {{ "{:,.2f}".format(case.value_cause).replace(',', 'X').replace('.', ',').replace('X', '.') }}
                 {% else %}
-                  Não informado
+                Não informado
                 {% endif %}
               </dd>
             </dl>
@@ -80,18 +101,20 @@
 
             {% if benefits_count == 0 or documents_count == 0 %}
             <div class="alert alert-warning mt-3">
-              <i class="bi bi-exclamation-triangle"></i> <strong>Atenção:</strong> 
-              Para uma petição mais completa, recomendamos cadastrar benefícios e fazer upload de documentos antes de gerar a petição.
+              <i class="bi bi-exclamation-triangle"></i> <strong>Atenção:</strong>
+              Para uma petição mais completa, recomendamos cadastrar benefícios e fazer upload de documentos antes de
+              gerar a petição.
             </div>
             {% endif %}
 
             <hr>
 
             <h5 class="mt-4">Versionamento</h5>
-            <p>Esta será a <strong>Versão {{ next_version }}</strong> da petição. Você pode gerar quantas versões precisar, cada uma será salva separadamente.</p>
+            <p>Esta será a <strong>Versão {{ next_version }}</strong> da petição. Você pode gerar quantas versões
+              precisar, cada uma será salva separadamente.</p>
 
             <div class="alert alert-success">
-              <i class="bi bi-check-circle"></i> <strong>Você pode gerar múltiplas versões!</strong> 
+              <i class="bi bi-check-circle"></i> <strong>Você pode gerar múltiplas versões!</strong>
               Sempre que adicionar novos documentos ou benefícios, pode gerar uma nova petição atualizada.
             </div>
 
@@ -101,39 +124,66 @@
             <div class="row">
               <div class="col-md-12">
                 <div class="form-check">
-                  <input class="form-check-input" type="checkbox" value="" id="use-template-checkbox">
+                  <input class="form-check-input" type="checkbox" value="" id="use-template-checkbox" disabled>
                   <label class="form-check-label fw-bold" for="use-template-checkbox">
                     <i class="bi bi-file-earmark-text"></i> Usar Modelo Personalizado
                   </label>
-                  <div class="form-text">Carregue um arquivo modelo (PDF, DOCX, TXT, MD) para gerar a petição baseada na sua estrutura</div>
+                  <div class="form-text">Carregue um arquivo modelo (DOCX, DOC) para gerar a petição baseada na
+                    sua estrutura</div>
+                </div>
+              </div>
+            </div>
+
+            <hr>
+
+            <div class="accordion mb-3" id="placeholdersAccordion">
+              <div class="accordion-item">
+                <h2 class="accordion-header">
+                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#placeholderCollapse" aria-expanded="false" aria-controls="placeholderCollapse">
+                    <i class="bi bi-search"></i> <span class="ms-2">Placeholders que serão Substituídos</span>
+                  </button>
+                </h2>
+                <div id="placeholderCollapse" class="accordion-collapse collapse"
+                  data-bs-parent="#placeholdersAccordion">
+                  <div class="accordion-body">
+                    <div id="placeholders-container" class="row" data-case-id="{{ case_id }}">
+                      <div class="col-12">
+                        <div class="text-center text-muted py-3">
+                          <i class="bi bi-hourglass-split"></i> Carregando placeholders...
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
           <div class="card-footer">
-            <form method="POST" action="{{ url_for('petitions.case_petition_generate', case_id=case_id) }}" 
-                  enctype="multipart/form-data" id="petition-form">
-              
+            <form method="POST" action="{{ url_for('petitions.case_petition_generate', case_id=case_id) }}"
+              enctype="multipart/form-data" id="petition-form">
+
               <!-- Template upload section dentro do form -->
               <div id="template-upload-section-form" class="mb-3" style="display: none;">
                 <div class="card bg-light">
                   <div class="card-body">
                     <h6><i class="bi bi-upload"></i> Upload do Modelo</h6>
                     <div class="mb-3">
-                      <input type="file" class="form-control" id="template-file" name="template_file" 
-                             accept=".pdf,.docx,.doc,.txt,.md">
+                      <input type="file" class="form-control" id="template-file" name="template_file"
+                        accept=".pdf,.docx,.doc,.txt,.md">
                       <div class="form-text">
                         <strong>Formatos aceitos:</strong> PDF, DOCX, DOC, TXT, MD
                       </div>
                     </div>
                     <div class="alert alert-info mb-0">
-                      <i class="bi bi-info-circle"></i> 
-                      <strong>Como funciona:</strong> A IA analisará a estrutura do seu modelo e gerará a petição seguindo o mesmo formato, preenchendo com os dados do caso.
+                      <i class="bi bi-info-circle"></i>
+                      <strong>Como funciona:</strong> A IA analisará a estrutura do seu modelo e gerará a petição
+                      seguindo o mesmo formato, preenchendo com os dados do caso.
                     </div>
                   </div>
                 </div>
               </div>
-              
+
               <button type="submit" class="btn btn-warning btn-lg" id="generate-btn">
                 <i class="bi bi-magic"></i> Gerar Petição Versão {{ next_version }}
               </button>
@@ -149,57 +199,115 @@
 </div>
 
 <script>
-document.addEventListener('DOMContentLoaded', function() {
+  document.addEventListener('DOMContentLoaded', function () {
     const useTemplateCheckbox = document.getElementById('use-template-checkbox');
     const templateUploadSection = document.getElementById('template-upload-section-form');
     const templateFileInput = document.getElementById('template-file');
     const generateBtn = document.getElementById('generate-btn');
     const petitionForm = document.getElementById('petition-form');
+    const placeholdersContainer = document.getElementById('placeholders-container');
+    const caseId = placeholdersContainer.getAttribute('data-case-id');
+
+    // Carregar placeholders na página
+    function loadPlaceholders() {
+      fetch(`/cases/${caseId}/petitions/api/placeholders-preview`)
+        .then(response => response.json())
+        .then(data => {
+          renderPlaceholders(data);
+        })
+        .catch(error => {
+          console.error('Erro ao carregar placeholders:', error);
+          placeholdersContainer.innerHTML = '<div class="col-12"><div class="alert alert-danger">Erro ao carregar placeholders</div></div>';
+        });
+    }
+
+    function renderPlaceholders(data) {
+      let html = '';
+
+      for (const [category, placeholders] of Object.entries(data)) {
+        html += `
+                  <div class="col-md-6 mb-3">
+                      <div class="card border-secondary h-100">
+                          <div class="card-header bg-secondary text-white">
+                              <h6 class="mb-0">${category}</h6>
+                          </div>
+                          <div class="card-body">
+                              <small>
+              `;
+
+        for (const [placeholder, value] of Object.entries(placeholders)) {
+          html += `
+                      <div class="mb-2">
+                          <code class="badge bg-light text-dark">${placeholder}</code>
+                          <div class="text-muted small mt-1">${escapeHtml(String(value))}</div>
+                      </div>
+                  `;
+        }
+
+        html += `
+                              </small>
+                          </div>
+                      </div>
+                  </div>
+              `;
+      }
+
+      placeholdersContainer.innerHTML = html;
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Carregar placeholders ao iniciar
+    loadPlaceholders();
 
     // Controlar exibição da seção de upload
-    useTemplateCheckbox.addEventListener('change', function() {
-        if (this.checked) {
-            templateUploadSection.style.display = 'block';
-        } else {
-            templateUploadSection.style.display = 'none';
-            templateFileInput.value = '';
-        }
+    useTemplateCheckbox.addEventListener('change', function () {
+      if (this.checked) {
+        templateUploadSection.style.display = 'block';
+      } else {
+        templateUploadSection.style.display = 'none';
+        templateFileInput.value = '';
+      }
     });
 
     // Validação do formulário
-    petitionForm.addEventListener('submit', function(e) {
-        if (useTemplateCheckbox.checked && !templateFileInput.files.length) {
-            e.preventDefault();
-            alert('Selecione um arquivo modelo ou desmarque a opção "Usar Modelo Personalizado"');
-            return false;
-        }
+    petitionForm.addEventListener('submit', function (e) {
+      if (useTemplateCheckbox.checked && !templateFileInput.files.length) {
+        e.preventDefault();
+        alert('Selecione um arquivo modelo ou desmarque a opção "Usar Modelo Personalizado"');
+        return false;
+      }
 
-        // Alterar texto do botão durante geração
-        generateBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Gerando Petição...';
-        generateBtn.disabled = true;
+      // Alterar texto do botão durante geração
+      generateBtn.innerHTML = '<i class="bi bi-hourglass-split"></i> Gerando Petição...';
+      generateBtn.disabled = true;
     });
 
     // Validação de arquivo
-    templateFileInput.addEventListener('change', function() {
-        if (this.files.length > 0) {
-            const file = this.files[0];
-            const allowedExtensions = ['.pdf', '.docx', '.doc', '.txt', '.md'];
-            const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
-            
-            if (!allowedExtensions.includes(fileExtension)) {
-                alert('Tipo de arquivo não suportado. Use: PDF, DOCX, DOC, TXT ou MD');
-                this.value = '';
-                return;
-            }
+    templateFileInput.addEventListener('change', function () {
+      if (this.files.length > 0) {
+        const file = this.files[0];
+        const allowedExtensions = ['.pdf', '.docx', '.doc', '.txt', '.md'];
+        const fileExtension = '.' + file.name.split('.').pop().toLowerCase();
 
-            // Verificar tamanho (máximo 10MB)
-            if (file.size > 10 * 1024 * 1024) {
-                alert('Arquivo muito grande. Máximo 10MB permitido.');
-                this.value = '';
-                return;
-            }
+        if (!allowedExtensions.includes(fileExtension)) {
+          alert('Tipo de arquivo não suportado. Use: PDF, DOCX, DOC, TXT ou MD');
+          this.value = '';
+          return;
         }
+
+        // Verificar tamanho (máximo 10MB)
+        if (file.size > 10 * 1024 * 1024) {
+          alert('Arquivo muito grande. Máximo 10MB permitido.');
+          this.value = '';
+          return;
+        }
+      }
     });
-});
+  });
 </script>
 {% endblock %}

@@ -44,52 +44,86 @@
 
               <dt class="col-sm-4">Tipo de Caso:</dt>
               <dd class="col-sm-8">
+                {% set case_type_map = {
+                'fap_trajeto': 'FAP - Acidente de Trajeto',
+                'fap_outros': 'FAP - Outros Acidentes',
+                'acao_ordinaria': 'Ação Ordinária',
+                'acao_trabalhista': 'Ação Trabalhista',
+                'recurso': 'Recurso'
+                } %}
                 {% if case.case_type %}
-                  <span class="badge bg-info">{{ case.case_type }}</span>
+                <span class="badge bg-primary">{{ case_type_map.get(case.case_type, case.case_type) }}</span>
                 {% else %}
-                  <span class="text-muted">Não informado</span>
+                <span class="text-muted">Não informado</span>
                 {% endif %}
               </dd>
 
-              {% if case.case_type in ['fap_trajeto', 'fap_outros'] and case.fap_reason %}
+              {% if case.case_type in ['fap_trajeto', 'fap_outros'] %}
               <dt class="col-sm-4">Motivo / Enquadramento:</dt>
               <dd class="col-sm-8">
-                {% if case.fap_reason == 'inclusao_indevida_trajeto' %}
-                  Inclusão indevida de benefício de trajeto
-                {% elif case.fap_reason == 'erro_material_cat' %}
-                  Erro material no preenchimento da CAT
-                {% elif case.fap_reason == 'cat_trajeto_extemporanea' %}
-                  CAT de trajeto transmitida extemporaneamente
+                {% set fap_reason_map = {
+                'inclusao_indevida_trajeto': 'Inclusão indevida de benefício de trajeto',
+                'erro_material_cat': 'Erro material no preenchimento da CAT',
+                'cat_trajeto_extemporanea': 'CAT de trajeto transmitida extemporaneamente'
+                } %}
+                {% if case.fap_reason %}
+                <span class="badge bg-info">{{ fap_reason_map.get(case.fap_reason, case.fap_reason) }}</span>
                 {% else %}
-                  {{ case.fap_reason }}
+                <span class="text-muted">Não informado</span>
                 {% endif %}
               </dd>
               {% endif %}
 
               <dt class="col-sm-4">Status:</dt>
               <dd class="col-sm-8">
+                {% set status_colors = {
+                'active': 'success',
+                'ativo': 'success',
+                'inactive': 'secondary',
+                'inativo': 'secondary',
+                'em_andamento': 'warning',
+                'in_progress': 'warning',
+                'concluido': 'info',
+                'completed': 'info',
+                'arquivado': 'danger',
+                'archived': 'danger'
+                } %}
                 {% if case.status %}
-                  <span class="badge bg-{{ 'success' if case.status.lower() == 'ativo' else 'secondary' }}">{{ case.status }}</span>
+                <span class="badge bg-{{ status_colors.get(case.status.lower(), 'secondary') }}">
+                  {% if case.status.lower() in ['ativo', 'active'] %}
+                  ✓ Ativo
+                  {% elif case.status.lower() in ['em_andamento', 'in_progress'] %}
+                  ⏳ Em Andamento
+                  {% elif case.status.lower() in ['concluido', 'completed'] %}
+                  ✓ Concluído
+                  {% elif case.status.lower() in ['arquivado', 'archived'] %}
+                  📁 Arquivado
+                  {% elif case.status.lower() in ['inativo', 'inactive'] %}
+                  ✗ Inativo
+                  {% else %}
+                  {{ case.status }}
+                  {% endif %}
+                </span>
                 {% else %}
-                  <span class="text-muted">Não informado</span>
+                <span class="text-muted">Não informado</span>
                 {% endif %}
               </dd>
 
               <dt class="col-sm-4">Valor da Causa:</dt>
               <dd class="col-sm-8">
                 {% if case.value_cause %}
-                  R$ {{ "{:,.2f}".format(case.value_cause).replace(',', 'X').replace('.', ',').replace('X', '.') }}
+                R$ {{ "{:,.2f}".format(case.value_cause).replace(',', 'X').replace('.', ',').replace('X', '.') }}
                 {% else %}
-                  <span class="text-muted">Não informado</span>
+                <span class="text-muted">Não informado</span>
                 {% endif %}
               </dd>
 
               <dt class="col-sm-4">Data de Ajuizamento:</dt>
               <dd class="col-sm-8">
                 {% if case.filing_date %}
-                  {{ case.filing_date.strftime('%d/%m/%Y') }}
+                {{ case.filing_date.strftime('%d/%m/%Y') }}
                 {% else %}
-                  <span class="text-muted">Não informada</span>
+                <span class="text-muted">Não informada</span>
                 {% endif %}
               </dd>
             </dl>
@@ -98,23 +132,23 @@
 
             <h5>Resumo dos Fatos</h5>
             {% if case.facts_summary %}
-              <p>{{ case.facts_summary }}</p>
+            <p>{{ case.facts_summary }}</p>
             {% else %}
-              <p class="text-muted">Nenhum resumo cadastrado ainda.</p>
+            <p class="text-muted">Nenhum resumo cadastrado ainda.</p>
             {% endif %}
 
             <h5>Teses Jurídicas</h5>
             {% if case.thesis_summary %}
-              <p>{{ case.thesis_summary }}</p>
+            <p>{{ case.thesis_summary }}</p>
             {% else %}
-              <p class="text-muted">Nenhuma tese cadastrada ainda.</p>
+            <p class="text-muted">Nenhuma tese cadastrada ainda.</p>
             {% endif %}
 
             <h5>Informações sobre Prescrição</h5>
             {% if case.prescription_summary %}
-              <p>{{ case.prescription_summary }}</p>
+            <p>{{ case.prescription_summary }}</p>
             {% else %}
-              <p class="text-muted">Nenhuma informação cadastrada ainda.</p>
+            <p class="text-muted">Nenhuma informação cadastrada ainda.</p>
             {% endif %}
           </div>
         </div>
@@ -134,42 +168,43 @@
           </div>
           <div class="card-body">
             {% if benefits %}
-              <div class="table-responsive">
-                <table class="table table-sm">
-                  <thead>
-                    <tr>
-                      <th>NB</th>
-                      <th>Tipo</th>
-                      <th>Segurado</th>
-                      <th>Data Acidente</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {% for benefit in benefits[:3] %}
-                    <tr>
-                      <td>{{ benefit.benefit_number }}</td>
-                      <td>{{ benefit.benefit_type }}</td>
-                      <td>{{ benefit.insured_name }}</td>
-                      <td>{{ benefit.accident_date.strftime('%d/%m/%Y') if benefit.accident_date else '-' }}</td>
-                    </tr>
-                    {% endfor %}
-                  </tbody>
-                </table>
-              </div>
-              {% if benefits|length > 3 %}
-              <div class="text-center">
-                <a href="{{ url_for('benefits.case_benefits_list', case_id=case_id) }}" class="btn btn-outline-primary">
-                  <i class="bi bi-eye"></i> Ver todos os {{ benefits|length }} benefícios
-                </a>
-              </div>
-              {% endif %}
+            <div class="table-responsive">
+              <table class="table table-sm">
+                <thead>
+                  <tr>
+                    <th>NB</th>
+                    <th>Tipo</th>
+                    <th>Segurado</th>
+                    <th>Data Acidente</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for benefit in benefits[:3] %}
+                  <tr>
+                    <td>{{ benefit.benefit_number }}</td>
+                    <td>{{ benefit.benefit_type }}</td>
+                    <td>{{ benefit.insured_name }}</td>
+                    <td>{{ benefit.accident_date.strftime('%d/%m/%Y') if benefit.accident_date else '-' }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% if benefits|length > 3 %}
+            <div class="text-center">
+              <a href="{{ url_for('benefits.case_benefits_list', case_id=case_id) }}" class="btn btn-outline-primary">
+                <i class="bi bi-eye"></i> Ver todos os {{ benefits|length }} benefícios
+              </a>
+            </div>
+            {% endif %}
             {% else %}
-              <div class="alert alert-info mb-0">
-                <i class="bi bi-info-circle"></i> Nenhum benefício cadastrado ainda.
-                <a href="{{ url_for('benefits.case_benefit_new', case_id=case_id) }}" class="btn btn-outline-success btn-sm ms-2">
-                  <i class="bi bi-plus-circle"></i> Adicionar primeiro benefício
-                </a>
-              </div>
+            <div class="alert alert-info mb-0">
+              <i class="bi bi-info-circle"></i> Nenhum benefício cadastrado ainda.
+              <a href="{{ url_for('benefits.case_benefit_new', case_id=case_id) }}"
+                class="btn btn-outline-success btn-sm ms-2">
+                <i class="bi bi-plus-circle"></i> Adicionar primeiro benefício
+              </a>
+            </div>
             {% endif %}
           </div>
         </div>
@@ -189,55 +224,57 @@
           </div>
           <div class="card-body">
             {% if documents %}
-              <div class="table-responsive">
-                <table class="table table-sm">
-                  <thead>
-                    <tr>
-                      <th>Arquivo</th>
-                      <th>Tipo</th>
-                      <th>Upload</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {% for doc in documents[:3] %}
-                    <tr>
-                      <td>
-                        <i class="bi bi-file-earmark-pdf text-danger"></i>
-                        {{ doc.original_filename[:20] }}{% if doc.original_filename|length > 20 %}...{% endif %}
-                      </td>
-                      <td>
-                        {% if doc.document_type == 'cat' %}
-                          <span class="badge bg-danger">CAT</span>
-                        {% elif doc.document_type == 'laudo_medico' %}
-                          <span class="badge bg-info">Laudo</span>
-                        {% elif doc.document_type == 'infben' %}
-                          <span class="badge bg-primary">INFBEN</span>
-                        {% else %}
-                          <span class="badge bg-secondary">{{ doc.document_type[:6] }}</span>
-                        {% endif %}
-                      </td>
-                      <td>
-                        <small class="text-muted">{{ doc.uploaded_at.strftime('%d/%m') if doc.uploaded_at else '-' }}</small>
-                      </td>
-                    </tr>
-                    {% endfor %}
-                  </tbody>
-                </table>
-              </div>
-              {% if documents|length > 3 %}
-              <div class="text-center">
-                <a href="{{ url_for('documents.case_documents_list', case_id=case_id) }}" class="btn btn-outline-primary">
-                  <i class="bi bi-eye"></i> Ver todos os {{ documents|length }} documentos
-                </a>
-              </div>
-              {% endif %}
+            <div class="table-responsive">
+              <table class="table table-sm">
+                <thead>
+                  <tr>
+                    <th>Arquivo</th>
+                    <th>Tipo</th>
+                    <th>Upload</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for doc in documents[:3] %}
+                  <tr>
+                    <td>
+                      <i class="bi bi-file-earmark-pdf text-danger"></i>
+                      {{ doc.original_filename[:20] }}{% if doc.original_filename|length > 20 %}...{% endif %}
+                    </td>
+                    <td>
+                      {% if doc.document_type == 'cat' %}
+                      <span class="badge bg-danger">CAT</span>
+                      {% elif doc.document_type == 'laudo_medico' %}
+                      <span class="badge bg-info">Laudo</span>
+                      {% elif doc.document_type == 'infben' %}
+                      <span class="badge bg-primary">INFBEN</span>
+                      {% else %}
+                      <span class="badge bg-secondary">{{ doc.document_type[:6] }}</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      <small class="text-muted">{{ doc.uploaded_at.strftime('%d/%m') if doc.uploaded_at else '-'
+                        }}</small>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% if documents|length > 3 %}
+            <div class="text-center">
+              <a href="{{ url_for('documents.case_documents_list', case_id=case_id) }}" class="btn btn-outline-primary">
+                <i class="bi bi-eye"></i> Ver todos os {{ documents|length }} documentos
+              </a>
+            </div>
+            {% endif %}
             {% else %}
-              <div class="alert alert-info mb-0">
-                <i class="bi bi-info-circle"></i> Nenhum documento anexado ainda.
-                <a href="{{ url_for('documents.case_document_new', case_id=case_id) }}" class="btn btn-outline-success btn-sm ms-2">
-                  <i class="bi bi-upload"></i> Enviar primeiro documento
-                </a>
-              </div>
+            <div class="alert alert-info mb-0">
+              <i class="bi bi-info-circle"></i> Nenhum documento anexado ainda.
+              <a href="{{ url_for('documents.case_document_new', case_id=case_id) }}"
+                class="btn btn-outline-success btn-sm ms-2">
+                <i class="bi bi-upload"></i> Enviar primeiro documento
+              </a>
+            </div>
             {% endif %}
           </div>
         </div>
@@ -252,67 +289,71 @@
                 <i class="bi bi-eye"></i> Ver Todas
               </a>
               {% endif %}
-              <a href="{{ url_for('petitions.case_petition_generate', case_id=case_id) }}" class="btn btn-sm btn-warning">
+              <a href="{{ url_for('petitions.case_petition_generate', case_id=case_id) }}"
+                class="btn btn-sm btn-warning">
                 <i class="bi bi-magic"></i> Gerar Nova Petição
               </a>
             </div>
           </div>
           <div class="card-body">
             {% if petitions %}
-              <div class="table-responsive">
-                <table class="table table-sm">
-                  <thead>
-                    <tr>
-                      <th>Versão</th>
-                      <th>Título</th>
-                      <th>Gerada em</th>
-                      <th>Status</th>
-                      <th>Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {% for petition in petitions[:3] %}
-                    <tr>
-                      <td><span class="badge bg-primary">v{{ petition.version }}</span></td>
-                      <td>{{ petition.title[:30] }}{% if petition.title|length > 30 %}...{% endif %}</td>
-                      <td>
-                        <small class="text-muted">{{ petition.generated_at.strftime('%d/%m/%Y %H:%M') if petition.generated_at else '-' }}</small>
-                      </td>
-                      <td>
-                        {% if petition.status == 'completed' %}
-                          <span class="badge bg-success">Concluída</span>
-                        {% elif petition.status == 'processing' %}
-                          <span class="badge bg-info">Processando</span>
-                        {% elif petition.status == 'error' %}
-                          <span class="badge bg-danger">Erro</span>
-                        {% else %}
-                          <span class="badge bg-secondary">{{ petition.status }}</span>
-                        {% endif %}
-                      </td>
-                      <td>
-                        <a href="{{ url_for('petitions.case_petition_view', case_id=case_id, petition_id=petition.id) }}" class="btn btn-xs btn-info" title="Visualizar">
-                          <i class="bi bi-eye"></i>
-                        </a>
-                      </td>
-                    </tr>
-                    {% endfor %}
-                  </tbody>
-                </table>
-              </div>
-              {% if petitions|length > 3 %}
-              <div class="text-center">
-                <a href="{{ url_for('petitions.case_petitions_list', case_id=case_id) }}" class="btn btn-outline-info">
-                  <i class="bi bi-eye"></i> Ver todas as {{ petitions|length }} petições
-                </a>
-              </div>
-              {% endif %}
+            <div class="table-responsive">
+              <table class="table table-sm">
+                <thead>
+                  <tr>
+                    <th>Versão</th>
+                    <th>Título</th>
+                    <th>Gerada em</th>
+                    <th>Status</th>
+                    <th>Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for petition in petitions[:3] %}
+                  <tr>
+                    <td><span class="badge bg-primary">v{{ petition.version }}</span></td>
+                    <td>{{ petition.title[:30] }}{% if petition.title|length > 30 %}...{% endif %}</td>
+                    <td>
+                      <small class="text-muted">{{ petition.generated_at.strftime('%d/%m/%Y %H:%M') if
+                        petition.generated_at else '-' }}</small>
+                    </td>
+                    <td>
+                      {% if petition.status == 'completed' %}
+                      <span class="badge bg-success">Concluída</span>
+                      {% elif petition.status == 'processing' %}
+                      <span class="badge bg-info">Processando</span>
+                      {% elif petition.status == 'error' %}
+                      <span class="badge bg-danger">Erro</span>
+                      {% else %}
+                      <span class="badge bg-secondary">{{ petition.status }}</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      <a href="{{ url_for('petitions.case_petition_view', case_id=case_id, petition_id=petition.id) }}"
+                        class="btn btn-xs btn-info" title="Visualizar">
+                        <i class="bi bi-eye"></i>
+                      </a>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% if petitions|length > 3 %}
+            <div class="text-center">
+              <a href="{{ url_for('petitions.case_petitions_list', case_id=case_id) }}" class="btn btn-outline-info">
+                <i class="bi bi-eye"></i> Ver todas as {{ petitions|length }} petições
+              </a>
+            </div>
+            {% endif %}
             {% else %}
-              <div class="alert alert-warning mb-0">
-                <i class="bi bi-stars"></i> Nenhuma petição gerada ainda.
-                <a href="{{ url_for('petitions.case_petition_generate', case_id=case_id) }}" class="btn btn-outline-warning btn-sm ms-2">
-                  <i class="bi bi-magic"></i> Gerar primeira petição com IA
-                </a>
-              </div>
+            <div class="alert alert-warning mb-0">
+              <i class="bi bi-stars"></i> Nenhuma petição gerada ainda.
+              <a href="{{ url_for('petitions.case_petition_generate', case_id=case_id) }}"
+                class="btn btn-outline-warning btn-sm ms-2">
+                <i class="bi bi-magic"></i> Gerar primeira petição com IA
+              </a>
+            </div>
             {% endif %}
           </div>
         </div>
@@ -337,7 +378,8 @@
               <a href="{{ url_for('benefits.case_benefit_new', case_id=case_id) }}" class="btn btn-outline-secondary">
                 <i class="bi bi-plus-circle"></i> Adicionar Benefício
               </a>
-              <a href="{{ url_for('petitions.case_petition_generate', case_id=case_id) }}" class="btn btn-outline-warning">
+              <a href="{{ url_for('petitions.case_petition_generate', case_id=case_id) }}"
+                class="btn btn-outline-warning">
                 <i class="bi bi-robot"></i> Gerar Petição com IA
               </a>
             </div>
@@ -356,44 +398,48 @@
           </div>
           <div class="card-body">
             {% if case_lawyers %}
-              <div class="list-group">
-                {% for case_lawyer in case_lawyers %}
-                <div class="list-group-item d-flex justify-content-between align-items-center">
-                  <div>
-                    <h6 class="mb-1">
-                      <i class="bi bi-person-badge"></i> {{ case_lawyer.lawyer.name }}
-                    </h6>
-                    <small class="text-muted">
-                      OAB: {{ case_lawyer.lawyer.oab_number }}
-                      {% if case_lawyer.role %}
-                        | Função: {{ case_lawyer.role }}
-                      {% endif %}
-                    </small>
-                    {% if case_lawyer.lawyer.email %}
-                      <br><small class="text-muted"><i class="bi bi-envelope"></i> {{ case_lawyer.lawyer.email }}</small>
+            <div class="list-group">
+              {% for case_lawyer in case_lawyers %}
+              <div class="list-group-item d-flex justify-content-between align-items-center">
+                <div>
+                  <h6 class="mb-1">
+                    <i class="bi bi-person-badge"></i> {{ case_lawyer.lawyer.name }}
+                  </h6>
+                  <small class="text-muted">
+                    OAB: {{ case_lawyer.lawyer.oab_number }}
+                    {% if case_lawyer.role %}
+                    | Função: {{ case_lawyer.role }}
                     {% endif %}
-                  </div>
-                  <form action="{{ url_for('cases.case_lawyer_remove', case_id=case_id, case_lawyer_id=case_lawyer.id) }}" method="POST" style="display: inline;" onsubmit="return confirm('Tem certeza que deseja remover este advogado do caso?');">
-                    <button type="submit" class="btn btn-sm btn-danger" title="Remover">
-                      <i class="bi bi-trash"></i>
-                    </button>
-                  </form>
+                  </small>
+                  {% if case_lawyer.lawyer.email %}
+                  <br><small class="text-muted"><i class="bi bi-envelope"></i> {{ case_lawyer.lawyer.email }}</small>
+                  {% endif %}
                 </div>
-                {% endfor %}
+                <form action="{{ url_for('cases.case_lawyer_remove', case_id=case_id, case_lawyer_id=case_lawyer.id) }}"
+                  method="POST" style="display: inline;"
+                  onsubmit="return confirm('Tem certeza que deseja remover este advogado do caso?');">
+                  <button type="submit" class="btn btn-sm btn-danger" title="Remover">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </form>
               </div>
+              {% endfor %}
+            </div>
             {% else %}
-              <div class="alert alert-info mb-0">
-                <i class="bi bi-info-circle"></i> Nenhum advogado vinculado ainda.
-                <button class="btn btn-outline-primary btn-sm ms-2" data-bs-toggle="modal" data-bs-target="#addLawyerModal">
-                  <i class="bi bi-plus-circle"></i> Adicionar primeiro advogado
-                </button>
-              </div>
+            <div class="alert alert-info mb-0">
+              <i class="bi bi-info-circle"></i> Nenhum advogado vinculado ainda.
+              <button class="btn btn-outline-primary btn-sm ms-2" data-bs-toggle="modal"
+                data-bs-target="#addLawyerModal">
+                <i class="bi bi-plus-circle"></i> Adicionar primeiro advogado
+              </button>
+            </div>
             {% endif %}
           </div>
         </div>
 
         <!-- Modal para Adicionar Advogado -->
-        <div class="modal fade" id="addLawyerModal" tabindex="-1" aria-labelledby="addLawyerModalLabel" aria-hidden="true">
+        <div class="modal fade" id="addLawyerModal" tabindex="-1" aria-labelledby="addLawyerModalLabel"
+          aria-hidden="true">
           <div class="modal-dialog">
             <div class="modal-content">
               <div class="modal-header">
@@ -405,28 +451,31 @@
               <form action="{{ url_for('cases.case_lawyer_add', case_id=case_id) }}" method="POST">
                 <div class="modal-body">
                   {% if all_lawyers %}
-                    <div class="mb-3">
-                      <label for="lawyer_id" class="form-label">Selecione o Advogado <span class="text-danger">*</span></label>
-                      <select name="lawyer_id" id="lawyer_id" class="form-select" required>
-                        <option value="">-- Selecione --</option>
-                        {% for lawyer in all_lawyers %}
-                          <option value="{{ lawyer.id }}">{{ lawyer.name }} (OAB: {{ lawyer.oab_number }})</option>
-                        {% endfor %}
-                      </select>
-                    </div>
-                    
-                    <div class="mb-3">
-                      <label for="role" class="form-label">Função/Papel no Caso</label>
-                      <input type="text" name="role" id="role" class="form-control" placeholder="Ex: Responsável, Publicações, etc.">
-                      <div class="form-text">Opcional: Defina a função deste advogado no caso</div>
-                    </div>
+                  <div class="mb-3">
+                    <label for="lawyer_id" class="form-label">Selecione o Advogado <span
+                        class="text-danger">*</span></label>
+                    <select name="lawyer_id" id="lawyer_id" class="form-select" required>
+                      <option value="">-- Selecione --</option>
+                      {% for lawyer in all_lawyers %}
+                      <option value="{{ lawyer.id }}">{{ lawyer.name }} (OAB: {{ lawyer.oab_number }})</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+
+                  <div class="mb-3">
+                    <label for="role" class="form-label">Função/Papel no Caso</label>
+                    <input type="text" name="role" id="role" class="form-control"
+                      placeholder="Ex: Responsável, Publicações, etc.">
+                    <div class="form-text">Opcional: Defina a função deste advogado no caso</div>
+                  </div>
                   {% else %}
-                    <div class="alert alert-warning">
-                      <i class="bi bi-exclamation-triangle"></i> Nenhum advogado cadastrado no sistema.
-                      <a href="{{ url_for('lawyers.lawyer_new') }}" class="btn btn-outline-primary btn-sm ms-2" target="_blank">
-                        <i class="bi bi-plus-circle"></i> Cadastrar Advogado
-                      </a>
-                    </div>
+                  <div class="alert alert-warning">
+                    <i class="bi bi-exclamation-triangle"></i> Nenhum advogado cadastrado no sistema.
+                    <a href="{{ url_for('lawyers.lawyer_new') }}" class="btn btn-outline-primary btn-sm ms-2"
+                      target="_blank">
+                      <i class="bi bi-plus-circle"></i> Cadastrar Advogado
+                    </a>
+                  </div>
                   {% endif %}
                 </div>
                 <div class="modal-footer">
@@ -434,9 +483,9 @@
                     <i class="bi bi-x-circle"></i> Cancelar
                   </button>
                   {% if all_lawyers %}
-                    <button type="submit" class="btn btn-primary">
-                      <i class="bi bi-check-circle"></i> Adicionar Advogado
-                    </button>
+                  <button type="submit" class="btn btn-primary">
+                    <i class="bi bi-check-circle"></i> Adicionar Advogado
+                  </button>
                   {% endif %}
                 </div>
               </form>
@@ -451,23 +500,23 @@
           </div>
           <div class="card-body">
             {% if case.court %}
-              <dl class="row mb-0">
-                <dt class="col-sm-4">Vara:</dt>
-                <dd class="col-sm-8">{{ case.court.vara_name }}</dd>
-                
-                <dt class="col-sm-4">Seção:</dt>
-                <dd class="col-sm-8">{{ case.court.section or 'Não informado' }}</dd>
-                
-                <dt class="col-sm-4">Localização:</dt>
-                <dd class="col-sm-8">{{ case.court.city }}/{{ case.court.state }}</dd>
-              </dl>
+            <dl class="row mb-0">
+              <dt class="col-sm-4">Vara:</dt>
+              <dd class="col-sm-8">{{ case.court.vara_name }}</dd>
+
+              <dt class="col-sm-4">Seção:</dt>
+              <dd class="col-sm-8">{{ case.court.section or 'Não informado' }}</dd>
+
+              <dt class="col-sm-4">Localização:</dt>
+              <dd class="col-sm-8">{{ case.court.city }}/{{ case.court.state }}</dd>
+            </dl>
             {% else %}
-              <div class="alert alert-warning mb-0">
-                <i class="bi bi-exclamation-triangle"></i> Nenhuma vara selecionada para este caso.
-                <a href="{{ url_for('cases.case_edit', case_id=case_id) }}" class="btn btn-outline-primary btn-sm ms-2">
-                  <i class="bi bi-pencil"></i> Editar caso
-                </a>
-              </div>
+            <div class="alert alert-warning mb-0">
+              <i class="bi bi-exclamation-triangle"></i> Nenhuma vara selecionada para este caso.
+              <a href="{{ url_for('cases.case_edit', case_id=case_id) }}" class="btn btn-outline-primary btn-sm ms-2">
+                <i class="bi bi-pencil"></i> Editar caso
+              </a>
+            </div>
             {% endif %}
           </div>
         </div>

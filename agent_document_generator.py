@@ -97,6 +97,63 @@ class AgentDocumentGenerator:
         # Retornar template específico ou padrão
         return template_mapping.get(fap_reason, 'templates_docx/modelo_acidente_trajeto.docx')
     
+    def get_placeholders_preview(self, case, benefits):
+        """
+        Retorna um dicionário com os placeholders e seus valores para prévia
+        Usado para exibir no HTML antes de gerar o documento
+        
+        Args:
+            case: Objeto Case do banco de dados
+            benefits: Lista de CaseBenefit
+            
+        Returns:
+            dict: Dicionário com as categorias e placeholders
+        """
+        return {
+            'Dados do Cliente': {
+                '{{cliente_nome}}': case.client.name if case.client else 'Não informado',
+                '{{cliente_cnpj}}': case.client.cnpj if case.client else 'Não informado',
+                '{{cliente_endereco}}': self._format_address(case.client) if case.client else 'Não informado',
+                '{{cliente_cidade}}': case.client.city if case.client else 'Não informado',
+                '{{cliente_estado}}': case.client.state if case.client else 'Não informado',
+            },
+            'Dados do Caso': {
+                '{{caso_titulo}}': case.title,
+                '{{caso_tipo}}': case.case_type,
+                '{{caso_numero}}': str(case.id),
+            },
+            'Dados FAP': {
+                '{{fap_motivo}}': self._get_fap_reason_text(case.fap_reason) if case.fap_reason else 'Não informado',
+                '{{ano_inicial_fap}}': str(case.fap_start_year) if case.fap_start_year else 'Não informado',
+                '{{ano_final_fap}}': str(case.fap_end_year) if case.fap_end_year else 'Não informado',
+                '{{anos_fap}}': self._format_years_range(case.fap_start_year, case.fap_end_year) or 'Não informado',
+            },
+            'Dados de Benefícios': {
+                '{{total_beneficios}}': str(len(benefits)),
+                '{{lista_beneficios}}': f"{len(benefits)} benefício(s) será(ão) listado(s)",
+            },
+            'Valores': {
+                '{{valor_causa}}': self._format_currency(case.value_cause) if case.value_cause else 'Não informado',
+                '{{valor_causa_extenso}}': self._value_to_words(case.value_cause) if case.value_cause else 'Não informado',
+            },
+            'Datas': {
+                '{{data_ajuizamento}}': case.filing_date.strftime('%d/%m/%Y') if case.filing_date else 'Não informado',
+                '{{data_atual}}': datetime.now().strftime('%d/%m/%Y'),
+                '{{mes_ano_atual}}': datetime.now().strftime('%B de %Y'),
+            },
+            'Dados da Vara': {
+                '{{vara_nome}}': case.court.vara_name if case.court else 'Não informado',
+                '{{vara_cidade}}': case.court.city if case.court else 'Não informado',
+                '{{vara_estado}}': case.court.state if case.court else 'Não informado',
+                '{{vara_completo}}': self._format_court(case.court) if case.court else 'Não informado',
+            },
+            'Resumos': {
+                '{{fatos_resumo}}': case.facts_summary[:100] + '...' if case.facts_summary and len(case.facts_summary) > 100 else case.facts_summary or 'Não informado',
+                '{{teses_resumo}}': case.thesis_summary[:100] + '...' if case.thesis_summary and len(case.thesis_summary) > 100 else case.thesis_summary or 'Não informado',
+                '{{prescricao_resumo}}': case.prescription_summary[:100] + '...' if case.prescription_summary and len(case.prescription_summary) > 100 else case.prescription_summary or 'Não informado',
+            },
+        }
+    
     def _replace_placeholders_in_document(self, document, case, benefits):
         """
         Substitui placeholders {{variavel}} no documento pelos dados reais
