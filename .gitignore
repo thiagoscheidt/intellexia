@@ -13,3 +13,5 @@ wheels/
 # Database files
 *.db
 instance/
+
+uv.lock
