@@ -1,0 +1,166 @@
+{% extends "layout/base.html" %}
+
+{% block title %}{{ file.original_filename }} - Base de Conhecimento - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-sm-6">
+                <h3 class="mb-0"><i class="bi bi-file-earmark-text"></i> Detalhes do Arquivo</h3>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-end">
+                    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('knowledge_base.list') }}">Base de Conhecimento</a>
+                    </li>
+                    <li class="breadcrumb-item active" aria-current="page">Detalhes</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="app-content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-8">
+                <!-- Informações principais -->
+                <div class="card card-primary card-outline">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="bi bi-file-earmark-text"></i> {{ file.original_filename }}
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row">
+                            <dt class="col-sm-3">Nome do Arquivo:</dt>
+                            <dd class="col-sm-9">{{ file.original_filename }}</dd>
+
+                            <dt class="col-sm-3">Tipo:</dt>
+                            <dd class="col-sm-9">
+                                <span class="badge bg-info">{{ file.file_type }}</span>
+                            </dd>
+
+                            <dt class="col-sm-3">Categoria:</dt>
+                            <dd class="col-sm-9">
+                                {% if file.category %}
+                                <span class="badge bg-primary">{{ file.category }}</span>
+                                {% else %}
+                                <span class="text-muted">Não categorizado</span>
+                                {% endif %}
+                            </dd>
+
+                            <dt class="col-sm-3">Tamanho:</dt>
+                            <dd class="col-sm-9">
+                                {% if file.file_size %}
+                                {% if file.file_size < 1024 %} {{ file.file_size }} bytes {% elif file.file_size <
+                                    1048576 %} {{ "%.2f" |format(file.file_size / 1024) }} KB {% else %} {{ "%.2f"
+                                    |format(file.file_size / 1048576) }} MB {% endif %} {% else %} - {% endif %} </dd>
+
+                            <dt class="col-sm-3">Data de Upload:</dt>
+                            <dd class="col-sm-9">{{ file.uploaded_at.strftime('%d/%m/%Y às %H:%M') }}</dd>
+
+                            <dt class="col-sm-3">Última Atualização:</dt>
+                            <dd class="col-sm-9">{{ file.updated_at.strftime('%d/%m/%Y às %H:%M') }}</dd>
+
+                            {% if file.description %}
+                            <dt class="col-sm-3">Descrição:</dt>
+                            <dd class="col-sm-9">{{ file.description }}</dd>
+                            {% endif %}
+
+                            {% if file.tags %}
+                            <dt class="col-sm-3">Tags:</dt>
+                            <dd class="col-sm-9">
+                                {% for tag in file.tags.split(',') %}
+                                <span class="badge bg-secondary">{{ tag.strip() }}</span>
+                                {% endfor %}
+                            </dd>
+                            {% endif %}
+
+                            <dt class="col-sm-3">Caminho do Arquivo:</dt>
+                            <dd class="col-sm-9">
+                                <code class="text-muted small">{{ file.file_path }}</code>
+                            </dd>
+                        </dl>
+                    </div>
+                    <div class="card-footer">
+                        <a href="{{ url_for('knowledge_base.list') }}" class="btn btn-secondary">
+                            <i class="bi bi-arrow-left"></i> Voltar
+                        </a>
+                        <button type="button" class="btn btn-danger"
+                            onclick="deleteFile({{ file.id }}, '{{ file.original_filename }}')">
+                            <i class="bi bi-trash"></i> Excluir
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-4">
+                <!-- Informações adicionais -->
+                <div class="card card-info card-outline">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="bi bi-info-circle"></i> Informações</h3>
+                    </div>
+                    <div class="card-body">
+                        <p><strong>Adicionado por:</strong><br>{{ file.user.name if file.user else 'Desconhecido' }}</p>
+                        <p><strong>Escritório:</strong><br>{{ file.law_firm.trade_name if file.law_firm else
+                            'Desconhecido' }}</p>
+                        <p class="mb-0">
+                            <strong>Status:</strong><br>
+                            {% if file.is_active %}
+                            <span class="badge bg-success">Ativo</span>
+                            {% else %}
+                            <span class="badge bg-danger">Inativo</span>
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Ações rápidas -->
+                <div class="card card-secondary card-outline">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="bi bi-lightning"></i> Ações Rápidas</h3>
+                    </div>
+                    <div class="card-body">
+                        <div class="d-grid gap-2">
+                            <a href="{{ url_for('knowledge_base.list', category=file.category) }}"
+                                class="btn btn-outline-primary btn-sm">
+                                <i class="bi bi-filter"></i> Ver arquivos da mesma categoria
+                            </a>
+                            <a href="{{ url_for('knowledge_base.upload') }}" class="btn btn-outline-success btn-sm">
+                                <i class="bi bi-plus-circle"></i> Adicionar novo arquivo
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function deleteFile(fileId, filename) {
+        if (confirm('Tem certeza que deseja remover o arquivo "' + filename + '" da base de conhecimento?')) {
+            fetch(`/knowledge-base/${fileId}/delete`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        window.location.href = "{{ url_for('knowledge_base.list') }}";
+                    } else {
+                        alert('Erro ao remover arquivo: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('Erro ao remover arquivo: ' + error);
+                });
+        }
+    }
+</script>
+
+{% endblock %}

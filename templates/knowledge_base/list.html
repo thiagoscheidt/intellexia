@@ -1,0 +1,185 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Base de Conhecimento - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-sm-6">
+                <h3 class="mb-0"><i class="bi bi-book"></i> Base de Conhecimento</h3>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-end">
+                    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">Base de Conhecimento</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="app-content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="card card-primary card-outline">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="bi bi-list-ul"></i> Arquivos da Base de Conhecimento</h3>
+                        <div class="card-tools">
+                            <a href="{{ url_for('knowledge_base.upload') }}" class="btn btn-primary btn-sm">
+                                <i class="bi bi-plus-circle"></i> Adicionar Arquivo
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <!-- Filtros -->
+                        <form method="GET" class="row g-3 mb-3">
+                            <div class="col-md-4">
+                                <label for="search" class="form-label">Buscar</label>
+                                <input type="text" class="form-control" id="search" name="search"
+                                    placeholder="Nome, descrição ou tags..." value="{{ current_search }}">
+                            </div>
+                            <div class="col-md-3">
+                                <label for="category" class="form-label">Categoria</label>
+                                <select class="form-select" id="category" name="category">
+                                    <option value="">Todas</option>
+                                    {% for cat in categories %}
+                                    <option value="{{ cat }}" {% if cat==current_category %}selected{% endif %}>
+                                        {{ cat }}
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end">
+                                <button type="submit" class="btn btn-secondary me-2">
+                                    <i class="bi bi-search"></i> Filtrar
+                                </button>
+                                <a href="{{ url_for('knowledge_base.list') }}" class="btn btn-outline-secondary">
+                                    <i class="bi bi-x-circle"></i> Limpar
+                                </a>
+                            </div>
+                        </form>
+
+                        <!-- Mensagem caso não haja arquivos -->
+                        {% if files|length == 0 %}
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            Nenhum arquivo encontrado na base de conhecimento.
+                            <a href="{{ url_for('knowledge_base.upload') }}">Adicione o primeiro arquivo</a>.
+                        </div>
+                        {% else %}
+                        <!-- Tabela de arquivos -->
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Arquivo</th>
+                                        <th>Tipo</th>
+                                        <th>Categoria</th>
+                                        <th>Descrição</th>
+                                        <th>Tamanho</th>
+                                        <th>Data de Upload</th>
+                                        <th width="100">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for file in files %}
+                                    <tr>
+                                        <td>
+                                            <i class="bi bi-file-earmark-text"></i>
+                                            <strong>{{ file.original_filename }}</strong>
+                                            {% if file.tags %}
+                                            <br>
+                                            <small class="text-muted">
+                                                {% for tag in file.tags.split(',') %}
+                                                <span class="badge bg-secondary">{{ tag.strip() }}</span>
+                                                {% endfor %}
+                                            </small>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <span class="badge bg-info">{{ file.file_type }}</span>
+                                        </td>
+                                        <td>
+                                            {% if file.category %}
+                                            <span class="badge bg-primary">{{ file.category }}</span>
+                                            {% else %}
+                                            <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if file.description %}
+                                            {{ file.description[:100] }}{% if file.description|length > 100 %}...{%
+                                            endif %}
+                                            {% else %}
+                                            <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if file.file_size %}
+                                            {% if file.file_size < 1024 %} {{ file.file_size }} B {% elif file.file_size
+                                                < 1048576 %} {{ "%.2f" |format(file.file_size / 1024) }} KB {% else %}
+                                                {{ "%.2f" |format(file.file_size / 1048576) }} MB {% endif %} {% else %}
+                                                - {% endif %} </td>
+                                        <td>
+                                            <small>{{ file.uploaded_at.strftime('%d/%m/%Y %H:%M') }}</small>
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm" role="group">
+                                                <a href="{{ url_for('knowledge_base.details', file_id=file.id) }}"
+                                                    class="btn btn-info btn-sm" title="Ver detalhes">
+                                                    <i class="bi bi-eye"></i>
+                                                </a>
+                                                <button type="button" class="btn btn-danger btn-sm"
+                                                    onclick="deleteFile({{ file.id }}, '{{ file.original_filename }}')"
+                                                    title="Excluir">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Resumo -->
+                        <div class="mt-3">
+                            <small class="text-muted">
+                                Total: <strong>{{ files|length }}</strong> arquivo(s)
+                            </small>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function deleteFile(fileId, filename) {
+        if (confirm('Tem certeza que deseja remover o arquivo "' + filename + '" da base de conhecimento?')) {
+            fetch(`/knowledge-base/${fileId}/delete`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                }
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Erro ao remover arquivo: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    alert('Erro ao remover arquivo: ' + error);
+                });
+        }
+    }
+</script>
+
+{% endblock %}

@@ -1,0 +1,141 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Adicionar Arquivo - Base de Conhecimento - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-sm-6">
+                <h3 class="mb-0"><i class="bi bi-cloud-upload"></i> Adicionar Arquivo</h3>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-end">
+                    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('knowledge_base.list') }}">Base de Conhecimento</a>
+                    </li>
+                    <li class="breadcrumb-item active" aria-current="page">Adicionar Arquivo</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="app-content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-md-8 offset-md-2">
+                <div class="card card-primary card-outline">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="bi bi-cloud-upload"></i> Upload de Arquivo</h3>
+                    </div>
+                    <form method="POST" enctype="multipart/form-data">
+                        <div class="card-body">
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle"></i>
+                                <strong>Dica:</strong> Adicione arquivos relevantes à base de conhecimento como
+                                jurisprudências,
+                                legislações, modelos de documentos, artigos, etc. Isso ajudará na consulta e no trabalho
+                                do escritório.
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="file" class="form-label">Arquivo *</label>
+                                <input type="file" class="form-control" id="file" name="file" required
+                                    accept=".pdf,.doc,.docx,.txt,.odt,.rtf">
+                                <small class="form-text text-muted">
+                                    Formatos aceitos: PDF, DOC, DOCX, TXT, ODT, RTF
+                                </small>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="category" class="form-label">Categoria</label>
+                                <select class="form-select" id="category" name="category">
+                                    <option value="">Selecione uma categoria...</option>
+                                    <option value="Jurisprudência">Jurisprudência</option>
+                                    <option value="Legislação">Legislação</option>
+                                    <option value="Modelos">Modelos de Documentos</option>
+                                    <option value="Artigos">Artigos e Estudos</option>
+                                    <option value="Manuais">Manuais e Guias</option>
+                                    <option value="Procedimentos">Procedimentos Internos</option>
+                                    <option value="Outros">Outros</option>
+                                </select>
+                                <small class="form-text text-muted">
+                                    Categorize o arquivo para facilitar a organização
+                                </small>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="description" class="form-label">Descrição</label>
+                                <textarea class="form-control" id="description" name="description" rows="4"
+                                    placeholder="Descreva o conteúdo e a finalidade deste arquivo..."></textarea>
+                                <small class="form-text text-muted">
+                                    Uma boa descrição ajuda na busca e identificação do arquivo
+                                </small>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="tags" class="form-label">Tags</label>
+                                <input type="text" class="form-control" id="tags" name="tags"
+                                    placeholder="Ex: trabalhista, previdenciário, STJ, súmula">
+                                <small class="form-text text-muted">
+                                    Separe as tags por vírgula. Exemplo: trabalhista, jurisprudência, STJ
+                                </small>
+                            </div>
+
+                            <!-- <div class="alert alert-warning mt-3">
+                                <i class="bi bi-exclamation-triangle"></i>
+                                <strong>Atenção:</strong> Certifique-se de que o arquivo não contém informações
+                                sensíveis
+                                ou confidenciais de clientes antes de fazer o upload.
+                            </div> -->
+                        </div>
+
+                        <div class="card-footer">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-cloud-upload"></i> Fazer Upload
+                            </button>
+                            <a href="{{ url_for('knowledge_base.list') }}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle"></i> Cancelar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Card com informações adicionais -->
+                <div class="card card-info card-outline">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="bi bi-lightbulb"></i> Sugestões de Uso</h3>
+                    </div>
+                    <div class="card-body">
+                        <ul class="mb-0">
+                            <li><strong>Jurisprudência:</strong> Decisões judiciais relevantes, súmulas, precedentes
+                            </li>
+                            <li><strong>Legislação:</strong> Leis, decretos, portarias, instruções normativas</li>
+                            <li><strong>Modelos:</strong> Templates de petições, contratos, procurações</li>
+                            <li><strong>Artigos:</strong> Artigos acadêmicos, estudos de caso, análises doutrinárias
+                            </li>
+                            <li><strong>Manuais:</strong> Guias de procedimentos, fluxos de trabalho</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Validação do tamanho do arquivo (max 50MB)
+    document.getElementById('file').addEventListener('change', function (e) {
+        const file = e.target.files[0];
+        if (file) {
+            const maxSize = 50 * 1024 * 1024; // 50MB
+            if (file.size > maxSize) {
+                alert('O arquivo é muito grande. O tamanho máximo permitido é 50MB.');
+                e.target.value = '';
+            }
+        }
+    });
+</script>
+
+{% endblock %}

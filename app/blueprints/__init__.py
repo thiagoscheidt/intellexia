@@ -13,6 +13,7 @@ from app.blueprints.petitions import petitions_bp
 from app.blueprints.assistant import assistant_bp
 from app.blueprints.tools import tools_bp
 from app.blueprints.settings import settings_bp
+from app.blueprints.knowledge_base import knowledge_base_bp
 
 __all__ = [
     'auth_bp',
@@ -26,5 +27,6 @@ __all__ = [
     'petitions_bp',
     'assistant_bp',
     'tools_bp',
-    'settings_bp'
+    'settings_bp',
+    'knowledge_base_bp'
 ]

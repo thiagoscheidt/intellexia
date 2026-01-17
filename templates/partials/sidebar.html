@@ -199,6 +199,34 @@
           </ul>
         </li>
 
+        <li
+          class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('knowledge_base.') else '' }}">
+          <a href="#"
+            class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('knowledge_base.') else '' }}">
+            <i class="nav-icon bi bi-book"></i>
+            <p>
+              Base de Conhecimento
+              <i class="nav-arrow bi bi-chevron-right"></i>
+            </p>
+          </a>
+          <ul class="nav nav-treeview">
+            <li class="nav-item">
+              <a href="{{ url_for('knowledge_base.list') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.list' else '' }}">
+                <i class="nav-icon bi bi-list"></i>
+                <p>Listar Arquivos</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('knowledge_base.upload') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.upload' else '' }}">
+                <i class="nav-icon bi bi-cloud-upload"></i>
+                <p>Adicionar Arquivo</p>
+              </a>
+            </li>
+          </ul>
+        </li>
+
         {% if session.get('user_role') == 'admin' %}
         <li class="nav-header">ADMINISTRAÇÃO</li>
 

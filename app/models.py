@@ -371,3 +371,37 @@ class AiDocumentSummary(db.Model):
     
     def __repr__(self):
         return f'<AiDocumentSummary {self.original_filename}>'
+
+
+class KnowledgeBase(db.Model):
+    """Tabela knowledge_base - Base de conhecimento com arquivos do escritório"""
+    __tablename__ = 'knowledge_base'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    
+    # Informações do arquivo
+    original_filename = db.Column(db.String(255), nullable=False)
+    file_path = db.Column(db.String(500), nullable=False)
+    file_size = db.Column(db.Integer)  # Tamanho em bytes
+    file_type = db.Column(db.String(50))  # PDF, DOCX, TXT, etc.
+    
+    # Descrição e categorização
+    description = db.Column(db.Text)
+    category = db.Column(db.String(100))  # Jurisprudência, Legislação, Modelos, etc.
+    tags = db.Column(db.String(500))  # Tags separadas por vírgula
+    
+    # Status
+    is_active = db.Column(db.Boolean, default=True)
+    
+    # Auditoria
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relacionamentos
+    user = db.relationship('User')
+    law_firm = db.relationship('LawFirm')
+    
+    def __repr__(self):
+        return f'<KnowledgeBase {self.original_filename}>'
