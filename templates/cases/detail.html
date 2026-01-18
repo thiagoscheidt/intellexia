@@ -385,6 +385,9 @@
                 class="btn btn-outline-warning">
                 <i class="bi bi-robot"></i> Gerar Petição com IA
               </a>
+              <button type="button" class="btn btn-outline-info" onclick="openActivityTimeline()">
+                <i class="bi bi-clock-history"></i> Histórico
+              </button>
             </div>
           </div>
         </div>
@@ -548,4 +551,7 @@
     </div>
   </div>
 </div>
+
+<!-- Modal Timeline de Atividades -->
+{% include 'cases/activity_timeline_modal.html' %}
 {% endblock %}

@@ -1,0 +1,168 @@
+<!-- Modal Timeline de Atividades -->
+<div class="modal fade" id="activityTimelineModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-primary text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-clock-history"></i> Histórico de Atividades
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+
+            <div class="modal-body" id="timelineContainer" style="max-height: 600px; overflow-y: auto;">
+                <div class="text-center my-3">
+                    <div class="spinner-border spinner-border-sm" role="status">
+                        <span class="visually-hidden">Carregando...</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Fechar
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    window.caseId = {{ case_id }};
+
+    window.openActivityTimeline = function () {
+        const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('activityTimelineModal'));
+        modal.show();
+        loadActivityTimeline();
+    }
+
+    function loadActivityTimeline() {
+        fetch(`/cases/${window.caseId}/comments/timeline`)
+            .then(r => r.json())
+            .then(data => {
+                if (!data.activities || data.activities.length === 0) {
+                    document.getElementById('timelineContainer').innerHTML = '<p class="text-muted text-center my-3">Nenhuma atividade registrada</p>';
+                    return;
+                }
+
+                const html = `
+        <div class="timeline timeline-left">
+          ${data.activities.map((activity) => `
+            <div class="timeline-item mb-3">
+              <div class="timeline-badge bg-info">
+                <i class="bi ${activity.icon || 'bi-info-circle'}"></i>
+              </div>
+              <div class="timeline-content">
+                <h6 class="mb-1">
+                  <strong>${activity.title}</strong>
+                </h6>
+                <p class="text-muted small mb-1">
+                  ${activity.user} • ${formatActivityDate(activity.created_at)}
+                </p>
+                ${activity.description ? `<p class="mb-0"><small>${activity.description}</small></p>` : ''}
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      `;
+
+                document.getElementById('timelineContainer').innerHTML = html;
+            })
+            .catch(error => {
+                console.error('Erro ao carregar timeline:', error);
+                document.getElementById('timelineContainer').innerHTML = '<p class="text-danger text-center my-3">Erro ao carregar atividades</p>';
+            });
+    }
+
+    function formatActivityDate(isoString) {
+        const date = new Date(isoString);
+        const now = new Date();
+        const diff = now - date;
+        const hours = Math.floor(diff / 3600000);
+        const days = Math.floor(diff / 86400000);
+
+        if (hours < 1) {
+            const minutes = Math.floor(diff / 60000);
+            return minutes <= 1 ? 'Agora mesmo' : `${minutes}m atrás`;
+        } else if (hours < 24) {
+            return `${hours}h atrás`;
+        } else if (days < 7) {
+            return `${days}d atrás`;
+        } else {
+            return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+        }
+    }
+</script>
+
+<style>
+    .timeline {
+        position: relative;
+        padding: 0;
+        list-style: none;
+    }
+
+    .timeline::before {
+        content: '';
+        position: absolute;
+        left: 19px;
+        top: 0;
+        bottom: 0;
+        width: 2px;
+        background: #e3e6f0;
+    }
+
+    .timeline-left .timeline-item {
+        margin-bottom: 1.5rem;
+        position: relative;
+    }
+
+    .timeline-badge {
+        position: absolute;
+        left: -8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: 3px solid #fff;
+        box-shadow: 0 0 0 1px #e3e6f0;
+        color: white;
+        font-size: 14px;
+    }
+
+    .timeline-content {
+        margin-left: 60px;
+        padding: 10px 15px;
+        background: #f8f9fa;
+        border-left: 3px solid #e3e6f0;
+        border-radius: 0.25rem;
+    }
+
+    .timeline-content:hover {
+        background: #e9ecef;
+        border-left-color: #0d6efd;
+    }
+
+    #timelineContainer {
+        scrollbar-width: thin;
+    }
+
+    #timelineContainer::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    #timelineContainer::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+    }
+
+    #timelineContainer::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 10px;
+    }
+
+    #timelineContainer::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+</style>
