@@ -1,0 +1,399 @@
+<!-- Seção de Comentários/Discussões Internas -->
+<div class="card mt-3">
+    <div class="card-header bg-info text-white">
+        <h3 class="card-title">
+            <i class="bi bi-chat-left-text"></i> Discussões Internas
+        </h3>
+        <div class="card-tools">
+            <button class="btn btn-sm btn-light" data-bs-toggle="modal" data-bs-target="#newCommentModal">
+                <i class="bi bi-plus-circle"></i> Novo Comentário
+            </button>
+        </div>
+    </div>
+
+    <div class="card-body" id="commentsContainer" style="max-height: 600px; overflow-y: auto;">
+        <div class="text-center my-3">
+            <div class="spinner-border spinner-border-sm" role="status">
+                <span class="visually-hidden">Carregando...</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Novo Comentário -->
+<div class="modal fade" id="newCommentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-chat-left-text"></i> Novo Comentário
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Título (opcional)</label>
+                    <input type="text" id="commentTitle" class="form-control"
+                        placeholder="Ex: Dúvida sobre documento, Ação necessária, etc">
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Comentário <span class="text-danger">*</span></label>
+                    <textarea id="commentContent" class="form-control" rows="6" placeholder="Escreva seu comentário..."
+                        required></textarea>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label">Tipo</label>
+                    <select id="commentType" class="form-select">
+                        <option value="internal">Apenas Interno</option>
+                        <option value="note">Nota Pessoal</option>
+                    </select>
+                    <small class="form-text text-muted">Comentários internos são vistos por todos do caso</small>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+                    <i class="bi bi-x-circle"></i> Cancelar
+                </button>
+                <button type="button" class="btn btn-primary" onclick="saveComment()">
+                    <i class="bi bi-send"></i> Enviar Comentário
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Responder Comentário -->
+<div class="modal fade" id="replyCommentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-secondary text-white">
+                <h5 class="modal-title">
+                    <i class="bi bi-reply"></i> Responder Comentário
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                    aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label class="form-label">Sua Resposta <span class="text-danger">*</span></label>
+                    <textarea id="replyContent" class="form-control" rows="4"
+                        placeholder="Escreva sua resposta..."></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" onclick="saveReply()">
+                    <i class="bi bi-send"></i> Responder
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const caseId = {{ case_id }};
+    let currentReplyCommentId = null;
+
+    // Carregar comentários ao abrir a página
+    document.addEventListener('DOMContentLoaded', function () {
+        loadComments();
+        // Atualizar a cada 30 segundos
+        setInterval(loadComments, 30000);
+    });
+
+    // Carregar comentários
+    async function loadComments() {
+        try {
+            const response = await fetch(`/cases/${caseId}/comments/`);
+            const data = await response.json();
+
+            const html = data.comments.map(c => `
+      <div class="card mb-3 ${c.is_pinned ? 'border-warning border-2' : ''}" id="comment-${c.id}">
+        <div class="card-header ${c.is_resolved ? 'bg-light' : 'bg-white'}">
+          <div class="row align-items-start">
+            <div class="col">
+              <div class="d-flex align-items-center gap-2">
+                <img src="${c.avatar}" alt="" class="rounded-circle" width="35" height="35">
+                <div>
+                  <strong>${c.user}</strong>
+                  ${c.is_pinned ? '<i class="bi bi-pin-fill text-warning ms-2" title="Fixado"></i>' : ''}
+                  ${c.is_resolved ? '<span class="badge bg-success ms-2">Resolvido</span>' : ''}
+                  <br>
+                  <small class="text-muted">${formatDate(c.created_at)}</small>
+                </div>
+              </div>
+            </div>
+            <div class="col-auto">
+              <div class="btn-group btn-group-sm" role="group">
+                ${c.can_edit ? `
+                  <button class="btn btn-outline-primary" onclick="editComment(${c.id}, '${c.title}', '${c.content.replace(/'/g, "\\'")}')">
+                    <i class="bi bi-pencil"></i>
+                  </button>
+                ` : ''}
+                <button class="btn btn-outline-secondary" onclick="togglePin(${c.id})" title="${c.is_pinned ? 'Desafixar' : 'Fixar'}">
+                  <i class="bi bi-pin"></i>
+                </button>
+                ${c.can_delete ? `
+                  <button class="btn btn-outline-danger" onclick="deleteComment(${c.id})">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                ` : ''}
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="card-body">
+          ${c.title ? `<h6 class="mb-2"><strong>${c.title}</strong></h6>` : ''}
+          <p class="mb-2">${c.content}</p>
+          <div class="d-flex gap-2">
+            <button class="btn btn-sm btn-link" onclick="loadReplies(${c.id})">
+              <i class="bi bi-chat"></i> ${c.reply_count} resposta${c.reply_count !== 1 ? 's' : ''}
+            </button>
+            <button class="btn btn-sm btn-link" onclick="showReplyForm(${c.id})">
+              <i class="bi bi-reply"></i> Responder
+            </button>
+          </div>
+          <div id="replies-${c.id}" class="mt-3" style="display: none;"></div>
+        </div>
+      </div>
+    `).join('');
+
+            document.getElementById('commentsContainer').innerHTML = html || '<p class="text-muted text-center my-3">Sem comentários ainda</p>';
+        } catch (error) {
+            console.error('Erro ao carregar comentários:', error);
+        }
+    }
+
+    // Salvar novo comentário
+    async function saveComment() {
+        const title = document.getElementById('commentTitle').value;
+        const content = document.getElementById('commentContent').value;
+        const type = document.getElementById('commentType').value;
+
+        if (!content.trim()) {
+            alert('Escreva um comentário');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/cases/${caseId}/comments/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title, content, type, mentions: [] })
+            });
+
+            if (response.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('newCommentModal')).hide();
+                document.getElementById('commentTitle').value = '';
+                document.getElementById('commentContent').value = '';
+                loadComments();
+            } else {
+                alert('Erro ao salvar comentário');
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+            alert('Erro ao salvar comentário');
+        }
+    }
+
+    // Carregar respostas de um comentário
+    async function loadReplies(commentId) {
+        const repliesDiv = document.getElementById(`replies-${commentId}`);
+
+        if (repliesDiv.style.display === 'block') {
+            repliesDiv.style.display = 'none';
+            return;
+        }
+
+        try {
+            const response = await fetch(`/cases/${caseId}/comments/${commentId}/replies`);
+            const data = await response.json();
+
+            const html = data.replies.map(r => `
+      <div class="card card-sm border-secondary mb-2">
+        <div class="card-body p-2">
+          <div class="d-flex gap-2">
+            <img src="${r.avatar}" alt="" class="rounded-circle" width="30" height="30">
+            <div class="flex-grow-1">
+              <strong>${r.user}</strong>
+              <small class="text-muted ms-2">${formatDate(r.created_at)}</small>
+              <p class="mb-1 mt-1">${r.content}</p>
+              ${r.can_delete ? `
+                <button class="btn btn-link btn-sm text-danger" onclick="deleteComment(${r.id})">
+                  <i class="bi bi-trash"></i> Deletar
+                </button>
+              ` : ''}
+            </div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+
+            repliesDiv.innerHTML = html || '<p class="text-muted small">Sem respostas</p>';
+            repliesDiv.style.display = 'block';
+        } catch (error) {
+            console.error('Erro ao carregar respostas:', error);
+        }
+    }
+
+    // Mostrar formulário para responder
+    function showReplyForm(commentId) {
+        currentReplyCommentId = commentId;
+        document.getElementById('replyContent').value = '';
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('replyCommentModal')).show();
+    }
+
+    // Salvar resposta
+    async function saveReply() {
+        const content = document.getElementById('replyContent').value;
+
+        if (!content.trim()) {
+            alert('Escreva uma resposta');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/cases/${caseId}/comments/${currentReplyCommentId}/reply`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ content, mentions: [] })
+            });
+
+            if (response.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('replyCommentModal')).hide();
+                loadReplies(currentReplyCommentId);
+            } else {
+                alert('Erro ao salvar resposta');
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+            alert('Erro ao salvar resposta');
+        }
+    }
+
+    // Fixar/desafixar comentário
+    async function togglePin(commentId) {
+        try {
+            const response = await fetch(`/cases/${caseId}/comments/${commentId}/pin`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (response.ok) {
+                loadComments();
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+        }
+    }
+
+    // Deletar comentário
+    async function deleteComment(commentId) {
+        if (!confirm('Deletar comentário?')) return;
+
+        try {
+            const response = await fetch(`/cases/${caseId}/comments/${commentId}`, {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' }
+            });
+
+            if (response.ok) {
+                loadComments();
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+        }
+    }
+
+    // Editar comentário
+    function editComment(commentId, title, content) {
+        document.getElementById('commentTitle').value = title;
+        document.getElementById('commentContent').value = content;
+
+        // Modificar botão para atualizar
+        const modal = bootstrap.Modal.getOrCreateInstance(document.getElementById('newCommentModal'));
+        const btn = document.querySelector('#newCommentModal .btn-primary');
+        btn.onclick = () => updateComment(commentId);
+        modal.show();
+    }
+
+    // Atualizar comentário
+    async function updateComment(commentId) {
+        const title = document.getElementById('commentTitle').value;
+        const content = document.getElementById('commentContent').value;
+
+        if (!content.trim()) {
+            alert('Escreva um comentário');
+            return;
+        }
+
+        try {
+            const response = await fetch(`/cases/${caseId}/comments/${commentId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title, content })
+            });
+
+            if (response.ok) {
+                bootstrap.Modal.getInstance(document.getElementById('newCommentModal')).hide();
+                document.getElementById('commentTitle').value = '';
+                document.getElementById('commentContent').value = '';
+
+                // Restaurar botão para novo comentário
+                const btn = document.querySelector('#newCommentModal .btn-primary');
+                btn.onclick = saveComment;
+
+                loadComments();
+            }
+        } catch (error) {
+            console.error('Erro:', error);
+        }
+    }
+
+    // Formatar data
+    function formatDate(isoString) {
+        const date = new Date(isoString);
+        const now = new Date();
+        const diff = now - date;
+        const hours = Math.floor(diff / 3600000);
+        const days = Math.floor(diff / 86400000);
+
+        if (hours < 1) {
+            const minutes = Math.floor(diff / 60000);
+            return minutes <= 1 ? 'Agora mesmo' : `${minutes}m atrás`;
+        } else if (hours < 24) {
+            return `${hours}h atrás`;
+        } else if (days < 7) {
+            return `${days}d atrás`;
+        } else {
+            return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+        }
+    }
+</script>
+
+<style>
+    #commentsContainer {
+        scrollbar-width: thin;
+    }
+
+    #commentsContainer::-webkit-scrollbar {
+        width: 6px;
+    }
+
+    #commentsContainer::-webkit-scrollbar-track {
+        background: #f1f1f1;
+        border-radius: 10px;
+    }
+
+    #commentsContainer::-webkit-scrollbar-thumb {
+        background: #888;
+        border-radius: 10px;
+    }
+
+    #commentsContainer::-webkit-scrollbar-thumb:hover {
+        background: #555;
+    }
+</style>

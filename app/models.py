@@ -405,3 +405,62 @@ class KnowledgeBase(db.Model):
     
     def __repr__(self):
         return f'<KnowledgeBase {self.original_filename}>'
+
+
+class CaseActivity(db.Model):
+    """Tabela case_activities - Registro de todas as ações e alterações em um caso"""
+    __tablename__ = 'case_activities'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    case_id = db.Column(db.Integer, db.ForeignKey('cases.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    activity_type = db.Column(db.String(50), nullable=False)  # 'comment', 'status_change', 'document_added', etc
+    title = db.Column(db.String(255), nullable=False)
+    description = db.Column(db.Text)
+    related_id = db.Column(db.Integer)  # ID do documento, benefício, comentário, etc
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relacionamentos
+    case = db.relationship('Case', backref='activities')
+    user = db.relationship('User', backref='activities')
+    
+    def __repr__(self):
+        return f'<CaseActivity {self.activity_type}>'
+
+
+class CaseComment(db.Model):
+    """Tabela case_comments - Comentários e discussões internas sobre casos"""
+    __tablename__ = 'case_comments'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    case_id = db.Column(db.Integer, db.ForeignKey('cases.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    comment_type = db.Column(db.String(50), default='internal')  # 'internal', 'external', 'note'
+    title = db.Column(db.String(255))
+    content = db.Column(db.Text, nullable=False)
+    
+    # Thread (respostas)
+    parent_comment_id = db.Column(db.Integer, db.ForeignKey('case_comments.id'), index=True)
+    replies = db.relationship('CaseComment', remote_side=[id], backref='parent')
+    
+    # Status
+    is_pinned = db.Column(db.Boolean, default=False)
+    is_resolved = db.Column(db.Boolean, default=False)
+    resolved_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    resolved_at = db.Column(db.DateTime)
+    
+    # Mentions (JSON array de user_ids)
+    mentions = db.Column(db.JSON, default=list)
+    
+    # Timestamps
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relacionamentos
+    case = db.relationship('Case', backref='comments')
+    user = db.relationship('User', backref='comments', foreign_keys=[user_id])
+    resolved_by = db.relationship('User', foreign_keys=[resolved_by_id])
+    
+    def __repr__(self):
+        return f'<CaseComment {self.id}>'

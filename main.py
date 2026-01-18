@@ -44,6 +44,7 @@ from app.blueprints import (
     petitions_bp, assistant_bp, tools_bp, settings_bp,
     knowledge_base_bp, admin_users_bp
 )
+from app.blueprints.case_comments import case_comments_bp
 
 # Registrar todos os blueprints
 app.register_blueprint(auth_bp)
@@ -60,6 +61,7 @@ app.register_blueprint(tools_bp)
 app.register_blueprint(settings_bp)
 app.register_blueprint(admin_users_bp)
 app.register_blueprint(knowledge_base_bp)
+app.register_blueprint(case_comments_bp)
 
 # Importar middlewares e contexto (mantém funcionalidade anterior)
 from app.middlewares import init_app_middlewares
