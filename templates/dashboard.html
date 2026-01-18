@@ -26,7 +26,7 @@
       </a>
     </div>
   </div>
-  
+
   <div class="col-lg-3 col-6">
     <div class="small-box text-bg-success">
       <div class="inner">
@@ -41,7 +41,7 @@
       </a>
     </div>
   </div>
-  
+
   <div class="col-lg-3 col-6">
     <div class="small-box text-bg-warning">
       <div class="inner">
@@ -56,7 +56,7 @@
       </a>
     </div>
   </div>
-  
+
   <div class="col-lg-3 col-6">
     <div class="small-box text-bg-info">
       <div class="inner">
@@ -69,6 +69,55 @@
       <a href="{{ url_for('benefits.benefits_list') }}" class="small-box-footer">
         Ver benefícios <i class="bi bi-arrow-right-circle-fill"></i>
       </a>
+    </div>
+  </div>
+</div>
+
+<!-- Indicadores de saúde do pipeline -->
+<div class="row mb-3">
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">
+          <i class="bi bi-activity me-1"></i>
+          Taxa de Ativos
+        </h3>
+      </div>
+      <div class="card-body">
+        {% set total_cases_safe = total_cases or 0 %}
+        {% set active_pct = total_cases_safe and ((active_cases or 0) * 100 / total_cases_safe) or 0 %}
+        <div class="d-flex align-items-center mb-2">
+          <strong class="me-2">{{ active_cases or 0 }}</strong>
+          <span class="text-muted">de {{ total_cases_safe }} casos</span>
+          <span class="ms-auto text-success fw-bold">{{ '%.0f'|format(active_pct) }}%</span>
+        </div>
+        <div class="progress" style="height: 6px;">
+          <div class="progress-bar bg-success" role="progressbar" style="width: {{ active_pct }}%;"
+            aria-valuenow="{{ active_pct }}" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-6">
+    <div class="card">
+      <div class="card-header">
+        <h3 class="card-title">
+          <i class="bi bi-journal-check me-1"></i>
+          Taxa de Protocolados
+        </h3>
+      </div>
+      <div class="card-body">
+        {% set filed_pct = total_cases_safe and ((filed_cases or 0) * 100 / total_cases_safe) or 0 %}
+        <div class="d-flex align-items-center mb-2">
+          <strong class="me-2">{{ filed_cases or 0 }}</strong>
+          <span class="text-muted">de {{ total_cases_safe }} casos</span>
+          <span class="ms-auto text-primary fw-bold">{{ '%.0f'|format(filed_pct) }}%</span>
+        </div>
+        <div class="progress" style="height: 6px;">
+          <div class="progress-bar bg-primary" role="progressbar" style="width: {{ filed_pct }}%;"
+            aria-valuenow="{{ filed_pct }}" aria-valuemin="0" aria-valuemax="100"></div>
+        </div>
+      </div>
     </div>
   </div>
 </div>
@@ -87,13 +136,13 @@
         <dl class="row">
           <dt class="col-sm-8">Total de Casos:</dt>
           <dd class="col-sm-4"><span class="badge bg-primary">{{ total_cases or 0 }}</span></dd>
-          
+
           <dt class="col-sm-8">Casos Ativos:</dt>
           <dd class="col-sm-4"><span class="badge bg-success">{{ active_cases or 0 }}</span></dd>
-          
+
           <dt class="col-sm-8">Rascunhos:</dt>
           <dd class="col-sm-4"><span class="badge bg-warning">{{ draft_cases or 0 }}</span></dd>
-          
+
           <dt class="col-sm-8">Casos Protocolados:</dt>
           <dd class="col-sm-4"><span class="badge bg-info">{{ filed_cases or 0 }}</span></dd>
         </dl>
@@ -113,16 +162,50 @@
         <dl class="row">
           <dt class="col-sm-8">Total de Clientes:</dt>
           <dd class="col-sm-4"><span class="badge bg-primary">{{ total_clients or 0 }}</span></dd>
-          
+
           <dt class="col-sm-8">Total de Advogados:</dt>
           <dd class="col-sm-4"><span class="badge bg-secondary">{{ total_lawyers or 0 }}</span></dd>
-          
+
           <dt class="col-sm-8">Total de Benefícios:</dt>
           <dd class="col-sm-4"><span class="badge bg-info">{{ total_benefits or 0 }}</span></dd>
-          
+
           <dt class="col-sm-8">Total de Documentos:</dt>
           <dd class="col-sm-4"><span class="badge bg-warning">{{ total_documents or 0 }}</span></dd>
         </dl>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Gráficos rápidos -->
+<div class="row mt-3">
+  <div class="col-lg-6">
+    <div class="card card-outline card-primary h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h3 class="card-title mb-0"><i class="bi bi-graph-up-arrow me-1"></i> Casos por Status</h3>
+        <span class="badge bg-primary">Visão geral</span>
+      </div>
+      <div class="card-body">
+        {% if cases_by_status %}
+        <canvas id="chartStatus" height="160"></canvas>
+        {% else %}
+        <div class="alert alert-light mb-0">Sem dados de status para exibir.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card card-outline card-info h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h3 class="card-title mb-0"><i class="bi bi-pie-chart me-1"></i> Casos por Tipo</h3>
+        <span class="badge bg-info">Distribuição</span>
+      </div>
+      <div class="card-body">
+        {% if cases_by_type %}
+        <canvas id="chartType" height="160"></canvas>
+        {% else %}
+        <div class="alert alert-light mb-0">Sem dados de tipos para exibir.</div>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -157,14 +240,15 @@
                 <td>
                   <strong>{{ case.title[:40] }}{% if case.title|length > 40 %}...{% endif %}</strong>
                 </td>
-                <td>{{ case.client.name[:25] if case.client else 'N/A' }}{% if case.client and case.client.name|length > 25 %}...{% endif %}</td>
+                <td>{{ case.client.name[:25] if case.client else 'N/A' }}{% if case.client and case.client.name|length >
+                  25 %}...{% endif %}</td>
                 <td>
                   {% if case.status == 'active' %}
-                    <span class="badge bg-success">Ativo</span>
+                  <span class="badge bg-success">Ativo</span>
                   {% elif case.status == 'draft' %}
-                    <span class="badge bg-warning">Rascunho</span>
+                  <span class="badge bg-warning">Rascunho</span>
                   {% else %}
-                    <span class="badge bg-secondary">{{ case.status|title }}</span>
+                  <span class="badge bg-secondary">{{ case.status|title }}</span>
                   {% endif %}
                 </td>
                 <td>{{ case.created_at.strftime('%d/%m/%Y') if case.created_at else '-' }}</td>
@@ -252,15 +336,15 @@
           <li>
             <span class="badge bg-secondary me-2">{{ count }}</span>
             {% if case_type == 'fap_trajeto' %}
-              FAP Trajeto
+            FAP Trajeto
             {% elif case_type == 'fap_nexo' %}
-              FAP Nexo
+            FAP Nexo
             {% elif case_type == 'fap_multiplos' %}
-              FAP Múltiplos
+            FAP Múltiplos
             {% elif case_type == 'auto_infracao' %}
-              Auto Infração
+            Auto Infração
             {% else %}
-              {{ case_type|title }}
+            {{ case_type|title }}
             {% endif %}
           </li>
           {% endfor %}
@@ -273,11 +357,11 @@
           {% for status, count in cases_by_status.items() %}
           <li>
             {% if status == 'active' %}
-              <span class="badge bg-success me-2">{{ count }}</span> Ativos
+            <span class="badge bg-success me-2">{{ count }}</span> Ativos
             {% elif status == 'draft' %}
-              <span class="badge bg-warning me-2">{{ count }}</span> Rascunhos
+            <span class="badge bg-warning me-2">{{ count }}</span> Rascunhos
             {% else %}
-              <span class="badge bg-secondary me-2">{{ count }}</span> {{ status|title }}
+            <span class="badge bg-secondary me-2">{{ count }}</span> {{ status|title }}
             {% endif %}
           </li>
           {% endfor %}
@@ -287,4 +371,86 @@
     </div>
   </div>
 </div>
+{% endblock %}
+{% block extra_js %}
+<!-- Chart.js sem SRI para evitar bloqueio por hash incorreto -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const casesByStatus = {{ cases_by_status|default ({}) | tojson
+  }};
+  const casesByType = {{ cases_by_type|default ({}) | tojson }};
+
+  // Helper to transform dict into labels/data arrays
+  const toSeries = (obj, labelMap) => {
+    const labels = [];
+    const data = [];
+    Object.entries(obj || {}).forEach(([key, value]) => {
+      labels.push(labelMap?.[key] || key);
+      data.push(value);
+    });
+    return { labels, data };
+  };
+
+  const statusMap = {
+    active: 'Ativos',
+    draft: 'Rascunhos',
+    filed: 'Protocolados',
+  };
+
+  const typeMap = {
+    fap_trajeto: 'FAP Trajeto',
+    fap_nexo: 'FAP Nexo',
+    fap_multiplos: 'FAP Múltiplos',
+    auto_infracao: 'Auto Infração',
+  };
+
+  const palette = ['#0d6efd', '#198754', '#ffc107', '#0dcaf0', '#6610f2', '#fd7e14', '#6c757d'];
+
+  // Status chart
+  if (Object.keys(casesByStatus).length) {
+    const { labels, data } = toSeries(casesByStatus, statusMap);
+    const ctx = document.getElementById('chartStatus');
+    if (ctx) {
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Casos',
+            data,
+            backgroundColor: labels.map((_, i) => palette[i % palette.length]),
+            borderRadius: 6,
+          }],
+        },
+        options: {
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+        },
+      });
+    }
+  }
+
+  // Type chart
+  if (Object.keys(casesByType).length) {
+    const { labels, data } = toSeries(casesByType, typeMap);
+    const ctx = document.getElementById('chartType');
+    if (ctx) {
+      new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels,
+          datasets: [{
+            data,
+            backgroundColor: labels.map((_, i) => palette[i % palette.length]),
+          }],
+        },
+        options: {
+          plugins: { legend: { position: 'bottom' } },
+        },
+      });
+    }
+  }
+    });
+</script>
 {% endblock %}
