@@ -46,7 +46,7 @@
   {% block extra_css %}{% endblock %}
 </head>
 
-<body class="layout-fixed sidebar-expand-lg sidebar-open bg-body-tertiary">
+<body class="layout-fixed sidebar-expand-lg sidebar-open bg-body-tertiary sidebar-mini sidebar-collapse">
   <!--begin::App Wrapper-->
   <div class="app-wrapper">
     <!-- Header -->
@@ -136,13 +136,30 @@
   </script>
   <!--end::OverlayScrollbars Configure-->
 
-  <!-- Theme Toggle Script -->
+  <!-- Sidebar Mini & Theme Toggle Script -->
   <script>
     document.addEventListener('DOMContentLoaded', function () {
-      const themeToggle = document.getElementById('theme-toggle');
       const html = document.documentElement;
+      const body = document.body;
+      const themeToggle = document.getElementById('theme-toggle');
       const icon = themeToggle.querySelector('i');
 
+      // ===== SIDEBAR MINI STATE MANAGEMENT =====
+      const savedSidebarState = localStorage.getItem('sidebarState') || 'mini';
+
+      if (savedSidebarState === 'normal') {
+        body.classList.remove('sidebar-mini', 'sidebar-collapse');
+      } else {
+        body.classList.add('sidebar-mini', 'sidebar-collapse');
+      }
+
+      // Listen for sidebar toggle events
+      document.addEventListener('lte.sidebar', function (e) {
+        const isMini = body.classList.contains('sidebar-collapse');
+        localStorage.setItem('sidebarState', isMini ? 'normal' : 'mini');
+      });
+
+      // ===== THEME TOGGLE =====
       // Recuperar tema salvo do localStorage
       const savedTheme = localStorage.getItem('theme') || 'light';
 
@@ -171,11 +188,9 @@
         if (newTheme === 'dark') {
           icon.classList.remove('bi-moon-stars');
           icon.classList.add('bi-sun');
-          console.log('Modo dark ativado');
         } else {
           icon.classList.remove('bi-sun');
           icon.classList.add('bi-moon-stars');
-          console.log('Modo claro ativado');
         }
       });
     });
