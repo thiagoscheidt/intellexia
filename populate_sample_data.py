@@ -21,9 +21,9 @@ def import_models():
     from main import app
     from app.models import (
         db, LawFirm, User, Client, Court, Lawyer, Case, CaseLawyer, 
-        CaseCompetence, CaseBenefit, Document
+        CaseCompetence, CaseBenefit, Document, CaseActivity, CaseComment
     )
-    return app, db, LawFirm, User, Client, Court, Lawyer, Case, CaseLawyer, CaseCompetence, CaseBenefit, Document
+    return app, db, LawFirm, User, Client, Court, Lawyer, Case, CaseLawyer, CaseCompetence, CaseBenefit, Document, CaseActivity, CaseComment
 def create_sample_law_firm(db, LawFirm):
     """Cria escritório de advocacia de exemplo"""
     from datetime import datetime, timedelta, timezone
@@ -538,13 +538,173 @@ def create_sample_competences(db, CaseCompetence, cases):
     
     return competences
 
+def create_sample_activities(db, CaseActivity, cases, users):
+    """Cria atividades de exemplo para os casos"""
+    from datetime import datetime, timedelta, timezone
+    
+    activities = []
+    activity_types = [
+        {'type': 'caso_criado', 'title': 'Caso criado no sistema', 'icon': 'bi-file-text'},
+        {'type': 'documento_adicionado', 'title': 'Documento adicionado', 'icon': 'bi-file-earmark'},
+        {'type': 'beneficio_adicionado', 'title': 'Benefício adicionado', 'icon': 'bi-plus-circle'},
+        {'type': 'advogado_atribuido', 'title': 'Advogado atribuído', 'icon': 'bi-person-plus'},
+        {'type': 'status_alterado', 'title': 'Status alterado', 'icon': 'bi-arrow-repeat'},
+    ]
+    
+    descriptions = {
+        'caso_criado': 'Novo caso registrado no sistema',
+        'documento_adicionado': 'Novo documento anexado ao processo',
+        'beneficio_adicionado': 'Novo benefício de segurado adicionado',
+        'advogado_atribuido': 'Advogado responsável pelo caso definido',
+        'status_alterado': 'Status do caso foi atualizado'
+    }
+    
+    # Para cada caso, criar 2-3 atividades
+    for case_index, case in enumerate(cases):
+        user = users[case_index % len(users)]
+        
+        # Atividade 1: Caso criado
+        activity1_exists = CaseActivity.query.filter_by(
+            case_id=case.id,
+            activity_type='caso_criado'
+        ).first()
+        
+        if not activity1_exists:
+            activity1 = CaseActivity(
+                case_id=case.id,
+                user_id=user.id,
+                activity_type='caso_criado',
+                title='Caso criado no sistema',
+                description='Novo caso registrado no sistema',
+                created_at=datetime.now(timezone.utc) - timedelta(days=5)
+            )
+            db.session.add(activity1)
+            activities.append(activity1)
+        
+        # Atividade 2: Benefício adicionado
+        activity2_exists = CaseActivity.query.filter_by(
+            case_id=case.id,
+            activity_type='beneficio_adicionado'
+        ).first()
+        
+        if not activity2_exists:
+            activity2 = CaseActivity(
+                case_id=case.id,
+                user_id=user.id,
+                activity_type='beneficio_adicionado',
+                title='Benefício adicionado',
+                description='Novo benefício de segurado adicionado ao caso',
+                created_at=datetime.now(timezone.utc) - timedelta(days=3)
+            )
+            db.session.add(activity2)
+            activities.append(activity2)
+        
+        # Atividade 3: Advogado atribuído
+        activity3_exists = CaseActivity.query.filter_by(
+            case_id=case.id,
+            activity_type='advogado_atribuido'
+        ).first()
+        
+        if not activity3_exists:
+            activity3 = CaseActivity(
+                case_id=case.id,
+                user_id=user.id,
+                activity_type='advogado_atribuido',
+                title='Advogado atribuído',
+                description=f'Advogado {user.name} foi atribuído ao caso',
+                created_at=datetime.now(timezone.utc) - timedelta(days=2)
+            )
+            db.session.add(activity3)
+            activities.append(activity3)
+    
+    if activities:
+        print(f"✓ Criadas {len(activities)} atividades de exemplo")
+    
+    return activities
+
+def create_sample_comments(db, CaseComment, cases, users):
+    """Cria comentários de exemplo para os casos"""
+    from datetime import datetime, timedelta, timezone
+    
+    comments = []
+    
+    comment_data = [
+        {
+            'title': 'Análise técnica do FAP',
+            'content': 'Analisando a documentação do FAP, identifiquei inconsistências no período de 2019-2021. Será necessário requerer cálculo administrativo junto à INSS.'
+        },
+        {
+            'title': 'Documentação faltante',
+            'content': 'Solicitar ao cliente a lista completa de beneficiários inclusos no FAP para cotejamento com os dados do CNIS.'
+        },
+        {
+            'title': 'Estratégia processual',
+            'content': 'Recomendo primeiro tentar resolução administrativa via protocolo de contestação antes de ingressar ação judicial.'
+        },
+        {
+            'title': 'Prazos críticos',
+            'content': 'Atenção: prazo de prescrição termina em 6 meses. Protocolo administrativo deve ser feito até essa data.'
+        },
+        {
+            'title': 'Parecer jurídico',
+            'content': 'Com base na jurisprudência pacífica, acidente de trajeto não deve impactar o FAP. Temos tese forte para o caso.'
+        }
+    ]
+    
+    # Para cada caso, criar 1-2 comentários
+    for case_index, case in enumerate(cases):
+        # Pegar usuário aleatório (preferivelmente advogado)
+        user = users[case_index % len(users)]
+        
+        # Comentário 1
+        comment1_data = comment_data[case_index % len(comment_data)]
+        comment1_exists = CaseComment.query.filter_by(
+            case_id=case.id,
+            title=comment1_data['title']
+        ).first()
+        
+        if not comment1_exists:
+            comment1 = CaseComment(
+                case_id=case.id,
+                user_id=user.id,
+                comment_type='internal',
+                title=comment1_data['title'],
+                content=comment1_data['content'],
+                is_pinned=case_index % 3 == 0,  # Algumas fixadas
+                created_at=datetime.now(timezone.utc) - timedelta(days=2)
+            )
+            db.session.add(comment1)
+            comments.append(comment1)
+            db.session.flush()
+            
+            # Comentário 2: resposta ao comentário 1 (50% dos casos)
+            if case_index % 2 == 0 and len(users) > 1:
+                reply_user = users[(case_index + 1) % len(users)]
+                reply_content = 'Concorrer com a análise. Vou preparar o protocolo administrativo para não perder o prazo.'
+                
+                comment2 = CaseComment(
+                    case_id=case.id,
+                    user_id=reply_user.id,
+                    comment_type='internal',
+                    content=reply_content,
+                    parent_comment_id=comment1.id,
+                    created_at=datetime.now(timezone.utc) - timedelta(hours=6)
+                )
+                db.session.add(comment2)
+                comments.append(comment2)
+    
+    if comments:
+        print(f"✓ Criados {len(comments)} comentários de exemplo")
+    
+    return comments
+
 def main():
     """Função principal para executar a população de dados"""
     print("🚀 Iniciando população de dados de exemplo...")
     print("=" * 50)
     
     # Importar modelos no contexto correto
-    app, db, LawFirm, User, Client, Court, Lawyer, Case, CaseLawyer, CaseCompetence, CaseBenefit, Document = import_models()
+    app, db, LawFirm, User, Client, Court, Lawyer, Case, CaseLawyer, CaseCompetence, CaseBenefit, Document, CaseActivity, CaseComment = import_models()
     
     # Garantir que o app seja configurado corretamente
     app.config.update({
@@ -596,6 +756,12 @@ def main():
             print("\n📅 Criando competências...")
             competences = create_sample_competences(db, CaseCompetence, cases)
             
+            print("\n📝 Criando atividades de exemplo...")
+            activities = create_sample_activities(db, CaseActivity, cases, users)
+            
+            print("\n💬 Criando comentários e discussões...")
+            comments = create_sample_comments(db, CaseComment, cases, users)
+            
             # Commit final
             db.session.commit()
             
@@ -611,6 +777,8 @@ def main():
             print(f"   • {len(case_lawyers)} relações caso-advogado")
             print(f"   • {len(benefits)} benefícios")
             print(f"   • {len(competences)} competências")
+            print(f"   • {len(activities)} atividades")
+            print(f"   • {len(comments)} comentários")
             print("=" * 50)
             
     except Exception as e:
