@@ -75,6 +75,22 @@ def dashboard():
             db.func.count(Case.id).label('count')
         ).filter(Case.law_firm_id == law_firm_id).group_by(Case.status).all()
         cases_by_status = {status: count for status, count in cases_by_status_result}
+
+        # Casos abertos por mês (usando created_at) – processado em Python para portabilidade entre bancos
+        from collections import defaultdict
+        cases_by_month_raw = Case.query.with_entities(Case.created_at).filter(
+            Case.law_firm_id == law_firm_id,
+            Case.created_at.isnot(None)
+        ).all()
+        cases_by_month_map = defaultdict(int)
+        for (created_at,) in cases_by_month_raw:
+            try:
+                label = created_at.strftime('%b/%Y')  # Ex.: Jan/2026
+                cases_by_month_map[label] += 1
+            except Exception:
+                continue
+        # ordenar cronologicamente pela chave AAAA-MM, mantendo label amigável
+        cases_by_month = {k: v for k, v in sorted(cases_by_month_map.items(), key=lambda kv: datetime.strptime(kv[0], '%b/%Y'))}
         
         total_users = User.query.filter_by(law_firm_id=law_firm_id).count()
         
@@ -100,6 +116,7 @@ def dashboard():
             cases_by_status=cases_by_status,
             total_users=total_users,
             total_courts=total_courts,
+            cases_by_month=cases_by_month,
             user=user,
             law_firm=law_firm
         )
@@ -120,6 +137,7 @@ def dashboard():
             total_cause_value=0,
             cases_by_type={},
             cases_by_status={},
+            cases_by_month={},
             user=user if 'user' in locals() else None,
             law_firm=law_firm if 'law_firm' in locals() else None
         )

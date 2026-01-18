@@ -177,40 +177,6 @@
   </div>
 </div>
 
-<!-- Gráficos rápidos -->
-<div class="row mt-3">
-  <div class="col-lg-6">
-    <div class="card card-outline card-primary h-100">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <h3 class="card-title mb-0"><i class="bi bi-graph-up-arrow me-1"></i> Casos por Status</h3>
-        <span class="badge bg-primary">Visão geral</span>
-      </div>
-      <div class="card-body">
-        {% if cases_by_status %}
-        <canvas id="chartStatus" height="160"></canvas>
-        {% else %}
-        <div class="alert alert-light mb-0">Sem dados de status para exibir.</div>
-        {% endif %}
-      </div>
-    </div>
-  </div>
-  <div class="col-lg-6">
-    <div class="card card-outline card-info h-100">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <h3 class="card-title mb-0"><i class="bi bi-pie-chart me-1"></i> Casos por Tipo</h3>
-        <span class="badge bg-info">Distribuição</span>
-      </div>
-      <div class="card-body">
-        {% if cases_by_type %}
-        <canvas id="chartType" height="160"></canvas>
-        {% else %}
-        <div class="alert alert-light mb-0">Sem dados de tipos para exibir.</div>
-        {% endif %}
-      </div>
-    </div>
-  </div>
-</div>
-
 <!-- Valor total e distribuições -->
 <div class="row mt-3">
   <div class="col-md-8">
@@ -371,6 +337,59 @@
     </div>
   </div>
 </div>
+
+<!-- Gráficos rápidos (fim da página) -->
+<div class="row mt-3">
+  <div class="col-lg-6">
+    <div class="card card-outline card-primary h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h3 class="card-title mb-0"><i class="bi bi-graph-up-arrow me-1"></i> Casos por Status</h3>
+        <span class="badge bg-primary">Visão geral</span>
+      </div>
+      <div class="card-body">
+        {% if cases_by_status %}
+        <canvas id="chartStatus" height="160"></canvas>
+        {% else %}
+        <div class="alert alert-light mb-0">Sem dados de status para exibir.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card card-outline card-info h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h3 class="card-title mb-0"><i class="bi bi-pie-chart me-1"></i> Casos por Tipo</h3>
+        <span class="badge bg-info">Distribuição</span>
+      </div>
+      <div class="card-body">
+        {% if cases_by_type %}
+        <canvas id="chartType" height="160"></canvas>
+        {% else %}
+        <div class="alert alert-light mb-0">Sem dados de tipos para exibir.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Série temporal: casos abertos mês a mês -->
+<div class="row mt-3">
+  <div class="col-12">
+    <div class="card card-outline card-secondary h-100">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h3 class="card-title mb-0"><i class="bi bi-calendar3 me-1"></i> Casos Abertos por Mês</h3>
+        <span class="badge bg-secondary">Últimos meses</span>
+      </div>
+      <div class="card-body">
+        {% if cases_by_month %}
+        <canvas id="chartMonthly" height="180"></canvas>
+        {% else %}
+        <div class="alert alert-light mb-0">Sem dados mensais para exibir.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 {% block extra_js %}
 <!-- Chart.js sem SRI para evitar bloqueio por hash incorreto -->
@@ -380,6 +399,7 @@
     const casesByStatus = {{ cases_by_status|default ({}) | tojson
   }};
   const casesByType = {{ cases_by_type|default ({}) | tojson }};
+  const casesByMonth = {{ cases_by_month|default ({}) | tojson }};
 
   // Helper to transform dict into labels/data arrays
   const toSeries = (obj, labelMap) => {
@@ -406,6 +426,34 @@
   };
 
   const palette = ['#0d6efd', '#198754', '#ffc107', '#0dcaf0', '#6610f2', '#fd7e14', '#6c757d'];
+
+  // Monthly chart
+  if (Object.keys(casesByMonth).length) {
+    const { labels, data } = toSeries(casesByMonth);
+    const ctx = document.getElementById('chartMonthly');
+    if (ctx) {
+      new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Casos abertos',
+            data,
+            borderColor: palette[0],
+            backgroundColor: palette[0] + '33',
+            tension: 0.25,
+            fill: true,
+            pointRadius: 4,
+            pointHoverRadius: 6,
+          }],
+        },
+        options: {
+          plugins: { legend: { display: false } },
+          scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+        },
+      });
+    }
+  }
 
   // Status chart
   if (Object.keys(casesByStatus).length) {
