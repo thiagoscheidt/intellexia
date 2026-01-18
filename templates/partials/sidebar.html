@@ -42,34 +42,6 @@
           </ul>
         </li>
 
-        <li class="nav-item">
-          <a href="{{ url_for('assistant.legal_assistant') }}"
-            class="nav-link {{ 'active' if request.endpoint == 'assistant.legal_assistant' else '' }}">
-            <i class="nav-icon bi bi-robot"></i>
-            <p>Assistente Jurídico</p>
-          </a>
-        </li>
-
-        <li class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('tools.') else '' }}">
-          <a href="#"
-            class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('tools.') else '' }}">
-            <i class="nav-icon bi bi-tools"></i>
-            <p>
-              Ferramentas
-              <i class="nav-arrow bi bi-chevron-right"></i>
-            </p>
-          </a>
-          <ul class="nav nav-treeview">
-            <li class="nav-item">
-              <a href="{{ url_for('tools.tools_document_summary_list') }}"
-                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('tools.tools_document_summary') else '' }}">
-                <i class="nav-icon bi bi-robot"></i>
-                <p>Análise de Documento</p>
-              </a>
-            </li>
-          </ul>
-        </li>
-
         <li
           class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint.startswith('cases.') or request.endpoint.startswith('benefits.') or request.endpoint.startswith('documents.') or request.endpoint.startswith('petitions.')) else '' }}">
           <a href="#"
@@ -93,6 +65,34 @@
                 class="nav-link {{ 'active' if request.endpoint == 'cases.case_new' else '' }}">
                 <i class="nav-icon bi bi-plus-square"></i>
                 <p>Novo Caso</p>
+              </a>
+            </li>
+          </ul>
+        </li>
+
+        <li
+          class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint.startswith('tools.') or request.endpoint == 'assistant.legal_assistant') else '' }}">
+          <a href="#"
+            class="nav-link {{ 'active' if request.endpoint and (request.endpoint.startswith('tools.') or request.endpoint == 'assistant.legal_assistant') else '' }}">
+            <i class="nav-icon bi bi-tools"></i>
+            <p>
+              Ferramentas
+              <i class="nav-arrow bi bi-chevron-right"></i>
+            </p>
+          </a>
+          <ul class="nav nav-treeview">
+            <li class="nav-item">
+              <a href="{{ url_for('assistant.legal_assistant') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'assistant.legal_assistant' else '' }}">
+                <i class="nav-icon bi bi-robot"></i>
+                <p>Assistente Jurídico</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('tools.tools_document_summary_list') }}"
+                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('tools.tools_document_summary') else '' }}">
+                <i class="nav-icon bi bi-robot"></i>
+                <p>Análise de Documento</p>
               </a>
             </li>
           </ul>
