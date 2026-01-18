@@ -237,6 +237,14 @@
             <p>Configurações do Escritório</p>
           </a>
         </li>
+
+        <li class="nav-item">
+          <a href="{{ url_for('admin_users.list_users') }}"
+            class="nav-link {{ 'active' if request.endpoint in ['admin_users.list_users'] else '' }}">
+            <i class="nav-icon bi bi-people"></i>
+            <p>Usuários do Sistema</p>
+          </a>
+        </li>
         {% endif %}
       </ul>
       <!--end::Sidebar Menu-->

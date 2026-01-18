@@ -1,0 +1,238 @@
+{% extends 'layout/base.html' %}
+
+{% block title %}Administração - Usuários{% endblock %}
+{% block page_title %}Administração | Usuários{% endblock %}
+
+{% block content %}
+<div class="app-content">
+    <div class="container-fluid">
+        <div class="row mb-3">
+            <div class="col-md-8">
+                <h3 class="mb-1">Usuários do Escritório</h3>
+                <p class="text-muted mb-0">Gerencie contas, papéis e ativação.</p>
+            </div>
+            <div class="col-md-4 text-md-end mt-2 mt-md-0">
+                <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalAddUser">
+                    <i class="bi bi-person-plus me-1"></i> Novo usuário
+                </button>
+            </div>
+        </div>
+
+        <div class="card card-outline card-primary">
+            <div class="card-header">
+                <h3 class="card-title mb-0"><i class="bi bi-people"></i> Lista de usuários</h3>
+            </div>
+            <div class="card-body p-0">
+                {% if users %}
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Nome</th>
+                                <th>Email</th>
+                                <th>Papel</th>
+                                <th>Status</th>
+                                <th class="text-end">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for user in users %}
+                            <tr>
+                                <td>{{ user.name }}</td>
+                                <td>{{ user.email }}</td>
+                                <td><span class="badge bg-secondary text-uppercase">{{ user.role }}</span></td>
+                                <td>
+                                    {% if user.is_active %}
+                                    <span class="badge bg-success">Ativo</span>
+                                    {% else %}
+                                    <span class="badge bg-danger">Inativo</span>
+                                    {% endif %}
+                                </td>
+                                <td class="text-end">
+                                    {% if user.id != session.get('user_id') %}
+                                    <div class="btn-group" role="group">
+                                        <button class="btn btn-sm btn-outline-primary btn-edit" data-id="{{ user.id }}"
+                                            data-name="{{ user.name }}" data-email="{{ user.email }}"
+                                            data-role="{{ user.role }}">
+                                            <i class="bi bi-pencil-square"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-secondary"
+                                            onclick="toggleUser({{ user.id }})">
+                                            {% if user.is_active %}<i class="bi bi-slash-circle"></i>{% else %}<i
+                                                class="bi bi-check-circle"></i>{% endif %}
+                                        </button>
+                                    </div>
+                                    {% else %}
+                                    <span class="text-muted small">(sua conta)</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="p-3">
+                    <div class="alert alert-info mb-0">Nenhum usuário encontrado.</div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal add user -->
+<div class="modal fade" id="modalAddUser" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Novo Usuário</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formAddUser">
+                    <div class="mb-3">
+                        <label class="form-label">Nome</label>
+                        <input type="text" class="form-control" name="name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" name="email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Senha</label>
+                        <input type="password" class="form-control" name="password" required minlength="6">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Papel</label>
+                        <select class="form-select" name="role">
+                            <option value="user">Usuário</option>
+                            <option value="assistant">Assistente</option>
+                            <option value="lawyer">Advogado</option>
+                            <option value="admin">Administrador</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnSaveUser">Salvar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal edit user -->
+<div class="modal fade" id="modalEditUser" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Editar Usuário</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="formEditUser">
+                    <input type="hidden" name="user_id" id="edit_user_id">
+                    <div class="mb-3">
+                        <label class="form-label">Nome</label>
+                        <input type="text" class="form-control" name="name" id="edit_name" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Email</label>
+                        <input type="email" class="form-control" name="email" id="edit_email" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Nova Senha (opcional)</label>
+                        <input type="password" class="form-control" name="password" id="edit_password" minlength="6">
+                        <small class="text-muted">Deixe em branco para manter a senha atual.</small>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Papel</label>
+                        <select class="form-select" name="role" id="edit_role">
+                            <option value="user">Usuário</option>
+                            <option value="assistant">Assistente</option>
+                            <option value="lawyer">Advogado</option>
+                            <option value="admin">Administrador</option>
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-light" data-bs-dismiss="modal">Cancelar</button>
+                <button type="button" class="btn btn-primary" id="btnUpdateUser">Salvar alterações</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', () => {
+        const form = document.getElementById('formAddUser');
+        const btnSave = document.getElementById('btnSaveUser');
+        const editModalEl = document.getElementById('modalEditUser');
+        const editModal = new bootstrap.Modal(editModalEl);
+        const editForm = document.getElementById('formEditUser');
+        const btnUpdate = document.getElementById('btnUpdateUser');
+
+        btnSave.addEventListener('click', () => {
+            const formData = new FormData(form);
+            fetch('{{ url_for('admin_users.create_user') }}', {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            }).then(r => r.json()).then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert(data.message || 'Erro ao salvar.');
+                }
+            }).catch(() => alert('Erro de conexão.'));
+        });
+
+        document.querySelectorAll('.btn-edit').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const userId = btn.dataset.id;
+                document.getElementById('edit_user_id').value = userId;
+                document.getElementById('edit_name').value = btn.dataset.name || '';
+                document.getElementById('edit_email').value = btn.dataset.email || '';
+                document.getElementById('edit_role').value = btn.dataset.role || 'user';
+                document.getElementById('edit_password').value = '';
+                editModal.show();
+            });
+        });
+
+        btnUpdate.addEventListener('click', () => {
+            const formData = new FormData(editForm);
+            const userId = document.getElementById('edit_user_id').value;
+            fetch(`{{ url_for('admin_users.update_user', user_id=0) }}`.replace('0', userId), {
+                method: 'POST',
+                body: formData,
+                headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            }).then(r => r.json()).then(data => {
+                if (data.success) {
+                    location.reload();
+                } else {
+                    alert(data.message || 'Erro ao atualizar.');
+                }
+            }).catch(() => alert('Erro de conexão.'));
+        });
+    });
+
+    function toggleUser(userId) {
+        fetch(`{{ url_for('admin_users.toggle_user', user_id=0) }}`.replace('0', userId), {
+            method: 'POST',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        }).then(r => r.json()).then(data => {
+            if (data.success) {
+                location.reload();
+            } else {
+                alert(data.message || 'Erro ao atualizar usuário.');
+            }
+        }).catch(() => alert('Erro de conexão.'));
+    }
+
+    // openEdit no longer needed; handled via data attributes and listeners
+</script>
+{% endblock %}
