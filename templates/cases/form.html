@@ -7,7 +7,7 @@
   <div class="container-fluid">
     <div class="row">
       <div class="col-sm-6">
-        <h3 class="mb-0">{{ title }}</h3>
+        <h3 class="mb-0"><i class="bi bi-folder-plus me-2"></i>{{ title }}</h3>
       </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
@@ -24,23 +24,24 @@
   <div class="container-fluid">
     <div class="row">
       <div class="col-12">
-        <div class="card">
+        <div class="card card-primary card-outline">
           <div class="card-header">
-            <h3 class="card-title">{{ title }}</h3>
+            <h3 class="card-title"><i class="bi bi-folder-plus me-2"></i>{{ title }}</h3>
           </div>
           <form method="POST" action="">
             {{ form.hidden_tag() }}
             <div class="card-body">
-              <h5 class="mb-3">Informações Básicas</h5>
+              <h5 class="text-primary mb-3"><i class="bi bi-info-circle me-2"></i>Informações Básicas</h5>
               <div class="row">
                 <div class="col-md-12">
                   <div class="mb-3">
                     {{ form.title.label(class="form-label") }}
-                    {{ form.title(class="form-control" + (" is-invalid" if form.title.errors else "")) }}
+                    {{ form.title(class="form-control" + (" is-invalid" if form.title.errors else ""),
+                    placeholder="Digite o título do caso") }}
                     {% if form.title.errors %}
-                      <div class="invalid-feedback">
-                        {% for error in form.title.errors %}{{ error }}{% endfor %}
-                      </div>
+                    <div class="invalid-feedback">
+                      {% for error in form.title.errors %}{{ error }}{% endfor %}
+                    </div>
                     {% endif %}
                   </div>
                 </div>
@@ -52,9 +53,9 @@
                     {{ form.client_id.label(class="form-label") }}
                     {{ form.client_id(class="form-select" + (" is-invalid" if form.client_id.errors else "")) }}
                     {% if form.client_id.errors %}
-                      <div class="invalid-feedback">
-                        {% for error in form.client_id.errors %}{{ error }}{% endfor %}
-                      </div>
+                    <div class="invalid-feedback">
+                      {% for error in form.client_id.errors %}{{ error }}{% endfor %}
+                    </div>
                     {% endif %}
                   </div>
                 </div>
@@ -70,11 +71,12 @@
                 <div class="col-md-4">
                   <div class="mb-3">
                     {{ form.case_type.label(class="form-label") }}
-                    {{ form.case_type(class="form-select" + (" is-invalid" if form.case_type.errors else ""), id="case_type") }}
+                    {{ form.case_type(class="form-select" + (" is-invalid" if form.case_type.errors else ""),
+                    id="case_type") }}
                     {% if form.case_type.errors %}
-                      <div class="invalid-feedback">
-                        {% for error in form.case_type.errors %}{{ error }}{% endfor %}
-                      </div>
+                    <div class="invalid-feedback">
+                      {% for error in form.case_type.errors %}{{ error }}{% endfor %}
+                    </div>
                     {% endif %}
                   </div>
                 </div>
@@ -94,7 +96,7 @@
 
               <div class="row" id="fap_reason_container" style="display: none;">
                 <div class="col-md-12">
-                  <div class="mb-3">
+                  <div class="callout callout-warning">
                     {{ form.fap_reason.label(class="form-label") }}
                     {{ form.fap_reason(class="form-select") }}
                     <div class="form-text">Selecione o motivo ou enquadramento para casos FAP</div>
@@ -102,7 +104,7 @@
                 </div>
               </div>
 
-              <h5 class="mt-4 mb-3">Informações FAP</h5>
+              <h5 class="text-success mt-4 mb-3"><i class="bi bi-graph-up-arrow me-2"></i>Informações FAP</h5>
               <div class="row">
                 <div class="col-md-4">
                   <div class="mb-3">
@@ -124,7 +126,7 @@
                 </div>
               </div>
 
-              <h5 class="mt-4 mb-3">Resumos</h5>
+              <h5 class="text-info mt-4 mb-3"><i class="bi bi-file-earmark-text me-2"></i>Resumos</h5>
               <div class="row">
                 <div class="col-md-12">
                   <div class="mb-3">
@@ -138,7 +140,8 @@
                 <div class="col-md-12">
                   <div class="mb-3">
                     {{ form.thesis_summary.label(class="form-label") }}
-                    {{ form.thesis_summary(class="form-control", rows="4", placeholder="Descreva as teses jurídicas...") }}
+                    {{ form.thesis_summary(class="form-control", rows="4", placeholder="Descreva as teses jurídicas...")
+                    }}
                   </div>
                 </div>
               </div>
@@ -147,14 +150,19 @@
                 <div class="col-md-12">
                   <div class="mb-3">
                     {{ form.prescription_summary.label(class="form-label") }}
-                    {{ form.prescription_summary(class="form-control", rows="3", placeholder="Informações sobre prescrição...") }}
+                    {{ form.prescription_summary(class="form-control", rows="3", placeholder="Informações sobre
+                    prescrição...") }}
                   </div>
                 </div>
               </div>
             </div>
-            <div class="card-footer">
-              {{ form.submit(class="btn btn-primary") }}
-              <a href="{{ url_for('cases.cases_list') }}" class="btn btn-secondary">Cancelar</a>
+            <div class="card-footer text-end">
+              <a href="{{ url_for('cases.cases_list') }}" class="btn btn-secondary">
+                <i class="bi bi-x-circle me-1"></i>Cancelar
+              </a>
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-check-circle me-1"></i>{{ form.submit.label.text }}
+              </button>
             </div>
           </form>
         </div>
@@ -164,25 +172,25 @@
 </div>
 
 <script>
-// Mostrar/ocultar campo Motivo/Enquadramento baseado no tipo de caso
-document.addEventListener('DOMContentLoaded', function() {
-  const caseTypeSelect = document.getElementById('case_type');
-  const fapReasonContainer = document.getElementById('fap_reason_container');
-  
-  function toggleFapReason() {
-    const selectedValue = caseTypeSelect.value;
-    if (selectedValue === 'fap_trajeto' || selectedValue === 'fap_outros') {
-      fapReasonContainer.style.display = 'block';
-    } else {
-      fapReasonContainer.style.display = 'none';
+  // Mostrar/ocultar campo Motivo/Enquadramento baseado no tipo de caso
+  document.addEventListener('DOMContentLoaded', function () {
+    const caseTypeSelect = document.getElementById('case_type');
+    const fapReasonContainer = document.getElementById('fap_reason_container');
+
+    function toggleFapReason() {
+      const selectedValue = caseTypeSelect.value;
+      if (selectedValue === 'fap_trajeto' || selectedValue === 'fap_outros') {
+        fapReasonContainer.style.display = 'block';
+      } else {
+        fapReasonContainer.style.display = 'none';
+      }
     }
-  }
-  
-  // Verificar no carregamento da página
-  toggleFapReason();
-  
-  // Verificar quando mudar a seleção
-  caseTypeSelect.addEventListener('change', toggleFapReason);
-});
+
+    // Verificar no carregamento da página
+    toggleFapReason();
+
+    // Verificar quando mudar a seleção
+    caseTypeSelect.addEventListener('change', toggleFapReason);
+  });
 </script>
 {% endblock %}
