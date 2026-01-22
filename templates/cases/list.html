@@ -3,16 +3,17 @@
 {% block title %}Lista de Casos - IntellexIA{% endblock %}
 
 {% block content %}
-<div class="app-content-header">
+<div class="app-content-header border-bottom border-light">
   <div class="container-fluid">
-    <div class="row">
+    <div class="row align-items-center">
       <div class="col-sm-6">
-        <h3 class="mb-0"><i class="bi bi-briefcase"></i> Casos</h3>
+        <h3 class="mb-0"><i class="bi bi-briefcase text-primary"></i> Casos</h3>
       </div>
       <div class="col-sm-6">
-        <ol class="breadcrumb float-sm-end">
-          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
-          <li class="breadcrumb-item active" aria-current="page">Casos</li>
+        <ol class="breadcrumb float-sm-end mb-0">
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i>
+              Home</a></li>
+          <li class="breadcrumb-item active" aria-current="page"><i class="bi bi-folder"></i> Casos</li>
         </ol>
       </div>
     </div>
@@ -23,25 +24,25 @@
   <div class="container-fluid">
     <div class="row">
       <div class="col-12">
-        <div class="card card-primary card-outline">
-          <div class="card-header">
-            <h3 class="card-title"><i class="bi bi-list-ul"></i> Lista de Casos</h3>
+        <div class="card card-primary card-outline shadow-sm">
+          <div class="card-header bg-gradient bg-primary text-white border-0">
+            <h3 class="card-title mb-0"><i class="bi bi-list-ul"></i> Lista de Casos</h3>
             <div class="card-tools">
-              <a href="{{ url_for('cases.case_new') }}" class="btn btn-primary btn-sm">
+              <a href="{{ url_for('cases.case_new') }}" class="btn btn-light btn-sm">
                 <i class="bi bi-plus-circle"></i> Novo Caso
               </a>
             </div>
           </div>
           <div class="card-body">
             {% with messages = get_flashed_messages(with_categories=true) %}
-              {% if messages %}
-                {% for category, message in messages %}
-                  <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                    <i class="bi bi-info-circle"></i> {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                  </div>
-                {% endfor %}
-              {% endif %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+              <i class="bi bi-info-circle"></i> {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
+            {% endif %}
             {% endwith %}
 
             <!-- Filtros Avançados -->
@@ -49,7 +50,8 @@
               <div class="card-header">
                 <h5 class="card-title mb-0">
                   <i class="bi bi-funnel"></i> Filtros
-                  <button class="btn btn-sm btn-outline-secondary ms-2" type="button" data-bs-toggle="collapse" data-bs-target="#filtersCollapse" aria-expanded="false">
+                  <button class="btn btn-sm btn-outline-secondary ms-2" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#filtersCollapse" aria-expanded="false">
                     <i class="bi bi-chevron-down"></i>
                   </button>
                 </h5>
@@ -65,12 +67,12 @@
                       <select class="form-select" id="client_filter" name="client_id">
                         <option value="">Todos os clientes</option>
                         {% if clients %}
-                          {% for client in clients %}
-                            <option value="{{ client.id }}" 
-                              {% if request.args.get('client_id')|int == client.id %}selected{% endif %}>
-                              {{ client.name }}
-                            </option>
-                          {% endfor %}
+                        {% for client in clients %}
+                        <option value="{{ client.id }}" {% if request.args.get('client_id')|int==client.id %}selected{%
+                          endif %}>
+                          {{ client.name }}
+                        </option>
+                        {% endfor %}
                         {% endif %}
                       </select>
                     </div>
@@ -82,22 +84,27 @@
                       </label>
                       <select class="form-select" id="type_filter" name="case_type">
                         <option value="">Todos os tipos</option>
-                        <option value="fap_trajeto" {% if request.args.get('case_type') == 'fap_trajeto' %}selected{% endif %}>
+                        <option value="fap_trajeto" {% if request.args.get('case_type')=='fap_trajeto' %}selected{%
+                          endif %}>
                           FAP - Trajeto
                         </option>
-                        <option value="fap_nexo" {% if request.args.get('case_type') == 'fap_nexo' %}selected{% endif %}>
+                        <option value="fap_nexo" {% if request.args.get('case_type')=='fap_nexo' %}selected{% endif %}>
                           FAP - Nexo Causal
                         </option>
-                        <option value="fap_multiplos" {% if request.args.get('case_type') == 'fap_multiplos' %}selected{% endif %}>
+                        <option value="fap_multiplos" {% if request.args.get('case_type')=='fap_multiplos' %}selected{%
+                          endif %}>
                           FAP - Múltiplos
                         </option>
-                        <option value="auto_infracao" {% if request.args.get('case_type') == 'auto_infracao' %}selected{% endif %}>
+                        <option value="auto_infracao" {% if request.args.get('case_type')=='auto_infracao' %}selected{%
+                          endif %}>
                           Auto de Infração
                         </option>
-                        <option value="previdenciario" {% if request.args.get('case_type') == 'previdenciario' %}selected{% endif %}>
+                        <option value="previdenciario" {% if request.args.get('case_type')=='previdenciario'
+                          %}selected{% endif %}>
                           Previdenciário
                         </option>
-                        <option value="trabalhista" {% if request.args.get('case_type') == 'trabalhista' %}selected{% endif %}>
+                        <option value="trabalhista" {% if request.args.get('case_type')=='trabalhista' %}selected{%
+                          endif %}>
                           Trabalhista
                         </option>
                       </select>
@@ -110,19 +117,19 @@
                       </label>
                       <select class="form-select" id="status_filter" name="status">
                         <option value="">Todos os status</option>
-                        <option value="draft" {% if request.args.get('status') == 'draft' %}selected{% endif %}>
+                        <option value="draft" {% if request.args.get('status')=='draft' %}selected{% endif %}>
                           Rascunho
                         </option>
-                        <option value="active" {% if request.args.get('status') == 'active' %}selected{% endif %}>
+                        <option value="active" {% if request.args.get('status')=='active' %}selected{% endif %}>
                           Ativo
                         </option>
-                        <option value="suspended" {% if request.args.get('status') == 'suspended' %}selected{% endif %}>
+                        <option value="suspended" {% if request.args.get('status')=='suspended' %}selected{% endif %}>
                           Suspenso
                         </option>
-                        <option value="closed" {% if request.args.get('status') == 'closed' %}selected{% endif %}>
+                        <option value="closed" {% if request.args.get('status')=='closed' %}selected{% endif %}>
                           Encerrado
                         </option>
-                        <option value="archived" {% if request.args.get('status') == 'archived' %}selected{% endif %}>
+                        <option value="archived" {% if request.args.get('status')=='archived' %}selected{% endif %}>
                           Arquivado
                         </option>
                       </select>
@@ -136,12 +143,12 @@
                       <select class="form-select" id="court_filter" name="court_id">
                         <option value="">Todas as varas</option>
                         {% if courts %}
-                          {% for court in courts %}
-                            <option value="{{ court.id }}" 
-                              {% if request.args.get('court_id')|int == court.id %}selected{% endif %}>
-                              {{ court.vara_name }}
-                            </option>
-                          {% endfor %}
+                        {% for court in courts %}
+                        <option value="{{ court.id }}" {% if request.args.get('court_id')|int==court.id %}selected{%
+                          endif %}>
+                          {{ court.vara_name }}
+                        </option>
+                        {% endfor %}
                         {% endif %}
                       </select>
                     </div>
@@ -154,9 +161,9 @@
                       <select class="form-select" id="fap_year_filter" name="fap_year">
                         <option value="">Todos os anos</option>
                         {% for year in range(2015, 2025) %}
-                          <option value="{{ year }}" {% if request.args.get('fap_year')|int == year %}selected{% endif %}>
-                            {{ year }}
-                          </option>
+                        <option value="{{ year }}" {% if request.args.get('fap_year')|int==year %}selected{% endif %}>
+                          {{ year }}
+                        </option>
                         {% endfor %}
                       </select>
                     </div>
@@ -166,15 +173,15 @@
                       <label for="value_min" class="form-label">
                         <i class="bi bi-currency-dollar"></i> Valor Mínimo
                       </label>
-                      <input type="number" class="form-control" id="value_min" name="value_min" 
-                        placeholder="R$ 0,00" step="0.01" value="{{ request.args.get('value_min', '') }}">
+                      <input type="number" class="form-control" id="value_min" name="value_min" placeholder="R$ 0,00"
+                        step="0.01" value="{{ request.args.get('value_min', '') }}">
                     </div>
 
                     <div class="col-md-3">
                       <label for="value_max" class="form-label">
                         <i class="bi bi-currency-dollar"></i> Valor Máximo
                       </label>
-                      <input type="number" class="form-control" id="value_max" name="value_max" 
+                      <input type="number" class="form-control" id="value_max" name="value_max"
                         placeholder="R$ 999.999,99" step="0.01" value="{{ request.args.get('value_max', '') }}">
                     </div>
 
@@ -183,7 +190,7 @@
                       <label for="search_text" class="form-label">
                         <i class="bi bi-search"></i> Buscar Texto
                       </label>
-                      <input type="text" class="form-control" id="search_text" name="search" 
+                      <input type="text" class="form-control" id="search_text" name="search"
                         placeholder="Buscar em título, fatos..." value="{{ request.args.get('search', '') }}">
                     </div>
 
@@ -209,12 +216,12 @@
                       <div class="row g-3">
                         <div class="col-md-6">
                           <label for="date_from" class="form-label">Data de Ajuizamento (De)</label>
-                          <input type="date" class="form-control" id="date_from" name="date_from" 
+                          <input type="date" class="form-control" id="date_from" name="date_from"
                             value="{{ request.args.get('date_from', '') }}">
                         </div>
                         <div class="col-md-6">
                           <label for="date_to" class="form-label">Data de Ajuizamento (Até)</label>
-                          <input type="date" class="form-control" id="date_to" name="date_to" 
+                          <input type="date" class="form-control" id="date_to" name="date_to"
                             value="{{ request.args.get('date_to', '') }}">
                         </div>
                       </div>
@@ -225,38 +232,38 @@
             </div>
 
             <!-- Resumo dos Filtros Aplicados -->
-            {% set has_filters = request.args.get('client_id') or request.args.get('case_type') or 
-                                request.args.get('status') or request.args.get('court_id') or 
-                                request.args.get('fap_year') or request.args.get('value_min') or 
-                                request.args.get('value_max') or request.args.get('search') or
-                                request.args.get('date_from') or request.args.get('date_to') %}
+            {% set has_filters = request.args.get('client_id') or request.args.get('case_type') or
+            request.args.get('status') or request.args.get('court_id') or
+            request.args.get('fap_year') or request.args.get('value_min') or
+            request.args.get('value_max') or request.args.get('search') or
+            request.args.get('date_from') or request.args.get('date_to') %}
             {% if has_filters %}
             <div class="alert alert-info">
               <h6><i class="bi bi-filter"></i> Filtros Aplicados:</h6>
               <div class="d-flex flex-wrap gap-2">
                 {% if request.args.get('client_id') %}
-                  {% for client in clients %}
-                    {% if client.id|string == request.args.get('client_id') %}
-                      <span class="badge bg-primary">Cliente: {{ client.name }}</span>
-                    {% endif %}
-                  {% endfor %}
+                {% for client in clients %}
+                {% if client.id|string == request.args.get('client_id') %}
+                <span class="badge bg-primary">Cliente: {{ client.name }}</span>
+                {% endif %}
+                {% endfor %}
                 {% endif %}
                 {% if request.args.get('case_type') %}
-                  <span class="badge bg-info">Tipo: {{ request.args.get('case_type') }}</span>
+                <span class="badge bg-info">Tipo: {{ request.args.get('case_type') }}</span>
                 {% endif %}
                 {% if request.args.get('status') %}
-                  <span class="badge bg-success">Status: {{ request.args.get('status') }}</span>
+                <span class="badge bg-success">Status: {{ request.args.get('status') }}</span>
                 {% endif %}
                 {% if request.args.get('search') %}
-                  <span class="badge bg-warning text-dark">Busca: "{{ request.args.get('search') }}"</span>
+                <span class="badge bg-warning text-dark">Busca: "{{ request.args.get('search') }}"</span>
                 {% endif %}
                 {% if request.args.get('value_min') or request.args.get('value_max') %}
-                  <span class="badge bg-secondary">
-                    Valor: 
-                    {% if request.args.get('value_min') %}R$ {{ request.args.get('value_min') }}{% endif %}
-                    {% if request.args.get('value_min') and request.args.get('value_max') %} - {% endif %}
-                    {% if request.args.get('value_max') %}R$ {{ request.args.get('value_max') }}{% endif %}
-                  </span>
+                <span class="badge bg-secondary">
+                  Valor:
+                  {% if request.args.get('value_min') %}R$ {{ request.args.get('value_min') }}{% endif %}
+                  {% if request.args.get('value_min') and request.args.get('value_max') %} - {% endif %}
+                  {% if request.args.get('value_max') %}R$ {{ request.args.get('value_max') }}{% endif %}
+                </span>
                 {% endif %}
               </div>
             </div>
@@ -267,68 +274,76 @@
               <table id="casesTable" class="table table-bordered table-striped table-hover">
                 <thead class="table-light">
                   <tr>
-                    <th style="width: 60px;">ID</th>
-                    <th>Título / Cliente</th>
-                    <th style="width: 140px;">Tipo</th>
-                    <th style="width: 120px;">Status</th>
-                    <th style="width: 130px;">Valor da Causa</th>
-                    <th style="width: 130px;">Data Ajuiz.</th>
-                    <th style="width: 180px;" class="text-center">Ações</th>
+                    <th style="width: 60px;"><i class="bi bi-hash text-primary"></i> ID</th>
+                    <th><i class="bi bi-file-earmark-text text-primary"></i> Título / Cliente</th>
+                    <th style="width: 140px;"><i class="bi bi-bookmark text-primary"></i> Tipo</th>
+                    <th style="width: 120px;"><i class="bi bi-shield-check text-primary"></i> Status</th>
+                    <th style="width: 130px;"><i class="bi bi-cash-coin text-primary"></i> Valor</th>
+                    <th style="width: 130px;"><i class="bi bi-calendar-event text-primary"></i> Data</th>
+                    <th style="width: 180px;" class="text-center"><i class="bi bi-gear text-primary"></i> Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {% for case in cases %}
                   <tr>
-                    <td><strong>{{ case.id }}</strong></td>
+                    <td><span class="badge bg-primary">{{ case.id }}</span></td>
                     <td>
-                      <a href="{{ url_for('cases.case_detail', case_id=case.id) }}" class="text-decoration-none">
-                        <strong>{{ case.title }}</strong>
+                      <a href="{{ url_for('cases.case_detail', case_id=case.id) }}"
+                        class="text-decoration-none fw-bold text-dark">
+                        {{ case.title }}
                       </a>
                       <br>
                       <small class="text-muted">
-                        <i class="bi bi-person"></i> {{ case.client.name if case.client else 'Cliente não definido' }}
+                        <i class="bi bi-person-circle"></i> {{ case.client.name if case.client else 'Cliente não
+                        definido' }}
                       </small>
                     </td>
                     <td>
                       {% if case.case_type == 'fap_trajeto' %}
-                        <span class="badge bg-info text-dark"><i class="bi bi-truck"></i> FAP - Trajeto</span>
+                      <span class="badge bg-info text-dark"><i class="bi bi-truck"></i> FAP Trajeto</span>
                       {% elif case.case_type == 'fap_outros' %}
-                        <span class="badge bg-info text-dark"><i class="bi bi-file-text"></i> FAP - Outros</span>
+                      <span class="badge bg-info text-dark"><i class="bi bi-file-text"></i> FAP Outros</span>
                       {% elif case.case_type == 'previdenciario' %}
-                        <span class="badge bg-primary"><i class="bi bi-shield-check"></i> Previdenciário</span>
+                      <span class="badge bg-primary"><i class="bi bi-shield-check"></i> Previdenciário</span>
                       {% elif case.case_type == 'trabalhista' %}
-                        <span class="badge bg-warning text-dark"><i class="bi bi-building"></i> Trabalhista</span>
+                      <span class="badge bg-warning text-dark"><i class="bi bi-building"></i> Trabalhista</span>
                       {% else %}
-                        <span class="badge bg-secondary">{{ case.case_type }}</span>
+                      <span class="badge bg-secondary"><i class="bi bi-question-circle"></i> {{ case.case_type }}</span>
                       {% endif %}
                     </td>
                     <td>
                       {% if case.status == 'draft' %}
-                        <span class="badge bg-secondary"><i class="bi bi-pencil-square"></i> Rascunho</span>
+                      <span class="badge bg-secondary"><i class="bi bi-pencil-square"></i> Rascunho</span>
                       {% elif case.status == 'active' %}
-                        <span class="badge bg-success"><i class="bi bi-check-circle"></i> Ativo</span>
+                      <span class="badge bg-success"><i class="bi bi-check-circle-fill"></i> Ativo</span>
                       {% elif case.status == 'suspended' %}
-                        <span class="badge bg-warning text-dark"><i class="bi bi-pause-circle"></i> Suspenso</span>
+                      <span class="badge bg-warning text-dark"><i class="bi bi-pause-circle"></i> Suspenso</span>
                       {% elif case.status == 'closed' %}
-                        <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Encerrado</span>
+                      <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Encerrado</span>
                       {% elif case.status == 'archived' %}
-                        <span class="badge bg-dark"><i class="bi bi-archive"></i> Arquivado</span>
+                      <span class="badge bg-dark"><i class="bi bi-archive"></i> Arquivado</span>
                       {% endif %}
                     </td>
-                    <td><strong>R$ {{ "%.2f"|format(case.value_cause|float) if case.value_cause else '-' }}</strong></td>
-                    <td>{{ case.filing_date.strftime('%d/%m/%Y') if case.filing_date else '-' }}</td>
+                    <td class="text-nowrap"><strong class="text-success">R$ {{ "%.2f"|format(case.value_cause|float) if
+                        case.value_cause else '-' }}</strong></td>
+                    <td class="text-nowrap"><small>{{ case.filing_date.strftime('%d/%m/%Y') if case.filing_date else '-'
+                        }}</small></td>
                     <td class="text-center">
-                      <div class="btn-group" role="group">
-                        <a href="{{ url_for('cases.case_detail', case_id=case.id) }}" class="btn btn-sm btn-info" title="Visualizar">
+                      <div class="btn-group btn-group-sm" role="group">
+                        <a href="{{ url_for('cases.case_detail', case_id=case.id) }}" class="btn btn-info"
+                          title="Visualizar">
                           <i class="bi bi-eye"></i>
                         </a>
-                        <a href="{{ url_for('documents.case_documents_list', case_id=case.id) }}" class="btn btn-sm btn-secondary" title="Documentos">
+                        <a href="{{ url_for('documents.case_documents_list', case_id=case.id) }}"
+                          class="btn btn-secondary" title="Documentos">
                           <i class="bi bi-file-earmark-text"></i>
                         </a>
-                        <a href="{{ url_for('cases.case_edit', case_id=case.id) }}" class="btn btn-sm btn-warning" title="Editar">
+                        <a href="{{ url_for('cases.case_edit', case_id=case.id) }}" class="btn btn-warning"
+                          title="Editar">
                           <i class="bi bi-pencil"></i>
                         </a>
-                        <button type="button" class="btn btn-sm btn-danger" title="Excluir" onclick="confirmDelete('{{ url_for('cases.case_delete', case_id=case.id) }}')">
+                        <button type="button" class="btn btn-danger" title="Excluir"
+                          onclick="confirmDelete('{{ url_for('cases.case_delete', case_id=case.id) }}')">
                           <i class="bi bi-trash"></i>
                         </button>
                       </div>
@@ -341,7 +356,8 @@
             {% else %}
             <div class="alert alert-info mb-0">
               <h5><i class="bi bi-info-circle"></i> Nenhum caso cadastrado</h5>
-              <p class="mb-0">Você ainda não possui casos cadastrados. <a href="{{ url_for('cases.case_new') }}" class="alert-link">Clique aqui para cadastrar o primeiro caso</a>.</p>
+              <p class="mb-0">Você ainda não possui casos cadastrados. <a href="{{ url_for('cases.case_new') }}"
+                  class="alert-link">Clique aqui para cadastrar o primeiro caso</a>.</p>
             </div>
             {% endif %}
           </div>
@@ -365,63 +381,63 @@
 <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
 <script>
-$(document).ready(function() {
-  $('#casesTable').DataTable({
-    "language": {
-      "url": "//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json"
-    },
-    "pageLength": 25,
-    "order": [[0, "desc"]],
-    "columnDefs": [
-      { "orderable": false, "targets": 7 }
-    ],
-    "dom": 't<"row"<"col-sm-12 col-md-5"i><"col-sm-12 col-md-7"p>>'
-  });
-  
-  // Auto-expandir filtros se houver filtros aplicados
-  {% if has_filters %}
+  $(document).ready(function () {
+    $('#casesTable').DataTable({
+      "language": {
+        "url": "//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json"
+      },
+      "pageLength": 25,
+      "order": [[0, "desc"]],
+      "columnDefs": [
+        { "orderable": false, "targets": 7 }
+      ],
+      "dom": 't<"row"<"col-sm-12 col-md-5"i><"col-sm-12 col-md-7"p>>'
+    });
+
+    // Auto-expandir filtros se houver filtros aplicados
+    {% if has_filters %}
     $('#filtersCollapse').addClass('show');
-  {% endif %}
-  
-  // Aplicar filtros automaticamente quando campos mudarem
-  $('#client_filter, #type_filter, #status_filter, #court_filter, #fap_year_filter').change(function() {
-    $('#filtersForm').submit();
-  });
-  
-  // Submeter form ao pressionar Enter nos campos de busca
-  $('#search_text, #value_min, #value_max').keypress(function(e) {
-    if (e.which == 13) {
+    {% endif %}
+
+    // Aplicar filtros automaticamente quando campos mudarem
+    $('#client_filter, #type_filter, #status_filter, #court_filter, #fap_year_filter').change(function () {
       $('#filtersForm').submit();
-    }
+    });
+
+    // Submeter form ao pressionar Enter nos campos de busca
+    $('#search_text, #value_min, #value_max').keypress(function (e) {
+      if (e.which == 13) {
+        $('#filtersForm').submit();
+      }
+    });
   });
-});
 
-function confirmDelete(url) {
-  if (confirm('Tem certeza que deseja excluir este caso? Esta ação não pode ser desfeita.')) {
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = url;
-    document.body.appendChild(form);
-    form.submit();
+  function confirmDelete(url) {
+    if (confirm('Tem certeza que deseja excluir este caso? Esta ação não pode ser desfeita.')) {
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = url;
+      document.body.appendChild(form);
+      form.submit();
+    }
   }
-}
 
-function toggleAdvancedSearch() {
-  const section = document.getElementById('advancedSearchSection');
-  const button = event.target;
-  
-  if (section.classList.contains('d-none')) {
-    section.classList.remove('d-none');
-    button.innerHTML = '<i class="bi bi-chevron-up"></i> Ocultar Busca Avançada';
-    button.classList.remove('btn-outline-info');
-    button.classList.add('btn-outline-warning');
-  } else {
-    section.classList.add('d-none');
-    button.innerHTML = '<i class="bi bi-gear"></i> Busca Avançada';
-    button.classList.remove('btn-outline-warning');
-    button.classList.add('btn-outline-info');
+  function toggleAdvancedSearch() {
+    const section = document.getElementById('advancedSearchSection');
+    const button = event.target;
+
+    if (section.classList.contains('d-none')) {
+      section.classList.remove('d-none');
+      button.innerHTML = '<i class="bi bi-chevron-up"></i> Ocultar Busca Avançada';
+      button.classList.remove('btn-outline-info');
+      button.classList.add('btn-outline-warning');
+    } else {
+      section.classList.add('d-none');
+      button.innerHTML = '<i class="bi bi-gear"></i> Busca Avançada';
+      button.classList.remove('btn-outline-warning');
+      button.classList.add('btn-outline-info');
+    }
   }
-}
 </script>
 {% endif %}
 {% endblock %}
