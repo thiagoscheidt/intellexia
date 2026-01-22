@@ -214,6 +214,8 @@
                     <th><i class="bi bi-tag"></i> Tipo</th>
                     <th><i class="bi bi-person"></i> Segurado</th>
                     <th><i class="bi bi-calendar"></i> Data Acidente</th>
+                    <th><i class="bi bi-calendar-check"></i> Início Benefício</th>
+                    <th><i class="bi bi-calendar-x"></i> Fim Benefício</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -223,6 +225,10 @@
                     <td><span class="badge bg-light text-dark">{{ benefit.benefit_type }}</span></td>
                     <td>{{ benefit.insured_name }}</td>
                     <td><small>{{ benefit.accident_date.strftime('%d/%m/%Y') if benefit.accident_date else '-'
+                        }}</small></td>
+                    <td><small>{{ benefit.data_inicio_beneficio.strftime('%d/%m/%Y') if benefit.data_inicio_beneficio
+                        else '-' }}</small></td>
+                    <td><small>{{ benefit.data_fim_beneficio.strftime('%d/%m/%Y') if benefit.data_fim_beneficio else '-'
                         }}</small></td>
                   </tr>
                   {% endfor %}

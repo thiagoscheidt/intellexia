@@ -125,6 +125,35 @@
                 </div>
               </div>
 
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    {{ form.data_inicio_beneficio.label(class="form-label") }}
+                    {{ form.data_inicio_beneficio(class="form-control" + (" is-invalid" if
+                    form.data_inicio_beneficio.errors else ""), type="date") }}
+                    {% if form.data_inicio_beneficio.errors %}
+                    <div class="invalid-feedback">
+                      {% for error in form.data_inicio_beneficio.errors %}{{ error }}{% endfor %}
+                    </div>
+                    {% endif %}
+                    <div class="form-text">Data de início do benefício</div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    {{ form.data_fim_beneficio.label(class="form-label") }}
+                    {{ form.data_fim_beneficio(class="form-control" + (" is-invalid" if form.data_fim_beneficio.errors
+                    else ""), type="date") }}
+                    {% if form.data_fim_beneficio.errors %}
+                    <div class="invalid-feedback">
+                      {% for error in form.data_fim_beneficio.errors %}{{ error }}{% endfor %}
+                    </div>
+                    {% endif %}
+                    <div class="form-text">Data de fim do benefício (se aplicável)</div>
+                  </div>
+                </div>
+              </div>
+
               <div class="row mb-4 mt-3">
                 <div class="col-12">
                   <div class="alert alert-light border-start border-info p-3" role="alert">

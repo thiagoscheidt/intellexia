@@ -55,6 +55,8 @@
                     <th><i class="bi bi-person-fill"></i> Nome do Segurado</th>
                     <th style="width: 150px;"><i class="bi bi-credit-card"></i> NIT</th>
                     <th style="width: 130px;"><i class="bi bi-calendar-event"></i> Data Acidente</th>
+                    <th style="width: 130px;"><i class="bi bi-calendar-check"></i> Início Benefício</th>
+                    <th style="width: 130px;"><i class="bi bi-calendar-x"></i> Fim Benefício</th>
                     <th style="width: 120px;" class="text-center"><i class="bi bi-gear-fill"></i> Ações</th>
                   </tr>
                 </thead>
@@ -87,6 +89,20 @@
                     <td>
                       {% if benefit.accident_date %}
                       <span class="text-nowrap">{{ benefit.accident_date.strftime('%d/%m/%Y') }}</span>
+                      {% else %}
+                      <span class="text-muted">-</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if benefit.data_inicio_beneficio %}
+                      <span class="text-nowrap">{{ benefit.data_inicio_beneficio.strftime('%d/%m/%Y') }}</span>
+                      {% else %}
+                      <span class="text-muted">-</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if benefit.data_fim_beneficio %}
+                      <span class="text-nowrap">{{ benefit.data_fim_beneficio.strftime('%d/%m/%Y') }}</span>
                       {% else %}
                       <span class="text-muted">-</span>
                       {% endif %}
@@ -139,7 +155,7 @@
       "pageLength": 25,
       "order": [[0, "desc"]],
       "columnDefs": [
-        { "orderable": false, "targets": 6 }
+        { "orderable": false, "targets": 8 }
       ]
     });
   });

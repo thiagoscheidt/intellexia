@@ -42,13 +42,36 @@
                   <td><strong>Tipo:</strong></td>
                   <td>
                     {% if benefit.benefit_type == 'B91' %}
-                      <span class="badge bg-info text-dark"><i class="bi bi-clipboard-check"></i> B91 - Auxílio-Doença Acidentário</span>
+                    <span class="badge bg-info text-dark"><i class="bi bi-clipboard-check"></i> B91 - Auxílio-Doença
+                      Acidentário</span>
                     {% elif benefit.benefit_type == 'B94' %}
-                      <span class="badge bg-warning text-dark"><i class="bi bi-clipboard-plus"></i> B94 - Auxílio-Acidente</span>
+                    <span class="badge bg-warning text-dark"><i class="bi bi-clipboard-plus"></i> B94 -
+                      Auxílio-Acidente</span>
                     {% elif benefit.benefit_type == 'B31' %}
-                      <span class="badge bg-success"><i class="bi bi-clipboard-heart"></i> B31 - Aposentadoria por Invalidez</span>
+                    <span class="badge bg-success"><i class="bi bi-clipboard-heart"></i> B31 - Aposentadoria por
+                      Invalidez</span>
                     {% else %}
-                      <span class="badge bg-secondary"><i class="bi bi-clipboard"></i> {{ benefit.benefit_type }}</span>
+                    <span class="badge bg-secondary"><i class="bi bi-clipboard"></i> {{ benefit.benefit_type }}</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Data Início Benefício:</strong></td>
+                  <td>
+                    {% if benefit.data_inicio_beneficio %}
+                    <i class="bi bi-calendar-check"></i> {{ benefit.data_inicio_beneficio.strftime('%d/%m/%Y') }}
+                    {% else %}
+                    <span class="text-muted">Não informada</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Data Fim Benefício:</strong></td>
+                  <td>
+                    {% if benefit.data_fim_beneficio %}
+                    <i class="bi bi-calendar-x"></i> {{ benefit.data_fim_beneficio.strftime('%d/%m/%Y') }}
+                    {% else %}
+                    <span class="text-muted">Não informada</span>
                     {% endif %}
                   </td>
                 </tr>
@@ -62,9 +85,9 @@
                   <td><strong>NIT:</strong></td>
                   <td>
                     {% if benefit.insured_nit %}
-                      <code>{{ benefit.insured_nit }}</code>
+                    <code>{{ benefit.insured_nit }}</code>
                     {% else %}
-                      <span class="text-muted">Não informado</span>
+                    <span class="text-muted">Não informado</span>
                     {% endif %}
                   </td>
                 </tr>
@@ -72,9 +95,9 @@
                   <td><strong>Data do Acidente:</strong></td>
                   <td>
                     {% if benefit.accident_date %}
-                      <i class="bi bi-calendar-event"></i> {{ benefit.accident_date.strftime('%d/%m/%Y') }}
+                    <i class="bi bi-calendar-event"></i> {{ benefit.accident_date.strftime('%d/%m/%Y') }}
                     {% else %}
-                      <span class="text-muted">Não informada</span>
+                    <span class="text-muted">Não informada</span>
                     {% endif %}
                   </td>
                 </tr>
@@ -82,9 +105,9 @@
                   <td><strong>Empresa do Acidente:</strong></td>
                   <td>
                     {% if benefit.accident_company_name %}
-                      <i class="bi bi-building"></i> {{ benefit.accident_company_name }}
+                    <i class="bi bi-building"></i> {{ benefit.accident_company_name }}
                     {% else %}
-                      <span class="text-muted">Não informada</span>
+                    <span class="text-muted">Não informada</span>
                     {% endif %}
                   </td>
                 </tr>
@@ -92,24 +115,26 @@
                   <td><strong>Motivo do Erro:</strong></td>
                   <td>
                     {% if benefit.error_reason %}
-                      {% if benefit.error_reason == 'acidente_trajeto' %}
-                        <span class="badge bg-warning text-dark"><i class="bi bi-truck"></i> Acidente de Trajeto</span>
-                      {% elif benefit.error_reason == 'sem_nexo_causal' %}
-                        <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Sem Nexo Causal</span>
-                      {% elif benefit.error_reason == 'classificacao_incorreta' %}
-                        <span class="badge bg-info text-dark"><i class="bi bi-exclamation-triangle"></i> Classificação Incorreta</span>
-                      {% else %}
-                        <span class="badge bg-secondary">{{ benefit.error_reason }}</span>
-                      {% endif %}
+                    {% if benefit.error_reason == 'acidente_trajeto' %}
+                    <span class="badge bg-warning text-dark"><i class="bi bi-truck"></i> Acidente de Trajeto</span>
+                    {% elif benefit.error_reason == 'sem_nexo_causal' %}
+                    <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Sem Nexo Causal</span>
+                    {% elif benefit.error_reason == 'classificacao_incorreta' %}
+                    <span class="badge bg-info text-dark"><i class="bi bi-exclamation-triangle"></i> Classificação
+                      Incorreta</span>
                     {% else %}
-                      <span class="text-muted">Não especificado</span>
+                    <span class="badge bg-secondary">{{ benefit.error_reason }}</span>
+                    {% endif %}
+                    {% else %}
+                    <span class="text-muted">Não especificado</span>
                     {% endif %}
                   </td>
                 </tr>
                 <tr>
                   <td><strong>Data de Cadastro:</strong></td>
                   <td>
-                    <i class="bi bi-calendar-plus"></i> {{ benefit.created_at.strftime('%d/%m/%Y às %H:%M') if benefit.created_at else 'N/A' }}
+                    <i class="bi bi-calendar-plus"></i> {{ benefit.created_at.strftime('%d/%m/%Y às %H:%M') if
+                    benefit.created_at else 'N/A' }}
                   </td>
                 </tr>
               </tbody>
@@ -138,72 +163,73 @@
           </div>
           <div class="card-body">
             {% if related_cases %}
-              {% for case in related_cases %}
-              <div class="card card-light mb-3">
-                <div class="card-body p-3">
-                  <h6 class="card-title mb-2">
-                    <a href="{{ url_for('cases.case_detail', case_id=case.id) }}" class="text-decoration-none">
-                      <i class="bi bi-briefcase"></i> {{ case.title }}
-                    </a>
-                  </h6>
-                  
-                  <div class="row g-2 text-sm">
-                    <div class="col-12">
-                      <strong>Cliente:</strong> <i class="bi bi-person"></i> {{ case.client.name if case.client else 'N/A' }}
-                    </div>
-                    <div class="col-6">
-                      <strong>Status:</strong>
-                      {% if case.status == 'draft' %}
-                        <span class="badge bg-secondary"><i class="bi bi-pencil-square"></i> Rascunho</span>
-                      {% elif case.status == 'active' %}
-                        <span class="badge bg-success"><i class="bi bi-check-circle"></i> Ativo</span>
-                      {% elif case.status == 'suspended' %}
-                        <span class="badge bg-warning text-dark"><i class="bi bi-pause-circle"></i> Suspenso</span>
-                      {% elif case.status == 'closed' %}
-                        <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Encerrado</span>
-                      {% elif case.status == 'archived' %}
-                        <span class="badge bg-dark"><i class="bi bi-archive"></i> Arquivado</span>
-                      {% endif %}
-                    </div>
-                    <div class="col-6">
-                      <strong>Tipo:</strong>
-                      {% if case.case_type == 'fap_trajeto' %}
-                        <span class="badge bg-info text-dark">FAP - Trajeto</span>
-                      {% elif case.case_type == 'fap_nexo' %}
-                        <span class="badge bg-info text-dark">FAP - Nexo</span>
-                      {% elif case.case_type == 'fap_multiplos' %}
-                        <span class="badge bg-info text-dark">FAP - Múltiplos</span>
-                      {% elif case.case_type == 'auto_infracao' %}
-                        <span class="badge bg-danger">Auto Infração</span>
-                      {% else %}
-                        <span class="badge bg-secondary">{{ case.case_type }}</span>
-                      {% endif %}
-                    </div>
-                    {% if case.value_cause %}
-                    <div class="col-6">
-                      <strong>Valor:</strong> R$ {{ "%.2f"|format(case.value_cause|float) }}
-                    </div>
-                    {% endif %}
-                    {% if case.filing_date %}
-                    <div class="col-6">
-                      <strong>Ajuizado:</strong> {{ case.filing_date.strftime('%d/%m/%Y') }}
-                    </div>
+            {% for case in related_cases %}
+            <div class="card card-light mb-3">
+              <div class="card-body p-3">
+                <h6 class="card-title mb-2">
+                  <a href="{{ url_for('cases.case_detail', case_id=case.id) }}" class="text-decoration-none">
+                    <i class="bi bi-briefcase"></i> {{ case.title }}
+                  </a>
+                </h6>
+
+                <div class="row g-2 text-sm">
+                  <div class="col-12">
+                    <strong>Cliente:</strong> <i class="bi bi-person"></i> {{ case.client.name if case.client else 'N/A'
+                    }}
+                  </div>
+                  <div class="col-6">
+                    <strong>Status:</strong>
+                    {% if case.status == 'draft' %}
+                    <span class="badge bg-secondary"><i class="bi bi-pencil-square"></i> Rascunho</span>
+                    {% elif case.status == 'active' %}
+                    <span class="badge bg-success"><i class="bi bi-check-circle"></i> Ativo</span>
+                    {% elif case.status == 'suspended' %}
+                    <span class="badge bg-warning text-dark"><i class="bi bi-pause-circle"></i> Suspenso</span>
+                    {% elif case.status == 'closed' %}
+                    <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Encerrado</span>
+                    {% elif case.status == 'archived' %}
+                    <span class="badge bg-dark"><i class="bi bi-archive"></i> Arquivado</span>
                     {% endif %}
                   </div>
-                  
-                  <div class="mt-2">
-                    <a href="{{ url_for('cases.case_detail', case_id=case.id) }}" class="btn btn-sm btn-outline-primary">
-                      <i class="bi bi-eye"></i> Ver Caso
-                    </a>
+                  <div class="col-6">
+                    <strong>Tipo:</strong>
+                    {% if case.case_type == 'fap_trajeto' %}
+                    <span class="badge bg-info text-dark">FAP - Trajeto</span>
+                    {% elif case.case_type == 'fap_nexo' %}
+                    <span class="badge bg-info text-dark">FAP - Nexo</span>
+                    {% elif case.case_type == 'fap_multiplos' %}
+                    <span class="badge bg-info text-dark">FAP - Múltiplos</span>
+                    {% elif case.case_type == 'auto_infracao' %}
+                    <span class="badge bg-danger">Auto Infração</span>
+                    {% else %}
+                    <span class="badge bg-secondary">{{ case.case_type }}</span>
+                    {% endif %}
                   </div>
+                  {% if case.value_cause %}
+                  <div class="col-6">
+                    <strong>Valor:</strong> R$ {{ "%.2f"|format(case.value_cause|float) }}
+                  </div>
+                  {% endif %}
+                  {% if case.filing_date %}
+                  <div class="col-6">
+                    <strong>Ajuizado:</strong> {{ case.filing_date.strftime('%d/%m/%Y') }}
+                  </div>
+                  {% endif %}
+                </div>
+
+                <div class="mt-2">
+                  <a href="{{ url_for('cases.case_detail', case_id=case.id) }}" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-eye"></i> Ver Caso
+                  </a>
                 </div>
               </div>
-              {% endfor %}
+            </div>
+            {% endfor %}
             {% else %}
-              <div class="alert alert-info mb-0">
-                <h6><i class="bi bi-info-circle"></i> Nenhum caso vinculado</h6>
-                <p class="mb-0">Este benefício ainda não está vinculado a nenhum caso jurídico.</p>
-              </div>
+            <div class="alert alert-info mb-0">
+              <h6><i class="bi bi-info-circle"></i> Nenhum caso vinculado</h6>
+              <p class="mb-0">Este benefício ainda não está vinculado a nenhum caso jurídico.</p>
+            </div>
             {% endif %}
           </div>
         </div>
@@ -232,9 +258,11 @@
                     </h6>
                     <p class="card-text text-sm text-muted">
                       <strong>Tipo:</strong> {{ document.document_type }}<br>
-                      <strong>Enviado:</strong> {{ document.uploaded_at.strftime('%d/%m/%Y') if document.uploaded_at else 'N/A' }}
+                      <strong>Enviado:</strong> {{ document.uploaded_at.strftime('%d/%m/%Y') if document.uploaded_at
+                      else 'N/A' }}
                     </p>
-                    <a href="{{ url_for('documents.case_document_view', case_id=document.case_id, document_id=document.id) }}" class="btn btn-sm btn-outline-primary">
+                    <a href="{{ url_for('documents.case_document_view', case_id=document.case_id, document_id=document.id) }}"
+                      class="btn btn-sm btn-outline-primary">
                       <i class="bi bi-eye"></i> Visualizar
                     </a>
                   </div>
@@ -269,8 +297,8 @@
 
 {% block extra_css %}
 <style>
-.text-sm {
-  font-size: 0.875rem;
-}
+  .text-sm {
+    font-size: 0.875rem;
+  }
 </style>
 {% endblock %}

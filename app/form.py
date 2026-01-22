@@ -170,6 +170,8 @@ class CaseBenefitForm(FlaskForm):
     )
     insured_name = StringField('Nome do Segurado', validators=[DataRequired(), Length(max=255)])
     insured_nit = StringField('NIT/PIS do Segurado', validators=[Optional(), Length(max=50)])
+    data_inicio_beneficio = DateField('Início do Benefício', format='%Y-%m-%d', validators=[Optional()])
+    data_fim_beneficio = DateField('Fim do Benefício', format='%Y-%m-%d', validators=[Optional()])
     accident_date = DateField('Data do Acidente', format='%Y-%m-%d', validators=[Optional()])
     accident_company_name = StringField(
         'Empresa onde ocorreu o Acidente',
@@ -208,6 +210,8 @@ class CaseBenefitContextForm(FlaskForm):
     )
     insured_name = StringField('Nome do Segurado', validators=[DataRequired(), Length(max=255)])
     insured_nit = StringField('NIT/PIS do Segurado', validators=[Optional(), Length(max=50)])
+    data_inicio_beneficio = DateField('Início do Benefício', format='%Y-%m-%d', validators=[Optional()])
+    data_fim_beneficio = DateField('Fim do Benefício', format='%Y-%m-%d', validators=[Optional()])
     accident_date = DateField('Data do Acidente', format='%Y-%m-%d', validators=[Optional()])
     accident_company_name = StringField(
         'Empresa onde ocorreu o Acidente',

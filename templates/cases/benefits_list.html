@@ -96,6 +96,8 @@
                     <th><i class="bi bi-person-fill"></i> Segurado</th>
                     <th><i class="bi bi-credit-card"></i> NIT</th>
                     <th><i class="bi bi-calendar-event"></i> Data Acidente</th>
+                    <th><i class="bi bi-calendar-check"></i> Início Benefício</th>
+                    <th><i class="bi bi-calendar-x"></i> Fim Benefício</th>
                     <th><i class="bi bi-building"></i> Empresa</th>
                     <th><i class="bi bi-clock"></i> Criado em</th>
                     <th><i class="bi bi-gear-fill"></i> Ações</th>
@@ -119,6 +121,10 @@
                     <td><code class="text-nowrap">{{ benefit.insured_nit or '-' }}</code></td>
                     <td><span class="text-nowrap">{{ benefit.accident_date.strftime('%d/%m/%Y') if benefit.accident_date
                         else '-' }}</span></td>
+                    <td><span class="text-nowrap">{{ benefit.data_inicio_beneficio.strftime('%d/%m/%Y') if
+                        benefit.data_inicio_beneficio else '-' }}</span></td>
+                    <td><span class="text-nowrap">{{ benefit.data_fim_beneficio.strftime('%d/%m/%Y') if
+                        benefit.data_fim_beneficio else '-' }}</span></td>
                     <td><span class="text-nowrap">{{ benefit.accident_company_name or '-' }}</span></td>
                     <td><span class="text-nowrap">{{ benefit.created_at.strftime('%d/%m/%Y') if benefit.created_at else
                         '-' }}</span></td>
