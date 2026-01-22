@@ -1,0 +1,345 @@
+{% extends "layout/base.html" %}
+
+{% block title %}{{ title }} - IntellexIA{% endblock %}
+
+{% block content %}
+<style>
+    .wizard-steps {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 2rem;
+        position: relative;
+    }
+
+    .wizard-steps::before {
+        content: '';
+        position: absolute;
+        top: 20px;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: #e9ecef;
+        z-index: 0;
+    }
+
+    .wizard-step {
+        flex: 1;
+        text-align: center;
+        position: relative;
+        z-index: 1;
+    }
+
+    .wizard-step-circle {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: #e9ecef;
+        color: #6c757d;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto 0.5rem;
+        font-weight: bold;
+        transition: all 0.3s;
+    }
+
+    .wizard-step.active .wizard-step-circle {
+        background: #007bff;
+        color: white;
+    }
+
+    .wizard-step.completed .wizard-step-circle {
+        background: #28a745;
+        color: white;
+    }
+
+    .wizard-step-label {
+        font-size: 0.875rem;
+        color: #6c757d;
+    }
+
+    .wizard-step.active .wizard-step-label {
+        color: #007bff;
+        font-weight: 600;
+    }
+
+    .wizard-step.completed .wizard-step-label {
+        color: #28a745;
+    }
+
+    .step-content {
+        display: none;
+    }
+
+    .step-content.active {
+        display: block;
+    }
+</style>
+
+<div class="app-content-header">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-sm-6">
+                <h3 class="mb-0"><i class="bi bi-folder-plus me-2"></i>{{ title }}</h3>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-end">
+                    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_list') }}">Casos</a></li>
+                    <li class="breadcrumb-item active" aria-current="page">{{ title }}</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="app-content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="card card-primary card-outline">
+                    <div class="card-header">
+                        <h3 class="card-title"><i class="bi bi-folder-plus me-2"></i>{{ title }}</h3>
+                    </div>
+
+                    <div class="card-body">
+                        <!-- Wizard Steps Indicator -->
+                        <div class="wizard-steps">
+                            <div class="wizard-step active" data-step="1">
+                                <div class="wizard-step-circle">1</div>
+                                <div class="wizard-step-label">Informações Básicas</div>
+                            </div>
+                            <div class="wizard-step" data-step="2">
+                                <div class="wizard-step-circle">2</div>
+                                <div class="wizard-step-label">Informações FAP</div>
+                            </div>
+                            <div class="wizard-step" data-step="3">
+                                <div class="wizard-step-circle">3</div>
+                                <div class="wizard-step-label">Resumos</div>
+                            </div>
+                        </div>
+
+                        <form method="POST" action="" id="caseForm">
+                            {{ form.hidden_tag() }}
+
+                            <!-- Step 1: Informações Básicas -->
+                            <div class="step-content active" data-step="1">
+                                <h5 class="text-primary mb-3"><i class="bi bi-info-circle me-2"></i>Informações Básicas
+                                </h5>
+
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <div class="mb-3">
+                                            {{ form.title.label(class="form-label") }}
+                                            {{ form.title(class="form-control", placeholder="Digite o título do caso")
+                                            }}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            {{ form.client_id.label(class="form-label") }}
+                                            {{ form.client_id(class="form-select") }}
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            {{ form.court_id.label(class="form-label") }}
+                                            {{ form.court_id(class="form-select") }}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="mb-3">
+                                            {{ form.case_type.label(class="form-label") }}
+                                            {{ form.case_type(class="form-select", id="case_type") }}
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="mb-3">
+                                            {{ form.status.label(class="form-label") }}
+                                            {{ form.status(class="form-select") }}
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="mb-3">
+                                            {{ form.filing_date.label(class="form-label") }}
+                                            {{ form.filing_date(class="form-control", type="date") }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step 2: Informações FAP -->
+                            <div class="step-content" data-step="2">
+                                <h5 class="text-success mb-3"><i class="bi bi-graph-up-arrow me-2"></i>Informações FAP
+                                </h5>
+
+                                <div class="row" id="fap_reason_container">
+                                    <div class="col-md-12">
+                                        <div class="callout callout-warning">
+                                            {{ form.fap_reason.label(class="form-label") }}
+                                            {{ form.fap_reason(class="form-select") }}
+                                            <div class="form-text">Selecione o motivo ou enquadramento para casos FAP
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-4">
+                                        <div class="mb-3">
+                                            {{ form.fap_start_year.label(class="form-label") }}
+                                            {{ form.fap_start_year(class="form-control", placeholder="Ex: 2020") }}
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="mb-3">
+                                            {{ form.fap_end_year.label(class="form-label") }}
+                                            {{ form.fap_end_year(class="form-control", placeholder="Ex: 2023") }}
+                                        </div>
+                                    </div>
+                                    <div class="col-md-4">
+                                        <div class="mb-3">
+                                            {{ form.value_cause.label(class="form-label") }}
+                                            {{ form.value_cause(class="form-control", placeholder="0.00") }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step 3: Resumos -->
+                            <div class="step-content" data-step="3">
+                                <h5 class="text-info mb-3"><i class="bi bi-file-earmark-text me-2"></i>Resumos</h5>
+
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <div class="mb-3">
+                                            {{ form.facts_summary.label(class="form-label") }}
+                                            {{ form.facts_summary(class="form-control", rows="4", placeholder="Descreva
+                                            os fatos do caso...") }}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <div class="mb-3">
+                                            {{ form.thesis_summary.label(class="form-label") }}
+                                            {{ form.thesis_summary(class="form-control", rows="4", placeholder="Descreva
+                                            as teses jurídicas...") }}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-12">
+                                        <div class="mb-3">
+                                            {{ form.prescription_summary.label(class="form-label") }}
+                                            {{ form.prescription_summary(class="form-control", rows="3",
+                                            placeholder="Informações sobre prescrição...") }}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+
+                    <div class="card-footer text-end">
+                        <button type="button" class="btn btn-secondary" id="prevBtn" style="display: none;">
+                            <i class="bi bi-arrow-left me-1"></i>Anterior
+                        </button>
+                        <button type="button" class="btn btn-primary" id="nextBtn">
+                            Próximo<i class="bi bi-arrow-right ms-1"></i>
+                        </button>
+                        <button type="submit" form="caseForm" class="btn btn-success" id="submitBtn"
+                            style="display: none;">
+                            <i class="bi bi-check-circle me-1"></i>Salvar Caso
+                        </button>
+                        <a href="{{ url_for('cases.cases_list') }}" class="btn btn-secondary">
+                            <i class="bi bi-x-circle me-1"></i>Cancelar
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentStep = 1;
+    const totalSteps = 3;
+
+    function showStep(step) {
+        // Hide all steps
+        document.querySelectorAll('.step-content').forEach(el => {
+            el.classList.remove('active');
+        });
+
+        // Show current step
+        document.querySelector(`.step-content[data-step="${step}"]`).classList.add('active');
+
+        // Update wizard indicator
+        document.querySelectorAll('.wizard-step').forEach((el, index) => {
+            const stepNum = index + 1;
+            el.classList.remove('active', 'completed');
+
+            if (stepNum < step) {
+                el.classList.add('completed');
+            } else if (stepNum === step) {
+                el.classList.add('active');
+            }
+        });
+
+        // Update buttons
+        document.getElementById('prevBtn').style.display = step === 1 ? 'none' : 'inline-block';
+        document.getElementById('nextBtn').style.display = step === totalSteps ? 'none' : 'inline-block';
+        document.getElementById('submitBtn').style.display = step === totalSteps ? 'inline-block' : 'none';
+
+        // Update current_step hidden field
+        document.querySelector('[name="current_step"]').value = step;
+    }
+
+    document.getElementById('nextBtn').addEventListener('click', () => {
+        if (currentStep < totalSteps) {
+            currentStep++;
+            showStep(currentStep);
+        }
+    });
+
+    document.getElementById('prevBtn').addEventListener('click', () => {
+        if (currentStep > 1) {
+            currentStep--;
+            showStep(currentStep);
+        }
+    });
+
+    // Initialize
+    showStep(currentStep);
+
+    // Mostrar/ocultar campo Motivo/Enquadramento baseado no tipo de caso
+    document.addEventListener('DOMContentLoaded', function () {
+        const caseTypeSelect = document.getElementById('case_type');
+        const fapReasonContainer = document.getElementById('fap_reason_container');
+
+        function toggleFapReason() {
+            const selectedValue = caseTypeSelect.value;
+            if (selectedValue === 'fap_trajeto' || selectedValue === 'fap_outros') {
+                fapReasonContainer.style.display = 'block';
+            } else {
+                fapReasonContainer.style.display = 'none';
+            }
+        }
+
+        // Verificar no carregamento da página
+        toggleFapReason();
+
+        // Verificar quando mudar a seleção
+        caseTypeSelect.addEventListener('change', toggleFapReason);
+    });
+</script>
+{% endblock %}

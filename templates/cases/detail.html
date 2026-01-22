@@ -3,17 +3,19 @@
 {% block title %}Detalhes do Caso - IntellexIA{% endblock %}
 
 {% block content %}
-<div class="app-content-header">
+<div class="app-content-header border-bottom border-light">
   <div class="container-fluid">
-    <div class="row">
+    <div class="row align-items-center">
       <div class="col-sm-6">
-        <h3 class="mb-0">Detalhes do Caso #{{ case.id }}</h3>
+        <h3 class="mb-0"><i class="bi bi-file-text text-primary"></i> Detalhes do Caso #{{ case.id }}</h3>
       </div>
       <div class="col-sm-6">
-        <ol class="breadcrumb float-sm-end">
-          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_list') }}">Casos</a></li>
-          <li class="breadcrumb-item active" aria-current="page">Detalhes</li>
+        <ol class="breadcrumb float-sm-end mb-0">
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i>
+              Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_list') }}"><i class="bi bi-folder"></i> Casos</a>
+          </li>
+          <li class="breadcrumb-item active" aria-current="page"><i class="bi bi-eye"></i> Detalhes</li>
         </ol>
       </div>
     </div>
@@ -25,42 +27,91 @@
     <div class="row">
       <div class="col-md-8">
         <!-- Informações do Caso -->
-        <div class="card">
-          <div class="card-header">
-            <h3 class="card-title">Informações do Caso</h3>
+        <div class="card shadow-sm">
+          <div class="card-header bg-gradient bg-primary text-white border-0">
+            <h3 class="card-title mb-0"><i class="bi bi-file-earmark-text"></i> Informações do Caso</h3>
             <div class="card-tools">
-              <a href="{{ url_for('cases.case_edit', case_id=case_id) }}" class="btn btn-sm btn-primary">
+              <a href="{{ url_for('cases.case_edit', case_id=case_id) }}" class="btn btn-sm btn-light">
                 <i class="bi bi-pencil"></i> Editar
               </a>
             </div>
           </div>
           <div class="card-body">
-            <dl class="row">
-              <dt class="col-sm-4">Título:</dt>
-              <dd class="col-sm-8">{{ case.title }}</dd>
+            <div class="row mb-3">
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <small class="text-muted d-block"><i class="bi bi-tag"></i> Título</small>
+                  <h5 class="mb-0 text-dark">{{ case.title }}</h5>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <small class="text-muted d-block"><i class="bi bi-person"></i> Cliente</small>
+                  <h5 class="mb-0 text-dark">{{ case.client.name if case.client else 'Não informado' }}</h5>
+                </div>
+              </div>
+            </div>
 
-              <dt class="col-sm-4">Cliente:</dt>
-              <dd class="col-sm-8">{{ case.client.name if case.client else 'Não informado' }}</dd>
+            <div class="row mb-3">
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <small class="text-muted d-block"><i class="bi bi-bookmark"></i> Tipo de Caso</small>
+                  {% set case_type_map = {
+                  'fap_trajeto': 'FAP - Acidente de Trajeto',
+                  'fap_outros': 'FAP - Outros Acidentes',
+                  'acao_ordinaria': 'Ação Ordinária',
+                  'acao_trabalhista': 'Ação Trabalhista',
+                  'recurso': 'Recurso'
+                  } %}
+                  {% if case.case_type %}
+                  <span class="badge bg-primary">{{ case_type_map.get(case.case_type, case.case_type) }}</span>
+                  {% else %}
+                  <span class="text-muted">Não informado</span>
+                  {% endif %}
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <small class="text-muted d-block"><i class="bi bi-shield-check"></i> Status</small>
+                  {% set status_colors = {
+                  'active': 'success',
+                  'ativo': 'success',
+                  'inactive': 'secondary',
+                  'inativo': 'secondary',
+                  'em_andamento': 'warning',
+                  'in_progress': 'warning',
+                  'concluido': 'info',
+                  'completed': 'info',
+                  'arquivado': 'danger',
+                  'archived': 'danger'
+                  } %}
+                  {% if case.status %}
+                  <span class="badge bg-{{ status_colors.get(case.status.lower(), 'secondary') }} p-2">
+                    {% if case.status.lower() in ['ativo', 'active'] %}
+                    <i class="bi bi-check-circle"></i> Ativo
+                    {% elif case.status.lower() in ['em_andamento', 'in_progress'] %}
+                    <i class="bi bi-hourglass-split"></i> Em Andamento
+                    {% elif case.status.lower() in ['concluido', 'completed'] %}
+                    <i class="bi bi-check-double"></i> Concluído
+                    {% elif case.status.lower() in ['arquivado', 'archived'] %}
+                    <i class="bi bi-archive"></i> Arquivado
+                    {% elif case.status.lower() in ['inativo', 'inactive'] %}
+                    <i class="bi bi-x-circle"></i> Inativo
+                    {% else %}
+                    {{ case.status }}
+                    {% endif %}
+                  </span>
+                  {% else %}
+                  <span class="text-muted">Não informado</span>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
 
-              <dt class="col-sm-4">Tipo de Caso:</dt>
-              <dd class="col-sm-8">
-                {% set case_type_map = {
-                'fap_trajeto': 'FAP - Acidente de Trajeto',
-                'fap_outros': 'FAP - Outros Acidentes',
-                'acao_ordinaria': 'Ação Ordinária',
-                'acao_trabalhista': 'Ação Trabalhista',
-                'recurso': 'Recurso'
-                } %}
-                {% if case.case_type %}
-                <span class="badge bg-primary">{{ case_type_map.get(case.case_type, case.case_type) }}</span>
-                {% else %}
-                <span class="text-muted">Não informado</span>
-                {% endif %}
-              </dd>
-
-              {% if case.case_type in ['fap_trajeto', 'fap_outros'] %}
-              <dt class="col-sm-4">Motivo / Enquadramento:</dt>
-              <dd class="col-sm-8">
+            {% if case.case_type in ['fap_trajeto', 'fap_outros'] %}
+            <div class="row mb-3 p-3 bg-light border-start border-info border-4">
+              <div class="col-12">
+                <small class="text-muted d-block"><i class="bi bi-info-circle"></i> Motivo / Enquadramento (FAP)</small>
                 {% set fap_reason_map = {
                 'inclusao_indevida_trajeto': 'Inclusão indevida de benefício de trajeto',
                 'erro_material_cat': 'Erro material no preenchimento da CAT',
@@ -71,128 +122,117 @@
                 {% else %}
                 <span class="text-muted">Não informado</span>
                 {% endif %}
-              </dd>
-              {% endif %}
+              </div>
+            </div>
+            {% endif %}
 
-              <dt class="col-sm-4">Status:</dt>
-              <dd class="col-sm-8">
-                {% set status_colors = {
-                'active': 'success',
-                'ativo': 'success',
-                'inactive': 'secondary',
-                'inativo': 'secondary',
-                'em_andamento': 'warning',
-                'in_progress': 'warning',
-                'concluido': 'info',
-                'completed': 'info',
-                'arquivado': 'danger',
-                'archived': 'danger'
-                } %}
-                {% if case.status %}
-                <span class="badge bg-{{ status_colors.get(case.status.lower(), 'secondary') }}">
-                  {% if case.status.lower() in ['ativo', 'active'] %}
-                  ✓ Ativo
-                  {% elif case.status.lower() in ['em_andamento', 'in_progress'] %}
-                  ⏳ Em Andamento
-                  {% elif case.status.lower() in ['concluido', 'completed'] %}
-                  ✓ Concluído
-                  {% elif case.status.lower() in ['arquivado', 'archived'] %}
-                  📁 Arquivado
-                  {% elif case.status.lower() in ['inativo', 'inactive'] %}
-                  ✗ Inativo
+            <div class="row">
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <small class="text-muted d-block"><i class="bi bi-cash-coin"></i> Valor da Causa</small>
+                  {% if case.value_cause %}
+                  <h6 class="mb-0 text-success">R$ {{ "{:,.2f}".format(case.value_cause).replace(',', 'X').replace('.',
+                    ',').replace('X', '.') }}</h6>
                   {% else %}
-                  {{ case.status }}
+                  <span class="text-muted">Não informado</span>
                   {% endif %}
-                </span>
-                {% else %}
-                <span class="text-muted">Não informado</span>
-                {% endif %}
-              </dd>
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="mb-3">
+                  <small class="text-muted d-block"><i class="bi bi-calendar-event"></i> Data de Ajuizamento</small>
+                  {% if case.filing_date %}
+                  <h6 class="mb-0">{{ case.filing_date.strftime('%d/%m/%Y') }}</h6>
+                  {% else %}
+                  <span class="text-muted">Não informada</span>
+                  {% endif %}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
 
-              <dt class="col-sm-4">Valor da Causa:</dt>
-              <dd class="col-sm-8">
-                {% if case.value_cause %}
-                R$ {{ "{:,.2f}".format(case.value_cause).replace(',', 'X').replace('.', ',').replace('X', '.') }}
-                {% else %}
-                <span class="text-muted">Não informado</span>
-                {% endif %}
-              </dd>
+        <!-- Resumos -->
+        <div class="card shadow-sm mt-4">
+          <div class="card-header bg-gradient bg-info text-white border-0">
+            <h3 class="card-title mb-0"><i class="bi bi-chat-left-text"></i> Resumos</h3>
+          </div>
+          <div class="card-body">
+            <div class="mb-4">
+              <h6 class="text-primary mb-2"><i class="bi bi-bookmark-star"></i> Resumo dos Fatos</h6>
+              {% if case.facts_summary %}
+              <p class="mb-0">{{ case.facts_summary }}</p>
+              {% else %}
+              <p class="text-muted mb-0"><i class="bi bi-info-circle"></i> Nenhum resumo cadastrado ainda.</p>
+              {% endif %}
+            </div>
 
-              <dt class="col-sm-4">Data de Ajuizamento:</dt>
-              <dd class="col-sm-8">
-                {% if case.filing_date %}
-                {{ case.filing_date.strftime('%d/%m/%Y') }}
-                {% else %}
-                <span class="text-muted">Não informada</span>
-                {% endif %}
-              </dd>
-            </dl>
+            <hr class="my-3">
 
-            <hr>
+            <div class="mb-4">
+              <h6 class="text-primary mb-2"><i class="bi bi-scales"></i> Teses Jurídicas</h6>
+              {% if case.thesis_summary %}
+              <p class="mb-0">{{ case.thesis_summary }}</p>
+              {% else %}
+              <p class="text-muted mb-0"><i class="bi bi-info-circle"></i> Nenhuma tese cadastrada ainda.</p>
+              {% endif %}
+            </div>
 
-            <h5>Resumo dos Fatos</h5>
-            {% if case.facts_summary %}
-            <p>{{ case.facts_summary }}</p>
-            {% else %}
-            <p class="text-muted">Nenhum resumo cadastrado ainda.</p>
-            {% endif %}
+            <hr class="my-3">
 
-            <h5>Teses Jurídicas</h5>
-            {% if case.thesis_summary %}
-            <p>{{ case.thesis_summary }}</p>
-            {% else %}
-            <p class="text-muted">Nenhuma tese cadastrada ainda.</p>
-            {% endif %}
-
-            <h5>Informações sobre Prescrição</h5>
-            {% if case.prescription_summary %}
-            <p>{{ case.prescription_summary }}</p>
-            {% else %}
-            <p class="text-muted">Nenhuma informação cadastrada ainda.</p>
-            {% endif %}
+            <div>
+              <h6 class="text-primary mb-2"><i class="bi bi-calendar-check"></i> Informações sobre Prescrição</h6>
+              {% if case.prescription_summary %}
+              <p class="mb-0">{{ case.prescription_summary }}</p>
+              {% else %}
+              <p class="text-muted mb-0"><i class="bi bi-info-circle"></i> Nenhuma informação cadastrada ainda.</p>
+              {% endif %}
+            </div>
           </div>
         </div>
 
         <!-- Benefícios -->
-        <div class="card mt-3">
-          <div class="card-header">
-            <h3 class="card-title">Benefícios</h3>
+        <div class="card shadow-sm mt-4">
+          <div class="card-header bg-gradient bg-success text-white border-0">
+            <h3 class="card-title mb-0"><i class="bi bi-briefcase"></i> Benefícios</h3>
             <div class="card-tools">
-              <a href="{{ url_for('benefits.case_benefits_list', case_id=case_id) }}" class="btn btn-sm btn-info">
+              <a href="{{ url_for('benefits.case_benefits_list', case_id=case_id) }}" class="btn btn-sm btn-light">
                 <i class="bi bi-eye"></i> Ver Todos
               </a>
-              <a href="{{ url_for('benefits.case_benefit_new', case_id=case_id) }}" class="btn btn-sm btn-primary">
-                <i class="bi bi-plus-circle"></i> Adicionar Benefício
+              <a href="{{ url_for('benefits.case_benefit_new', case_id=case_id) }}" class="btn btn-sm btn-light">
+                <i class="bi bi-plus-circle"></i> Adicionar
               </a>
             </div>
           </div>
           <div class="card-body">
             {% if benefits %}
             <div class="table-responsive">
-              <table class="table table-sm">
-                <thead>
+              <table class="table table-sm table-hover">
+                <thead class="table-light">
                   <tr>
-                    <th>NB</th>
-                    <th>Tipo</th>
-                    <th>Segurado</th>
-                    <th>Data Acidente</th>
+                    <th><i class="bi bi-hash"></i> NB</th>
+                    <th><i class="bi bi-tag"></i> Tipo</th>
+                    <th><i class="bi bi-person"></i> Segurado</th>
+                    <th><i class="bi bi-calendar"></i> Data Acidente</th>
                   </tr>
                 </thead>
                 <tbody>
                   {% for benefit in benefits[:3] %}
                   <tr>
-                    <td>{{ benefit.benefit_number }}</td>
-                    <td>{{ benefit.benefit_type }}</td>
+                    <td><strong>{{ benefit.benefit_number }}</strong></td>
+                    <td><span class="badge bg-light text-dark">{{ benefit.benefit_type }}</span></td>
                     <td>{{ benefit.insured_name }}</td>
-                    <td>{{ benefit.accident_date.strftime('%d/%m/%Y') if benefit.accident_date else '-' }}</td>
+                    <td><small>{{ benefit.accident_date.strftime('%d/%m/%Y') if benefit.accident_date else '-'
+                        }}</small></td>
                   </tr>
                   {% endfor %}
                 </tbody>
               </table>
             </div>
             {% if benefits|length > 3 %}
-            <div class="text-center">
-              <a href="{{ url_for('benefits.case_benefits_list', case_id=case_id) }}" class="btn btn-outline-primary">
+            <div class="text-center mt-2">
+              <a href="{{ url_for('benefits.case_benefits_list', case_id=case_id) }}"
+                class="btn btn-sm btn-outline-success">
                 <i class="bi bi-eye"></i> Ver todos os {{ benefits|length }} benefícios
               </a>
             </div>
@@ -210,27 +250,27 @@
         </div>
 
         <!-- Documentos -->
-        <div class="card mt-3">
-          <div class="card-header">
-            <h3 class="card-title">Documentos</h3>
+        <div class="card shadow-sm mt-4">
+          <div class="card-header bg-gradient bg-warning text-white border-0">
+            <h3 class="card-title mb-0"><i class="bi bi-file-earmark-pdf"></i> Documentos</h3>
             <div class="card-tools">
-              <a href="{{ url_for('documents.case_documents_list', case_id=case_id) }}" class="btn btn-sm btn-info">
+              <a href="{{ url_for('documents.case_documents_list', case_id=case_id) }}" class="btn btn-sm btn-light">
                 <i class="bi bi-eye"></i> Ver Todos
               </a>
-              <a href="{{ url_for('documents.case_document_new', case_id=case_id) }}" class="btn btn-sm btn-primary">
-                <i class="bi bi-upload"></i> Upload Documento
+              <a href="{{ url_for('documents.case_document_new', case_id=case_id) }}" class="btn btn-sm btn-light">
+                <i class="bi bi-upload"></i> Upload
               </a>
             </div>
           </div>
           <div class="card-body">
             {% if documents %}
             <div class="table-responsive">
-              <table class="table table-sm">
-                <thead>
+              <table class="table table-sm table-hover">
+                <thead class="table-light">
                   <tr>
-                    <th>Arquivo</th>
-                    <th>Tipo</th>
-                    <th>Upload</th>
+                    <th><i class="bi bi-file-text"></i> Arquivo</th>
+                    <th><i class="bi bi-tag"></i> Tipo</th>
+                    <th><i class="bi bi-calendar"></i> Upload</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -238,7 +278,7 @@
                   <tr>
                     <td>
                       <i class="bi bi-file-earmark-pdf text-danger"></i>
-                      {{ doc.original_filename[:20] }}{% if doc.original_filename|length > 20 %}...{% endif %}
+                      {{ doc.original_filename[:25] }}{% if doc.original_filename|length > 25 %}...{% endif %}
                     </td>
                     <td>
                       {% if doc.document_type == 'cat' %}
@@ -251,18 +291,17 @@
                       <span class="badge bg-secondary">{{ doc.document_type[:6] }}</span>
                       {% endif %}
                     </td>
-                    <td>
-                      <small class="text-muted">{{ doc.uploaded_at.strftime('%d/%m') if doc.uploaded_at else '-'
-                        }}</small>
-                    </td>
+                    <td><small class="text-muted">{{ doc.uploaded_at.strftime('%d/%m/%Y') if doc.uploaded_at else '-'
+                        }}</small></td>
                   </tr>
                   {% endfor %}
                 </tbody>
               </table>
             </div>
             {% if documents|length > 3 %}
-            <div class="text-center">
-              <a href="{{ url_for('documents.case_documents_list', case_id=case_id) }}" class="btn btn-outline-primary">
+            <div class="text-center mt-2">
+              <a href="{{ url_for('documents.case_documents_list', case_id=case_id) }}"
+                class="btn btn-sm btn-outline-warning">
                 <i class="bi bi-eye"></i> Ver todos os {{ documents|length }} documentos
               </a>
             </div>
@@ -280,57 +319,54 @@
         </div>
 
         <!-- Petições Geradas com IA -->
-        <div class="card mt-3">
-          <div class="card-header bg-info text-white">
-            <h3 class="card-title"><i class="bi bi-robot"></i> Petições Geradas com IA</h3>
+        <div class="card shadow-sm mt-4">
+          <div class="card-header bg-gradient bg-danger text-white border-0">
+            <h3 class="card-title mb-0"><i class="bi bi-robot"></i> Petições Geradas com IA</h3>
             <div class="card-tools">
               {% if petitions %}
               <a href="{{ url_for('petitions.case_petitions_list', case_id=case_id) }}" class="btn btn-sm btn-light">
                 <i class="bi bi-eye"></i> Ver Todas
               </a>
               {% endif %}
-              <a href="{{ url_for('petitions.case_petition_generate', case_id=case_id) }}"
-                class="btn btn-sm btn-warning">
-                <i class="bi bi-magic"></i> Gerar Nova Petição
+              <a href="{{ url_for('petitions.case_petition_generate', case_id=case_id) }}" class="btn btn-sm btn-light">
+                <i class="bi bi-magic"></i> Gerar Nova
               </a>
             </div>
           </div>
           <div class="card-body">
             {% if petitions %}
             <div class="table-responsive">
-              <table class="table table-sm">
-                <thead>
+              <table class="table table-sm table-hover">
+                <thead class="table-light">
                   <tr>
-                    <th>Versão</th>
-                    <th>Título</th>
-                    <th>Gerada em</th>
-                    <th>Status</th>
-                    <th>Ações</th>
+                    <th><i class="bi bi-tag"></i> Versão</th>
+                    <th><i class="bi bi-file-text"></i> Título</th>
+                    <th><i class="bi bi-calendar"></i> Gerada em</th>
+                    <th><i class="bi bi-circle-fill"></i> Status</th>
+                    <th><i class="bi bi-gear"></i> Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {% for petition in petitions[:3] %}
                   <tr>
                     <td><span class="badge bg-primary">v{{ petition.version }}</span></td>
-                    <td>{{ petition.title[:30] }}{% if petition.title|length > 30 %}...{% endif %}</td>
-                    <td>
-                      <small class="text-muted">{{ petition.generated_at.strftime('%d/%m/%Y %H:%M') if
-                        petition.generated_at else '-' }}</small>
-                    </td>
+                    <td>{{ petition.title[:35] }}{% if petition.title|length > 35 %}...{% endif %}</td>
+                    <td><small class="text-muted">{{ petition.generated_at.strftime('%d/%m/%Y %H:%M') if
+                        petition.generated_at else '-' }}</small></td>
                     <td>
                       {% if petition.status == 'completed' %}
-                      <span class="badge bg-success">Concluída</span>
+                      <span class="badge bg-success"><i class="bi bi-check-circle"></i> Concluída</span>
                       {% elif petition.status == 'processing' %}
-                      <span class="badge bg-info">Processando</span>
+                      <span class="badge bg-info"><i class="bi bi-hourglass-split"></i> Processando</span>
                       {% elif petition.status == 'error' %}
-                      <span class="badge bg-danger">Erro</span>
+                      <span class="badge bg-danger"><i class="bi bi-exclamation-circle"></i> Erro</span>
                       {% else %}
                       <span class="badge bg-secondary">{{ petition.status }}</span>
                       {% endif %}
                     </td>
                     <td>
                       <a href="{{ url_for('petitions.case_petition_view', case_id=case_id, petition_id=petition.id) }}"
-                        class="btn btn-xs btn-info" title="Visualizar">
+                        class="btn btn-sm btn-outline-info" title="Visualizar">
                         <i class="bi bi-eye"></i>
                       </a>
                     </td>
@@ -340,8 +376,9 @@
               </table>
             </div>
             {% if petitions|length > 3 %}
-            <div class="text-center">
-              <a href="{{ url_for('petitions.case_petitions_list', case_id=case_id) }}" class="btn btn-outline-info">
+            <div class="text-center mt-2">
+              <a href="{{ url_for('petitions.case_petitions_list', case_id=case_id) }}"
+                class="btn btn-sm btn-outline-danger">
                 <i class="bi bi-eye"></i> Ver todas as {{ petitions|length }} petições
               </a>
             </div>
@@ -364,28 +401,30 @@
 
       <div class="col-md-4">
         <!-- Ações Rápidas -->
-        <div class="card">
-          <div class="card-header bg-primary">
-            <h3 class="card-title text-white">
+        <div class="card shadow-sm">
+          <div class="card-header bg-gradient bg-primary text-white border-0">
+            <h3 class="card-title mb-0">
               <i class="bi bi-lightning-charge"></i> Ações Rápidas
             </h3>
           </div>
           <div class="card-body">
             <div class="d-grid gap-2">
-              <a href="{{ url_for('documents.case_documents_list', case_id=case_id) }}" class="btn btn-outline-primary">
+              <a href="{{ url_for('documents.case_documents_list', case_id=case_id) }}"
+                class="btn btn-sm btn-outline-primary">
                 <i class="bi bi-file-earmark-text"></i> Gerenciar Documentos
               </a>
-              <a href="{{ url_for('documents.case_document_new', case_id=case_id) }}" class="btn btn-outline-success">
+              <a href="{{ url_for('documents.case_document_new', case_id=case_id) }}"
+                class="btn btn-sm btn-outline-success">
                 <i class="bi bi-upload"></i> Upload Documento
               </a>
-              <a href="{{ url_for('benefits.case_benefit_new', case_id=case_id) }}" class="btn btn-outline-secondary">
+              <a href="{{ url_for('benefits.case_benefit_new', case_id=case_id) }}" class="btn btn-sm btn-outline-info">
                 <i class="bi bi-plus-circle"></i> Adicionar Benefício
               </a>
               <a href="{{ url_for('petitions.case_petition_generate', case_id=case_id) }}"
-                class="btn btn-outline-warning">
+                class="btn btn-sm btn-outline-danger">
                 <i class="bi bi-robot"></i> Gerar Petição com IA
               </a>
-              <button type="button" class="btn btn-outline-info" onclick="openActivityTimeline()">
+              <button type="button" class="btn btn-sm btn-outline-secondary" onclick="openActivityTimeline()">
                 <i class="bi bi-clock-history"></i> Histórico
               </button>
             </div>
@@ -393,23 +432,23 @@
         </div>
 
         <!-- Advogados -->
-        <div class="card mt-3">
-          <div class="card-header">
-            <h3 class="card-title">Advogados do Caso</h3>
+        <div class="card shadow-sm mt-3">
+          <div class="card-header bg-gradient bg-secondary text-white border-0">
+            <h3 class="card-title mb-0"><i class="bi bi-person-check"></i> Advogados do Caso</h3>
             <div class="card-tools">
-              <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#addLawyerModal">
-                <i class="bi bi-plus-circle"></i> Adicionar Advogado
+              <button class="btn btn-sm btn-light" data-bs-toggle="modal" data-bs-target="#addLawyerModal">
+                <i class="bi bi-plus-circle"></i> Adicionar
               </button>
             </div>
           </div>
           <div class="card-body">
             {% if case_lawyers %}
-            <div class="list-group">
+            <div class="list-group list-group-flush">
               {% for case_lawyer in case_lawyers %}
-              <div class="list-group-item d-flex justify-content-between align-items-center">
+              <div class="list-group-item px-0 d-flex justify-content-between align-items-center border-bottom">
                 <div>
                   <h6 class="mb-1">
-                    <i class="bi bi-person-badge"></i> {{ case_lawyer.lawyer.name }}
+                    <i class="bi bi-person-badge text-primary"></i> {{ case_lawyer.lawyer.name }}
                   </h6>
                   <small class="text-muted">
                     OAB: {{ case_lawyer.lawyer.oab_number }}
@@ -418,7 +457,8 @@
                     {% endif %}
                   </small>
                   {% if case_lawyer.lawyer.email %}
-                  <br><small class="text-muted"><i class="bi bi-envelope"></i> {{ case_lawyer.lawyer.email }}</small>
+                  <br><small class="text-muted"><i class="bi bi-envelope"></i> {{ case_lawyer.lawyer.email
+                    }}</small>
                   {% endif %}
                 </div>
                 <form action="{{ url_for('cases.case_lawyer_remove', case_id=case_id, case_lawyer_id=case_lawyer.id) }}"
@@ -500,22 +540,24 @@
         </div>
 
         <!-- Vara Judicial -->
-        <div class="card mt-3">
-          <div class="card-header">
-            <h3 class="card-title">Vara Judicial</h3>
+        <div class="card shadow-sm mt-3">
+          <div class="card-header bg-gradient bg-teal text-white border-0">
+            <h3 class="card-title mb-0"><i class="bi bi-scales"></i> Vara Judicial</h3>
           </div>
           <div class="card-body">
             {% if case.court %}
-            <dl class="row mb-0">
-              <dt class="col-sm-4">Vara:</dt>
-              <dd class="col-sm-8">{{ case.court.vara_name }}</dd>
-
-              <dt class="col-sm-4">Seção:</dt>
-              <dd class="col-sm-8">{{ case.court.section or 'Não informado' }}</dd>
-
-              <dt class="col-sm-4">Localização:</dt>
-              <dd class="col-sm-8">{{ case.court.city }}/{{ case.court.state }}</dd>
-            </dl>
+            <div class="mb-3">
+              <small class="text-muted d-block"><i class="bi bi-building"></i> Vara</small>
+              <h6 class="mb-0">{{ case.court.vara_name }}</h6>
+            </div>
+            <div class="mb-3">
+              <small class="text-muted d-block"><i class="bi bi-folder-check"></i> Seção</small>
+              <h6 class="mb-0">{{ case.court.section or 'Não informado' }}</h6>
+            </div>
+            <div>
+              <small class="text-muted d-block"><i class="bi bi-geo-alt"></i> Localização</small>
+              <h6 class="mb-0">{{ case.court.city }}/{{ case.court.state }}</h6>
+            </div>
             {% else %}
             <div class="alert alert-warning mb-0">
               <i class="bi bi-exclamation-triangle"></i> Nenhuma vara selecionada para este caso.
@@ -528,23 +570,31 @@
         </div>
 
         <!-- Estatísticas -->
-        <div class="card mt-3">
-          <div class="card-header">
-            <h3 class="card-title">Estatísticas</h3>
+        <div class="card shadow-sm mt-3">
+          <div class="card-header bg-gradient bg-success text-white border-0">
+            <h3 class="card-title mb-0"><i class="bi bi-graph-up"></i> Resumo</h3>
           </div>
           <div class="card-body">
-            <div class="row text-center">
+            <div class="row g-3">
               <div class="col-6">
-                <div class="border-end">
-                  <h4 class="mb-0 text-primary">{{ documents|length }}</h4>
+                <div class="text-center p-3 bg-light border-start border-primary border-4">
+                  <h4 class="mb-1 text-primary"><i class="bi bi-file-earmark"></i> {{ documents|length }}</h4>
                   <small class="text-muted">Documentos</small>
                 </div>
               </div>
               <div class="col-6">
-                <h4 class="mb-0 text-success">{{ benefits|length }}</h4>
-                <small class="text-muted">Benefícios</small>
+                <div class="text-center p-3 bg-light border-start border-success border-4">
+                  <h4 class="mb-1 text-success"><i class="bi bi-briefcase"></i> {{ benefits|length }}</h4>
+                  <small class="text-muted">Benefícios</small>
+                </div>
               </div>
             </div>
+            {% if petitions %}
+            <div class="mt-3 pt-3 border-top">
+              <small class="text-muted d-block mb-2"><i class="bi bi-robot"></i> Petições Geradas</small>
+              <h5 class="mb-0 text-danger">{{ petitions|length }}</h5>
+            </div>
+            {% endif %}
           </div>
         </div>
       </div>

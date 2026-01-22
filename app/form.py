@@ -52,6 +52,7 @@ class LawyerForm(FlaskForm):
 # Formulário: Cases (Casos)
 # ========================
 class CaseForm(FlaskForm):
+    # Step 1: Informações Básicas
     client_id = SelectField('Cliente (Empresa Autora)', coerce=int, validators=[DataRequired()])
     court_id = SelectField('Vara Judicial', coerce=int, validators=[Optional()])
     title = StringField('Título do Caso', validators=[DataRequired(), Length(min=2, max=255)])
@@ -66,6 +67,21 @@ class CaseForm(FlaskForm):
         ],
         validators=[DataRequired()]
     )
+    status = SelectField(
+        'Status',
+        choices=[
+            ('draft', 'Rascunho'),
+            ('active', 'Ativo'),
+            ('suspended', 'Suspenso'),
+            ('closed', 'Encerrado'),
+            ('archived', 'Arquivado')
+        ],
+        default='draft',
+        validators=[DataRequired()]
+    )
+    filing_date = DateField('Data de Ajuizamento', format='%Y-%m-%d', validators=[Optional()])
+    
+    # Step 2: Informações FAP
     fap_reason = SelectField(
         'Motivo / Enquadramento',
         choices=[
@@ -84,28 +100,21 @@ class CaseForm(FlaskForm):
         'Ano Final FAP',
         validators=[Optional(), NumberRange(min=1900, max=2100)]
     )
-    facts_summary = TextAreaField('Resumo dos Fatos', validators=[Optional()])
-    thesis_summary = TextAreaField('Resumo das Teses Jurídicas', validators=[Optional()])
-    prescription_summary = TextAreaField('Informações sobre Prescrição', validators=[Optional()])
     value_cause = DecimalField(
         'Valor da Causa (R$)',
         places=2,
         validators=[Optional(), NumberRange(min=0)]
     )
-    status = SelectField(
-        'Status',
-        choices=[
-            ('draft', 'Rascunho'),
-            ('active', 'Ativo'),
-            ('suspended', 'Suspenso'),
-            ('closed', 'Encerrado'),
-            ('archived', 'Arquivado')
-        ],
-        default='draft',
-        validators=[DataRequired()]
-    )
-    filing_date = DateField('Data de Ajuizamento', format='%Y-%m-%d', validators=[Optional()])
-    submit = SubmitField('Salvar Caso')
+    
+    # Step 3: Resumos
+    facts_summary = TextAreaField('Resumo dos Fatos', validators=[Optional()])
+    thesis_summary = TextAreaField('Resumo das Teses Jurídicas', validators=[Optional()])
+    prescription_summary = TextAreaField('Informações sobre Prescrição', validators=[Optional()])
+    
+    # Campo hidden para controlar o step atual
+    current_step = HiddenField('Current Step', default='1')
+    
+    submit = SubmitField('Próximo')
 
 
 # ========================

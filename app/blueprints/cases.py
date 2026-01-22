@@ -149,7 +149,7 @@ def case_new():
             db.session.commit()
             from flask import flash
             flash('Caso cadastrado com sucesso!', 'success')
-            return redirect(url_for('cases.cases_list'))
+            return redirect(url_for('cases.case_detail', case_id=case.id))
         except Exception as e:
             db.session.rollback()
             from flask import flash

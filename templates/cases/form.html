@@ -3,6 +3,103 @@
 {% block title %}{{ title }} - IntellexIA{% endblock %}
 
 {% block content %}
+<style>
+  .wizard-steps {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 2rem;
+    position: relative;
+  }
+
+  .wizard-steps::before {
+    content: '';
+    position: absolute;
+    top: 20px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: #e9ecef;
+    z-index: 0;
+  }
+
+  .wizard-step {
+    flex: 1;
+    text-align: center;
+    position: relative;
+    z-index: 1;
+  }
+
+  .wizard-step-circle {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #e9ecef;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 0.5rem;
+    font-weight: bold;
+    transition: all 0.3s;
+  }
+
+  .wizard-step.active .wizard-step-circle {
+    background: #007bff;
+    color: white;
+  }
+
+  .wizard-step.completed .wizard-step-circle {
+    background: #28a745;
+    color: white;
+  }
+
+  .wizard-step-label {
+    font-size: 0.875rem;
+    color: #6c757d;
+  }
+
+  .wizard-step.active .wizard-step-label {
+    color: #007bff;
+    font-weight: 600;
+  }
+
+  .wizard-step.completed .wizard-step-label {
+    color: #28a745;
+  }
+
+  .wizard-step.has-error .wizard-step-circle {
+    background: #dc3545;
+    color: white;
+    animation: pulse 1s infinite;
+  }
+
+  .wizard-step.has-error .wizard-step-label {
+    color: #dc3545;
+  }
+
+  @keyframes pulse {
+    0% {
+      box-shadow: 0 0 0 0 rgba(220, 53, 69, 0.7);
+    }
+
+    50% {
+      box-shadow: 0 0 0 10px rgba(220, 53, 69, 0);
+    }
+
+    100% {
+      box-shadow: 0 0 0 0 rgba(220, 53, 69, 0);
+    }
+  }
+
+  .step-content {
+    display: none;
+  }
+
+  .step-content.active {
+    display: block;
+  }
+</style>
+
 <div class="app-content-header">
   <div class="container-fluid">
     <div class="row">
@@ -28,143 +125,175 @@
           <div class="card-header">
             <h3 class="card-title"><i class="bi bi-folder-plus me-2"></i>{{ title }}</h3>
           </div>
-          <form method="POST" action="">
-            {{ form.hidden_tag() }}
-            <div class="card-body">
-              <h5 class="text-primary mb-3"><i class="bi bi-info-circle me-2"></i>Informações Básicas</h5>
-              <div class="row">
-                <div class="col-md-12">
-                  <div class="mb-3">
-                    {{ form.title.label(class="form-label") }}
-                    {{ form.title(class="form-control" + (" is-invalid" if form.title.errors else ""),
-                    placeholder="Digite o título do caso") }}
-                    {% if form.title.errors %}
-                    <div class="invalid-feedback">
-                      {% for error in form.title.errors %}{{ error }}{% endfor %}
-                    </div>
-                    {% endif %}
-                  </div>
-                </div>
-              </div>
 
-              <div class="row">
-                <div class="col-md-6">
-                  <div class="mb-3">
-                    {{ form.client_id.label(class="form-label") }}
-                    {{ form.client_id(class="form-select" + (" is-invalid" if form.client_id.errors else "")) }}
-                    {% if form.client_id.errors %}
-                    <div class="invalid-feedback">
-                      {% for error in form.client_id.errors %}{{ error }}{% endfor %}
-                    </div>
-                    {% endif %}
-                  </div>
-                </div>
-                <div class="col-md-6">
-                  <div class="mb-3">
-                    {{ form.court_id.label(class="form-label") }}
-                    {{ form.court_id(class="form-select") }}
-                  </div>
-                </div>
-              </div>
+          <div class="card-body">
+            <!-- Alert de validação -->
+            <div id="validationAlert" class="alert alert-danger d-none" role="alert">
+              <h5 class="alert-heading"><i class="bi bi-exclamation-triangle-fill me-2"></i>Validações Pendentes</h5>
+              <p class="mb-2">Por favor, corrija os seguintes erros antes de salvar:</p>
+              <div id="validationAlertContent"></div>
+            </div>
 
-              <div class="row">
-                <div class="col-md-4">
-                  <div class="mb-3">
-                    {{ form.case_type.label(class="form-label") }}
-                    {{ form.case_type(class="form-select" + (" is-invalid" if form.case_type.errors else ""),
-                    id="case_type") }}
-                    {% if form.case_type.errors %}
-                    <div class="invalid-feedback">
-                      {% for error in form.case_type.errors %}{{ error }}{% endfor %}
-                    </div>
-                    {% endif %}
-                  </div>
-                </div>
-                <div class="col-md-4">
-                  <div class="mb-3">
-                    {{ form.status.label(class="form-label") }}
-                    {{ form.status(class="form-select") }}
-                  </div>
-                </div>
-                <div class="col-md-4">
-                  <div class="mb-3">
-                    {{ form.filing_date.label(class="form-label") }}
-                    {{ form.filing_date(class="form-control", type="date") }}
-                  </div>
-                </div>
+            <!-- Wizard Steps Indicator -->
+            <div class="wizard-steps">
+              <div class="wizard-step active" data-step="1">
+                <div class="wizard-step-circle">1</div>
+                <div class="wizard-step-label">Informações Básicas</div>
               </div>
-
-              <div class="row" id="fap_reason_container" style="display: none;">
-                <div class="col-md-12">
-                  <div class="callout callout-warning">
-                    {{ form.fap_reason.label(class="form-label") }}
-                    {{ form.fap_reason(class="form-select") }}
-                    <div class="form-text">Selecione o motivo ou enquadramento para casos FAP</div>
-                  </div>
-                </div>
+              <div class="wizard-step" data-step="2">
+                <div class="wizard-step-circle">2</div>
+                <div class="wizard-step-label">Informações FAP</div>
               </div>
-
-              <h5 class="text-success mt-4 mb-3"><i class="bi bi-graph-up-arrow me-2"></i>Informações FAP</h5>
-              <div class="row">
-                <div class="col-md-4">
-                  <div class="mb-3">
-                    {{ form.fap_start_year.label(class="form-label") }}
-                    {{ form.fap_start_year(class="form-control", placeholder="Ex: 2020") }}
-                  </div>
-                </div>
-                <div class="col-md-4">
-                  <div class="mb-3">
-                    {{ form.fap_end_year.label(class="form-label") }}
-                    {{ form.fap_end_year(class="form-control", placeholder="Ex: 2023") }}
-                  </div>
-                </div>
-                <div class="col-md-4">
-                  <div class="mb-3">
-                    {{ form.value_cause.label(class="form-label") }}
-                    {{ form.value_cause(class="form-control", placeholder="0.00") }}
-                  </div>
-                </div>
-              </div>
-
-              <h5 class="text-info mt-4 mb-3"><i class="bi bi-file-earmark-text me-2"></i>Resumos</h5>
-              <div class="row">
-                <div class="col-md-12">
-                  <div class="mb-3">
-                    {{ form.facts_summary.label(class="form-label") }}
-                    {{ form.facts_summary(class="form-control", rows="4", placeholder="Descreva os fatos do caso...") }}
-                  </div>
-                </div>
-              </div>
-
-              <div class="row">
-                <div class="col-md-12">
-                  <div class="mb-3">
-                    {{ form.thesis_summary.label(class="form-label") }}
-                    {{ form.thesis_summary(class="form-control", rows="4", placeholder="Descreva as teses jurídicas...")
-                    }}
-                  </div>
-                </div>
-              </div>
-
-              <div class="row">
-                <div class="col-md-12">
-                  <div class="mb-3">
-                    {{ form.prescription_summary.label(class="form-label") }}
-                    {{ form.prescription_summary(class="form-control", rows="3", placeholder="Informações sobre
-                    prescrição...") }}
-                  </div>
-                </div>
+              <div class="wizard-step" data-step="3">
+                <div class="wizard-step-circle">3</div>
+                <div class="wizard-step-label">Resumos</div>
               </div>
             </div>
-            <div class="card-footer text-end">
-              <a href="{{ url_for('cases.cases_list') }}" class="btn btn-secondary">
-                <i class="bi bi-x-circle me-1"></i>Cancelar
-              </a>
-              <button type="submit" class="btn btn-primary">
-                <i class="bi bi-check-circle me-1"></i>{{ form.submit.label.text }}
-              </button>
-            </div>
-          </form>
+
+            <form method="POST" action="" id="caseForm" novalidate>
+              {{ form.hidden_tag() }}
+
+              <!-- Step 1: Informações Básicas -->
+              <div class="step-content active" data-step="1">
+                <h5 class="text-primary mb-3"><i class="bi bi-info-circle me-2"></i>Informações Básicas
+                </h5>
+
+                <div class="row">
+                  <div class="col-md-12">
+                    <div class="mb-3">
+                      {{ form.title.label(class="form-label") }}
+                      {{ form.title(class="form-control", placeholder="Digite o título do caso")
+                      }}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="row">
+                  <div class="col-md-6">
+                    <div class="mb-3">
+                      {{ form.client_id.label(class="form-label") }}
+                      {{ form.client_id(class="form-select") }}
+                    </div>
+                  </div>
+                  <div class="col-md-6">
+                    <div class="mb-3">
+                      {{ form.court_id.label(class="form-label") }}
+                      {{ form.court_id(class="form-select") }}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="row">
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      {{ form.case_type.label(class="form-label") }}
+                      {{ form.case_type(class="form-select", id="case_type") }}
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      {{ form.status.label(class="form-label") }}
+                      {{ form.status(class="form-select") }}
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      {{ form.filing_date.label(class="form-label") }}
+                      {{ form.filing_date(class="form-control", type="date") }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Step 2: Informações FAP -->
+              <div class="step-content" data-step="2">
+                <h5 class="text-success mb-3"><i class="bi bi-graph-up-arrow me-2"></i>Informações FAP
+                </h5>
+
+                <div class="row" id="fap_reason_container">
+                  <div class="col-md-12">
+                    <div class="callout callout-warning">
+                      {{ form.fap_reason.label(class="form-label") }}
+                      {{ form.fap_reason(class="form-select") }}
+                      <div class="form-text">Selecione o motivo ou enquadramento para casos FAP
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="row">
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      {{ form.fap_start_year.label(class="form-label") }}
+                      {{ form.fap_start_year(class="form-control", placeholder="Ex: 2020") }}
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      {{ form.fap_end_year.label(class="form-label") }}
+                      {{ form.fap_end_year(class="form-control", placeholder="Ex: 2023") }}
+                    </div>
+                  </div>
+                  <div class="col-md-4">
+                    <div class="mb-3">
+                      {{ form.value_cause.label(class="form-label") }}
+                      {{ form.value_cause(class="form-control", placeholder="0.00") }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Step 3: Resumos -->
+              <div class="step-content" data-step="3">
+                <h5 class="text-info mb-3"><i class="bi bi-file-earmark-text me-2"></i>Resumos</h5>
+
+                <div class="row">
+                  <div class="col-md-12">
+                    <div class="mb-3">
+                      {{ form.facts_summary.label(class="form-label") }}
+                      {{ form.facts_summary(class="form-control", rows="4", placeholder="Descreva
+                      os fatos do caso...") }}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="row">
+                  <div class="col-md-12">
+                    <div class="mb-3">
+                      {{ form.thesis_summary.label(class="form-label") }}
+                      {{ form.thesis_summary(class="form-control", rows="4", placeholder="Descreva
+                      as teses jurídicas...") }}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="row">
+                  <div class="col-md-12">
+                    <div class="mb-3">
+                      {{ form.prescription_summary.label(class="form-label") }}
+                      {{ form.prescription_summary(class="form-control", rows="3",
+                      placeholder="Informações sobre prescrição...") }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </form>
+          </div>
+
+          <div class="card-footer text-end">
+            <button type="button" class="btn btn-secondary" id="prevBtn" style="display: none;">
+              <i class="bi bi-arrow-left me-1"></i>Anterior
+            </button>
+            <button type="button" class="btn btn-primary" id="nextBtn">
+              Próximo<i class="bi bi-arrow-right ms-1"></i>
+            </button>
+            <button type="submit" form="caseForm" class="btn btn-success" id="submitBtn" style="display: none;">
+              <i class="bi bi-check-circle me-1"></i>Salvar Caso
+            </button>
+            <a href="{{ url_for('cases.cases_list') }}" class="btn btn-secondary">
+              <i class="bi bi-x-circle me-1"></i>Cancelar
+            </a>
+          </div>
         </div>
       </div>
     </div>
@@ -172,25 +301,226 @@
 </div>
 
 <script>
-  // Mostrar/ocultar campo Motivo/Enquadramento baseado no tipo de caso
   document.addEventListener('DOMContentLoaded', function () {
-    const caseTypeSelect = document.getElementById('case_type');
-    const fapReasonContainer = document.getElementById('fap_reason_container');
+    let currentStep = 1;
+    const totalSteps = 3;
 
-    function toggleFapReason() {
-      const selectedValue = caseTypeSelect.value;
-      if (selectedValue === 'fap_trajeto' || selectedValue === 'fap_outros') {
-        fapReasonContainer.style.display = 'block';
-      } else {
-        fapReasonContainer.style.display = 'none';
+    function showStep(step) {
+      // Hide validation alert when changing steps
+      hideValidationAlert();
+
+      // Hide all steps
+      document.querySelectorAll('.step-content').forEach(el => {
+        el.classList.remove('active');
+      });
+
+      // Show current step
+      const stepContent = document.querySelector(`.step-content[data-step="${step}"]`);
+      if (stepContent) {
+        stepContent.classList.add('active');
+      }
+
+      // Update wizard indicator
+      document.querySelectorAll('.wizard-step').forEach((el, index) => {
+        const stepNum = index + 1;
+        el.classList.remove('active', 'completed');
+
+        if (stepNum < step) {
+          el.classList.add('completed');
+        } else if (stepNum === step) {
+          el.classList.add('active');
+        }
+      });
+
+      // Update buttons
+      const prevBtn = document.getElementById('prevBtn');
+      const nextBtn = document.getElementById('nextBtn');
+      const submitBtn = document.getElementById('submitBtn');
+
+      if (prevBtn) prevBtn.style.display = step === 1 ? 'none' : 'inline-block';
+      if (nextBtn) nextBtn.style.display = step === totalSteps ? 'none' : 'inline-block';
+      if (submitBtn) submitBtn.style.display = step === totalSteps ? 'inline-block' : 'none';
+
+      // Update current_step hidden field
+      const currentStepField = document.querySelector('[name="current_step"]');
+      if (currentStepField) {
+        currentStepField.value = step;
       }
     }
 
-    // Verificar no carregamento da página
-    toggleFapReason();
+    function validateAllSteps() {
+      let allErrors = [];
 
-    // Verificar quando mudar a seleção
-    caseTypeSelect.addEventListener('change', toggleFapReason);
+      // Validar Step 1 - usando querySelector de forma segura
+      const titleField = document.querySelector('input[name="title"]');
+      const clientIdField = document.querySelector('select[name="client_id"]');
+      const caseTypeField = document.querySelector('select[name="case_type"]');
+
+      console.log('Campos encontrados:', {
+        title: titleField,
+        clientId: clientIdField,
+        caseType: caseTypeField
+      });
+
+      if (titleField) {
+        const titleValue = titleField.value ? titleField.value.trim() : '';
+        if (!titleValue) {
+          allErrors.push({ step: 1, field: 'Título do Caso', message: 'Campo obrigatório' });
+        }
+      } else {
+        allErrors.push({ step: 1, field: 'Título do Caso', message: 'Campo não encontrado' });
+      }
+
+      if (clientIdField) {
+        const clientIdValue = clientIdField.value ? clientIdField.value : '';
+        if (!clientIdValue || clientIdValue === '0' || clientIdValue === '') {
+          allErrors.push({ step: 1, field: 'Cliente', message: 'Campo obrigatório' });
+        }
+      } else {
+        allErrors.push({ step: 1, field: 'Cliente', message: 'Campo não encontrado' });
+      }
+
+      if (caseTypeField) {
+        const caseTypeValue = caseTypeField.value ? caseTypeField.value : '';
+        if (!caseTypeValue) {
+          allErrors.push({ step: 1, field: 'Tipo de Caso', message: 'Campo obrigatório' });
+        }
+      } else {
+        allErrors.push({ step: 1, field: 'Tipo de Caso', message: 'Campo não encontrado' });
+      }
+
+      return allErrors;
+    }
+
+    function showValidationAlert(errors) {
+      if (errors.length === 0) return false;
+
+      // Agrupar erros por step
+      const errorsByStep = {};
+      errors.forEach(error => {
+        if (!errorsByStep[error.step]) {
+          errorsByStep[error.step] = [];
+        }
+        errorsByStep[error.step].push(error);
+      });
+
+      // Criar lista de erros
+      let errorList = '<ul class="mb-0">';
+      Object.keys(errorsByStep).forEach(step => {
+        const stepNames = {
+          '1': 'Informações Básicas',
+          '2': 'Informações FAP',
+          '3': 'Resumos'
+        };
+
+        errorList += `<li><strong>Etapa ${step} - ${stepNames[step]}:</strong><ul>`;
+        errorsByStep[step].forEach(error => {
+          errorList += `<li>${error.field}: ${error.message}</li>`;
+        });
+        errorList += '</ul></li>';
+      });
+      errorList += '</ul>';
+
+      // Mostrar alerta inline
+      const alertDiv = document.getElementById('validationAlert');
+      const alertContent = document.getElementById('validationAlertContent');
+
+      if (alertDiv && alertContent) {
+        alertContent.innerHTML = errorList;
+        alertDiv.classList.remove('d-none');
+
+        // Scroll para o topo do card
+        alertDiv.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+
+      // Marcar steps com erro
+      document.querySelectorAll('.wizard-step').forEach((el, index) => {
+        const stepNum = index + 1;
+        el.classList.remove('has-error');
+        if (errorsByStep[stepNum]) {
+          el.classList.add('has-error');
+        }
+      });
+
+      return true;
+    }
+
+    function hideValidationAlert() {
+      const alertDiv = document.getElementById('validationAlert');
+      if (alertDiv) {
+        alertDiv.classList.add('d-none');
+      }
+
+      // Remover marcas de erro dos steps
+      document.querySelectorAll('.wizard-step').forEach(el => {
+        el.classList.remove('has-error');
+      });
+    }
+
+    const nextBtn = document.getElementById('nextBtn');
+    if (nextBtn) {
+      nextBtn.addEventListener('click', () => {
+        if (currentStep < totalSteps) {
+          currentStep++;
+          showStep(currentStep);
+        }
+      });
+    }
+
+    const prevBtn = document.getElementById('prevBtn');
+    if (prevBtn) {
+      prevBtn.addEventListener('click', () => {
+        if (currentStep > 1) {
+          currentStep--;
+          showStep(currentStep);
+        }
+      });
+    }
+
+    // Validar antes de submeter
+    const caseForm = document.getElementById('caseForm');
+    if (caseForm) {
+      caseForm.addEventListener('submit', (e) => {
+        e.preventDefault(); // Sempre prevenir primeiro
+
+        const errors = validateAllSteps();
+
+        console.log('Validação executada. Erros encontrados:', errors);
+
+        if (errors.length > 0) {
+          showValidationAlert(errors);
+          return false;
+        } else {
+          // Se não houver erros, submeter o formulário
+          console.log('Sem erros, submetendo formulário...');
+          e.target.submit();
+        }
+      });
+    }
+
+    // Initialize
+    showStep(currentStep);
+
+    // Mostrar/ocultar campo Motivo/Enquadramento baseado no tipo de caso
+    const caseTypeSelect = document.getElementById('case_type');
+    const fapReasonContainer = document.getElementById('fap_reason_container');
+
+    if (caseTypeSelect && fapReasonContainer) {
+      function toggleFapReason() {
+        const selectedValue = caseTypeSelect.value;
+        if (selectedValue === 'fap_trajeto' || selectedValue === 'fap_outros') {
+          fapReasonContainer.style.display = 'block';
+        } else {
+          fapReasonContainer.style.display = 'none';
+        }
+      }
+
+      // Verificar no carregamento da página
+      toggleFapReason();
+
+      // Verificar quando mudar a seleção
+      caseTypeSelect.addEventListener('change', toggleFapReason);
+    }
   });
 </script>
 {% endblock %}
