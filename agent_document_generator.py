@@ -146,6 +146,12 @@ class AgentDocumentGenerator:
                 '{{data_inicio_beneficio_segurado_exemplo}}': 'Não informado',  # Adicionar campo no modelo se necessário
                 '{{data_fim_beneficio_segurado_exemplo}}': 'Não informado',  # Adicionar campo no modelo se necessário
                 '{{numero_beneficio}}': benefits[0].benefit_number if benefits else 'Não informado',
+                '{{lesao_segurado_exemplo}}': 'Não informado',  # Campo adicional
+                '{{resumo_evento_segurado_exemplo}}': 'Não informado',  # Campo adicional
+                '{{data_afastamento_trabalho}}': 'Não informado',  # Campo adicional
+                '{{data_laudo_medico_segurado_exemplo}}': 'Não informado',  # Campo adicional
+                '{{numero_cat}}': benefits[0].accident_date.strftime('%d/%m/%Y') if benefits and benefits[0].accident_date else 'Não informado',  # ou campo específico se existir
+                '{{numero_bo}}': 'Não informado',  # Campo adicional
             },
             'Valores': {
                 '{{valor_causa}}': self._format_currency(case.value_cause) if case.value_cause else 'Não informado',
@@ -159,6 +165,9 @@ class AgentDocumentGenerator:
             },
             'Imagens': {
                 '{{Imagem_cat}}': '[Imagem CAT será inserida]',
+                '{{imagem_fap}}': '[Imagem FAP será inserida]',
+                '{{imagem_info_beneficiario}}': '[Imagem Info Beneficiário será inserida]',
+                '{{imagem_declaracao_beneficio}}': '[Imagem Declaração Benefício será inserida]',
                 '{{imagem_inss_beneficiario}}': '[Imagem INSS Beneficiário será inserida]',
                 '{{imagem_vigencia_beneficio}}': '[Imagem Vigência Benefício será inserida]',
             },
@@ -210,6 +219,12 @@ class AgentDocumentGenerator:
             '{{data_inicio_beneficio_segurado_exemplo}}': '',  # Campo adicional a ser implementado
             '{{data_fim_beneficio_segurado_exemplo}}': '',  # Campo adicional a ser implementado
             '{{numero_beneficio}}': benefits[0].benefit_number if benefits else '',
+            '{{lesao_segurado_exemplo}}': '',  # Campo adicional
+            '{{resumo_evento_segurado_exemplo}}': '',  # Campo adicional
+            '{{data_afastamento_trabalho}}': '',  # Campo adicional
+            '{{data_laudo_medico_segurado_exemplo}}': '',  # Campo adicional
+            '{{numero_cat}}': '',  # Campo adicional
+            '{{numero_bo}}': '',  # Campo adicional,
             
             # Valores
             '{{valor_causa}}': self._format_currency(case.value_cause) if case.value_cause else '',
@@ -223,6 +238,9 @@ class AgentDocumentGenerator:
             
             # Imagens (placeholders - inserção real requer lógica adicional)
             '{{Imagem_cat}}': '[IMAGEM_CAT]',
+            '{{imagem_fap}}': '[IMAGEM_FAP]',
+            '{{imagem_info_beneficiario}}': '[IMAGEM_INFO_BENEFICIARIO]',
+            '{{imagem_declaracao_beneficio}}': '[IMAGEM_DECLARACAO_BENEFICIO]',
             '{{imagem_inss_beneficiario}}': '[IMAGEM_INSS_BENEFICIARIO]',
             '{{imagem_vigencia_beneficio}}': '[IMAGEM_VIGENCIA_BENEFICIO]',
             
