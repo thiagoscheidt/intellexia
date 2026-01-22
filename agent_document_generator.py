@@ -4,7 +4,8 @@ from app.prompts.document_reader_prompt import DocumentReaderPrompt
 from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
 from docx import Document
-from docx.shared import Inches
+from docx.shared import Inches, Pt
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from app.models import Case, CaseBenefit
 from datetime import datetime
 
@@ -67,15 +68,21 @@ class AgentDocumentGenerator:
             template_path = self._select_template_by_fap_reason(case.fap_reason)
         
         # Carregar template
+        document_base = Document("templates_docx/modelo_acidente_trajeto_inicio.docx")
         document = Document(template_path)
         
         # Preencher campos do template com dados do caso
         self._replace_placeholders_in_document(document, case, benefits)
         
         # Adicionar benefícios nas tabelas
-        self._add_benefits_to_tables(document, benefits)
+        self._add_benefits_to_tables(document, case, benefits)
         
-        return document
+
+
+        for element in document.element.body:
+            document_base.element.body.append(element)
+
+        return document_base
     
     def _select_template_by_fap_reason(self, fap_reason):
         """
@@ -131,6 +138,14 @@ class AgentDocumentGenerator:
             'Dados de Benefícios': {
                 '{{total_beneficios}}': str(len(benefits)),
                 '{{lista_beneficios}}': f"{len(benefits)} benefício(s) será(ão) listado(s)",
+                '{{quantidade_acidentes}}': str(len(benefits)),
+                '{{quantidade_acidentes_extenso}}': self._number_to_words(len(benefits)),
+                '{{nome_segurado_exemplo}}': benefits[0].insured_name if benefits else 'Não informado',
+                '{{nit_segurado_exemplo}}': benefits[0].insured_nit if benefits else 'Não informado',
+                '{{data_acidente_segurado_exemplo}}': benefits[0].accident_date.strftime('%d/%m/%Y') if benefits and benefits[0].accident_date else 'Não informado',
+                '{{data_inicio_beneficio_segurado_exemplo}}': 'Não informado',  # Adicionar campo no modelo se necessário
+                '{{data_fim_beneficio_segurado_exemplo}}': 'Não informado',  # Adicionar campo no modelo se necessário
+                '{{numero_beneficio}}': benefits[0].benefit_number if benefits else 'Não informado',
             },
             'Valores': {
                 '{{valor_causa}}': self._format_currency(case.value_cause) if case.value_cause else 'Não informado',
@@ -140,6 +155,12 @@ class AgentDocumentGenerator:
                 '{{data_ajuizamento}}': case.filing_date.strftime('%d/%m/%Y') if case.filing_date else 'Não informado',
                 '{{data_atual}}': datetime.now().strftime('%d/%m/%Y'),
                 '{{mes_ano_atual}}': datetime.now().strftime('%B de %Y'),
+                '{{vigencia_fap}}': self._format_years_range(case.fap_start_year, case.fap_end_year) or 'Não informado',
+            },
+            'Imagens': {
+                '{{Imagem_cat}}': '[Imagem CAT será inserida]',
+                '{{imagem_inss_beneficiario}}': '[Imagem INSS Beneficiário será inserida]',
+                '{{imagem_vigencia_beneficio}}': '[Imagem Vigência Benefício será inserida]',
             },
             'Dados da Vara': {
                 '{{vara_nome}}': case.court.vara_name if case.court else 'Não informado',
@@ -181,6 +202,14 @@ class AgentDocumentGenerator:
             # Dados de Benefícios
             '{{total_beneficios}}': str(len(benefits)),
             '{{lista_beneficios}}': self._format_benefits_list(benefits),
+            '{{quantidade_acidentes}}': str(len(benefits)),
+            '{{quantidade_acidentes_extenso}}': self._number_to_words(len(benefits)),
+            '{{nome_segurado_exemplo}}': benefits[0].insured_name if benefits else '',
+            '{{nit_segurado_exemplo}}': benefits[0].insured_nit if benefits else '',
+            '{{data_acidente_segurado_exemplo}}': benefits[0].accident_date.strftime('%d/%m/%Y') if benefits and benefits[0].accident_date else '',
+            '{{data_inicio_beneficio_segurado_exemplo}}': '',  # Campo adicional a ser implementado
+            '{{data_fim_beneficio_segurado_exemplo}}': '',  # Campo adicional a ser implementado
+            '{{numero_beneficio}}': benefits[0].benefit_number if benefits else '',
             
             # Valores
             '{{valor_causa}}': self._format_currency(case.value_cause) if case.value_cause else '',
@@ -190,6 +219,12 @@ class AgentDocumentGenerator:
             '{{data_ajuizamento}}': case.filing_date.strftime('%d/%m/%Y') if case.filing_date else '',
             '{{data_atual}}': datetime.now().strftime('%d/%m/%Y'),
             '{{mes_ano_atual}}': datetime.now().strftime('%B de %Y'),
+            '{{vigencia_fap}}': self._format_years_range(case.fap_start_year, case.fap_end_year),
+            
+            # Imagens (placeholders - inserção real requer lógica adicional)
+            '{{Imagem_cat}}': '[IMAGEM_CAT]',
+            '{{imagem_inss_beneficiario}}': '[IMAGEM_INSS_BENEFICIARIO]',
+            '{{imagem_vigencia_beneficio}}': '[IMAGEM_VIGENCIA_BENEFICIO]',
             
             # Dados da Vara
             '{{vara_nome}}': case.court.vara_name if case.court else '',
@@ -329,6 +364,26 @@ class AgentDocumentGenerator:
         # Implementação simplificada - pode ser expandida
         return f"{value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
     
+    def _number_to_words(self, number):
+        """Converte número inteiro para extenso (português)"""
+        numbers = {
+            0: 'zero', 1: 'um', 2: 'dois', 3: 'três', 4: 'quatro', 5: 'cinco',
+            6: 'seis', 7: 'sete', 8: 'oito', 9: 'nove', 10: 'dez',
+            11: 'onze', 12: 'doze', 13: 'treze', 14: 'quatorze', 15: 'quinze',
+            16: 'dezesseis', 17: 'dezessete', 18: 'dezoito', 19: 'dezenove', 20: 'vinte',
+            30: 'trinta', 40: 'quarenta', 50: 'cinquenta', 60: 'sessenta',
+            70: 'setenta', 80: 'oitenta', 90: 'noventa', 100: 'cem'
+        }
+        
+        if number in numbers:
+            return numbers[number]
+        elif number < 100:
+            tens = (number // 10) * 10
+            units = number % 10
+            return f"{numbers[tens]} e {numbers[units]}"
+        else:
+            return str(number)  # Retorna número se > 100 (pode expandir se necessário)
+    
     def find_placeholders_in_document(self, document):
         """
         Método de debug: encontra todos os placeholders no documento
@@ -376,10 +431,15 @@ class AgentDocumentGenerator:
         }
         return reasons.get(fap_reason_code, fap_reason_code)
     
-    def _add_benefits_to_tables(self, document, benefits):
+    def _add_benefits_to_tables(self, document, case, benefits):
         """
         Adiciona linhas com dados dos benefícios nas tabelas do documento
         Procura por tabelas que contenham marcadores específicos ou cabeçalhos
+        
+        Args:
+            document: Documento DOCX
+            case: Objeto Case com dados do caso (incluindo anos FAP)
+            benefits: Lista de objetos CaseBenefit
         """
         if not benefits:
             return
@@ -410,26 +470,57 @@ class AgentDocumentGenerator:
                 cells = new_row.cells
                 
                 # Preencher células com dados do benefício
+                # Estrutura: Item | Vigências do FAP | CNPJ | Empregado(a) | NIT | Tipo | Benefício | CAT
                 if len(cells) >= 1:
-                    cells[0].text = str(idx)  # ID/Número sequencial
+                    # Item
+                    self._format_table_cell(cells[0], str(idx))
                 if len(cells) >= 2:
-                    cells[1].text = benefit.benefit_number or ''
+                    # Vigências do FAP (anos inicial e final combinados)
+                    vigencia = self._format_years_range(case.fap_start_year, case.fap_end_year)
+                    self._format_table_cell(cells[1], vigencia)
                 if len(cells) >= 3:
-                    cells[2].text = benefit.insured_name or ''
+                    # CNPJ do cliente
+                    cnpj = case.client.cnpj if case.client else ''
+                    self._format_table_cell(cells[2], cnpj)
                 if len(cells) >= 4:
-                    cells[3].text = benefit.insured_nit or ''
+                    # Empregado(a) - Nome do Segurado
+                    self._format_table_cell(cells[3], benefit.insured_name or '')
                 if len(cells) >= 5:
-                    cells[4].text = benefit.accident_date.strftime('%d/%m/%Y') if benefit.accident_date else ''
+                    # NIT
+                    self._format_table_cell(cells[4], benefit.insured_nit or '')
                 if len(cells) >= 6:
-                    cells[5].text = benefit.benefit_type or ''
-                
-                # Colunas opcionais
+                    # Tipo de Benefício
+                    self._format_table_cell(cells[5], benefit.benefit_type or '')
                 if len(cells) >= 7:
-                    cells[6].text = benefit.error_reason or ''
+                    # Benefício - Número do Benefício
+                    self._format_table_cell(cells[6], benefit.benefit_number or '')
                 if len(cells) >= 8:
-                    cells[7].text = benefit.accident_company_name or ''
-                if len(cells) >= 9:
-                    cells[8].text = benefit.notes or ''
+                    # CAT - Data do Acidente
+                    cat_data = benefit.accident_date.strftime('%d/%m/%Y') if benefit.accident_date else ''
+                    self._format_table_cell(cells[7], cat_data)
+    
+    def _format_table_cell(self, cell, text):
+        """
+        Formata uma célula de tabela com estilo específico:
+        - Fonte: Avenir Next LT Pro
+        - Tamanho: 7pt
+        - Alinhamento: Centralizado
+        
+        Args:
+            cell: Objeto Cell do python-docx
+            text: Texto a ser inserido na célula
+        """
+        # Limpar conteúdo existente
+        cell.text = ''
+        
+        # Adicionar parágrafo com formatação
+        paragraph = cell.paragraphs[0] if cell.paragraphs else cell.add_paragraph()
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        
+        # Adicionar run com texto formatado
+        run = paragraph.add_run(text)
+        run.font.name = 'Avenir Next LT Pro'
+        run.font.size = Pt(7)
 
 
 # =====================================

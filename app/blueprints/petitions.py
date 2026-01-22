@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, sessio
 from app.models import db, Petition, Case
 from datetime import datetime
 from werkzeug.utils import secure_filename
+from agent_document_generator import AgentDocumentGenerator
 import os
 
 petitions_bp = Blueprint('petitions', __name__, url_prefix='/cases/<int:case_id>/petitions')
@@ -111,7 +112,6 @@ def case_petition_generate(case_id):
                 is_fap_case = case.case_type in ['fap_trajeto', 'fap_outros']
                 
                 if is_fap_case:
-                    from agent_document_generator import AgentDocumentGenerator
                     agent = AgentDocumentGenerator()
                     
                     docx_document = agent.generate_fap_petition(case_id)

@@ -3,16 +3,17 @@
 {% block title %}Lista de Benefícios - IntellexIA{% endblock %}
 
 {% block content %}
-<div class="app-content-header">
+<div class="app-content-header border-bottom">
   <div class="container-fluid">
     <div class="row">
       <div class="col-sm-6">
-        <h3 class="mb-0"><i class="bi bi-shield-check"></i> Benefícios</h3>
+        <h3 class="mb-0"><i class="bi bi-gift-fill"></i> Benefícios</h3>
       </div>
       <div class="col-sm-6">
         <ol class="breadcrumb float-sm-end">
-          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
-          <li class="breadcrumb-item active" aria-current="page">Benefícios</li>
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house-fill"></i>
+              Home</a></li>
+          <li class="breadcrumb-item active" aria-current="page"><i class="bi bi-gift-fill"></i> Benefícios</li>
         </ol>
       </div>
     </div>
@@ -23,74 +24,76 @@
   <div class="container-fluid">
     <div class="row">
       <div class="col-12">
-        <div class="card card-secondary card-outline">
-          <div class="card-header">
-            <h3 class="card-title"><i class="bi bi-list-ul"></i> Todos os Benefícios do Sistema</h3>
+        <div class="card">
+          <div class="card-header bg-gradient bg-success text-white">
+            <h3 class="card-title mb-0"><i class="bi bi-list-ul"></i> Todos os Benefícios do Sistema</h3>
             <div class="card-tools">
-              <small class="text-muted"><i class="bi bi-info-circle"></i> Para criar benefícios, acesse a página do caso específico</small>
+              <small class="text-white-50"><i class="bi bi-info-circle"></i> Para criar benefícios, acesse a página do
+                caso específico</small>
             </div>
           </div>
           <div class="card-body">
             {% with messages = get_flashed_messages(with_categories=true) %}
-              {% if messages %}
-                {% for category, message in messages %}
-                  <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                    <i class="bi bi-info-circle"></i> {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                  </div>
-                {% endfor %}
-              {% endif %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+              <i class="bi bi-info-circle"></i> {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
+            {% endif %}
             {% endwith %}
 
             {% if benefits %}
             <div class="table-responsive">
               <table id="benefitsTable" class="table table-bordered table-striped table-hover">
-                <thead class="table-light">
+                <thead class="table-dark">
                   <tr>
-                    <th style="width: 60px;">ID</th>
-                    <th style="width: 160px;">Número Benefício</th>
-                    <th style="width: 120px;" class="text-center">Tipo</th>
-                    <th>Nome do Segurado</th>
-                    <th style="width: 150px;">NIT</th>
-                    <th style="width: 130px;">Data Acidente</th>
-                    <th style="width: 120px;" class="text-center">Ações</th>
+                    <th style="width: 60px;"><i class="bi bi-hash"></i> ID</th>
+                    <th style="width: 160px;"><i class="bi bi-file-earmark"></i> Número Benefício</th>
+                    <th style="width: 120px;" class="text-center"><i class="bi bi-tag-fill"></i> Tipo</th>
+                    <th><i class="bi bi-person-fill"></i> Nome do Segurado</th>
+                    <th style="width: 150px;"><i class="bi bi-credit-card"></i> NIT</th>
+                    <th style="width: 130px;"><i class="bi bi-calendar-event"></i> Data Acidente</th>
+                    <th style="width: 120px;" class="text-center"><i class="bi bi-gear-fill"></i> Ações</th>
                   </tr>
                 </thead>
                 <tbody>
                   {% for benefit in benefits %}
                   <tr>
-                    <td><strong>{{ benefit.id }}</strong></td>
+                    <td><span class="badge bg-primary">{{ benefit.id }}</span></td>
                     <td>
-                      <code class="text-primary">{{ benefit.benefit_number }}</code>
+                      <code class="text-primary fw-bold">{{ benefit.benefit_number }}</code>
                     </td>
                     <td class="text-center">
                       {% if benefit.benefit_type == 'B91' %}
-                        <span class="badge bg-info text-dark"><i class="bi bi-clipboard-check"></i> B91</span>
+                      <span class="badge bg-info"><i class="bi bi-clipboard-check"></i> B91</span>
                       {% elif benefit.benefit_type == 'B94' %}
-                        <span class="badge bg-warning text-dark"><i class="bi bi-clipboard-plus"></i> B94</span>
+                      <span class="badge bg-warning text-dark"><i class="bi bi-clipboard-plus"></i> B94</span>
                       {% else %}
-                        <span class="badge bg-secondary"><i class="bi bi-clipboard"></i> {{ benefit.benefit_type }}</span>
+                      <span class="badge bg-secondary"><i class="bi bi-clipboard"></i> {{ benefit.benefit_type }}</span>
                       {% endif %}
                     </td>
                     <td>
-                      <i class="bi bi-person"></i> <strong>{{ benefit.insured_name }}</strong>
+                      <strong>{{ benefit.insured_name }}</strong>
                     </td>
                     <td>
                       {% if benefit.insured_nit %}
-                        <code>{{ benefit.insured_nit }}</code>
+                      <code class="text-nowrap">{{ benefit.insured_nit }}</code>
                       {% else %}
-                        <span class="text-muted">-</span>
+                      <span class="text-muted">-</span>
                       {% endif %}
                     </td>
                     <td>
                       {% if benefit.accident_date %}
-                        <i class="bi bi-calendar-event"></i> {{ benefit.accident_date.strftime('%d/%m/%Y') }}
+                      <span class="text-nowrap">{{ benefit.accident_date.strftime('%d/%m/%Y') }}</span>
                       {% else %}
-                        <span class="text-muted">-</span>
+                      <span class="text-muted">-</span>
                       {% endif %}
                     </td>
                     <td class="text-center">
-                      <a href="{{ url_for('benefits.benefit_detail', benefit_id=benefit.id) }}" class="btn btn-sm btn-info" title="Visualizar">
+                      <a href="{{ url_for('benefits.benefit_detail', benefit_id=benefit.id) }}"
+                        class="btn btn-sm btn-info" title="Visualizar">
                         <i class="bi bi-eye"></i> Visualizar
                       </a>
                     </td>
@@ -102,14 +105,16 @@
             {% else %}
             <div class="alert alert-info mb-0">
               <h5><i class="bi bi-info-circle"></i> Nenhum benefício cadastrado</h5>
-              <p class="mb-0">Você ainda não possui benefícios cadastrados. Para cadastrar benefícios, acesse a página do caso desejado e use a aba <strong>"Benefícios"</strong>.</p>
+              <p class="mb-0">Você ainda não possui benefícios cadastrados. Para cadastrar benefícios, acesse a página
+                do caso desejado e use a aba <strong>"Benefícios"</strong>.</p>
             </div>
             {% endif %}
           </div>
           {% if benefits %}
-          <div class="card-footer clearfix">
+          <div class="card-footer bg-light">
             <div class="float-end">
-              <span class="badge bg-secondary">Total: {{ benefits|length }} benefício(s)</span>
+              <span class="badge bg-primary"><i class="bi bi-gift-fill"></i> Total: {{ benefits|length }}
+                benefício(s)</span>
             </div>
           </div>
           {% endif %}
@@ -126,18 +131,18 @@
 <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
 <script>
-$(document).ready(function() {
-  $('#benefitsTable').DataTable({
-    "language": {
-      "url": "//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json"
-    },
-    "pageLength": 25,
-    "order": [[0, "desc"]],
-    "columnDefs": [
-      { "orderable": false, "targets": 6 }
-    ]
+  $(document).ready(function () {
+    $('#benefitsTable').DataTable({
+      "language": {
+        "url": "//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json"
+      },
+      "pageLength": 25,
+      "order": [[0, "desc"]],
+      "columnDefs": [
+        { "orderable": false, "targets": 6 }
+      ]
+    });
   });
-});
 </script>
 {% endif %}
 {% endblock %}
