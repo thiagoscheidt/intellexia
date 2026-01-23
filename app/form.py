@@ -249,6 +249,7 @@ class DocumentForm(FlaskForm):
         'Tipo de Documento',
         choices=[
             ('cat', 'CAT - Comunicação de Acidente de Trabalho'),
+            ('fap', 'Tela do sistema FAP'),
             ('extrato_beneficio', 'Extrato de Benefício Previdenciário'),
             ('decisao_administrativa', 'Decisão Administrativa do INSS'),
             ('calculo_judicial', 'Cálculo Judicial Previdenciário'),
