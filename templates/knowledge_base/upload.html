@@ -3,18 +3,31 @@
 {% block title %}Adicionar Arquivo - Base de Conhecimento - IntellexIA{% endblock %}
 
 {% block content %}
-<div class="app-content-header">
+<div class="app-content-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 2rem 0; margin-bottom: 1.5rem; border-radius: 0 0 15px 15px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);">
     <div class="container-fluid">
-        <div class="row">
-            <div class="col-sm-6">
-                <h3 class="mb-0"><i class="bi bi-cloud-upload"></i> Adicionar Arquivo</h3>
+        <div class="row align-items-center">
+            <div class="col-sm-8">
+                <div class="d-flex align-items-center">
+                    <div class="me-3">
+                        <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 60px; height: 60px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                            <i class="bi bi-cloud-upload-fill" style="font-size: 1.8rem; color: #667eea;"></i>
+                        </div>
+                    </div>
+                    <div class="text-white">
+                        <h3 class="mb-1" style="font-weight: 600; font-size: 1.8rem;">
+                            <i class="bi bi-file-earmark-arrow-up-fill"></i> Adicionar Arquivo
+                        </h3>
+                        <p class="mb-0 opacity-90" style="font-size: 1rem;">
+                            <i class="bi bi-stars"></i> Expanda sua base de conhecimento com novos documentos
+                        </p>
+                    </div>
+                </div>
             </div>
-            <div class="col-sm-6">
-                <ol class="breadcrumb float-sm-end">
-                    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
-                    <li class="breadcrumb-item"><a href="{{ url_for('knowledge_base.list') }}">Base de Conhecimento</a>
-                    </li>
-                    <li class="breadcrumb-item active" aria-current="page">Adicionar Arquivo</li>
+            <div class="col-sm-4">
+                <ol class="breadcrumb float-sm-end mb-0" style="background: rgba(255,255,255,0.15); padding: 0.75rem 1rem; border-radius: 10px; backdrop-filter: blur(10px);">
+                    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}" class="text-white text-decoration-none"><i class="bi bi-house-fill"></i> Home</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('knowledge_base.list') }}" class="text-white text-decoration-none">Base de Conhecimento</a></li>
+                    <li class="breadcrumb-item active text-white" aria-current="page"><strong>Adicionar</strong></li>
                 </ol>
             </div>
         </div>
@@ -25,98 +38,172 @@
     <div class="container-fluid">
         <div class="row">
             <div class="col-md-8 offset-md-2">
-                <div class="card card-primary card-outline">
-                    <div class="card-header">
-                        <h3 class="card-title"><i class="bi bi-cloud-upload"></i> Upload de Arquivo</h3>
+                <div class="card border-0 shadow-lg" style="border-radius: 15px; overflow: hidden;">
+                    <div class="card-header text-white" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1.5rem;">
+                        <div class="d-flex align-items-center">
+                            <div class="me-3">
+                                <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 45px; height: 45px;">
+                                    <i class="bi bi-cloud-upload-fill" style="font-size: 1.5rem; color: #667eea;"></i>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 class="card-title mb-0" style="font-weight: 600; font-size: 1.3rem;">Upload de Arquivo</h3>
+                                <small class="opacity-75">Adicione documentos à sua base de conhecimento</small>
+                            </div>
+                        </div>
                     </div>
                     <form method="POST" enctype="multipart/form-data">
-                        <div class="card-body">
-                            <div class="alert alert-info">
-                                <i class="bi bi-info-circle"></i>
-                                <strong>Dica:</strong> Adicione arquivos relevantes à base de conhecimento como
-                                jurisprudências,
-                                legislações, modelos de documentos, artigos, etc. Isso ajudará na consulta e no trabalho
-                                do escritório.
+                        <div class="card-body" style="padding: 2rem;">
+                            <div class="alert border-0 shadow-sm" style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%); border-left: 4px solid #2196F3 !important;">
+                                <div class="d-flex align-items-start">
+                                    <i class="bi bi-info-circle-fill text-primary me-3" style="font-size: 1.5rem;"></i>
+                                    <div>
+                                        <strong>Dica:</strong> Adicione arquivos relevantes à base de conhecimento como
+                                        jurisprudências, legislações, modelos de documentos, artigos, etc. Isso ajudará na consulta e no trabalho
+                                        do escritório.
+                                    </div>
+                                </div>
                             </div>
 
-                            <div class="mb-3">
-                                <label for="file" class="form-label">Arquivo *</label>
-                                <input type="file" class="form-control" id="file" name="file" required
-                                    accept=".pdf,.doc,.docx,.txt,.odt,.rtf">
-                                <small class="form-text text-muted">
-                                    Formatos aceitos: PDF, DOC, DOCX, TXT, ODT, RTF
+                            <div class="mb-4">
+                                <label for="file" class="form-label fw-bold">
+                                    <i class="bi bi-file-earmark-arrow-up text-primary"></i> Arquivo *
+                                </label>
+                                <input type="file" class="form-control form-control-lg border-2 shadow-sm" id="file" name="file" required
+                                    accept=".pdf,.doc,.docx,.txt,.odt,.rtf" style="border-radius: 10px;">
+                                <small class="form-text text-muted d-block mt-2">
+                                    <i class="bi bi-check-circle text-success"></i> Formatos aceitos: PDF, DOC, DOCX, TXT, ODT, RTF
                                 </small>
                             </div>
 
-                            <div class="mb-3">
-                                <label for="category" class="form-label">Categoria</label>
-                                <select class="form-select" id="category" name="category">
+                            <div class="mb-4">
+                                <label for="category" class="form-label fw-bold">
+                                    <i class="bi bi-folder text-warning"></i> Categoria
+                                </label>
+                                <select class="form-select form-select-lg border-2 shadow-sm" id="category" name="category" style="border-radius: 10px;">
                                     <option value="">Selecione uma categoria...</option>
-                                    <option value="Jurisprudência">Jurisprudência</option>
-                                    <option value="Legislação">Legislação</option>
-                                    <option value="Modelos">Modelos de Documentos</option>
-                                    <option value="Artigos">Artigos e Estudos</option>
-                                    <option value="Manuais">Manuais e Guias</option>
-                                    <option value="Procedimentos">Procedimentos Internos</option>
-                                    <option value="Outros">Outros</option>
+                                    <option value="Jurisprudência">📚 Jurisprudência</option>
+                                    <option value="Legislação">⚖️ Legislação</option>
+                                    <option value="Modelos">📄 Modelos de Documentos</option>
+                                    <option value="Artigos">📰 Artigos e Estudos</option>
+                                    <option value="Manuais">📖 Manuais e Guias</option>
+                                    <option value="Procedimentos">🔧 Procedimentos Internos</option>
+                                    <option value="Outros">📦 Outros</option>
                                 </select>
-                                <small class="form-text text-muted">
-                                    Categorize o arquivo para facilitar a organização
+                                <small class="form-text text-muted d-block mt-2">
+                                    <i class="bi bi-tag"></i> Categorize o arquivo para facilitar a organização
                                 </small>
                             </div>
 
-                            <div class="mb-3">
-                                <label for="description" class="form-label">Descrição</label>
-                                <textarea class="form-control" id="description" name="description" rows="4"
-                                    placeholder="Descreva o conteúdo e a finalidade deste arquivo..."></textarea>
-                                <small class="form-text text-muted">
-                                    Uma boa descrição ajuda na busca e identificação do arquivo
+                            <div class="mb-4">
+                                <label for="description" class="form-label fw-bold">
+                                    <i class="bi bi-chat-left-text text-info"></i> Descrição
+                                </label>
+                                <textarea class="form-control form-control-lg border-2 shadow-sm" id="description" name="description" rows="4"
+                                    placeholder="Descreva o conteúdo e a finalidade deste arquivo..." style="border-radius: 10px;"></textarea>
+                                <small class="form-text text-muted d-block mt-2">
+                                    <i class="bi bi-lightbulb"></i> Uma boa descrição ajuda na busca e identificação do arquivo
                                 </small>
                             </div>
 
-                            <div class="mb-3">
-                                <label for="tags" class="form-label">Tags</label>
-                                <input type="text" class="form-control" id="tags" name="tags"
-                                    placeholder="Ex: trabalhista, previdenciário, STJ, súmula">
-                                <small class="form-text text-muted">
-                                    Separe as tags por vírgula. Exemplo: trabalhista, jurisprudência, STJ
+                            <div class="mb-4">
+                                <label for="tags" class="form-label fw-bold">
+                                    <i class="bi bi-tags text-success"></i> Tags
+                                </label>
+                                <input type="text" class="form-control form-control-lg border-2 shadow-sm" id="tags" name="tags"
+                                    placeholder="Ex: trabalhista, previdenciário, STJ, súmula" style="border-radius: 10px;">
+                                <small class="form-text text-muted d-block mt-2">
+                                    <i class="bi bi-hash"></i> Separe as tags por vírgula. Exemplo: trabalhista, jurisprudência, STJ
                                 </small>
                             </div>
-
-                            <!-- <div class="alert alert-warning mt-3">
-                                <i class="bi bi-exclamation-triangle"></i>
-                                <strong>Atenção:</strong> Certifique-se de que o arquivo não contém informações
-                                sensíveis
-                                ou confidenciais de clientes antes de fazer o upload.
-                            </div> -->
                         </div>
 
-                        <div class="card-footer">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-cloud-upload"></i> Fazer Upload
-                            </button>
-                            <a href="{{ url_for('knowledge_base.list') }}" class="btn btn-secondary">
-                                <i class="bi bi-x-circle"></i> Cancelar
-                            </a>
+                        <div class="card-footer bg-light" style="padding: 1.5rem;">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <a href="{{ url_for('knowledge_base.list') }}" class="btn btn-outline-secondary btn-lg" style="border-radius: 10px; padding: 0.75rem 2rem;">
+                                    <i class="bi bi-x-circle"></i> Cancelar
+                                </a>
+                                <button type="submit" class="btn btn-lg shadow" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 10px; padding: 0.75rem 2.5rem;">
+                                    <i class="bi bi-cloud-upload-fill"></i> Fazer Upload
+                                </button>
+                            </div>
                         </div>
                     </form>
                 </div>
 
                 <!-- Card com informações adicionais -->
-                <div class="card card-info card-outline">
-                    <div class="card-header">
-                        <h3 class="card-title"><i class="bi bi-lightbulb"></i> Sugestões de Uso</h3>
+                <div class="card border-0 shadow-lg mt-4" style="border-radius: 15px; overflow: hidden;">
+                    <div class="card-header text-white" style="background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%); padding: 1.5rem;">
+                        <div class="d-flex align-items-center">
+                            <div class="me-3">
+                                <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 45px; height: 45px;">
+                                    <i class="bi bi-lightbulb-fill" style="font-size: 1.5rem; color: #4CAF50;"></i>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 class="card-title mb-0" style="font-weight: 600; font-size: 1.3rem;">Sugestões de Uso</h3>
+                                <small class="opacity-75">Como organizar seus documentos</small>
+                            </div>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <ul class="mb-0">
-                            <li><strong>Jurisprudência:</strong> Decisões judiciais relevantes, súmulas, precedentes
-                            </li>
-                            <li><strong>Legislação:</strong> Leis, decretos, portarias, instruções normativas</li>
-                            <li><strong>Modelos:</strong> Templates de petições, contratos, procurações</li>
-                            <li><strong>Artigos:</strong> Artigos acadêmicos, estudos de caso, análises doutrinárias
-                            </li>
-                            <li><strong>Manuais:</strong> Guias de procedimentos, fluxos de trabalho</li>
-                        </ul>
+                    <div class="card-body" style="padding: 2rem;">
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-start">
+                                    <div class="me-3 mt-1">
+                                        <i class="bi bi-book-fill text-primary" style="font-size: 1.5rem;"></i>
+                                    </div>
+                                    <div>
+                                        <h6 class="mb-1 fw-bold">Jurisprudência</h6>
+                                        <p class="text-muted mb-0" style="font-size: 0.9rem;">Decisões judiciais relevantes, súmulas, precedentes</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-start">
+                                    <div class="me-3 mt-1">
+                                        <i class="bi bi-balance-scale text-success" style="font-size: 1.5rem;"></i>
+                                    </div>
+                                    <div>
+                                        <h6 class="mb-1 fw-bold">Legislação</h6>
+                                        <p class="text-muted mb-0" style="font-size: 0.9rem;">Leis, decretos, portarias, instruções normativas</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-start">
+                                    <div class="me-3 mt-1">
+                                        <i class="bi bi-file-text-fill text-warning" style="font-size: 1.5rem;"></i>
+                                    </div>
+                                    <div>
+                                        <h6 class="mb-1 fw-bold">Modelos</h6>
+                                        <p class="text-muted mb-0" style="font-size: 0.9rem;">Templates de petições, contratos, procurações</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-start">
+                                    <div class="me-3 mt-1">
+                                        <i class="bi bi-newspaper text-info" style="font-size: 1.5rem;"></i>
+                                    </div>
+                                    <div>
+                                        <h6 class="mb-1 fw-bold">Artigos</h6>
+                                        <p class="text-muted mb-0" style="font-size: 0.9rem;">Artigos acadêmicos, estudos de caso, análises doutrinárias</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-12">
+                                <div class="d-flex align-items-start">
+                                    <div class="me-3 mt-1">
+                                        <i class="bi bi-journal-bookmark-fill text-danger" style="font-size: 1.5rem;"></i>
+                                    </div>
+                                    <div>
+                                        <h6 class="mb-1 fw-bold">Manuais</h6>
+                                        <p class="text-muted mb-0" style="font-size: 0.9rem;">Guias de procedimentos, fluxos de trabalho</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>

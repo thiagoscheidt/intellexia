@@ -3,18 +3,31 @@
 {% block title %}{{ file.original_filename }} - Base de Conhecimento - IntellexIA{% endblock %}
 
 {% block content %}
-<div class="app-content-header">
+<div class="app-content-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 2rem 0; margin-bottom: 1.5rem; border-radius: 0 0 15px 15px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);">
     <div class="container-fluid">
-        <div class="row">
-            <div class="col-sm-6">
-                <h3 class="mb-0"><i class="bi bi-file-earmark-text"></i> Detalhes do Arquivo</h3>
+        <div class="row align-items-center">
+            <div class="col-sm-8">
+                <div class="d-flex align-items-center">
+                    <div class="me-3">
+                        <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 60px; height: 60px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                            <i class="bi bi-file-earmark-text-fill" style="font-size: 1.8rem; color: #667eea;"></i>
+                        </div>
+                    </div>
+                    <div class="text-white">
+                        <h3 class="mb-1" style="font-weight: 600; font-size: 1.8rem;">
+                            <i class="bi bi-info-circle-fill"></i> Detalhes do Arquivo
+                        </h3>
+                        <p class="mb-0 opacity-90" style="font-size: 1rem;">
+                            <i class="bi bi-stars"></i> Visualize informações completas do documento
+                        </p>
+                    </div>
+                </div>
             </div>
-            <div class="col-sm-6">
-                <ol class="breadcrumb float-sm-end">
-                    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
-                    <li class="breadcrumb-item"><a href="{{ url_for('knowledge_base.list') }}">Base de Conhecimento</a>
-                    </li>
-                    <li class="breadcrumb-item active" aria-current="page">Detalhes</li>
+            <div class="col-sm-4">
+                <ol class="breadcrumb float-sm-end mb-0" style="background: rgba(255,255,255,0.15); padding: 0.75rem 1rem; border-radius: 10px; backdrop-filter: blur(10px);">
+                    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}" class="text-white text-decoration-none"><i class="bi bi-house-fill"></i> Home</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('knowledge_base.list') }}" class="text-white text-decoration-none">Base de Conhecimento</a></li>
+                    <li class="breadcrumb-item active text-white" aria-current="page"><strong>Detalhes</strong></li>
                 </ol>
             </div>
         </div>
@@ -26,13 +39,21 @@
         <div class="row">
             <div class="col-md-8">
                 <!-- Informações principais -->
-                <div class="card card-primary card-outline">
-                    <div class="card-header">
-                        <h3 class="card-title">
-                            <i class="bi bi-file-earmark-text"></i> {{ file.original_filename }}
-                        </h3>
+                <div class="card border-0 shadow-lg" style="border-radius: 15px; overflow: hidden;">
+                    <div class="card-header text-white" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1.5rem;">
+                        <div class="d-flex align-items-center">
+                            <div class="me-3">
+                                <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 45px; height: 45px;">
+                                    <i class="bi bi-file-earmark-text-fill" style="font-size: 1.5rem; color: #667eea;"></i>
+                                </div>
+                            </div>
+                            <div>
+                                <h3 class="card-title mb-0" style="font-weight: 600; font-size: 1.3rem;">{{ file.original_filename }}</h3>
+                                <small class="opacity-75">Informações detalhadas do documento</small>
+                            </div>
+                        </div>
                     </div>
-                    <div class="card-body">
+                    <div class="card-body" style="padding: 2rem;">
                         <dl class="row">
                             <dt class="col-sm-3">Nome do Arquivo:</dt>
                             <dd class="col-sm-9">{{ file.original_filename }}</dd>
@@ -84,25 +105,34 @@
                             </dd>
                         </dl>
                     </div>
-                    <div class="card-footer">
-                        <a href="{{ url_for('knowledge_base.list') }}" class="btn btn-secondary">
-                            <i class="bi bi-arrow-left"></i> Voltar
-                        </a>
-                        <button type="button" class="btn btn-danger"
-                            onclick="deleteFile({{ file.id }}, '{{ file.original_filename }}')">
-                            <i class="bi bi-trash"></i> Excluir
-                        </button>
+                    <div class="card-footer bg-light" style="padding: 1.5rem;">
+                        <div class="d-flex justify-content-between">
+                            <a href="{{ url_for('knowledge_base.list') }}" class="btn btn-outline-secondary btn-lg" style="border-radius: 10px; padding: 0.75rem 2rem;">
+                                <i class="bi bi-arrow-left"></i> Voltar
+                            </a>
+                            <button type="button" class="btn btn-danger btn-lg shadow" style="border-radius: 10px; padding: 0.75rem 2rem;"
+                                onclick="deleteFile({{ file.id }}, '{{ file.original_filename }}')">
+                                <i class="bi bi-trash-fill"></i> Excluir
+                            </button>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <div class="col-md-4">
                 <!-- Informações adicionais -->
-                <div class="card card-info card-outline">
-                    <div class="card-header">
-                        <h3 class="card-title"><i class="bi bi-info-circle"></i> Informações</h3>
+                <div class="card border-0 shadow-lg mb-4" style="border-radius: 15px; overflow: hidden;">
+                    <div class="card-header text-white" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%); padding: 1.5rem;">
+                        <div class="d-flex align-items-center">
+                            <div class="me-3">
+                                <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                    <i class="bi bi-info-circle-fill" style="font-size: 1.3rem; color: #17a2b8;"></i>
+                                </div>
+                            </div>
+                            <h3 class="card-title mb-0" style="font-weight: 600; font-size: 1.1rem;">Informações</h3>
+                        </div>
                     </div>
-                    <div class="card-body">
+                    <div class="card-body" style="padding: 1.5rem;">
                         <p><strong>Adicionado por:</strong><br>{{ file.user.name if file.user else 'Desconhecido' }}</p>
                         <p><strong>Escritório:</strong><br>{{ file.law_firm.trade_name if file.law_firm else
                             'Desconhecido' }}</p>
@@ -118,11 +148,18 @@
                 </div>
 
                 <!-- Ações rápidas -->
-                <div class="card card-secondary card-outline">
-                    <div class="card-header">
-                        <h3 class="card-title"><i class="bi bi-lightning"></i> Ações Rápidas</h3>
+                <div class="card border-0 shadow-lg" style="border-radius: 15px; overflow: hidden;">
+                    <div class="card-header text-white" style="background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%); padding: 1.5rem;">
+                        <div class="d-flex align-items-center">
+                            <div class="me-3">
+                                <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                    <i class="bi bi-lightning-fill" style="font-size: 1.3rem; color: #ffc107;"></i>
+                                </div>
+                            </div>
+                            <h3 class="card-title mb-0" style="font-weight: 600; font-size: 1.1rem;">Ações Rápidas</h3>
+                        </div>
                     </div>
-                    <div class="card-body">
+                    <div class="card-body" style="padding: 1.5rem;">
                         <div class="d-grid gap-2">
                             <a href="{{ url_for('knowledge_base.list', category=file.category) }}"
                                 class="btn btn-outline-primary btn-sm">

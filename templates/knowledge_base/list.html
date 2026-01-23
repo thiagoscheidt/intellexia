@@ -3,16 +3,30 @@
 {% block title %}Base de Conhecimento - IntellexIA{% endblock %}
 
 {% block content %}
-<div class="app-content-header">
+<div class="app-content-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 2rem 0; margin-bottom: 1.5rem; border-radius: 0 0 15px 15px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);">
     <div class="container-fluid">
-        <div class="row">
-            <div class="col-sm-6">
-                <h3 class="mb-0"><i class="bi bi-book"></i> Base de Conhecimento</h3>
+        <div class="row align-items-center">
+            <div class="col-sm-8">
+                <div class="d-flex align-items-center">
+                    <div class="me-3">
+                        <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 60px; height: 60px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                            <i class="bi bi-book-fill" style="font-size: 1.8rem; color: #667eea;"></i>
+                        </div>
+                    </div>
+                    <div class="text-white">
+                        <h3 class="mb-1" style="font-weight: 600; font-size: 1.8rem;">
+                            <i class="bi bi-collection-fill"></i> Base de Conhecimento
+                        </h3>
+                        <p class="mb-0 opacity-90" style="font-size: 1rem;">
+                            <i class="bi bi-stars"></i> Gerencie seus documentos e arquivos jurídicos
+                        </p>
+                    </div>
+                </div>
             </div>
-            <div class="col-sm-6">
-                <ol class="breadcrumb float-sm-end">
-                    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
-                    <li class="breadcrumb-item active" aria-current="page">Base de Conhecimento</li>
+            <div class="col-sm-4">
+                <ol class="breadcrumb float-sm-end mb-0" style="background: rgba(255,255,255,0.15); padding: 0.75rem 1rem; border-radius: 10px; backdrop-filter: blur(10px);">
+                    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}" class="text-white text-decoration-none"><i class="bi bi-house-fill"></i> Home</a></li>
+                    <li class="breadcrumb-item active text-white" aria-current="page"><strong>Base de Conhecimento</strong></li>
                 </ol>
             </div>
         </div>
@@ -23,29 +37,41 @@
     <div class="container-fluid">
         <div class="row">
             <div class="col-12">
-                <div class="card card-primary card-outline">
-                    <div class="card-header">
-                        <h3 class="card-title"><i class="bi bi-list-ul"></i> Arquivos da Base de Conhecimento</h3>
-                        <div class="card-tools">
-                            <a href="{{ url_for('knowledge_base.search_chat') }}" class="btn btn-success btn-sm me-2">
-                                <i class="bi bi-search"></i> Pesquisar com IA
-                            </a>
-                            <a href="{{ url_for('knowledge_base.upload') }}" class="btn btn-primary btn-sm">
-                                <i class="bi bi-plus-circle"></i> Adicionar Arquivo
-                            </a>
+                <div class="card border-0 shadow-lg" style="border-radius: 15px; overflow: hidden;">
+                    <div class="card-header text-white" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1.5rem;">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="d-flex align-items-center">
+                                <div class="me-3">
+                                    <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 45px; height: 45px;">
+                                        <i class="bi bi-list-ul" style="font-size: 1.5rem; color: #667eea;"></i>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h3 class="card-title mb-0" style="font-weight: 600; font-size: 1.3rem;">Arquivos da Base de Conhecimento</h3>
+                                    <small class="opacity-75">Gerencie e organize seus documentos</small>
+                                </div>
+                            </div>
+                            <div class="card-tools d-flex gap-2">
+                                <a href="{{ url_for('knowledge_base.search_chat') }}" class="btn btn-light btn-lg shadow-sm" style="border-radius: 10px;">
+                                    <i class="bi bi-search"></i> Pesquisar com IA
+                                </a>
+                                <a href="{{ url_for('knowledge_base.upload') }}" class="btn btn-light btn-lg shadow-sm" style="border-radius: 10px;">
+                                    <i class="bi bi-plus-circle-fill"></i> Adicionar Arquivo
+                                </a>
+                            </div>
                         </div>
                     </div>
-                    <div class="card-body">
+                    <div class="card-body" style="padding: 2rem;">
                         <!-- Filtros -->
-                        <form method="GET" class="row g-3 mb-3">
+                        <form method="GET" class="row g-3 mb-4">
                             <div class="col-md-4">
-                                <label for="search" class="form-label">Buscar</label>
-                                <input type="text" class="form-control" id="search" name="search"
-                                    placeholder="Nome, descrição ou tags..." value="{{ current_search }}">
+                                <label for="search" class="form-label fw-bold"><i class="bi bi-search text-primary"></i> Buscar</label>
+                                <input type="text" class="form-control form-control-lg border-2 shadow-sm" id="search" name="search"
+                                    placeholder="Nome, descrição ou tags..." value="{{ current_search }}" style="border-radius: 10px;">
                             </div>
                             <div class="col-md-3">
-                                <label for="category" class="form-label">Categoria</label>
-                                <select class="form-select" id="category" name="category">
+                                <label for="category" class="form-label fw-bold"><i class="bi bi-filter text-warning"></i> Categoria</label>
+                                <select class="form-select form-select-lg border-2 shadow-sm" id="category" name="category" style="border-radius: 10px;">
                                     <option value="">Todas</option>
                                     {% for cat in categories %}
                                     <option value="{{ cat }}" {% if cat==current_category %}selected{% endif %}>
@@ -54,12 +80,12 @@
                                     {% endfor %}
                                 </select>
                             </div>
-                            <div class="col-md-2 d-flex align-items-end">
-                                <button type="submit" class="btn btn-secondary me-2">
+                            <div class="col-md-3 d-flex align-items-end gap-2">
+                                <button type="submit" class="btn btn-lg shadow-sm" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 10px; padding: 0.75rem 2rem;">
                                     <i class="bi bi-search"></i> Filtrar
                                 </button>
-                                <a href="{{ url_for('knowledge_base.list') }}" class="btn btn-outline-secondary">
-                                    <i class="bi bi-x-circle"></i> Limpar
+                                <a href="{{ url_for('knowledge_base.list') }}" class="btn btn-outline-secondary btn-lg" style="border-radius: 10px; padding: 0.75rem 1.5rem;">
+                                    <i class="bi bi-x-circle"></i>
                                 </a>
                             </div>
                         </form>
