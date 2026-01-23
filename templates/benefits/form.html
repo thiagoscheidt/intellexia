@@ -76,6 +76,33 @@
               <div class="row">
                 <div class="col-md-6">
                   <div class="mb-3">
+                    {{ form.numero_cat.label(class="form-label") }}
+                    {{ form.numero_cat(class="form-control" + (" is-invalid" if form.numero_cat.errors else "")) }}
+                    {% if form.numero_cat.errors %}
+                    <div class="invalid-feedback">
+                      {% for error in form.numero_cat.errors %}{{ error }}{% endfor %}
+                    </div>
+                    {% endif %}
+                    <div class="form-text">Número da CAT (Comunicação de Acidente de Trabalho)</div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="mb-3">
+                    {{ form.numero_bo.label(class="form-label") }}
+                    {{ form.numero_bo(class="form-control" + (" is-invalid" if form.numero_bo.errors else "")) }}
+                    {% if form.numero_bo.errors %}
+                    <div class="invalid-feedback">
+                      {% for error in form.numero_bo.errors %}{{ error }}{% endfor %}
+                    </div>
+                    {% endif %}
+                    <div class="form-text">Número do BO (Boletim de Ocorrência), se houver</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="mb-3">
                     {{ form.data_inicio_beneficio.label(class="form-label") }}
                     {{ form.data_inicio_beneficio(class="form-control" + (" is-invalid" if
                     form.data_inicio_beneficio.errors else ""), type="date") }}

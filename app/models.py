@@ -265,6 +265,8 @@ class CaseBenefit(db.Model):
     benefit_type = db.Column(db.String(10), nullable=False)  # B91, B94, etc.
     insured_name = db.Column(db.String(255), nullable=False)
     insured_nit = db.Column(db.String(50))
+    numero_cat = db.Column(db.String(100))
+    numero_bo = db.Column(db.String(100))
     data_inicio_beneficio = db.Column(db.Date)
     data_fim_beneficio = db.Column(db.Date)
     accident_date = db.Column(db.Date)

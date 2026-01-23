@@ -11,6 +11,7 @@ database/
 ├── add_fap_reason_column.py            # Adiciona coluna fap_reason
 ├── add_petition_file_path.py           # Adiciona coluna file_path
 ├── add_benefit_dates_columns.py        # Adiciona colunas de datas de benefício em case_benefits
+├── add_benefit_cat_bo_columns.py       # Adiciona colunas numero_cat e numero_bo em case_benefits
 ├── add_ai_document_summaries_table.py  # Adiciona tabela ai_document_summaries
 └── [futuros scripts de migração]
 ```
@@ -243,6 +244,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 | Data       | Script                               | Descrição                                                                    |
 | ---------- | ------------------------------------ | ---------------------------------------------------------------------------- |
+| 2026-01-23 | `add_benefit_cat_bo_columns.py`      | Adiciona colunas numero_cat e numero_bo em case_benefits                     |
 | 2026-01-22 | `add_benefit_dates_columns.py`       | Adiciona colunas data_inicio_beneficio e data_fim_beneficio em case_benefits |
 | 2026-01-07 | `add_fap_reason_column.py`           | Adiciona campo fap_reason na tabela cases                                    |
 | 2026-01-07 | `add_petition_file_path.py`          | Adiciona campo file_path na tabela petitions                                 |

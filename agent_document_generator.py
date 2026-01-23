@@ -143,15 +143,15 @@ class AgentDocumentGenerator:
                 '{{nome_segurado_exemplo}}': benefits[0].insured_name if benefits else 'Não informado',
                 '{{nit_segurado_exemplo}}': benefits[0].insured_nit if benefits else 'Não informado',
                 '{{data_acidente_segurado_exemplo}}': benefits[0].accident_date.strftime('%d/%m/%Y') if benefits and benefits[0].accident_date else 'Não informado',
-                '{{data_inicio_beneficio_segurado_exemplo}}': 'Não informado',  # Adicionar campo no modelo se necessário
-                '{{data_fim_beneficio_segurado_exemplo}}': 'Não informado',  # Adicionar campo no modelo se necessário
+                '{{data_inicio_beneficio_segurado_exemplo}}': benefits[0].data_inicio_beneficio.strftime('%d/%m/%Y') if benefits and benefits[0].data_inicio_beneficio else 'Não informado',
+                '{{data_fim_beneficio_segurado_exemplo}}': benefits[0].data_fim_beneficio.strftime('%d/%m/%Y') if benefits and benefits[0].data_fim_beneficio else 'Não informado',
                 '{{numero_beneficio}}': benefits[0].benefit_number if benefits else 'Não informado',
                 '{{lesao_segurado_exemplo}}': 'Não informado',  # Campo adicional
                 '{{resumo_evento_segurado_exemplo}}': 'Não informado',  # Campo adicional
                 '{{data_afastamento_trabalho}}': 'Não informado',  # Campo adicional
                 '{{data_laudo_medico_segurado_exemplo}}': 'Não informado',  # Campo adicional
-                '{{numero_cat}}': benefits[0].accident_date.strftime('%d/%m/%Y') if benefits and benefits[0].accident_date else 'Não informado',  # ou campo específico se existir
-                '{{numero_bo}}': 'Não informado',  # Campo adicional
+                '{{numero_cat}}': benefits[0].numero_cat if benefits and benefits[0].numero_cat else 'Não informado',
+                '{{numero_bo}}': benefits[0].numero_bo if benefits and benefits[0].numero_bo else 'Não informado',
             },
             'Valores': {
                 '{{valor_causa}}': self._format_currency(case.value_cause) if case.value_cause else 'Não informado',
@@ -216,15 +216,15 @@ class AgentDocumentGenerator:
             '{{nome_segurado_exemplo}}': benefits[0].insured_name if benefits else '',
             '{{nit_segurado_exemplo}}': benefits[0].insured_nit if benefits else '',
             '{{data_acidente_segurado_exemplo}}': benefits[0].accident_date.strftime('%d/%m/%Y') if benefits and benefits[0].accident_date else '',
-            '{{data_inicio_beneficio_segurado_exemplo}}': '',  # Campo adicional a ser implementado
-            '{{data_fim_beneficio_segurado_exemplo}}': '',  # Campo adicional a ser implementado
+            '{{data_inicio_beneficio_segurado_exemplo}}': benefits[0].data_inicio_beneficio.strftime('%d/%m/%Y') if benefits and benefits[0].data_inicio_beneficio else '',
+            '{{data_fim_beneficio_segurado_exemplo}}': benefits[0].data_fim_beneficio.strftime('%d/%m/%Y') if benefits and benefits[0].data_fim_beneficio else '',
             '{{numero_beneficio}}': benefits[0].benefit_number if benefits else '',
             '{{lesao_segurado_exemplo}}': '',  # Campo adicional
             '{{resumo_evento_segurado_exemplo}}': '',  # Campo adicional
             '{{data_afastamento_trabalho}}': '',  # Campo adicional
             '{{data_laudo_medico_segurado_exemplo}}': '',  # Campo adicional
-            '{{numero_cat}}': '',  # Campo adicional
-            '{{numero_bo}}': '',  # Campo adicional,
+            '{{numero_cat}}': benefits[0].numero_cat if benefits and benefits[0].numero_cat else '',
+            '{{numero_bo}}': benefits[0].numero_bo if benefits and benefits[0].numero_bo else '',
             
             # Valores
             '{{valor_causa}}': self._format_currency(case.value_cause) if case.value_cause else '',

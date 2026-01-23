@@ -56,6 +56,26 @@
                   </td>
                 </tr>
                 <tr>
+                  <td><strong>Número da CAT:</strong></td>
+                  <td>
+                    {% if benefit.numero_cat %}
+                    <code>{{ benefit.numero_cat }}</code>
+                    {% else %}
+                    <span class="text-muted">Não informado</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                <tr>
+                  <td><strong>Número do BO:</strong></td>
+                  <td>
+                    {% if benefit.numero_bo %}
+                    <code>{{ benefit.numero_bo }}</code>
+                    {% else %}
+                    <span class="text-muted">Não informado</span>
+                    {% endif %}
+                  </td>
+                </tr>
+                <tr>
                   <td><strong>Data Início Benefício:</strong></td>
                   <td>
                     {% if benefit.data_inicio_beneficio %}
