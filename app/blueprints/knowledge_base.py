@@ -206,3 +206,53 @@ def details(file_id):
     ).first_or_404()
     
     return render_template('knowledge_base/details.html', file=file)
+
+@knowledge_base_bp.route('/search')
+def search_chat():
+    """Tela de chat para pesquisa na base de conhecimento"""
+    law_firm_id = get_current_law_firm_id()
+    
+    if not law_firm_id:
+        flash('Você precisa estar logado para acessar esta página.', 'error')
+        return redirect(url_for('auth.login'))
+    
+    # Contar documentos na base de conhecimento
+    total_documents = KnowledgeBase.query.filter_by(
+        law_firm_id=law_firm_id,
+        is_active=True
+    ).count()
+    
+    return render_template('knowledge_base/search_chat.html', total_documents=total_documents)
+
+@knowledge_base_bp.route('/api/ask', methods=['POST'])
+def api_ask():
+    """API para fazer perguntas à base de conhecimento"""
+    law_firm_id = get_current_law_firm_id()
+    
+    if not law_firm_id:
+        return jsonify({'success': False, 'error': 'Não autorizado'}), 401
+    
+    data = request.get_json()
+    question = data.get('question', '').strip()
+    
+    if not question:
+        return jsonify({'success': False, 'error': 'Pergunta não pode estar vazia'}), 400
+    
+    try:
+        # Inicializar o ingestor
+        ingestor = KnowledgeIngestor()
+        
+        # Fazer a pergunta usando o método ask_with_llm
+        result = ingestor.ask_with_llm(question)
+        
+        return jsonify({
+            'success': True,
+            'answer': result['answer'],
+            'sources': result['sources']
+        })
+    except Exception as e:
+        print(f"Erro ao processar pergunta: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro ao processar pergunta: {str(e)}'
+        }), 500

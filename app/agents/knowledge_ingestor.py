@@ -153,7 +153,16 @@ class KnowledgeIngestor:
             {"role": "user", "content": question}
         ])
         
+        # Extrair fontes únicas (remover duplicatas)
+        sources = []
+        seen_sources = set()
+        for item in context_data['results'].points:
+            source = item.payload['source']
+            if source not in seen_sources:
+                sources.append(source)
+                seen_sources.add(source)
+        
         return {
             "answer": response.answer,
-            "sources": [item.payload['source'] for item in context_data['results'].points]
+            "sources": sources
         }

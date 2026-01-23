@@ -27,6 +27,9 @@
                     <div class="card-header">
                         <h3 class="card-title"><i class="bi bi-list-ul"></i> Arquivos da Base de Conhecimento</h3>
                         <div class="card-tools">
+                            <a href="{{ url_for('knowledge_base.search_chat') }}" class="btn btn-success btn-sm me-2">
+                                <i class="bi bi-search"></i> Pesquisar com IA
+                            </a>
                             <a href="{{ url_for('knowledge_base.upload') }}" class="btn btn-primary btn-sm">
                                 <i class="bi bi-plus-circle"></i> Adicionar Arquivo
                             </a>

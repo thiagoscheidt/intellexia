@@ -1,0 +1,380 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Pesquisar na Base de Conhecimento - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-sm-6">
+        <h3 class="mb-0"><i class="bi bi-search"></i> Pesquisar na Base de Conhecimento</h3>
+      </div>
+      <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-end">
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('knowledge_base.list') }}">Base de Conhecimento</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Pesquisar</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row justify-content-center">
+      <div class="col-lg-10">
+        <div class="card">
+          <div class="card-header bg-primary text-white">
+            <h3 class="card-title mb-0">
+              <i class="bi bi-robot"></i> Assistente de Pesquisa com IA
+            </h3>
+          </div>
+          <div class="card-body">
+            <div class="alert alert-info">
+              <h5><i class="bi bi-info-circle"></i> Como funciona?</h5>
+              <p class="mb-0">Faça perguntas sobre os documentos da sua base de conhecimento e a IA responderá com base nas informações disponíveis.</p>
+              <p class="mb-0 mt-2"><strong>Documentos disponíveis:</strong> {{ total_documents }}</p>
+            </div>
+
+            <!-- Chat Container -->
+            <div id="chat-container" class="border rounded p-3 bg-light" style="height: 500px; overflow-y: auto;">
+              <div id="chat-messages">
+                <div class="text-center text-muted py-5">
+                  <i class="bi bi-chat-dots" style="font-size: 3rem;"></i>
+                  <p class="mt-3">Faça sua primeira pergunta para começar!</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Input Area -->
+            <div class="mt-3">
+              <form id="question-form">
+                <div class="input-group">
+                  <input 
+                    type="text" 
+                    class="form-control form-control-lg" 
+                    id="question-input" 
+                    placeholder="Digite sua pergunta aqui..."
+                    autocomplete="off"
+                    required
+                  >
+                  <button class="btn btn-primary btn-lg" type="submit" id="send-btn">
+                    <i class="bi bi-send"></i> Enviar
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            <!-- Exemplos de perguntas -->
+            <div class="mt-3">
+              <small class="text-muted">
+                <strong>Exemplos de perguntas:</strong>
+              </small>
+              <div class="d-flex flex-wrap gap-2 mt-2">
+                <button class="btn btn-sm btn-outline-secondary example-question" data-question="Qual o prazo para contestação do FAP?">
+                  Qual o prazo para contestação do FAP?
+                </button>
+                <button class="btn btn-sm btn-outline-secondary example-question" data-question="Como funciona o cálculo do FAP?">
+                  Como funciona o cálculo do FAP?
+                </button>
+                <button class="btn btn-sm btn-outline-secondary example-question" data-question="O que é acidente de trajeto?">
+                  O que é acidente de trajeto?
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* Escopar estilos apenas para a área do chat, não afetar sidebar */
+  .app-content .card-body #chat-container,
+  .app-content .card-body #chat-messages,
+  .app-content .card-body .message,
+  .app-content .card-body .message-content {
+    position: relative;
+    z-index: 1;
+  }
+
+  .app-content .card-body .message {
+    margin-bottom: 15px;
+    animation: fadeIn 0.3s;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  .app-content .card-body .message-user {
+    text-align: right;
+  }
+
+  .app-content .card-body .message-user .message-content {
+    background: #007bff;
+    color: white;
+    display: inline-block;
+    padding: 10px 15px;
+    border-radius: 15px 15px 0 15px;
+    max-width: 70%;
+    word-wrap: break-word;
+  }
+
+  .app-content .card-body .message-assistant {
+    text-align: left;
+  }
+
+  .app-content .card-body .message-assistant .message-content {
+    background: white;
+    border: 1px solid #dee2e6;
+    display: inline-block;
+    padding: 10px 15px;
+    border-radius: 15px 15px 15px 0;
+    max-width: 70%;
+    word-wrap: break-word;
+  }
+
+  .app-content .card-body .message-loading {
+    text-align: left;
+  }
+
+  .app-content .card-body .message-loading .message-content {
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    display: inline-block;
+    padding: 10px 15px;
+    border-radius: 15px;
+  }
+
+  .app-content .card-body .sources {
+    margin-top: 10px;
+    padding: 10px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    font-size: 0.85rem;
+  }
+
+  .app-content .card-body .sources-title {
+    font-weight: bold;
+    color: #6c757d;
+    margin-bottom: 5px;
+  }
+
+  .app-content .card-body .source-item {
+    color: #495057;
+    margin-left: 10px;
+  }
+
+  .app-content .card-body .typing-indicator {
+    display: inline-block;
+  }
+
+  .app-content .card-body .typing-indicator span {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background-color: #6c757d;
+    margin: 0 2px;
+    animation: typing 1.4s infinite;
+  }
+
+  .app-content .card-body .typing-indicator span:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  .app-content .card-body .typing-indicator span:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+
+  @keyframes typing {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-10px); }
+  }
+</style>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    const questionForm = document.getElementById('question-form');
+    const questionInput = document.getElementById('question-input');
+    const sendBtn = document.getElementById('send-btn');
+    const chatMessages = document.getElementById('chat-messages');
+    const chatContainer = document.getElementById('chat-container');
+    const exampleButtons = document.querySelectorAll('.example-question');
+
+    // Limpar mensagem inicial quando começar a conversa
+    let isFirstMessage = true;
+
+    // Função para adicionar mensagem do usuário
+    function addUserMessage(text) {
+      if (isFirstMessage) {
+        chatMessages.innerHTML = '';
+        isFirstMessage = false;
+      }
+
+      const messageDiv = document.createElement('div');
+      messageDiv.className = 'message message-user';
+      messageDiv.innerHTML = `
+        <div class="message-content">
+          <strong>Você:</strong><br>
+          ${escapeHtml(text)}
+        </div>
+      `;
+      chatMessages.appendChild(messageDiv);
+      scrollToBottom();
+    }
+
+    // Função para adicionar mensagem de carregamento
+    function addLoadingMessage() {
+      const messageDiv = document.createElement('div');
+      messageDiv.className = 'message message-loading';
+      messageDiv.id = 'loading-message';
+      messageDiv.innerHTML = `
+        <div class="message-content">
+          <div class="typing-indicator">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <span class="ms-2 text-muted">IA pesquisando...</span>
+        </div>
+      `;
+      chatMessages.appendChild(messageDiv);
+      scrollToBottom();
+    }
+
+    // Função para remover mensagem de carregamento
+    function removeLoadingMessage() {
+      const loadingMsg = document.getElementById('loading-message');
+      if (loadingMsg) {
+        loadingMsg.remove();
+      }
+    }
+
+    // Função para adicionar resposta do assistente
+    function addAssistantMessage(answer, sources) {
+      removeLoadingMessage();
+
+      const messageDiv = document.createElement('div');
+      messageDiv.className = 'message message-assistant';
+      
+      let sourcesHtml = '';
+      if (sources && sources.length > 0) {
+        sourcesHtml = `
+          <div class="sources">
+            <div class="sources-title"><i class="bi bi-book"></i> Fontes:</div>
+            ${sources.map(source => `<div class="source-item">• ${escapeHtml(source)}</div>`).join('')}
+          </div>
+        `;
+      }
+
+      messageDiv.innerHTML = `
+        <div class="message-content">
+          <strong><i class="bi bi-robot"></i> Assistente:</strong><br>
+          ${escapeHtml(answer)}
+          ${sourcesHtml}
+        </div>
+      `;
+      chatMessages.appendChild(messageDiv);
+      scrollToBottom();
+    }
+
+    // Função para adicionar mensagem de erro
+    function addErrorMessage(error) {
+      removeLoadingMessage();
+
+      const messageDiv = document.createElement('div');
+      messageDiv.className = 'message message-assistant';
+      messageDiv.innerHTML = `
+        <div class="message-content">
+          <strong><i class="bi bi-exclamation-triangle text-danger"></i> Erro:</strong><br>
+          ${escapeHtml(error)}
+        </div>
+      `;
+      chatMessages.appendChild(messageDiv);
+      scrollToBottom();
+    }
+
+    // Função para rolar para o final
+    function scrollToBottom() {
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    // Função para escapar HTML
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Enviar pergunta
+    async function sendQuestion(question) {
+      if (!question.trim()) return;
+
+      // Adicionar mensagem do usuário
+      addUserMessage(question);
+
+      // Limpar input
+      questionInput.value = '';
+
+      // Desabilitar botão e input
+      sendBtn.disabled = true;
+      questionInput.disabled = true;
+
+      // Adicionar indicador de carregamento
+      addLoadingMessage();
+
+      try {
+        const response = await fetch('{{ url_for("knowledge_base.api_ask") }}', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ question: question })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          addAssistantMessage(data.answer, data.sources);
+        } else {
+          addErrorMessage(data.error || 'Erro ao processar sua pergunta');
+        }
+      } catch (error) {
+        console.error('Erro:', error);
+        addErrorMessage('Erro ao conectar com o servidor. Tente novamente.');
+      } finally {
+        // Reabilitar botão e input
+        sendBtn.disabled = false;
+        questionInput.disabled = false;
+        questionInput.focus();
+      }
+    }
+
+    // Event listener para o formulário
+    questionForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      const question = questionInput.value.trim();
+      if (question) {
+        sendQuestion(question);
+      }
+    });
+
+    // Event listeners para perguntas de exemplo
+    exampleButtons.forEach(button => {
+      button.addEventListener('click', function() {
+        const question = this.getAttribute('data-question');
+        questionInput.value = question;
+        sendQuestion(question);
+      });
+    });
+
+    // Focar no input ao carregar
+    questionInput.focus();
+  });
+</script>
+{% endblock %}
