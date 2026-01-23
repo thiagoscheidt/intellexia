@@ -223,6 +223,63 @@ Sistema integrado de documentos vinculados aos casos:
 - Descrição e categorização
 - Download e visualização
 
+### 🖼️ Inserção Automática de Imagens em Petições (NOVO!)
+Sistema avançado de inserção de imagens de documentos em petições Word:
+
+#### ⚡ Como Funciona
+1. **Anexar Documento**: Faça upload de CAT, FAP, INFBEN ou outros documentos ao caso
+2. **Selecionar Tipo**: Escolha o tipo correto do documento (CAT, FAP, INFBEN, etc.)
+3. **Usar Placeholder**: No template Word, use `{{imagem_cat}}`, `{{imagem_fap}}`, etc.
+4. **Gerar Petição**: A imagem é inserida automaticamente no local do placeholder!
+
+#### 🏷️ Placeholders Disponíveis
+- `{{imagem_cat}}` - Comunicação de Acidente de Trabalho
+- `{{imagem_fap}}` - Fator Acidentário de Prevenção
+- `{{imagem_info_beneficiario}}` - INFBEN
+- `{{imagem_declaracao_beneficio}}` - Declaração de Benefício
+- `{{imagem_inss_beneficiario}}` - CNIS
+- `{{imagem_vigencia_beneficio}}` - Vigência do Benefício
+
+#### 📋 Formatos Suportados
+- **PDFs**: Primeira página convertida automaticamente (150 DPI)
+- **Imagens**: PNG, JPG, JPEG, BMP, GIF
+
+#### 🔧 Recursos Técnicos
+- Conversão automática PDF → Imagem com `pdf2image`
+- Redimensionamento inteligente (6" parágrafos, 5" tabelas)
+- Centralização automática
+- Tratamento gracioso de erros (se uma imagem falhar, as outras continuam)
+- Preservação de qualidade (150 DPI)
+
+#### 📚 Documentação Completa
+- **[Quickstart](docs/QUICKSTART_IMAGENS_PETICOES.md)** - Início rápido em 3 passos
+- **[Documentação](docs/INSERCAO_IMAGENS_DOCUMENTOS.md)** - Guia completo
+- **[Testes](docs/TESTE_INSERCAO_IMAGENS.md)** - Como testar e validar
+- **[Exemplos](docs/TEMPLATE_EXEMPLO_IMAGENS.md)** - Templates de exemplo
+
+#### ⚙️ Pré-requisito: Poppler
+Para converter PDFs, instale o Poppler:
+
+**Windows (Chocolatey):**
+```bash
+choco install poppler
+```
+
+**Windows (Scoop):**
+```bash
+scoop install poppler
+```
+
+**Linux:**
+```bash
+sudo apt-get install poppler-utils
+```
+
+**macOS:**
+```bash
+brew install poppler
+```
+
 ### 🤖 Integração com IA (Planejado)
 - Análise automática de documentos
 - Extração de informações relevantes

@@ -8,10 +8,13 @@ from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from app.models import Case, CaseBenefit
+from app.models import Case, CaseBenefit, Document as DocumentModel
 from datetime import datetime
 from copy import deepcopy
 from docxcompose.composer import Composer
+import os
+from pdf2image import convert_from_path
+from PIL import Image
 
 _ = load_dotenv()
 
@@ -83,6 +86,9 @@ class AgentDocumentGenerator:
         
         # Adicionar benefícios nas tabelas
         self._add_benefits_to_tables(document_content, case, benefits)
+        
+        # Inserir imagens de documentos anexados
+        self._insert_document_images(document_content, case_id)
         
         # Usar Composer para mesclar documentos preservando estilos e formatação
         composer = Composer(document_base)
@@ -177,7 +183,7 @@ class AgentDocumentGenerator:
                 '{{vigencia_fap}}': self._format_years_range(case.fap_start_year, case.fap_end_year) or 'Não informado',
             },
             'Imagens': {
-                '{{Imagem_cat}}': '[Imagem CAT será inserida]',
+                '{{imagem_cat}}': '[Imagem CAT será inserida]',
                 '{{imagem_fap}}': '[Imagem FAP será inserida]',
                 '{{imagem_info_beneficiario}}': '[Imagem Info Beneficiário será inserida]',
                 '{{imagem_declaracao_beneficio}}': '[Imagem Declaração Benefício será inserida]',
@@ -250,13 +256,7 @@ class AgentDocumentGenerator:
             '{{mes_ano_atual}}': datetime.now().strftime('%B de %Y'),
             '{{vigencia_fap}}': self._format_years_range(case.fap_start_year, case.fap_end_year),
             
-            # Imagens (placeholders - inserção real requer lógica adicional)
-            '{{Imagem_cat}}': '[IMAGEM_CAT]',
-            '{{imagem_fap}}': '[IMAGEM_FAP]',
-            '{{imagem_info_beneficiario}}': '[IMAGEM_INFO_BENEFICIARIO]',
-            '{{imagem_declaracao_beneficio}}': '[IMAGEM_DECLARACAO_BENEFICIO]',
-            '{{imagem_inss_beneficiario}}': '[IMAGEM_INSS_BENEFICIARIO]',
-            '{{imagem_vigencia_beneficio}}': '[IMAGEM_VIGENCIA_BENEFICIO]',
+            # Nota: Placeholders de imagem ({{imagem_*}}) são tratados separadamente pelo método _insert_document_images()
             
             # Dados da Vara
             '{{vara_nome}}': case.court.vara_name if case.court else '',
@@ -395,6 +395,113 @@ class AgentDocumentGenerator:
         """Converte valor numérico para extenso (simplificado)"""
         # Implementação simplificada - pode ser expandida
         return f"{value:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+    
+    def _insert_document_images(self, document, case_id):
+        """
+        Insere imagens de documentos anexados nos placeholders correspondentes
+        
+        Args:
+            document: Documento DOCX onde as imagens serão inseridas
+            case_id: ID do caso para buscar documentos relacionados
+        """
+        # Mapeamento de placeholders para tipos de documentos
+        image_placeholders = {
+            '{{imagem_cat}}': 'cat',
+            '{{imagem_fap}}': 'fap',
+            '{{imagem_info_beneficiario}}': 'infben',
+            '{{imagem_declaracao_beneficio}}': 'declaracao_beneficio',
+            '{{imagem_inss_beneficiario}}': 'cnis',
+            '{{imagem_vigencia_beneficio}}': 'vigencia_beneficio',
+        }
+        
+        for placeholder, doc_type in image_placeholders.items():
+            # Buscar documento do tipo especificado
+            doc_record = DocumentModel.query.filter_by(
+                case_id=case_id,
+                document_type=doc_type
+            ).first()
+            
+            if doc_record and doc_record.file_path:
+                # Inserir imagem no documento
+                self._replace_placeholder_with_image(document, placeholder, doc_record.file_path)
+    
+    def _replace_placeholder_with_image(self, document, placeholder, file_path):
+        """
+        Substitui um placeholder por uma imagem do arquivo especificado
+        
+        Args:
+            document: Documento DOCX
+            placeholder: Placeholder a ser substituído (ex: '{{imagem_cat}}')
+            file_path: Caminho do arquivo (PDF ou imagem)
+        """
+        # Verificar se arquivo existe
+        if not os.path.exists(file_path):
+            print(f"Arquivo não encontrado: {file_path}")
+            return
+        
+        # Converter PDF para imagem se necessário
+        image_stream = None
+        file_extension = os.path.splitext(file_path)[1].lower()
+        
+        if file_extension == '.pdf':
+            try:
+                # Converter primeira página do PDF para imagem
+                images = convert_from_path(file_path, first_page=1, last_page=1, dpi=150)
+                if images:
+                    # Salvar imagem em BytesIO
+                    image_stream = BytesIO()
+                    images[0].save(image_stream, format='PNG')
+                    image_stream.seek(0)
+            except Exception as e:
+                print(f"Erro ao converter PDF para imagem: {e}")
+                return
+        elif file_extension in ['.png', '.jpg', '.jpeg', '.bmp', '.gif']:
+            try:
+                # Ler imagem diretamente
+                with open(file_path, 'rb') as f:
+                    image_stream = BytesIO(f.read())
+            except Exception as e:
+                print(f"Erro ao ler imagem: {e}")
+                return
+        else:
+            print(f"Formato de arquivo não suportado: {file_extension}")
+            return
+        
+        if not image_stream:
+            return
+        
+        # Procurar placeholder em parágrafos e substituir por imagem
+        for paragraph in document.paragraphs:
+            if placeholder in paragraph.text:
+                # Limpar o parágrafo
+                paragraph.text = ''
+                # Adicionar imagem
+                run = paragraph.add_run()
+                try:
+                    run.add_picture(image_stream, width=Inches(6))
+                    # Centralizar parágrafo
+                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                except Exception as e:
+                    print(f"Erro ao inserir imagem: {e}")
+                return
+        
+        # Procurar em tabelas
+        for table in document.tables:
+            for row in table.rows:
+                for cell in row.cells:
+                    for paragraph in cell.paragraphs:
+                        if placeholder in paragraph.text:
+                            # Limpar o parágrafo
+                            paragraph.text = ''
+                            # Adicionar imagem
+                            run = paragraph.add_run()
+                            try:
+                                run.add_picture(image_stream, width=Inches(5))
+                                # Centralizar parágrafo
+                                paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                            except Exception as e:
+                                print(f"Erro ao inserir imagem: {e}")
+                            return
     
     def _number_to_words(self, number):
         """Converte número inteiro para extenso (português)"""

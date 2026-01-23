@@ -23,6 +23,12 @@ Bem-vindo à documentação do **IntellexIA**! Aqui você encontrará guias, tut
 - **[TEMPLATE_FAP_INSTRUCOES.md](TEMPLATE_FAP_INSTRUCOES.md)** - Instruções para trabalhar com templates FAP
 - **[INSTRUCOES_PARA_IA.md](INSTRUCOES_PARA_IA.md)** - Guia para integração com IA
 
+### 🖼️ Inserção de Imagens em Petições (NOVO!)
+- **[QUICKSTART_IMAGENS_PETICOES.md](QUICKSTART_IMAGENS_PETICOES.md)** ⚡ - Início rápido: Como usar imagens em 3 passos
+- **[INSERCAO_IMAGENS_DOCUMENTOS.md](INSERCAO_IMAGENS_DOCUMENTOS.md)** 📖 - Documentação completa da funcionalidade
+- **[TESTE_INSERCAO_IMAGENS.md](TESTE_INSERCAO_IMAGENS.md)** 🧪 - Guia de testes e validação
+- **[TEMPLATE_EXEMPLO_IMAGENS.md](TEMPLATE_EXEMPLO_IMAGENS.md)** 📝 - Exemplos de templates com imagens
+
 ### Instalação e Setup
 - **[INSTALACAO_RESUMO_DOCUMENTOS.md](INSTALACAO_RESUMO_DOCUMENTOS.md)** - Instalação e configuração deAnálise de Documentos
 - **[QUICKSTART_RESUMO_DOCUMENTOS.md](QUICKSTART_RESUMO_DOCUMENTOS.md)** - Início rápido com resumos

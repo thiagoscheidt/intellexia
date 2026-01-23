@@ -89,7 +89,15 @@
                         <span class="badge bg-secondary">{{ doc.document_type }}</span>
                       {% endif %}
                     </td>
-                    <td>{{ doc.related_benefit_number if doc.related_benefit_id else '-' }}</td>
+                    <td>
+                      {% if doc.related_benefit %}
+                        <span class="badge bg-primary">
+                          {{ doc.related_benefit.benefit_number }} - {{ doc.related_benefit.insured_name }}
+                        </span>
+                      {% else %}
+                        <span class="text-muted">-</span>
+                      {% endif %}
+                    </td>
                     <td>
                       <small class="text-muted">
                         {{ doc.uploaded_at.strftime('%d/%m/%Y %H:%M') if doc.uploaded_at else '-' }}
