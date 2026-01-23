@@ -445,13 +445,20 @@ class AgentDocumentGenerator:
         
         if file_extension == '.pdf':
             try:
-                # Converter primeira página do PDF para imagem
-                images = convert_from_path(file_path, first_page=1, last_page=1, dpi=150)
-                if images:
-                    # Salvar imagem em BytesIO
-                    image_stream = BytesIO()
-                    images[0].save(image_stream, format='PNG')
-                    image_stream.seek(0)
+                # Converter TODAS as páginas do PDF para imagens
+                images = convert_from_path(file_path, dpi=150)
+                if not images:
+                    print(f"Nenhuma página encontrada no PDF: {file_path}")
+                    return
+                    
+                # Converter todas as imagens para BytesIO
+                image_streams = []
+                for img in images:
+                    stream = BytesIO()
+                    img.save(stream, format='PNG')
+                    stream.seek(0)
+                    image_streams.append(stream)
+                    
             except Exception as e:
                 print(f"Erro ao converter PDF para imagem: {e}")
                 return
@@ -460,6 +467,7 @@ class AgentDocumentGenerator:
                 # Ler imagem diretamente
                 with open(file_path, 'rb') as f:
                     image_stream = BytesIO(f.read())
+                    image_streams = [image_stream]
             except Exception as e:
                 print(f"Erro ao ler imagem: {e}")
                 return
@@ -467,22 +475,32 @@ class AgentDocumentGenerator:
             print(f"Formato de arquivo não suportado: {file_extension}")
             return
         
-        if not image_stream:
+        if not image_streams:
             return
         
-        # Procurar placeholder em parágrafos e substituir por imagem
+        # Procurar placeholder em parágrafos e substituir por imagens
         for paragraph in document.paragraphs:
             if placeholder in paragraph.text:
                 # Limpar o parágrafo
                 paragraph.text = ''
-                # Adicionar imagem
-                run = paragraph.add_run()
-                try:
-                    run.add_picture(image_stream, width=Inches(6))
-                    # Centralizar parágrafo
-                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                except Exception as e:
-                    print(f"Erro ao inserir imagem: {e}")
+                
+                # Adicionar todas as imagens
+                for idx, img_stream in enumerate(image_streams):
+                    if idx > 0:
+                        # Adicionar quebra de linha entre imagens
+                        paragraph.add_run().add_break()
+                    
+                    # Adicionar imagem
+                    run = paragraph.add_run()
+                    try:
+                        img_stream.seek(0)  # Garantir que está no início
+                        run.add_picture(img_stream, width=Inches(6))
+                    except Exception as e:
+                        print(f"Erro ao inserir imagem {idx + 1}: {e}")
+                        continue
+                
+                # Centralizar parágrafo
+                paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 return
         
         # Procurar em tabelas
@@ -493,14 +511,24 @@ class AgentDocumentGenerator:
                         if placeholder in paragraph.text:
                             # Limpar o parágrafo
                             paragraph.text = ''
-                            # Adicionar imagem
-                            run = paragraph.add_run()
-                            try:
-                                run.add_picture(image_stream, width=Inches(5))
-                                # Centralizar parágrafo
-                                paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                            except Exception as e:
-                                print(f"Erro ao inserir imagem: {e}")
+                            
+                            # Adicionar todas as imagens
+                            for idx, img_stream in enumerate(image_streams):
+                                if idx > 0:
+                                    # Adicionar quebra de linha entre imagens
+                                    paragraph.add_run().add_break()
+                                
+                                # Adicionar imagem
+                                run = paragraph.add_run()
+                                try:
+                                    img_stream.seek(0)  # Garantir que está no início
+                                    run.add_picture(img_stream, width=Inches(5))
+                                except Exception as e:
+                                    print(f"Erro ao inserir imagem {idx + 1}: {e}")
+                                    continue
+                            
+                            # Centralizar parágrafo
+                            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                             return
     
     def _number_to_words(self, number):
