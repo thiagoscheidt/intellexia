@@ -11,8 +11,9 @@ from openai import OpenAI
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as rest
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+from langchain_openai import ChatOpenAI
 from docling.document_converter import DocumentConverter
-from app import app
+from pydantic import BaseModel, Field
 
 
 load_dotenv()
@@ -23,6 +24,12 @@ DEFAULT_COLLECTION = os.getenv("QDRANT_COLLECTION", "knowledge_base")
 QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
 MAX_CHARS_PER_CHUNK = int(os.getenv("MAX_CHARS_PER_CHUNK", "1500"))
+
+
+class ResponseSchema(BaseModel):
+    answer: str = Field(description="Resposta gerada para a pergunta")
+    sources: list[str] = Field(description="Fontes utilizadas para gerar a resposta")
+
 
 
 class KnowledgeIngestor:
@@ -109,6 +116,7 @@ class KnowledgeIngestor:
         }
 
     def process_file(self, file_path: Path, source_name: str):
+        """Processa um arquivo e insere na base de conhecimento"""
         # Usa caminho absoluto em string para evitar problemas no conversor
         converter = DocumentConverter()
         try:
@@ -116,13 +124,13 @@ class KnowledgeIngestor:
             markdown = result.document.export_to_markdown()
             self.ingest_document(markdown, source=source_name)
             return markdown
-        except Exception:
+        except Exception as e:
+            print(f"Erro ao processar arquivo: {str(e)}")
             return None
         
-    def ask_knowledge_base(question: str) -> dict:
+    def ask_with_llm(self, question: str) -> dict:
         """
-        Função MOCK para consultar a base de conhecimento.
-        TODO: Implementar a lógica real de consulta à base de conhecimento.
+        Consulta a base de conhecimento e usa LLM para gerar resposta.
         
         Args:
             question: A pergunta do usuário
@@ -130,19 +138,22 @@ class KnowledgeIngestor:
         Returns:
             dict com 'answer' (str) e 'sources' (list)
         """
-        context = ingestor.ask_knowledge_base(question)
+        # Buscar contexto na base vetorial
+        context_data = self.ask_knowledge_base(question)
 
+        # Usar LLM para gerar resposta baseada no contexto
         llm = ChatOpenAI(
-            model="gpt-4.1-mini",
+            model="gpt-4o-mini",
             temperature=0
         ).with_structured_output(ResponseSchema)
 
         response = llm.invoke([
-            {"role": "system", "content": "Você é um assistente útil que responde perguntas sobre a Empresa EMS Ventura."},
-            {"role": "system", "content": f"Voce possui o seguinte contexto: {context['context']}. Se não souber não invente a resposta, responda que não sabe."},
+            {"role": "system", "content": "Você é um assistente jurídico especializado que responde perguntas com base na base de conhecimento da empresa."},
+            {"role": "system", "content": f"Contexto disponível: {context_data['context']}. Se não souber a resposta com base no contexto, informe claramente que não possui essa informação."},
             {"role": "user", "content": question}
-        ]);
+        ])
+        
         return {
             "answer": response.answer,
-            "sources": [item.payload['source'] for item in context['results'].points]
+            "sources": [item.payload['source'] for item in context_data['results'].points]
         }

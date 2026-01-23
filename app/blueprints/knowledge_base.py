@@ -122,7 +122,40 @@ def upload():
             try:
                 db.session.add(knowledge_file)
                 db.session.commit()
-                flash(f'Arquivo "{filename}" adicionado com sucesso à base de conhecimento!', 'success')
+                
+                # Processar arquivo com KnowledgeIngestor e inserir no Qdrant
+                try:
+                    print(f"Iniciando processamento do arquivo: {filename}")
+                    ingestor = KnowledgeIngestor()
+                    
+                    # Usar o nome do arquivo com ID como source_name
+                    source_name = f"{filename} (ID: {knowledge_file.id})"
+                    
+                    # Processar arquivo e inserir no Qdrant
+                    markdown_content = ingestor.process_file(
+                        Path(file_path), 
+                        source_name=source_name
+                    )
+                    
+                    if markdown_content:
+                        print(f"Arquivo processado com sucesso: {filename}")
+                        flash(
+                            f'Arquivo "{filename}" adicionado com sucesso à base de conhecimento e processado pela IA!', 
+                            'success'
+                        )
+                    else:
+                        print(f"Aviso: Arquivo salvo mas não foi possível processar: {filename}")
+                        flash(
+                            f'Arquivo "{filename}" adicionado à base de conhecimento, mas houve problema no processamento pela IA.', 
+                            'warning'
+                        )
+                except Exception as e:
+                    print(f"Erro ao processar arquivo com IA: {str(e)}")
+                    flash(
+                        f'Arquivo "{filename}" foi salvo, mas ocorreu um erro no processamento pela IA: {str(e)}', 
+                        'warning'
+                    )
+                
                 return redirect(url_for('knowledge_base.list'))
             except Exception as e:
                 db.session.rollback()
