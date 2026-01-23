@@ -144,6 +144,18 @@ class KnowledgeIngestor:
         # Buscar contexto na base vetorial
         context_data = self.ask_knowledge_base(question)
 
+        # Preparar contexto com identificação de fontes
+        context_with_sources = []
+        sources_map = {}  # Mapear índice -> nome do arquivo
+        
+        for idx, item in enumerate(context_data['results'].points):
+            source = item.payload['source']
+            text = item.payload['text']
+            sources_map[idx] = source
+            context_with_sources.append(f"[Fonte {idx}]: {source}\n{text}")
+        
+        formatted_context = "\n\n---\n\n".join(context_with_sources)
+
         # Usar LLM para gerar resposta baseada no contexto
         llm = ChatOpenAI(
             model="gpt-4o-mini",
@@ -152,20 +164,29 @@ class KnowledgeIngestor:
 
         response = llm.invoke([
             {"role": "system", "content": "Você é um assistente jurídico especializado que responde perguntas com base na base de conhecimento da empresa."},
-            {"role": "system", "content": f"Contexto disponível: {context_data['context']}. Se não souber a resposta com base no contexto, informe claramente que não possui essa informação."},
+            {"role": "system", "content": f"Contexto disponível:\n\n{formatted_context}\n\nIMPORTANTE: No campo 'sources', liste APENAS os números das fontes que você realmente usou para responder (ex: ['0', '2']). Se não souber a resposta com base no contexto, informe claramente que não possui essa informação e retorne sources como lista vazia."},
             {"role": "user", "content": question}
         ])
         
-        # Extrair fontes únicas (remover duplicatas)
-        sources = []
-        seen_sources = set()
-        for item in context_data['results'].points:
-            source = item.payload['source']
-            if source not in seen_sources:
-                sources.append(source)
-                seen_sources.add(source)
+        # Converter índices retornados pela IA em nomes de arquivos
+        used_sources = []
+        if response.sources:
+            for source_ref in response.sources:
+                # Extrair número da referência (ex: "Fonte 0" -> 0, ou apenas "0" -> 0)
+                try:
+                    # Tentar extrair número
+                    import re
+                    numbers = re.findall(r'\d+', str(source_ref))
+                    if numbers:
+                        idx = int(numbers[0])
+                        if idx in sources_map:
+                            source_name = sources_map[idx]
+                            if source_name not in used_sources:
+                                used_sources.append(source_name)
+                except (ValueError, IndexError):
+                    continue
         
         return {
             "answer": response.answer,
-            "sources": sources
+            "sources": used_sources
         }
