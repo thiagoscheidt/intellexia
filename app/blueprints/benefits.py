@@ -58,6 +58,10 @@ def case_benefit_new(case_id):
             benefit_type=form.benefit_type.data,
             insured_name=form.insured_name.data,
             insured_nit=form.insured_nit.data,
+            numero_cat=form.numero_cat.data,
+            numero_bo=form.numero_bo.data,
+            data_inicio_beneficio=form.data_inicio_beneficio.data,
+            data_fim_beneficio=form.data_fim_beneficio.data,
             accident_date=form.accident_date.data,
             accident_company_name=form.accident_company_name.data,
             error_reason=form.error_reason.data,
@@ -92,6 +96,10 @@ def case_benefit_edit(case_id, benefit_id):
         benefit.benefit_type = form.benefit_type.data
         benefit.insured_name = form.insured_name.data
         benefit.insured_nit = form.insured_nit.data
+        benefit.numero_cat = form.numero_cat.data
+        benefit.numero_bo = form.numero_bo.data
+        benefit.data_inicio_beneficio = form.data_inicio_beneficio.data
+        benefit.data_fim_beneficio = form.data_fim_beneficio.data
         benefit.accident_date = form.accident_date.data
         benefit.accident_company_name = form.accident_company_name.data
         benefit.error_reason = form.error_reason.data

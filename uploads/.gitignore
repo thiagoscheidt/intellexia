@@ -1,0 +1,6 @@
+# Ignora todo o conteúdo da pasta uploads
+*
+# Exceto os arquivos .gitignore
+!.gitignore
+# Permite que as subpastas existam
+!*/

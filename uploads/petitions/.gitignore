@@ -1,0 +1,4 @@
+# Ignora todo o conteúdo desta pasta
+*
+# Exceto este arquivo
+!.gitignore

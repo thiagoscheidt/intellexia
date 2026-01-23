@@ -6,8 +6,12 @@ from dotenv import load_dotenv
 from docx import Document
 from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 from app.models import Case, CaseBenefit
 from datetime import datetime
+from copy import deepcopy
+from docxcompose.composer import Composer
 
 _ = load_dotenv()
 
@@ -67,22 +71,31 @@ class AgentDocumentGenerator:
         if template_path is None:
             template_path = self._select_template_by_fap_reason(case.fap_reason)
         
-        # Carregar template
+        # Carregar templates
         document_base = Document("templates_docx/modelo_acidente_trajeto_inicio.docx")
-        document = Document(template_path)
+        document_content = Document(template_path)
         
-        # Preencher campos do template com dados do caso
-        self._replace_placeholders_in_document(document, case, benefits)
+        # Preencher campos do template BASE com dados do caso (cabeçalho/rodapé inicial)
+        self._replace_placeholders_in_document(document_base, case, benefits)
+        
+        # Preencher campos do template CONTEÚDO com dados do caso
+        self._replace_placeholders_in_document(document_content, case, benefits)
         
         # Adicionar benefícios nas tabelas
-        self._add_benefits_to_tables(document, case, benefits)
+        self._add_benefits_to_tables(document_content, case, benefits)
         
+        # Usar Composer para mesclar documentos preservando estilos e formatação
+        composer = Composer(document_base)
+        composer.append(document_content)
 
-
-        for element in document.element.body:
-            document_base.element.body.append(element)
-
-        return document_base
+        return composer.doc
+    
+    def _append_document_content(self, base_doc, source_doc):
+        """
+        DEPRECATED: Método antigo substituído por docxcompose.Composer
+        Mantido para referência mas não é mais usado.
+        """
+        pass
     
     def _select_template_by_fap_reason(self, fap_reason):
         """

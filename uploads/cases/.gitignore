@@ -1,0 +1,6 @@
+# Ignora todo o conteúdo desta pasta
+*
+# Exceto este arquivo
+!.gitignore
+# Permite que as subpastas existam
+!*/

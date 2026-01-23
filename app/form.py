@@ -169,7 +169,7 @@ class CaseBenefitForm(FlaskForm):
         validators=[DataRequired()]
     )
     insured_name = StringField('Nome do Segurado', validators=[DataRequired(), Length(max=255)])
-    insured_nit = StringField('NIT/PIS do Segurado', validators=[Optional(), Length(max=50)])
+    insured_nit = StringField('NIT/PIS do Segurado', validators=[Optional()])
     numero_cat = StringField('Número da CAT', validators=[Optional(), Length(max=100)])
     numero_bo = StringField('Número do BO', validators=[Optional(), Length(max=100)])
     data_inicio_beneficio = DateField('Início do Benefício', format='%Y-%m-%d', validators=[Optional()])
@@ -211,7 +211,7 @@ class CaseBenefitContextForm(FlaskForm):
         validators=[DataRequired()]
     )
     insured_name = StringField('Nome do Segurado', validators=[DataRequired(), Length(max=255)])
-    insured_nit = StringField('NIT/PIS do Segurado', validators=[Optional(), Length(max=50)])
+    insured_nit = StringField('NIT/PIS do Segurado', validators=[Optional()])
     numero_cat = StringField('Número da CAT', validators=[Optional(), Length(max=100)])
     numero_bo = StringField('Número do BO', validators=[Optional(), Length(max=100)])
     data_inicio_beneficio = DateField('Início do Benefício', format='%Y-%m-%d', validators=[Optional()])
