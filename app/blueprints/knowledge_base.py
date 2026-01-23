@@ -1,7 +1,9 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify
 from app.models import db, KnowledgeBase
+from app.agents.knowledge_ingestor import KnowledgeIngestor
 from datetime import datetime
 from werkzeug.utils import secure_filename
+from pathlib import Path
 import os
 
 knowledge_base_bp = Blueprint('knowledge_base', __name__, url_prefix='/knowledge-base')

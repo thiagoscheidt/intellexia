@@ -213,6 +213,7 @@ class AgentDocumentGenerator:
             '{{lista_beneficios}}': self._format_benefits_list(benefits),
             '{{quantidade_acidentes}}': str(len(benefits)),
             '{{quantidade_acidentes_extenso}}': self._number_to_words(len(benefits)),
+            '{{titulo_acidente_trajeto}}': 'Acidente de Trajeto' if len(benefits) == 1 else 'Acidentes de Trajeto',
             '{{nome_segurado_exemplo}}': benefits[0].insured_name if benefits else '',
             '{{nit_segurado_exemplo}}': benefits[0].insured_nit if benefits else '',
             '{{data_acidente_segurado_exemplo}}': benefits[0].accident_date.strftime('%d/%m/%Y') if benefits and benefits[0].accident_date else '',
