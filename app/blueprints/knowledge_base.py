@@ -134,7 +134,10 @@ def upload():
                     # Processar arquivo e inserir no Qdrant
                     markdown_content = ingestor.process_file(
                         Path(file_path), 
-                        source_name=source_name
+                        source_name=source_name,
+                        category=category,
+                        description=description,
+                        tags=tags
                     )
                     
                     if markdown_content:

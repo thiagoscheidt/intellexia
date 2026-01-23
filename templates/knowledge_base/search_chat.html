@@ -21,67 +21,141 @@
 </div>
 
 <div class="app-content">
-  <div class="container-fluid">
-    <div class="row justify-content-center">
-      <div class="col-lg-10">
-        <div class="card">
-          <div class="card-header bg-primary text-white">
-            <h3 class="card-title mb-0">
-              <i class="bi bi-robot"></i> Assistente de Pesquisa com IA
-            </h3>
-          </div>
-          <div class="card-body">
-            <div class="alert alert-info">
-              <h5><i class="bi bi-info-circle"></i> Como funciona?</h5>
-              <p class="mb-0">Faça perguntas sobre os documentos da sua base de conhecimento e a IA responderá com base nas informações disponíveis.</p>
-              <p class="mb-0 mt-2"><strong>Documentos disponíveis:</strong> {{ total_documents }}</p>
+  <div class="container-fluid" style="height: calc(100vh - 120px);">
+    <div class="row h-100">
+      <div class="col-12 h-100">
+        <div class="card h-100" id="knowledge-chat-card" style="display: flex; flex-direction: column;">
+          <div class="card-header text-white" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1.5rem;">
+            <div class="row align-items-center">
+              <div class="col-md-8">
+                <div class="d-flex align-items-center">
+                  <div class="me-3">
+                    <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
+                      <i class="bi bi-robot" style="font-size: 1.8rem; color: #667eea;"></i>
+                    </div>
+                  </div>
+                  <div>
+                    <h3 class="mb-1" style="font-weight: 600; font-size: 1.4rem;">
+                      Assistente Jurídico IA
+                    </h3>
+                    <p class="mb-0 opacity-75" style="font-size: 0.9rem;">
+                      <i class="bi bi-lightning-charge-fill"></i> Pesquisa inteligente na base de conhecimento
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                <div class="d-flex flex-column gap-2 align-items-md-end">
+                  <span class="badge bg-white text-dark d-inline-flex align-items-center gap-2" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                    <i class="bi bi-folder-fill text-primary"></i>
+                    <strong>{{ total_documents }}</strong> documento(s)
+                  </span>
+                  <small class="text-white opacity-75">
+                    <i class="bi bi-clock"></i> Respostas em tempo real
+                  </small>
+                </div>
+              </div>
             </div>
-
+          </div>
+          <div class="card-body" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 0;">
+            
             <!-- Chat Container -->
-            <div id="chat-container" class="border rounded p-3 bg-light" style="height: 500px; overflow-y: auto;">
+            <div id="chat-container" class="p-4" style="flex: 1; overflow-y: auto; overflow-x: hidden; background: linear-gradient(to bottom, #f8f9fa 0%, #ffffff 100%);">
               <div id="chat-messages">
-                <div class="text-center text-muted py-5">
-                  <i class="bi bi-chat-dots" style="font-size: 3rem;"></i>
-                  <p class="mt-3">Faça sua primeira pergunta para começar!</p>
+                <div class="text-center py-5" style="margin-top: 15%;">
+                  <div class="mb-4">
+                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3" 
+                         style="width: 100px; height: 100px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);">
+                      <i class="bi bi-chat-dots-fill text-white" style="font-size: 3rem;"></i>
+                    </div>
+                  </div>
+                  <h3 class="mb-3" style="font-weight: 600; color: #2d3748;">
+                    Olá! Sou seu Assistente Jurídico
+                  </h3>
+                  <p class="text-muted mb-4" style="font-size: 1.1rem; max-width: 500px; margin: 0 auto;">
+                    Posso ajudá-lo a encontrar informações nos seus documentos da base de conhecimento
+                  </p>
+                  
+                  <div class="row justify-content-center mt-5">
+                    <div class="col-md-8">
+                      <div class="row g-3">
+                        <div class="col-md-4">
+                          <div class="card border-0 shadow-sm h-100" style="transition: transform 0.2s;">
+                            <div class="card-body text-center p-3">
+                              <i class="bi bi-lightning-charge-fill text-primary mb-2" style="font-size: 2rem;"></i>
+                              <h6 class="mb-1">Rápido</h6>
+                              <small class="text-muted">Respostas instantâneas</small>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="col-md-4">
+                          <div class="card border-0 shadow-sm h-100" style="transition: transform 0.2s;">
+                            <div class="card-body text-center p-3">
+                              <i class="bi bi-shield-check text-success mb-2" style="font-size: 2rem;"></i>
+                              <h6 class="mb-1">Confiável</h6>
+                              <small class="text-muted">Baseado em seus docs</small>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="col-md-4">
+                          <div class="card border-0 shadow-sm h-100" style="transition: transform 0.2s;">
+                            <div class="card-body text-center p-3">
+                              <i class="bi bi-book text-info mb-2" style="font-size: 2rem;"></i>
+                              <h6 class="mb-1">Completo</h6>
+                              <small class="text-muted">Com fontes citadas</small>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="mt-5">
+                    <small class="text-muted d-block mb-2">
+                      <i class="bi bi-lightbulb-fill text-warning"></i> <strong>Dica:</strong> Seja específico nas suas perguntas
+                    </small>
+                  </div>
                 </div>
               </div>
             </div>
 
             <!-- Input Area -->
-            <div class="mt-3">
+            <div class="border-top bg-white p-4" style="flex-shrink: 0; box-shadow: 0 -2px 10px rgba(0,0,0,0.05);">
+              <!-- Exemplos de perguntas - acima do input -->
+              <div class="mb-3">
+                <small class="text-muted d-block mb-2">
+                  <i class="bi bi-stars"></i> <strong>Perguntas sugeridas:</strong>
+                </small>
+                <div class="d-flex flex-wrap gap-2">
+                  <button class="btn btn-sm btn-outline-primary example-question" data-question="Qual o prazo para contestação do FAP?" style="border-radius: 20px;">
+                    <i class="bi bi-lightning-fill"></i> Prazo contestação FAP
+                  </button>
+                  <button class="btn btn-sm btn-outline-primary example-question" data-question="Como funciona o cálculo do FAP?" style="border-radius: 20px;">
+                    <i class="bi bi-calculator-fill"></i> Cálculo do FAP
+                  </button>
+                  <button class="btn btn-sm btn-outline-primary example-question" data-question="O que é acidente de trajeto?" style="border-radius: 20px;">
+                    <i class="bi bi-question-circle-fill"></i> Acidente de trajeto
+                  </button>
+                </div>
+              </div>
+
               <form id="question-form">
-                <div class="input-group">
+                <div class="input-group input-group-lg shadow-sm">
                   <input 
                     type="text" 
-                    class="form-control form-control-lg" 
+                    class="form-control border-0" 
                     id="question-input" 
                     placeholder="Digite sua pergunta aqui..."
                     autocomplete="off"
                     required
+                    style="border-radius: 30px 0 0 30px; padding-left: 25px; background: #f8f9fa;"
                   >
-                  <button class="btn btn-primary btn-lg" type="submit" id="send-btn">
-                    <i class="bi bi-send"></i> Enviar
+                  <button class="btn btn-primary px-4" type="submit" id="send-btn" 
+                          style="border-radius: 0 30px 30px 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none;">
+                    <i class="bi bi-send-fill"></i> Enviar
                   </button>
                 </div>
               </form>
-            </div>
-
-            <!-- Exemplos de perguntas -->
-            <div class="mt-3">
-              <small class="text-muted">
-                <strong>Exemplos de perguntas:</strong>
-              </small>
-              <div class="d-flex flex-wrap gap-2 mt-2">
-                <button class="btn btn-sm btn-outline-secondary example-question" data-question="Qual o prazo para contestação do FAP?">
-                  Qual o prazo para contestação do FAP?
-                </button>
-                <button class="btn btn-sm btn-outline-secondary example-question" data-question="Como funciona o cálculo do FAP?">
-                  Como funciona o cálculo do FAP?
-                </button>
-                <button class="btn btn-sm btn-outline-secondary example-question" data-question="O que é acidente de trajeto?">
-                  O que é acidente de trajeto?
-                </button>
-              </div>
             </div>
           </div>
         </div>
@@ -91,109 +165,163 @@
 </div>
 
 <style>
-  /* Escopar estilos apenas para a área do chat, não afetar sidebar */
-  .app-content .card-body #chat-container,
-  .app-content .card-body #chat-messages,
-  .app-content .card-body .message,
-  .app-content .card-body .message-content {
-    position: relative;
-    z-index: 1;
+  /* Escopar TODOS os estilos apenas para este card específico */
+  #knowledge-chat-card .message {
+    margin-bottom: 20px;
+    animation: kb-fadeIn 0.4s ease-out;
+    clear: both;
   }
 
-  .app-content .card-body .message {
-    margin-bottom: 15px;
-    animation: fadeIn 0.3s;
+  @keyframes kb-fadeIn {
+    from { 
+      opacity: 0; 
+      transform: translateY(15px);
+    }
+    to { 
+      opacity: 1; 
+      transform: translateY(0);
+    }
   }
 
-  @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-
-  .app-content .card-body .message-user {
+  #knowledge-chat-card .message-user {
     text-align: right;
   }
 
-  .app-content .card-body .message-user .message-content {
-    background: #007bff;
+  #knowledge-chat-card .message-user .message-content {
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
     color: white;
     display: inline-block;
-    padding: 10px 15px;
-    border-radius: 15px 15px 0 15px;
-    max-width: 70%;
+    padding: 12px 18px;
+    border-radius: 20px 20px 4px 20px;
+    max-width: 75%;
     word-wrap: break-word;
+    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
+    font-size: 0.95rem;
+    line-height: 1.5;
   }
 
-  .app-content .card-body .message-assistant {
+  #knowledge-chat-card .message-assistant {
     text-align: left;
   }
 
-  .app-content .card-body .message-assistant .message-content {
+  #knowledge-chat-card .message-assistant .message-content {
     background: white;
-    border: 1px solid #dee2e6;
+    border: 2px solid #e9ecef;
     display: inline-block;
-    padding: 10px 15px;
-    border-radius: 15px 15px 15px 0;
-    max-width: 70%;
+    padding: 12px 18px;
+    border-radius: 20px 20px 20px 4px;
+    max-width: 75%;
     word-wrap: break-word;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    font-size: 0.95rem;
+    line-height: 1.6;
   }
 
-  .app-content .card-body .message-loading {
+  #knowledge-chat-card .message-loading {
     text-align: left;
   }
 
-  .app-content .card-body .message-loading .message-content {
+  #knowledge-chat-card .message-loading .message-content {
     background: #f8f9fa;
-    border: 1px solid #dee2e6;
+    border: 2px solid #e9ecef;
     display: inline-block;
-    padding: 10px 15px;
-    border-radius: 15px;
+    padding: 12px 18px;
+    border-radius: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
   }
 
-  .app-content .card-body .sources {
-    margin-top: 10px;
-    padding: 10px;
-    background: #f8f9fa;
+  #knowledge-chat-card .sources {
+    margin-top: 12px;
+    padding: 12px 15px;
+    background: linear-gradient(to right, #f8f9fa 0%, #e9ecef 100%);
+    border-left: 4px solid #007bff;
     border-radius: 8px;
     font-size: 0.85rem;
   }
 
-  .app-content .card-body .sources-title {
-    font-weight: bold;
-    color: #6c757d;
-    margin-bottom: 5px;
-  }
-
-  .app-content .card-body .source-item {
+  #knowledge-chat-card .sources-title {
+    font-weight: 600;
     color: #495057;
-    margin-left: 10px;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
   }
 
-  .app-content .card-body .typing-indicator {
-    display: inline-block;
+  #knowledge-chat-card .source-item {
+    color: #6c757d;
+    margin-left: 15px;
+    padding: 4px 0;
+    font-size: 0.85rem;
   }
 
-  .app-content .card-body .typing-indicator span {
+  #knowledge-chat-card .typing-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  #knowledge-chat-card .typing-indicator span {
     display: inline-block;
-    width: 8px;
-    height: 8px;
+    width: 10px;
+    height: 10px;
     border-radius: 50%;
-    background-color: #6c757d;
-    margin: 0 2px;
-    animation: typing 1.4s infinite;
+    background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+    animation: kb-typing 1.4s infinite ease-in-out;
   }
 
-  .app-content .card-body .typing-indicator span:nth-child(2) {
+  #knowledge-chat-card .typing-indicator span:nth-child(2) {
     animation-delay: 0.2s;
   }
 
-  .app-content .card-body .typing-indicator span:nth-child(3) {
+  #knowledge-chat-card .typing-indicator span:nth-child(3) {
     animation-delay: 0.4s;
   }
 
-  @keyframes typing {
-    0%, 60%, 100% { transform: translateY(0); }
-    30% { transform: translateY(-10px); }
+  @keyframes kb-typing {
+    0%, 60%, 100% { 
+      transform: translateY(0);
+      opacity: 0.7;
+    }
+    30% { 
+      transform: translateY(-12px);
+      opacity: 1;
+    }
+  }
+
+  /* Estilo para o input */
+  #knowledge-chat-card #question-input:focus {
+    border-color: #007bff;
+    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+  }
+
+  #knowledge-chat-card .example-question {
+    transition: all 0.2s ease;
+    border-radius: 20px;
+  }
+
+  #knowledge-chat-card .example-question:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 123, 255, 0.2);
+  }
+
+  /* Scrollbar personalizada */
+  #knowledge-chat-card #chat-container::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  #knowledge-chat-card #chat-container::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+  }
+
+  #knowledge-chat-card #chat-container::-webkit-scrollbar-thumb {
+    background: #888;
+    border-radius: 10px;
+  }
+
+  #knowledge-chat-card #chat-container::-webkit-scrollbar-thumb:hover {
+    background: #555;
   }
 </style>
 

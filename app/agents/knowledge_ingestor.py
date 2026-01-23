@@ -64,7 +64,7 @@ class KnowledgeIngestor:
         texts = text_splitter.split_text(text)
         return texts
 
-    def ingest_document(self, text: str, source: str) -> Optional[list[str]]:
+    def ingest_document(self, text: str, source: str, category: str = None, description: str = None, tags: str = None) -> Optional[list[str]]:
         cleaned = text.strip()
         if not cleaned:
             return None
@@ -83,6 +83,9 @@ class KnowledgeIngestor:
             payload = {
                 "text": chunk,
                 "source": source,
+                "category": category or "",
+                "description": description or "",
+                "tags": tags or "",
                 "chunk_index": idx,
                 "chunk_total": total,
                 "ingested_at": datetime.utcnow().isoformat() + "Z",
@@ -115,14 +118,14 @@ class KnowledgeIngestor:
             "results": results
         }
 
-    def process_file(self, file_path: Path, source_name: str):
+    def process_file(self, file_path: Path, source_name: str, category: str = None, description: str = None, tags: str = None):
         """Processa um arquivo e insere na base de conhecimento"""
         # Usa caminho absoluto em string para evitar problemas no conversor
         converter = DocumentConverter()
         try:
             result = converter.convert(str(file_path))
             markdown = result.document.export_to_markdown()
-            self.ingest_document(markdown, source=source_name)
+            self.ingest_document(markdown, source=source_name, category=category, description=description, tags=tags)
             return markdown
         except Exception as e:
             print(f"Erro ao processar arquivo: {str(e)}")
