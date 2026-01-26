@@ -60,29 +60,47 @@ class CaseKnowledgeIngestor:
         response = self.openai.embeddings.create(input=text, model=EMBEDDING_MODEL)
         return response.data[0].embedding
 
-    def _chunk_text(self, text: str, chunk_size: int = MAX_CHARS_PER_CHUNK) -> list[str]:
+    def _chunk_text(self, text: str, chunk_size: int = MAX_CHARS_PER_CHUNK) -> list[dict]:
+        """Divide o texto em chunks, mantendo informações de metadados."""
         print(f"Iniciando Chunking de texto em pedaços de até {chunk_size} caracteres")
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=20)
         texts = text_splitter.split_text(text)
-        return texts
+        # Retorna lista de dicts com texto e metadados vazios (serão preenchidos posteriormente)
+        return [{'text': chunk, 'metadata': {}} for chunk in texts]
 
-    def ingest_document(self, text: str, source: str, category: str = None, description: str = None, tags: str = None) -> Optional[list[str]]:
-        cleaned = text.strip()
-        if not cleaned:
-            return None
-
-        chunks = self._chunk_text(cleaned)
+    def ingest_document(self, text: str, source: str, category: str = None, description: str = None, tags: str = None, chunks_with_pages: list[dict] = None) -> Optional[list[str]]:
+        """Ingere documento na base vetorial.
+        
+        Args:
+            text: Texto do documento (usado se chunks_with_pages não fornecido)
+            source: Nome da fonte
+            category: Categoria do documento
+            description: Descrição
+            tags: Tags
+            chunks_with_pages: Lista de dicts com 'text' e 'page' (opcional)
+        """
+        if chunks_with_pages:
+            chunks = chunks_with_pages
+        else:
+            cleaned = text.strip()
+            if not cleaned:
+                return None
+            chunks = self._chunk_text(cleaned)
+        
         print(f"Documento '{source}' dividido em {len(chunks)} chunks")
         point_ids: list[str] = []
         total = len(chunks)
 
         points: list[rest.PointStruct] = []
-        for idx, chunk in enumerate(chunks):
-            print(f"Processando chunk {idx + 1}/{total} ({len(chunk)} chars)")
-            vector = self._embed(chunk)
+        for idx, chunk_data in enumerate(chunks):
+            chunk_text = chunk_data.get('text', chunk_data) if isinstance(chunk_data, dict) else chunk_data
+            chunk_page = chunk_data.get('page') if isinstance(chunk_data, dict) else None
+            
+            print(f"Processando chunk {idx + 1}/{total} ({len(chunk_text)} chars)" + (f" - Página {chunk_page}" if chunk_page else ""))
+            vector = self._embed(chunk_text)
             point_id = str(uuid.uuid4())
             payload = {
-                "text": chunk,
+                "text": chunk_text,
                 "source": source,
                 "category": category or "",
                 "description": description or "",
@@ -91,6 +109,11 @@ class CaseKnowledgeIngestor:
                 "chunk_total": total,
                 "ingested_at": datetime.utcnow().isoformat() + "Z",
             }
+            
+            # Adiciona número da página se disponível
+            if chunk_page is not None:
+                payload["page"] = chunk_page
+                
             points.append(rest.PointStruct(id=point_id, vector=vector, payload=payload))
             point_ids.append(point_id)
 
@@ -120,16 +143,111 @@ class CaseKnowledgeIngestor:
         }
 
     def process_file(self, file_path: Path, source_name: str, category: str = None, description: str = None, tags: str = None):
-        """Processa um arquivo e insere na base de conhecimento de casos"""
-        # Usa caminho absoluto em string para evitar problemas no conversor
+        """Processa um arquivo e insere na base de conhecimento de casos com informação de páginas"""
         converter = DocumentConverter()
         try:
             result = converter.convert(str(file_path))
-            markdown = result.document.export_to_markdown()
-            self.ingest_document(markdown, source=source_name, category=category, description=description, tags=tags)
-            return markdown
+            doc = result.document
+            
+            chunks_with_pages = []
+            
+            # Verifica se tem páginas
+            if hasattr(doc, 'pages') and doc.pages:
+                print(f"Documento tem {len(doc.pages)} páginas")
+                
+                # Processa cada página separadamente
+                for page_no in sorted(doc.pages.keys()):
+                    # Extrai o texto da página através dos items
+                    page_items = []
+                    
+                    for item in doc.iterate_items():
+                        if not hasattr(item, 'text') or not item.text:
+                            continue
+                        
+                        # Verifica se o item pertence a esta página através do bbox
+                        item_page = None
+                        if hasattr(item, 'prov') and item.prov:
+                            prov_list = item.prov if isinstance(item.prov, list) else [item.prov]
+                            for prov in prov_list:
+                                if prov and hasattr(prov, 'bbox'):
+                                    bbox = prov.bbox
+                                    if hasattr(bbox, 'page'):
+                                        item_page = bbox.page
+                                        break
+                        
+                        if item_page == page_no:
+                            page_items.append(item.text)
+                    
+                    # Se encontrou texto na página, faz chunking
+                    if page_items:
+                        page_text = "\n".join(page_items)
+                        page_chunks = self._chunk_text(page_text)
+                        
+                        for chunk_data in page_chunks:
+                            chunk_data['page'] = page_no
+                            chunks_with_pages.append(chunk_data)
+                        
+                        print(f"Página {page_no}: {len(page_chunks)} chunks")
+            
+            # Se conseguiu extrair com páginas
+            if chunks_with_pages:
+                print(f"✓ Total: {len(chunks_with_pages)} chunks COM informação de página")
+                self.ingest_document(
+                    text="",
+                    source=source_name,
+                    category=category,
+                    description=description,
+                    tags=tags,
+                    chunks_with_pages=chunks_with_pages
+                )
+            else:
+                # Fallback: usa export_to_markdown do documento inteiro mas tenta mapear por posição
+                print("⚠ Tentando abordagem alternativa: mapeamento por caracteres")
+                
+                full_text = doc.export_to_markdown()
+                total_chars = len(full_text)
+                
+                # Estima caracteres por página
+                if hasattr(doc, 'pages') and len(doc.pages) > 0:
+                    chars_per_page = total_chars // len(doc.pages)
+                    
+                    chunks = self._chunk_text(full_text)
+                    current_char_pos = 0
+                    
+                    for chunk_data in chunks:
+                        chunk_text = chunk_data['text']
+                        # Estima a página baseado na posição do chunk
+                        estimated_page = min((current_char_pos // chars_per_page) + 1, len(doc.pages))
+                        chunk_data['page'] = estimated_page
+                        chunks_with_pages.append(chunk_data)
+                        current_char_pos += len(chunk_text)
+                        
+                    print(f"✓ Total: {len(chunks_with_pages)} chunks com página ESTIMADA")
+                    self.ingest_document(
+                        text="",
+                        source=source_name,
+                        category=category,
+                        description=description,
+                        tags=tags,
+                        chunks_with_pages=chunks_with_pages
+                    )
+                else:
+                    # Último fallback: sem informação de página
+                    print("✗ Processando SEM informação de páginas")
+                    self.ingest_document(
+                        text=full_text,
+                        source=source_name,
+                        category=category,
+                        description=description,
+                        tags=tags
+                    )
+            
+            return doc.export_to_markdown()
+            
         except Exception as e:
             print(f"Erro ao processar arquivo: {str(e)}")
+            import traceback
+            traceback.print_exc()
             return None
         
     def ask_with_llm(self, question: str, user_id: int = None, law_firm_id: int = None) -> dict:
@@ -149,13 +267,18 @@ class CaseKnowledgeIngestor:
 
         # Preparar contexto com identificação de fontes
         context_with_sources = []
-        sources_map = {}  # Mapear índice -> nome do arquivo
+        sources_map = {}  # Mapear índice -> informações da fonte (nome e página)
         
         for idx, item in enumerate(context_data['results'].points):
             source = item.payload['source']
             text = item.payload['text']
-            sources_map[idx] = source
-            context_with_sources.append(f"[Fonte {idx}]: {source}\n{text}")
+            page = item.payload.get('page')  # Número da página, se disponível
+            
+            # Cria identificador da fonte com página se disponível
+            source_info = f"{source} (Página {page})" if page else source
+            sources_map[idx] = source_info
+            
+            context_with_sources.append(f"[Fonte {idx}]: {source_info}\n{text}")
         
         formatted_context = "\n\n---\n\n".join(context_with_sources)
 
