@@ -242,16 +242,23 @@ def api_ask():
         return jsonify({'success': False, 'error': 'Pergunta não pode estar vazia'}), 400
     
     try:
+        user_id = get_current_user_id()
+        
         # Inicializar o ingestor
         ingestor = KnowledgeIngestor()
         
         # Fazer a pergunta usando o método ask_with_llm
-        result = ingestor.ask_with_llm(question)
+        result = ingestor.ask_with_llm(
+            question=question,
+            user_id=user_id,
+            law_firm_id=law_firm_id
+        )
         
         return jsonify({
             'success': True,
             'answer': result['answer'],
-            'sources': result['sources']
+            'sources': result['sources'],
+            'history_id': result.get('history_id')
         })
     except Exception as e:
         print(f"Erro ao processar pergunta: {str(e)}")

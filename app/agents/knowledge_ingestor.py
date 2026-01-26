@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 import uuid
+import json
+import time
 from datetime import datetime
 from typing import Optional
 
@@ -131,15 +133,17 @@ class KnowledgeIngestor:
             print(f"Erro ao processar arquivo: {str(e)}")
             return None
         
-    def ask_with_llm(self, question: str) -> dict:
+    def ask_with_llm(self, question: str, user_id: int = None, law_firm_id: int = None) -> dict:
         """
         Consulta a base de conhecimento e usa LLM para gerar resposta.
         
         Args:
             question: A pergunta do usuário
+            user_id: ID do usuário que fez a pergunta (opcional)
+            law_firm_id: ID do escritório (opcional)
             
         Returns:
-            dict com 'answer' (str) e 'sources' (list)
+            dict com 'answer' (str), 'sources' (list) e 'history_id' (int, se salvo no banco)
         """
         # Buscar contexto na base vetorial
         context_data = self.ask_knowledge_base(question)
@@ -156,6 +160,9 @@ class KnowledgeIngestor:
         
         formatted_context = "\n\n---\n\n".join(context_with_sources)
 
+        # Medir tempo de resposta
+        start_time = time.time()
+
         # Usar LLM para gerar resposta baseada no contexto
         llm = ChatOpenAI(
             model="gpt-4o-mini",
@@ -167,6 +174,9 @@ class KnowledgeIngestor:
             {"role": "system", "content": f"Contexto disponível:\n\n{formatted_context}\n\nIMPORTANTE: No campo 'sources', liste APENAS os números das fontes que você realmente usou para responder (ex: ['0', '2']). Se não souber a resposta com base no contexto, informe claramente que não possui essa informação e retorne sources como lista vazia."},
             {"role": "user", "content": question}
         ])
+        
+        # Calcular tempo de resposta
+        response_time_ms = int((time.time() - start_time) * 1000)
         
         # Converter índices retornados pela IA em nomes de arquivos
         used_sources = []
@@ -186,7 +196,33 @@ class KnowledgeIngestor:
                 except (ValueError, IndexError):
                     continue
         
-        return {
+        result = {
             "answer": response.answer,
-            "sources": used_sources
+            "sources": used_sources,
+            "response_time_ms": response_time_ms
         }
+        
+        # Salvar no banco de dados se user_id e law_firm_id foram fornecidos
+        if user_id and law_firm_id:
+            try:
+                from app.models import db, KnowledgeChatHistory
+                
+                history_entry = KnowledgeChatHistory(
+                    user_id=user_id,
+                    law_firm_id=law_firm_id,
+                    question=question,
+                    answer=response.answer,
+                    sources=json.dumps(used_sources, ensure_ascii=False),
+                    response_time_ms=response_time_ms
+                )
+                
+                db.session.add(history_entry)
+                db.session.commit()
+                
+                result["history_id"] = history_entry.id
+                print(f"Histórico salvo com ID: {history_entry.id}")
+            except Exception as e:
+                print(f"Erro ao salvar histórico no banco: {str(e)}")
+                db.session.rollback()
+        
+        return result

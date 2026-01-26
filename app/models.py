@@ -411,6 +411,38 @@ class KnowledgeBase(db.Model):
         return f'<KnowledgeBase {self.original_filename}>'
 
 
+class KnowledgeChatHistory(db.Model):
+    """Tabela knowledge_chat_history - Histórico de perguntas e respostas do chat da base de conhecimento"""
+    __tablename__ = 'knowledge_chat_history'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    
+    # Pergunta e resposta
+    question = db.Column(db.Text, nullable=False)
+    answer = db.Column(db.Text, nullable=False)
+    sources = db.Column(db.Text)  # JSON array com as fontes utilizadas
+    
+    # Métricas
+    response_time_ms = db.Column(db.Integer)  # Tempo de resposta em milissegundos
+    tokens_used = db.Column(db.Integer)  # Quantidade de tokens utilizados
+    
+    # Feedback do usuário (opcional)
+    user_rating = db.Column(db.Integer)  # 1-5 estrelas
+    user_feedback = db.Column(db.Text)  # Comentário do usuário
+    
+    # Auditoria
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    
+    # Relacionamentos
+    user = db.relationship('User')
+    law_firm = db.relationship('LawFirm')
+    
+    def __repr__(self):
+        return f'<KnowledgeChatHistory {self.id}>'
+
+
 class CaseActivity(db.Model):
     """Tabela case_activities - Registro de todas as ações e alterações em um caso"""
     __tablename__ = 'case_activities'
