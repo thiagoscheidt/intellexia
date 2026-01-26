@@ -221,16 +221,14 @@ def cases_knowledge_base_upload():
                     # Usar CaseKnowledgeIngestor para base de conhecimento de casos
                     ingestor = CaseKnowledgeIngestor()
                     
-                    # Usar o nome do arquivo com ID como source_name
-                    source_name = f"{filename} (ID: {cases_kb_file.id})"
-                    
                     # Processar arquivo e inserir no Qdrant
                     markdown_content = ingestor.process_file(
                         Path(file_path), 
-                        source_name=source_name,
+                        source_name=filename,
                         category=category,
                         description=description,
-                        tags=tags
+                        tags=tags,
+                        file_id=cases_kb_file.id
                     )
                     
                     if markdown_content:

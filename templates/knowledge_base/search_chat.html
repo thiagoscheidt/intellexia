@@ -3,13 +3,15 @@
 {% block title %}Pesquisar na Base de Conhecimento - IntellexIA{% endblock %}
 
 {% block content %}
-<div class="app-content-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 2rem 0; margin-bottom: 1.5rem; border-radius: 0 0 15px 15px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);">
+<div class="app-content-header"
+  style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 2rem 0; margin-bottom: 1.5rem; border-radius: 0 0 15px 15px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);">
   <div class="container-fluid">
     <div class="row align-items-center">
       <div class="col-sm-8">
         <div class="d-flex align-items-center">
           <div class="me-3">
-            <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 60px; height: 60px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+            <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
+              style="width: 60px; height: 60px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
               <i class="bi bi-search" style="font-size: 1.8rem; color: #667eea;"></i>
             </div>
           </div>
@@ -24,9 +26,12 @@
         </div>
       </div>
       <div class="col-sm-4">
-        <ol class="breadcrumb float-sm-end mb-0" style="background: rgba(255,255,255,0.15); padding: 0.75rem 1rem; border-radius: 10px; backdrop-filter: blur(10px);">
-          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}" class="text-white text-decoration-none"><i class="bi bi-house-fill"></i> Home</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('knowledge_base.list') }}" class="text-white text-decoration-none">Base de Conhecimento</a></li>
+        <ol class="breadcrumb float-sm-end mb-0"
+          style="background: rgba(255,255,255,0.15); padding: 0.75rem 1rem; border-radius: 10px; backdrop-filter: blur(10px);">
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"
+              class="text-white text-decoration-none"><i class="bi bi-house-fill"></i> Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('knowledge_base.list') }}"
+              class="text-white text-decoration-none">Base de Conhecimento</a></li>
           <li class="breadcrumb-item active text-white" aria-current="page"><strong>Pesquisar</strong></li>
         </ol>
       </div>
@@ -39,12 +44,14 @@
     <div class="row h-100">
       <div class="col-12 h-100">
         <div class="card h-100" id="knowledge-chat-card" style="display: flex; flex-direction: column;">
-          <div class="card-header text-white" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1.5rem;">
+          <div class="card-header text-white"
+            style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1.5rem;">
             <div class="row align-items-center">
               <div class="col-md-8">
                 <div class="d-flex align-items-center">
                   <div class="me-3">
-                    <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
+                    <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
+                      style="width: 50px; height: 50px;">
                       <i class="bi bi-robot" style="font-size: 1.8rem; color: #667eea;"></i>
                     </div>
                   </div>
@@ -60,7 +67,8 @@
               </div>
               <div class="col-md-4 text-md-end mt-3 mt-md-0">
                 <div class="d-flex flex-column gap-2 align-items-md-end">
-                  <span class="badge bg-white text-dark d-inline-flex align-items-center gap-2" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                  <span class="badge bg-white text-dark d-inline-flex align-items-center gap-2"
+                    style="padding: 0.5rem 1rem; font-size: 0.9rem;">
                     <i class="bi bi-folder-fill text-primary"></i>
                     <strong>{{ total_documents }}</strong> documento(s)
                   </span>
@@ -72,14 +80,15 @@
             </div>
           </div>
           <div class="card-body" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 0;">
-            
+
             <!-- Chat Container -->
-            <div id="chat-container" class="p-4" style="flex: 1; overflow-y: auto; overflow-x: hidden; background: linear-gradient(to bottom, #f8f9fa 0%, #ffffff 100%); display: flex; align-items: center; justify-content: center;">
+            <div id="chat-container" class="p-4"
+              style="flex: 1; overflow-y: auto; overflow-x: hidden; background: linear-gradient(to bottom, #f8f9fa 0%, #ffffff 100%); display: flex; align-items: center; justify-content: center;">
               <div id="chat-messages" style="width: 100%; max-width: 900px;">
                 <div class="text-center py-3">
                   <div class="mb-4">
-                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3" 
-                         style="width: 100px; height: 100px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);">
+                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3"
+                      style="width: 100px; height: 100px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);">
                       <i class="bi bi-chat-dots-fill text-white" style="font-size: 3rem;"></i>
                     </div>
                   </div>
@@ -89,7 +98,7 @@
                   <p class="text-muted mb-4" style="font-size: 1.1rem; max-width: 500px; margin: 0 auto;">
                     Posso ajudá-lo a encontrar informações nos seus documentos da base de conhecimento
                   </p>
-                  
+
                   <div class="row justify-content-center mt-5">
                     <div class="col-md-8">
                       <div class="row g-3">
@@ -126,7 +135,8 @@
 
                   <div class="mt-5">
                     <small class="text-muted d-block mb-2">
-                      <i class="bi bi-lightbulb-fill text-warning"></i> <strong>Dica:</strong> Seja específico nas suas perguntas
+                      <i class="bi bi-lightbulb-fill text-warning"></i> <strong>Dica:</strong> Seja específico nas suas
+                      perguntas
                     </small>
                   </div>
                 </div>
@@ -141,13 +151,16 @@
                   <i class="bi bi-stars"></i> <strong>Perguntas sugeridas:</strong>
                 </small>
                 <div class="d-flex flex-wrap gap-2">
-                  <button class="btn btn-sm btn-outline-primary example-question" data-question="Qual o prazo para contestação do FAP?" style="border-radius: 20px;">
+                  <button class="btn btn-sm btn-outline-primary example-question"
+                    data-question="Qual o prazo para contestação do FAP?" style="border-radius: 20px;">
                     <i class="bi bi-lightning-fill"></i> Prazo contestação FAP
                   </button>
-                  <button class="btn btn-sm btn-outline-primary example-question" data-question="Como funciona o cálculo do FAP?" style="border-radius: 20px;">
+                  <button class="btn btn-sm btn-outline-primary example-question"
+                    data-question="Como funciona o cálculo do FAP?" style="border-radius: 20px;">
                     <i class="bi bi-calculator-fill"></i> Cálculo do FAP
                   </button>
-                  <button class="btn btn-sm btn-outline-primary example-question" data-question="O que é acidente de trajeto?" style="border-radius: 20px;">
+                  <button class="btn btn-sm btn-outline-primary example-question"
+                    data-question="O que é acidente de trajeto?" style="border-radius: 20px;">
                     <i class="bi bi-question-circle-fill"></i> Acidente de trajeto
                   </button>
                 </div>
@@ -155,17 +168,11 @@
 
               <form id="question-form">
                 <div class="input-group input-group-lg shadow-sm">
-                  <input 
-                    type="text" 
-                    class="form-control border-0" 
-                    id="question-input" 
-                    placeholder="Digite sua pergunta aqui..."
-                    autocomplete="off"
-                    required
-                    style="border-radius: 30px 0 0 30px; padding-left: 25px; background: #f8f9fa;"
-                  >
-                  <button class="btn btn-primary px-4" type="submit" id="send-btn" 
-                          style="border-radius: 0 30px 30px 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none;">
+                  <input type="text" class="form-control border-0" id="question-input"
+                    placeholder="Digite sua pergunta aqui..." autocomplete="off" required
+                    style="border-radius: 30px 0 0 30px; padding-left: 25px; background: #f8f9fa;">
+                  <button class="btn btn-primary px-4" type="submit" id="send-btn"
+                    style="border-radius: 0 30px 30px 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none;">
                     <i class="bi bi-send-fill"></i> Enviar
                   </button>
                 </div>
@@ -187,12 +194,13 @@
   }
 
   @keyframes kb-fadeIn {
-    from { 
-      opacity: 0; 
+    from {
+      opacity: 0;
       transform: translateY(15px);
     }
-    to { 
-      opacity: 1; 
+
+    to {
+      opacity: 1;
       transform: translateY(0);
     }
   }
@@ -293,11 +301,15 @@
   }
 
   @keyframes kb-typing {
-    0%, 60%, 100% { 
+
+    0%,
+    60%,
+    100% {
       transform: translateY(0);
       opacity: 0.7;
     }
-    30% { 
+
+    30% {
       transform: translateY(-12px);
       opacity: 1;
     }
@@ -422,7 +434,7 @@
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
 <script>
-  document.addEventListener('DOMContentLoaded', function() {
+  document.addEventListener('DOMContentLoaded', function () {
     // Configurar marked.js
     if (typeof marked !== 'undefined') {
       marked.setOptions({
@@ -494,14 +506,62 @@
     }
 
     // Função para adicionar resposta do assistente
-    function addAssistantMessage(answer, sources) {
+    function addAssistantMessage(answer, sources, sourcesDetail) {
       removeLoadingMessage();
 
       const messageDiv = document.createElement('div');
       messageDiv.className = 'message message-assistant';
-      
+
       let sourcesHtml = '';
-      if (sources && sources.length > 0) {
+      if (sourcesDetail && sourcesDetail.length > 0) {
+        // Agrupa fontes pelo arquivo
+        const sourcesByFile = {};
+        sourcesDetail.forEach(detail => {
+          if (!sourcesByFile[detail.source]) {
+            sourcesByFile[detail.source] = [];
+          }
+          if (detail.page && !sourcesByFile[detail.source].includes(detail.page)) {
+            sourcesByFile[detail.source].push(detail.page);
+          }
+        });
+
+        const sourceItems = Object.entries(sourcesByFile).map(([fileName, pages]) => {
+          const pageInfo = pages.length > 0 ? ` (Pág. ${pages.sort((a, b) => a - b).join(', ')})` : '';
+
+          // Busca o file_id da primeira ocorrência deste arquivo
+          const fileDetail = sourcesDetail.find(d => d.source === fileName);
+          const fileId = fileDetail && fileDetail.file_id ? fileDetail.file_id : null;
+
+          // Se temos file_id, usa rota por ID, senão usa por nome
+          const downloadUrl = fileId
+            ? `/knowledge-base/${fileId}/download`
+            : `{{ url_for('knowledge_base.download_by_name') }}?filename=${encodeURIComponent(fileName)}`;
+
+          return `
+            <div class="source-item d-flex justify-content-between align-items-center" style="padding: 0.5rem; margin-bottom: 0.5rem; background: #f8f9fa; border-radius: 8px;">
+              <span>
+                <i class="bi bi-file-earmark-text"></i> ${escapeHtml(fileName)}${pageInfo}
+              </span>
+              <a href="${downloadUrl}" 
+                 class="btn btn-sm btn-primary"
+                 target="_blank"
+                 style="padding: 0.25rem 0.75rem; font-size: 0.875rem; text-decoration: none; color: white;">
+                <i class="bi bi-download"></i> Baixar
+              </a>
+            </div>
+          `;
+        }).join('');
+
+        sourcesHtml = `
+          <div class="sources" style="margin-top: 1rem; padding: 1rem; background: #f0f4ff; border-radius: 10px; border-left: 4px solid #667eea;">
+            <div class="sources-title" style="font-weight: 600; margin-bottom: 0.75rem; color: #667eea;">
+              <i class="bi bi-book"></i> Fontes Utilizadas:
+            </div>
+            ${sourceItems}
+          </div>
+        `;
+      } else if (sources && sources.length > 0) {
+        // Fallback para formato antigo
         sourcesHtml = `
           <div class="sources">
             <div class="sources-title"><i class="bi bi-book"></i> Fontes:</div>
@@ -591,7 +651,7 @@
         const data = await response.json();
 
         if (data.success) {
-          addAssistantMessage(data.answer, data.sources);
+          addAssistantMessage(data.answer, data.sources, data.sources_detail);
         } else {
           addErrorMessage(data.error || 'Erro ao processar sua pergunta');
         }
@@ -607,7 +667,7 @@
     }
 
     // Event listener para o formulário
-    questionForm.addEventListener('submit', function(e) {
+    questionForm.addEventListener('submit', function (e) {
       e.preventDefault();
       const question = questionInput.value.trim();
       if (question) {
@@ -617,7 +677,7 @@
 
     // Event listeners para perguntas de exemplo
     exampleButtons.forEach(button => {
-      button.addEventListener('click', function() {
+      button.addEventListener('click', function () {
         const question = this.getAttribute('data-question');
         questionInput.value = question;
         sendQuestion(question);

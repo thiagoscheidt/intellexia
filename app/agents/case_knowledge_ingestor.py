@@ -28,9 +28,13 @@ QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
 MAX_CHARS_PER_CHUNK = int(os.getenv("MAX_CHARS_PER_CHUNK", "1500"))
 
 
+class SourceInfo(BaseModel):
+    source_name: str = Field(description="Nome do arquivo fonte")
+    page: Optional[int] = Field(description="Número da página do documento", default=None)
+
 class ResponseSchema(BaseModel):
     answer: str = Field(description="Resposta gerada para a pergunta")
-    sources: list[str] = Field(description="Fontes utilizadas para gerar a resposta")
+    sources: list[str] = Field(description="Índices das fontes utilizadas (ex: ['0', '2'])")
 
 
 
@@ -68,7 +72,7 @@ class CaseKnowledgeIngestor:
         # Retorna lista de dicts com texto e metadados vazios (serão preenchidos posteriormente)
         return [{'text': chunk, 'metadata': {}} for chunk in texts]
 
-    def ingest_document(self, text: str, source: str, category: str = None, description: str = None, tags: str = None, chunks_with_pages: list[dict] = None) -> Optional[list[str]]:
+    def ingest_document(self, text: str, source: str, category: str = None, description: str = None, tags: str = None, chunks_with_pages: list[dict] = None, file_id: int = None) -> Optional[list[str]]:
         """Ingere documento na base vetorial.
         
         Args:
@@ -78,6 +82,7 @@ class CaseKnowledgeIngestor:
             description: Descrição
             tags: Tags
             chunks_with_pages: Lista de dicts com 'text' e 'page' (opcional)
+            file_id: ID do arquivo no banco de dados (opcional)
         """
         if chunks_with_pages:
             chunks = chunks_with_pages
@@ -109,6 +114,10 @@ class CaseKnowledgeIngestor:
                 "chunk_total": total,
                 "ingested_at": datetime.utcnow().isoformat() + "Z",
             }
+            
+            # Adiciona ID do arquivo se disponível
+            if file_id is not None:
+                payload["file_id"] = file_id
             
             # Adiciona número da página se disponível
             if chunk_page is not None:
@@ -142,7 +151,7 @@ class CaseKnowledgeIngestor:
             "results": results
         }
 
-    def process_file(self, file_path: Path, source_name: str, category: str = None, description: str = None, tags: str = None):
+    def process_file(self, file_path: Path, source_name: str, category: str = None, description: str = None, tags: str = None, file_id: int = None):
         """Processa um arquivo e insere na base de conhecimento de casos com informação de páginas"""
         converter = DocumentConverter()
         try:
@@ -198,7 +207,8 @@ class CaseKnowledgeIngestor:
                     category=category,
                     description=description,
                     tags=tags,
-                    chunks_with_pages=chunks_with_pages
+                    chunks_with_pages=chunks_with_pages,
+                    file_id=file_id
                 )
             else:
                 # Fallback: usa export_to_markdown do documento inteiro mas tenta mapear por posição
@@ -229,7 +239,8 @@ class CaseKnowledgeIngestor:
                         category=category,
                         description=description,
                         tags=tags,
-                        chunks_with_pages=chunks_with_pages
+                        chunks_with_pages=chunks_with_pages,
+                        file_id=file_id
                     )
                 else:
                     # Último fallback: sem informação de página
@@ -239,7 +250,8 @@ class CaseKnowledgeIngestor:
                         source=source_name,
                         category=category,
                         description=description,
-                        tags=tags
+                        tags=tags,
+                        file_id=file_id
                     )
             
             return doc.export_to_markdown()
@@ -300,8 +312,10 @@ class CaseKnowledgeIngestor:
         # Calcular tempo de resposta
         response_time_ms = int((time.time() - start_time) * 1000)
         
-        # Converter índices retornados pela IA em nomes de arquivos
+        # Converter índices retornados pela IA em nomes de arquivos com páginas
         used_sources = []
+        sources_detail = []  # Lista detalhada com arquivo e página
+        
         if response.sources:
             for source_ref in response.sources:
                 # Extrair número da referência (ex: "Fonte 0" -> 0, ou apenas "0" -> 0)
@@ -312,15 +326,29 @@ class CaseKnowledgeIngestor:
                     if numbers:
                         idx = int(numbers[0])
                         if idx in sources_map:
-                            source_name = sources_map[idx]
-                            if source_name not in used_sources:
-                                used_sources.append(source_name)
+                            source_info = sources_map[idx]
+                            if source_info not in used_sources:
+                                used_sources.append(source_info)
+                            
+                            # Adiciona informação detalhada
+                            original_item = context_data['results'].points[idx]
+                            source_name = original_item.payload['source']
+                            source_page = original_item.payload.get('page')
+                            source_file_id = original_item.payload.get('file_id')
+                            
+                            sources_detail.append({
+                                'source': source_name,
+                                'page': source_page,
+                                'file_id': source_file_id,
+                                'display': source_info
+                            })
                 except (ValueError, IndexError):
                     continue
         
         result = {
             "answer": response.answer,
             "sources": used_sources,
+            "sources_detail": sources_detail,  # Nova informação detalhada
             "response_time_ms": response_time_ms
         }
         

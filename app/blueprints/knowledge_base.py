@@ -128,16 +128,14 @@ def upload():
                     print(f"Iniciando processamento do arquivo: {filename}")
                     ingestor = KnowledgeIngestor()
                     
-                    # Usar o nome do arquivo com ID como source_name
-                    source_name = f"{filename} (ID: {knowledge_file.id})"
-                    
                     # Processar arquivo e inserir no Qdrant
                     markdown_content = ingestor.process_file(
                         Path(file_path), 
-                        source_name=source_name,
+                        source_name=filename,
                         category=category,
                         description=description,
-                        tags=tags
+                        tags=tags,
+                        file_id=knowledge_file.id
                     )
                     
                     if markdown_content:
@@ -242,6 +240,44 @@ def download(file_id):
         flash(f'Erro ao baixar o arquivo: {str(e)}', 'error')
         return redirect(url_for('knowledge_base.list'))
 
+@knowledge_base_bp.route('/download-by-name')
+def download_by_name():
+    """Baixar arquivo da base de conhecimento por nome do arquivo"""
+    law_firm_id = get_current_law_firm_id()
+    
+    if not law_firm_id:
+        flash('Você precisa estar logado para acessar esta página.', 'error')
+        return redirect(url_for('auth.login'))
+
+    filename = request.args.get('filename', '')
+    
+    if not filename:
+        flash('Nome do arquivo não especificado.', 'error')
+        return redirect(url_for('knowledge_base.list'))
+
+    # Busca pelo nome original do arquivo
+    file = KnowledgeBase.query.filter_by(
+        original_filename=filename,
+        law_firm_id=law_firm_id,
+        is_active=True
+    ).first()
+
+    if not file:
+        flash('Arquivo não encontrado.', 'error')
+        return redirect(url_for('knowledge_base.list'))
+
+    if not os.path.exists(file.file_path):
+        flash('Arquivo não encontrado no servidor.', 'error')
+        return redirect(url_for('knowledge_base.list'))
+
+    try:
+        return send_file(file.file_path, as_attachment=True, download_name=file.original_filename)
+    except TypeError:
+        return send_file(file.file_path, as_attachment=True, attachment_filename=file.original_filename)
+    except Exception as e:
+        flash(f'Erro ao baixar o arquivo: {str(e)}', 'error')
+        return redirect(url_for('knowledge_base.list'))
+
 @knowledge_base_bp.route('/search')
 def search_chat():
     """Tela de chat para pesquisa na base de conhecimento"""
@@ -290,6 +326,7 @@ def api_ask():
             'success': True,
             'answer': result['answer'],
             'sources': result['sources'],
+            'sources_detail': result.get('sources_detail', []),
             'history_id': result.get('history_id')
         })
     except Exception as e:
