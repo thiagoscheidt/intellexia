@@ -443,6 +443,40 @@ class KnowledgeChatHistory(db.Model):
         return f'<KnowledgeChatHistory {self.id}>'
 
 
+class CasesKnowledgeBase(db.Model):
+    """Tabela cases_knowledge_base - Base de conhecimento geral para casos (não específica de um caso)"""
+    __tablename__ = 'cases_knowledge_base'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    
+    # Informações do arquivo
+    original_filename = db.Column(db.String(255), nullable=False)
+    file_path = db.Column(db.String(500), nullable=False)
+    file_size = db.Column(db.Integer)  # Tamanho em bytes
+    file_type = db.Column(db.String(50))  # PDF, DOCX, TXT, etc.
+    
+    # Descrição e categorização
+    description = db.Column(db.Text)
+    category = db.Column(db.String(100))  # Jurisprudência, Legislação, Modelos, etc.
+    tags = db.Column(db.String(500))  # Tags separadas por vírgula
+    
+    # Status
+    is_active = db.Column(db.Boolean, default=True)
+    
+    # Auditoria
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relacionamentos
+    user = db.relationship('User')
+    law_firm = db.relationship('LawFirm')
+    
+    def __repr__(self):
+        return f'<CasesKnowledgeBase {self.original_filename}>'
+
+
 class CaseActivity(db.Model):
     """Tabela case_activities - Registro de todas as ações e alterações em um caso"""
     __tablename__ = 'case_activities'

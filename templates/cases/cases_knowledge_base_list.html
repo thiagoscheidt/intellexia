@@ -1,0 +1,167 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Base de Conhecimento de Casos - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 2rem 0; margin-bottom: 1.5rem; border-radius: 0 0 15px 15px; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.2);">
+  <div class="container-fluid">
+    <div class="row align-items-center">
+      <div class="col-sm-8">
+        <div class="d-flex align-items-center">
+          <div class="me-3">
+            <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 60px; height: 60px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+              <i class="bi bi-briefcase-fill" style="font-size: 1.8rem; color: #10b981;"></i>
+            </div>
+          </div>
+          <div class="text-white">
+            <h3 class="mb-1" style="font-weight: 600; font-size: 1.8rem;">
+              Base de Conhecimento de Casos
+            </h3>
+            <p class="mb-0 opacity-90" style="font-size: 1rem;">
+              <i class="bi bi-stars"></i> Documentos gerais para todos os casos
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-4">
+        <ol class="breadcrumb float-sm-end mb-0" style="background: rgba(255,255,255,0.15); padding: 0.75rem 1rem; border-radius: 10px; backdrop-filter: blur(10px);">
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}" class="text-white text-decoration-none"><i class="bi bi-house-fill"></i> Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_list') }}" class="text-white text-decoration-none">Casos</a></li>
+          <li class="breadcrumb-item active text-white" aria-current="page"><strong>Base de Conhecimento</strong></li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <!-- Estatísticas -->
+    <div class="row mb-4">
+      <div class="col-md-4">
+        <div class="card border-0 shadow-sm">
+          <div class="card-body">
+            <div class="d-flex align-items-center">
+              <div class="flex-shrink-0">
+                <div class="rounded-circle bg-success bg-opacity-10 p-3">
+                  <i class="bi bi-file-earmark-text text-success" style="font-size: 1.5rem;"></i>
+                </div>
+              </div>
+              <div class="flex-grow-1 ms-3">
+                <h6 class="mb-0 text-muted">Total de Documentos</h6>
+                <h3 class="mb-0 mt-1">{{ total_files }}</h3>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <div class="col-md-8">
+        <div class="card border-0 shadow-sm">
+          <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <h6 class="mb-0 text-muted">Adicionar Documentos</h6>
+                <p class="mb-0 text-muted small mt-1">Faça upload de documentos gerais para auxiliar em todos os casos</p>
+              </div>
+              <a href="{{ url_for('cases.cases_knowledge_base_upload') }}" class="btn btn-success">
+                <i class="bi bi-cloud-upload"></i> Fazer Upload
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Card informativo -->
+    <div class="alert alert-info border-0 shadow-sm mb-4">
+      <div class="d-flex align-items-start">
+        <i class="bi bi-info-circle-fill me-3" style="font-size: 1.5rem;"></i>
+        <div>
+          <h6 class="mb-1"><strong>Sobre esta Base de Conhecimento</strong></h6>
+          <p class="mb-0">
+            Esta é uma base de conhecimento <strong>geral para casos</strong>, contendo documentos, jurisprudências, 
+            legislações e modelos que podem ser utilizados em diversos casos. Os documentos aqui armazenados 
+            estarão disponíveis para consulta da IA em qualquer caso do sistema.
+          </p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Lista de Arquivos -->
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white border-bottom">
+        <h5 class="mb-0"><i class="bi bi-files"></i> Documentos da Base de Conhecimento</h5>
+      </div>
+      <div class="card-body">
+        {% if files %}
+        <div class="table-responsive">
+          <table class="table table-hover">
+            <thead class="table-light">
+              <tr>
+                <th width="40%">Arquivo</th>
+                <th width="15%">Categoria</th>
+                <th width="10%">Tipo</th>
+                <th width="10%">Tamanho</th>
+                <th width="15%">Enviado em</th>
+                <th width="10%">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for file in files %}
+              <tr>
+                <td>
+                  <div class="d-flex align-items-center">
+                    <i class="bi bi-file-earmark-text text-success me-2" style="font-size: 1.5rem;"></i>
+                    <div>
+                      <strong>{{ file.original_filename }}</strong>
+                      {% if file.description %}
+                      <br><small class="text-muted">{{ file.description[:100] }}{% if file.description|length > 100 %}...{% endif %}</small>
+                      {% endif %}
+                    </div>
+                  </div>
+                </td>
+                <td>
+                  {% if file.category %}
+                  <span class="badge bg-info">{{ get_category_name(file.category) }}</span>
+                  {% else %}
+                  <span class="text-muted">-</span>
+                  {% endif %}
+                </td>
+                <td><span class="badge bg-secondary">{{ file.file_type }}</span></td>
+                <td>{{ (file.file_size / 1024) | round(2) }} KB</td>
+                <td>{{ file.uploaded_at.strftime('%d/%m/%Y %H:%M') }}</td>
+                <td>
+                  <button class="btn btn-sm btn-outline-danger" onclick="deleteFile({{ file.id }})">
+                    <i class="bi bi-trash"></i>
+                  </button>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5">
+          <i class="bi bi-inbox" style="font-size: 4rem; color: #ccc;"></i>
+          <h5 class="mt-3 text-muted">Nenhum documento encontrado</h5>
+          <p class="text-muted">Faça upload de documentos para começar a construir a base de conhecimento de casos.</p>
+          <a href="{{ url_for('cases.cases_knowledge_base_upload') }}" class="btn btn-success mt-3">
+            <i class="bi bi-cloud-upload"></i> Fazer Upload
+          </a>
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+function deleteFile(fileId) {
+  if (confirm('Tem certeza que deseja remover este arquivo?')) {
+    // TODO: Implementar endpoint de exclusão
+    alert('Funcionalidade de exclusão será implementada em breve');
+  }
+}
+</script>
+{% endblock %}

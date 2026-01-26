@@ -1,12 +1,32 @@
-from flask import Blueprint, render_template, request, session, jsonify, redirect, url_for
-from app.models import db, Case, Client, CaseBenefit, Document, Petition, CaseLawyer, Lawyer, CaseCompetence
+from flask import Blueprint, render_template, request, session, jsonify, redirect, url_for, flash
+from app.models import db, Case, Client, CaseBenefit, Document, Petition, CaseLawyer, Lawyer, CaseCompetence, CasesKnowledgeBase
+from app.agents.knowledge_ingestor import KnowledgeIngestor
 from datetime import datetime
 from decimal import Decimal
 from functools import wraps
 from werkzeug.utils import secure_filename
+from pathlib import Path
 import os
 
 cases_bp = Blueprint('cases', __name__, url_prefix='/cases')
+
+# Mapeamento de categorias (slug -> nome amigável)
+CATEGORIES_MAP = {
+    'jurisprudencia': 'Jurisprudência',
+    'legislacao': 'Legislação',
+    'modelos-peticoes': 'Modelos de Petições',
+    'exemplos-peticoes': 'Exemplos de Petições',
+    'templates': 'Templates',
+    'doutrinas': 'Doutrinas',
+    'pareceres-tecnicos': 'Pareceres Técnicos',
+    'sumulas': 'Súmulas',
+    'orientacoes-normativas': 'Orientações Normativas',
+    'outros': 'Outros'
+}
+
+def get_category_name(slug):
+    """Converte slug de categoria para nome amigável"""
+    return CATEGORIES_MAP.get(slug, slug)
 
 def get_current_law_firm_id():
     return session.get('law_firm_id')
@@ -111,6 +131,141 @@ def cases_list():
     cases = query.order_by(Case.created_at.desc()).all()
     
     return render_template('cases/list.html', cases=cases, clients=clients, courts=courts)
+
+
+@cases_bp.route('/knowledge-base')
+@require_law_firm
+def cases_knowledge_base_list():
+    """Lista arquivos da base de conhecimento geral de casos"""
+    law_firm_id = get_current_law_firm_id()
+    
+    # Buscar arquivos da base de conhecimento
+    files = CasesKnowledgeBase.query.filter_by(
+        law_firm_id=law_firm_id,
+        is_active=True
+    ).order_by(CasesKnowledgeBase.uploaded_at.desc()).all()
+    
+    # Contar total de arquivos
+    total_files = len(files)
+    
+    return render_template(
+        'cases/cases_knowledge_base_list.html',
+        files=files,
+        total_files=total_files,
+        get_category_name=get_category_name
+    )
+
+
+@cases_bp.route('/knowledge-base/upload', methods=['GET', 'POST'])
+@require_law_firm
+def cases_knowledge_base_upload():
+    """Upload de arquivos para a base de conhecimento geral de casos"""
+    law_firm_id = get_current_law_firm_id()
+    user_id = session.get('user_id')
+    
+    if request.method == 'POST':
+        # Validar se o arquivo foi enviado
+        if 'file' not in request.files:
+            flash('Nenhum arquivo foi enviado.', 'error')
+            return redirect(request.url)
+        
+        file = request.files['file']
+        
+        if file.filename == '':
+            flash('Nenhum arquivo foi selecionado.', 'error')
+            return redirect(request.url)
+        
+        # Obter dados do formulário
+        description = request.form.get('description', '')
+        category = request.form.get('category', '')
+        tags = request.form.get('tags', '')
+        
+        # Salvar arquivo
+        if file:
+            filename = secure_filename(file.filename)
+            upload_dir = f"uploads/cases_knowledge_base/{law_firm_id}"
+            os.makedirs(upload_dir, exist_ok=True)
+            
+            # Adicionar timestamp ao nome do arquivo para evitar duplicatas
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            name, ext = os.path.splitext(filename)
+            filename_with_timestamp = f"{name}_{timestamp}{ext}"
+            
+            file_path = os.path.join(upload_dir, filename_with_timestamp)
+            file.save(file_path)
+            
+            # Obter informações do arquivo
+            file_size = os.path.getsize(file_path)
+            file_type = ext.lstrip('.').upper() if ext else 'DESCONHECIDO'
+            
+            # Criar registro no banco de dados
+            cases_kb_file = CasesKnowledgeBase(
+                user_id=user_id,
+                law_firm_id=law_firm_id,
+                original_filename=filename,
+                file_path=file_path,
+                file_size=file_size,
+                file_type=file_type,
+                description=description,
+                category=category,
+                tags=tags
+            )
+            
+            try:
+                db.session.add(cases_kb_file)
+                db.session.commit()
+                
+                # Processar arquivo com KnowledgeIngestor e inserir no Qdrant
+                try:
+                    print(f"Iniciando processamento do arquivo: {filename}")
+                    # Usar collection específica para base de conhecimento de casos
+                    ingestor = KnowledgeIngestor(collection_name="cases_knowledge_base")
+                    
+                    # Usar o nome do arquivo com ID como source_name
+                    source_name = f"{filename} (ID: {cases_kb_file.id})"
+                    
+                    # Processar arquivo e inserir no Qdrant
+                    markdown_content = ingestor.process_file(
+                        Path(file_path), 
+                        source_name=source_name,
+                        category=category,
+                        description=description,
+                        tags=tags
+                    )
+                    
+                    if markdown_content:
+                        print(f"Arquivo processado com sucesso: {filename}")
+                        flash(
+                            f'Arquivo "{filename}" adicionado com sucesso à base de conhecimento de casos e processado pela IA!', 
+                            'success'
+                        )
+                    else:
+                        print(f"Aviso: Arquivo salvo mas não foi possível processar: {filename}")
+                        flash(
+                            f'Arquivo "{filename}" adicionado à base de conhecimento, mas houve problema no processamento pela IA.', 
+                            'warning'
+                        )
+                except Exception as e:
+                    print(f"Erro ao processar arquivo com IA: {str(e)}")
+                    flash(
+                        f'Arquivo "{filename}" foi salvo, mas ocorreu um erro no processamento pela IA: {str(e)}', 
+                        'warning'
+                    )
+                
+                return redirect(url_for('cases.cases_knowledge_base_list'))
+            except Exception as e:
+                db.session.rollback()
+                # Remover arquivo em caso de erro
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+                flash(f'Erro ao salvar arquivo no banco de dados: {str(e)}', 'error')
+                return redirect(request.url)
+    
+    return render_template(
+        'cases/cases_knowledge_base_upload.html',
+        categories=CATEGORIES_MAP
+    )
+
 
 @cases_bp.route('/new', methods=['GET', 'POST'])
 @require_law_firm
