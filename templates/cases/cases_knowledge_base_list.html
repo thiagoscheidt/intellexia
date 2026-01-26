@@ -61,12 +61,17 @@
           <div class="card-body">
             <div class="d-flex justify-content-between align-items-center">
               <div>
-                <h6 class="mb-0 text-muted">Adicionar Documentos</h6>
-                <p class="mb-0 text-muted small mt-1">Faça upload de documentos gerais para auxiliar em todos os casos</p>
+                <h6 class="mb-0 text-muted">Gerenciar Base de Conhecimento</h6>
+                <p class="mb-0 text-muted small mt-1">Faça upload de documentos ou converse com a IA</p>
               </div>
-              <a href="{{ url_for('cases.cases_knowledge_base_upload') }}" class="btn btn-success">
-                <i class="bi bi-cloud-upload"></i> Fazer Upload
-              </a>
+              <div class="d-flex gap-2">
+                <a href="{{ url_for('cases.cases_knowledge_base_chat') }}" class="btn btn-info text-white">
+                  <i class="bi bi-chat-dots-fill"></i> Chat com IA
+                </a>
+                <a href="{{ url_for('cases.cases_knowledge_base_upload') }}" class="btn btn-success">
+                  <i class="bi bi-cloud-upload"></i> Fazer Upload
+                </a>
+              </div>
             </div>
           </div>
         </div>

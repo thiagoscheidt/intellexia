@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, session, jsonify, redirect, url_for, flash
-from app.models import db, Case, Client, CaseBenefit, Document, Petition, CaseLawyer, Lawyer, CaseCompetence, CasesKnowledgeBase
-from app.agents.knowledge_ingestor import KnowledgeIngestor
+from app.models import db, Case, Client, CaseBenefit, Document, Petition, CaseLawyer, Lawyer, CaseCompetence, CasesKnowledgeBase, CaseTemplate
+from app.agents.case_knowledge_ingestor import CaseKnowledgeIngestor
 from datetime import datetime
 from decimal import Decimal
 from functools import wraps
@@ -215,11 +215,11 @@ def cases_knowledge_base_upload():
                 db.session.add(cases_kb_file)
                 db.session.commit()
                 
-                # Processar arquivo com KnowledgeIngestor e inserir no Qdrant
+                # Processar arquivo com CaseKnowledgeIngestor e inserir no Qdrant
                 try:
                     print(f"Iniciando processamento do arquivo: {filename}")
-                    # Usar collection específica para base de conhecimento de casos
-                    ingestor = KnowledgeIngestor(collection_name="cases_knowledge_base")
+                    # Usar CaseKnowledgeIngestor para base de conhecimento de casos
+                    ingestor = CaseKnowledgeIngestor()
                     
                     # Usar o nome do arquivo com ID como source_name
                     source_name = f"{filename} (ID: {cases_kb_file.id})"
@@ -265,6 +265,63 @@ def cases_knowledge_base_upload():
         'cases/cases_knowledge_base_upload.html',
         categories=CATEGORIES_MAP
     )
+
+
+@cases_bp.route('/knowledge-base/chat')
+@require_law_firm
+def cases_knowledge_base_chat():
+    """Tela de chat para pesquisa na base de conhecimento de casos"""
+    law_firm_id = get_current_law_firm_id()
+    
+    # Contar documentos na base de conhecimento
+    total_documents = CasesKnowledgeBase.query.filter_by(
+        law_firm_id=law_firm_id,
+        is_active=True
+    ).count()
+    
+    return render_template('cases/cases_knowledge_base_chat.html', total_documents=total_documents)
+
+
+@cases_bp.route('/knowledge-base/api/ask', methods=['POST'])
+@require_law_firm
+def cases_knowledge_base_api_ask():
+    """API para fazer perguntas à base de conhecimento de casos"""
+    law_firm_id = get_current_law_firm_id()
+    
+    if not law_firm_id:
+        return jsonify({'success': False, 'error': 'Não autorizado'}), 401
+    
+    data = request.get_json()
+    question = data.get('question', '').strip()
+    
+    if not question:
+        return jsonify({'success': False, 'error': 'Pergunta não pode estar vazia'}), 400
+    
+    try:
+        user_id = session.get('user_id')
+        
+        # Inicializar o CaseKnowledgeIngestor
+        ingestor = CaseKnowledgeIngestor()
+        
+        # Fazer a pergunta usando o método ask_with_llm
+        result = ingestor.ask_with_llm(
+            question=question,
+            user_id=user_id,
+            law_firm_id=law_firm_id
+        )
+        
+        return jsonify({
+            'success': True,
+            'answer': result['answer'],
+            'sources': result['sources'],
+            'history_id': result.get('history_id')
+        })
+    except Exception as e:
+        print(f"Erro ao processar pergunta: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro ao processar pergunta: {str(e)}'
+        }), 500
 
 
 @cases_bp.route('/new', methods=['GET', 'POST'])
@@ -441,3 +498,187 @@ def case_lawyer_remove(case_id, case_lawyer_id):
         flash(f'Erro ao remover advogado: {str(e)}', 'danger')
     
     return redirect(url_for('cases.case_detail', case_id=case_id))
+
+
+# ============================================================================
+# ROTAS DE TEMPLATES
+# ============================================================================
+
+@cases_bp.route('/templates')
+@require_law_firm
+def templates_list():
+    """Lista todos os templates disponíveis"""
+    law_firm_id = get_current_law_firm_id()
+    user_id = session.get('user_id')
+    
+    # Filtros
+    categoria = request.args.get('categoria')
+    status = request.args.get('status')
+    search = request.args.get('search', '').strip()
+    
+    query = CaseTemplate.query.filter_by(law_firm_id=law_firm_id)
+    
+    if categoria:
+        query = query.filter(CaseTemplate.categoria == categoria)
+    
+    if status:
+        if status == 'active':
+            query = query.filter(CaseTemplate.is_active == True)
+        elif status == 'inactive':
+            query = query.filter(CaseTemplate.is_active == False)
+    
+    if search:
+        search_pattern = f'%{search}%'
+        query = query.filter(
+            db.or_(
+                CaseTemplate.template_name.ilike(search_pattern),
+                CaseTemplate.resumo_curto.ilike(search_pattern),
+                CaseTemplate.categoria.ilike(search_pattern)
+            )
+        )
+    
+    templates = query.order_by(CaseTemplate.uploaded_at.desc()).all()
+    
+    # Estatísticas
+    total_templates = CaseTemplate.query.filter_by(law_firm_id=law_firm_id).count()
+    active_templates = CaseTemplate.query.filter_by(law_firm_id=law_firm_id, is_active=True).count()
+    
+    # Categorias únicas
+    categorias = db.session.query(CaseTemplate.categoria).filter_by(law_firm_id=law_firm_id).distinct().all()
+    categorias = [c[0] for c in categorias if c[0]]
+    
+    return render_template(
+        'cases/templates_list.html',
+        templates=templates,
+        total_templates=total_templates,
+        active_templates=active_templates,
+        categorias=categorias,
+        current_categoria=categoria,
+        current_status=status,
+        search=search
+    )
+
+
+@cases_bp.route('/templates/upload', methods=['GET', 'POST'])
+@require_law_firm
+def templates_upload():
+    """Upload de novo template"""
+    law_firm_id = get_current_law_firm_id()
+    user_id = session.get('user_id')
+    
+    if request.method == 'POST':
+        try:
+            # Validar campos obrigatórios
+            template_name = request.form.get('template_name', '').strip()
+            resumo_curto = request.form.get('resumo_curto', '').strip()
+            categoria = request.form.get('categoria', '').strip()
+            
+            if not template_name or not resumo_curto or not categoria:
+                flash('Todos os campos obrigatórios devem ser preenchidos.', 'danger')
+                return redirect(url_for('cases.templates_upload'))
+            
+            # Processar arquivo
+            if 'file' not in request.files:
+                flash('Nenhum arquivo foi enviado.', 'danger')
+                return redirect(url_for('cases.templates_upload'))
+            
+            file = request.files['file']
+            if file.filename == '':
+                flash('Nenhum arquivo foi selecionado.', 'danger')
+                return redirect(url_for('cases.templates_upload'))
+            
+            # Validar extensão
+            allowed_extensions = {'.docx', '.doc', '.pdf'}
+            file_ext = Path(file.filename).suffix.lower()
+            if file_ext not in allowed_extensions:
+                flash(f'Formato de arquivo não permitido. Use: {" ".join(allowed_extensions)}', 'danger')
+                return redirect(url_for('cases.templates_upload'))
+            
+            # Criar diretório
+            upload_dir = Path('uploads') / 'templates' / str(law_firm_id)
+            upload_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Salvar arquivo
+            filename = secure_filename(file.filename)
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+            unique_filename = f"{timestamp}_{filename}"
+            file_path = upload_dir / unique_filename
+            
+            file.save(str(file_path))
+            
+            # Criar registro no banco
+            template = CaseTemplate(
+                user_id=user_id,
+                law_firm_id=law_firm_id,
+                template_name=template_name,
+                resumo_curto=resumo_curto,
+                categoria=categoria,
+                original_filename=filename,
+                file_path=str(file_path),
+                file_size=file_path.stat().st_size,
+                file_type=file_ext.upper().replace('.', ''),
+                is_active=request.form.get('is_active') == 'on',
+                status='available',
+                tags=request.form.get('tags', '')
+            )
+            
+            db.session.add(template)
+            db.session.commit()
+            
+            flash(f'Template "{template_name}" adicionado com sucesso!', 'success')
+            return redirect(url_for('cases.templates_list'))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Erro ao adicionar template: {str(e)}', 'danger')
+            return redirect(url_for('cases.templates_upload'))
+    
+    return render_template('cases/templates_upload.html')
+
+
+@cases_bp.route('/templates/<int:template_id>/toggle', methods=['POST'])
+@require_law_firm
+def templates_toggle(template_id):
+    """Ativa ou desativa um template"""
+    law_firm_id = get_current_law_firm_id()
+    
+    template = CaseTemplate.query.filter_by(
+        id=template_id,
+        law_firm_id=law_firm_id
+    ).first_or_404()
+    
+    template.is_active = not template.is_active
+    db.session.commit()
+    
+    status = 'ativado' if template.is_active else 'desativado'
+    flash(f'Template "{template.template_name}" {status} com sucesso!', 'success')
+    
+    return redirect(url_for('cases.templates_list'))
+
+
+@cases_bp.route('/templates/<int:template_id>/delete', methods=['POST'])
+@require_law_firm
+def templates_delete(template_id):
+    """Deleta um template"""
+    law_firm_id = get_current_law_firm_id()
+    
+    template = CaseTemplate.query.filter_by(
+        id=template_id,
+        law_firm_id=law_firm_id
+    ).first_or_404()
+    
+    try:
+        # Deletar arquivo físico
+        if os.path.exists(template.file_path):
+            os.remove(template.file_path)
+        
+        template_name = template.template_name
+        db.session.delete(template)
+        db.session.commit()
+        
+        flash(f'Template "{template_name}" removido com sucesso!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao remover template: {str(e)}', 'danger')
+    
+    return redirect(url_for('cases.templates_list'))

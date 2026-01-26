@@ -1,0 +1,165 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Adicionar Template{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-sm-6">
+        <h3 class="mb-0">Adicionar Template</h3>
+      </div>
+      <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-end">
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases.templates_list') }}">Templates</a></li>
+          <li class="breadcrumb-item active" aria-current="page">Adicionar</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-md-8 mx-auto">
+        <div class="card">
+          <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"><i class="bi bi-file-earmark-plus"></i> Novo Template de Caso</h5>
+          </div>
+          <div class="card-body">
+            <form method="POST" enctype="multipart/form-data">
+              
+              <!-- Nome do Template -->
+              <div class="mb-3">
+                <label for="template_name" class="form-label">
+                  Nome do Template <span class="text-danger">*</span>
+                </label>
+                <input type="text" class="form-control" id="template_name" name="template_name" 
+                       placeholder="Ex: Peticao Inicial.docx" required>
+                <small class="form-text text-muted">
+                  Nome identificador do template (ex: "Acidente de Trajeto.docx")
+                </small>
+              </div>
+
+              <!-- Resumo Curto -->
+              <div class="mb-3">
+                <label for="resumo_curto" class="form-label">
+                  Resumo Curto <span class="text-danger">*</span>
+                </label>
+                <textarea class="form-control" id="resumo_curto" name="resumo_curto" 
+                          rows="3" placeholder="Descrição breve sobre o uso deste template..." required></textarea>
+                <small class="form-text text-muted">
+                  Breve descrição do que este template faz (ex: "Benefício atribuído a empresa diferente da real empregadora")
+                </small>
+              </div>
+
+              <!-- Categoria -->
+              <div class="mb-3">
+                <label for="categoria" class="form-label">
+                  Categoria <span class="text-danger">*</span>
+                </label>
+                <select class="form-select" id="categoria" name="categoria" required>
+                  <option value="">Selecione uma categoria...</option>
+                  <option value="Documento principal">Documento principal</option>
+                  <option value="Erro de vínculo empregatício">Erro de vínculo empregatício</option>
+                  <option value="Erro de estabelecimento">Erro de estabelecimento</option>
+                  <option value="Erro de nexo causal">Erro de nexo causal</option>
+                  <option value="Acidente de trajeto">Acidente de trajeto</option>
+                  <option value="Acidente de trajeto / erro material">Acidente de trajeto / erro material</option>
+                  <option value="Acidente de trajeto / CAT fora do prazo">Acidente de trajeto / CAT fora do prazo</option>
+                  <option value="Duplicidade de benefício">Duplicidade de benefício</option>
+                  <option value="Bloqueio indevido do FAP">Bloqueio indevido do FAP</option>
+                  <option value="Benefício judicial cancelado">Benefício judicial cancelado</option>
+                  <option value="Benefício concomitante">Benefício concomitante</option>
+                  <option value="Benefícios concomitantes">Benefícios concomitantes</option>
+                  <option value="Duplicidade administrativa">Duplicidade administrativa</option>
+                  <option value="Inclusão indevida">Inclusão indevida</option>
+                  <option value="Erro de CNAE">Erro de CNAE</option>
+                  <option value="Erro no índice de custo">Erro no índice de custo</option>
+                  <option value="Erro metodológico">Erro metodológico</option>
+                  <option value="Erro cadastral">Erro cadastral</option>
+                  <option value="Erro judicial">Erro judicial</option>
+                  <option value="Erro na rotatividade">Erro na rotatividade</option>
+                  <option value="Benefício judicial">Benefício judicial</option>
+                  <option value="Erro na massa salarial">Erro na massa salarial</option>
+                  <option value="Erro no número de vínculos">Erro no número de vínculos</option>
+                  <option value="Nexo técnico afastado">Nexo técnico afastado</option>
+                  <option value="Duplicidade de nexo">Duplicidade de nexo</option>
+                  <option value="Nexo indevido">Nexo indevido</option>
+                  <option value="Evento fora do período legal">Evento fora do período legal</option>
+                  <option value="Ilegalidade da rotatividade">Ilegalidade da rotatividade</option>
+                  <option value="Outros">Outros</option>
+                </select>
+                <small class="form-text text-muted">
+                  Categoria que classifica o tipo de situação/erro do template
+                </small>
+              </div>
+
+              <!-- Arquivo -->
+              <div class="mb-3">
+                <label for="file" class="form-label">
+                  Arquivo do Template <span class="text-danger">*</span>
+                </label>
+                <input type="file" class="form-control" id="file" name="file" 
+                       accept=".docx,.doc,.pdf" required>
+                <small class="form-text text-muted">
+                  Formatos aceitos: .docx, .doc, .pdf (máx. 10MB)
+                </small>
+              </div>
+
+              <!-- Tags (opcional) -->
+              <div class="mb-3">
+                <label for="tags" class="form-label">Tags (opcional)</label>
+                <input type="text" class="form-control" id="tags" name="tags" 
+                       placeholder="fap, trajeto, inss, previdenciário">
+                <small class="form-text text-muted">
+                  Tags separadas por vírgula para facilitar busca
+                </small>
+              </div>
+
+              <!-- Status Ativo -->
+              <div class="mb-3 form-check">
+                <input type="checkbox" class="form-check-input" id="is_active" name="is_active" checked>
+                <label class="form-check-label" for="is_active">
+                  Template ativo (disponível para uso)
+                </label>
+              </div>
+
+              <hr>
+
+              <!-- Botões -->
+              <div class="d-flex justify-content-between">
+                <a href="{{ url_for('cases.templates_list') }}" class="btn btn-secondary">
+                  <i class="bi bi-x-circle"></i> Cancelar
+                </a>
+                <button type="submit" class="btn btn-primary">
+                  <i class="bi bi-check-circle"></i> Adicionar Template
+                </button>
+              </div>
+
+            </form>
+          </div>
+        </div>
+
+        <!-- Card de Ajuda -->
+        <div class="card mt-4">
+          <div class="card-header bg-info text-white">
+            <h6 class="mb-0"><i class="bi bi-info-circle"></i> Dicas</h6>
+          </div>
+          <div class="card-body">
+            <ul class="mb-0">
+              <li>Os templates serão usados pela IA para gerar petições de casos similares</li>
+              <li>Use nomes descritivos para facilitar a identificação</li>
+              <li>O resumo curto deve explicar quando usar este template</li>
+              <li>A categoria deve corresponder ao tipo de erro/situação do FAP</li>
+              <li>Templates inativos não serão sugeridos pela IA</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

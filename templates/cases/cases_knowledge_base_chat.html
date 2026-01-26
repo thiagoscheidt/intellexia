@@ -1,0 +1,633 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Chat - Base de Conhecimento de Casos - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 2rem 0; margin-bottom: 1.5rem; border-radius: 0 0 15px 15px; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.2);">
+  <div class="container-fluid">
+    <div class="row align-items-center">
+      <div class="col-sm-8">
+        <div class="d-flex align-items-center">
+          <div class="me-3">
+            <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 60px; height: 60px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+              <i class="bi bi-chat-dots-fill" style="font-size: 1.8rem; color: #10b981;"></i>
+            </div>
+          </div>
+          <div class="text-white">
+            <h3 class="mb-1" style="font-weight: 600; font-size: 1.8rem;">
+              <i class="bi bi-robot"></i> Chat - Base de Conhecimento de Casos
+            </h3>
+            <p class="mb-0 opacity-90" style="font-size: 1rem;">
+              <i class="bi bi-stars"></i> Faça perguntas sobre jurisprudências, legislação e templates
+            </p>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-4">
+        <ol class="breadcrumb float-sm-end mb-0" style="background: rgba(255,255,255,0.15); padding: 0.75rem 1rem; border-radius: 10px; backdrop-filter: blur(10px);">
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}" class="text-white text-decoration-none"><i class="bi bi-house-fill"></i> Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_list') }}" class="text-white text-decoration-none">Casos</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_knowledge_base_list') }}" class="text-white text-decoration-none">Base de Conhecimento</a></li>
+          <li class="breadcrumb-item active text-white" aria-current="page"><strong>Chat</strong></li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid" style="height: calc(100vh - 120px);">
+    <div class="row h-100">
+      <div class="col-12 h-100">
+        <div class="card h-100" id="cases-kb-chat-card" style="display: flex; flex-direction: column;">
+          <div class="card-header text-white" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 1.5rem;">
+            <div class="row align-items-center">
+              <div class="col-md-8">
+                <div class="d-flex align-items-center">
+                  <div class="me-3">
+                    <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
+                      <i class="bi bi-robot" style="font-size: 1.8rem; color: #10b981;"></i>
+                    </div>
+                  </div>
+                  <div>
+                    <h3 class="mb-1" style="font-weight: 600; font-size: 1.4rem;">
+                      Assistente Jurídico IA - Casos
+                    </h3>
+                    <p class="mb-0 opacity-75" style="font-size: 0.9rem;">
+                      <i class="bi bi-lightning-charge-fill"></i> Pesquisa inteligente na base de conhecimento de casos
+                    </p>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-4 text-md-end mt-3 mt-md-0">
+                <div class="d-flex flex-column gap-2 align-items-md-end">
+                  <span class="badge bg-white text-dark d-inline-flex align-items-center gap-2" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
+                    <i class="bi bi-folder-fill" style="color: #10b981;"></i>
+                    <strong>{{ total_documents }}</strong> documento(s)
+                  </span>
+                  <small class="text-white opacity-75">
+                    <i class="bi bi-clock"></i> Respostas em tempo real
+                  </small>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="card-body" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 0;">
+            
+            <!-- Chat Container -->
+            <div id="chat-container" class="p-4" style="flex: 1; overflow-y: auto; overflow-x: hidden; background: linear-gradient(to bottom, #f0fdf4 0%, #ffffff 100%); display: flex; align-items: center; justify-content: center;">
+              <div id="chat-messages" style="width: 100%; max-width: 900px;">
+                <div class="text-center py-3">
+                  <div class="mb-4">
+                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3" 
+                         style="width: 100px; height: 100px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3);">
+                      <i class="bi bi-chat-dots-fill text-white" style="font-size: 3rem;"></i>
+                    </div>
+                  </div>
+                  <h3 class="mb-3" style="font-weight: 600; color: #2d3748;">
+                    Olá! Sou seu Assistente Jurídico para Casos
+                  </h3>
+                  <p class="text-muted mb-4" style="font-size: 1.1rem; max-width: 500px; margin: 0 auto;">
+                    Posso ajudá-lo a encontrar informações sobre jurisprudências, legislação, templates e exemplos de petições
+                  </p>
+                  
+                  <div class="row justify-content-center mt-5">
+                    <div class="col-md-8">
+                      <div class="row g-3">
+                        <div class="col-md-4">
+                          <div class="card border-0 shadow-sm h-100" style="transition: transform 0.2s;">
+                            <div class="card-body text-center p-3">
+                              <i class="bi bi-lightning-charge-fill text-success mb-2" style="font-size: 2rem;"></i>
+                              <h6 class="mb-1">Rápido</h6>
+                              <small class="text-muted">Respostas instantâneas</small>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="col-md-4">
+                          <div class="card border-0 shadow-sm h-100" style="transition: transform 0.2s;">
+                            <div class="card-body text-center p-3">
+                              <i class="bi bi-shield-check text-success mb-2" style="font-size: 2rem;"></i>
+                              <h6 class="mb-1">Confiável</h6>
+                              <small class="text-muted">Baseado em seus docs</small>
+                            </div>
+                          </div>
+                        </div>
+                        <div class="col-md-4">
+                          <div class="card border-0 shadow-sm h-100" style="transition: transform 0.2s;">
+                            <div class="card-body text-center p-3">
+                              <i class="bi bi-book text-success mb-2" style="font-size: 2rem;"></i>
+                              <h6 class="mb-1">Completo</h6>
+                              <small class="text-muted">Com fontes citadas</small>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div class="mt-5">
+                    <small class="text-muted d-block mb-2">
+                      <i class="bi bi-lightbulb-fill text-warning"></i> <strong>Dica:</strong> Seja específico nas suas perguntas
+                    </small>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Input Area -->
+            <div class="border-top bg-white p-4" style="flex-shrink: 0; box-shadow: 0 -2px 10px rgba(0,0,0,0.05);">
+              <!-- Exemplos de perguntas - acima do input -->
+              <div class="mb-3">
+                <small class="text-muted d-block mb-2">
+                  <i class="bi bi-stars"></i> <strong>Perguntas sugeridas:</strong>
+                </small>
+                <div class="d-flex flex-wrap gap-2">
+                  <button class="btn btn-sm btn-outline-success example-question" data-question="Qual o prazo para contestação do FAP?" style="border-radius: 20px;">
+                    <i class="bi bi-lightning-fill"></i> Prazo contestação FAP
+                  </button>
+                  <button class="btn btn-sm btn-outline-success example-question" data-question="Como funciona o cálculo do FAP?" style="border-radius: 20px;">
+                    <i class="bi bi-calculator-fill"></i> Cálculo do FAP
+                  </button>
+                  <button class="btn btn-sm btn-outline-success example-question" data-question="Modelos de petição inicial previdenciária" style="border-radius: 20px;">
+                    <i class="bi bi-file-text-fill"></i> Modelos de petição
+                  </button>
+                </div>
+              </div>
+
+              <form id="question-form">
+                <div class="input-group input-group-lg shadow-sm">
+                  <input 
+                    type="text" 
+                    class="form-control border-0" 
+                    id="question-input" 
+                    placeholder="Digite sua pergunta aqui..."
+                    autocomplete="off"
+                    required
+                    style="border-radius: 30px 0 0 30px; padding-left: 25px; background: #f8f9fa;"
+                  >
+                  <button class="btn btn-success px-4" type="submit" id="send-btn" 
+                          style="border-radius: 0 30px 30px 0; background: linear-gradient(135deg, #10b981 0%, #059669 100%); border: none;">
+                    <i class="bi bi-send-fill"></i> Enviar
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  /* Escopar TODOS os estilos apenas para este card específico */
+  #cases-kb-chat-card .message {
+    margin-bottom: 20px;
+    animation: kb-fadeIn 0.4s ease-out;
+    clear: both;
+  }
+
+  @keyframes kb-fadeIn {
+    from { 
+      opacity: 0; 
+      transform: translateY(15px);
+    }
+    to { 
+      opacity: 1; 
+      transform: translateY(0);
+    }
+  }
+
+  #cases-kb-chat-card .message-user {
+    text-align: right;
+  }
+
+  #cases-kb-chat-card .message-user .message-content {
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    color: white;
+    display: inline-block;
+    padding: 12px 18px;
+    border-radius: 20px 20px 4px 20px;
+    max-width: 75%;
+    word-wrap: break-word;
+    box-shadow: 0 2px 8px rgba(16, 185, 129, 0.3);
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
+
+  #cases-kb-chat-card .message-assistant {
+    text-align: left;
+  }
+
+  #cases-kb-chat-card .message-assistant .message-content {
+    background: white;
+    border: 2px solid #e9ecef;
+    display: inline-block;
+    padding: 12px 18px;
+    border-radius: 20px 20px 20px 4px;
+    max-width: 75%;
+    word-wrap: break-word;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+    font-size: 0.95rem;
+    line-height: 1.6;
+  }
+
+  #cases-kb-chat-card .message-loading {
+    text-align: left;
+  }
+
+  #cases-kb-chat-card .message-loading .message-content {
+    background: #f8f9fa;
+    border: 2px solid #e9ecef;
+    display: inline-block;
+    padding: 12px 18px;
+    border-radius: 20px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+  }
+
+  #cases-kb-chat-card .sources {
+    margin-top: 12px;
+    padding: 12px 15px;
+    background: linear-gradient(to right, #f0fdf4 0%, #dcfce7 100%);
+    border-left: 4px solid #10b981;
+    border-radius: 8px;
+    font-size: 0.85rem;
+  }
+
+  #cases-kb-chat-card .sources-title {
+    font-weight: 600;
+    color: #495057;
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+
+  #cases-kb-chat-card .source-item {
+    color: #6c757d;
+    margin-left: 15px;
+    padding: 4px 0;
+    font-size: 0.85rem;
+  }
+
+  #cases-kb-chat-card .typing-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+  }
+
+  #cases-kb-chat-card .typing-indicator span {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+    animation: kb-typing 1.4s infinite ease-in-out;
+  }
+
+  #cases-kb-chat-card .typing-indicator span:nth-child(2) {
+    animation-delay: 0.2s;
+  }
+
+  #cases-kb-chat-card .typing-indicator span:nth-child(3) {
+    animation-delay: 0.4s;
+  }
+
+  @keyframes kb-typing {
+    0%, 60%, 100% { 
+      transform: translateY(0);
+      opacity: 0.7;
+    }
+    30% { 
+      transform: translateY(-12px);
+      opacity: 1;
+    }
+  }
+
+  /* Estilo para o input */
+  #cases-kb-chat-card #question-input:focus {
+    border-color: #10b981;
+    box-shadow: 0 0 0 0.2rem rgba(16, 185, 129, 0.25);
+  }
+
+  #cases-kb-chat-card .example-question {
+    transition: all 0.2s ease;
+    border-radius: 20px;
+  }
+
+  #cases-kb-chat-card .example-question:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2);
+  }
+
+  /* Scrollbar personalizada */
+  #cases-kb-chat-card #chat-container::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  #cases-kb-chat-card #chat-container::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+  }
+
+  #cases-kb-chat-card #chat-container::-webkit-scrollbar-thumb {
+    background: #10b981;
+    border-radius: 10px;
+  }
+
+  #cases-kb-chat-card #chat-container::-webkit-scrollbar-thumb:hover {
+    background: #059669;
+  }
+
+  /* Estilos para markdown renderizado */
+  #cases-kb-chat-card .message-content h1,
+  #cases-kb-chat-card .message-content h2,
+  #cases-kb-chat-card .message-content h3,
+  #cases-kb-chat-card .message-content h4 {
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+  }
+
+  #cases-kb-chat-card .message-content h1 {
+    font-size: 1.5rem;
+  }
+
+  #cases-kb-chat-card .message-content h2 {
+    font-size: 1.3rem;
+  }
+
+  #cases-kb-chat-card .message-content h3 {
+    font-size: 1.1rem;
+  }
+
+  #cases-kb-chat-card .message-content p {
+    margin-bottom: 0.75rem;
+  }
+
+  #cases-kb-chat-card .message-content ul,
+  #cases-kb-chat-card .message-content ol {
+    margin-left: 1.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  #cases-kb-chat-card .message-content li {
+    margin-bottom: 0.25rem;
+  }
+
+  #cases-kb-chat-card .message-content code {
+    background-color: rgba(0, 0, 0, 0.05);
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+  }
+
+  #cases-kb-chat-card .message-content pre {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+    padding: 1rem;
+    overflow-x: auto;
+    margin-bottom: 0.75rem;
+  }
+
+  #cases-kb-chat-card .message-content pre code {
+    background-color: transparent;
+    padding: 0;
+  }
+
+  #cases-kb-chat-card .message-content blockquote {
+    border-left: 4px solid #10b981;
+    padding-left: 1rem;
+    margin-left: 0;
+    color: #6c757d;
+    font-style: italic;
+  }
+
+  #cases-kb-chat-card .message-content strong {
+    font-weight: 600;
+  }
+
+  #cases-kb-chat-card .message-content a {
+    color: #10b981;
+    text-decoration: underline;
+  }
+
+  #cases-kb-chat-card .message-content a:hover {
+    color: #059669;
+  }
+</style>
+
+<!-- Biblioteca para renderizar Markdown -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Configurar marked.js
+    if (typeof marked !== 'undefined') {
+      marked.setOptions({
+        breaks: true,
+        gfm: true,
+        sanitize: false,
+        smartLists: true,
+        smartypants: true
+      });
+    }
+
+    const questionForm = document.getElementById('question-form');
+    const questionInput = document.getElementById('question-input');
+    const sendBtn = document.getElementById('send-btn');
+    const chatMessages = document.getElementById('chat-messages');
+    const chatContainer = document.getElementById('chat-container');
+    const exampleButtons = document.querySelectorAll('.example-question');
+
+    // Limpar mensagem inicial quando começar a conversa
+    let isFirstMessage = true;
+
+    // Função para adicionar mensagem do usuário
+    function addUserMessage(text) {
+      if (isFirstMessage) {
+        chatMessages.innerHTML = '';
+        chatMessages.style.maxWidth = 'none';
+        chatContainer.style.display = 'block';
+        chatContainer.style.alignItems = 'flex-start';
+        chatContainer.style.justifyContent = 'flex-start';
+        isFirstMessage = false;
+      }
+
+      const messageDiv = document.createElement('div');
+      messageDiv.className = 'message message-user';
+      messageDiv.innerHTML = `
+        <div class="message-content">
+          <strong>Você:</strong><br>
+          ${escapeHtml(text)}
+        </div>
+      `;
+      chatMessages.appendChild(messageDiv);
+      scrollToBottom();
+    }
+
+    // Função para adicionar mensagem de carregamento
+    function addLoadingMessage() {
+      const messageDiv = document.createElement('div');
+      messageDiv.className = 'message message-loading';
+      messageDiv.id = 'loading-message';
+      messageDiv.innerHTML = `
+        <div class="message-content">
+          <div class="typing-indicator">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <span class="ms-2 text-muted">IA pesquisando...</span>
+        </div>
+      `;
+      chatMessages.appendChild(messageDiv);
+      scrollToBottom();
+    }
+
+    // Função para remover mensagem de carregamento
+    function removeLoadingMessage() {
+      const loadingMsg = document.getElementById('loading-message');
+      if (loadingMsg) {
+        loadingMsg.remove();
+      }
+    }
+
+    // Função para adicionar resposta do assistente
+    function addAssistantMessage(answer, sources) {
+      removeLoadingMessage();
+
+      const messageDiv = document.createElement('div');
+      messageDiv.className = 'message message-assistant';
+      
+      let sourcesHtml = '';
+      if (sources && sources.length > 0) {
+        sourcesHtml = `
+          <div class="sources">
+            <div class="sources-title"><i class="bi bi-book"></i> Fontes:</div>
+            ${sources.map(source => `<div class="source-item">• ${escapeHtml(source)}</div>`).join('')}
+          </div>
+        `;
+      }
+
+      // Renderizar markdown se a biblioteca marked estiver disponível
+      let renderedAnswer = answer;
+      if (typeof marked !== 'undefined') {
+        try {
+          renderedAnswer = marked.parse(answer);
+        } catch (error) {
+          console.error('Erro ao renderizar markdown:', error);
+          renderedAnswer = escapeHtml(answer);
+        }
+      } else {
+        renderedAnswer = escapeHtml(answer);
+      }
+
+      messageDiv.innerHTML = `
+        <div class="message-content">
+          <strong><i class="bi bi-robot"></i> Assistente:</strong><br>
+          <div class="markdown-content">${renderedAnswer}</div>
+          ${sourcesHtml}
+        </div>
+      `;
+      chatMessages.appendChild(messageDiv);
+      scrollToBottom();
+    }
+
+    // Função para adicionar mensagem de erro
+    function addErrorMessage(error) {
+      removeLoadingMessage();
+
+      const messageDiv = document.createElement('div');
+      messageDiv.className = 'message message-assistant';
+      messageDiv.innerHTML = `
+        <div class="message-content">
+          <strong><i class="bi bi-exclamation-triangle text-danger"></i> Erro:</strong><br>
+          ${escapeHtml(error)}
+        </div>
+      `;
+      chatMessages.appendChild(messageDiv);
+      scrollToBottom();
+    }
+
+    // Função para rolar para o final
+    function scrollToBottom() {
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+
+    // Função para escapar HTML
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Enviar pergunta
+    async function sendQuestion(question) {
+      if (!question.trim()) return;
+
+      // Adicionar mensagem do usuário
+      addUserMessage(question);
+
+      // Limpar input
+      questionInput.value = '';
+
+      // Desabilitar botão e input
+      sendBtn.disabled = true;
+      questionInput.disabled = true;
+
+      // Adicionar indicador de carregamento
+      addLoadingMessage();
+
+      try {
+        const response = await fetch('{{ url_for("cases.cases_knowledge_base_api_ask") }}', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ question: question })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          addAssistantMessage(data.answer, data.sources);
+        } else {
+          addErrorMessage(data.error || 'Erro ao processar sua pergunta');
+        }
+      } catch (error) {
+        console.error('Erro:', error);
+        addErrorMessage('Erro ao conectar com o servidor. Tente novamente.');
+      } finally {
+        // Reabilitar botão e input
+        sendBtn.disabled = false;
+        questionInput.disabled = false;
+        questionInput.focus();
+      }
+    }
+
+    // Event listener para o formulário
+    questionForm.addEventListener('submit', function(e) {
+      e.preventDefault();
+      const question = questionInput.value.trim();
+      if (question) {
+        sendQuestion(question);
+      }
+    });
+
+    // Event listeners para perguntas de exemplo
+    exampleButtons.forEach(button => {
+      button.addEventListener('click', function() {
+        const question = this.getAttribute('data-question');
+        questionInput.value = question;
+        sendQuestion(question);
+      });
+    });
+
+    // Focar no input ao carregar
+    questionInput.focus();
+  });
+</script>
+{% endblock %}

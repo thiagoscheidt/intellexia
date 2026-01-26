@@ -477,6 +477,46 @@ class CasesKnowledgeBase(db.Model):
         return f'<CasesKnowledgeBase {self.original_filename}>'
 
 
+class CaseTemplate(db.Model):
+    """Tabela case_templates - Templates de documentos para geração de casos"""
+    __tablename__ = 'case_templates'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    
+    # Informações do template
+    template_name = db.Column(db.String(255), nullable=False)  # Nome do arquivo (ex: "Peticao Inicial.docx")
+    resumo_curto = db.Column(db.Text, nullable=False)  # Descrição breve do template
+    categoria = db.Column(db.String(150), nullable=False, index=True)  # Categoria do erro/situação
+    
+    # Arquivo do template
+    original_filename = db.Column(db.String(255), nullable=False)
+    file_path = db.Column(db.String(500), nullable=False)
+    file_size = db.Column(db.Integer)  # Tamanho em bytes
+    file_type = db.Column(db.String(50))  # DOCX, PDF, etc.
+    
+    # Status e controle
+    is_active = db.Column(db.Boolean, default=True)  # Se pode ser usado
+    status = db.Column(db.String(30), default='available')  # available, draft, archived
+    
+    # Metadata adicional
+    tags = db.Column(db.String(500))  # Tags separadas por vírgula
+    usage_count = db.Column(db.Integer, default=0)  # Quantas vezes foi usado
+    
+    # Auditoria
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_used_at = db.Column(db.DateTime)  # Última vez que foi usado
+    
+    # Relacionamentos
+    user = db.relationship('User')
+    law_firm = db.relationship('LawFirm')
+    
+    def __repr__(self):
+        return f'<CaseTemplate {self.template_name}>'
+
+
 class CaseActivity(db.Model):
     """Tabela case_activities - Registro de todas as ações e alterações em um caso"""
     __tablename__ = 'case_activities'

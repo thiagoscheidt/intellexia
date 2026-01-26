@@ -67,6 +67,13 @@
                 <p>Novo Caso</p>
               </a>
             </li>
+            <li class="nav-item">
+              <a href="{{ url_for('cases.templates_list') }}"
+                class="nav-link {{ 'active' if request.endpoint in ['cases.templates_list', 'cases.templates_upload'] else '' }}">
+                <i class="nav-icon bi bi-file-earmark-text"></i>
+                <p>Templates</p>
+              </a>
+            </li>
           </ul>
         </li>
 
