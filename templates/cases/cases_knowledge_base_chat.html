@@ -3,31 +3,34 @@
 {% block title %}Chat - Base de Conhecimento de Casos - IntellexIA{% endblock %}
 
 {% block content %}
-<div class="app-content-header" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 2rem 0; margin-bottom: 1.5rem; border-radius: 0 0 15px 15px; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.2);">
+<div class="app-content-header"
+  style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 1rem 0; margin-bottom: 0.75rem; border-radius: 0 0 15px 15px; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.2);">
   <div class="container-fluid">
     <div class="row align-items-center">
       <div class="col-sm-8">
         <div class="d-flex align-items-center">
           <div class="me-3">
-            <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 60px; height: 60px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-              <i class="bi bi-chat-dots-fill" style="font-size: 1.8rem; color: #10b981;"></i>
+            <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
+              style="width: 45px; height: 45px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+              <i class="bi bi-chat-dots-fill" style="font-size: 1.4rem; color: #10b981;"></i>
             </div>
           </div>
           <div class="text-white">
-            <h3 class="mb-1" style="font-weight: 600; font-size: 1.8rem;">
+            <h3 class="mb-0" style="font-weight: 600; font-size: 1.3rem;">
               <i class="bi bi-robot"></i> Chat - Base de Conhecimento de Casos
             </h3>
-            <p class="mb-0 opacity-90" style="font-size: 1rem;">
-              <i class="bi bi-stars"></i> Faça perguntas sobre jurisprudências, legislação e templates
-            </p>
           </div>
         </div>
       </div>
       <div class="col-sm-4">
-        <ol class="breadcrumb float-sm-end mb-0" style="background: rgba(255,255,255,0.15); padding: 0.75rem 1rem; border-radius: 10px; backdrop-filter: blur(10px);">
-          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}" class="text-white text-decoration-none"><i class="bi bi-house-fill"></i> Home</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_list') }}" class="text-white text-decoration-none">Casos</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_knowledge_base_list') }}" class="text-white text-decoration-none">Base de Conhecimento</a></li>
+        <ol class="breadcrumb float-sm-end mb-0"
+          style="background: rgba(255,255,255,0.15); padding: 0.5rem 0.75rem; border-radius: 10px; backdrop-filter: blur(10px);">
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"
+              class="text-white text-decoration-none"><i class="bi bi-house-fill"></i> Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_list') }}"
+              class="text-white text-decoration-none">Casos</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_knowledge_base_list') }}"
+              class="text-white text-decoration-none">Base de Conhecimento</a></li>
           <li class="breadcrumb-item active text-white" aria-current="page"><strong>Chat</strong></li>
         </ol>
       </div>
@@ -36,51 +39,47 @@
 </div>
 
 <div class="app-content">
-  <div class="container-fluid" style="height: calc(100vh - 120px);">
+  <div class="container-fluid" style="height: calc(100vh - 90px);">
     <div class="row h-100">
       <div class="col-12 h-100">
         <div class="card h-100" id="cases-kb-chat-card" style="display: flex; flex-direction: column;">
-          <div class="card-header text-white" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 1.5rem;">
+          <div class="card-header text-white"
+            style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 0.75rem 1rem;">
             <div class="row align-items-center">
               <div class="col-md-8">
                 <div class="d-flex align-items-center">
-                  <div class="me-3">
-                    <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 50px; height: 50px;">
-                      <i class="bi bi-robot" style="font-size: 1.8rem; color: #10b981;"></i>
+                  <div class="me-2">
+                    <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
+                      style="width: 35px; height: 35px;">
+                      <i class="bi bi-robot" style="font-size: 1.3rem; color: #10b981;"></i>
                     </div>
                   </div>
                   <div>
-                    <h3 class="mb-1" style="font-weight: 600; font-size: 1.4rem;">
+                    <h3 class="mb-0" style="font-weight: 600; font-size: 1.1rem;">
                       Assistente Jurídico IA - Casos
                     </h3>
-                    <p class="mb-0 opacity-75" style="font-size: 0.9rem;">
-                      <i class="bi bi-lightning-charge-fill"></i> Pesquisa inteligente na base de conhecimento de casos
-                    </p>
                   </div>
                 </div>
               </div>
-              <div class="col-md-4 text-md-end mt-3 mt-md-0">
-                <div class="d-flex flex-column gap-2 align-items-md-end">
-                  <span class="badge bg-white text-dark d-inline-flex align-items-center gap-2" style="padding: 0.5rem 1rem; font-size: 0.9rem;">
-                    <i class="bi bi-folder-fill" style="color: #10b981;"></i>
-                    <strong>{{ total_documents }}</strong> documento(s)
-                  </span>
-                  <small class="text-white opacity-75">
-                    <i class="bi bi-clock"></i> Respostas em tempo real
-                  </small>
-                </div>
+              <div class="col-md-4 text-md-end">
+                <span class="badge bg-white text-dark d-inline-flex align-items-center gap-2"
+                  style="padding: 0.35rem 0.75rem; font-size: 0.85rem;">
+                  <i class="bi bi-folder-fill" style="color: #10b981;"></i>
+                  <strong>{{ total_documents }}</strong> documento(s)
+                </span>
               </div>
             </div>
           </div>
           <div class="card-body" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 0;">
-            
+
             <!-- Chat Container -->
-            <div id="chat-container" class="p-4" style="flex: 1; overflow-y: auto; overflow-x: hidden; background: linear-gradient(to bottom, #f0fdf4 0%, #ffffff 100%); display: flex; align-items: center; justify-content: center;">
+            <div id="chat-container" class="p-4"
+              style="flex: 1; overflow-y: auto; overflow-x: hidden; background: linear-gradient(to bottom, #f0fdf4 0%, #ffffff 100%); display: flex; align-items: center; justify-content: center;">
               <div id="chat-messages" style="width: 100%; max-width: 900px;">
                 <div class="text-center py-3">
                   <div class="mb-4">
-                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3" 
-                         style="width: 100px; height: 100px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3);">
+                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3"
+                      style="width: 100px; height: 100px; background: linear-gradient(135deg, #10b981 0%, #059669 100%); box-shadow: 0 10px 30px rgba(16, 185, 129, 0.3);">
                       <i class="bi bi-chat-dots-fill text-white" style="font-size: 3rem;"></i>
                     </div>
                   </div>
@@ -88,9 +87,10 @@
                     Olá! Sou seu Assistente Jurídico para Casos
                   </h3>
                   <p class="text-muted mb-4" style="font-size: 1.1rem; max-width: 500px; margin: 0 auto;">
-                    Posso ajudá-lo a encontrar informações sobre jurisprudências, legislação, templates e exemplos de petições
+                    Posso ajudá-lo a encontrar informações sobre jurisprudências, legislação, templates e exemplos de
+                    petições
                   </p>
-                  
+
                   <div class="row justify-content-center mt-5">
                     <div class="col-md-8">
                       <div class="row g-3">
@@ -127,7 +127,8 @@
 
                   <div class="mt-5">
                     <small class="text-muted d-block mb-2">
-                      <i class="bi bi-lightbulb-fill text-warning"></i> <strong>Dica:</strong> Seja específico nas suas perguntas
+                      <i class="bi bi-lightbulb-fill text-warning"></i> <strong>Dica:</strong> Seja específico nas suas
+                      perguntas
                     </small>
                   </div>
                 </div>
@@ -142,13 +143,16 @@
                   <i class="bi bi-stars"></i> <strong>Perguntas sugeridas:</strong>
                 </small>
                 <div class="d-flex flex-wrap gap-2">
-                  <button class="btn btn-sm btn-outline-success example-question" data-question="Qual o prazo para contestação do FAP?" style="border-radius: 20px;">
+                  <button class="btn btn-sm btn-outline-success example-question"
+                    data-question="Qual o prazo para contestação do FAP?" style="border-radius: 20px;">
                     <i class="bi bi-lightning-fill"></i> Prazo contestação FAP
                   </button>
-                  <button class="btn btn-sm btn-outline-success example-question" data-question="Como funciona o cálculo do FAP?" style="border-radius: 20px;">
+                  <button class="btn btn-sm btn-outline-success example-question"
+                    data-question="Como funciona o cálculo do FAP?" style="border-radius: 20px;">
                     <i class="bi bi-calculator-fill"></i> Cálculo do FAP
                   </button>
-                  <button class="btn btn-sm btn-outline-success example-question" data-question="Modelos de petição inicial previdenciária" style="border-radius: 20px;">
+                  <button class="btn btn-sm btn-outline-success example-question"
+                    data-question="Modelos de petição inicial previdenciária" style="border-radius: 20px;">
                     <i class="bi bi-file-text-fill"></i> Modelos de petição
                   </button>
                 </div>
@@ -156,17 +160,11 @@
 
               <form id="question-form">
                 <div class="input-group input-group-lg shadow-sm">
-                  <input 
-                    type="text" 
-                    class="form-control border-0" 
-                    id="question-input" 
-                    placeholder="Digite sua pergunta aqui..."
-                    autocomplete="off"
-                    required
-                    style="border-radius: 30px 0 0 30px; padding-left: 25px; background: #f8f9fa;"
-                  >
-                  <button class="btn btn-success px-4" type="submit" id="send-btn" 
-                          style="border-radius: 0 30px 30px 0; background: linear-gradient(135deg, #10b981 0%, #059669 100%); border: none;">
+                  <input type="text" class="form-control border-0" id="question-input"
+                    placeholder="Digite sua pergunta aqui..." autocomplete="off" required
+                    style="border-radius: 30px 0 0 30px; padding-left: 25px; background: #f8f9fa;">
+                  <button class="btn btn-success px-4" type="submit" id="send-btn"
+                    style="border-radius: 0 30px 30px 0; background: linear-gradient(135deg, #10b981 0%, #059669 100%); border: none;">
                     <i class="bi bi-send-fill"></i> Enviar
                   </button>
                 </div>
@@ -188,12 +186,13 @@
   }
 
   @keyframes kb-fadeIn {
-    from { 
-      opacity: 0; 
+    from {
+      opacity: 0;
       transform: translateY(15px);
     }
-    to { 
-      opacity: 1; 
+
+    to {
+      opacity: 1;
       transform: translateY(0);
     }
   }
@@ -294,11 +293,15 @@
   }
 
   @keyframes kb-typing {
-    0%, 60%, 100% { 
+
+    0%,
+    60%,
+    100% {
       transform: translateY(0);
       opacity: 0.7;
     }
-    30% { 
+
+    30% {
       transform: translateY(-12px);
       opacity: 1;
     }
@@ -423,7 +426,7 @@
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
 <script>
-  document.addEventListener('DOMContentLoaded', function() {
+  document.addEventListener('DOMContentLoaded', function () {
     // Configurar marked.js
     if (typeof marked !== 'undefined') {
       marked.setOptions({
@@ -501,7 +504,7 @@
 
       const messageDiv = document.createElement('div');
       messageDiv.className = 'message message-assistant';
-      
+
       let sourcesHtml = '';
       if (sources && sources.length > 0) {
         sourcesHtml = `
@@ -609,7 +612,7 @@
     }
 
     // Event listener para o formulário
-    questionForm.addEventListener('submit', function(e) {
+    questionForm.addEventListener('submit', function (e) {
       e.preventDefault();
       const question = questionInput.value.trim();
       if (question) {
@@ -619,7 +622,7 @@
 
     // Event listeners para perguntas de exemplo
     exampleButtons.forEach(button => {
-      button.addEventListener('click', function() {
+      button.addEventListener('click', function () {
         const question = this.getAttribute('data-question');
         questionInput.value = question;
         sendQuestion(question);
