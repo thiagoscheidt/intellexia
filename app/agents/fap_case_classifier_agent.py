@@ -4,6 +4,8 @@ import os
 import uuid
 import json
 import time
+import sys
+from pathlib import Path as PathLib
 from datetime import datetime
 from typing import Optional
 
@@ -17,6 +19,13 @@ from langchain_openai import ChatOpenAI
 from docling.document_converter import DocumentConverter
 from pydantic import BaseModel, Field
 
+# Adicionar o diretório raiz ao path para imports do app
+root_dir = PathLib(__file__).parent.parent.parent
+sys.path.insert(0, str(root_dir))
+
+from app.models import db, CaseTemplate
+from main import app
+
 
 load_dotenv()
 
@@ -29,22 +38,52 @@ class ResponseSchema(BaseModel):
     unable_to_classify: bool = Field(default=False, description="True se não foi possível categorizar com confiança mínima")
 
 class FapCaseClassifierAgent:
-    def __init__(self):
+    def __init__(self, law_firm_id: int):
         self.openai = OpenAI()
+        self.law_firm_id = law_firm_id
 
-    def determineCategoryTemplate(self):
+    def determineCategoryTemplate(self, case_description: str):
+        """
+        Determina a categoria e template mais adequado para um caso FAP
+        
+        Args:
+            case_description: Descrição do caso a ser classificado
+            
+        Returns:
+            ResponseSchema com id, nome_arquivo, categoria, confidence, justificativa e unable_to_classify
+        """
+        
+        # Buscar templates do banco de dados para este law_firm
+        with app.app_context():
+            templates = CaseTemplate.query.filter_by(
+                law_firm_id=self.law_firm_id,
+                is_active=True
+            ).order_by(CaseTemplate.id).all()
+            
+            if not templates:
+                raise Exception(f"Nenhum template ativo encontrado para law_firm_id={self.law_firm_id}")
+            
+            # Gerar lista de templates no formato do prompt
+            templates_list = []
+            for idx, template in enumerate(templates, 1):
+                templates_list.append(
+                    f"{idx}. {template.template_name} — {template.categoria}"
+                )
+            
+            templates_text = "\n".join(templates_list)
+        
         llm = ChatOpenAI(
             model="gpt-4o-mini",
             temperature=0
         ).with_structured_output(ResponseSchema)
 
         response = llm.invoke([
-            {"role": "system", "content": """
+            {"role": "system", "content": f"""
                 Você é um agente especialista em classificar casos jurídicos relacionados ao FAP, NTEP e benefícios previdenciários. 
                 Sua tarefa é analisar a descrição do caso fornecida e identificar qual item da lista abaixo melhor representa o tipo de situação apresentada.
              
                 Regras obrigatórias:
-                    - Você deve escolher APENAS UM item da lista (ID 1 a 35).
+                    - Você deve escolher APENAS UM item da lista (ID 1 a {len(templates)}).
                     - Não crie novos itens ou categorias.
                     - Baseie sua decisão exclusivamente na descrição do caso.
                     - Retorne a resposta somente em formato JSON.
@@ -55,55 +94,21 @@ class FapCaseClassifierAgent:
 
                     Lista de opções (use exatamente os IDs e nomes abaixo):
              
-                    1. Peticao Inicial.docx — Documento principal  
-                    2. Acidente Ocorrido em outra Empresa.docx — Erro de vínculo empregatício  
-                    3. Acidente Ocorrido em outro Estabelecimento.docx — Erro de estabelecimento  
-                    4. Acidente não Relacionado ao Trabalho.docx — Erro de nexo causal  
-                    5. Acidente de Trajeto.docx — Acidente de trajeto  
-                    6. Acidente de Trajeto - CAT Erro material.docx — Acidente de trajeto / erro material  
-                    7. Acidente de Trajeto - CAT Extemporânea.docx — Acidente de trajeto / CAT fora do prazo  
-                    8. 60 Dias - B91.docx — Duplicidade de benefício  
-                    9. Exclusão dos bloqueios causados pelo B92.docx — Bloqueio indevido do FAP  
-                    10. Revogação da antecipação dos efeitos da tutela.docx — Benefício judicial cancelado  
-                    11. B91 com aposentadoria - REVISADA.docx — Benefício concomitante  
-                    12. B91 com auxílio-acidente - REVISADA.docx — Benefício concomitante  
-                    13. B91 com auxílio-doença - REVISADA.docx — Duplicidade de benefício  
-                    14. B92 com aposentadoria - REVISADA.docx — Benefício concomitante  
-                    15. B94 com aposentadoria - REVISADA.docx — Benefício concomitante  
-                    16. B94 com auxílio-acidente - REVISADA.docx — Duplicidade de benefício  
-                    17. Benefício Concomitante.docx — Benefícios concomitantes  
-                    18. Bloqueio de malus – B92 – B91 – Acidente de trajeto.docx — Bloqueio indevido do FAP  
-                    19. CAT Duplicada.docx — Duplicidade administrativa  
-                    20. Convertido B31.docx — Inclusão indevida  
-                    21. Convertido para B31 – Acórdão do CRPS.docx — Inclusão indevida  
-                    22. Correção da CNAE Preponderante.docx — Erro de CNAE  
-                    23. Custo B94 - Benefício Cessado por Óbito.docx — Erro no índice de custo  
-                    24. Custo B94 Genérico.docx — Erro metodológico  
-                    25. DIB = DCB.docx — Erro cadastral  
-                    26. Divergência entre benefício concedido e implementado.docx — Erro judicial  
-                    27. Exclusão das admissões que representarem crescimento.docx — Erro na rotatividade  
-                    28. Judicial.docx — Benefício judicial  
-                    29. Massa Salarial.docx — Erro na massa salarial  
-                    30. Média de Vínculos.docx — Erro no número de vínculos  
-                    31. Nexo afastado.docx — Nexo técnico afastado  
-                    32. NTP Duplicado.docx — Duplicidade de nexo  
-                    33. NTP Indevido.docx — Nexo indevido  
-                    34. Pre-FAP.docx — Evento fora do período legal  
-                    35. Rotatividade.docx — Ilegalidade da rotatividade  
+                    {templates_text}
 
                     Descrição do caso:
-                    {{DESCRICAO_DO_CASO}}
+                    {case_description}
 
                     Formato obrigatório de resposta (somente JSON):
 
-                    {
+                    {{
                         "id": number,
                         "nome_arquivo": "string",
                         "categoria": "string",
                         "confidence": 0.0,
                         "justificativa": "breve explicação",
                         "unable_to_classify": false
-                    }
+                    }}
                 """}
         ])
         
@@ -112,42 +117,73 @@ class FapCaseClassifierAgent:
 
 def main():
     """Função para testar o classificador de casos FAP"""
-    print("=" * 80)
-    print("TESTE DO CLASSIFICADOR DE CASOS FAP")
-    print("=" * 80)
     
-    # Exemplo de descrição de caso para teste
-    descricao_caso = """
-    Empresa recebeu notificação do FAP onde consta um benefício B91 (auxílio-doença acidentário)
-    que foi concedido a um funcionário que sofreu acidente de trajeto indo para o trabalho.
-    A CAT foi emitida pela empresa dentro do prazo, mas acreditamos que acidente de trajeto
-    não deveria impactar o FAP da empresa.
-    """
-    
-    print("\n📋 DESCRIÇÃO DO CASO:")
-    print(descricao_caso)
-    print("\n" + "=" * 80)
-    
-    # Instanciar o agente
-    agent = FapCaseClassifierAgent()
-    
-    print("\n🤖 Processando classificação...\n")
-    
-    # Executar classificação
-    resultado = agent.determineCategoryTemplate()
-    
-    # Exibir resultado
-    print("=" * 80)
-    print("RESULTADO DA CLASSIFICAÇÃO")
-    print("=" * 80)
-    print(f"\n📌 ID: {resultado.id}")
-    print(f"📄 Arquivo: {resultado.nome_arquivo}")
-    print(f"📂 Categoria: {resultado.categoria}")
-    print(f"📊 Confiança: {resultado.confidence:.2f}")
-    print(f"⚠️  Incapaz de classificar: {'Sim' if resultado.unable_to_classify else 'Não'}")
-    print(f"\n💭 Justificativa:")
-    print(f"   {resultado.justificativa}")
-    print("\n" + "=" * 80)
+    with app.app_context():
+        from app.models import LawFirm
+        
+        # Buscar primeiro law_firm para teste
+        law_firm = LawFirm.query.first()
+        
+        if not law_firm:
+            print("❌ ERRO: Nenhum escritório encontrado no banco de dados!")
+            print("   Execute primeiro os scripts de população de dados.")
+            return
+        
+        print("=" * 80)
+        print("TESTE DO CLASSIFICADOR DE CASOS FAP")
+        print("=" * 80)
+        print(f"\n🏢 Escritório: {law_firm.name} (ID: {law_firm.id})")
+        
+        # Verificar se há templates cadastrados
+        templates_count = CaseTemplate.query.filter_by(
+            law_firm_id=law_firm.id,
+            is_active=True
+        ).count()
+        
+        print(f"📋 Templates disponíveis: {templates_count}")
+        
+        if templates_count == 0:
+            print("\n❌ ERRO: Nenhum template ativo encontrado para este escritório!")
+            print("   Execute: python database/populate_case_templates.py")
+            return
+        
+        # Exemplo de descrição de caso para teste
+        descricao_caso = """
+        Empresa recebeu notificação do FAP onde consta um benefício B91 (auxílio-doença acidentário)
+        que foi concedido a um funcionário que sofreu acidente de trajeto indo para o trabalho.
+        A CAT foi emitida pela empresa dentro do prazo, mas acreditamos que acidente de trajeto
+        não deveria impactar o FAP da empresa.
+        """
+        
+        print("\n📋 DESCRIÇÃO DO CASO:")
+        print(descricao_caso)
+        print("\n" + "=" * 80)
+        
+        # Instanciar o agente
+        agent = FapCaseClassifierAgent(law_firm_id=law_firm.id)
+        
+        print("\n🤖 Processando classificação...\n")
+        
+        try:
+            # Executar classificação
+            resultado = agent.determineCategoryTemplate(descricao_caso)
+            
+            # Exibir resultado
+            print("=" * 80)
+            print("RESULTADO DA CLASSIFICAÇÃO")
+            print("=" * 80)
+            print(f"\n📌 ID: {resultado.id}")
+            print(f"📄 Arquivo: {resultado.nome_arquivo}")
+            print(f"📂 Categoria: {resultado.categoria}")
+            print(f"📊 Confiança: {resultado.confidence:.2f}")
+            print(f"⚠️  Incapaz de classificar: {'Sim' if resultado.unable_to_classify else 'Não'}")
+            print(f"\n💭 Justificativa:")
+            print(f"   {resultado.justificativa}")
+            print("\n" + "=" * 80)
+        except Exception as e:
+            print(f"❌ ERRO ao classificar: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
 
 if __name__ == "__main__":
