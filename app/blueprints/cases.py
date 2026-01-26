@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, session, jsonify, redirect, url_for, flash
+from flask import Blueprint, render_template, request, session, jsonify, redirect, url_for, flash, send_file
 from app.models import db, Case, Client, CaseBenefit, Document, Petition, CaseLawyer, Lawyer, CaseCompetence, CasesKnowledgeBase, CaseTemplate
 from app.agents.case_knowledge_ingestor import CaseKnowledgeIngestor
 from datetime import datetime
@@ -280,6 +280,37 @@ def cases_knowledge_base_chat():
     ).count()
     
     return render_template('cases/cases_knowledge_base_chat.html', total_documents=total_documents)
+
+
+@cases_bp.route('/knowledge-base/<int:file_id>/download')
+@require_law_firm
+def cases_knowledge_base_download(file_id):
+    """Download de um arquivo da base de conhecimento de casos"""
+    law_firm_id = get_current_law_firm_id()
+
+    file = CasesKnowledgeBase.query.filter_by(
+        id=file_id,
+        law_firm_id=law_firm_id,
+        is_active=True
+    ).first()
+
+    if not file:
+        flash('Arquivo não encontrado.', 'error')
+        return redirect(url_for('cases.cases_knowledge_base_list'))
+
+    if not os.path.exists(file.file_path):
+        flash('Arquivo não encontrado no servidor.', 'error')
+        return redirect(url_for('cases.cases_knowledge_base_list'))
+
+    try:
+        # Preferência por `download_name` em versões mais novas do Flask
+        return send_file(file.file_path, as_attachment=True, download_name=file.original_filename)
+    except TypeError:
+        # Compatibilidade com versões mais antigas do Flask
+        return send_file(file.file_path, as_attachment=True, attachment_filename=file.original_filename)
+    except Exception as e:
+        flash(f'Erro ao baixar o arquivo: {str(e)}', 'error')
+        return redirect(url_for('cases.cases_knowledge_base_list'))
 
 
 @cases_bp.route('/knowledge-base/api/ask', methods=['POST'])

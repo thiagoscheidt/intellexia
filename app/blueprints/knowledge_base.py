@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify
+from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify, send_file
 from app.models import db, KnowledgeBase
 from app.agents.knowledge_ingestor import KnowledgeIngestor
 from datetime import datetime
@@ -209,6 +209,38 @@ def details(file_id):
     ).first_or_404()
     
     return render_template('knowledge_base/details.html', file=file)
+
+
+@knowledge_base_bp.route('/<int:file_id>/download')
+def download(file_id):
+    """Faz o download de um arquivo da base de conhecimento"""
+    law_firm_id = get_current_law_firm_id()
+
+    if not law_firm_id:
+        flash('Você precisa estar logado para acessar esta página.', 'error')
+        return redirect(url_for('auth.login'))
+
+    file = KnowledgeBase.query.filter_by(
+        id=file_id,
+        law_firm_id=law_firm_id,
+        is_active=True
+    ).first()
+
+    if not file:
+        flash('Arquivo não encontrado.', 'error')
+        return redirect(url_for('knowledge_base.list'))
+
+    if not os.path.exists(file.file_path):
+        flash('Arquivo não encontrado no servidor.', 'error')
+        return redirect(url_for('knowledge_base.list'))
+
+    try:
+        return send_file(file.file_path, as_attachment=True, download_name=file.original_filename)
+    except TypeError:
+        return send_file(file.file_path, as_attachment=True, attachment_filename=file.original_filename)
+    except Exception as e:
+        flash(f'Erro ao baixar o arquivo: {str(e)}', 'error')
+        return redirect(url_for('knowledge_base.list'))
 
 @knowledge_base_bp.route('/search')
 def search_chat():

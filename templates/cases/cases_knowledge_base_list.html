@@ -3,13 +3,15 @@
 {% block title %}Base de Conhecimento de Casos - IntellexIA{% endblock %}
 
 {% block content %}
-<div class="app-content-header" style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 2rem 0; margin-bottom: 1.5rem; border-radius: 0 0 15px 15px; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.2);">
+<div class="app-content-header"
+  style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); padding: 2rem 0; margin-bottom: 1.5rem; border-radius: 0 0 15px 15px; box-shadow: 0 4px 15px rgba(16, 185, 129, 0.2);">
   <div class="container-fluid">
     <div class="row align-items-center">
       <div class="col-sm-8">
         <div class="d-flex align-items-center">
           <div class="me-3">
-            <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 60px; height: 60px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+            <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
+              style="width: 60px; height: 60px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
               <i class="bi bi-briefcase-fill" style="font-size: 1.8rem; color: #10b981;"></i>
             </div>
           </div>
@@ -24,9 +26,12 @@
         </div>
       </div>
       <div class="col-sm-4">
-        <ol class="breadcrumb float-sm-end mb-0" style="background: rgba(255,255,255,0.15); padding: 0.75rem 1rem; border-radius: 10px; backdrop-filter: blur(10px);">
-          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}" class="text-white text-decoration-none"><i class="bi bi-house-fill"></i> Home</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_list') }}" class="text-white text-decoration-none">Casos</a></li>
+        <ol class="breadcrumb float-sm-end mb-0"
+          style="background: rgba(255,255,255,0.15); padding: 0.75rem 1rem; border-radius: 10px; backdrop-filter: blur(10px);">
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"
+              class="text-white text-decoration-none"><i class="bi bi-house-fill"></i> Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_list') }}"
+              class="text-white text-decoration-none">Casos</a></li>
           <li class="breadcrumb-item active text-white" aria-current="page"><strong>Base de Conhecimento</strong></li>
         </ol>
       </div>
@@ -55,7 +60,7 @@
           </div>
         </div>
       </div>
-      
+
       <div class="col-md-8">
         <div class="card border-0 shadow-sm">
           <div class="card-body">
@@ -85,8 +90,8 @@
         <div>
           <h6 class="mb-1"><strong>Sobre esta Base de Conhecimento</strong></h6>
           <p class="mb-0">
-            Esta é uma base de conhecimento <strong>geral para casos</strong>, contendo documentos, jurisprudências, 
-            legislações e modelos que podem ser utilizados em diversos casos. Os documentos aqui armazenados 
+            Esta é uma base de conhecimento <strong>geral para casos</strong>, contendo documentos, jurisprudências,
+            legislações e modelos que podem ser utilizados em diversos casos. Os documentos aqui armazenados
             estarão disponíveis para consulta da IA em qualquer caso do sistema.
           </p>
         </div>
@@ -121,7 +126,8 @@
                     <div>
                       <strong>{{ file.original_filename }}</strong>
                       {% if file.description %}
-                      <br><small class="text-muted">{{ file.description[:100] }}{% if file.description|length > 100 %}...{% endif %}</small>
+                      <br><small class="text-muted">{{ file.description[:100] }}{% if file.description|length > 100
+                        %}...{% endif %}</small>
                       {% endif %}
                     </div>
                   </div>
@@ -137,6 +143,10 @@
                 <td>{{ (file.file_size / 1024) | round(2) }} KB</td>
                 <td>{{ file.uploaded_at.strftime('%d/%m/%Y %H:%M') }}</td>
                 <td>
+                  <a href="{{ url_for('cases.cases_knowledge_base_download', file_id=file.id) }}"
+                    class="btn btn-sm btn-outline-primary me-1" title="Download">
+                    <i class="bi bi-download"></i>
+                  </a>
                   <button class="btn btn-sm btn-outline-danger" onclick="deleteFile({{ file.id }})">
                     <i class="bi bi-trash"></i>
                   </button>
@@ -162,11 +172,11 @@
 </div>
 
 <script>
-function deleteFile(fileId) {
-  if (confirm('Tem certeza que deseja remover este arquivo?')) {
-    // TODO: Implementar endpoint de exclusão
-    alert('Funcionalidade de exclusão será implementada em breve');
+  function deleteFile(fileId) {
+    if (confirm('Tem certeza que deseja remover este arquivo?')) {
+      // TODO: Implementar endpoint de exclusão
+      alert('Funcionalidade de exclusão será implementada em breve');
+    }
   }
-}
 </script>
 {% endblock %}

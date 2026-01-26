@@ -3,13 +3,15 @@
 {% block title %}Base de Conhecimento - IntellexIA{% endblock %}
 
 {% block content %}
-<div class="app-content-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 2rem 0; margin-bottom: 1.5rem; border-radius: 0 0 15px 15px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);">
+<div class="app-content-header"
+    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 2rem 0; margin-bottom: 1.5rem; border-radius: 0 0 15px 15px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);">
     <div class="container-fluid">
         <div class="row align-items-center">
             <div class="col-sm-8">
                 <div class="d-flex align-items-center">
                     <div class="me-3">
-                        <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 60px; height: 60px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                        <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
+                            style="width: 60px; height: 60px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
                             <i class="bi bi-book-fill" style="font-size: 1.8rem; color: #667eea;"></i>
                         </div>
                     </div>
@@ -24,9 +26,12 @@
                 </div>
             </div>
             <div class="col-sm-4">
-                <ol class="breadcrumb float-sm-end mb-0" style="background: rgba(255,255,255,0.15); padding: 0.75rem 1rem; border-radius: 10px; backdrop-filter: blur(10px);">
-                    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}" class="text-white text-decoration-none"><i class="bi bi-house-fill"></i> Home</a></li>
-                    <li class="breadcrumb-item active text-white" aria-current="page"><strong>Base de Conhecimento</strong></li>
+                <ol class="breadcrumb float-sm-end mb-0"
+                    style="background: rgba(255,255,255,0.15); padding: 0.75rem 1rem; border-radius: 10px; backdrop-filter: blur(10px);">
+                    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"
+                            class="text-white text-decoration-none"><i class="bi bi-house-fill"></i> Home</a></li>
+                    <li class="breadcrumb-item active text-white" aria-current="page"><strong>Base de
+                            Conhecimento</strong></li>
                 </ol>
             </div>
         </div>
@@ -38,24 +43,29 @@
         <div class="row">
             <div class="col-12">
                 <div class="card border-0 shadow-lg" style="border-radius: 15px; overflow: hidden;">
-                    <div class="card-header text-white" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1.5rem;">
+                    <div class="card-header text-white"
+                        style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1.5rem;">
                         <div class="d-flex justify-content-between align-items-center">
                             <div class="d-flex align-items-center">
                                 <div class="me-3">
-                                    <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 45px; height: 45px;">
+                                    <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
+                                        style="width: 45px; height: 45px;">
                                         <i class="bi bi-list-ul" style="font-size: 1.5rem; color: #667eea;"></i>
                                     </div>
                                 </div>
                                 <div>
-                                    <h3 class="card-title mb-0" style="font-weight: 600; font-size: 1.3rem;">Arquivos da Base de Conhecimento</h3>
+                                    <h3 class="card-title mb-0" style="font-weight: 600; font-size: 1.3rem;">Arquivos da
+                                        Base de Conhecimento</h3>
                                     <small class="opacity-75">Gerencie e organize seus documentos</small>
                                 </div>
                             </div>
                             <div class="card-tools d-flex gap-2">
-                                <a href="{{ url_for('knowledge_base.search_chat') }}" class="btn btn-light btn-lg shadow-sm" style="border-radius: 10px;">
+                                <a href="{{ url_for('knowledge_base.search_chat') }}"
+                                    class="btn btn-light btn-lg shadow-sm" style="border-radius: 10px;">
                                     <i class="bi bi-search"></i> Pesquisar com IA
                                 </a>
-                                <a href="{{ url_for('knowledge_base.upload') }}" class="btn btn-light btn-lg shadow-sm" style="border-radius: 10px;">
+                                <a href="{{ url_for('knowledge_base.upload') }}" class="btn btn-light btn-lg shadow-sm"
+                                    style="border-radius: 10px;">
                                     <i class="bi bi-plus-circle-fill"></i> Adicionar Arquivo
                                 </a>
                             </div>
@@ -65,13 +75,17 @@
                         <!-- Filtros -->
                         <form method="GET" class="row g-3 mb-4">
                             <div class="col-md-4">
-                                <label for="search" class="form-label fw-bold"><i class="bi bi-search text-primary"></i> Buscar</label>
-                                <input type="text" class="form-control form-control-lg border-2 shadow-sm" id="search" name="search"
-                                    placeholder="Nome, descrição ou tags..." value="{{ current_search }}" style="border-radius: 10px;">
+                                <label for="search" class="form-label fw-bold"><i class="bi bi-search text-primary"></i>
+                                    Buscar</label>
+                                <input type="text" class="form-control form-control-lg border-2 shadow-sm" id="search"
+                                    name="search" placeholder="Nome, descrição ou tags..." value="{{ current_search }}"
+                                    style="border-radius: 10px;">
                             </div>
                             <div class="col-md-3">
-                                <label for="category" class="form-label fw-bold"><i class="bi bi-filter text-warning"></i> Categoria</label>
-                                <select class="form-select form-select-lg border-2 shadow-sm" id="category" name="category" style="border-radius: 10px;">
+                                <label for="category" class="form-label fw-bold"><i
+                                        class="bi bi-filter text-warning"></i> Categoria</label>
+                                <select class="form-select form-select-lg border-2 shadow-sm" id="category"
+                                    name="category" style="border-radius: 10px;">
                                     <option value="">Todas</option>
                                     {% for cat in categories %}
                                     <option value="{{ cat }}" {% if cat==current_category %}selected{% endif %}>
@@ -81,10 +95,12 @@
                                 </select>
                             </div>
                             <div class="col-md-3 d-flex align-items-end gap-2">
-                                <button type="submit" class="btn btn-lg shadow-sm" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 10px; padding: 0.75rem 2rem;">
+                                <button type="submit" class="btn btn-lg shadow-sm"
+                                    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 10px; padding: 0.75rem 2rem;">
                                     <i class="bi bi-search"></i> Filtrar
                                 </button>
-                                <a href="{{ url_for('knowledge_base.list') }}" class="btn btn-outline-secondary btn-lg" style="border-radius: 10px; padding: 0.75rem 1.5rem;">
+                                <a href="{{ url_for('knowledge_base.list') }}" class="btn btn-outline-secondary btn-lg"
+                                    style="border-radius: 10px; padding: 0.75rem 1.5rem;">
                                     <i class="bi bi-x-circle"></i>
                                 </a>
                             </div>
@@ -159,6 +175,10 @@
                                                 <a href="{{ url_for('knowledge_base.details', file_id=file.id) }}"
                                                     class="btn btn-info btn-sm" title="Ver detalhes">
                                                     <i class="bi bi-eye"></i>
+                                                </a>
+                                                <a href="{{ url_for('knowledge_base.download', file_id=file.id) }}"
+                                                    class="btn btn-primary btn-sm" title="Download">
+                                                    <i class="bi bi-download"></i>
                                                 </a>
                                                 <button type="button" class="btn btn-danger btn-sm"
                                                     onclick="deleteFile({{ file.id }}, '{{ file.original_filename }}')"
