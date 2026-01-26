@@ -337,10 +337,102 @@
   #knowledge-chat-card #chat-container::-webkit-scrollbar-thumb:hover {
     background: #555;
   }
+
+  /* Estilos para markdown renderizado */
+  #knowledge-chat-card .message-content h1,
+  #knowledge-chat-card .message-content h2,
+  #knowledge-chat-card .message-content h3,
+  #knowledge-chat-card .message-content h4 {
+    margin-top: 1rem;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+  }
+
+  #knowledge-chat-card .message-content h1 {
+    font-size: 1.5rem;
+  }
+
+  #knowledge-chat-card .message-content h2 {
+    font-size: 1.3rem;
+  }
+
+  #knowledge-chat-card .message-content h3 {
+    font-size: 1.1rem;
+  }
+
+  #knowledge-chat-card .message-content p {
+    margin-bottom: 0.75rem;
+  }
+
+  #knowledge-chat-card .message-content ul,
+  #knowledge-chat-card .message-content ol {
+    margin-left: 1.5rem;
+    margin-bottom: 0.75rem;
+  }
+
+  #knowledge-chat-card .message-content li {
+    margin-bottom: 0.25rem;
+  }
+
+  #knowledge-chat-card .message-content code {
+    background-color: rgba(0, 0, 0, 0.05);
+    padding: 0.2rem 0.4rem;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    font-size: 0.9em;
+  }
+
+  #knowledge-chat-card .message-content pre {
+    background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+    padding: 1rem;
+    overflow-x: auto;
+    margin-bottom: 0.75rem;
+  }
+
+  #knowledge-chat-card .message-content pre code {
+    background-color: transparent;
+    padding: 0;
+  }
+
+  #knowledge-chat-card .message-content blockquote {
+    border-left: 4px solid #007bff;
+    padding-left: 1rem;
+    margin-left: 0;
+    color: #6c757d;
+    font-style: italic;
+  }
+
+  #knowledge-chat-card .message-content strong {
+    font-weight: 600;
+  }
+
+  #knowledge-chat-card .message-content a {
+    color: #007bff;
+    text-decoration: underline;
+  }
+
+  #knowledge-chat-card .message-content a:hover {
+    color: #0056b3;
+  }
 </style>
+
+<!-- Biblioteca para renderizar Markdown -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
 <script>
   document.addEventListener('DOMContentLoaded', function() {
+    // Configurar marked.js
+    if (typeof marked !== 'undefined') {
+      marked.setOptions({
+        breaks: true,
+        gfm: true,
+        sanitize: false,
+        smartLists: true,
+        smartypants: true
+      });
+    }
     const questionForm = document.getElementById('question-form');
     const questionInput = document.getElementById('question-input');
     const sendBtn = document.getElementById('send-btn');
@@ -418,10 +510,23 @@
         `;
       }
 
+      // Renderizar markdown se a biblioteca marked estiver disponível
+      let renderedAnswer = answer;
+      if (typeof marked !== 'undefined') {
+        try {
+          renderedAnswer = marked.parse(answer);
+        } catch (error) {
+          console.error('Erro ao renderizar markdown:', error);
+          renderedAnswer = escapeHtml(answer);
+        }
+      } else {
+        renderedAnswer = escapeHtml(answer);
+      }
+
       messageDiv.innerHTML = `
         <div class="message-content">
           <strong><i class="bi bi-robot"></i> Assistente:</strong><br>
-          ${escapeHtml(answer)}
+          <div class="markdown-content">${renderedAnswer}</div>
           ${sourcesHtml}
         </div>
       `;
