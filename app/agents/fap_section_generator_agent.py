@@ -8,6 +8,7 @@ import sys
 from pathlib import Path as PathLib
 from datetime import datetime
 from typing import Optional, List
+import tempfile
 
 from anyio import Path
 from dotenv import load_dotenv
@@ -282,6 +283,82 @@ def main():
             print("-" * 80)
             
             print(f"\n📊 Tamanho total da seção: {len(section_content)} caracteres")
+            
+            # Converter markdown para Word e salvar
+            print("\n" + "=" * 80)
+            print("💾 CONVERTENDO PARA WORD E SALVANDO...")
+            print("=" * 80)
+            
+            try:
+                # Importar pypandoc (instalar com: pip install pypandoc)
+                import pypandoc
+                
+                # Criar diretório de saída se não existir
+                output_dir = root_dir / "uploads" / "generated_sections"
+                output_dir.mkdir(parents=True, exist_ok=True)
+                
+                # Nome do arquivo baseado no template e timestamp
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"{template_name.replace(' ', '_')}_{timestamp}.docx"
+                output_path = output_dir / filename
+                
+                # Criar arquivo temporário com o markdown
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, encoding='utf-8') as temp_md:
+                    temp_md.write(section_content)
+                    temp_md_path = temp_md.name
+                
+                try:
+                    # Converter markdown para docx usando pypandoc
+                    pypandoc.convert_file(
+                        temp_md_path,
+                        'docx',
+                        outputfile=str(output_path),
+                        extra_args=['--reference-doc=reference.docx'] if (root_dir / 'reference.docx').exists() else []
+                    )
+                    
+                    print(f"\n✅ Arquivo Word salvo com sucesso!")
+                    print(f"📁 Localização: {output_path}")
+                    print(f"📊 Tamanho: {output_path.stat().st_size / 1024:.2f} KB")
+                    
+                finally:
+                    # Limpar arquivo temporário
+                    if os.path.exists(temp_md_path):
+                        os.unlink(temp_md_path)
+                        
+            except ImportError:
+                print("\n⚠️  pypandoc não instalado. Para converter para Word, instale:")
+                print("   pip install pypandoc")
+                print("   Também é necessário ter o Pandoc instalado no sistema.")
+                print("   Baixe em: https://pandoc.org/installing.html")
+                
+                # Salvar apenas o markdown
+                output_dir = root_dir / "uploads" / "generated_sections"
+                output_dir.mkdir(parents=True, exist_ok=True)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"{template_name.replace(' ', '_')}_{timestamp}.md"
+                output_path = output_dir / filename
+                
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    f.write(section_content)
+                
+                print(f"\n💾 Arquivo Markdown salvo: {output_path}")
+                
+            except Exception as e:
+                print(f"\n❌ ERRO ao converter para Word: {str(e)}")
+                print("   Salvando como markdown...")
+                
+                # Fallback: salvar como markdown
+                output_dir = root_dir / "uploads" / "generated_sections"
+                output_dir.mkdir(parents=True, exist_ok=True)
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                filename = f"{template_name.replace(' ', '_')}_{timestamp}.md"
+                output_path = output_dir / filename
+                
+                with open(output_path, 'w', encoding='utf-8') as f:
+                    f.write(section_content)
+                
+                print(f"💾 Arquivo Markdown salvo: {output_path}")
+            
             print("\n" + "=" * 80)
             print("✅ Seção/tópico gerado com sucesso!")
             print("   O template foi preenchido com os dados reais do caso.")
