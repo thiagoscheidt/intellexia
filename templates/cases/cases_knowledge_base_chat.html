@@ -445,8 +445,85 @@
     const chatContainer = document.getElementById('chat-container');
     const exampleButtons = document.querySelectorAll('.example-question');
 
+    // Histórico da conversa (formato OpenAI: [{role, content}])
+    let conversationHistory = [];
+
     // Limpar mensagem inicial quando começar a conversa
     let isFirstMessage = true;
+
+    // Carregar histórico ao abrir a página
+    async function loadHistory() {
+      try {
+        const response = await fetch('{{ url_for("cases.cases_knowledge_base_api_history") }}');
+        const data = await response.json();
+
+        if (data.success && data.history && data.history.length > 0) {
+          // Limpar tela inicial
+          isFirstMessage = false;
+          chatMessages.innerHTML = '';
+          chatMessages.style.maxWidth = 'none';
+          chatContainer.style.display = 'block';
+          chatContainer.style.alignItems = 'flex-start';
+          chatContainer.style.justifyContent = 'flex-start';
+
+          // Renderizar mensagens do histórico
+          data.history.forEach(entry => {
+            // Adicionar pergunta do usuário
+            const userMsgDiv = document.createElement('div');
+            userMsgDiv.className = 'message message-user';
+            userMsgDiv.innerHTML = `
+              <div class="message-content">
+                <strong>Você:</strong><br>
+                ${escapeHtml(entry.question)}
+              </div>
+            `;
+            chatMessages.appendChild(userMsgDiv);
+
+            // Adicionar resposta do assistente
+            const assistantMsgDiv = document.createElement('div');
+            assistantMsgDiv.className = 'message message-assistant';
+
+            let sourcesHtml = '';
+            if (entry.sources && entry.sources.length > 0) {
+              sourcesHtml = `
+                <div class="sources">
+                  <div class="sources-title"><i class="bi bi-book"></i> Fontes:</div>
+                  ${entry.sources.map(source => `<div class="source-item">• ${escapeHtml(source)}</div>`).join('')}
+                </div>
+              `;
+            }
+
+            let renderedAnswer = entry.answer;
+            if (typeof marked !== 'undefined') {
+              try {
+                renderedAnswer = marked.parse(entry.answer);
+              } catch (error) {
+                renderedAnswer = escapeHtml(entry.answer);
+              }
+            } else {
+              renderedAnswer = escapeHtml(entry.answer);
+            }
+
+            assistantMsgDiv.innerHTML = `
+              <div class="message-content">
+                <strong><i class="bi bi-robot"></i> Assistente:</strong><br>
+                <div class="markdown-content">${renderedAnswer}</div>
+                ${sourcesHtml}
+              </div>
+            `;
+            chatMessages.appendChild(assistantMsgDiv);
+
+            // Adicionar ao histórico da conversa
+            conversationHistory.push({ role: 'user', content: entry.question });
+            conversationHistory.push({ role: 'assistant', content: entry.answer });
+          });
+
+          scrollToBottom();
+        }
+      } catch (error) {
+        console.error('Erro ao carregar histórico:', error);
+      }
+    }
 
     // Função para adicionar mensagem do usuário
     function addUserMessage(text) {
@@ -499,14 +576,62 @@
     }
 
     // Função para adicionar resposta do assistente
-    function addAssistantMessage(answer, sources) {
+    function addAssistantMessage(answer, sources, sourcesDetail) {
       removeLoadingMessage();
 
       const messageDiv = document.createElement('div');
       messageDiv.className = 'message message-assistant';
 
       let sourcesHtml = '';
-      if (sources && sources.length > 0) {
+      if (sourcesDetail && sourcesDetail.length > 0) {
+        // Agrupa fontes pelo arquivo
+        const sourcesByFile = {};
+        sourcesDetail.forEach(detail => {
+          if (!sourcesByFile[detail.source]) {
+            sourcesByFile[detail.source] = [];
+          }
+          if (detail.page && !sourcesByFile[detail.source].includes(detail.page)) {
+            sourcesByFile[detail.source].push(detail.page);
+          }
+        });
+
+        const sourceItems = Object.entries(sourcesByFile).map(([fileName, pages]) => {
+          const pageInfo = pages.length > 0 ? ` (Pág. ${pages.sort((a, b) => a - b).join(', ')})` : '';
+
+          // Busca o file_id da primeira ocorrência deste arquivo
+          const fileDetail = sourcesDetail.find(d => d.source === fileName);
+          const fileId = fileDetail && fileDetail.file_id ? fileDetail.file_id : null;
+
+          // Se temos file_id, usa rota por ID, senão usa por nome
+          const downloadUrl = fileId
+            ? `/cases/knowledge-base/${fileId}/download`
+            : `{{ url_for('cases.cases_knowledge_base_download_by_name') }}?filename=${encodeURIComponent(fileName)}`;
+
+          return `
+            <div class="source-item d-flex justify-content-between align-items-center" style="padding: 0.5rem; margin-bottom: 0.5rem; background: #f8f9fa; border-radius: 8px;">
+              <span>
+                <i class="bi bi-file-earmark-text"></i> ${escapeHtml(fileName)}${pageInfo}
+              </span>
+              <a href="${downloadUrl}" 
+                 class="btn btn-sm btn-success"
+                 target="_blank"
+                 style="padding: 0.25rem 0.75rem; font-size: 0.875rem; text-decoration: none; color: white;">
+                <i class="bi bi-download"></i> Baixar
+              </a>
+            </div>
+          `;
+        }).join('');
+
+        sourcesHtml = `
+          <div class="sources" style="margin-top: 1rem; padding: 1rem; background: #f0fdf4; border-radius: 10px; border-left: 4px solid #10b981;">
+            <div class="sources-title" style="font-weight: 600; margin-bottom: 0.75rem; color: #10b981;">
+              <i class="bi bi-book"></i> Fontes Utilizadas:
+            </div>
+            ${sourceItems}
+          </div>
+        `;
+      } else if (sources && sources.length > 0) {
+        // Fallback para formato antigo
         sourcesHtml = `
           <div class="sources">
             <div class="sources-title"><i class="bi bi-book"></i> Fontes:</div>
@@ -574,6 +699,9 @@
       // Adicionar mensagem do usuário
       addUserMessage(question);
 
+      // Adicionar ao histórico da conversa
+      conversationHistory.push({ role: 'user', content: question });
+
       // Limpar input
       questionInput.value = '';
 
@@ -590,13 +718,18 @@
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ question: question })
+          body: JSON.stringify({
+            question: question,
+            history: conversationHistory
+          })
         });
 
         const data = await response.json();
 
         if (data.success) {
-          addAssistantMessage(data.answer, data.sources);
+          addAssistantMessage(data.answer, data.sources, data.sources_detail);
+          // Adicionar resposta ao histórico
+          conversationHistory.push({ role: 'assistant', content: data.answer });
         } else {
           addErrorMessage(data.error || 'Erro ao processar sua pergunta');
         }
@@ -628,6 +761,9 @@
         sendQuestion(question);
       });
     });
+
+    // Carregar histórico ao inicializar
+    loadHistory();
 
     // Focar no input ao carregar
     questionInput.focus();

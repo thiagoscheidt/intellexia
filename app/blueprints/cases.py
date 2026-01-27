@@ -322,6 +322,7 @@ def cases_knowledge_base_api_ask():
     
     data = request.get_json()
     question = data.get('question', '').strip()
+    conversation_history = data.get('history', [])  # Histórico da conversa atual
     
     if not question:
         return jsonify({'success': False, 'error': 'Pergunta não pode estar vazia'}), 400
@@ -332,17 +333,19 @@ def cases_knowledge_base_api_ask():
         # Inicializar o CaseKnowledgeIngestor
         ingestor = CaseKnowledgeIngestor()
         
-        # Fazer a pergunta usando o método ask_with_llm
+        # Fazer a pergunta usando o método ask_with_llm com histórico
         result = ingestor.ask_with_llm(
             question=question,
             user_id=user_id,
-            law_firm_id=law_firm_id
+            law_firm_id=law_firm_id,
+            history=conversation_history if conversation_history else None
         )
         
         return jsonify({
             'success': True,
             'answer': result['answer'],
             'sources': result['sources'],
+            'sources_detail': result.get('sources_detail', []),
             'history_id': result.get('history_id')
         })
     except Exception as e:
@@ -350,6 +353,94 @@ def cases_knowledge_base_api_ask():
         return jsonify({
             'success': False,
             'error': f'Erro ao processar pergunta: {str(e)}'
+        }), 500
+
+@cases_bp.route('/knowledge-base/api/history', methods=['GET'])
+@require_law_firm
+def cases_knowledge_base_api_history():
+    """API para recuperar histórico de conversas do usuário na base de casos"""
+    law_firm_id = get_current_law_firm_id()
+    user_id = session.get('user_id')
+    
+    if not law_firm_id or not user_id:
+        return jsonify({'success': False, 'error': 'Não autorizado'}), 401
+    
+    try:
+        from app.models import KnowledgeChatHistory
+        import json as json_lib
+        
+        # Buscar últimas 50 conversas do usuário (filtrado por collection de casos)
+        limit = request.args.get('limit', 50, type=int)
+        
+        # Nota: Assumindo que o histórico de casos também usa KnowledgeChatHistory
+        # Se existir uma tabela separada (CasesKnowledgeChatHistory), ajustar aqui
+        history_entries = KnowledgeChatHistory.query.filter_by(
+            user_id=user_id,
+            law_firm_id=law_firm_id
+        ).order_by(KnowledgeChatHistory.created_at.desc()).limit(limit).all()
+        
+        # Formatar para o frontend
+        history_data = []
+        for entry in reversed(history_entries):  # Inverter para mostrar do mais antigo ao mais recente
+            sources_detail = []
+            if entry.sources:
+                try:
+                    sources_list = json_lib.loads(entry.sources)
+                    for source in sources_list:
+                        sources_detail.append(source)
+                except:
+                    pass
+            
+            history_data.append({
+                'id': entry.id,
+                'question': entry.question,
+                'answer': entry.answer,
+                'sources': sources_detail,
+                'created_at': entry.created_at.isoformat() if entry.created_at else None
+            })
+        
+        return jsonify({
+            'success': True,
+            'history': history_data
+        })
+    except Exception as e:
+        print(f"Erro ao recuperar histórico: {str(e)}")
+        return jsonify({
+            'success': False,
+            'error': f'Erro ao recuperar histórico: {str(e)}'
+        }), 500
+
+@cases_bp.route('/knowledge-base/api/clear-history', methods=['POST'])
+@require_law_firm
+def cases_knowledge_base_api_clear_history():
+    """API para limpar histórico de conversas do usuário na base de casos"""
+    law_firm_id = get_current_law_firm_id()
+    user_id = session.get('user_id')
+    
+    if not law_firm_id or not user_id:
+        return jsonify({'success': False, 'error': 'Não autorizado'}), 401
+    
+    try:
+        from app.models import KnowledgeChatHistory
+        
+        # Deletar histórico do usuário
+        KnowledgeChatHistory.query.filter_by(
+            user_id=user_id,
+            law_firm_id=law_firm_id
+        ).delete()
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Histórico limpo com sucesso'
+        })
+    except Exception as e:
+        print(f"Erro ao limpar histórico: {str(e)}")
+        db.session.rollback()
+        return jsonify({
+            'success': False,
+            'error': f'Erro ao limpar histórico: {str(e)}'
         }), 500
 
 

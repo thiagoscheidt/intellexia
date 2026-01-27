@@ -441,8 +441,85 @@
     const chatContainer = document.getElementById('chat-container');
     const exampleButtons = document.querySelectorAll('.example-question');
 
+    // Histórico da conversa (formato OpenAI: [{role, content}])
+    let conversationHistory = [];
+
     // Limpar mensagem inicial quando começar a conversa
     let isFirstMessage = true;
+
+    // Carregar histórico ao abrir a página
+    async function loadHistory() {
+      try {
+        const response = await fetch('{{ url_for("knowledge_base.api_history") }}');
+        const data = await response.json();
+
+        if (data.success && data.history && data.history.length > 0) {
+          // Limpar tela inicial
+          isFirstMessage = false;
+          chatMessages.innerHTML = '';
+          chatMessages.style.maxWidth = 'none';
+          chatContainer.style.display = 'block';
+          chatContainer.style.alignItems = 'flex-start';
+          chatContainer.style.justifyContent = 'flex-start';
+
+          // Renderizar mensagens do histórico
+          data.history.forEach(entry => {
+            // Adicionar pergunta do usuário
+            const userMsgDiv = document.createElement('div');
+            userMsgDiv.className = 'message message-user';
+            userMsgDiv.innerHTML = `
+              <div class="message-content">
+                <strong>Você:</strong><br>
+                ${escapeHtml(entry.question)}
+              </div>
+            `;
+            chatMessages.appendChild(userMsgDiv);
+
+            // Adicionar resposta do assistente
+            const assistantMsgDiv = document.createElement('div');
+            assistantMsgDiv.className = 'message message-assistant';
+
+            let sourcesHtml = '';
+            if (entry.sources && entry.sources.length > 0) {
+              sourcesHtml = `
+                <div class="sources">
+                  <div class="sources-title"><i class="bi bi-book"></i> Fontes:</div>
+                  ${entry.sources.map(source => `<div class="source-item">• ${escapeHtml(source)}</div>`).join('')}
+                </div>
+              `;
+            }
+
+            let renderedAnswer = entry.answer;
+            if (typeof marked !== 'undefined') {
+              try {
+                renderedAnswer = marked.parse(entry.answer);
+              } catch (error) {
+                renderedAnswer = escapeHtml(entry.answer);
+              }
+            } else {
+              renderedAnswer = escapeHtml(entry.answer);
+            }
+
+            assistantMsgDiv.innerHTML = `
+              <div class="message-content">
+                <strong><i class="bi bi-robot"></i> Assistente:</strong><br>
+                <div class="markdown-content">${renderedAnswer}</div>
+                ${sourcesHtml}
+              </div>
+            `;
+            chatMessages.appendChild(assistantMsgDiv);
+
+            // Adicionar ao histórico da conversa
+            conversationHistory.push({ role: 'user', content: entry.question });
+            conversationHistory.push({ role: 'assistant', content: entry.answer });
+          });
+
+          scrollToBottom();
+        }
+      } catch (error) {
+        console.error('Erro ao carregar histórico:', error);
+      }
+    }
 
     // Função para adicionar mensagem do usuário
     function addUserMessage(text) {
@@ -618,6 +695,9 @@
       // Adicionar mensagem do usuário
       addUserMessage(question);
 
+      // Adicionar ao histórico da conversa
+      conversationHistory.push({ role: 'user', content: question });
+
       // Limpar input
       questionInput.value = '';
 
@@ -634,13 +714,18 @@
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ question: question })
+          body: JSON.stringify({
+            question: question,
+            history: conversationHistory
+          })
         });
 
         const data = await response.json();
 
         if (data.success) {
           addAssistantMessage(data.answer, data.sources, data.sources_detail);
+          // Adicionar resposta ao histórico
+          conversationHistory.push({ role: 'assistant', content: data.answer });
         } else {
           addErrorMessage(data.error || 'Erro ao processar sua pergunta');
         }
@@ -672,6 +757,9 @@
         sendQuestion(question);
       });
     });
+
+    // Carregar histórico ao inicializar
+    loadHistory();
 
     // Focar no input ao carregar
     questionInput.focus();

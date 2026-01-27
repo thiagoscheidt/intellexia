@@ -262,7 +262,7 @@ class CaseKnowledgeIngestor:
             traceback.print_exc()
             return None
         
-    def ask_with_llm(self, question: str, user_id: int = None, law_firm_id: int = None) -> dict:
+    def ask_with_llm(self, question: str, user_id: int = None, law_firm_id: int = None, history=None) -> dict:
         """
         Consulta a base de conhecimento de casos e usa LLM para gerar resposta.
         
@@ -270,6 +270,7 @@ class CaseKnowledgeIngestor:
             question: A pergunta do usuário
             user_id: ID do usuário que fez a pergunta (opcional)
             law_firm_id: ID do escritório (opcional)
+            history: Histórico da conversa no formato OpenAI (lista de dicts com 'role' e 'content')
             
         Returns:
             dict com 'answer' (str), 'sources' (list) e 'history_id' (int, se salvo no banco)
@@ -303,11 +304,35 @@ class CaseKnowledgeIngestor:
             temperature=0
         ).with_structured_output(ResponseSchema)
 
-        response = llm.invoke([
-            {"role": "system", "content": "Você é um assistente jurídico, que deve auxiliar na desenvolvimento de petições e outras atividades jurídicas."},
-            {"role": "system", "content": f"Contexto disponível:\n\n{formatted_context}\n\nIMPORTANTE: No campo 'sources', liste APENAS os números das fontes que você realmente usou para responder (ex: ['0', '2']). Se não souber a resposta com base no contexto, informe claramente que não possui essa informação e retorne sources como lista vazia."},
-            {"role": "user", "content": question}
-        ])
+        # Mensagem de sistema com instruções
+        system_message = {
+            "role": "system", 
+            "content": "Você é um assistente jurídico, que deve auxiliar na desenvolvimento de petições e outras atividades jurídicas."
+        }
+        
+        context_message = {
+            "role": "system", 
+            "content": f"Contexto disponível:\n\n{formatted_context}\n\nIMPORTANTE: No campo 'sources', liste APENAS os números das fontes que você realmente usou para responder (ex: ['0', '2']). Se não souber a resposta com base no contexto, informe claramente que não possui essa informação e retorne sources como lista vazia."
+        }
+
+        # Construir mensagens para o LLM
+        if history is None or len(history) == 0:
+            # Primeira pergunta da conversa
+            messages = [
+                system_message,
+                context_message,
+                {"role": "user", "content": question}
+            ]
+        else:
+            # Limitar histórico às últimas 5 interações (10 mensagens)
+            limited_history = history[-10:] if len(history) > 10 else history
+            # Continuar conversa com histórico limitado
+            messages = [system_message] + limited_history + [
+                context_message,
+                {"role": "user", "content": question}
+            ]
+            
+        response = llm.invoke(messages)
         
         # Calcular tempo de resposta
         response_time_ms = int((time.time() - start_time) * 1000)
