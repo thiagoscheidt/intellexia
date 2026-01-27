@@ -5,30 +5,30 @@
 {% block content %}
 
 <div class="app-content-header"
-    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 2rem 0; margin-bottom: 1.5rem; border-radius: 0 0 15px 15px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);">
+    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1rem 0; margin-bottom: 0.75rem; border-radius: 0 0 15px 15px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);">
     <div class="container-fluid">
         <div class="row align-items-center">
             <div class="col-sm-8">
                 <div class="d-flex align-items-center">
                     <div class="me-3">
                         <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
-                            style="width: 60px; height: 60px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-                            <i class="bi bi-cloud-upload-fill" style="font-size: 1.8rem; color: #667eea;"></i>
+                            style="width: 40px; height: 40px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                            <i class="bi bi-cloud-upload-fill" style="font-size: 1.2rem; color: #667eea;"></i>
                         </div>
                     </div>
                     <div class="text-white">
-                        <h3 class="mb-1" style="font-weight: 600; font-size: 1.8rem;">
+                        <h3 class="mb-0" style="font-weight: 600; font-size: 1.2rem;">
                             <i class="bi bi-file-earmark-arrow-up-fill"></i> Adicionar Arquivo
                         </h3>
-                        <p class="mb-0 opacity-90" style="font-size: 1rem;">
+                        <small class="opacity-90" style="font-size: 1rem;">
                             <i class="bi bi-stars"></i> Expanda sua base de conhecimento com novos documentos
-                        </p>
+                        </small>
                     </div>
                 </div>
             </div>
             <div class="col-sm-4">
                 <ol class="breadcrumb float-sm-end mb-0"
-                    style="background: rgba(255,255,255,0.15); padding: 0.75rem 1rem; border-radius: 10px; backdrop-filter: blur(10px);">
+                    style="background: rgba(255,255,255,0.15); padding: 0.5rem 0.75rem; border-radius: 10px; backdrop-filter: blur(10px);">
                     <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"
                             class="text-white text-decoration-none"><i class="bi bi-house-fill"></i> Home</a></li>
                     <li class="breadcrumb-item"><a href="{{ url_for('knowledge_base.list') }}"
