@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify, send_file
-from app.models import db, KnowledgeBase
+from app.models import db, KnowledgeBase, KnowledgeCategory
 from app.agents.knowledge_ingestor import KnowledgeIngestor
 from datetime import datetime
 from werkzeug.utils import secure_filename
@@ -70,6 +70,12 @@ def upload():
     if not law_firm_id or not user_id:
         flash('Você precisa estar logado para acessar esta página.', 'error')
         return redirect(url_for('auth.login'))
+    
+    # Buscar categorias do banco de dados
+    categories = KnowledgeCategory.query.filter_by(
+        law_firm_id=law_firm_id,
+        is_active=True
+    ).order_by(KnowledgeCategory.display_order).all()
     
     if request.method == 'POST':
         # Validar se o arquivo foi enviado
@@ -169,7 +175,140 @@ def upload():
                 flash(f'Erro ao salvar arquivo no banco de dados: {str(e)}', 'error')
                 return redirect(request.url)
     
-    return render_template('knowledge_base/upload.html')
+    return render_template('knowledge_base/upload.html', categories=categories)
+
+# ROTAS PARA GERENCIAR CATEGORIAS
+
+@knowledge_base_bp.route('/categories')
+def categories_list():
+    """Lista todas as categorias da base de conhecimento"""
+    law_firm_id = get_current_law_firm_id()
+    if not law_firm_id:
+        flash('Você precisa estar logado para acessar esta página.', 'error')
+        return redirect(url_for('auth.login'))
+    
+    categories = KnowledgeCategory.query.filter_by(
+        law_firm_id=law_firm_id
+    ).order_by(KnowledgeCategory.display_order).all()
+    
+    return render_template('knowledge_base/categories.html', categories=categories)
+
+@knowledge_base_bp.route('/categories/create', methods=['POST'])
+def category_create():
+    """Cria uma nova categoria"""
+    law_firm_id = get_current_law_firm_id()
+    if not law_firm_id:
+        return jsonify({'success': False, 'error': 'Não autenticado'}), 401
+    
+    try:
+        name = request.form.get('name', '').strip()
+        icon = request.form.get('icon', '').strip()
+        description = request.form.get('description', '').strip()
+        color = request.form.get('color', '#007bff')
+        
+        if not name:
+            return jsonify({'success': False, 'error': 'Nome é obrigatório'}), 400
+        
+        # Verificar se já existe categoria com este nome
+        existing = KnowledgeCategory.query.filter_by(
+            law_firm_id=law_firm_id,
+            name=name
+        ).first()
+        
+        if existing:
+            return jsonify({'success': False, 'error': 'Já existe uma categoria com este nome'}), 400
+        
+        # Obter próxima ordem de exibição
+        max_order = db.session.query(db.func.max(KnowledgeCategory.display_order)).filter_by(
+            law_firm_id=law_firm_id
+        ).scalar() or 0
+        
+        category = KnowledgeCategory(
+            law_firm_id=law_firm_id,
+            name=name,
+            icon=icon,
+            description=description,
+            color=color,
+            display_order=max_order + 1,
+            is_active=True
+        )
+        
+        db.session.add(category)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Categoria criada com sucesso'})
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@knowledge_base_bp.route('/categories/<int:category_id>/update', methods=['POST'])
+def category_update(category_id):
+    """Atualiza uma categoria existente"""
+    law_firm_id = get_current_law_firm_id()
+    if not law_firm_id:
+        return jsonify({'success': False, 'error': 'Não autenticado'}), 401
+    
+    try:
+        category = KnowledgeCategory.query.filter_by(
+            id=category_id,
+            law_firm_id=law_firm_id
+        ).first()
+        
+        if not category:
+            return jsonify({'success': False, 'error': 'Categoria não encontrada'}), 404
+        
+        name = request.form.get('name', '').strip()
+        if not name:
+            return jsonify({'success': False, 'error': 'Nome é obrigatório'}), 400
+        
+        # Verificar duplicação de nome
+        existing = KnowledgeCategory.query.filter(
+            KnowledgeCategory.law_firm_id == law_firm_id,
+            KnowledgeCategory.name == name,
+            KnowledgeCategory.id != category_id
+        ).first()
+        
+        if existing:
+            return jsonify({'success': False, 'error': 'Já existe uma categoria com este nome'}), 400
+        
+        category.name = name
+        category.icon = request.form.get('icon', '').strip()
+        category.description = request.form.get('description', '').strip()
+        category.color = request.form.get('color', '#007bff')
+        
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Categoria atualizada com sucesso'})
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@knowledge_base_bp.route('/categories/<int:category_id>/delete', methods=['POST'])
+def category_delete(category_id):
+    """Desativa uma categoria"""
+    law_firm_id = get_current_law_firm_id()
+    if not law_firm_id:
+        return jsonify({'success': False, 'error': 'Não autenticado'}), 401
+    
+    try:
+        category = KnowledgeCategory.query.filter_by(
+            id=category_id,
+            law_firm_id=law_firm_id
+        ).first()
+        
+        if not category:
+            return jsonify({'success': False, 'error': 'Categoria não encontrada'}), 404
+        
+        category.is_active = False
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Categoria desativada com sucesso'})
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @knowledge_base_bp.route('/<int:file_id>/delete', methods=['POST'])
 def delete(file_id):

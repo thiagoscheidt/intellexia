@@ -1,0 +1,262 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Gerenciar Categorias - Base de Conhecimento - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header"
+    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1rem 0; margin-bottom: 0.75rem; border-radius: 0 0 15px 15px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);">
+    <div class="container-fluid">
+        <div class="row align-items-center">
+            <div class="col-sm-8">
+                <div class="d-flex align-items-center">
+                    <div class="me-3">
+                        <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
+                            style="width: 40px; height: 40px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                            <i class="bi bi-folder-fill" style="font-size: 1.2rem; color: #667eea;"></i>
+                        </div>
+                    </div>
+                    <div class="text-white">
+                        <h3 class="mb-0" style="font-weight: 600; font-size: 1.2rem;">
+                            <i class="bi bi-tags-fill"></i> Gerenciar Categorias
+                        </h3>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-4">
+                <ol class="breadcrumb float-sm-end mb-0"
+                    style="background: rgba(255,255,255,0.15); padding: 0.5rem 0.75rem; border-radius: 10px; backdrop-filter: blur(10px);">
+                    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"
+                            class="text-white text-decoration-none"><i class="bi bi-house-fill"></i> Home</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('knowledge_base.list') }}"
+                            class="text-white text-decoration-none">Base de Conhecimento</a></li>
+                    <li class="breadcrumb-item active text-white" aria-current="page"><strong>Categorias</strong></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="app-content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="card border-0 shadow-lg" style="border-radius: 15px; overflow: hidden;">
+                    <div class="card-header text-white"
+                        style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1rem;">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div class="d-flex align-items-center">
+                                <div class="me-2">
+                                    <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
+                                        style="width: 30px; height: 30px;">
+                                        <i class="bi bi-list-ul" style="font-size: 1rem; color: #667eea;"></i>
+                                    </div>
+                                </div>
+                                <div>
+                                    <h3 class="card-title mb-0" style="font-weight: 600; font-size: 1rem;">Categorias de Documentos</h3>
+                                    <small class="opacity-75">Organize sua base de conhecimento</small>
+                                </div>
+                            </div>
+                            <button class="btn btn-light shadow-sm" style="border-radius: 8px; padding: 0.5rem 1rem;"
+                                data-bs-toggle="modal" data-bs-target="#categoryModal" onclick="openCreateModal()">
+                                <i class="bi bi-plus-circle-fill"></i> Nova Categoria
+                            </button>
+                        </div>
+                    </div>
+                    <div class="card-body" style="padding: 1.5rem;">
+                        {% if categories|length == 0 %}
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            Nenhuma categoria cadastrada. Crie a primeira categoria para começar a organizar seus documentos.
+                        </div>
+                        {% else %}
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th width="50">Ordem</th>
+                                        <th>Categoria</th>
+                                        <th>Descrição</th>
+                                        <th width="100">Cor</th>
+                                        <th width="100">Status</th>
+                                        <th width="100">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for cat in categories %}
+                                    <tr>
+                                        <td class="text-center">{{ cat.display_order }}</td>
+                                        <td>
+                                            <span style="font-size: 1.2rem;">{{ cat.icon }}</span>
+                                            <strong class="ms-2">{{ cat.name }}</strong>
+                                        </td>
+                                        <td>{{ cat.description or '-' }}</td>
+                                        <td>
+                                            <div class="d-flex align-items-center gap-2">
+                                                <div style="width: 30px; height: 30px; background: {{ cat.color }}; border-radius: 5px;"></div>
+                                                <small class="text-muted">{{ cat.color }}</small>
+                                            </div>
+                                        </td>
+                                        <td>
+                                            {% if cat.is_active %}
+                                            <span class="badge bg-success">Ativa</span>
+                                            {% else %}
+                                            <span class="badge bg-secondary">Inativa</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            <div class="btn-group btn-group-sm">
+                                                <button class="btn btn-primary btn-sm" title="Editar"
+                                                    onclick="openEditModal({{ cat.id }}, '{{ cat.name }}', '{{ cat.icon }}', '{{ cat.description or '' }}', '{{ cat.color }}')">
+                                                    <i class="bi bi-pencil"></i>
+                                                </button>
+                                                <button class="btn btn-danger btn-sm" title="Desativar"
+                                                    onclick="deleteCategory({{ cat.id }}, '{{ cat.name }}')">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal para criar/editar categoria -->
+<div class="modal fade" id="categoryModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <h5 class="modal-title text-white" id="categoryModalTitle">Nova Categoria</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="categoryForm">
+                <div class="modal-body">
+                    <input type="hidden" id="categoryId">
+                    
+                    <div class="mb-3">
+                        <label for="categoryName" class="form-label fw-bold">
+                            <i class="bi bi-tag"></i> Nome *
+                        </label>
+                        <input type="text" class="form-control" id="categoryName" required
+                            placeholder="Ex: Jurisprudência">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="categoryIcon" class="form-label fw-bold">
+                            <i class="bi bi-emoji-smile"></i> Ícone/Emoji
+                        </label>
+                        <input type="text" class="form-control" id="categoryIcon"
+                            placeholder="Ex: 📚 ou deixe vazio">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="categoryDescription" class="form-label fw-bold">
+                            <i class="bi bi-text-left"></i> Descrição
+                        </label>
+                        <textarea class="form-control" id="categoryDescription" rows="2"
+                            placeholder="Breve descrição da categoria"></textarea>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="categoryColor" class="form-label fw-bold">
+                            <i class="bi bi-palette"></i> Cor
+                        </label>
+                        <input type="color" class="form-control form-control-color" id="categoryColor" 
+                            value="#007bff" style="width: 100px;">
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+let isEditMode = false;
+
+function openCreateModal() {
+    isEditMode = false;
+    document.getElementById('categoryModalTitle').textContent = 'Nova Categoria';
+    document.getElementById('categoryForm').reset();
+    document.getElementById('categoryId').value = '';
+}
+
+function openEditModal(id, name, icon, description, color) {
+    isEditMode = true;
+    document.getElementById('categoryModalTitle').textContent = 'Editar Categoria';
+    document.getElementById('categoryId').value = id;
+    document.getElementById('categoryName').value = name;
+    document.getElementById('categoryIcon').value = icon;
+    document.getElementById('categoryDescription').value = description;
+    document.getElementById('categoryColor').value = color;
+    
+    const modal = new bootstrap.Modal(document.getElementById('categoryModal'));
+    modal.show();
+}
+
+document.getElementById('categoryForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    const categoryId = document.getElementById('categoryId').value;
+    const formData = new FormData();
+    formData.append('name', document.getElementById('categoryName').value);
+    formData.append('icon', document.getElementById('categoryIcon').value);
+    formData.append('description', document.getElementById('categoryDescription').value);
+    formData.append('color', document.getElementById('categoryColor').value);
+    
+    const url = isEditMode 
+        ? `/knowledge-base/categories/${categoryId}/update`
+        : '/knowledge-base/categories/create';
+    
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Erro: ' + data.error);
+        }
+    } catch (error) {
+        alert('Erro ao salvar categoria: ' + error);
+    }
+});
+
+async function deleteCategory(id, name) {
+    if (!confirm(`Tem certeza que deseja desativar a categoria "${name}"?`)) {
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/knowledge-base/categories/${id}/delete`, {
+            method: 'POST'
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            location.reload();
+        } else {
+            alert('Erro: ' + data.error);
+        }
+    } catch (error) {
+        alert('Erro ao desativar categoria: ' + error);
+    }
+}
+</script>
+
+{% endblock %}

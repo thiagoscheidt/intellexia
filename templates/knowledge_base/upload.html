@@ -95,13 +95,9 @@
                                 <select class="form-select form-select-lg border-2 shadow-sm" id="category"
                                     name="category" style="border-radius: 10px;">
                                     <option value="">Selecione uma categoria...</option>
-                                    <option value="Jurisprudência">📚 Jurisprudência</option>
-                                    <option value="Legislação">⚖️ Legislação</option>
-                                    <option value="Modelos">📄 Modelos de Documentos</option>
-                                    <option value="Artigos">📰 Artigos e Estudos</option>
-                                    <option value="Manuais">📖 Manuais e Guias</option>
-                                    <option value="Procedimentos">🔧 Procedimentos Internos</option>
-                                    <option value="Outros">📦 Outros</option>
+                                    {% for cat in categories %}
+                                    <option value="{{ cat.name }}">{{ cat.icon }} {{ cat.name }}</option>
+                                    {% endfor %}
                                 </select>
                                 <small class="form-text text-muted d-block mt-2">
                                     <i class="bi bi-tag"></i> Categorize o arquivo para facilitar a organização
