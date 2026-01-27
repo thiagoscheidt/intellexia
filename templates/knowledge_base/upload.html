@@ -3,6 +3,7 @@
 {% block title %}Adicionar Arquivo - Base de Conhecimento - IntellexIA{% endblock %}
 
 {% block content %}
+
 <div class="app-content-header"
     style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 2rem 0; margin-bottom: 1.5rem; border-radius: 0 0 15px 15px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);">
     <div class="container-fluid">
@@ -117,17 +118,32 @@
                                     arquivo
                                 </small>
                             </div>
-
                             <div class="mb-4">
                                 <label for="tags" class="form-label fw-bold">
                                     <i class="bi bi-tags text-success"></i> Tags
                                 </label>
-                                <input type="text" class="form-control form-control-lg border-2 shadow-sm" id="tags"
-                                    name="tags" placeholder="Ex: trabalhista, previdenciário, STJ, súmula"
-                                    style="border-radius: 10px;">
+                                <select class="form-select" id="tags" name="tags" multiple style="width: 100%;">
+                                    <option value="trabalhista">Trabalhista</option>
+                                    <option value="previdenciário">Previdenciário</option>
+                                    <option value="STJ">STJ</option>
+                                    <option value="STF">STF</option>
+                                    <option value="súmula">Súmula</option>
+                                    <option value="jurisprudência">Jurisprudência</option>
+                                    <option value="legislação">Legislação</option>
+                                    <option value="petição">Petição</option>
+                                    <option value="recurso">Recurso</option>
+                                    <option value="acórdão">Acórdão</option>
+                                    <option value="sentença">Sentença</option>
+                                    <option value="despacho">Despacho</option>
+                                    <option value="FAP">FAP</option>
+                                    <option value="INSS">INSS</option>
+                                    <option value="acidente">Acidente</option>
+                                    <option value="aposentadoria">Aposentadoria</option>
+                                    <option value="auxílio-doença">Auxílio-doença</option>
+                                    <option value="pensão">Pensão</option>
+                                </select>
                                 <small class="form-text text-muted d-block mt-2">
-                                    <i class="bi bi-hash"></i> Separe as tags por vírgula. Exemplo: trabalhista,
-                                    jurisprudência, STJ
+                                    <i class="bi bi-hash"></i> Selecione múltiplas tags ou digite novas (pressione Enter)
                                 </small>
                             </div>
 
@@ -255,6 +271,55 @@
     </div>
 </div>
 
+<style>
+/* Select2 custom para integração visual com AdminLTE/Bootstrap 5 */
+.select2-container--default .select2-selection--multiple {
+    min-height: 48px;
+    border-radius: 10px;
+    border: 2px solid #dee2e6;
+    background: #fff;
+    box-shadow: none;
+    padding: 4px 8px;
+}
+.select2-container--default .select2-selection--multiple .select2-selection__choice {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    margin: 2px 4px 2px 0;
+    padding: 4px 10px;
+    font-size: 0.95rem;
+    font-weight: 500;
+}
+.select2-container--default .select2-selection--multiple .select2-selection__choice__remove {
+    color: #fff;
+    margin-right: 6px;
+    font-weight: bold;
+    opacity: 0.8;
+}
+.select2-container--default .select2-selection--multiple .select2-selection__choice__remove:hover {
+    color: #ffd6d6;
+    opacity: 1;
+}
+.select2-container--default .select2-search--inline .select2-search__field {
+    min-width: 120px;
+    font-size: 1rem;
+}
+.select2-container--default .select2-selection--multiple:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.15);
+}
+.select2-dropdown {
+    border-radius: 10px;
+    border: 2px solid #dee2e6;
+    box-shadow: 0 4px 16px rgba(102, 126, 234, 0.08);
+}
+.select2-results__option--highlighted {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: #fff;
+}
+</style>
+
 <script>
     // Validação do tamanho do arquivo (max 50MB)
     document.getElementById('file').addEventListener('change', function (e) {
@@ -280,6 +345,22 @@
         // Mostra o loading e esconde o texto original
         uploadBtnText.style.display = 'none';
         uploadBtnLoading.style.display = 'inline-block';
+    });
+
+    $('#tags').select2({
+        placeholder: 'Selecione ou digite as tags',
+        tags: true,
+        width: '100%',
+        allowClear: true,
+        closeOnSelect: false,
+        language: {
+            noResults: function() {
+                return 'Nenhuma tag encontrada';
+            },
+            inputTooShort: function() {
+                return 'Digite para buscar ou criar uma tag';
+            }
+        }
     });
 </script>
 

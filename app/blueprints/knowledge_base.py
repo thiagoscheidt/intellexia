@@ -92,7 +92,8 @@ def upload():
         # Obter dados do formulário
         description = request.form.get('description', '')
         category = request.form.get('category', '')
-        tags = request.form.get('tags', '')
+        tags = request.form.getlist('tags')
+        tags = ','.join(tags)
         lawsuit_number = request.form.get('lawsuit_number', '')
         
         # Salvar arquivo
