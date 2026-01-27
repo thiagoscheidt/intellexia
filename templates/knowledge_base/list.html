@@ -122,6 +122,7 @@
                                         <th>Arquivo</th>
                                         <th>Tipo</th>
                                         <th>Categoria</th>
+                                        <th>Número do Processo</th>
                                         <th>Descrição</th>
                                         <th>Tamanho</th>
                                         <th>Data de Upload</th>
@@ -149,6 +150,15 @@
                                         <td>
                                             {% if file.category %}
                                             <span class="badge bg-primary">{{ file.category }}</span>
+                                            {% else %}
+                                            <span class="text-muted">-</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if file.lawsuit_number %}
+                                            <span class="badge bg-success">
+                                                <i class="bi bi-briefcase"></i> {{ file.lawsuit_number }}
+                                            </span>
                                             {% else %}
                                             <span class="text-muted">-</span>
                                             {% endif %}

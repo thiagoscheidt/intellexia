@@ -87,6 +87,7 @@ def upload():
         description = request.form.get('description', '')
         category = request.form.get('category', '')
         tags = request.form.get('tags', '')
+        lawsuit_number = request.form.get('lawsuit_number', '')
         
         # Salvar arquivo
         if file:
@@ -116,7 +117,8 @@ def upload():
                 file_type=file_type,
                 description=description,
                 category=category,
-                tags=tags
+                tags=tags,
+                lawsuit_number=lawsuit_number
             )
             
             try:
@@ -135,6 +137,7 @@ def upload():
                         category=category,
                         description=description,
                         tags=tags,
+                        lawsuit_number=lawsuit_number,
                         file_id=knowledge_file.id
                     )
                     

@@ -72,7 +72,7 @@ class KnowledgeIngestor:
         # Retorna lista de dicts com texto e metadados vazios (serão preenchidos posteriormente)
         return [{'text': chunk, 'metadata': {}} for chunk in texts]
 
-    def ingest_document(self, text: str, source: str, category: str = None, description: str = None, tags: str = None, chunks_with_pages: list[dict] = None, file_id: int = None) -> Optional[list[str]]:
+    def ingest_document(self, text: str, source: str, category: str = None, description: str = None, tags: str = None, lawsuit_number: str = None, chunks_with_pages: list[dict] = None, file_id: int = None) -> Optional[list[str]]:
         """Ingere documento na base vetorial.
         
         Args:
@@ -110,6 +110,7 @@ class KnowledgeIngestor:
                 "category": category or "",
                 "description": description or "",
                 "tags": tags or "",
+                "lawsuit_number": lawsuit_number or "",
                 "chunk_index": idx,
                 "chunk_total": total,
                 "ingested_at": datetime.utcnow().isoformat() + "Z",
@@ -151,7 +152,7 @@ class KnowledgeIngestor:
             "results": results
         }
 
-    def process_file(self, file_path: Path, source_name: str, category: str = None, description: str = None, tags: str = None, file_id: int = None):
+    def process_file(self, file_path: Path, source_name: str, category: str = None, description: str = None, tags: str = None, lawsuit_number: str = None, file_id: int = None):
         """Processa um arquivo e insere na base de conhecimento com informação de páginas"""
         converter = DocumentConverter()
         try:
@@ -207,6 +208,7 @@ class KnowledgeIngestor:
                     category=category,
                     description=description,
                     tags=tags,
+                    lawsuit_number=lawsuit_number,
                     chunks_with_pages=chunks_with_pages,
                     file_id=file_id
                 )
@@ -239,6 +241,7 @@ class KnowledgeIngestor:
                         category=category,
                         description=description,
                         tags=tags,
+                        lawsuit_number=lawsuit_number,
                         chunks_with_pages=chunks_with_pages,
                         file_id=file_id
                     )
@@ -251,6 +254,7 @@ class KnowledgeIngestor:
                         category=category,
                         description=description,
                         tags=tags,
+                        lawsuit_number=lawsuit_number,
                         file_id=file_id
                     )
             

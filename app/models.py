@@ -395,6 +395,7 @@ class KnowledgeBase(db.Model):
     description = db.Column(db.Text)
     category = db.Column(db.String(100))  # Jurisprudência, Legislação, Modelos, etc.
     tags = db.Column(db.String(500))  # Tags separadas por vírgula
+    lawsuit_number = db.Column(db.String(100))  # Número do processo judicial (opcional)
     
     # Status
     is_active = db.Column(db.Boolean, default=True)
