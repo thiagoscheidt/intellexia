@@ -62,10 +62,33 @@ cp .env.example .env
 ```
 
 ### 4. Executar aplicação
+
+#### Desenvolvimento
 ```bash
 uv run python main.py
 ```
 (As tabelas serão criadas automaticamente na primeira execução)
+
+#### Produção
+Para ambientes de produção, utilize o Gunicorn:
+```bash
+# Instalar gunicorn (se necessário)
+uv add gunicorn
+
+# Executar com 4 workers
+gunicorn -w 4 -b 127.0.0.1:8000 wsgi:app
+```
+
+**Parâmetros Gunicorn:**
+- `-w 4`: 4 processos workers (ajuste conforme CPU disponível)
+- `-b 127.0.0.1:8000`: Bind no endereço e porta especificados
+- `wsgi:app`: Módulo e aplicação Flask
+
+**Recomendações para Produção:**
+- Use um servidor reverso proxy (Nginx, Apache)
+- Configure SSL/TLS para HTTPS
+- Ajuste número de workers baseado em: `(2 x $num_cores) + 1`
+- Use supervisor ou systemd para gerenciar o processo
 
 ## 📁 Estrutura do Banco de Dados
 
