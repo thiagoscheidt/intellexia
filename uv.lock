@@ -518,6 +518,18 @@ wheels = [
 ]
 
 [[package]]
+name = "gunicorn"
+version = "24.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "packaging" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/78/0a/10739c03537ec5b131a867bf94df2e412b437696c7e5d26970e2198a80d2/gunicorn-24.1.1.tar.gz", hash = "sha256:f006d110e5cb3102859b4f5cd48335dbd9cc28d0d27cd24ddbdafa6c60929408", size = 287567, upload-time = "2026-01-24T01:15:31.359Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/96/90/cfe637677916fc6f53cd2b05d5746e249f683e1fa14c9e745a88c66f7290/gunicorn-24.1.1-py3-none-any.whl", hash = "sha256:757f6b621fc4f7581a90600b2cd9df593461f06a41d7259cb9b94499dc4095a8", size = 114920, upload-time = "2026-01-24T01:15:29.656Z" },
+]
+
+[[package]]
 name = "h11"
 version = "0.16.0"
 source = { registry = "https://pypi.org/simple" }
@@ -643,6 +655,7 @@ dependencies = [
     { name = "flask" },
     { name = "flask-sqlalchemy" },
     { name = "flask-wtf" },
+    { name = "gunicorn" },
     { name = "langchain-openai" },
     { name = "langchain-text-splitters" },
     { name = "openai" },
@@ -667,6 +680,7 @@ requires-dist = [
     { name = "flask", specifier = ">=3.1.2" },
     { name = "flask-sqlalchemy", specifier = ">=3.1.1" },
     { name = "flask-wtf", specifier = ">=1.2.2" },
+    { name = "gunicorn", specifier = ">=24.1.1" },
     { name = "langchain-openai", specifier = ">=1.1.6" },
     { name = "langchain-text-splitters", specifier = ">=1.1.0" },
     { name = "openai", specifier = ">=2.14.0" },
