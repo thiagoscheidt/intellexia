@@ -504,6 +504,27 @@ class KnowledgeChatHistory(db.Model):
         return f'<KnowledgeChatHistory {self.id}>'
 
 
+class KnowledgeSummary(db.Model):
+    """Tabela knowledge_summaries - Resumos gerados pela IA para arquivos da base de conhecimento"""
+    __tablename__ = 'knowledge_summaries'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    knowledge_base_id = db.Column(db.Integer, db.ForeignKey('knowledge_base.id'), nullable=False, index=True)
+    
+    # Dados do resumo
+    payload = db.Column(db.JSON, nullable=False)  # JSON com o resumo e metadados
+    
+    # Auditoria
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relacionamentos
+    knowledge_base = db.relationship('KnowledgeBase')
+    
+    def __repr__(self):
+        return f'<KnowledgeSummary {self.id}>'
+
+
 class CasesKnowledgeBase(db.Model):
     """Tabela cases_knowledge_base - Base de conhecimento geral para casos (não específica de um caso)"""
     __tablename__ = 'cases_knowledge_base'

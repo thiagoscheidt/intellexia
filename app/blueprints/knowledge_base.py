@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify, send_file
-from app.models import db, KnowledgeBase, KnowledgeCategory, KnowledgeTag
+from app.models import db, KnowledgeBase, KnowledgeCategory, KnowledgeTag, KnowledgeSummary
 from app.agents.knowledge_ingestor import KnowledgeIngestor
 from datetime import datetime
 from werkzeug.utils import secure_filename
@@ -488,7 +488,62 @@ def details(file_id):
         is_active=True
     ).first_or_404()
     
-    return render_template('knowledge_base/details.html', file=file)
+    # Buscar resumo existente
+    summary = KnowledgeSummary.query.filter_by(knowledge_base_id=file_id).first()
+    
+    return render_template('knowledge_base/details.html', file=file, summary=summary)
+
+
+@knowledge_base_bp.route('/<int:file_id>/generate-summary', methods=['POST'])
+def generate_summary(file_id):
+    """Gera um resumo para o arquivo usando IA"""
+    law_firm_id = get_current_law_firm_id()
+    user_id = get_current_user_id()
+    
+    if not law_firm_id or not user_id:
+        return jsonify({'success': False, 'error': 'Não autorizado'}), 401
+    
+    try:
+        # Verificar se o arquivo existe
+        file = KnowledgeBase.query.filter_by(
+            id=file_id,
+            law_firm_id=law_firm_id,
+            is_active=True
+        ).first()
+        
+        if not file:
+            return jsonify({'success': False, 'error': 'Arquivo não encontrado'}), 404
+        
+        # TODO: Implementar lógica de geração de resumo
+        # Placeholder para implementação futura
+        summary_payload = {
+            'status': 'generating',
+            'message': 'Resumo em processamento...'
+        }
+        
+        # Verificar se já existe resumo
+        existing_summary = KnowledgeSummary.query.filter_by(knowledge_base_id=file_id).first()
+        
+        if existing_summary:
+            existing_summary.payload = summary_payload
+            existing_summary.updated_at = datetime.utcnow()
+        else:
+            summary = KnowledgeSummary(
+                knowledge_base_id=file_id,
+                payload=summary_payload
+            )
+            db.session.add(summary)
+        
+        db.session.commit()
+        
+        return jsonify({
+            'success': True,
+            'message': 'Função de geração de resumo pronta para implementação'
+        })
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 
 @knowledge_base_bp.route('/<int:file_id>/download')

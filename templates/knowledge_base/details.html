@@ -148,6 +148,40 @@
                 </div>
 
                 <!-- Ações rápidas -->
+                <div class="card border-0 shadow-lg mb-4" style="border-radius: 15px; overflow: hidden;">
+                    <div class="card-header text-white" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); padding: 1.5rem;">
+                        <div class="d-flex align-items-center">
+                            <div class="me-3">
+                                <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                    <i class="bi bi-file-earmark-text-fill" style="font-size: 1.3rem; color: #28a745;"></i>
+                                </div>
+                            </div>
+                            <h3 class="card-title mb-0" style="font-weight: 600; font-size: 1.1rem;">Resumo</h3>
+                        </div>
+                    </div>
+                    <div class="card-body" style="padding: 1.5rem;">
+                        {% if summary %}
+                            <div class="alert alert-info">
+                                <i class="bi bi-info-circle"></i> Resumo disponível
+                            </div>
+                            <div class="p-3 bg-light rounded" style="border-left: 4px solid #28a745;">
+                                <p>{{ summary.payload.get('summary', 'Resumo em processamento...') }}</p>
+                            </div>
+                        {% else %}
+                            <p class="text-muted mb-3">Nenhum resumo gerado ainda. Clique no botão abaixo para gerar.</p>
+                        {% endif %}
+                        <button type="button" class="btn btn-success btn-sm w-100" onclick="generateSummary({{ file.id }})">
+                            <i class="bi bi-wand2"></i> 
+                            {% if summary %}
+                                Regenerar Resumo
+                            {% else %}
+                                Gerar Resumo com IA
+                            {% endif %}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Ações rápidas -->
                 <div class="card border-0 shadow-lg" style="border-radius: 15px; overflow: hidden;">
                     <div class="card-header text-white" style="background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%); padding: 1.5rem;">
                         <div class="d-flex align-items-center">
@@ -197,6 +231,40 @@
                     alert('Erro ao remover arquivo: ' + error);
                 });
         }
+    }
+
+    function generateSummary(fileId) {
+        const button = event.target.closest('button');
+        const originalHTML = button.innerHTML;
+        
+        // Desabilitar botão e mostrar carregamento
+        button.disabled = true;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Gerando resumo...';
+        
+        fetch(`/knowledge-base/${fileId}/generate-summary`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Recarregar página para mostrar novo resumo
+                    setTimeout(() => {
+                        location.reload();
+                    }, 1500);
+                } else {
+                    alert('Erro ao gerar resumo: ' + data.error);
+                    button.disabled = false;
+                    button.innerHTML = originalHTML;
+                }
+            })
+            .catch(error => {
+                alert('Erro ao gerar resumo: ' + error);
+                button.disabled = false;
+                button.innerHTML = originalHTML;
+            });
     }
 </script>
 
