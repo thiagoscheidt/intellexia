@@ -442,6 +442,36 @@ class KnowledgeCategory(db.Model):
         return f'<KnowledgeCategory {self.name}>'
 
 
+class KnowledgeTag(db.Model):
+    """Tabela knowledge_tags - Tags para marcação da base de conhecimento"""
+    __tablename__ = 'knowledge_tags'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    
+    # Informações da tag
+    name = db.Column(db.String(100), nullable=False)
+    icon = db.Column(db.String(50))  # Emoji ou classe de ícone Bootstrap
+    description = db.Column(db.Text)
+    color = db.Column(db.String(20), default='#007bff')  # Cor em hexadecimal
+    
+    # Ordem de exibição
+    display_order = db.Column(db.Integer, default=0)
+    
+    # Status
+    is_active = db.Column(db.Boolean, default=True)
+    
+    # Auditoria
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relacionamentos
+    law_firm = db.relationship('LawFirm')
+    
+    def __repr__(self):
+        return f'<KnowledgeTag {self.name}>'
+
+
 class KnowledgeChatHistory(db.Model):
     """Tabela knowledge_chat_history - Histórico de perguntas e respostas do chat da base de conhecimento"""
     __tablename__ = 'knowledge_chat_history'

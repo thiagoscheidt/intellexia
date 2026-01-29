@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify, send_file
-from app.models import db, KnowledgeBase, KnowledgeCategory
+from app.models import db, KnowledgeBase, KnowledgeCategory, KnowledgeTag
 from app.agents.knowledge_ingestor import KnowledgeIngestor
 from datetime import datetime
 from werkzeug.utils import secure_filename
@@ -76,6 +76,12 @@ def upload():
         law_firm_id=law_firm_id,
         is_active=True
     ).order_by(KnowledgeCategory.display_order).all()
+    
+    # Buscar tags do banco de dados
+    tags = KnowledgeTag.query.filter_by(
+        law_firm_id=law_firm_id,
+        is_active=True
+    ).order_by(KnowledgeTag.display_order).all()
     
     if request.method == 'POST':
         # Validar se o arquivo foi enviado
@@ -170,7 +176,7 @@ def upload():
                 return redirect(url_for('knowledge_base.list'))
             except Exception as e:
                 db.session.rollback()
-                # Remover arquivo em caso de erro
+                # Remover arquivo em caso de erro, tags=tags
                 if os.path.exists(file_path):
                     os.remove(file_path)
                 flash(f'Erro ao salvar arquivo no banco de dados: {str(e)}', 'error')
@@ -306,6 +312,139 @@ def category_delete(category_id):
         db.session.commit()
         
         return jsonify({'success': True, 'message': 'Categoria desativada com sucesso'})
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+# ROTAS PARA GERENCIAR TAGS
+
+@knowledge_base_bp.route('/tags')
+def tags_list():
+    """Lista todas as tags da base de conhecimento"""
+    law_firm_id = get_current_law_firm_id()
+    if not law_firm_id:
+        flash('Você precisa estar logado para acessar esta página.', 'error')
+        return redirect(url_for('auth.login'))
+    
+    tags = KnowledgeTag.query.filter_by(
+        law_firm_id=law_firm_id
+    ).order_by(KnowledgeTag.display_order).all()
+    
+    return render_template('knowledge_base/tags.html', tags=tags)
+
+@knowledge_base_bp.route('/tags/create', methods=['POST'])
+def tag_create():
+    """Cria uma nova tag"""
+    law_firm_id = get_current_law_firm_id()
+    if not law_firm_id:
+        return jsonify({'success': False, 'error': 'Não autenticado'}), 401
+    
+    try:
+        name = request.form.get('name', '').strip()
+        icon = request.form.get('icon', '').strip()
+        description = request.form.get('description', '').strip()
+        color = request.form.get('color', '#007bff')
+        
+        if not name:
+            return jsonify({'success': False, 'error': 'Nome é obrigatório'}), 400
+        
+        # Verificar se já existe tag com este nome
+        existing = KnowledgeTag.query.filter_by(
+            law_firm_id=law_firm_id,
+            name=name
+        ).first()
+        
+        if existing:
+            return jsonify({'success': False, 'error': 'Já existe uma tag com este nome'}), 400
+        
+        # Obter próxima ordem de exibição
+        max_order = db.session.query(db.func.max(KnowledgeTag.display_order)).filter_by(
+            law_firm_id=law_firm_id
+        ).scalar() or 0
+        
+        tag = KnowledgeTag(
+            law_firm_id=law_firm_id,
+            name=name,
+            icon=icon,
+            description=description,
+            color=color,
+            display_order=max_order + 1,
+            is_active=True
+        )
+        
+        db.session.add(tag)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Tag criada com sucesso'})
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@knowledge_base_bp.route('/tags/<int:tag_id>/update', methods=['POST'])
+def tag_update(tag_id):
+    """Atualiza uma tag existente"""
+    law_firm_id = get_current_law_firm_id()
+    if not law_firm_id:
+        return jsonify({'success': False, 'error': 'Não autenticado'}), 401
+    
+    try:
+        tag = KnowledgeTag.query.filter_by(
+            id=tag_id,
+            law_firm_id=law_firm_id
+        ).first()
+        
+        if not tag:
+            return jsonify({'success': False, 'error': 'Tag não encontrada'}), 404
+        
+        name = request.form.get('name', '').strip()
+        if not name:
+            return jsonify({'success': False, 'error': 'Nome é obrigatório'}), 400
+        
+        # Verificar duplicação de nome
+        existing = KnowledgeTag.query.filter(
+            KnowledgeTag.law_firm_id == law_firm_id,
+            KnowledgeTag.name == name,
+            KnowledgeTag.id != tag_id
+        ).first()
+        
+        if existing:
+            return jsonify({'success': False, 'error': 'Já existe uma tag com este nome'}), 400
+        
+        tag.name = name
+        tag.icon = request.form.get('icon', '').strip()
+        tag.description = request.form.get('description', '').strip()
+        tag.color = request.form.get('color', '#007bff')
+        
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Tag atualizada com sucesso'})
+    
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+@knowledge_base_bp.route('/tags/<int:tag_id>/delete', methods=['POST'])
+def tag_delete(tag_id):
+    """Desativa uma tag"""
+    law_firm_id = get_current_law_firm_id()
+    if not law_firm_id:
+        return jsonify({'success': False, 'error': 'Não autenticado'}), 401
+    
+    try:
+        tag = KnowledgeTag.query.filter_by(
+            id=tag_id,
+            law_firm_id=law_firm_id
+        ).first()
+        
+        if not tag:
+            return jsonify({'success': False, 'error': 'Tag não encontrada'}), 404
+        
+        tag.is_active = False
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Tag desativada com sucesso'})
     
     except Exception as e:
         db.session.rollback()
