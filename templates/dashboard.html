@@ -390,6 +390,75 @@
     </div>
   </div>
 </div>
+
+<!-- Sessão: Base de Conhecimento do Escritório -->
+<div class="row mt-4">
+  <div class="col-12">
+    <div class="card border-0 shadow-lg" style="border-radius: 15px; overflow: hidden;">
+      <div class="card-header text-white" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1.2rem;">
+        <div class="d-flex align-items-center">
+          <div class="me-3">
+            <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 40px; height: 40px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+              <i class="bi bi-book-fill" style="font-size: 1.2rem; color: #667eea;"></i>
+            </div>
+          </div>
+          <div>
+            <h3 class="card-title mb-0" style="font-weight: 600; font-size: 1.1rem;">Base de Conhecimento do Escritório</h3>
+            <small class="opacity-75">Resumo dos documentos, categorias e tags cadastrados</small>
+          </div>
+        </div>
+      </div>
+      <div class="card-body" style="padding: 1.5rem;">
+        <div class="row g-4">
+          <div class="col-md-4">
+            <div class="d-flex align-items-center">
+              <div class="me-3">
+                <span class="badge bg-primary" style="font-size: 1.2rem; padding: 12px 16px; border-radius: 50%;">
+                  <i class="bi bi-collection-fill"></i>
+                </span>
+              </div>
+              <div>
+                <div style="font-size: 1.5rem; font-weight: 700;">{{ knowledge_count or 0 }}</div>
+                <div class="text-muted">Documentos</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="d-flex align-items-center">
+              <div class="me-3">
+                <span class="badge bg-warning text-dark" style="font-size: 1.2rem; padding: 12px 16px; border-radius: 50%;">
+                  <i class="bi bi-folder-fill"></i>
+                </span>
+              </div>
+              <div>
+                <div style="font-size: 1.5rem; font-weight: 700;">{{ knowledge_categories_count or 0 }}</div>
+                <div class="text-muted">Categorias</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="d-flex align-items-center">
+              <div class="me-3">
+                <span class="badge bg-success" style="font-size: 1.2rem; padding: 12px 16px; border-radius: 50%;">
+                  <i class="bi bi-tags-fill"></i>
+                </span>
+              </div>
+              <div>
+                <div style="font-size: 1.5rem; font-weight: 700;">{{ knowledge_tags_count or 0 }}</div>
+                <div class="text-muted">Tags únicas</div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="mt-4">
+          <a href="{{ url_for('knowledge_base.list') }}" class="btn btn-light shadow-sm" style="border-radius: 8px; padding: 0.5rem 1.5rem;">
+            <i class="bi bi-arrow-right-circle"></i> Acessar Base de Conhecimento
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 {% block extra_js %}
 <!-- Chart.js sem SRI para evitar bloqueio por hash incorreto -->

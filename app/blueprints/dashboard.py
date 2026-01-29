@@ -41,7 +41,7 @@ def dashboard():
         law_firm = user.law_firm if user else None
         law_firm_id = get_current_law_firm_id()
         
-        from app.models import Client, CaseBenefit, Lawyer, Document
+        from app.models import Client, CaseBenefit, Lawyer, Document, KnowledgeBase, KnowledgeCategory
         
         total_cases = Case.query.filter_by(law_firm_id=law_firm_id).count()
         active_cases = Case.query.filter_by(law_firm_id=law_firm_id, status='active').count()
@@ -97,6 +97,18 @@ def dashboard():
         from app.models import Court
         total_courts = Court.query.filter_by(law_firm_id=law_firm_id).count()
         
+        # --- INFORMAÇÕES DA BASE DE CONHECIMENTO ---
+        knowledge_count = KnowledgeBase.query.filter_by(law_firm_id=law_firm_id, is_active=True).count()
+        knowledge_categories_count = KnowledgeCategory.query.filter_by(law_firm_id=law_firm_id, is_active=True).count()
+        # Tags únicas
+        all_tags = KnowledgeBase.query.with_entities(KnowledgeBase.tags).filter_by(law_firm_id=law_firm_id, is_active=True).all()
+        tag_set = set()
+        for tags_str, in all_tags:
+            if tags_str:
+                tag_set.update([t.strip() for t in tags_str.split(',') if t.strip()])
+        knowledge_tags_count = len(tag_set)
+        # ---
+        
         return render_template('dashboard.html',
             total_cases=total_cases,
             active_cases=active_cases,
@@ -117,6 +129,9 @@ def dashboard():
             total_users=total_users,
             total_courts=total_courts,
             cases_by_month=cases_by_month,
+            knowledge_count=knowledge_count,
+            knowledge_categories_count=knowledge_categories_count,
+            knowledge_tags_count=knowledge_tags_count,
             user=user,
             law_firm=law_firm
         )
