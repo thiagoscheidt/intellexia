@@ -109,6 +109,13 @@
                 <p>Análise de Documento</p>
               </a>
             </li>
+            <li class="nav-item">
+              <a href="{{ url_for('tools.datajud_search') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'tools.datajud_search' else '' }}">
+                <i class="nav-icon bi bi-search"></i>
+                <p>Pesquisa DataJud</p>
+              </a>
+            </li>
           </ul>
         </li>
 

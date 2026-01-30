@@ -195,3 +195,155 @@ def tools_document_summary_reprocess(document_id):
         flash(f'Erro ao reprocessar documento: {str(e)}', 'danger')
     
     return redirect(url_for('tools.tools_document_summary_detail', document_id=document_id))
+
+
+# ========================
+# Ferramentas DataJud - Pesquisa de Processos
+# ========================
+
+@tools_bp.route('/datajud', methods=['GET', 'POST'])
+@require_law_firm
+def datajud_search():
+    """
+    Ferramentas de busca na API DataJud - Consulta de processos judiciais
+    """
+    from app.services.data_jud_api import DataJudAPI
+    
+    resultado = None
+    processos = []
+    total_resultados = 0
+    erro = None
+    tempo_busca = 0
+    
+    # Dados para os selects
+    tribunais = [
+        ('STF', 'STF - Supremo Tribunal Federal'),
+        ('STJ', 'STJ - Superior Tribunal de Justiça'),
+        ('TST', 'TST - Tribunal Superior do Trabalho'),
+        ('TSE', 'TSE - Tribunal Superior Eleitoral'),
+        ('TRF1', 'TRF1 - 1ª Região'),
+        ('TRF2', 'TRF2 - 2ª Região'),
+        ('TRF3', 'TRF3 - 3ª Região'),
+        ('TRF4', 'TRF4 - 4ª Região'),
+        ('TRF5', 'TRF5 - 5ª Região'),
+        ('TRF6', 'TRF6 - 6ª Região'),
+        ('TJSP', 'TJSP - Tribunal de Justiça de SP'),
+        ('TJRJ', 'TJRJ - Tribunal de Justiça do RJ'),
+        ('TJMG', 'TJMG - Tribunal de Justiça de MG'),
+        ('TJRS', 'TJRS - Tribunal de Justiça do RS'),
+        ('TJPR', 'TJPR - Tribunal de Justiça do PR'),
+        ('TJBA', 'TJBA - Tribunal de Justiça da BA'),
+        ('TJCE', 'TJCE - Tribunal de Justiça do CE'),
+        ('TJPE', 'TJPE - Tribunal de Justiça de PE'),
+        ('TJGO', 'TJGO - Tribunal de Justiça de GO'),
+        ('TJDFT', 'TJDFT - Tribunal de Justiça do DF'),
+    ]
+    
+    if request.method == 'POST':
+        try:
+            api = DataJudAPI()
+            tipo_busca = request.form.get('tipo_busca', 'numero')
+            
+            if tipo_busca == 'numero':
+                # Busca por número de processo
+                numero_processo = request.form.get('numero_processo', '').strip()
+                tribunal = request.form.get('tribunal', '').strip()
+                
+                if not numero_processo or not tribunal:
+                    erro = "Preencha o número do processo e selecione um tribunal."
+                    return render_template(
+                        'tools/datajud_search.html',
+                        tribunais=tribunais,
+                        erro=erro,
+                        tipo_busca=tipo_busca
+                    )
+                
+                resultado = api.buscar_por_numero_processo(
+                    numero_processo=numero_processo,
+                    tribunal=tribunal,
+                    size=20
+                )
+            
+            elif tipo_busca == 'classe':
+                # Busca por classe e órgão
+                codigo_classe = request.form.get('codigo_classe', '').strip()
+                tribunal = request.form.get('tribunal', '').strip()
+                
+                if not codigo_classe or not tribunal:
+                    erro = "Preencha o código da classe e selecione um tribunal."
+                    return render_template(
+                        'tools/datajud_search.html',
+                        tribunais=tribunais,
+                        erro=erro,
+                        tipo_busca=tipo_busca
+                    )
+                
+                try:
+                    codigo_classe = int(codigo_classe)
+                except ValueError:
+                    erro = "Código de classe deve ser um número."
+                    return render_template(
+                        'tools/datajud_search.html',
+                        tribunais=tribunais,
+                        erro=erro,
+                        tipo_busca=tipo_busca
+                    )
+                
+                resultado = api.buscar_por_classe_e_orgao(
+                    codigo_classe=codigo_classe,
+                    codigo_orgao=0,
+                    tribunal=tribunal,
+                    size=20
+                )
+            
+            elif tipo_busca == 'assunto':
+                # Busca por assunto
+                codigo_assunto = request.form.get('codigo_assunto', '').strip()
+                tribunal = request.form.get('tribunal', '').strip()
+                
+                if not codigo_assunto or not tribunal:
+                    erro = "Preencha o código do assunto e selecione um tribunal."
+                    return render_template(
+                        'tools/datajud_search.html',
+                        tribunais=tribunais,
+                        erro=erro,
+                        tipo_busca=tipo_busca
+                    )
+                
+                try:
+                    codigo_assunto = int(codigo_assunto)
+                except ValueError:
+                    erro = "Código do assunto deve ser um número."
+                    return render_template(
+                        'tools/datajud_search.html',
+                        tribunais=tribunais,
+                        erro=erro,
+                        tipo_busca=tipo_busca
+                    )
+                
+                resultado = api.buscar_por_assunto(
+                    codigo_assunto=codigo_assunto,
+                    tribunal=tribunal,
+                    size=20
+                )
+            
+            # Processar resultado
+            if resultado.get('error'):
+                erro = f"Erro na busca: {resultado.get('message')}"
+            else:
+                tempo_busca = resultado.get('took', 0)
+                total_resultados = api.obter_total_resultados(resultado)
+                processos = api.extrair_processos(resultado)
+        
+        except Exception as e:
+            erro = f"Erro ao buscar: {str(e)}"
+    
+    return render_template(
+        'tools/datajud_search.html',
+        tribunais=tribunais,
+        resultado=resultado,
+        processos=processos,
+        total_resultados=total_resultados,
+        tempo_busca=tempo_busca,
+        erro=erro
+    )

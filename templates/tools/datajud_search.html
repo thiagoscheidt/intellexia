@@ -1,0 +1,398 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Pesquisa DataJud - Ferramentas{% endblock %}
+{% block page_title %}Pesquisa DataJud - Consulta de Processos{% endblock %}
+
+{% block content %}
+
+<!-- Header com aba de tipos de busca -->
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card border-0 shadow-sm" style="border-radius: 16px; overflow: hidden;">
+      <div class="card-body" style="background: linear-gradient(135deg, #f8f9ff 0%, #eef1ff 100%);">
+        <div class="d-flex align-items-center gap-3">
+          <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
+            style="width: 56px; height: 56px; box-shadow: 0 6px 14px rgba(102,126,234,0.18);">
+            <i class="bi bi-search" style="font-size: 1.6rem; color: #667eea;"></i>
+          </div>
+          <div>
+            <h1 class="h4 mb-1" style="font-weight: 700;">Pesquisa em Processos Judiciais</h1>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+              <span class="badge text-bg-info">DataJud API</span>
+              <small class="text-muted">Consulte processos em tempo real nos tribunais brasileiros</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Abas de tipos de busca -->
+<div class="row mb-4">
+  <div class="col-12">
+    <ul class="nav nav-tabs" id="searchTabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="numero-tab" data-bs-toggle="tab" data-bs-target="#numero" type="button"
+          role="tab" aria-controls="numero" aria-selected="true">
+          <i class="bi bi-hash me-2"></i> Por Número
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="classe-tab" data-bs-toggle="tab" data-bs-target="#classe" type="button"
+          role="tab" aria-controls="classe" aria-selected="false">
+          <i class="bi bi-bookmark me-2"></i> Por Classe
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="assunto-tab" data-bs-toggle="tab" data-bs-target="#assunto" type="button"
+          role="tab" aria-controls="assunto" aria-selected="false">
+          <i class="bi bi-tag me-2"></i> Por Assunto
+        </button>
+      </li>
+    </ul>
+  </div>
+</div>
+
+<!-- Alertas -->
+{% if erro %}
+<div class="row mb-3">
+  <div class="col-12">
+    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+      <i class="bi bi-exclamation-triangle me-2"></i>
+      <strong>Erro:</strong> {{ erro }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+<!-- Conteúdo das abas -->
+<div class="tab-content" id="searchTabsContent">
+  <!-- TAB 1: Por Número -->
+  <div class="tab-pane fade show active" id="numero" role="tabpanel" aria-labelledby="numero-tab">
+    <div class="row mb-4">
+      <div class="col-12">
+        <div class="card shadow-sm">
+          <div class="card-body">
+            <form method="POST" class="row g-3">
+              <input type="hidden" name="tipo_busca" value="numero">
+              
+              <div class="col-md-6">
+                <label for="numero_processo" class="form-label fw-600">Número do Processo</label>
+                <input type="text" class="form-control form-control-lg" id="numero_processo" name="numero_processo"
+                  placeholder="Ex: 0000832-35.2018.4.01.3202" required>
+                <small class="text-muted">Número CNJ com ou sem formatação</small>
+              </div>
+              
+              <div class="col-md-6">
+                <label for="tribunal" class="form-label fw-600">Tribunal</label>
+                <select class="form-select form-select-lg" id="tribunal" name="tribunal" required>
+                  <option value="">Selecione um tribunal...</option>
+                  {% for sigla, nome in tribunais %}
+                  <option value="{{ sigla }}">{{ nome }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              
+              <div class="col-12">
+                <button type="submit" class="btn btn-primary btn-lg">
+                  <i class="bi bi-search me-2"></i> Buscar Processo
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 2: Por Classe -->
+  <div class="tab-pane fade" id="classe" role="tabpanel" aria-labelledby="classe-tab">
+    <div class="row mb-4">
+      <div class="col-12">
+        <div class="card shadow-sm">
+          <div class="card-body">
+            <form method="POST" class="row g-3">
+              <input type="hidden" name="tipo_busca" value="classe">
+              
+              <div class="col-md-4">
+                <label for="codigo_classe" class="form-label fw-600">Código da Classe</label>
+                <input type="number" class="form-control form-control-lg" id="codigo_classe" name="codigo_classe"
+                  placeholder="Ex: 436" required>
+                <small class="text-muted">Código TPU. Ex: 436 = Juizado Especial Cível</small>
+              </div>
+              
+              <div class="col-md-4">
+                <label for="codigo_orgao" class="form-label fw-600">Código do Órgão (opcional)</label>
+                <input type="number" class="form-control form-control-lg" id="codigo_orgao" name="codigo_orgao"
+                  placeholder="Ex: 16403">
+                <small class="text-muted">Deixe vazio para buscar em todo o tribunal</small>
+              </div>
+              
+              <div class="col-md-4">
+                <label for="tribunal" class="form-label fw-600">Tribunal</label>
+                <select class="form-select form-select-lg" id="tribunal" name="tribunal" required>
+                  <option value="">Selecione um tribunal...</option>
+                  {% for sigla, nome in tribunais %}
+                  <option value="{{ sigla }}">{{ nome }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              
+              <div class="col-12">
+                <button type="submit" class="btn btn-primary btn-lg">
+                  <i class="bi bi-search me-2"></i> Buscar por Classe
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- TAB 3: Por Assunto -->
+  <div class="tab-pane fade" id="assunto" role="tabpanel" aria-labelledby="assunto-tab">
+    <div class="row mb-4">
+      <div class="col-12">
+        <div class="card shadow-sm">
+          <div class="card-body">
+            <form method="POST" class="row g-3">
+              <input type="hidden" name="tipo_busca" value="assunto">
+              
+              <div class="col-md-6">
+                <label for="codigo_assunto" class="form-label fw-600">Código do Assunto</label>
+                <input type="number" class="form-control form-control-lg" id="codigo_assunto" name="codigo_assunto"
+                  placeholder="Ex: 6177" required>
+                <small class="text-muted">Código TPU. Assuntos comuns: 6177 (Concessão), 7716 (Auxílio-doença)</small>
+              </div>
+              
+              <div class="col-md-6">
+                <label for="tribunal" class="form-label fw-600">Tribunal</label>
+                <select class="form-select form-select-lg" id="tribunal" name="tribunal" required>
+                  <option value="">Selecione um tribunal...</option>
+                  {% for sigla, nome in tribunais %}
+                  <option value="{{ sigla }}">{{ nome }}</option>
+                  {% endfor %}
+                </select>
+              </div>
+              
+              <div class="col-12">
+                <button type="submit" class="btn btn-primary btn-lg">
+                  <i class="bi bi-search me-2"></i> Buscar por Assunto
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Resultados -->
+{% if total_resultados > 0 %}
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card shadow-sm border-success">
+      <div class="card-header bg-light border-success">
+        <div class="d-flex align-items-center justify-content-between">
+          <h5 class="mb-0">
+            <i class="bi bi-check-circle text-success me-2"></i>
+            Resultados da Busca
+          </h5>
+          <small class="text-muted">
+            {{ total_resultados }} processo(s) encontrado(s) em {{ tempo_busca }}ms
+          </small>
+        </div>
+      </div>
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-hover">
+            <thead>
+              <tr>
+                <th>Número</th>
+                <th>Classe</th>
+                <th>Tribunal</th>
+                <th>Órgão Julgador</th>
+                <th>Data Ajuizamento</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for processo in processos %}
+              <tr>
+                <td>
+                  <code class="text-primary fw-bold">{{ processo.numeroProcesso[:8] }}-{{ processo.numeroProcesso[8:] }}</code>
+                </td>
+                <td>
+                  <small>
+                    <span class="badge bg-info">{{ processo.classe.codigo }}</span>
+                    <br>
+                    {{ processo.classe.nome[:40] }}{% if processo.classe.nome|length > 40 %}...{% endif %}
+                  </small>
+                </td>
+                <td>
+                  <strong>{{ processo.tribunal }}</strong>
+                </td>
+                <td>
+                  <small class="text-muted">{{ processo.orgaoJulgador.nome[:35] }}{% if processo.orgaoJulgador.nome|length > 35 %}...{% endif %}</small>
+                </td>
+                <td>
+                  <small>{{ processo.dataAjuizamento[:10] if processo.dataAjuizamento }}</small>
+                </td>
+                <td>
+                  {% if processo.nivelSigilo == 0 %}
+                  <span class="badge bg-success">Público</span>
+                  {% else %}
+                  <span class="badge bg-warning">Sigiloso</span>
+                  {% endif %}
+                </td>
+              </tr>
+              
+              <!-- Detalhes expandidos (movimentos recentes) -->
+              <tr class="table-light">
+                <td colspan="6">
+                  <div class="px-3 py-2">
+                    <h6 class="mb-2">
+                      <i class="bi bi-calendar me-2"></i>Movimentos Recentes
+                    </h6>
+                    {% set movimentos = processo.movimentos|default([])|list %}
+                    {% if movimentos %}
+                    <div class="row g-2">
+                      {% for mov in movimentos[:3] %}
+                      <div class="col-md-6 col-lg-4">
+                        <div class="border-start border-3 border-primary ps-2">
+                          <small class="text-muted">{{ mov.dataHora[:10] }}</small>
+                          <p class="mb-0 small">{{ mov.nome[:50] }}{% if mov.nome|length > 50 %}...{% endif %}</p>
+                        </div>
+                      </div>
+                      {% endfor %}
+                    </div>
+                    {% else %}
+                    <small class="text-muted">Sem movimentos registrados</small>
+                    {% endif %}
+                    
+                    <!-- Assuntos -->
+                    {% set assuntos = processo.assuntos|default([]) %}
+                    {% if assuntos %}
+                    <div class="mt-2">
+                      <h6 class="mb-2">
+                        <i class="bi bi-tag me-2"></i>Assuntos
+                      </h6>
+                      {% for assunto in assuntos %}
+                        {% if loop.index <= 3 %}
+                        <span class="badge bg-secondary me-1">{{ assunto.nome }}</span>
+                        {% endif %}
+                      {% endfor %}
+                      {% if assuntos|length > 3 %}
+                      <span class="badge bg-secondary">+{{ assuntos|length - 3 }}</span>
+                      {% endif %}
+                    </div>
+                    {% endif %}
+                  </div>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Informações úteis -->
+<div class="row">
+  <div class="col-md-6">
+    <div class="card shadow-sm">
+      <div class="card-header">
+        <h6 class="mb-0">
+          <i class="bi bi-info-circle me-2"></i>Dicas de Busca
+        </h6>
+      </div>
+      <div class="card-body">
+        <ul class="list-unstyled small">
+          <li class="mb-2">
+            <strong>📋 Por Número:</strong> Use o número CNJ do processo
+          </li>
+          <li class="mb-2">
+            <strong>🏷️ Por Classe:</strong> Código da classe processual (TPU)
+          </li>
+          <li class="mb-2">
+            <strong>🏛️ Por Assunto:</strong> Código do assunto processual (TPU)
+          </li>
+          <li>
+            <strong>⏱️ Tempo de Resposta:</strong> Varia conforme volume de dados
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-md-6">
+    <div class="card shadow-sm">
+      <div class="card-header">
+        <h6 class="mb-0">
+          <i class="bi bi-book me-2"></i>Códigos Comuns
+        </h6>
+      </div>
+      <div class="card-body small">
+        <table class="table table-sm table-borderless mb-0">
+          <tr>
+            <td><strong>436</strong></td>
+            <td>Juizado Especial</td>
+          </tr>
+          <tr>
+            <td><strong>6177</strong></td>
+            <td>Concessão de Benefício</td>
+          </tr>
+          <tr>
+            <td><strong>7716</strong></td>
+            <td>Auxílio-Doença</td>
+          </tr>
+          <tr>
+            <td><strong>26</strong></td>
+            <td>Distribuição</td>
+          </tr>
+        </table>
+        <small class="text-muted d-block mt-2">
+          <a href="https://www.cnj.jus.br/sgt/versoes.php" target="_blank">Ver todas as TPUs →</a>
+        </small>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% elif resultado %}
+<div class="row">
+  <div class="col-12">
+    <div class="alert alert-info alert-dismissible fade show" role="alert">
+      <i class="bi bi-info-circle me-2"></i>
+      <strong>Nenhum resultado encontrado.</strong> Tente modificar os critérios de busca.
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
+  </div>
+</div>
+{% else %}
+<!-- Mensagem inicial -->
+<div class="row">
+  <div class="col-lg-8 mx-auto">
+    <div class="card shadow-sm border-0" style="background: linear-gradient(135deg, #f8f9ff 0%, #eef1ff 100%);">
+      <div class="card-body text-center py-5">
+        <div class="mb-4">
+          <i class="bi bi-cloud-check" style="font-size: 3rem; color: #667eea;"></i>
+        </div>
+        <h5 class="fw-bold">Bem-vindo à Pesquisa DataJud</h5>
+        <p class="text-muted mb-0">
+          Realize buscas em tempo real dos processos judiciais brasileiros.<br>
+          Selecione o tipo de busca acima e clique em "Buscar".
+        </p>
+      </div>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
