@@ -4,6 +4,7 @@ from app.agents.knowledge_ingestor import KnowledgeIngestor
 from datetime import datetime
 from werkzeug.utils import secure_filename
 from pathlib import Path
+from app.agents.agent_document_summary import AgentDocumentSummary
 import os
 
 knowledge_base_bp = Blueprint('knowledge_base', __name__, url_prefix='/knowledge-base')
@@ -514,12 +515,16 @@ def generate_summary(file_id):
         if not file:
             return jsonify({'success': False, 'error': 'Arquivo não encontrado'}), 404
         
+        agent = AgentDocumentSummary()
+
+        summary_payload = agent.summarizeDocument(file_path=file.file_path)
+
         # TODO: Implementar lógica de geração de resumo
         # Placeholder para implementação futura
-        summary_payload = {
-            'status': 'generating',
-            'message': 'Resumo em processamento...'
-        }
+        # summary_payload = {
+        #     'status': 'generating',
+        #     'message': 'Resumo em processamento...'
+        # }
         
         # Verificar se já existe resumo
         existing_summary = KnowledgeSummary.query.filter_by(knowledge_base_id=file_id).first()

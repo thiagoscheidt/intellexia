@@ -3,13 +3,15 @@
 {% block title %}{{ file.original_filename }} - Base de Conhecimento - IntellexIA{% endblock %}
 
 {% block content %}
-<div class="app-content-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 2rem 0; margin-bottom: 1.5rem; border-radius: 0 0 15px 15px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);">
+<div class="app-content-header"
+    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 2rem 0; margin-bottom: 1.5rem; border-radius: 0 0 15px 15px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);">
     <div class="container-fluid">
         <div class="row align-items-center">
             <div class="col-sm-8">
                 <div class="d-flex align-items-center">
                     <div class="me-3">
-                        <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 60px; height: 60px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                        <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
+                            style="width: 60px; height: 60px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
                             <i class="bi bi-file-earmark-text-fill" style="font-size: 1.8rem; color: #667eea;"></i>
                         </div>
                     </div>
@@ -24,9 +26,12 @@
                 </div>
             </div>
             <div class="col-sm-4">
-                <ol class="breadcrumb float-sm-end mb-0" style="background: rgba(255,255,255,0.15); padding: 0.75rem 1rem; border-radius: 10px; backdrop-filter: blur(10px);">
-                    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}" class="text-white text-decoration-none"><i class="bi bi-house-fill"></i> Home</a></li>
-                    <li class="breadcrumb-item"><a href="{{ url_for('knowledge_base.list') }}" class="text-white text-decoration-none">Base de Conhecimento</a></li>
+                <ol class="breadcrumb float-sm-end mb-0"
+                    style="background: rgba(255,255,255,0.15); padding: 0.75rem 1rem; border-radius: 10px; backdrop-filter: blur(10px);">
+                    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"
+                            class="text-white text-decoration-none"><i class="bi bi-house-fill"></i> Home</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('knowledge_base.list') }}"
+                            class="text-white text-decoration-none">Base de Conhecimento</a></li>
                     <li class="breadcrumb-item active text-white" aria-current="page"><strong>Detalhes</strong></li>
                 </ol>
             </div>
@@ -40,15 +45,19 @@
             <div class="col-md-8">
                 <!-- Informações principais -->
                 <div class="card border-0 shadow-lg" style="border-radius: 15px; overflow: hidden;">
-                    <div class="card-header text-white" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1.5rem;">
+                    <div class="card-header text-white"
+                        style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1.5rem;">
                         <div class="d-flex align-items-center">
                             <div class="me-3">
-                                <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 45px; height: 45px;">
-                                    <i class="bi bi-file-earmark-text-fill" style="font-size: 1.5rem; color: #667eea;"></i>
+                                <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
+                                    style="width: 45px; height: 45px;">
+                                    <i class="bi bi-file-earmark-text-fill"
+                                        style="font-size: 1.5rem; color: #667eea;"></i>
                                 </div>
                             </div>
                             <div>
-                                <h3 class="card-title mb-0" style="font-weight: 600; font-size: 1.3rem;">{{ file.original_filename }}</h3>
+                                <h3 class="card-title mb-0" style="font-weight: 600; font-size: 1.3rem;">{{
+                                    file.original_filename }}</h3>
                                 <small class="opacity-75">Informações detalhadas do documento</small>
                             </div>
                         </div>
@@ -107,14 +116,152 @@
                     </div>
                     <div class="card-footer bg-light" style="padding: 1.5rem;">
                         <div class="d-flex justify-content-between">
-                            <a href="{{ url_for('knowledge_base.list') }}" class="btn btn-outline-secondary btn-lg" style="border-radius: 10px; padding: 0.75rem 2rem;">
+                            <a href="{{ url_for('knowledge_base.list') }}" class="btn btn-outline-secondary btn-lg"
+                                style="border-radius: 10px; padding: 0.75rem 2rem;">
                                 <i class="bi bi-arrow-left"></i> Voltar
                             </a>
-                            <button type="button" class="btn btn-danger btn-lg shadow" style="border-radius: 10px; padding: 0.75rem 2rem;"
+                            <button type="button" class="btn btn-danger btn-lg shadow"
+                                style="border-radius: 10px; padding: 0.75rem 2rem;"
                                 onclick="deleteFile({{ file.id }}, '{{ file.original_filename }}')">
                                 <i class="bi bi-trash-fill"></i> Excluir
                             </button>
                         </div>
+                    </div>
+                </div>
+                <!-- Resumo do documento -->
+                <div class="card border-0 shadow-lg mb-4 mt-2" style="border-radius: 15px; overflow: hidden;">
+                    <div class="card-header text-white"
+                        style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); padding: 1.5rem;">
+                        <div class="d-flex align-items-center">
+                            <div class="me-3">
+                                <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
+                                    style="width: 45px; height: 45px;">
+                                    <i class="bi bi-file-earmark-text-fill"
+                                        style="font-size: 1.5rem; color: #28a745;"></i>
+                                </div>
+                            </div>
+                            <h3 class="card-title mb-0" style="font-weight: 600; font-size: 1.3rem;">Resumo</h3>
+                        </div>
+                    </div>
+                    <div class="card-body" style="padding: 2rem;">
+                        {% if summary %}
+                        {% set summary_payload = summary.payload or {} %}
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i> Resumo disponível
+                        </div>
+
+                        <div class="row g-4">
+                            <div class="col-lg-8">
+                                <div class="p-3 bg-light rounded mb-3" style="border-left: 4px solid #28a745;">
+                                    <h6 class="mb-2">Resumo curto</h6>
+                                    <p class="mb-0" style="font-size: 1.05rem; line-height: 1.6;">
+                                        {{ summary_payload.get('summary_short') or summary_payload.get('summary',
+                                        'Resumo em processamento...') }}
+                                    </p>
+                                </div>
+                                <div class="p-3 bg-light rounded mb-3" style="border-left: 4px solid #20c997;">
+                                    <h6 class="mb-2">Resumo longo</h6>
+                                    <p class="mb-0" style="font-size: 1.1rem; line-height: 1.7;">
+                                        {{ summary_payload.get('summary_long') or summary_payload.get('summary', 'Resumo
+                                        em processamento...') }}
+                                    </p>
+                                </div>
+                            </div>
+                            <div class="col-lg-4">
+                                <div class="p-3 rounded border" style="border-color: rgba(40, 167, 69, 0.35);">
+                                    <h6 class="mb-2">Pontos-chave</h6>
+                                    {% if summary_payload.get('key_points') %}
+                                    <ul class="mb-0">
+                                        {% for item in summary_payload.get('key_points', []) %}
+                                        <li>{{ item }}</li>
+                                        {% endfor %}
+                                    </ul>
+                                    {% else %}
+                                    <span class="text-muted">Não informado</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-4">
+                            <h6 class="mb-2">Entidades</h6>
+                            <div class="row g-2">
+                                <div class="col-12">
+                                    <strong>Pessoas:</strong>
+                                    {% if summary_payload.get('entities', {}).get('people') %}
+                                    {{ summary_payload.get('entities', {}).get('people') | join(', ') }}
+                                    {% else %}
+                                    <span class="text-muted">Não informado</span>
+                                    {% endif %}
+                                </div>
+                                <div class="col-12">
+                                    <strong>Organizações:</strong>
+                                    {% if summary_payload.get('entities', {}).get('organizations') %}
+                                    {{ summary_payload.get('entities', {}).get('organizations') | join(', ') }}
+                                    {% else %}
+                                    <span class="text-muted">Não informado</span>
+                                    {% endif %}
+                                </div>
+                                <div class="col-12">
+                                    <strong>Localidades:</strong>
+                                    {% if summary_payload.get('entities', {}).get('locations') %}
+                                    {{ summary_payload.get('entities', {}).get('locations') | join(', ') }}
+                                    {% else %}
+                                    <span class="text-muted">Não informado</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="mt-4">
+                            <h6 class="mb-2">Datas</h6>
+                            {% if summary_payload.get('dates') %}
+                            <div class="d-flex flex-wrap gap-2">
+                                {% for item in summary_payload.get('dates', []) %}
+                                <span class="badge bg-secondary">{{ item }}</span>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <span class="text-muted">Não informado</span>
+                            {% endif %}
+                        </div>
+
+                        <div class="mt-4">
+                            <h6 class="mb-2">Números de processo</h6>
+                            {% if summary_payload.get('lawsuit_numbers') %}
+                            <div class="d-flex flex-wrap gap-2">
+                                {% for item in summary_payload.get('lawsuit_numbers', []) %}
+                                <span class="badge bg-info text-dark">{{ item }}</span>
+                                {% endfor %}
+                            </div>
+                            {% else %}
+                            <span class="text-muted">Não informado</span>
+                            {% endif %}
+                        </div>
+
+                        <div class="mt-4">
+                            <h6 class="mb-2">Idioma</h6>
+                            <span class="badge bg-primary">{{ summary_payload.get('language', 'pt-BR') }}</span>
+                        </div>
+
+                        {% if summary_payload.get('notes') %}
+                        <div class="mt-4">
+                            <h6 class="mb-2">Observações</h6>
+                            <p class="mb-0">{{ summary_payload.get('notes') }}</p>
+                        </div>
+                        {% endif %}
+                        {% else %}
+                        <p class="text-muted mb-3">Nenhum resumo gerado ainda. Clique no botão abaixo para gerar.</p>
+                        {% endif %}
+                        <button type="button" class="btn btn-success btn-sm w-100 mt-3"
+                            onclick="generateSummary({{ file.id }})">
+                            <i class="bi bi-wand2"></i>
+                            {% if summary %}
+                            Regenerar Resumo
+                            {% else %}
+                            Gerar Resumo com IA
+                            {% endif %}
+                        </button>
                     </div>
                 </div>
             </div>
@@ -122,10 +269,12 @@
             <div class="col-md-4">
                 <!-- Informações adicionais -->
                 <div class="card border-0 shadow-lg mb-4" style="border-radius: 15px; overflow: hidden;">
-                    <div class="card-header text-white" style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%); padding: 1.5rem;">
+                    <div class="card-header text-white"
+                        style="background: linear-gradient(135deg, #17a2b8 0%, #138496 100%); padding: 1.5rem;">
                         <div class="d-flex align-items-center">
                             <div class="me-3">
-                                <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
+                                    style="width: 40px; height: 40px;">
                                     <i class="bi bi-info-circle-fill" style="font-size: 1.3rem; color: #17a2b8;"></i>
                                 </div>
                             </div>
@@ -148,45 +297,13 @@
                 </div>
 
                 <!-- Ações rápidas -->
-                <div class="card border-0 shadow-lg mb-4" style="border-radius: 15px; overflow: hidden;">
-                    <div class="card-header text-white" style="background: linear-gradient(135deg, #28a745 0%, #20c997 100%); padding: 1.5rem;">
-                        <div class="d-flex align-items-center">
-                            <div class="me-3">
-                                <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
-                                    <i class="bi bi-file-earmark-text-fill" style="font-size: 1.3rem; color: #28a745;"></i>
-                                </div>
-                            </div>
-                            <h3 class="card-title mb-0" style="font-weight: 600; font-size: 1.1rem;">Resumo</h3>
-                        </div>
-                    </div>
-                    <div class="card-body" style="padding: 1.5rem;">
-                        {% if summary %}
-                            <div class="alert alert-info">
-                                <i class="bi bi-info-circle"></i> Resumo disponível
-                            </div>
-                            <div class="p-3 bg-light rounded" style="border-left: 4px solid #28a745;">
-                                <p>{{ summary.payload.get('summary', 'Resumo em processamento...') }}</p>
-                            </div>
-                        {% else %}
-                            <p class="text-muted mb-3">Nenhum resumo gerado ainda. Clique no botão abaixo para gerar.</p>
-                        {% endif %}
-                        <button type="button" class="btn btn-success btn-sm w-100" onclick="generateSummary({{ file.id }})">
-                            <i class="bi bi-wand2"></i> 
-                            {% if summary %}
-                                Regenerar Resumo
-                            {% else %}
-                                Gerar Resumo com IA
-                            {% endif %}
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Ações rápidas -->
                 <div class="card border-0 shadow-lg" style="border-radius: 15px; overflow: hidden;">
-                    <div class="card-header text-white" style="background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%); padding: 1.5rem;">
+                    <div class="card-header text-white"
+                        style="background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%); padding: 1.5rem;">
                         <div class="d-flex align-items-center">
                             <div class="me-3">
-                                <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 40px; height: 40px;">
+                                <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
+                                    style="width: 40px; height: 40px;">
                                     <i class="bi bi-lightning-fill" style="font-size: 1.3rem; color: #ffc107;"></i>
                                 </div>
                             </div>
@@ -236,11 +353,11 @@
     function generateSummary(fileId) {
         const button = event.target.closest('button');
         const originalHTML = button.innerHTML;
-        
+
         // Desabilitar botão e mostrar carregamento
         button.disabled = true;
         button.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Gerando resumo...';
-        
+
         fetch(`/knowledge-base/${fileId}/generate-summary`, {
             method: 'POST',
             headers: {
