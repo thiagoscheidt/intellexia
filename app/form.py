@@ -8,6 +8,14 @@ from wtforms import (
 from wtforms.validators import DataRequired, Length, Email, Optional, NumberRange
 
 
+# Função de coerção segura para SelectField com valores vazios
+def safe_int_coerce(value):
+    """Converte valor para int, retornando None para valores vazios"""
+    if not value or value == '':
+        return None
+    return int(value)
+
+
 # ========================
 # Formulário: Clients (Empresas Autoras)
 # ========================
@@ -184,7 +192,7 @@ class CaseBenefitForm(FlaskForm):
     )
     fap_reason_id = SelectField(
         'Motivo da Contestação FAP',
-        coerce=int,
+        coerce=safe_int_coerce,
         validators=[Optional()],
         choices=[]  # Populated dynamically in view
     )
@@ -232,7 +240,7 @@ class CaseBenefitContextForm(FlaskForm):
     )
     fap_reason_id = SelectField(
         'Motivo da Contestação FAP',
-        coerce=int,
+        coerce=safe_int_coerce,
         validators=[Optional()],
         choices=[]  # Populated dynamically in view
     )
