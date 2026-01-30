@@ -518,13 +518,18 @@ def generate_summary(file_id):
         agent = AgentDocumentSummary()
 
         summary_payload = agent.summarizeDocument(file_path=file.file_path)
-
-        # TODO: Implementar lógica de geração de resumo
-        # Placeholder para implementação futura
-        # summary_payload = {
-        #     'status': 'generating',
-        #     'message': 'Resumo em processamento...'
-        # }
+        
+        # Extrair lawsuit_numbers do resumo e preencher na tabela se vazio
+        if summary_payload and isinstance(summary_payload, dict):
+            lawsuit_numbers = summary_payload.get('lawsuit_numbers')
+            
+            # Se encontrou números de processo no resumo e o arquivo não tem preenchido
+            if lawsuit_numbers and not file.lawsuit_number:
+                # Se for uma lista, converte para string separada por vírgula
+                if isinstance(lawsuit_numbers, list):
+                    file.lawsuit_number = ', '.join(str(num) for num in lawsuit_numbers)
+                else:
+                    file.lawsuit_number = str(lawsuit_numbers)
         
         # Verificar se já existe resumo
         existing_summary = KnowledgeSummary.query.filter_by(knowledge_base_id=file_id).first()
@@ -543,7 +548,7 @@ def generate_summary(file_id):
         
         return jsonify({
             'success': True,
-            'message': 'Função de geração de resumo pronta para implementação'
+            'message': 'Resumo gerado com sucesso' if not lawsuit_numbers else f'Resumo gerado e {len(lawsuit_numbers) if isinstance(lawsuit_numbers, list) else 1} número(s) de processo adicionado(s)'
         })
     
     except Exception as e:

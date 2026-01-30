@@ -16,6 +16,7 @@ Bem-vindo à documentação do **IntellexIA**! Aqui você encontrará guias, tut
 - **[ASSISTENTE_JURIDICO.md](ASSISTENTE_JURIDICO.md)** - Guia do Assistente Jurídico com IA
 - **[AUTENTICACAO.md](AUTENTICACAO.md)** - Sistema de autenticação e segurança
 - **[DASHBOARD.md](DASHBOARD.md)** - Dashboard e estatísticas
+- **[BASE_CONHECIMENTO.md](BASE_CONHECIMENTO.md)** 📚 - Base de Conhecimento com Resumos e Busca IA
 - **[DADOS_EXEMPLO.md](DADOS_EXEMPLO.md)** - Dados de exemplo para testes
 
 ### Ferramentas e Integração
@@ -37,6 +38,7 @@ Bem-vindo à documentação do **IntellexIA**! Aqui você encontrará guias, tut
 - **[RESUMO_DOCUMENTOS.md](RESUMO_DOCUMENTOS.md)** - Resumo geral de funcionalidades
 - **[RESUMO_IMPLEMENTACAO.md](RESUMO_IMPLEMENTACAO.md)** - Resumo de implementação
 - **[ARQUITETURA_RESUMO_DOCUMENTOS.md](ARQUITETURA_RESUMO_DOCUMENTOS.md)** - Resumo de arquitetura
+- **[CHANGELOG_BASE_CONHECIMENTO.md](CHANGELOG_BASE_CONHECIMENTO.md)** 📝 - Histórico de mudanças e atualizações
 
 ### Multi-Tenant
 - **[MULTI_TENANT.md](MULTI_TENANT.md)** - Sistema multi-tenant e isolamento de dados
