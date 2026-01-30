@@ -5,6 +5,35 @@
 
 {% block content %}
 
+<!-- Cabeçalho da página -->
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card border-0 shadow-sm" style="border-radius: 16px; overflow: hidden;">
+      <div class="card-body" style="background: linear-gradient(135deg, #f8f9ff 0%, #eef1ff 100%);">
+        <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+          <div class="d-flex align-items-center gap-3">
+            <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
+              style="width: 56px; height: 56px; box-shadow: 0 6px 14px rgba(102,126,234,0.18);">
+              <i class="bi bi-speedometer2" style="font-size: 1.6rem; color: #667eea;"></i>
+            </div>
+            <div>
+              <h1 class="h4 mb-1" style="font-weight: 700; letter-spacing: .2px;">Dashboard do Sistema</h1>
+              <div class="d-flex align-items-center flex-wrap gap-2">
+                <span class="badge text-bg-primary">Visão geral</span>
+                <small class="text-muted">Acompanhe suas métricas e ações prioritárias</small>
+              </div>
+              <div class="mt-2" style="min-height: 28px;">
+                <span id="welcomeTyped" class="text-primary"
+                  style="font-size: 0.95rem; font-weight: 600; display: inline-block; white-space: nowrap; text-align: left;"></span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Sessão: Base de Conhecimento do Escritório -->
 <div class="row mb-4 mt-4">
   <div class="col-12">
@@ -460,8 +489,27 @@
 {% block extra_js %}
 <!-- Chart.js sem SRI para evitar bloqueio por hash incorreto -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/typed.js@2.0.12"></script>
 <script>
   document.addEventListener('DOMContentLoaded', function () {
+    const welcomeEl = document.getElementById('welcomeTyped');
+    if (welcomeEl) {
+      new Typed('#welcomeTyped', {
+        strings: [
+          'Bem-vindo(a)! Aqui você acompanha o que importa no seu escritório.',
+          'Dica rápida: mantenha os templates atualizados para agilizar petições.',
+          'Insights inteligentes: revise benefícios ativos e motivos FAP com frequência.',
+          'Seu painel está pronto — comece pelos casos recentes.'
+        ],
+        typeSpeed: 35,
+        backSpeed: 18,
+        backDelay: 1800,
+        loop: true,
+        smartBackspace: true,
+        showCursor: true,
+        cursorChar: '|'
+      });
+    }
     const casesByStatus = {{ cases_by_status|default ({}) | tojson
   }};
   const casesByType = {{ cases_by_type|default ({}) | tojson }};
