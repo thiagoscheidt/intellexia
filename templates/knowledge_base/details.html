@@ -108,6 +108,13 @@
                             </dd>
                             {% endif %}
 
+                            {% if file.lawsuit_number %}
+                            <dt class="col-sm-3">Número do Processo:</dt>
+                            <dd class="col-sm-9">
+                                <span class="badge bg-info">{{ file.lawsuit_number }}</span>
+                            </dd>
+                            {% endif %}
+
                             <dt class="col-sm-3">Caminho do Arquivo:</dt>
                             <dd class="col-sm-9">
                                 <code class="text-muted small">{{ file.file_path }}</code>
@@ -115,16 +122,29 @@
                         </dl>
                     </div>
                     <div class="card-footer bg-light" style="padding: 1.5rem;">
-                        <div class="d-flex justify-content-between">
-                            <a href="{{ url_for('knowledge_base.list') }}" class="btn btn-outline-secondary btn-lg"
-                                style="border-radius: 10px; padding: 0.75rem 2rem;">
+                        <div class="d-flex justify-content-between gap-2">
+                            <a href="{{ url_for('knowledge_base.list') }}" class="btn btn-outline-secondary btn-sm"
+                                style="border-radius: 8px;">
                                 <i class="bi bi-arrow-left"></i> Voltar
                             </a>
-                            <button type="button" class="btn btn-danger btn-lg shadow"
-                                style="border-radius: 10px; padding: 0.75rem 2rem;"
-                                onclick="deleteFile({{ file.id }}, '{{ file.original_filename }}')">
-                                <i class="bi bi-trash-fill"></i> Excluir
-                            </button>
+                            <div class="d-flex gap-2">
+                                {% if file.file_type == 'PDF' %}
+                                <button type="button" class="btn btn-info btn-sm shadow"
+                                    style="border-radius: 8px;"
+                                    onclick="viewPDF({{ file.id }}, '{{ file.original_filename }}')">
+                                    <i class="bi bi-file-earmark-pdf-fill"></i> Visualizar PDF
+                                </button>
+                                {% endif %}
+                                <a href="{{ url_for('knowledge_base.download', file_id=file.id) }}" class="btn btn-primary btn-sm shadow"
+                                    style="border-radius: 8px;">
+                                    <i class="bi bi-download"></i> Download
+                                </a>
+                                <button type="button" class="btn btn-danger btn-sm shadow"
+                                    style="border-radius: 8px;"
+                                    onclick="deleteFile({{ file.id }}, '{{ file.original_filename }}')">
+                                    <i class="bi bi-trash-fill"></i> Excluir
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -348,6 +368,11 @@
                     alert('Erro ao remover arquivo: ' + error);
                 });
         }
+    }
+
+    function viewPDF(fileId, filename) {
+        // Abre o PDF em uma nova aba usando o endpoint de visualização
+        window.open(`/knowledge-base/${fileId}/view`, '_blank');
     }
 
     function generateSummary(fileId) {
