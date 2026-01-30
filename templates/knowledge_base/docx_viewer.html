@@ -4,24 +4,21 @@
 
 {% block content %}
 <div class="app-content-header"
-    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 2rem 0; margin-bottom: 1.5rem; border-radius: 0 0 15px 15px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);">
+    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1rem 0; margin-bottom: 0.75rem; border-radius: 0 0 15px 15px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);">
     <div class="container-fluid">
         <div class="row align-items-center">
             <div class="col-sm-8">
                 <div class="d-flex align-items-center">
                     <div class="me-3">
                         <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
-                            style="width: 60px; height: 60px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-                            <i class="bi bi-file-earmark-word-fill" style="font-size: 1.8rem; color: #764ba2;"></i>
+                            style="width: 40px; height: 40px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                            <i class="bi bi-file-earmark-word-fill" style="font-size: 1.2rem; color: #764ba2;"></i>
                         </div>
                     </div>
                     <div class="text-white">
-                        <h3 class="mb-1" style="font-weight: 600; font-size: 1.8rem;">
+                        <h3 class="mb-0" style="font-weight: 600; font-size: 1.2rem;">
                             <i class="bi bi-eye-fill"></i> Visualização DOCX
                         </h3>
-                        <p class="mb-0 opacity-90" style="font-size: 1rem;">
-                            <i class="bi bi-file-earmark-word-fill"></i> {{ file.original_filename }}
-                        </p>
                     </div>
                 </div>
             </div>
@@ -39,10 +36,74 @@
     </div>
 </div>
 
+<style>
+    .docx-viewer-shell {
+        background: linear-gradient(180deg, #f6f7fb 0%, #eef1f7 100%);
+        border-radius: 18px;
+        overflow: hidden;
+    }
+
+    .docx-toolbar {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        backdrop-filter: blur(8px);
+        background: rgba(255, 255, 255, 0.85);
+        border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    }
+
+    .docx-canvas {
+        padding: 12px 12px 24px;
+        min-height: 70vh;
+    }
+
+    .docx-paper {
+        max-width: none;
+        width: 100%;
+        margin: 0;
+        background: #ffffff;
+        padding: 32px 36px;
+        border-radius: 14px;
+        box-shadow: 0 16px 40px rgba(36, 42, 67, 0.14);
+        border: none;
+        transform-origin: top center;
+        transition: transform 0.15s ease;
+    }
+
+    .docx-page-indicator {
+        font-size: 0.85rem;
+        color: #6c757d;
+    }
+
+    .docx-actions .btn {
+        border-radius: 999px;
+    }
+</style>
+
 <div class="container-fluid">
-    <div class="card border-0 shadow-lg" style="border-radius: 15px; overflow: hidden;">
-        <div class="card-body" style="padding: 0; background: #f5f5f5;">
-            <div id="docx-container" style="max-width: 900px; margin: 20px auto; background: white; padding: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1);">
+    <div class="card border-0 shadow-lg docx-viewer-shell">
+        <div class="docx-toolbar px-3 py-2 d-flex align-items-center justify-content-between">
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-primary-subtle text-primary">
+                    <i class="bi bi-magic"></i> Visualização DOCX
+                </span>
+                <span class="docx-page-indicator">Modo leitura aprimorado</span>
+            </div>
+            <div class="docx-actions d-flex align-items-center gap-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="zoom-out">
+                    <i class="bi bi-zoom-out"></i>
+                </button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="zoom-reset">100%</button>
+                <button type="button" class="btn btn-outline-secondary btn-sm" id="zoom-in">
+                    <i class="bi bi-zoom-in"></i>
+                </button>
+                <button type="button" class="btn btn-outline-primary btn-sm" id="fit-width">
+                    <i class="bi bi-arrows-angle-expand"></i> Ajustar
+                </button>
+            </div>
+        </div>
+        <div class="card-body docx-canvas">
+            <div id="docx-container" class="docx-paper">
                 <div class="text-center py-5">
                     <div class="spinner-border" role="status">
                         <span class="visually-hidden">Carregando...</span>
@@ -60,6 +121,38 @@
 <script>
     (function () {
         const container = document.getElementById('docx-container');
+        const zoomOutButton = document.getElementById('zoom-out');
+        const zoomInButton = document.getElementById('zoom-in');
+        const zoomResetButton = document.getElementById('zoom-reset');
+        const fitWidthButton = document.getElementById('fit-width');
+        let zoomLevel = 1;
+
+        const applyZoom = () => {
+            container.style.transform = `scale(${zoomLevel})`;
+            zoomResetButton.textContent = `${Math.round(zoomLevel * 100)}%`;
+        };
+
+        zoomOutButton.addEventListener('click', () => {
+            zoomLevel = Math.max(0.7, zoomLevel - 0.1);
+            applyZoom();
+        });
+
+        zoomInButton.addEventListener('click', () => {
+            zoomLevel = Math.min(1.6, zoomLevel + 0.1);
+            applyZoom();
+        });
+
+        zoomResetButton.addEventListener('click', () => {
+            zoomLevel = 1;
+            applyZoom();
+        });
+
+        fitWidthButton.addEventListener('click', () => {
+            const availableWidth = container.parentElement.clientWidth - 40;
+            const targetWidth = container.scrollWidth || 980;
+            zoomLevel = Math.min(1.6, Math.max(0.7, availableWidth / targetWidth));
+            applyZoom();
+        });
 
         fetch(`/knowledge-base/{{ file.id }}/download`)
             .then(response => response.blob())
