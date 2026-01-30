@@ -585,6 +585,36 @@ def view(file_id):
         flash(f'Erro ao visualizar o arquivo: {str(e)}', 'error')
         return redirect(url_for('knowledge_base.list'))
 
+
+@knowledge_base_bp.route('/<int:file_id>/view-docx')
+def view_docx(file_id):
+    """Visualiza um arquivo DOCX da base de conhecimento em uma nova página"""
+    law_firm_id = get_current_law_firm_id()
+
+    if not law_firm_id:
+        flash('Você precisa estar logado para acessar esta página.', 'error')
+        return redirect(url_for('auth.login'))
+
+    file = KnowledgeBase.query.filter_by(
+        id=file_id,
+        law_firm_id=law_firm_id,
+        is_active=True
+    ).first()
+
+    if not file:
+        flash('Arquivo não encontrado.', 'error')
+        return redirect(url_for('knowledge_base.list'))
+
+    if not os.path.exists(file.file_path):
+        flash('Arquivo não encontrado no servidor.', 'error')
+        return redirect(url_for('knowledge_base.list'))
+
+    if file.file_type != 'DOCX':
+        flash('Visualização disponível apenas para arquivos DOCX.', 'error')
+        return redirect(url_for('knowledge_base.details', file_id=file_id))
+
+    return render_template('knowledge_base/docx_viewer.html', file=file)
+
 @knowledge_base_bp.route('/<int:file_id>/download')
 def download(file_id):
     """Faz o download de um arquivo da base de conhecimento"""

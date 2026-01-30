@@ -135,6 +135,13 @@
                                     <i class="bi bi-file-earmark-pdf-fill"></i> Visualizar PDF
                                 </button>
                                 {% endif %}
+                                {% if file.file_type == 'DOCX' %}
+                                <button type="button" class="btn btn-warning btn-sm shadow"
+                                    style="border-radius: 8px;"
+                                    onclick="viewDOCX({{ file.id }}, '{{ file.original_filename }}')">
+                                    <i class="bi bi-file-earmark-word-fill"></i> Visualizar DOCX
+                                </button>
+                                {% endif %}
                                 <a href="{{ url_for('knowledge_base.download', file_id=file.id) }}" class="btn btn-primary btn-sm shadow"
                                     style="border-radius: 8px;">
                                     <i class="bi bi-download"></i> Download
@@ -373,6 +380,11 @@
     function viewPDF(fileId, filename) {
         // Abre o PDF em uma nova aba usando o endpoint de visualização
         window.open(`/knowledge-base/${fileId}/view`, '_blank');
+    }
+
+    function viewDOCX(fileId, filename) {
+        // Abre o DOCX em uma nova aba usando o visualizador dedicado
+        window.open(`/knowledge-base/${fileId}/view-docx`, '_blank');
     }
 
     function generateSummary(fileId) {
