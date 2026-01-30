@@ -195,7 +195,8 @@ def case_petition_generate(case_id):
             flash(f'Erro ao criar petição: {str(e)}', 'danger')
     
     from app.models import CaseBenefit, Document
-    benefits_count = CaseBenefit.query.filter_by(case_id=case_id).count()
+    benefits = CaseBenefit.query.filter_by(case_id=case_id).all()
+    benefits_count = len(benefits)
     documents_count = Document.query.filter_by(case_id=case_id, use_in_ai=True).count()
     last_petition = Petition.query.filter_by(case_id=case_id).order_by(Petition.version.desc()).first()
     next_version = (last_petition.version + 1) if last_petition else 1
@@ -204,6 +205,7 @@ def case_petition_generate(case_id):
         'cases/petition_generate.html',
         case=case,
         case_id=case_id,
+        benefits=benefits,
         next_version=next_version,
         benefits_count=benefits_count,
         documents_count=documents_count

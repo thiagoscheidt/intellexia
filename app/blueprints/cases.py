@@ -465,7 +465,6 @@ def case_new():
             court_id=form.court_id.data if form.court_id.data != 0 else None,
             title=form.title.data,
             case_type=form.case_type.data,
-            fap_reason=form.fap_reason.data if form.fap_reason.data else None,
             fap_start_year=form.fap_start_year.data,
             fap_end_year=form.fap_end_year.data,
             facts_summary=form.facts_summary.data,
@@ -519,7 +518,6 @@ def case_edit(case_id):
         case.court_id = form.court_id.data if form.court_id.data != 0 else None
         case.title = form.title.data
         case.case_type = form.case_type.data
-        case.fap_reason = form.fap_reason.data if form.fap_reason.data else None
         case.fap_start_year = form.fap_start_year.data
         case.fap_end_year = form.fap_end_year.data
         case.facts_summary = form.facts_summary.data

@@ -1,0 +1,99 @@
+{% extends "layout/base.html" %}
+
+{% block title %}{{ title }} - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header border-bottom border-light">
+  <div class="container-fluid">
+    <div class="row align-items-center">
+      <div class="col-sm-6">
+        <h3 class="mb-0"><i class="bi bi-tag text-primary"></i> {{ title }}</h3>
+      </div>
+      <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-end mb-0">
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_list') }}"><i class="bi bi-briefcase"></i> Casos</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('fap_reasons.list') }}"><i class="bi bi-tags"></i> Motivos FAP</a></li>
+          <li class="breadcrumb-item active" aria-current="page">{{ title }}</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-12">
+        <div class="card card-primary card-outline shadow-sm">
+          <div class="card-header bg-gradient bg-primary text-white border-0">
+            <h3 class="card-title mb-0"><i class="bi bi-pencil-square"></i> {{ title }}</h3>
+          </div>
+          <div class="card-body">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+              <i class="bi bi-info-circle"></i> {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            <form method="POST">
+              <!-- Nome de Exibição -->
+              <div class="mb-3">
+                <label for="display_name" class="form-label">
+                  <i class="bi bi-tag"></i> Nome de Exibição <span class="text-danger">*</span>
+                </label>
+                <input type="text" class="form-control" id="display_name" name="display_name"
+                  value="{{ fap_reason.display_name if fap_reason else '' }}"
+                  placeholder="Ex: Inclusão indevida de acidente de trajeto" required>
+                <div class="form-text">Nome simples que será exibido nos campos de seleção</div>
+              </div>
+
+              <!-- Descrição -->
+              <div class="mb-3">
+                <label for="description" class="form-label">
+                  <i class="bi bi-file-text"></i> Descrição Completa
+                </label>
+                <textarea class="form-control" id="description" name="description" rows="4"
+                  placeholder="Descrição detalhada do motivo de contestação FAP...">{{ fap_reason.description if fap_reason else '' }}</textarea>
+                <div class="form-text">Descrição completa para referência interna (opcional)</div>
+              </div>
+
+              <!-- Template Relacionado -->
+              <div class="mb-3">
+                <label for="template_id" class="form-label">
+                  <i class="bi bi-file-earmark"></i> Template Relacionado
+                </label>
+                <select class="form-select" id="template_id" name="template_id">
+                  <option value="0">Nenhum template associado</option>
+                  {% for template in templates %}
+                  <option value="{{ template.id }}"
+                    {% if fap_reason and fap_reason.template_id==template.id %}selected{% endif %}>
+                    {{ template.template_name }}
+                  </option>
+                  {% endfor %}
+                </select>
+                <div class="form-text">Template DOCX que será usado para este motivo (opcional)</div>
+              </div>
+
+              <!-- Botões de Ação -->
+              <div class="d-flex gap-2">
+                <button type="submit" class="btn btn-success">
+                  <i class="bi bi-check-circle"></i> Salvar
+                </button>
+                <a href="{{ url_for('fap_reasons.list') }}" class="btn btn-secondary">
+                  <i class="bi bi-x-circle"></i> Cancelar
+                </a>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

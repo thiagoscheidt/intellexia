@@ -1,0 +1,242 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Motivos FAP - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header border-bottom border-light">
+  <div class="container-fluid">
+    <div class="row align-items-center">
+      <div class="col-sm-6">
+        <h3 class="mb-0"><i class="bi bi-tags text-primary"></i> Motivos FAP</h3>
+      </div>
+      <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-end mb-0">
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_list') }}"><i class="bi bi-briefcase"></i> Casos</a></li>
+          <li class="breadcrumb-item active" aria-current="page"><i class="bi bi-tags"></i> Motivos FAP</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-12">
+        <div class="card card-primary card-outline shadow-sm">
+          <div class="card-header bg-gradient bg-primary text-white border-0">
+            <h3 class="card-title mb-0"><i class="bi bi-list-ul"></i> Lista de Motivos de Contestação FAP</h3>
+            <div class="card-tools">
+              <a href="{{ url_for('fap_reasons.new') }}" class="btn btn-light btn-sm">
+                <i class="bi bi-plus-circle"></i> Novo Motivo
+              </a>
+            </div>
+          </div>
+          <div class="card-body">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+              <i class="bi bi-info-circle"></i> {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            <!-- Filtros -->
+            <div class="card card-light mb-4">
+              <div class="card-header">
+                <h5 class="card-title mb-0">
+                  <i class="bi bi-funnel"></i> Filtros
+                </h5>
+              </div>
+              <div class="card-body">
+                <form method="GET" id="filtersForm" class="row g-3">
+                  <div class="col-md-6">
+                    <label for="search" class="form-label">
+                      <i class="bi bi-search"></i> Buscar
+                    </label>
+                    <input type="text" class="form-control" id="search" name="search"
+                      placeholder="Buscar por nome ou descrição..." value="{{ search }}">
+                  </div>
+
+                  <div class="col-md-3">
+                    <label for="status_filter" class="form-label">
+                      <i class="bi bi-flag"></i> Status
+                    </label>
+                    <select class="form-select" id="status_filter" name="status">
+                      <option value="">Todos</option>
+                      <option value="active" {% if current_status=='active' %}selected{% endif %}>Ativos</option>
+                      <option value="inactive" {% if current_status=='inactive' %}selected{% endif %}>Inativos</option>
+                    </select>
+                  </div>
+
+                  <div class="col-md-3 d-flex align-items-end">
+                    <button type="submit" class="btn btn-primary me-2">
+                      <i class="bi bi-search"></i> Filtrar
+                    </button>
+                    <a href="{{ url_for('fap_reasons.list') }}" class="btn btn-outline-secondary">
+                      <i class="bi bi-x-circle"></i> Limpar
+                    </a>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            <!-- Estatísticas -->
+            <div class="row mb-3">
+              <div class="col-md-6">
+                <div class="alert alert-info">
+                  <strong><i class="bi bi-info-circle"></i> Total de Motivos:</strong> {{ total_reasons }}
+                </div>
+              </div>
+              <div class="col-md-6">
+                <div class="alert alert-success">
+                  <strong><i class="bi bi-check-circle"></i> Motivos Ativos:</strong> {{ active_reasons }}
+                </div>
+              </div>
+            </div>
+
+            {% if fap_reasons %}
+            <div class="table-responsive">
+              <table class="table table-bordered table-striped table-hover" id="fapReasonsTable">
+                <thead class="table-light">
+                  <tr>
+                    <th><i class="bi bi-hash text-primary"></i> ID</th>
+                    <th><i class="bi bi-tag text-primary"></i> Nome</th>
+                    <th><i class="bi bi-file-text text-primary"></i> Descrição</th>
+                    <th><i class="bi bi-file-earmark text-primary"></i> Template</th>
+                    <th><i class="bi bi-shield-check text-primary"></i> Status</th>
+                    <th class="text-center"><i class="bi bi-gear text-primary"></i> Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for reason in fap_reasons %}
+                  <tr>
+                    <td><span class="badge bg-primary">{{ reason.id }}</span></td>
+                    <td><strong>{{ reason.display_name }}</strong></td>
+                    <td>
+                      {% if reason.description %}
+                      {{ reason.description[:80] }}{% if reason.description|length > 80 %}...{% endif %}
+                      {% else %}
+                      <span class="text-muted">-</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if reason.template %}
+                      <span class="badge bg-info">{{ reason.template.template_name }}</span>
+                      {% else %}
+                      <span class="text-muted">Nenhum</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if reason.is_active %}
+                      <span class="badge bg-success"><i class="bi bi-check-circle-fill"></i> Ativo</span>
+                      {% else %}
+                      <span class="badge bg-secondary"><i class="bi bi-x-circle"></i> Inativo</span>
+                      {% endif %}
+                    </td>
+                    <td class="text-center">
+                      <div class="btn-group btn-group-sm" role="group">
+                        <a href="{{ url_for('fap_reasons.edit', reason_id=reason.id) }}" class="btn btn-warning"
+                          title="Editar">
+                          <i class="bi bi-pencil"></i>
+                        </a>
+                        <button type="button" class="btn {% if reason.is_active %}btn-secondary{% else %}btn-success{% endif %}"
+                          title="{% if reason.is_active %}Desativar{% else %}Ativar{% endif %}"
+                          onclick="toggleStatus('{{ url_for('fap_reasons.toggle', reason_id=reason.id) }}')">
+                          <i class="bi {% if reason.is_active %}bi-x-circle{% else %}bi-check-circle{% endif %}"></i>
+                        </button>
+                        <button type="button" class="btn btn-danger" title="Excluir"
+                          onclick="confirmDelete('{{ url_for('fap_reasons.delete', reason_id=reason.id) }}', '{{ reason.display_name }}')">
+                          <i class="bi bi-trash"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info mb-0">
+              <h5><i class="bi bi-info-circle"></i> Nenhum motivo FAP cadastrado</h5>
+              <p class="mb-0">Você ainda não possui motivos FAP cadastrados. <a href="{{ url_for('fap_reasons.new') }}"
+                  class="alert-link">Clique aqui para cadastrar o primeiro motivo</a>.</p>
+            </div>
+            {% endif %}
+          </div>
+          {% if fap_reasons %}
+          <div class="card-footer clearfix">
+            <div class="float-end">
+              <span class="badge bg-primary">Total: {{ fap_reasons|length }} motivo(s)</span>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if fap_reasons %}
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+<script>
+  $(document).ready(function () {
+    $('#fapReasonsTable').DataTable({
+      "language": {
+        "url": "//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json"
+      },
+      "pageLength": 25,
+      "order": [[0, "asc"]],
+      "columnDefs": [
+        { "orderable": false, "targets": 5 }
+      ],
+      "dom": 't<"row"<"col-sm-12 col-md-5"i><"col-sm-12 col-md-7"p>>'
+    });
+
+    // Auto-expandir filtros se houver filtros aplicados
+    {% if search or current_status %}
+    $('#filtersForm').closest('.card').addClass('open');
+    {% endif %}
+
+    // Aplicar filtros automaticamente quando campos mudarem
+    $('#status_filter').change(function () {
+      $('#filtersForm').submit();
+    });
+
+    // Submeter form ao pressionar Enter no campo de busca
+    $('#search').keypress(function (e) {
+      if (e.which == 13) {
+        $('#filtersForm').submit();
+      }
+    });
+  });
+</script>
+{% endif %}
+<script>
+  function confirmDelete(url, name) {
+    if (confirm(`Tem certeza que deseja excluir o motivo "${name}"? Esta ação não pode ser desfeita.`)) {
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = url;
+      document.body.appendChild(form);
+      form.submit();
+    }
+  }
+
+  function toggleStatus(url) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = url;
+    document.body.appendChild(form);
+    form.submit();
+  }
+</script>
+{% endblock %}

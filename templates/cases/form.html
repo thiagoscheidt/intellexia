@@ -210,16 +210,7 @@
                 <h5 class="text-success mb-3"><i class="bi bi-graph-up-arrow me-2"></i>Informações FAP
                 </h5>
 
-                <div class="row" id="fap_reason_container">
-                  <div class="col-md-12">
-                    <div class="callout callout-warning">
-                      {{ form.fap_reason.label(class="form-label") }}
-                      {{ form.fap_reason(class="form-select") }}
-                      <div class="form-text">Selecione o motivo ou enquadramento para casos FAP
-                      </div>
-                    </div>
-                  </div>
-                </div>
+                <!-- Nota: Motivo/Enquadramento FAP agora é definido para cada benefício individualmente -->
 
                 <div class="row">
                   <div class="col-md-4">
@@ -501,26 +492,8 @@
     // Initialize
     showStep(currentStep);
 
-    // Mostrar/ocultar campo Motivo/Enquadramento baseado no tipo de caso
-    const caseTypeSelect = document.getElementById('case_type');
-    const fapReasonContainer = document.getElementById('fap_reason_container');
-
-    if (caseTypeSelect && fapReasonContainer) {
-      function toggleFapReason() {
-        const selectedValue = caseTypeSelect.value;
-        if (selectedValue === 'fap_trajeto' || selectedValue === 'fap_outros') {
-          fapReasonContainer.style.display = 'block';
-        } else {
-          fapReasonContainer.style.display = 'none';
-        }
-      }
-
-      // Verificar no carregamento da página
-      toggleFapReason();
-
-      // Verificar quando mudar a seleção
-      caseTypeSelect.addEventListener('change', toggleFapReason);
-    }
+    // Nota: JavaScript para mostrar/ocultar Motivo/Enquadramento foi removido
+    // pois o campo agora é definido para cada benefício individualmente
   });
 </script>
 {% endblock %}

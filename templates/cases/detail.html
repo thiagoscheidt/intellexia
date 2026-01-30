@@ -108,23 +108,7 @@
               </div>
             </div>
 
-            {% if case.case_type in ['fap_trajeto', 'fap_outros'] %}
-            <div class="row mb-3 p-3 bg-light border-start border-info border-4">
-              <div class="col-12">
-                <small class="text-muted d-block"><i class="bi bi-info-circle"></i> Motivo / Enquadramento (FAP)</small>
-                {% set fap_reason_map = {
-                'inclusao_indevida_trajeto': 'Inclusão indevida de benefício de trajeto',
-                'erro_material_cat': 'Erro material no preenchimento da CAT',
-                'cat_trajeto_extemporanea': 'CAT de trajeto transmitida extemporaneamente'
-                } %}
-                {% if case.fap_reason %}
-                <span class="badge bg-info">{{ fap_reason_map.get(case.fap_reason, case.fap_reason) }}</span>
-                {% else %}
-                <span class="text-muted">Não informado</span>
-                {% endif %}
-              </div>
-            </div>
-            {% endif %}
+            <!-- Nota: Motivo/Enquadramento FAP agora é exibido em cada benefício -->
 
             <div class="row">
               <div class="col-md-6">
@@ -213,17 +197,30 @@
                     <th><i class="bi bi-hash"></i> NB</th>
                     <th><i class="bi bi-tag"></i> Tipo</th>
                     <th><i class="bi bi-person"></i> Segurado</th>
+                    <th><i class="bi bi-info-circle"></i> Motivo FAP</th>
                     <th><i class="bi bi-calendar"></i> Data Acidente</th>
                     <th><i class="bi bi-calendar-check"></i> Início Benefício</th>
                     <th><i class="bi bi-calendar-x"></i> Fim Benefício</th>
                   </tr>
                 </thead>
                 <tbody>
+                  {% set fap_reason_map = {
+                    'inclusao_indevida_trajeto': 'Inclusão indevida',
+                    'erro_material_cat': 'Erro material CAT',
+                    'cat_trajeto_extemporanea': 'CAT extemporânea'
+                  } %}
                   {% for benefit in benefits[:3] %}
                   <tr>
                     <td><strong>{{ benefit.benefit_number }}</strong></td>
                     <td><span class="badge bg-light text-dark">{{ benefit.benefit_type }}</span></td>
                     <td>{{ benefit.insured_name }}</td>
+                    <td>
+                      {% if benefit.fap_reason %}
+                      <span class="badge bg-info">{{ fap_reason_map.get(benefit.fap_reason, benefit.fap_reason) }}</span>
+                      {% else %}
+                      <span class="text-muted">-</span>
+                      {% endif %}
+                    </td>
                     <td><small>{{ benefit.accident_date.strftime('%d/%m/%Y') if benefit.accident_date else '-'
                         }}</small></td>
                     <td><small>{{ benefit.data_inicio_beneficio.strftime('%d/%m/%Y') if benefit.data_inicio_beneficio

@@ -43,9 +43,9 @@
         </li>
 
         <li
-          class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint.startswith('cases.') or request.endpoint.startswith('benefits.') or request.endpoint.startswith('documents.') or request.endpoint.startswith('petitions.')) else '' }}">
+          class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint.startswith('cases.') or request.endpoint.startswith('benefits.') or request.endpoint.startswith('documents.') or request.endpoint.startswith('petitions.') or request.endpoint.startswith('fap_reasons.')) else '' }}">
           <a href="#"
-            class="nav-link {{ 'active' if request.endpoint and (request.endpoint.startswith('cases.') or request.endpoint.startswith('benefits.') or request.endpoint.startswith('documents.') or request.endpoint.startswith('petitions.')) else '' }}">
+            class="nav-link {{ 'active' if request.endpoint and (request.endpoint.startswith('cases.') or request.endpoint.startswith('benefits.') or request.endpoint.startswith('documents.') or request.endpoint.startswith('petitions.') or request.endpoint.startswith('fap_reasons.')) else '' }}">
             <i class="nav-icon bi bi-newspaper"></i>
             <p>
               Casos
@@ -65,6 +65,13 @@
                 class="nav-link {{ 'active' if request.endpoint == 'cases.case_new' else '' }}">
                 <i class="nav-icon bi bi-plus-square"></i>
                 <p>Novo Caso</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('fap_reasons.list') }}"
+                class="nav-link {{ 'active' if request.endpoint in ['fap_reasons.list', 'fap_reasons.new', 'fap_reasons.edit'] else '' }}">
+                <i class="nav-icon bi bi-tags"></i>
+                <p>Motivos FAP</p>
               </a>
             </li>
             <li class="nav-item">

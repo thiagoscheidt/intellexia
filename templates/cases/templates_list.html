@@ -106,17 +106,15 @@
       <div class="card-body p-0">
         {% if templates %}
         <div class="table-responsive">
-          <table class="table table-hover mb-0">
+          <table class="table table-hover mb-0" id="templatesTable">
             <thead>
               <tr>
                 <th>ID</th>
-                <th>Nome do Template</th>
-                <th>Resumo</th>
+                <th>Nome</th>
                 <th>Categoria</th>
+                <th>Resumo</th>
                 <th>Arquivo</th>
                 <th>Status</th>
-                <th>Uso</th>
-                <th>Data Upload</th>
                 <th>Ações</th>
               </tr>
             </thead>
@@ -124,20 +122,13 @@
               {% for template in templates %}
               <tr>
                 <td>{{ template.id }}</td>
-                <td>
-                  <strong>{{ template.template_name }}</strong>
-                </td>
-                <td>
-                  <small class="text-muted">{{ template.resumo_curto[:100] }}{% if template.resumo_curto|length > 100 %}...{% endif %}</small>
-                </td>
-                <td>
-                  <span class="badge bg-info">{{ template.categoria }}</span>
-                </td>
+                <td><strong>{{ template.template_name }}</strong></td>
+                <td><span class="badge bg-info">{{ template.categoria }}</span></td>
+                <td><small class="text-muted">{{ template.resumo_curto[:80] }}{% if template.resumo_curto|length > 80 %}...{% endif %}</small></td>
                 <td>
                   <small class="text-muted">
-                    {{ template.original_filename }}<br>
-                    <span class="badge bg-secondary">{{ template.file_type }}</span>
-                    {{ "%.2f"|format(template.file_size / 1024) }} KB
+                    {{ template.file_type }}<br>
+                    <span class="badge bg-secondary">{{ "%.1f"|format(template.file_size / 1024) }} KB</span>
                   </small>
                 </td>
                 <td>
@@ -146,14 +137,6 @@
                   {% else %}
                   <span class="badge bg-secondary">Inativo</span>
                   {% endif %}
-                </td>
-                <td>
-                  <span class="badge bg-primary">{{ template.usage_count }}</span>
-                </td>
-                <td>
-                  <small class="text-muted">
-                    {{ template.uploaded_at.strftime('%d/%m/%Y %H:%M') }}
-                  </small>
                 </td>
                 <td>
                   <div class="btn-group btn-group-sm">
@@ -190,4 +173,44 @@
 
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{% if templates %}
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+<script>
+  $(document).ready(function () {
+    $('#templatesTable').DataTable({
+      "language": {
+        "url": "//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json"
+      },
+      "pageLength": 25,
+      "order": [[0, "desc"]],
+      "columnDefs": [
+        { "orderable": false, "targets": 6 }
+      ],
+      "dom": 't<"row"<"col-sm-12 col-md-5"i><"col-sm-12 col-md-7"p>>'
+    });
+
+    // Auto-expandir filtros se houver filtros aplicados
+    {% if current_search or current_categoria or current_status %}
+    $('#filtersCollapse').addClass('show');
+    {% endif %}
+
+    // Aplicar filtros automaticamente quando campos mudarem
+    $('#search, #categoria, #status').change(function () {
+      $('form').submit();
+    });
+
+    // Submeter form ao pressionar Enter no campo de busca
+    $('#search').keypress(function (e) {
+      if (e.which == 13) {
+        $('form').submit();
+      }
+    });
+  });
+</script>
+{% endif %}
 {% endblock %}

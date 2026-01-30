@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify
-from app.models import db, CaseBenefit, Case
+from app.models import db, CaseBenefit, Case, FapReason
 from datetime import datetime
 from functools import wraps
 
@@ -51,6 +51,13 @@ def case_benefit_new(case_id):
     case = Case.query.get_or_404(case_id)
     form = CaseBenefitContextForm()
     
+    # Populate fap_reason_id choices
+    fap_reasons = FapReason.query.filter_by(
+        law_firm_id=case.law_firm_id,
+        is_active=True
+    ).order_by(FapReason.display_name).all()
+    form.fap_reason_id.choices = [('', 'Nenhum motivo selecionado')] + [(r.id, r.display_name) for r in fap_reasons]
+    
     if form.validate_on_submit():
         benefit = CaseBenefit(
             case_id=case_id,
@@ -65,6 +72,7 @@ def case_benefit_new(case_id):
             accident_date=form.accident_date.data,
             accident_company_name=form.accident_company_name.data,
             error_reason=form.error_reason.data,
+            fap_reason_id=form.fap_reason_id.data or None,
             notes=form.notes.data
         )
         
@@ -91,6 +99,13 @@ def case_benefit_edit(case_id, benefit_id):
     
     form = CaseBenefitContextForm(obj=benefit)
     
+    # Populate fap_reason_id choices
+    fap_reasons = FapReason.query.filter_by(
+        law_firm_id=case.law_firm_id,
+        is_active=True
+    ).order_by(FapReason.display_name).all()
+    form.fap_reason_id.choices = [('', 'Nenhum motivo selecionado')] + [(r.id, r.display_name) for r in fap_reasons]
+    
     if form.validate_on_submit():
         benefit.benefit_number = form.benefit_number.data
         benefit.benefit_type = form.benefit_type.data
@@ -103,6 +118,7 @@ def case_benefit_edit(case_id, benefit_id):
         benefit.accident_date = form.accident_date.data
         benefit.accident_company_name = form.accident_company_name.data
         benefit.error_reason = form.error_reason.data
+        benefit.fap_reason_id = form.fap_reason_id.data or None
         benefit.notes = form.notes.data
         benefit.updated_at = datetime.utcnow()
         

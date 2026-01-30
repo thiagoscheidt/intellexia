@@ -281,6 +281,21 @@
               <div class="row">
                 <div class="col-md-12">
                   <div class="mb-3">
+                    {{ form.fap_reason_id.label(class="form-label") }}
+                    {{ form.fap_reason_id(class="form-select" + (" is-invalid" if form.fap_reason_id.errors else "")) }}
+                    {% if form.fap_reason_id.errors %}
+                    <div class="invalid-feedback">
+                      {% for error in form.fap_reason_id.errors %}{{ error }}{% endfor %}
+                    </div>
+                    {% endif %}
+                    <div class="form-text">Selecione o motivo de contestação FAP deste benefício</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-12">
+                  <div class="mb-3">
                     {{ form.notes.label(class="form-label") }}
                     {{ form.notes(class="form-control" + (" is-invalid" if form.notes.errors else ""), rows="4") }}
                     {% if form.notes.errors %}

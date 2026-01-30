@@ -45,11 +45,13 @@ from app.blueprints import (
     knowledge_base_bp, admin_users_bp
 )
 from app.blueprints.case_comments import case_comments_bp
+from app.blueprints.fap_reasons import fap_reasons_bp
 
 # Registrar todos os blueprints
 app.register_blueprint(auth_bp)
 app.register_blueprint(dashboard_bp)
 app.register_blueprint(cases_bp)
+app.register_blueprint(fap_reasons_bp)
 app.register_blueprint(clients_bp)
 app.register_blueprint(lawyers_bp)
 app.register_blueprint(courts_bp)

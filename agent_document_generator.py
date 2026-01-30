@@ -70,9 +70,12 @@ class AgentDocumentGenerator:
         # Buscar benefícios do caso
         benefits = CaseBenefit.query.filter_by(case_id=case_id).all()
         
+        # Obter fap_reason do primeiro benefício (se houver múltiplos, pegar o primeiro)
+        fap_reason = benefits[0].fap_reason if benefits and benefits[0].fap_reason else None
+        
         # Selecionar template baseado no fap_reason se não foi especificado
         if template_path is None:
-            template_path = self._select_template_by_fap_reason(case.fap_reason)
+            template_path = self._select_template_by_fap_reason(fap_reason)
         
         # Carregar templates
         document_base = Document("templates_docx/modelo_acidente_trajeto_inicio.docx")
@@ -149,7 +152,7 @@ class AgentDocumentGenerator:
                 '{{caso_numero}}': str(case.id),
             },
             'Dados FAP': {
-                '{{fap_motivo}}': self._get_fap_reason_text(case.fap_reason) if case.fap_reason else 'Não informado',
+                '{{fap_motivo}}': self._get_fap_reason_text(benefits[0].fap_reason) if benefits and benefits[0].fap_reason else 'Não informado',
                 '{{ano_inicial_fap}}': str(case.fap_start_year) if case.fap_start_year else 'Não informado',
                 '{{ano_final_fap}}': str(case.fap_end_year) if case.fap_end_year else 'Não informado',
                 '{{anos_fap}}': self._format_years_range(case.fap_start_year, case.fap_end_year) or 'Não informado',
@@ -222,7 +225,7 @@ class AgentDocumentGenerator:
             '{{caso_numero}}': str(case.id),
             
             # Dados FAP
-            '{{fap_motivo}}': self._get_fap_reason_text(case.fap_reason) if case.fap_reason else '',
+            '{{fap_motivo}}': self._get_fap_reason_text(benefits[0].fap_reason) if benefits and benefits[0].fap_reason else '',
             '{{ano_inicial_fap}}': str(case.fap_start_year) if case.fap_start_year else '',
             '{{ano_final_fap}}': str(case.fap_end_year) if case.fap_end_year else '',
             '{{anos_fap}}': self._format_years_range(case.fap_start_year, case.fap_end_year),

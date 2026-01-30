@@ -64,7 +64,11 @@
                 'erro_material_cat': 'Erro material no preenchimento da CAT',
                 'cat_trajeto_extemporanea': 'CAT de trajeto transmitida extemporaneamente'
                 } %}
-                {{ fap_reason_map.get(case.fap_reason, case.fap_reason if case.fap_reason else 'Não informado') }}
+                {% if benefits and benefits[0].fap_reason %}
+                {{ fap_reason_map.get(benefits[0].fap_reason, benefits[0].fap_reason) }}
+                {% else %}
+                Não informado
+                {% endif %}
               </dd>
 
               <dt class="col-sm-4">Valor da Causa:</dt>

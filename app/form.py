@@ -82,16 +82,9 @@ class CaseForm(FlaskForm):
     filing_date = DateField('Data de Ajuizamento', format='%Y-%m-%d', validators=[Optional()])
     
     # Step 2: Informações FAP
-    fap_reason = SelectField(
-        'Motivo / Enquadramento',
-        choices=[
-            ('', 'Selecione um motivo'),
-            ('inclusao_indevida_trajeto', 'Inclusão indevida de benefício de trajeto'),
-            ('erro_material_cat', 'Erro material no preenchimento da CAT'),
-            ('cat_trajeto_extemporanea', 'CAT de trajeto transmitida extemporaneamente')
-        ],
-        validators=[Optional()]
-    )
+    # NOTA: Campo fap_reason foi movido para o modelo CaseBenefit
+    # Cada benefício agora possui seu próprio motivo/enquadramento
+    # Este campo foi removido do formulário de caso
     fap_start_year = IntegerField(
         'Ano Inicial FAP',
         validators=[Optional(), NumberRange(min=1900, max=2100)]
@@ -189,6 +182,12 @@ class CaseBenefitForm(FlaskForm):
         ],
         validators=[Optional()]
     )
+    fap_reason_id = SelectField(
+        'Motivo da Contestação FAP',
+        coerce=int,
+        validators=[Optional()],
+        choices=[]  # Populated dynamically in view
+    )
     notes = TextAreaField('Observações Adicionais', validators=[Optional()])
     submit = SubmitField('Salvar Benefício')
 
@@ -230,6 +229,12 @@ class CaseBenefitContextForm(FlaskForm):
             ('outros', 'Outros')
         ],
         validators=[Optional()]
+    )
+    fap_reason_id = SelectField(
+        'Motivo da Contestação FAP',
+        coerce=int,
+        validators=[Optional()],
+        choices=[]  # Populated dynamically in view
     )
     notes = TextAreaField('Observações Adicionais', validators=[Optional()])
     submit = SubmitField('Salvar Benefício')
