@@ -597,23 +597,44 @@
           // Busca o file_id da primeira ocorrência deste arquivo
           const fileDetail = sourcesDetail.find(d => d.source === fileName);
           const fileId = fileDetail && fileDetail.file_id ? fileDetail.file_id : null;
+          const fileType = fileDetail && fileDetail.file_type ? String(fileDetail.file_type).toUpperCase() : '';
+          const fileExt = fileName.split('.').pop().toLowerCase();
 
           // Se temos file_id, usa rota por ID, senão usa por nome
           const downloadUrl = fileId
             ? `/knowledge-base/${fileId}/download`
             : `{{ url_for('knowledge_base.download_by_name') }}?filename=${encodeURIComponent(fileName)}`;
 
+          let viewUrl = null;
+          if (fileId) {
+            if (fileType === 'PDF' || fileExt === 'pdf') {
+              viewUrl = `/knowledge-base/${fileId}/view`;
+            } else if (fileType === 'DOCX' || fileExt === 'docx') {
+              viewUrl = `/knowledge-base/${fileId}/view-docx`;
+            }
+          }
+
           return `
             <div class="source-item d-flex justify-content-between align-items-center" style="padding: 0.5rem; margin-bottom: 0.5rem; background: #f8f9fa; border-radius: 8px;">
               <span>
                 <i class="bi bi-file-earmark-text"></i> ${escapeHtml(fileName)}${pageInfo}
               </span>
-              <a href="${downloadUrl}" 
-                 class="btn btn-sm btn-primary"
-                 target="_blank"
-                 style="padding: 0.25rem 0.75rem; font-size: 0.875rem; text-decoration: none; color: white;">
-                <i class="bi bi-download"></i> Baixar
-              </a>
+              <div class="d-flex gap-2">
+                 ${viewUrl ? `
+                 <a href="${viewUrl}" 
+                   class="btn btn-sm btn-info shadow"
+                   target="_blank"
+                   style="padding: 0.25rem 0.75rem; font-size: 0.875rem; text-decoration: none; color: white; border-radius: 8px;">
+                  <i class="bi bi-eye"></i> Visualizar
+                 </a>
+                 ` : ''}
+                <a href="${downloadUrl}" 
+                   class="btn btn-sm btn-primary shadow"
+                   target="_blank"
+                   style="padding: 0.25rem 0.75rem; font-size: 0.875rem; text-decoration: none; color: white; border-radius: 8px;">
+                  <i class="bi bi-download"></i> Baixar
+                </a>
+              </div>
             </div>
           `;
         }).join('');
