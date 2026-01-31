@@ -39,8 +39,8 @@
         </button>
       </li>
       <li class="nav-item" role="presentation">
-        <button class="nav-link" id="classe-tab" data-bs-toggle="tab" data-bs-target="#classe" type="button"
-          role="tab" aria-controls="classe" aria-selected="false">
+        <button class="nav-link" id="classe-tab" data-bs-toggle="tab" data-bs-target="#classe" type="button" role="tab"
+          aria-controls="classe" aria-selected="false">
           <i class="bi bi-bookmark me-2"></i> Por Classe
         </button>
       </li>
@@ -77,14 +77,14 @@
           <div class="card-body">
             <form method="POST" class="row g-3">
               <input type="hidden" name="tipo_busca" value="numero">
-              
+
               <div class="col-md-6">
                 <label for="numero_processo" class="form-label fw-600">Número do Processo</label>
                 <input type="text" class="form-control form-control-lg" id="numero_processo" name="numero_processo"
                   placeholder="Ex: 0000832-35.2018.4.01.3202" required>
                 <small class="text-muted">Número CNJ com ou sem formatação</small>
               </div>
-              
+
               <div class="col-md-6">
                 <label for="tribunal" class="form-label fw-600">Tribunal</label>
                 <select class="form-select form-select-lg" id="tribunal" name="tribunal" required>
@@ -94,7 +94,7 @@
                   {% endfor %}
                 </select>
               </div>
-              
+
               <div class="col-12">
                 <button type="submit" class="btn btn-primary btn-lg">
                   <i class="bi bi-search me-2"></i> Buscar Processo
@@ -115,21 +115,21 @@
           <div class="card-body">
             <form method="POST" class="row g-3">
               <input type="hidden" name="tipo_busca" value="classe">
-              
+
               <div class="col-md-4">
                 <label for="codigo_classe" class="form-label fw-600">Código da Classe</label>
                 <input type="number" class="form-control form-control-lg" id="codigo_classe" name="codigo_classe"
                   placeholder="Ex: 436" required>
                 <small class="text-muted">Código TPU. Ex: 436 = Juizado Especial Cível</small>
               </div>
-              
+
               <div class="col-md-4">
                 <label for="codigo_orgao" class="form-label fw-600">Código do Órgão (opcional)</label>
                 <input type="number" class="form-control form-control-lg" id="codigo_orgao" name="codigo_orgao"
                   placeholder="Ex: 16403">
                 <small class="text-muted">Deixe vazio para buscar em todo o tribunal</small>
               </div>
-              
+
               <div class="col-md-4">
                 <label for="tribunal" class="form-label fw-600">Tribunal</label>
                 <select class="form-select form-select-lg" id="tribunal" name="tribunal" required>
@@ -139,7 +139,7 @@
                   {% endfor %}
                 </select>
               </div>
-              
+
               <div class="col-12">
                 <button type="submit" class="btn btn-primary btn-lg">
                   <i class="bi bi-search me-2"></i> Buscar por Classe
@@ -160,14 +160,14 @@
           <div class="card-body">
             <form method="POST" class="row g-3">
               <input type="hidden" name="tipo_busca" value="assunto">
-              
+
               <div class="col-md-6">
                 <label for="codigo_assunto" class="form-label fw-600">Código do Assunto</label>
                 <input type="number" class="form-control form-control-lg" id="codigo_assunto" name="codigo_assunto"
                   placeholder="Ex: 6177" required>
                 <small class="text-muted">Código TPU. Assuntos comuns: 6177 (Concessão), 7716 (Auxílio-doença)</small>
               </div>
-              
+
               <div class="col-md-6">
                 <label for="tribunal" class="form-label fw-600">Tribunal</label>
                 <select class="form-select form-select-lg" id="tribunal" name="tribunal" required>
@@ -177,7 +177,7 @@
                   {% endfor %}
                 </select>
               </div>
-              
+
               <div class="col-12">
                 <button type="submit" class="btn btn-primary btn-lg">
                   <i class="bi bi-search me-2"></i> Buscar por Assunto
@@ -224,7 +224,8 @@
               {% for processo in processos %}
               <tr>
                 <td>
-                  <code class="text-primary fw-bold">{{ processo.numeroProcesso[:8] }}-{{ processo.numeroProcesso[8:] }}</code>
+                  <code
+                    class="text-primary fw-bold">{{ processo.numeroProcesso[:8] }}-{{ processo.numeroProcesso[8:] }}</code>
                 </td>
                 <td>
                   <small>
@@ -237,10 +238,29 @@
                   <strong>{{ processo.tribunal }}</strong>
                 </td>
                 <td>
-                  <small class="text-muted">{{ processo.orgaoJulgador.nome[:35] }}{% if processo.orgaoJulgador.nome|length > 35 %}...{% endif %}</small>
+                  <small class="text-muted">{{ processo.orgaoJulgador.nome[:35] }}{% if
+                    processo.orgaoJulgador.nome|length > 35 %}...{% endif %}</small>
                 </td>
                 <td>
-                  <small>{{ processo.dataAjuizamento[:10] if processo.dataAjuizamento }}</small>
+                  <small>
+                    {% if processo.dataAjuizamento %}
+                    {% if '-' in processo.dataAjuizamento %}
+                    {# Formato: YYYY-MM-DD #}
+                    {% set data_partes = processo.dataAjuizamento[:10].split('-') %}
+                    {{ data_partes[2] }}/{{ data_partes[1] }}/{{ data_partes[0] }}
+                    {% elif 'T' in processo.dataAjuizamento %}
+                    {# Formato: YYYY-MM-DDTHH:MM:SS #}
+                    {% set data_partes = processo.dataAjuizamento[:10].split('-') %}
+                    {{ data_partes[2] }}/{{ data_partes[1] }}/{{ data_partes[0] }}
+                    {% elif processo.dataAjuizamento|length >= 8 %}
+                    {# Formato: YYYYMMDD #}
+                    {{ processo.dataAjuizamento[6:8] }}/{{ processo.dataAjuizamento[4:6] }}/{{
+                    processo.dataAjuizamento[0:4] }}
+                    {% else %}
+                    {{ processo.dataAjuizamento }}
+                    {% endif %}
+                    {% endif %}
+                  </small>
                 </td>
                 <td>
                   {% if processo.nivelSigilo == 0 %}
@@ -250,47 +270,346 @@
                   {% endif %}
                 </td>
               </tr>
-              
+
               <!-- Detalhes expandidos (movimentos recentes) -->
               <tr class="table-light">
                 <td colspan="6">
                   <div class="px-3 py-2">
-                    <h6 class="mb-2">
-                      <i class="bi bi-calendar me-2"></i>Movimentos Recentes
-                    </h6>
                     {% set movimentos = processo.movimentos|default([])|list %}
+
+                    <!-- Status do Processo - Destaque de Decisões Importantes -->
+                    {% set sentenca_mov = namespace(found=false, data='', nome='') %}
+                    {% set transito_mov = namespace(found=false, data='') %}
+                    {% set acordo_mov = namespace(found=false, data='') %}
+
+                    {% for mov in movimentos %}
+                    {# Códigos importantes: 123=Sentença, 11009=Trânsito, 193=Acordo, 11354=Sentença declarada #}
+                    {% if mov.codigo in [123, 11354] and not sentenca_mov.found %}
+                    {% set sentenca_mov.found = true %}
+                    {% set sentenca_mov.data = mov.dataHora[:10] if mov.dataHora else '' %}
+                    {% set sentenca_mov.nome = mov.nome %}
+                    {% elif mov.codigo == 11009 and not transito_mov.found %}
+                    {% set transito_mov.found = true %}
+                    {% set transito_mov.data = mov.dataHora[:10] if mov.dataHora else '' %}
+                    {% elif mov.codigo == 193 and not acordo_mov.found %}
+                    {% set acordo_mov.found = true %}
+                    {% set acordo_mov.data = mov.dataHora[:10] if mov.dataHora else '' %}
+                    {% endif %}
+                    {% endfor %}
+
+                    {% if sentenca_mov.found or transito_mov.found or acordo_mov.found %}
+                    <div class="alert alert-info border-0 mb-3"
+                      style="background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);">
+                      <h6 class="mb-2">
+                        <i class="bi bi-shield-check me-2"></i>Status do Processo
+                      </h6>
+                      <div class="row g-2">
+                        {% if transito_mov.found %}
+                        <div class="col-md-12">
+                          <div class="d-flex align-items-center p-2 rounded" style="background: #1b5e20; color: white;">
+                            <i class="bi bi-check-circle-fill me-2" style="font-size: 1.5rem;"></i>
+                            <div>
+                              <strong class="d-block">Trânsito em Julgado</strong>
+                              <small>Decisão final irrecorrível - {{ transito_mov.data }}</small>
+                            </div>
+                          </div>
+                        </div>
+                        {% endif %}
+
+                        {% if acordo_mov.found %}
+                        <div class="col-md-12">
+                          <div class="d-flex align-items-center p-2 rounded" style="background: #4caf50; color: white;">
+                            <i class="bi bi-handshake-fill me-2" style="font-size: 1.5rem;"></i>
+                            <div>
+                              <strong class="d-block">Acordo Homologado</strong>
+                              <small>{{ acordo_mov.data }}</small>
+                            </div>
+                          </div>
+                        </div>
+                        {% endif %}
+
+                        {% if sentenca_mov.found and not transito_mov.found %}
+                        <div class="col-md-12">
+                          <div class="d-flex align-items-center p-2 rounded" style="background: #ff9800; color: white;">
+                            <i class="bi bi-file-earmark-text-fill me-2" style="font-size: 1.5rem;"></i>
+                            <div>
+                              <strong class="d-block">Sentença Publicada</strong>
+                              <small>{{ sentenca_mov.nome[:60] }} - {{ sentenca_mov.data }}</small>
+                            </div>
+                          </div>
+                        </div>
+                        {% endif %}
+                      </div>
+                    </div>
+                    {% endif %}
+
+                    <h6 class="mb-3">
+                      <script type="module" src=""></script>
+                      <i class="bi bi-calendar me-2"></i>Linha do Tempo - Movimentos Recentes
+                    </h6>
                     {% if movimentos %}
-                    <div class="row g-2">
-                      {% for mov in movimentos[:3] %}
-                      <div class="col-md-6 col-lg-4">
-                        <div class="border-start border-3 border-primary ps-2">
-                          <small class="text-muted">{{ mov.dataHora[:10] }}</small>
-                          <p class="mb-0 small">{{ mov.nome[:50] }}{% if mov.nome|length > 50 %}...{% endif %}</p>
+                    <div class="timeline" style="position: relative; padding-left: 30px;">
+                      {% for mov in movimentos[:10] %}
+                      {# Identificar movimentos importantes #}
+                      {% set is_importante = mov.codigo in [123, 11009, 193, 11354, 246, 50, 51, 132] %}
+                      {% set cor_circulo = '#667eea' %}
+                      {% set bg_card = '#f8f9ff' %}
+                      {% set border_cor = '#667eea' %}
+
+                      {% if mov.codigo == 11009 %}
+                      {% set cor_circulo = '#1b5e20' %}
+                      {% set bg_card = '#e8f5e9' %}
+                      {% set border_cor = '#4caf50' %}
+                      {% elif mov.codigo in [123, 11354] %}
+                      {% set cor_circulo = '#e65100' %}
+                      {% set bg_card = '#fff3e0' %}
+                      {% set border_cor = '#ff9800' %}
+                      {% elif mov.codigo == 193 %}
+                      {% set cor_circulo = '#2e7d32' %}
+                      {% set bg_card = '#e8f5e9' %}
+                      {% set border_cor = '#66bb6a' %}
+                      {% elif mov.codigo == 246 %}
+                      {% set cor_circulo = '#c62828' %}
+                      {% set bg_card = '#ffebee' %}
+                      {% set border_cor = '#e57373' %}
+                      {% elif mov.codigo == 51 %}
+                      {% set cor_circulo = '#5e35b1' %}
+                      {% set bg_card = '#f3e5f5' %}
+                      {% set border_cor = '#9c27b0' %}
+                      {% endif %}
+
+                      <div class="timeline-item mb-3" style="position: relative; padding-left: 20px;">
+                        <!-- Círculo da timeline -->
+                        <div
+                          style="position: absolute; left: -30px; top: 3px; width: {{ '18px' if is_importante else '16px' }}; height: {{ '18px' if is_importante else '16px' }}; background: {{ cor_circulo }}; border: 3px solid white; border-radius: 50%; box-shadow: 0 0 0 2px {{ cor_circulo }};">
+                        </div>
+
+                        <!-- Linha conectora (exceto no último item) -->
+                        {% if not loop.last %}
+                        <div
+                          style="position: absolute; left: -22px; top: 22px; width: 2px; height: 60px; background: #e0e4ff;">
+                        </div>
+                        {% endif %}
+
+                        <!-- Conteúdo -->
+                        <div class="p-3 rounded {% if is_importante %}shadow-sm{% endif %}"
+                          style="background: {{ bg_card }}; border-left: 3px solid {{ border_cor }};">
+                          <!-- Badge de movimento importante -->
+                          {% if is_importante %}
+                          <div class="mb-2">
+                            {% if mov.codigo == 11009 %}
+                            <span class="badge" style="background: #1b5e20;">
+                              <i class="bi bi-award-fill me-1"></i>TRÂNSITO EM JULGADO
+                            </span>
+                            {% elif mov.codigo in [123, 11354] %}
+                            <span class="badge" style="background: #e65100;">
+                              <i class="bi bi-file-earmark-text-fill me-1"></i>SENTENÇA
+                            </span>
+                            {% elif mov.codigo == 193 %}
+                            <span class="badge" style="background: #2e7d32;">
+                              <i class="bi bi-handshake-fill me-1"></i>ACORDO
+                            </span>
+                            {% elif mov.codigo == 246 %}
+                            <span class="badge" style="background: #c62828;">
+                              <i class="bi bi-arrow-up-circle-fill me-1"></i>RECURSO
+                            </span>
+                            {% elif mov.codigo == 51 %}
+                            <span class="badge" style="background: #5e35b1;">
+                              <i class="bi bi-hourglass-split me-1"></i>CONCLUSÃO
+                              {% if mov.complementosTabelados %}
+                              {% for comp in mov.complementosTabelados %}
+                              {% if comp.nome and ('julgamento' in comp.nome.lower() or 'despacho' in comp.nome.lower()
+                              or 'decisão' in comp.nome.lower()) %}
+                              - {{ comp.nome.upper() }}
+                              {% endif %}
+                              {% endfor %}
+                              {% endif %}
+                            </span>
+                            {% endif %}
+                          </div>
+                          {% endif %}
+                          <!-- Data e Hora -->
+                          <div class="d-flex justify-content-between align-items-center mb-2">
+                            <small class="text-primary fw-bold">
+                              <i class="bi bi-calendar-event me-1"></i>
+                              {% if mov.dataHora %}
+                              {% if '-' in mov.dataHora %}
+                              {# Formato: YYYY-MM-DD #}
+                              {% set data_partes = mov.dataHora[:10].split('-') %}
+                              {{ data_partes[2] }}/{{ data_partes[1] }}/{{ data_partes[0] }}
+                              {% elif mov.dataHora|length >= 8 %}
+                              {# Formato: YYYYMMDD #}
+                              {{ mov.dataHora[6:8] }}/{{ mov.dataHora[4:6] }}/{{ mov.dataHora[0:4] }}
+                              {% else %}
+                              {{ mov.dataHora[:10] }}
+                              {% endif %}
+                              {% else %}
+                              Data não disponível
+                              {% endif %}
+                            </small>
+                            {% if mov.dataHora and mov.dataHora|length > 10 %}
+                            <small class="text-muted">
+                              <i class="bi bi-clock me-1"></i>
+                              {{ mov.dataHora[11:16] if mov.dataHora|length > 11 else '' }}
+                            </small>
+                            {% endif %}
+                          </div>
+
+                          <!-- Nome do Movimento -->
+                          <p class="mb-2 small fw-600">{{ mov.nome[:100] }}{% if mov.nome|length > 100 %}...{% endif %}
+                          </p>
+
+                          <!-- Código e Órgão Julgador -->
+                          <div class="row g-2 small">
+                            {% if mov.codigo %}
+                            <div class="col-auto">
+                              <span class="badge bg-light text-dark">
+                                <i class="bi bi-hash"></i> Código: {{ mov.codigo }}
+                              </span>
+                            </div>
+                            {% endif %}
+
+                            {% if mov.orgaoJulgador %}
+                            <div class="col-auto">
+                              <span class="badge bg-light text-dark">
+                                <i class="bi bi-building"></i> {{ mov.orgaoJulgador.nomeOrgao if
+                                mov.orgaoJulgador.nomeOrgao else mov.orgaoJulgador.nome }}
+                              </span>
+                            </div>
+                            {% endif %}
+                          </div>
+
+                          <!-- Complementos Tabelados -->
+                          {% if mov.complementosTabelados %}
+                          <div class="mt-2 border-top pt-2">
+                            <small class="text-muted d-block mb-1">
+                              <i class="bi bi-list-ul me-1"></i>Detalhes:
+                            </small>
+                            {% for comp in mov.complementosTabelados[:2] %}
+                            <small class="d-block text-muted">
+                              • {{ comp.nome if comp.nome else comp.descricao }}
+                              {% if comp.valor %}<strong>({{ comp.valor }})</strong>{% endif %}
+                            </small>
+                            {% endfor %}
+                            {% if mov.complementosTabelados|length > 2 %}
+                            <small class="d-block text-muted">• +{{ mov.complementosTabelados|length - 2 }}
+                              detalhes</small>
+                            {% endif %}
+                          </div>
+                          {% endif %}
                         </div>
                       </div>
                       {% endfor %}
                     </div>
-                    {% else %}
-                    <small class="text-muted">Sem movimentos registrados</small>
+
+                    {% if movimentos|length > 10 %}
+                    <small class="text-muted d-block mt-2">
+                      <i class="bi bi-info-circle me-1"></i>
+                      Exibindo 10 de {{ movimentos|length }} movimentos
+                    </small>
                     {% endif %}
-                    
+                    {% else %}
+                    <small class="text-muted"><i class="bi bi-inbox me-2"></i>Sem movimentos registrados</small>
+                    {% endif %}
+
                     <!-- Assuntos -->
                     {% set assuntos = processo.assuntos|default([]) %}
                     {% if assuntos %}
-                    <div class="mt-2">
+                    <div class="mt-3 border-top pt-3">
                       <h6 class="mb-2">
                         <i class="bi bi-tag me-2"></i>Assuntos
                       </h6>
                       {% for assunto in assuntos %}
-                        {% if loop.index <= 3 %}
-                        <span class="badge bg-secondary me-1">{{ assunto.nome }}</span>
+                      {% if loop.index <= 5 %}<span class="badge bg-secondary me-1 mb-1">{{ assunto.nome }}</span>
                         {% endif %}
-                      {% endfor %}
-                      {% if assuntos|length > 3 %}
-                      <span class="badge bg-secondary">+{{ assuntos|length - 3 }}</span>
-                      {% endif %}
+                        {% endfor %}
+                        {% if assuntos|length > 5 %}
+                        <span class="badge bg-secondary">+{{ assuntos|length - 5 }}</span>
+                        {% endif %}
                     </div>
                     {% endif %}
+
+                    <!-- Detalhes Técnicos do Processo -->
+                    <div class="mt-3 border-top pt-3">
+                      <h6 class="mb-3">
+                        <i class="bi bi-info-circle me-2"></i>Detalhes Técnicos
+                      </h6>
+                      <div class="row g-3 small">
+                        <!-- Grau e Instância -->
+                        {% if processo.grau %}
+                        <div class="col-md-4">
+                          <div class="p-2 rounded" style="background: #f0f4ff;">
+                            <small class="text-muted d-block mb-1">
+                              <i class="bi bi-diagram-2 me-1"></i>Grau/Instância
+                            </small>
+                            <strong class="d-block">{{ processo.grau }}</strong>
+                          </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Sistema de Informação -->
+                        {% if processo.sistema %}
+                        <div class="col-md-4">
+                          <div class="p-2 rounded" style="background: #f0f4ff;">
+                            <small class="text-muted d-block mb-1">
+                              <i class="bi bi-server me-1"></i>Sistema
+                            </small>
+                            <strong class="d-block">{{ processo.sistema.nome if processo.sistema.nome else 'N/A'
+                              }}</strong>
+                          </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Formato do Processo -->
+                        {% if processo.formato %}
+                        <div class="col-md-4">
+                          <div class="p-2 rounded" style="background: #f0f4ff;">
+                            <small class="text-muted d-block mb-1">
+                              <i class="bi bi-file-earmark me-1"></i>Formato
+                            </small>
+                            <strong class="d-block">{{ processo.formato.nome if processo.formato.nome else 'N/A'
+                              }}</strong>
+                          </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Código do Órgão -->
+                        {% if processo.orgaoJulgador and processo.orgaoJulgador.codigo %}
+                        <div class="col-md-4">
+                          <div class="p-2 rounded" style="background: #f0f4ff;">
+                            <small class="text-muted d-block mb-1">
+                              <i class="bi bi-hash me-1"></i>Código do Órgão
+                            </small>
+                            <strong class="d-block">{{ processo.orgaoJulgador.codigo }}</strong>
+                          </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Município (IBGE) -->
+                        {% if processo.orgaoJulgador and processo.orgaoJulgador.codigoMunicipioIBGE %}
+                        <div class="col-md-4">
+                          <div class="p-2 rounded" style="background: #f0f4ff;">
+                            <small class="text-muted d-block mb-1">
+                              <i class="bi bi-geo-alt me-1"></i>Código Município
+                            </small>
+                            <strong class="d-block">{{ processo.orgaoJulgador.codigoMunicipioIBGE }}</strong>
+                          </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Total de Movimentos -->
+                        {% if movimentos|length > 0 %}
+                        <div class="col-md-4">
+                          <div class="p-2 rounded" style="background: #f0f4ff;">
+                            <small class="text-muted d-block mb-1">
+                              <i class="bi bi-hourglass me-1"></i>Total de Movimentos
+                            </small>
+                            <strong class="d-block">{{ movimentos|length }}</strong>
+                          </div>
+                        </div>
+                        {% endif %}
+                      </div>
+                    </div>
                   </div>
                 </td>
               </tr>
