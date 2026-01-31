@@ -2,6 +2,7 @@ from flask import Blueprint, render_template, request, redirect, url_for, sessio
 from app.models import db, KnowledgeBase, KnowledgeCategory, KnowledgeTag, KnowledgeSummary
 from app.agents.knowledge_ingestor import KnowledgeIngestor
 from datetime import datetime
+import builtins
 from werkzeug.utils import secure_filename
 from pathlib import Path
 from app.agents.agent_document_summary import AgentDocumentSummary
@@ -504,56 +505,62 @@ def generate_summary(file_id):
     if not law_firm_id or not user_id:
         return jsonify({'success': False, 'error': 'Não autorizado'}), 401
     
-    try:
-        # Verificar se o arquivo existe
-        file = KnowledgeBase.query.filter_by(
-            id=file_id,
-            law_firm_id=law_firm_id,
-            is_active=True
-        ).first()
-        
-        if not file:
-            return jsonify({'success': False, 'error': 'Arquivo não encontrado'}), 404
-        
-        agent = AgentDocumentSummary()
-
-        summary_payload = agent.summarizeDocument(file_path=file.file_path)
-        
-        # Extrair lawsuit_numbers do resumo e preencher na tabela se vazio
-        if summary_payload and isinstance(summary_payload, dict):
-            lawsuit_numbers = summary_payload.get('lawsuit_numbers')
-            
-            # Se encontrou números de processo no resumo e o arquivo não tem preenchido
-            if lawsuit_numbers and not file.lawsuit_number:
-                # Se for uma lista, converte para string separada por vírgula
-                if isinstance(lawsuit_numbers, list):
-                    file.lawsuit_number = ', '.join(str(num) for num in lawsuit_numbers)
-                else:
-                    file.lawsuit_number = str(lawsuit_numbers)
-        
-        # Verificar se já existe resumo
-        existing_summary = KnowledgeSummary.query.filter_by(knowledge_base_id=file_id).first()
-        
-        if existing_summary:
-            existing_summary.payload = summary_payload
-            existing_summary.updated_at = datetime.utcnow()
-        else:
-            summary = KnowledgeSummary(
-                knowledge_base_id=file_id,
-                payload=summary_payload
-            )
-            db.session.add(summary)
-        
-        db.session.commit()
-        
-        return jsonify({
-            'success': True,
-            'message': 'Resumo gerado com sucesso' if not lawsuit_numbers else f'Resumo gerado e {len(lawsuit_numbers) if isinstance(lawsuit_numbers, list) else 1} número(s) de processo adicionado(s)'
-        })
+    # Verificar se o arquivo existe
+    file = KnowledgeBase.query.filter_by(
+        id=file_id,
+        law_firm_id=law_firm_id,
+        is_active=True
+    ).first()
     
-    except Exception as e:
-        db.session.rollback()
-        return jsonify({'success': False, 'error': str(e)}), 500
+    if not file:
+        return jsonify({'success': False, 'error': 'Arquivo não encontrado'}), 404
+    
+    agent = AgentDocumentSummary()
+
+    # O agent já retorna um dict
+    summary_payload = agent.summarizeDocument(file_path=file.file_path)
+    
+    # Extrair lawsuit_numbers do resumo e preencher na tabela se vazio
+    lawsuit_numbers = []
+    if summary_payload and isinstance(summary_payload, dict):
+        lawsuit_numbers_raw = summary_payload.get('lawsuit_numbers', [])
+        
+        # Validar e limpar lawsuit_numbers
+        if lawsuit_numbers_raw:
+            if isinstance(lawsuit_numbers_raw, builtins.list):
+                # Filtrar apenas strings não vazias
+                lawsuit_numbers = [str(num).strip() for num in lawsuit_numbers_raw if num and str(num).strip()]
+            elif isinstance(lawsuit_numbers_raw, str) and lawsuit_numbers_raw.strip():
+                lawsuit_numbers = [lawsuit_numbers_raw.strip()]
+                
+        # Se encontrou números de processo válidos e o arquivo não tem preenchido
+        if lawsuit_numbers and (not file.lawsuit_number or file.lawsuit_number.strip() == ''):
+            try:
+                file.lawsuit_number = ', '.join(lawsuit_numbers)
+                print(f"Atribuído lawsuit_number ao arquivo: {file.lawsuit_number}")
+            except Exception as e:
+                print(f"Erro ao atribuir lawsuit_number: {str(e)}")
+    
+    # Verificar se já existe resumo
+    print(f"Verificando existência de resumo para o arquivo ID {file_id}")
+    existing_summary = KnowledgeSummary.query.filter_by(knowledge_base_id=file_id).first()
+    print(f"Resumo gerado para o arquivo ID {file_id}: {summary_payload}")
+    if existing_summary:
+        existing_summary.payload = summary_payload
+        existing_summary.updated_at = datetime.utcnow()
+    else:
+        summary = KnowledgeSummary(
+            knowledge_base_id=file_id,
+            payload=summary_payload
+        )
+        db.session.add(summary)
+    
+    db.session.commit()
+    
+    return jsonify({
+        'success': True,
+        'message': 'Resumo gerado com sucesso' if not lawsuit_numbers else f'Resumo gerado e {len(lawsuit_numbers) if isinstance(lawsuit_numbers, builtins.list) else 1} número(s) de processo adicionado(s)'
+    })
 
 
 @knowledge_base_bp.route('/<int:file_id>/view')
