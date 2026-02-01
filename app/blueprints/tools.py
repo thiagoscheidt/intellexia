@@ -208,6 +208,7 @@ def datajud_search():
     Ferramentas de busca na API DataJud - Consulta de processos judiciais
     """
     from app.services.data_jud_api import DataJudAPI
+    from app.services.sgt_tpu_service import obter_assuntos_tpu, SgtTpuService
     
     resultado = None
     processos = []
@@ -238,6 +239,16 @@ def datajud_search():
         ('TJGO', 'TJGO - Tribunal de Justiça de GO'),
         ('TJDFT', 'TJDFT - Tribunal de Justiça do DF'),
     ]
+    assuntos = []
+    classes = []
+    try:
+        service = SgtTpuService()
+        assuntos = service.obter_assuntos_tpu()
+        classes = service.obter_classes_tpu()
+    except Exception:
+        assuntos = []
+        classes = []
+
     
     if request.method == 'POST':
         try:
@@ -254,6 +265,8 @@ def datajud_search():
                     return render_template(
                         'tools/datajud_search.html',
                         tribunais=tribunais,
+                        assuntos=assuntos,
+                        classes=classes,
                         erro=erro,
                         tipo_busca=tipo_busca
                     )
@@ -274,6 +287,8 @@ def datajud_search():
                     return render_template(
                         'tools/datajud_search.html',
                         tribunais=tribunais,
+                        assuntos=assuntos,
+                        classes=classes,
                         erro=erro,
                         tipo_busca=tipo_busca
                     )
@@ -285,6 +300,8 @@ def datajud_search():
                     return render_template(
                         'tools/datajud_search.html',
                         tribunais=tribunais,
+                        assuntos=assuntos,
+                        classes=classes,
                         erro=erro,
                         tipo_busca=tipo_busca
                     )
@@ -306,6 +323,8 @@ def datajud_search():
                     return render_template(
                         'tools/datajud_search.html',
                         tribunais=tribunais,
+                        assuntos=assuntos,
+                        classes=classes,
                         erro=erro,
                         tipo_busca=tipo_busca
                     )
@@ -317,6 +336,8 @@ def datajud_search():
                     return render_template(
                         'tools/datajud_search.html',
                         tribunais=tribunais,
+                        assuntos=assuntos,
+                        classes=classes,
                         erro=erro,
                         tipo_busca=tipo_busca
                     )
@@ -345,5 +366,7 @@ def datajud_search():
         processos=processos,
         total_resultados=total_resultados,
         tempo_busca=tempo_busca,
+        assuntos=assuntos,
+        classes=classes,
         erro=erro
     )

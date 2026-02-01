@@ -127,10 +127,22 @@ class DataJudAPI:
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
+            status_code = getattr(e.response, 'status_code', None)
+            message = str(e)
+            if status_code == 404:
+                message = f"Tribunal '{tribunal}' não disponível na API pública do DataJud."
+            details = None
+            if getattr(e, 'response', None) is not None:
+                try:
+                    details = e.response.text
+                except Exception:
+                    details = None
+            if details:
+                message = f"{message} | {details}"
             return {
                 'error': True,
-                'message': str(e),
-                'status_code': getattr(e.response, 'status_code', None)
+                'message': message,
+                'status_code': status_code
             }
     
     def buscar_por_classe_e_orgao(
@@ -172,10 +184,14 @@ class DataJudAPI:
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
+            status_code = getattr(e.response, 'status_code', None)
+            message = str(e)
+            if status_code == 404:
+                message = f"Tribunal '{tribunal}' não disponível na API pública do DataJud."
             return {
                 'error': True,
-                'message': str(e),
-                'status_code': getattr(e.response, 'status_code', None)
+                'message': message,
+                'status_code': status_code
             }
     
     def buscar_com_paginacao(
@@ -221,10 +237,14 @@ class DataJudAPI:
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
+            status_code = getattr(e.response, 'status_code', None)
+            message = str(e)
+            if status_code == 404:
+                message = f"Tribunal '{tribunal}' não disponível na API pública do DataJud."
             return {
                 'error': True,
-                'message': str(e),
-                'status_code': getattr(e.response, 'status_code', None)
+                'message': message,
+                'status_code': status_code
             }
     
     def buscar_por_assunto(
@@ -266,10 +286,14 @@ class DataJudAPI:
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
+            status_code = getattr(e.response, 'status_code', None)
+            message = str(e)
+            if status_code == 404:
+                message = f"Tribunal '{tribunal}' não disponível na API pública do DataJud."
             return {
                 'error': True,
-                'message': str(e),
-                'status_code': getattr(e.response, 'status_code', None)
+                'message': message,
+                'status_code': status_code
             }
     
     def buscar_movimentos_por_codigo(

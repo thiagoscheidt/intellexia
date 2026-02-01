@@ -4,6 +4,43 @@
 {% block page_title %}Pesquisa DataJud - Consulta de Processos{% endblock %}
 
 {% block content %}
+<style>
+  .select2-container--default .select2-selection--single {
+    background-color: #fff;
+    border: 1px solid #ced4da;
+    border-radius: 0.5rem;
+    min-height: 54px;
+    font-size: 1.05rem;
+  }
+
+  .select2-container--default .select2-selection--single .select2-selection__rendered {
+    color: #212529;
+    line-height: 52px;
+    padding-left: 12px;
+  }
+
+  .select2-container--default .select2-selection--single .select2-selection__arrow {
+    height: 52px;
+  }
+
+  .select2-dropdown {
+    border-radius: 0.5rem;
+  }
+
+  .select2-results__option {
+    padding: 10px 12px;
+    font-size: 1.05rem;
+  }
+
+  .select2-search__field {
+    font-size: 1.05rem;
+    padding: 6px 10px;
+    background-color: #fff !important;
+    color: #212529 !important;
+    border: 1px solid #ced4da;
+    border-radius: 0.375rem;
+  }
+</style>
 
 <!-- Header com aba de tipos de busca -->
 <div class="row mb-4">
@@ -87,8 +124,9 @@
               </div>
 
               <div class="col-md-6">
-                <label for="tribunal" class="form-label fw-600">Tribunal</label>
-                <select class="form-select form-select-lg" id="tribunal" name="tribunal" required>
+                <label for="tribunal_numero" class="form-label fw-600">Tribunal</label>
+                <select class="form-select form-select-lg select2" id="tribunal_numero" name="tribunal" required
+                  data-placeholder="Selecione um tribunal...">
                   <option value="">Selecione um tribunal...</option>
                   {% for sigla, nome in tribunais %}
                   <option value="{{ sigla }}" {% if request.args.get('tribunal')==sigla %}selected{% endif %}>{{ nome }}
@@ -120,9 +158,17 @@
 
               <div class="col-md-4">
                 <label for="codigo_classe" class="form-label fw-600">Código da Classe</label>
-                <input type="number" class="form-control form-control-lg" id="codigo_classe" name="codigo_classe"
-                  placeholder="Ex: 436" required>
-                <small class="text-muted">Código TPU. Ex: 436 = Juizado Especial Cível</small>
+                {% set codigo_classe_atual = request.form.get('codigo_classe') or request.args.get('codigo_classe') %}
+                <select class="form-select form-select-lg select2" id="codigo_classe" name="codigo_classe" required
+                  data-placeholder="Selecione uma classe...">
+                  <option value="">Selecione uma classe...</option>
+                  {% for classe in classes %}
+                  <option value="{{ classe.codigo }}" {% if codigo_classe_atual==classe.codigo %}selected{% endif %}>
+                    {{ classe.codigo }} — {{ classe.nome }}
+                  </option>
+                  {% endfor %}
+                </select>
+                <small class="text-muted">TPU oficial do CNJ</small>
               </div>
 
               <div class="col-md-4">
@@ -133,8 +179,9 @@
               </div>
 
               <div class="col-md-4">
-                <label for="tribunal" class="form-label fw-600">Tribunal</label>
-                <select class="form-select form-select-lg" id="tribunal" name="tribunal" required>
+                <label for="tribunal_classe" class="form-label fw-600">Tribunal</label>
+                <select class="form-select form-select-lg select2" id="tribunal_classe" name="tribunal" required
+                  data-placeholder="Selecione um tribunal...">
                   <option value="">Selecione um tribunal...</option>
                   {% for sigla, nome in tribunais %}
                   <option value="{{ sigla }}">{{ nome }}</option>
@@ -165,14 +212,24 @@
 
               <div class="col-md-6">
                 <label for="codigo_assunto" class="form-label fw-600">Código do Assunto</label>
-                <input type="number" class="form-control form-control-lg" id="codigo_assunto" name="codigo_assunto"
-                  placeholder="Ex: 6177" required>
-                <small class="text-muted">Código TPU. Assuntos comuns: 6177 (Concessão), 7716 (Auxílio-doença)</small>
+                {% set codigo_assunto_atual = request.form.get('codigo_assunto') or request.args.get('codigo_assunto')
+                %}
+                <select class="form-select form-select-lg select2" id="codigo_assunto" name="codigo_assunto" required
+                  data-placeholder="Selecione um assunto...">
+                  <option value="">Selecione um assunto...</option>
+                  {% for assunto in assuntos %}
+                  <option value="{{ assunto.codigo }}" {% if codigo_assunto_atual==assunto.codigo %}selected{% endif %}>
+                    {{ assunto.codigo }} — {{ assunto.nome }}
+                  </option>
+                  {% endfor %}
+                </select>
+                <small class="text-muted">TPU oficial do CNJ</small>
               </div>
 
               <div class="col-md-6">
-                <label for="tribunal" class="form-label fw-600">Tribunal</label>
-                <select class="form-select form-select-lg" id="tribunal" name="tribunal" required>
+                <label for="tribunal_assunto" class="form-label fw-600">Tribunal</label>
+                <select class="form-select form-select-lg select2" id="tribunal_assunto" name="tribunal" required
+                  data-placeholder="Selecione um tribunal...">
                   <option value="">Selecione um tribunal...</option>
                   {% for sigla, nome in tribunais %}
                   <option value="{{ sigla }}">{{ nome }}</option>
@@ -715,5 +772,18 @@
   </div>
 </div>
 {% endif %}
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    $('.select2').each(function () {
+      const placeholder = $(this).data('placeholder') || 'Selecione...';
+      $(this).select2({
+        width: '100%',
+        allowClear: true,
+        placeholder
+      });
+    });
+  });
+</script>
 
 {% endblock %}
