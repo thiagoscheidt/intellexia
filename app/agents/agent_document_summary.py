@@ -56,6 +56,7 @@ class DocumentSummary(BaseModel):
     lawsuit_numbers: List[str] = Field(default_factory=list, description="Números de processo")
     language: str = Field(default="pt-BR", description="Idioma do documento")
     notes: str = Field(default="", description="Observações adicionais")
+    court_tag: str = Field(default="", description="Tag do tribunal conforme lista pré-definida")
     lawsuit_info: LawsuitInfo = Field(default_factory=LawsuitInfo, description="Informações de processo")
 
     def to_dict(self) -> dict:
@@ -118,6 +119,10 @@ class AgentDocumentSummary:
             "- nature: natureza da ação (ex: Procedimento Comum)\n"
             "- judicial_power: poder judiciário (ex: Justiça Federal)\n"
             "- judge: nome do juiz (se não estiver explícito, procurar por 'Signatário')\n"
+            "- court_tag: tag do tribunal conforme a lista a seguir (use a CHAVE, ex: TRF1, TJSP). Se não conseguir identificar, deixe vazio:\n"
+            "  STF, STJ, TST, TSE, STM, TRF1, TRF2, TRF3, TRF4, TRF5, TRF6, "
+            "TJAC, TJAL, TJAM, TJAP, TJBA, TJCE, TJDFT, TJES, TJGO, TJMA, TJMG, TJMS, "
+            "TJMT, TJPA, TJPB, TJPE, TJPI, TJPR, TJRJ, TJRN, TJRO, TJRR, TJRS, TJSC, TJSE, TJSP, TJTO\n"
             "- parties: objeto contendo:\n"
             "  - active_pole: array de partes do polo ativo com nome, papel (ex: Autor) e advogados\n"
             "  - passive_pole: array de partes do polo passivo com nome, papel (ex: Parte passiva, Réu) e advogados\n"

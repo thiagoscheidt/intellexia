@@ -137,6 +137,14 @@
                                     <i class="bi bi-file-earmark-word-fill"></i> Visualizar DOCX
                                 </button>
                                 {% endif %}
+                                {% if file.lawsuit_number %}
+                                {% set process_number = file.lawsuit_number.split(',')[0].strip() %}
+                                {% set tribunal_tag = (summary.payload or {}).get('court_tag') if summary else '' %}
+                                <a href="{{ url_for('tools.datajud_search', numero_processo=process_number, tribunal=tribunal_tag) }}"
+                                    class="btn btn-outline-info btn-sm shadow" style="border-radius: 8px;">
+                                    <i class="bi bi-search"></i> Verificar status no DataJud
+                                </a>
+                                {% endif %}
                                 <a href="{{ url_for('knowledge_base.download', file_id=file.id) }}"
                                     class="btn btn-primary btn-sm shadow" style="border-radius: 8px;">
                                     <i class="bi bi-download"></i> Download

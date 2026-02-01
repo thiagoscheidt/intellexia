@@ -81,7 +81,8 @@
               <div class="col-md-6">
                 <label for="numero_processo" class="form-label fw-600">Número do Processo</label>
                 <input type="text" class="form-control form-control-lg" id="numero_processo" name="numero_processo"
-                  placeholder="Ex: 0000832-35.2018.4.01.3202" required>
+                  placeholder="Ex: 0000832-35.2018.4.01.3202" value="{{ request.args.get('numero_processo', '') }}"
+                  required>
                 <small class="text-muted">Número CNJ com ou sem formatação</small>
               </div>
 
@@ -90,7 +91,8 @@
                 <select class="form-select form-select-lg" id="tribunal" name="tribunal" required>
                   <option value="">Selecione um tribunal...</option>
                   {% for sigla, nome in tribunais %}
-                  <option value="{{ sigla }}">{{ nome }}</option>
+                  <option value="{{ sigla }}" {% if request.args.get('tribunal')==sigla %}selected{% endif %}>{{ nome }}
+                  </option>
                   {% endfor %}
                 </select>
               </div>
