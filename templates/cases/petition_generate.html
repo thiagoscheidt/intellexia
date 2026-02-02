@@ -48,11 +48,10 @@
               <dt class="col-sm-4">Tipo de Caso:</dt>
               <dd class="col-sm-8">
                 {% set case_type_map = {
-                'fap_trajeto': 'FAP - Acidente de Trajeto',
-                'fap_outros': 'FAP - Outros Acidentes',
-                'acao_ordinaria': 'Ação Ordinária',
-                'acao_trabalhista': 'Ação Trabalhista',
-                'recurso': 'Recurso'
+                'fap': 'Revisão FAP - AÇÃO REVISIONAL DO FATOR ACIDENTÁRIO DE PREVENÇÃO',
+                'previdenciario': 'Previdenciário',
+                'trabalhista': 'Trabalhista',
+                'outros': 'Outros'
                 } %}
                 {{ case_type_map.get(case.case_type, case.case_type) }}
               </dd>

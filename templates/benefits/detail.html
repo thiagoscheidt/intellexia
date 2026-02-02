@@ -132,25 +132,6 @@
                   </td>
                 </tr>
                 <tr>
-                  <td><strong>Motivo do Erro:</strong></td>
-                  <td>
-                    {% if benefit.error_reason %}
-                    {% if benefit.error_reason == 'acidente_trajeto' %}
-                    <span class="badge bg-warning text-dark"><i class="bi bi-truck"></i> Acidente de Trajeto</span>
-                    {% elif benefit.error_reason == 'sem_nexo_causal' %}
-                    <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Sem Nexo Causal</span>
-                    {% elif benefit.error_reason == 'classificacao_incorreta' %}
-                    <span class="badge bg-info text-dark"><i class="bi bi-exclamation-triangle"></i> Classificação
-                      Incorreta</span>
-                    {% else %}
-                    <span class="badge bg-secondary">{{ benefit.error_reason }}</span>
-                    {% endif %}
-                    {% else %}
-                    <span class="text-muted">Não especificado</span>
-                    {% endif %}
-                  </td>
-                </tr>
-                <tr>
                   <td><strong>Data de Cadastro:</strong></td>
                   <td>
                     <i class="bi bi-calendar-plus"></i> {{ benefit.created_at.strftime('%d/%m/%Y às %H:%M') if
@@ -213,14 +194,14 @@
                   </div>
                   <div class="col-6">
                     <strong>Tipo:</strong>
-                    {% if case.case_type == 'fap_trajeto' %}
-                    <span class="badge bg-info text-dark">FAP - Trajeto</span>
-                    {% elif case.case_type == 'fap_nexo' %}
-                    <span class="badge bg-info text-dark">FAP - Nexo</span>
-                    {% elif case.case_type == 'fap_multiplos' %}
-                    <span class="badge bg-info text-dark">FAP - Múltiplos</span>
-                    {% elif case.case_type == 'auto_infracao' %}
-                    <span class="badge bg-danger">Auto Infração</span>
+                    {% if case.case_type == 'fap' %}
+                    <span class="badge bg-info text-dark">FAP</span>
+                    {% elif case.case_type == 'previdenciario' %}
+                    <span class="badge bg-primary">Previdenciário</span>
+                    {% elif case.case_type == 'trabalhista' %}
+                    <span class="badge bg-warning text-dark">Trabalhista</span>
+                    {% elif case.case_type == 'outros' %}
+                    <span class="badge bg-secondary">Outros</span>
                     {% else %}
                     <span class="badge bg-secondary">{{ case.case_type }}</span>
                     {% endif %}

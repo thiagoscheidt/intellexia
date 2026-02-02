@@ -58,6 +58,13 @@ def case_benefit_new(case_id):
     ).order_by(FapReason.display_name).all()
     form.fap_reason_id.choices = [('', 'Nenhum motivo selecionado')] + [(r.id, r.display_name) for r in fap_reasons]
     
+    # Populate fap_vigencia_years choices based on case dates
+    if case.fap_start_year and case.fap_end_year:
+        years = [str(year) for year in range(case.fap_start_year, case.fap_end_year + 1)]
+        form.fap_vigencia_years.choices = [(year, year) for year in years]
+    else:
+        form.fap_vigencia_years.choices = []
+    
     if form.validate_on_submit():
         benefit = CaseBenefit(
             case_id=case_id,
@@ -71,8 +78,8 @@ def case_benefit_new(case_id):
             data_fim_beneficio=form.data_fim_beneficio.data,
             accident_date=form.accident_date.data,
             accident_company_name=form.accident_company_name.data,
-            error_reason=form.error_reason.data,
             fap_reason_id=form.fap_reason_id.data or None,
+            fap_vigencia_years=','.join(form.fap_vigencia_years.data) if form.fap_vigencia_years.data else None,
             notes=form.notes.data
         )
         
@@ -106,6 +113,16 @@ def case_benefit_edit(case_id, benefit_id):
     ).order_by(FapReason.display_name).all()
     form.fap_reason_id.choices = [('', 'Nenhum motivo selecionado')] + [(r.id, r.display_name) for r in fap_reasons]
     
+    # Populate fap_vigencia_years choices based on case dates
+    if case.fap_start_year and case.fap_end_year:
+        years = [str(year) for year in range(case.fap_start_year, case.fap_end_year + 1)]
+        form.fap_vigencia_years.choices = [(year, year) for year in years]
+        # Pre-fill with existing values
+        if benefit.fap_vigencia_years:
+            form.fap_vigencia_years.data = benefit.fap_vigencia_years.split(',')
+    else:
+        form.fap_vigencia_years.choices = []
+    
     if form.validate_on_submit():
         benefit.benefit_number = form.benefit_number.data
         benefit.benefit_type = form.benefit_type.data
@@ -117,8 +134,8 @@ def case_benefit_edit(case_id, benefit_id):
         benefit.data_fim_beneficio = form.data_fim_beneficio.data
         benefit.accident_date = form.accident_date.data
         benefit.accident_company_name = form.accident_company_name.data
-        benefit.error_reason = form.error_reason.data
         benefit.fap_reason_id = form.fap_reason_id.data or None
+        benefit.fap_vigencia_years = ','.join(form.fap_vigencia_years.data) if form.fap_vigencia_years.data else None
         benefit.notes = form.notes.data
         benefit.updated_at = datetime.utcnow()
         

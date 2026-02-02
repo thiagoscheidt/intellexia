@@ -157,14 +157,14 @@
               <div class="col-12 mb-1">
                 <div class="d-flex justify-content-between align-items-center">
                   <small>
-                    {% if case_type == 'fap_trajeto' %}
-                      <i class="bi bi-truck"></i> FAP - Trajeto
-                    {% elif case_type == 'fap_nexo' %}
-                      <i class="bi bi-link"></i> FAP - Nexo
-                    {% elif case_type == 'fap_multiplos' %}
-                      <i class="bi bi-layers"></i> FAP - Múltiplos
-                    {% elif case_type == 'auto_infracao' %}
-                      <i class="bi bi-exclamation-triangle"></i> Auto Infração
+                    {% if case_type == 'fap' %}
+                      <i class="bi bi-truck"></i> Revisão FAP - AÇÃO REVISIONAL DO FATOR ACIDENTÁRIO DE PREVENÇÃO
+                    {% elif case_type == 'previdenciario' %}
+                      <i class="bi bi-shield-check"></i> Previdenciário
+                    {% elif case_type == 'trabalhista' %}
+                      <i class="bi bi-building"></i> Trabalhista
+                    {% elif case_type == 'outros' %}
+                      <i class="bi bi-folder"></i> Outros
                     {% else %}
                       <i class="bi bi-folder"></i> {{ case_type|title }}
                     {% endif %}
@@ -218,18 +218,14 @@
                         </a>
                       </td>
                       <td>
-                        {% if case.case_type == 'fap_trajeto' %}
-                          <span class="badge bg-info text-dark"><i class="bi bi-truck"></i> FAP - Trajeto</span>
-                        {% elif case.case_type == 'fap_nexo' %}
-                          <span class="badge bg-info text-dark"><i class="bi bi-link"></i> FAP - Nexo</span>
-                        {% elif case.case_type == 'fap_multiplos' %}
-                          <span class="badge bg-info text-dark"><i class="bi bi-layers"></i> FAP - Múltiplos</span>
-                        {% elif case.case_type == 'auto_infracao' %}
-                          <span class="badge bg-danger"><i class="bi bi-exclamation-triangle"></i> Auto Infração</span>
+                        {% if case.case_type == 'fap' %}
+                          <span class="badge bg-info text-dark"><i class="bi bi-truck"></i> FAP</span>
                         {% elif case.case_type == 'previdenciario' %}
                           <span class="badge bg-primary"><i class="bi bi-shield-check"></i> Previdenciário</span>
                         {% elif case.case_type == 'trabalhista' %}
                           <span class="badge bg-warning text-dark"><i class="bi bi-building"></i> Trabalhista</span>
+                        {% elif case.case_type == 'outros' %}
+                          <span class="badge bg-secondary"><i class="bi bi-folder"></i> Outros</span>
                         {% else %}
                           <span class="badge bg-secondary">{{ case.case_type }}</span>
                         {% endif %}

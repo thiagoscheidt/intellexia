@@ -141,9 +141,7 @@ class AgentDocumentGenerator:
                     
                     # Se houver mais colunas, preencher com dados adicionais
                     if len(new_row.cells) > 6:
-                        new_row.cells[6].text = benefit.error_reason or ''
-                    if len(new_row.cells) > 7:
-                        new_row.cells[7].text = benefit.accident_company_name or ''
+                        new_row.cells[6].text = benefit.accident_company_name or ''
 
 
 # =====================================

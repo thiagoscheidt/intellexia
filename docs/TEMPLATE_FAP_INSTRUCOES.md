@@ -18,7 +18,7 @@ Use a sintaxe `{{variavel}}` para inserir dados automaticamente:
 
 #### Dados do Caso
 - `{{caso_titulo}}` - Título do caso
-- `{{caso_tipo}}` - Tipo do caso (fap_trajeto, fap_outros, etc.)
+- `{{caso_tipo}}` - Tipo do caso (fap, previdenciario, trabalhista, outros)
 - `{{fap_motivo}}` - Motivo/Enquadramento FAP (texto legível)
 - `{{ano_inicial_fap}}` - Ano inicial do FAP
 - `{{ano_final_fap}}` - Ano final do FAP
@@ -144,7 +144,7 @@ Caso FAP no Sistema
         ↓
 Usuário solicita geração de petição
         ↓
-Sistema identifica: case_type in ['fap_trajeto', 'fap_outros']
+Sistema identifica: case_type == 'fap'
         ↓
 AgentDocumentGenerator é acionado
         ↓
@@ -179,7 +179,7 @@ Petição disponível para visualização/download
 - Formato: Texto puro/Markdown
 
 ### AgentDocumentGenerator (FAP)
-- Usado para casos FAP (fap_trajeto, fap_outros)
+- Usado para casos FAP (fap)
 - Preenche templates DOCX
 - Estrutura rígida e profissional
 - Formato: Microsoft Word (.docx)
@@ -187,7 +187,7 @@ Petição disponível para visualização/download
 ## Próximos Passos
 
 1. Crie seu template DOCX personalizado
-2. Salve em `templates_docx/modelo_fap_trajeto.docx`
+2. Salve em `templates_docx/modelo_fap.docx`
 3. Adicione os placeholders desejados
 4. Teste gerando uma petição via sistema
 5. Ajuste o template conforme necessário

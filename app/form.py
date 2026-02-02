@@ -2,7 +2,7 @@ from flask_wtf import FlaskForm
 from flask_wtf.file import FileField, FileAllowed
 from wtforms import (
     StringField, PasswordField, SubmitField, TextAreaField,
-    SelectField, IntegerField, DecimalField, DateField,
+    SelectField, SelectMultipleField, IntegerField, DecimalField, DateField,
     BooleanField, HiddenField
 )
 from wtforms.validators import DataRequired, Length, Email, Optional, NumberRange
@@ -67,8 +67,7 @@ class CaseForm(FlaskForm):
     case_type = SelectField(
         'Tipo de Caso',
         choices=[
-            ('fap_trajeto', 'FAP - Acidente de Trajeto'),
-            ('fap_outros', 'FAP - Outros'),
+            ('fap', 'Revisão FAP - AÇÃO REVISIONAL DO FATOR ACIDENTÁRIO DE PREVENÇÃO'),
             ('previdenciario', 'Previdenciário'),
             ('trabalhista', 'Trabalhista'),
             ('outros', 'Outros')
@@ -180,21 +179,16 @@ class CaseBenefitForm(FlaskForm):
         'Empresa onde ocorreu o Acidente',
         validators=[Optional(), Length(max=255)]
     )
-    error_reason = SelectField(
-        'Motivo da Contestação',
-        choices=[
-            ('nexo_causal', 'Ausência de Nexo Causal'),
-            ('trajeto', 'Acidente de Trajeto'),
-            ('fora_empresa', 'Acidente Fora da Empresa'),
-            ('outros', 'Outros')
-        ],
-        validators=[Optional()]
-    )
     fap_reason_id = SelectField(
         'Motivo da Contestação FAP',
         coerce=safe_int_coerce,
         validators=[Optional()],
         choices=[]  # Populated dynamically in view
+    )
+    fap_vigencia_years = SelectMultipleField(
+        'Vigências FAP (Anos)',
+        validators=[DataRequired()],
+        choices=[]  # Populated dynamically based on case dates
     )
     notes = TextAreaField('Observações Adicionais', validators=[Optional()])
     submit = SubmitField('Salvar Benefício')
@@ -228,21 +222,16 @@ class CaseBenefitContextForm(FlaskForm):
         'Empresa onde ocorreu o Acidente',
         validators=[Optional(), Length(max=255)]
     )
-    error_reason = SelectField(
-        'Motivo da Contestação',
-        choices=[
-            ('nexo_causal', 'Ausência de Nexo Causal'),
-            ('trajeto', 'Acidente de Trajeto'),
-            ('fora_empresa', 'Acidente Fora da Empresa'),
-            ('outros', 'Outros')
-        ],
-        validators=[Optional()]
-    )
     fap_reason_id = SelectField(
         'Motivo da Contestação FAP',
         coerce=safe_int_coerce,
         validators=[Optional()],
         choices=[]  # Populated dynamically in view
+    )
+    fap_vigencia_years = SelectMultipleField(
+        'Vigências FAP (Anos)',
+        validators=[DataRequired()],
+        choices=[]  # Populated dynamically based on case dates
     )
     notes = TextAreaField('Observações Adicionais', validators=[Optional()])
     submit = SubmitField('Salvar Benefício')

@@ -93,10 +93,10 @@ def process_legal_assistant_message(message, context):
             response = "📂 **Tipos de casos no sistema:**\n\n"
             for case_type, count in types:
                 type_name = {
-                    'fap_trajeto': 'FAP - Acidente de Trajeto',
-                    'fap_nexo': 'FAP - Nexo Causal',
-                    'fap_multiplos': 'FAP - Múltiplos Benefícios',
-                    'auto_infracao': 'Auto de Infração'
+                    'fap': 'Revisão FAP - AÇÃO REVISIONAL DO FATOR ACIDENTÁRIO DE PREVENÇÃO',
+                    'previdenciario': 'Previdenciário',
+                    'trabalhista': 'Trabalhista',
+                    'outros': 'Outros'
                 }.get(case_type, case_type.title() if case_type else 'Não especificado')
                 response += f"• **{type_name}:** {count} casos\n"
             return response + "\nQual tipo você gostaria de analisar em detalhes?"

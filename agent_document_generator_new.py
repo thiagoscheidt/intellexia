@@ -140,9 +140,7 @@ class AgentDocumentGenerator:
                     
                     # Se houver mais colunas, preencher com dados adicionais
                     if len(new_row.cells) > 6:
-                        new_row.cells[6].text = benefit.error_reason or ''
-                    if len(new_row.cells) > 7:
-                        new_row.cells[7].text = benefit.accident_company_name or ''
+                        new_row.cells[6].text = benefit.accident_company_name or ''
 
 
 # =====================================
@@ -215,7 +213,7 @@ from agent_document_generator import AgentDocumentGenerator
 agent = AgentDocumentGenerator()
 document = agent.generate_fap_petition(
     case_id=123,
-    template_path="templates_docx/modelo_fap_trajeto.docx"
+    template_path="templates_docx/modelo_fap.docx"
 )
 document.save("peticao_gerada.docx")
 """)

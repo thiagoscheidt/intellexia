@@ -144,7 +144,7 @@ def populate_data():
     cases_data = [
         {
             'title': 'Revisão FAP - Acidente de Trabalho 2019-2021',
-            'case_type': 'fap_trajeto',
+            'case_type': 'fap',
             'fap_start_year': 2019,
             'fap_end_year': 2021,
             'facts_summary': 'Contestação do FAP em razão de acidente de trajeto.',
@@ -158,7 +158,7 @@ def populate_data():
         },
         {
             'title': 'Revisão FAP - Nexo Causal 2020-2022',
-            'case_type': 'fap_nexo',
+            'case_type': 'fap',
             'fap_start_year': 2020,
             'fap_end_year': 2022,
             'facts_summary': 'Contestação de auxílio-doença acidentário.',
@@ -214,7 +214,6 @@ def populate_data():
             'insured_nit': '12345678901',
             'accident_date': date(2019, 8, 15),
             'accident_company_name': 'Construtora Silva & Filhos Ltda',
-            'error_reason': 'acidente_trajeto',
             'notes': 'Acidente no trajeto casa-trabalho'
         }
     ]

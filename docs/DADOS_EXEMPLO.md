@@ -74,24 +74,24 @@ python clear_sample_data.py --table benefits
 
 ### Casos Jurídicos
 1. **Revisão FAP - Acidente de Trabalho 2019-2021**
-   - Tipo: fap_trajeto
+   - Tipo: fap
    - Status: ativo
    - Valor: R$ 250.000,00
    - 2 benefícios relacionados
 
 2. **Revisão FAP - Nexo Causal Contestado 2020-2022**
-   - Tipo: fap_nexo
+   - Tipo: fap
    - Status: ativo
    - Valor: R$ 180.000,00
    - 1 benefício relacionado
 
 3. **Anulação de Auto de Infração - NR12**
-   - Tipo: auto_infracao
+   - Tipo: outros
    - Status: draft
    - Valor: R$ 75.000,00
 
 4. **Revisão FAP - Múltiplos Benefícios 2018-2020**
-   - Tipo: fap_multiplos
+   - Tipo: fap
    - Status: ativo
    - Valor: R$ 420.000,00
    - 3 benefícios relacionados

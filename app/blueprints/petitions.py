@@ -109,7 +109,7 @@ def case_petition_generate(case_id):
             db.session.commit()
             
             try:
-                is_fap_case = case.case_type in ['fap_trajeto', 'fap_outros']
+                is_fap_case = case.case_type == 'fap'
                 
                 if is_fap_case:
                     agent = AgentDocumentGenerator()
@@ -154,8 +154,7 @@ def case_petition_generate(case_id):
                             'benefit_type': benefit.benefit_type,
                             'insured_name': benefit.insured_name,
                             'insured_nit': benefit.insured_nit,
-                            'accident_date': str(benefit.accident_date) if benefit.accident_date else '',
-                            'error_reason': benefit.error_reason
+                            'accident_date': str(benefit.accident_date) if benefit.accident_date else ''
                         })
                     
                     documents_data = []

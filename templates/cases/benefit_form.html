@@ -67,7 +67,7 @@
 
         <!-- Formulário de Benefício -->
         <div class="card">
-          <div class="card-header bg-gradient bg-info text-white">
+          <div class="card-header bg-gradient bg-secondary text-white">
             <h3 class="card-title mb-0"><i class="bi bi-file-earmark-plus"></i> {{ title }}</h3>
             <div class="card-tools">
               <a href="{{ url_for('benefits.case_benefits_list', case_id=case.id) }}" class="btn btn-light btn-sm">
@@ -91,8 +91,8 @@
 
               <div class="row mb-4">
                 <div class="col-12">
-                  <div class="alert alert-light border-start border-success p-3" role="alert">
-                    <h5 class="mb-0"><i class="bi bi-gift-fill text-success"></i> Informações do Benefício</h5>
+                  <div class="alert alert-light section-header p-3" role="alert">
+                    <h5 class="mb-0"><i class="bi bi-gift-fill text-primary"></i> Informações do Benefício</h5>
                   </div>
                 </div>
               </div>
@@ -183,8 +183,8 @@
 
               <div class="row mb-4 mt-3">
                 <div class="col-12">
-                  <div class="alert alert-light border-start border-info p-3" role="alert">
-                    <h5 class="mb-0"><i class="bi bi-person-fill text-info"></i> Dados do Segurado</h5>
+                  <div class="alert alert-light section-header p-3" role="alert">
+                    <h5 class="mb-0"><i class="bi bi-person-fill text-primary"></i> Dados do Segurado</h5>
                   </div>
                 </div>
               </div>
@@ -218,8 +218,8 @@
 
               <div class="row mb-4 mt-3">
                 <div class="col-12">
-                  <div class="alert alert-light border-start border-warning p-3" role="alert">
-                    <h5 class="mb-0"><i class="bi bi-exclamation-triangle-fill text-warning"></i> Informações do
+                  <div class="alert alert-light section-header p-3" role="alert">
+                    <h5 class="mb-0"><i class="bi bi-exclamation-triangle-fill text-primary"></i> Informações do
                       Acidente</h5>
                   </div>
                 </div>
@@ -256,24 +256,8 @@
 
               <div class="row mb-4 mt-3">
                 <div class="col-12">
-                  <div class="alert alert-light border-start border-secondary p-3" role="alert">
-                    <h5 class="mb-0"><i class="bi bi-plus-circle-fill text-secondary"></i> Detalhes Adicionais</h5>
-                  </div>
-                </div>
-              </div>
-
-              <div class="row">
-                <div class="col-md-12">
-                  <div class="mb-3">
-                    {{ form.error_reason.label(class="form-label") }}
-                    {{ form.error_reason(class="form-control" + (" is-invalid" if form.error_reason.errors else ""),
-                    rows="3") }}
-                    {% if form.error_reason.errors %}
-                    <div class="invalid-feedback">
-                      {% for error in form.error_reason.errors %}{{ error }}{% endfor %}
-                    </div>
-                    {% endif %}
-                    <div class="form-text">Descreva o motivo do erro ou problema identificado no benefício</div>
+                  <div class="alert alert-light section-header p-3" role="alert">
+                    <h5 class="mb-0"><i class="bi bi-plus-circle-fill text-primary"></i> Detalhes Adicionais</h5>
                   </div>
                 </div>
               </div>
@@ -282,13 +266,28 @@
                 <div class="col-md-12">
                   <div class="mb-3">
                     {{ form.fap_reason_id.label(class="form-label") }}
-                    {{ form.fap_reason_id(class="form-select" + (" is-invalid" if form.fap_reason_id.errors else "")) }}
+                    {{ form.fap_reason_id(class="form-select select2" + (" is-invalid" if form.fap_reason_id.errors else "")) }}
                     {% if form.fap_reason_id.errors %}
                     <div class="invalid-feedback">
                       {% for error in form.fap_reason_id.errors %}{{ error }}{% endfor %}
                     </div>
                     {% endif %}
                     <div class="form-text">Selecione o motivo de contestação FAP deste benefício</div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="row">
+                <div class="col-md-12">
+                  <div class="mb-3">
+                    {{ form.fap_vigencia_years.label(class="form-label") }}
+                    {{ form.fap_vigencia_years(class="form-select select2" + (" is-invalid" if form.fap_vigencia_years.errors else ""), multiple=True, data_placeholder="Selecione as vigências FAP") }}
+                    {% if form.fap_vigencia_years.errors %}
+                    <div class="invalid-feedback">
+                      {% for error in form.fap_vigencia_years.errors %}{{ error }}{% endfor %}
+                    </div>
+                    {% endif %}
+                    <div class="form-text">Selecione os anos de vigência FAP para este benefício (use Ctrl+Click para múltiplas seleções)</div>
                   </div>
                 </div>
               </div>
@@ -309,15 +308,15 @@
               </div>
             </div>
 
-            <div class="card-footer bg-light">
+            <div class="card-footer bg-light d-flex justify-content-end gap-2">
+              <a href="{{ url_for('benefits.case_benefits_list', case_id=case.id) }}"
+                class="btn btn-outline-secondary">
+                <i class="bi bi-x-circle"></i> Cancelar
+              </a>
               <button type="submit" class="btn btn-primary">
                 <i class="bi bi-check-circle-fill"></i>
                 {% if benefit_id %}Atualizar Benefício{% else %}Cadastrar Benefício{% endif %}
               </button>
-              <a href="{{ url_for('benefits.case_benefits_list', case_id=case.id) }}"
-                class="btn btn-outline-secondary ms-2">
-                <i class="bi bi-x-circle"></i> Cancelar
-              </a>
             </div>
           </form>
         </div>
@@ -326,7 +325,49 @@
   </div>
 </div>
 
+<style>
+  .section-header {
+    border-left: 4px solid #0d6efd;
+  }
+  /* Select2 (tags) - ajustar campo de busca para fundo claro */
+  .select2-container--default .select2-selection--multiple {
+    min-height: 38px;
+  }
+  .select2-container--default .select2-selection--multiple .select2-search__field,
+  .select2-container--default .select2-search--inline .select2-search__field {
+    background-color: #ffffff !important;
+    color: #212529 !important;
+    border: 0 !important;
+    box-shadow: none !important;
+  }
+  .select2-container--default .select2-search--dropdown .select2-search__field {
+    background-color: #ffffff !important;
+    color: #212529 !important;
+    border: 1px solid #ced4da !important;
+  }
+  .select2-container--default .select2-selection--multiple {
+    background-color: #ffffff !important;
+    border-color: #ced4da !important;
+  }
+  .select2-dropdown {
+    background-color: #ffffff !important;
+    color: #212529 !important;
+  }
+  .select2-container--default .select2-selection--multiple .select2-selection__rendered {
+    color: #212529;
+  }
+</style>
+
 <script>
+  // Select2 para Vigências FAP (tags)
+  if (window.jQuery && $.fn.select2) {
+    $('.select2').select2({
+      width: '100%',
+      placeholder: 'Selecione as vigências FAP',
+      closeOnSelect: false
+    });
+  }
+
   // Máscara para o NIT
   document.querySelector('[name="insured_nit"]').addEventListener('input', function (e) {
     let value = e.target.value.replace(/\D/g, '');

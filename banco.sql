@@ -64,7 +64,7 @@ CREATE TABLE `cases` (
   `client_id` BIGINT UNSIGNED NOT NULL,           -- FK da empresa autora
   `court_id` BIGINT UNSIGNED NULL,                -- FK da vara judicial
   `title` VARCHAR(255) NOT NULL,                  -- Título do caso
-  `case_type` VARCHAR(50) NOT NULL,               -- Tipo de caso (ex.: fap_trajeto)
+  `case_type` VARCHAR(50) NOT NULL,               -- Tipo de caso (ex.: fap, previdenciario, trabalhista, outros)
   `fap_start_year` SMALLINT UNSIGNED NULL,        -- Ano inicial da revisão FAP
   `fap_end_year` SMALLINT UNSIGNED NULL,          -- Ano final da revisão FAP
   `facts_summary` TEXT NULL,                      -- Fatos resumidos do caso
@@ -137,7 +137,6 @@ CREATE TABLE `case_benefits` (
   `insured_nit` VARCHAR(50) NULL,                 -- NIT/PIS do segurado
   `accident_date` DATE NULL,                      -- Data do acidente
   `accident_company_name` VARCHAR(255) NULL,      -- Empresa onde foi o acidente
-  `error_reason` VARCHAR(50) NULL,                -- Motivo da contestação
   `notes` TEXT NULL,                              -- Observações adicionais
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,

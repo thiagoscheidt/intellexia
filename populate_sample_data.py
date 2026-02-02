@@ -299,7 +299,7 @@ def create_sample_cases(db, Case, law_firm, clients, courts, lawyers):
         {
             'law_firm_id': law_firm.id,
             'title': 'Revisão FAP - Acidente de Trabalho 2019-2021',
-            'case_type': 'fap_trajeto',
+            'case_type': 'fap',
             'fap_start_year': 2019,
             'fap_end_year': 2021,
             'facts_summary': 'Contestação do FAP em razão de acidente de trajeto classificado incorretamente como acidente típico.',
@@ -312,7 +312,7 @@ def create_sample_cases(db, Case, law_firm, clients, courts, lawyers):
         {
             'law_firm_id': law_firm.id,
             'title': 'Revisão FAP - Nexo Causal Contestado 2020-2022',
-            'case_type': 'fap_nexo',
+            'case_type': 'fap',
             'fap_start_year': 2020,
             'fap_end_year': 2022,
             'facts_summary': 'Contestação de auxílio-doença acidentário concedido indevidamente sem nexo causal comprovado.',
@@ -325,7 +325,7 @@ def create_sample_cases(db, Case, law_firm, clients, courts, lawyers):
         {
             'law_firm_id': law_firm.id,
             'title': 'Anulação de Auto de Infração - NR12',
-            'case_type': 'auto_infracao',
+            'case_type': 'outros',
             'fap_start_year': None,
             'fap_end_year': None,
             'facts_summary': 'Auto de infração lavrado por descumprimento da NR12 sem fundamentação técnica adequada.',
@@ -338,7 +338,7 @@ def create_sample_cases(db, Case, law_firm, clients, courts, lawyers):
         {
             'law_firm_id': law_firm.id,
             'title': 'Revisão FAP - Múltiplos Benefícios 2018-2020',
-            'case_type': 'fap_multiplos',
+            'case_type': 'fap',
             'fap_start_year': 2018,
             'fap_end_year': 2020,
             'facts_summary': 'Contestação de múltiplos benefícios acidentários concedidos incorretamente impactando FAP.',
@@ -421,7 +421,6 @@ def create_sample_benefits(db, CaseBenefit, cases):
                 'data_fim_beneficio': date(2019, 11, 15),
                 'accident_date': date(2019, 8, 15),
                 'accident_company_name': 'Construtora Silva & Filhos Ltda',
-                'error_reason': 'acidente_trajeto',
                 'notes': 'Acidente ocorreu no trajeto casa-trabalho, classificado incorretamente como típico'
             },
             {
@@ -435,7 +434,6 @@ def create_sample_benefits(db, CaseBenefit, cases):
                 'data_fim_beneficio': None,
                 'accident_date': date(2020, 2, 10),
                 'accident_company_name': 'Construtora Silva & Filhos Ltda',
-                'error_reason': 'acidente_trajeto',
                 'notes': 'Queda de bicicleta no trajeto trabalho-casa'
             }
         ],
@@ -452,7 +450,6 @@ def create_sample_benefits(db, CaseBenefit, cases):
                 'data_fim_beneficio': date(2021, 5, 20),
                 'accident_date': date(2020, 11, 5),
                 'accident_company_name': 'Metalúrgica Aço Forte S.A.',
-                'error_reason': 'sem_nexo_causal',
                 'notes': 'Doença preexistente não relacionada ao trabalho'
             }
         ],
@@ -471,7 +468,6 @@ def create_sample_benefits(db, CaseBenefit, cases):
                 'data_fim_beneficio': date(2018, 8, 10),
                 'accident_date': date(2018, 5, 20),
                 'accident_company_name': 'Indústria Têxtil Fios de Ouro S.A.',
-                'error_reason': 'classificacao_incorreta',
                 'notes': 'Benefício concedido sem comprovação adequada'
             },
             {
@@ -485,7 +481,6 @@ def create_sample_benefits(db, CaseBenefit, cases):
                 'data_fim_beneficio': None,
                 'accident_date': date(2019, 9, 12),
                 'accident_company_name': 'Indústria Têxtil Fios de Ouro S.A.',
-                'error_reason': 'sem_nexo_causal',
                 'notes': 'Lesão não relacionada à atividade profissional'
             },
             {
@@ -499,7 +494,6 @@ def create_sample_benefits(db, CaseBenefit, cases):
                 'data_fim_beneficio': date(2020, 7, 30),
                 'accident_date': date(2020, 1, 8),
                 'accident_company_name': 'Indústria Têxtil Fios de Ouro S.A.',
-                'error_reason': 'acidente_trajeto',
                 'notes': 'Acidente no trajeto, classificado como típico'
             }
         ]

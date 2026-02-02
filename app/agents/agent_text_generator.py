@@ -99,7 +99,6 @@ BENEFÍCIOS ({len(benefits_data)} no total):
    Segurado: {benefit.get('insured_name', '')}
    NIT: {benefit.get('insured_nit', '')}
    Data do Acidente: {benefit.get('accident_date', '')}
-   Motivo da Contestação: {benefit.get('error_reason', '')}
 """
 
         if documents_data:

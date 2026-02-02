@@ -84,20 +84,8 @@
                       </label>
                       <select class="form-select" id="type_filter" name="case_type">
                         <option value="">Todos os tipos</option>
-                        <option value="fap_trajeto" {% if request.args.get('case_type')=='fap_trajeto' %}selected{%
-                          endif %}>
-                          FAP - Trajeto
-                        </option>
-                        <option value="fap_nexo" {% if request.args.get('case_type')=='fap_nexo' %}selected{% endif %}>
-                          FAP - Nexo Causal
-                        </option>
-                        <option value="fap_multiplos" {% if request.args.get('case_type')=='fap_multiplos' %}selected{%
-                          endif %}>
-                          FAP - Múltiplos
-                        </option>
-                        <option value="auto_infracao" {% if request.args.get('case_type')=='auto_infracao' %}selected{%
-                          endif %}>
-                          Auto de Infração
+                        <option value="fap" {% if request.args.get('case_type')=='fap' %}selected{% endif %}>
+                          Revisão FAP - AÇÃO REVISIONAL DO FATOR ACIDENTÁRIO DE PREVENÇÃO
                         </option>
                         <option value="previdenciario" {% if request.args.get('case_type')=='previdenciario'
                           %}selected{% endif %}>
@@ -106,6 +94,9 @@
                         <option value="trabalhista" {% if request.args.get('case_type')=='trabalhista' %}selected{%
                           endif %}>
                           Trabalhista
+                        </option>
+                        <option value="outros" {% if request.args.get('case_type')=='outros' %}selected{% endif %}>
+                          Outros
                         </option>
                       </select>
                     </div>
@@ -299,14 +290,14 @@
                       </small>
                     </td>
                     <td>
-                      {% if case.case_type == 'fap_trajeto' %}
-                      <span class="badge bg-info text-dark"><i class="bi bi-truck"></i> FAP Trajeto</span>
-                      {% elif case.case_type == 'fap_outros' %}
-                      <span class="badge bg-info text-dark"><i class="bi bi-file-text"></i> FAP Outros</span>
+                      {% if case.case_type == 'fap' %}
+                      <span class="badge bg-info text-dark"><i class="bi bi-truck"></i> FAP</span>
                       {% elif case.case_type == 'previdenciario' %}
                       <span class="badge bg-primary"><i class="bi bi-shield-check"></i> Previdenciário</span>
                       {% elif case.case_type == 'trabalhista' %}
                       <span class="badge bg-warning text-dark"><i class="bi bi-building"></i> Trabalhista</span>
+                      {% elif case.case_type == 'outros' %}
+                      <span class="badge bg-secondary"><i class="bi bi-question-circle"></i> Outros</span>
                       {% else %}
                       <span class="badge bg-secondary"><i class="bi bi-question-circle"></i> {{ case.case_type }}</span>
                       {% endif %}

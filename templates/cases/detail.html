@@ -57,11 +57,10 @@
                 <div class="mb-3">
                   <small class="text-muted d-block"><i class="bi bi-bookmark"></i> Tipo de Caso</small>
                   {% set case_type_map = {
-                  'fap_trajeto': 'FAP - Acidente de Trajeto',
-                  'fap_outros': 'FAP - Outros Acidentes',
-                  'acao_ordinaria': 'Ação Ordinária',
-                  'acao_trabalhista': 'Ação Trabalhista',
-                  'recurso': 'Recurso'
+                  'fap': 'Revisão FAP - AÇÃO REVISIONAL DO FATOR ACIDENTÁRIO DE PREVENÇÃO',
+                  'previdenciario': 'Previdenciário',
+                  'trabalhista': 'Trabalhista',
+                  'outros': 'Outros'
                   } %}
                   {% if case.case_type %}
                   <span class="badge bg-primary">{{ case_type_map.get(case.case_type, case.case_type) }}</span>

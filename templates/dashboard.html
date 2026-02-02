@@ -396,14 +396,14 @@
           {% for case_type, count in cases_by_type.items() %}
           <li>
             <span class="badge bg-secondary me-2">{{ count }}</span>
-            {% if case_type == 'fap_trajeto' %}
-            FAP Trajeto
-            {% elif case_type == 'fap_nexo' %}
-            FAP Nexo
-            {% elif case_type == 'fap_multiplos' %}
-            FAP Múltiplos
-            {% elif case_type == 'auto_infracao' %}
-            Auto Infração
+            {% if case_type == 'fap' %}
+            Revisão FAP - AÇÃO REVISIONAL DO FATOR ACIDENTÁRIO DE PREVENÇÃO
+            {% elif case_type == 'previdenciario' %}
+            Previdenciário
+            {% elif case_type == 'trabalhista' %}
+            Trabalhista
+            {% elif case_type == 'outros' %}
+            Outros
             {% else %}
             {{ case_type|title }}
             {% endif %}
@@ -533,10 +533,10 @@
   };
 
   const typeMap = {
-    fap_trajeto: 'FAP Trajeto',
-    fap_nexo: 'FAP Nexo',
-    fap_multiplos: 'FAP Múltiplos',
-    auto_infracao: 'Auto Infração',
+    fap: 'FAP',
+    previdenciario: 'Previdenciário',
+    trabalhista: 'Trabalhista',
+    outros: 'Outros',
   };
 
   const palette = ['#0d6efd', '#198754', '#ffc107', '#0dcaf0', '#6610f2', '#fd7e14', '#6c757d'];
