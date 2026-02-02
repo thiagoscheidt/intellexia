@@ -271,6 +271,7 @@ class CaseBenefit(db.Model):
     accident_date = db.Column(db.Date)
     accident_company_name = db.Column(db.String(255))
     fap_reason = db.Column(db.String(100))  # Motivo/Enquadramento FAP (movido de Case para CaseBenefit)
+    fap_reason_id = db.Column(db.Integer, db.ForeignKey('fap_reasons.id'), index=True)  # Foreign key para fap_reasons
     fap_vigencia_years = db.Column(db.String(500))  # Anos de vigência FAP (comma-separated, ex: "2019,2020,2021")
     notes = db.Column(db.Text)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -279,6 +280,7 @@ class CaseBenefit(db.Model):
     # Relacionamentos
     case = db.relationship('Case', back_populates='benefits')
     documents = db.relationship('Document', back_populates='related_benefit')
+    fap_reason_obj = db.relationship('FapReason', foreign_keys=[fap_reason_id])
     
     def __repr__(self):
         return f'<CaseBenefit {self.benefit_number}>'
