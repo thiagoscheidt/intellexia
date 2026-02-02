@@ -129,7 +129,7 @@ def case_benefit_edit(case_id, benefit_id):
     if benefit.fap_vigencia_years:
         form.fap_vigencia_years.data = benefit.fap_vigencia_years.split(',')
     
-    # Ensure fap_reason_id is properly set
+    # Ensure fap_reason_id is properly set as string
     if benefit.fap_reason_id:
         form.fap_reason_id.data = str(benefit.fap_reason_id)
     

@@ -5,7 +5,7 @@ from wtforms import (
     SelectField, SelectMultipleField, IntegerField, DecimalField, DateField,
     BooleanField, HiddenField
 )
-from wtforms.validators import DataRequired, Length, Email, Optional, NumberRange
+from wtforms.validators import DataRequired, Length, Email, Optional, NumberRange, ValidationError
 
 
 # Função de coerção segura para SelectField com valores vazios
@@ -13,7 +13,33 @@ def safe_int_coerce(value):
     """Converte valor para int, retornando None para valores vazios"""
     if not value or value == '':
         return None
-    return int(value)
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return None
+
+
+# Função para manter valor como int se já for int
+def int_or_none_coerce(value):
+    """Aceita int, string int ou string vazia e retorna int ou vazio string"""
+    if value is None or value == '':
+        return ''  # Retorna string vazia para que a choice '' seja encontrada
+    if isinstance(value, int):
+        return str(value)  # Converte int para string
+    try:
+        return str(int(value))  # Converte string para int e volta para string
+    except (ValueError, TypeError):
+        return value
+
+
+# Validador customizado para SelectField com choices dinâmicas
+class OptionalSelectField(Optional):
+    """Validador que ignora 'not a valid choice' quando choices não estão preenchidas"""
+    def __call__(self, form, field):
+        # Se o campo tem choices vazias, não valida
+        if not field.choices:
+            return
+        super().__call__(form, field)
 
 
 # ========================
@@ -181,8 +207,8 @@ class CaseBenefitForm(FlaskForm):
     )
     fap_reason_id = SelectField(
         'Motivo da Contestação FAP',
-        coerce=safe_int_coerce,
-        validators=[Optional()],
+        coerce=int_or_none_coerce,
+        validators=[OptionalSelectField()],
         choices=[]  # Populated dynamically in view
     )
     fap_vigencia_years = SelectMultipleField(
@@ -224,8 +250,8 @@ class CaseBenefitContextForm(FlaskForm):
     )
     fap_reason_id = SelectField(
         'Motivo da Contestação FAP',
-        coerce=safe_int_coerce,
-        validators=[Optional()],
+        coerce=int_or_none_coerce,
+        validators=[OptionalSelectField()],
         choices=[]  # Populated dynamically in view
     )
     fap_vigencia_years = SelectMultipleField(
