@@ -562,6 +562,49 @@ def generate_summary(file_id):
         'message': 'Resumo gerado com sucesso' if not lawsuit_numbers else f'Resumo gerado e {len(lawsuit_numbers) if isinstance(lawsuit_numbers, builtins.list) else 1} número(s) de processo adicionado(s)'
     })
 
+@knowledge_base_bp.route('/<int:file_id>/get-summary', methods=['GET'])
+def get_summary(file_id):
+    """Retorna o resumo de um arquivo"""
+    law_firm_id = get_current_law_firm_id()
+    
+    if not law_firm_id:
+        return jsonify({'success': False, 'error': 'Não autorizado'}), 401
+    
+    # Verificar se o arquivo existe
+    file = KnowledgeBase.query.filter_by(
+        id=file_id,
+        law_firm_id=law_firm_id,
+        is_active=True
+    ).first()
+    
+    if not file:
+        return jsonify({'success': False, 'error': 'Arquivo não encontrado'}), 404
+    
+    # Buscar resumo
+    summary = KnowledgeSummary.query.filter_by(knowledge_base_id=file_id).first()
+    
+    if not summary:
+        return jsonify({'success': False, 'error': 'Resumo não encontrado'}), 404
+    
+    # Converter para dicionário se payload for uma string JSON
+    import json as json_lib
+    payload = summary.payload
+    if isinstance(payload, str):
+        try:
+            payload = json_lib.loads(payload)
+        except:
+            payload = {'content': payload}
+    
+    return jsonify({
+        'success': True,
+        'summary': {
+            'id': summary.id,
+            'payload': payload,
+            'created_at': summary.created_at.isoformat() if summary.created_at else None,
+            'updated_at': summary.updated_at.isoformat() if summary.updated_at else None
+        }
+    })
+
 
 @knowledge_base_bp.route('/<int:file_id>/view')
 def view(file_id):

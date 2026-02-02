@@ -419,6 +419,31 @@
   }
 </style>
 
+<!-- Modal para Resumo -->
+<div class="modal fade" id="summaryModal" tabindex="-1" aria-labelledby="summaryModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+        <h5 class="modal-title" id="summaryModalLabel">
+          <i class="bi bi-file-text"></i> Resumo do Documento
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="summaryContent">
+        <div class="text-center py-5">
+          <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Carregando...</span>
+          </div>
+          <p class="mt-3 text-muted">Carregando resumo...</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- Biblioteca para renderizar Markdown -->
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 
@@ -620,6 +645,13 @@
                 <i class="bi bi-file-earmark-text"></i> ${escapeHtml(fileName)}${pageInfo}
               </span>
               <div class="d-flex gap-2">
+                 ${fileId ? `
+                 <button class="btn btn-sm btn-success shadow summary-btn"
+                   data-file-id="${fileId}"
+                   style="padding: 0.25rem 0.75rem; font-size: 0.875rem; text-decoration: none; color: white; border-radius: 8px; border: none; cursor: pointer;">
+                  <i class="bi bi-file-text"></i> Resumo
+                 </button>
+                 ` : ''}
                  ${viewUrl ? `
                  <a href="${viewUrl}" 
                    class="btn btn-sm btn-info shadow"
@@ -784,6 +816,339 @@
 
     // Focar no input ao carregar
     questionInput.focus();
+
+    // EVENT LISTENERS PARA BOTÕES DE RESUMO
+    document.addEventListener('click', async function(e) {
+      if (e.target.closest('.summary-btn')) {
+        const btn = e.target.closest('.summary-btn');
+        const fileId = btn.getAttribute('data-file-id');
+        
+        if (!fileId) return;
+        
+        // Abrir modal
+        const summaryModal = new bootstrap.Modal(document.getElementById('summaryModal'));
+        summaryModal.show();
+        
+        // Carregar resumo
+        try {
+          const response = await fetch(`/knowledge-base/${fileId}/get-summary`);
+          const data = await response.json();
+          
+          const summaryContent = document.getElementById('summaryContent');
+          
+          if (data.success && data.summary) {
+            const summary = data.summary.payload || {};
+            
+            let htmlContent = '';
+            
+            // Título do documento
+            if (summary.document_name) {
+              htmlContent += `<h5 class="mb-3" style="color: #667eea; font-weight: 600;">📄 ${escapeHtml(summary.document_name)}</h5>`;
+            }
+            
+            // Resumo Curto
+            if (summary.summary_short) {
+              htmlContent += `
+                <div class="alert alert-light border-start border-4" style="border-color: #667eea; background: #f8f9ff;">
+                  <h6 class="mb-2" style="font-weight: 600; color: #667eea;">
+                    <i class="bi bi-lightning-fill"></i> Resumo Curto
+                  </h6>
+                  <p class="mb-0 small">${escapeHtml(summary.summary_short)}</p>
+                </div>
+              `;
+            }
+            
+            // Resumo Longo
+            if (summary.summary_long) {
+              htmlContent += `
+                <div class="card mb-3 border-0 bg-light">
+                  <div class="card-header bg-light border-bottom-2" style="border-bottom: 2px solid #667eea;">
+                    <h6 class="mb-0" style="font-weight: 600; color: #667eea;">
+                      <i class="bi bi-star-fill"></i> Resumo Completo
+                    </h6>
+                  </div>
+                  <div class="card-body small" style="line-height: 1.6; white-space: pre-wrap;">
+                    ${escapeHtml(summary.summary_long)}
+                  </div>
+                </div>
+              `;
+            }
+            
+            // Informações Processuais (lawsuit_info)
+            if (summary.lawsuit_info && Object.keys(summary.lawsuit_info).some(k => summary.lawsuit_info[k])) {
+              const lawsuit = summary.lawsuit_info;
+              let lawsuitHtml = `
+                <div class="card mb-3 border-0">
+                  <div class="card-header bg-light border-bottom-2" style="border-bottom: 2px solid #dc3545;">
+                    <h6 class="mb-0" style="font-weight: 600; color: #dc3545;">
+                      <i class="bi bi-briefcase-fill"></i> Informações Processuais
+                    </h6>
+                  </div>
+                  <div class="card-body small">
+              `;
+              
+              // Dados básicos do processo
+              if (lawsuit.process_number) {
+                lawsuitHtml += `<div class="mb-2"><strong>Número do Processo:</strong> <code style="background: #f0f0f0; padding: 0.25rem 0.5rem; border-radius: 4px;">${escapeHtml(lawsuit.process_number)}</code></div>`;
+              }
+              if (lawsuit.case_value) {
+                lawsuitHtml += `<div class="mb-2"><strong>Valor da Causa:</strong> ${escapeHtml(lawsuit.case_value)}</div>`;
+              }
+              if (lawsuit.start_year) {
+                lawsuitHtml += `<div class="mb-2"><strong>Ano de Início:</strong> ${escapeHtml(lawsuit.start_year)}</div>`;
+              }
+              if (lawsuit.nature) {
+                lawsuitHtml += `<div class="mb-2"><strong>Natureza:</strong> ${escapeHtml(lawsuit.nature)}</div>`;
+              }
+              if (lawsuit.judicial_power) {
+                lawsuitHtml += `<div class="mb-2"><strong>Poder Judiciário:</strong> ${escapeHtml(lawsuit.judicial_power)}</div>`;
+              }
+              if (lawsuit.origin_court) {
+                lawsuitHtml += `<div class="mb-2"><strong>Tribunal de Origem:</strong> ${escapeHtml(lawsuit.origin_court)}</div>`;
+              }
+              if (lawsuit.court_tag) {
+                lawsuitHtml += `<div class="mb-2"><strong>Tribunal:</strong> <span class="badge bg-primary">${escapeHtml(lawsuit.court_tag)}</span></div>`;
+              }
+              if (lawsuit.judge) {
+                lawsuitHtml += `<div class="mb-2"><strong>Juiz:</strong> ${escapeHtml(lawsuit.judge)}</div>`;
+              }
+              
+              // Assuntos
+              if (lawsuit.subjects && Array.isArray(lawsuit.subjects) && lawsuit.subjects.length > 0) {
+                lawsuitHtml += `
+                  <div class="mb-3">
+                    <strong>Assuntos:</strong><br>
+                    <div class="d-flex flex-wrap gap-1 mt-2">
+                      ${lawsuit.subjects.map(s => `<span class="badge bg-warning text-dark">${escapeHtml(s)}</span>`).join('')}
+                    </div>
+                  </div>
+                `;
+              }
+              
+              // Polos Processuais
+              if (lawsuit.parties) {
+                // Polo Ativo
+                if (lawsuit.parties.active_pole && Array.isArray(lawsuit.parties.active_pole) && lawsuit.parties.active_pole.length > 0) {
+                  lawsuitHtml += `
+                    <div class="mt-3 pt-3 border-top">
+                      <strong style="color: #28a745;">
+                        <i class="bi bi-arrow-up-circle"></i> Polo Ativo
+                      </strong>
+                      <ul class="mb-2 mt-2" style="padding-left: 1.5rem;">
+                  `;
+                  lawsuit.parties.active_pole.forEach(part => {
+                    let partHtml = `<li>${escapeHtml(part.name)}`;
+                    if (part.role) partHtml += ` <small class="text-muted">(${escapeHtml(part.role)})</small>`;
+                    if (part.lawyers && Array.isArray(part.lawyers) && part.lawyers.length > 0) {
+                      partHtml += `<ul style="margin-top: 0.5rem; margin-bottom: 0.5rem; padding-left: 1rem;">`;
+                      part.lawyers.forEach(lawyer => {
+                        partHtml += `<li><small>⚖️ ${escapeHtml(lawyer)}</small></li>`;
+                      });
+                      partHtml += `</ul>`;
+                    }
+                    partHtml += `</li>`;
+                    lawsuitHtml += partHtml;
+                  });
+                  lawsuitHtml += `</ul></div>`;
+                }
+                
+                // Polo Passivo
+                if (lawsuit.parties.passive_pole && Array.isArray(lawsuit.parties.passive_pole) && lawsuit.parties.passive_pole.length > 0) {
+                  lawsuitHtml += `
+                    <div class="mt-2 pt-3 border-top">
+                      <strong style="color: #dc3545;">
+                        <i class="bi bi-arrow-down-circle"></i> Polo Passivo
+                      </strong>
+                      <ul class="mb-0 mt-2" style="padding-left: 1.5rem;">
+                  `;
+                  lawsuit.parties.passive_pole.forEach(part => {
+                    let partHtml = `<li>${escapeHtml(part.name)}`;
+                    if (part.role) partHtml += ` <small class="text-muted">(${escapeHtml(part.role)})</small>`;
+                    if (part.lawyers && Array.isArray(part.lawyers) && part.lawyers.length > 0) {
+                      partHtml += `<ul style="margin-top: 0.5rem; margin-bottom: 0.5rem; padding-left: 1rem;">`;
+                      part.lawyers.forEach(lawyer => {
+                        partHtml += `<li><small>⚖️ ${escapeHtml(lawyer)}</small></li>`;
+                      });
+                      partHtml += `</ul>`;
+                    }
+                    partHtml += `</li>`;
+                    lawsuitHtml += partHtml;
+                  });
+                  lawsuitHtml += `</ul></div>`;
+                }
+              }
+              
+              lawsuitHtml += `</div></div>`;
+              htmlContent += lawsuitHtml;
+            }
+            
+            // Principais Pontos
+            if (summary.key_points && summary.key_points.length > 0) {
+              htmlContent += `
+                <div class="card mb-3 border-0">
+                  <div class="card-header bg-light border-bottom-2" style="border-bottom: 2px solid #28a745;">
+                    <h6 class="mb-0" style="font-weight: 600; color: #28a745;">
+                      <i class="bi bi-check-circle-fill"></i> Pontos-Chave
+                    </h6>
+                  </div>
+                  <div class="card-body small">
+                    <ul class="mb-0">
+              `;
+              summary.key_points.forEach(point => {
+                htmlContent += `<li class="mb-2">${escapeHtml(point)}</li>`;
+              });
+              htmlContent += `
+                    </ul>
+                  </div>
+                </div>
+              `;
+            }
+            
+            // Partes/Seções do Documento
+            if (summary.sections && summary.sections.length > 0) {
+              htmlContent += `
+                <div class="card mb-3 border-0">
+                  <div class="card-header bg-light border-bottom-2" style="border-bottom: 2px solid #0d6efd;">
+                    <h6 class="mb-0" style="font-weight: 600; color: #0d6efd;">
+                      <i class="bi bi-list-ul"></i> Seções do Documento
+                    </h6>
+                  </div>
+                  <div class="card-body small">
+                    <ul class="mb-0">
+              `;
+              summary.sections.forEach(section => {
+                htmlContent += `<li class="mb-2">${escapeHtml(section)}</li>`;
+              });
+              htmlContent += `
+                    </ul>
+                  </div>
+                </div>
+              `;
+            }
+            
+            // Partes (alternativa se chamado de "parts")
+            if (summary.parts && summary.parts.length > 0) {
+              htmlContent += `
+                <div class="card mb-3 border-0">
+                  <div class="card-header bg-light border-bottom-2" style="border-bottom: 2px solid #0d6efd;">
+                    <h6 class="mb-0" style="font-weight: 600; color: #0d6efd;">
+                      <i class="bi bi-bookmark-fill"></i> Partes
+                    </h6>
+                  </div>
+                  <div class="card-body small">
+                    <ul class="mb-0">
+              `;
+              summary.parts.forEach(part => {
+                htmlContent += `<li class="mb-2">${escapeHtml(part)}</li>`;
+              });
+              htmlContent += `
+                    </ul>
+                  </div>
+                </div>
+              `;
+            }
+            
+            // Números de Processo
+            if (summary.lawsuit_numbers && summary.lawsuit_numbers.length > 0) {
+              htmlContent += `
+                <div class="card mb-3 border-0">
+                  <div class="card-header bg-light border-bottom-2" style="border-bottom: 2px solid #ffc107;">
+                    <h6 class="mb-0" style="font-weight: 600; color: #ff9800;">
+                      <i class="bi bi-bookmark-fill"></i> Números de Processo
+                    </h6>
+                  </div>
+                  <div class="card-body small">
+                    <div class="d-flex flex-wrap gap-2">
+              `;
+              summary.lawsuit_numbers.forEach(num => {
+                htmlContent += `<span class="badge bg-warning text-dark">${escapeHtml(num)}</span>`;
+              });
+              htmlContent += `
+                    </div>
+                  </div>
+                </div>
+              `;
+            }
+            
+            // Datas Importantes
+            if (summary.important_dates && Object.keys(summary.important_dates).length > 0) {
+              htmlContent += `
+                <div class="card mb-3 border-0">
+                  <div class="card-header bg-light border-bottom-2" style="border-bottom: 2px solid #17a2b8;">
+                    <h6 class="mb-0" style="font-weight: 600; color: #17a2b8;">
+                      <i class="bi bi-calendar-event-fill"></i> Datas Importantes
+                    </h6>
+                  </div>
+                  <div class="card-body small">
+                    <table class="table table-sm table-borderless mb-0">
+              `;
+              Object.entries(summary.important_dates).forEach(([key, value]) => {
+                htmlContent += `<tr><td class="fw-bold">${key}:</td><td>${escapeHtml(value)}</td></tr>`;
+              });
+              htmlContent += `
+                    </table>
+                  </div>
+                </div>
+              `;
+            }
+            
+            // Documentos Relacionados
+            if (summary.related_documents && summary.related_documents.length > 0) {
+              htmlContent += `
+                <div class="card mb-3 border-0">
+                  <div class="card-header bg-light border-bottom-2" style="border-bottom: 2px solid #dc3545;">
+                    <h6 class="mb-0" style="font-weight: 600; color: #dc3545;">
+                      <i class="bi bi-link-45deg"></i> Documentos Relacionados
+                    </h6>
+                  </div>
+                  <div class="card-body small">
+                    <ul class="mb-0">
+              `;
+              summary.related_documents.forEach(doc => {
+                htmlContent += `<li class="mb-2">${escapeHtml(doc)}</li>`;
+              });
+              htmlContent += `
+                    </ul>
+                  </div>
+                </div>
+              `;
+            }
+            
+            // Conclusão
+            if (summary.conclusion) {
+              htmlContent += `
+                <div class="alert alert-info border-0" style="background: linear-gradient(135deg, #e3f2fd 0%, #f3e5f5 100%);">
+                  <h6 class="mb-2" style="font-weight: 600; color: #667eea;">
+                    <i class="bi bi-info-circle-fill"></i> Conclusão
+                  </h6>
+                  <p class="mb-0 small">${summary.conclusion}</p>
+                </div>
+              `;
+            }
+            
+            if (!htmlContent) {
+              htmlContent = `<p class="text-muted text-center py-4"><i class="bi bi-inbox"></i> Nenhum resumo disponível para este documento.</p>`;
+            }
+            
+            summaryContent.innerHTML = htmlContent;
+          } else {
+            summaryContent.innerHTML = `
+              <div class="alert alert-warning border-0 text-center">
+                <i class="bi bi-exclamation-triangle"></i>
+                <p class="mb-0">Resumo não disponível. <a href="/knowledge-base/${fileId}/generate-summary" class="alert-link">Gerar agora?</a></p>
+              </div>
+            `;
+          }
+        } catch (error) {
+          console.error('Erro ao carregar resumo:', error);
+          document.getElementById('summaryContent').innerHTML = `
+            <div class="alert alert-danger border-0">
+              <i class="bi bi-exclamation-circle"></i> Erro ao carregar resumo.
+            </div>
+          `;
+        }
+      }
+    });
   });
 </script>
 {% endblock %}
