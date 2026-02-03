@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from markitdown import MarkItDown
 from langchain_openai import ChatOpenAI
+from app.agents.file_agent import FileAgent
 
 load_dotenv()
 
@@ -96,14 +97,18 @@ class AgentDocumentSummary:
             extracted_text = text_content if isinstance(text_content, str) else str(text_content)
         else:
             md = MarkItDown()
+            print("Iniciando conversão do documento para texto...")
             result = md.convert(file_path)
             extracted_text = result.text_content or ""
 
         max_chars = int(os.getenv("SUMMARY_MAX_CHARS", "24000"))
-        truncated = False
+        use_file = False
+        file_id = None
         if len(extracted_text) > max_chars:
-            extracted_text = extracted_text[:max_chars]
-            truncated = True
+            print("Texto extraído excede o limite máximo, utilizando upload de arquivo para LLM...")
+            file_agent = FileAgent()
+            file_id = file_agent.upload_file(file_path)
+            use_file = True
 
         user_prompt = (
             "Resuma o documento abaixo. Preserve informações jurídicas relevantes. "
@@ -134,9 +139,21 @@ class AgentDocumentSummary:
             temperature=0.2
         ).with_structured_output(DocumentSummary)
 
-        response = llm.invoke([
-            {"role": "system", "content": "Você é um assistente jurídico. Gere um resumo técnico, objetivo e estruturado."},
-            {"role": "user", "content": user_prompt}
-        ])
+        if use_file and file_id:
+            response = llm.invoke([
+                {"role": "system", "content": "Você é um assistente jurídico. Gere um resumo técnico, objetivo e estruturado."},
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": user_prompt.replace(f"DOCUMENTO:\n{extracted_text}", "DOCUMENTO: (arquivo anexado)")},
+                        {"type": "file", "file_id": file_id},
+                    ],
+                },
+            ])
+        else:
+            response = llm.invoke([
+                {"role": "system", "content": "Você é um assistente jurídico. Gere um resumo técnico, objetivo e estruturado."},
+                {"role": "user", "content": user_prompt}
+            ])
 
         return response.to_dict()

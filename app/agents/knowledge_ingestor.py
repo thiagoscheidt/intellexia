@@ -14,7 +14,10 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models as rest
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_openai import ChatOpenAI
-from docling.document_converter import DocumentConverter
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.datamodel.base_models import InputFormat
+from docling.datamodel.accelerator_options import AcceleratorOptions, AcceleratorDevice
 from pydantic import BaseModel, Field
 
 
@@ -154,6 +157,19 @@ class KnowledgeIngestor:
 
     def process_file(self, file_path: Path, source_name: str, category: str = None, description: str = None, tags: str = None, lawsuit_number: str = None, file_id: int = None):
         """Processa um arquivo e insere na base de conhecimento com informação de páginas"""
+        # CPU acceleration (use all CPU cores)
+        #cpu_accel = AcceleratorOptions(num_threads=8, device=AcceleratorDevice.CPU)
+        pipeline_options = PdfPipelineOptions(
+            do_ocr=False,
+            generate_page_images=False,  # Skip page images to save memory
+            do_table_structure=False,  # Skip table structure extraction
+            enable_parallel_processing=True  # Use multiple cores
+        )
+        #pipeline_options = PdfPipelineOptions(accelerator_options=cpu_accel, do_ocr=False)
+
+        converter = DocumentConverter(
+            format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
+        )
         converter = DocumentConverter()
         try:
             result = converter.convert(str(file_path))
