@@ -257,11 +257,11 @@
               <div class="row">
                 <div class="col-md-12">
                   <div class="mb-3">
-                    {{ form.accident_summary.label(class="form-label") }}
-                    {{ form.accident_summary(class="form-control" + (" is-invalid" if
-                    form.accident_summary.errors else ""), rows="4") }}
+                    <label for="accident_summary_editor" class="form-label">{{ form.accident_summary.label.text }}</label>
+                    <div id="accident_summary_editor" style="height: 250px; background-color: white;"></div>
+                    {{ form.accident_summary(style="display:none;", id="accident_summary_hidden") }}
                     {% if form.accident_summary.errors %}
-                    <div class="invalid-feedback">
+                    <div class="invalid-feedback d-block">
                       {% for error in form.accident_summary.errors %}{{ error }}{% endfor %}
                     </div>
                     {% endif %}
@@ -311,10 +311,11 @@
               <div class="row">
                 <div class="col-md-12">
                   <div class="mb-3">
-                    {{ form.notes.label(class="form-label") }}
-                    {{ form.notes(class="form-control" + (" is-invalid" if form.notes.errors else ""), rows="4") }}
+                    <label for="notes_editor" class="form-label">{{ form.notes.label.text }}</label>
+                    <div id="notes_editor" style="height: 250px; background-color: white;"></div>
+                    {{ form.notes(style="display:none;", id="notes_hidden") }}
                     {% if form.notes.errors %}
-                    <div class="invalid-feedback">
+                    <div class="invalid-feedback d-block">
                       {% for error in form.notes.errors %}{{ error }}{% endfor %}
                     </div>
                     {% endif %}
@@ -395,6 +396,10 @@
 
   // Validação do formulário
   document.querySelector('form').addEventListener('submit', function (e) {
+    // Sincronizar Quill editors com hidden fields
+    document.getElementById('accident_summary_hidden').value = quillAccident.root.innerHTML;
+    document.getElementById('notes_hidden').value = quillNotes.root.innerHTML;
+    
     let benefitNumber = document.querySelector('[name="benefit_number"]').value;
     let benefitType = document.querySelector('[name="benefit_type"]').value;
     let insuredName = document.querySelector('[name="insured_name"]').value;
@@ -403,6 +408,60 @@
       e.preventDefault();
       alert('Por favor, preencha todos os campos obrigatórios (marcados com *).');
       return false;
+    }
+  });
+
+  // Inicializar Quill Editors
+  var quillAccident = new Quill('#accident_summary_editor', {
+    theme: 'snow',
+    modules: {
+      toolbar: [
+        ['bold', 'italic', 'underline', 'strike'],
+        ['blockquote', 'code-block'],
+        [{ 'header': 1 }, { 'header': 2 }],
+        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+        [{ 'script': 'sub'}, { 'script': 'super' }],
+        [{ 'indent': '-1'}, { 'indent': '+1' }],
+        [{ 'size': ['small', false, 'large', 'huge'] }],
+        [{ 'header': [false, 1, 2, 3, 4, 5, 6] }],
+        [{ 'font': [] }],
+        [{ 'color': [] }, { 'background': [] }],
+        [{ 'align': [] }],
+        ['clean']
+      ]
+    }
+  });
+
+  var quillNotes = new Quill('#notes_editor', {
+    theme: 'snow',
+    modules: {
+      toolbar: [
+        ['bold', 'italic', 'underline', 'strike'],
+        ['blockquote', 'code-block'],
+        [{ 'header': 1 }, { 'header': 2 }],
+        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+        [{ 'script': 'sub'}, { 'script': 'super' }],
+        [{ 'indent': '-1'}, { 'indent': '+1' }],
+        [{ 'size': ['small', false, 'large', 'huge'] }],
+        [{ 'header': [false, 1, 2, 3, 4, 5, 6] }],
+        [{ 'font': [] }],
+        [{ 'color': [] }, { 'background': [] }],
+        [{ 'align': [] }],
+        ['clean']
+      ]
+    }
+  });
+
+  // Carregar conteúdo existente quando a página carrega
+  document.addEventListener('DOMContentLoaded', function() {
+    var accidentContent = document.getElementById('accident_summary_hidden').value;
+    if (accidentContent) {
+      quillAccident.root.innerHTML = accidentContent;
+    }
+    
+    var notesContent = document.getElementById('notes_hidden').value;
+    if (notesContent) {
+      quillNotes.root.innerHTML = notesContent;
     }
   });
 </script>

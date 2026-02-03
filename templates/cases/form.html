@@ -241,9 +241,9 @@
                 <div class="row">
                   <div class="col-md-12">
                     <div class="mb-3">
-                      {{ form.facts_summary.label(class="form-label") }}
-                      {{ form.facts_summary(class="form-control", rows="4", placeholder="Descreva
-                      os fatos do caso...") }}
+                      {{ form.facts_summary.label(class="form-label", for="facts_summary_editor") }}
+                      <div id="facts_summary_editor" style="height: 200px; background: white;"></div>
+                      {{ form.facts_summary(id="facts_summary_hidden", style="display: none;") }}
                     </div>
                   </div>
                 </div>
@@ -251,9 +251,9 @@
                 <div class="row">
                   <div class="col-md-12">
                     <div class="mb-3">
-                      {{ form.thesis_summary.label(class="form-label") }}
-                      {{ form.thesis_summary(class="form-control", rows="4", placeholder="Descreva
-                      as teses jurídicas...") }}
+                      {{ form.thesis_summary.label(class="form-label", for="thesis_summary_editor") }}
+                      <div id="thesis_summary_editor" style="height: 200px; background: white;"></div>
+                      {{ form.thesis_summary(id="thesis_summary_hidden", style="display: none;") }}
                     </div>
                   </div>
                 </div>
@@ -261,9 +261,9 @@
                 <div class="row">
                   <div class="col-md-12">
                     <div class="mb-3">
-                      {{ form.prescription_summary.label(class="form-label") }}
-                      {{ form.prescription_summary(class="form-control", rows="3",
-                      placeholder="Informações sobre prescrição...") }}
+                      {{ form.prescription_summary.label(class="form-label", for="prescription_summary_editor") }}
+                      <div id="prescription_summary_editor" style="height: 150px; background: white;"></div>
+                      {{ form.prescription_summary(id="prescription_summary_hidden", style="display: none;") }}
                     </div>
                   </div>
                 </div>
@@ -494,6 +494,62 @@
 
     // Nota: JavaScript para mostrar/ocultar Motivo/Enquadramento foi removido
     // pois o campo agora é definido para cada benefício individualmente
+
+    // Inicializar Quill Editors
+    const toolbarOptions = [
+      ['bold', 'italic', 'underline', 'strike'],
+      ['blockquote', 'code-block'],
+      [{ 'header': 1 }, { 'header': 2 }],
+      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+      [{ 'script': 'sub'}, { 'script': 'super' }],
+      [{ 'indent': '-1'}, { 'indent': '+1' }],
+      [{ 'size': ['small', false, 'large', 'huge'] }],
+      [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+      [{ 'color': [] }, { 'background': [] }],
+      [{ 'align': [] }],
+      ['clean']
+    ];
+
+    const quillFactsSummary = new Quill('#facts_summary_editor', {
+      theme: 'snow',
+      modules: { toolbar: toolbarOptions },
+      placeholder: 'Descreva os fatos do caso...'
+    });
+
+    const quillThesisSummary = new Quill('#thesis_summary_editor', {
+      theme: 'snow',
+      modules: { toolbar: toolbarOptions },
+      placeholder: 'Descreva as teses jurídicas...'
+    });
+
+    const quillPrescriptionSummary = new Quill('#prescription_summary_editor', {
+      theme: 'snow',
+      modules: { toolbar: toolbarOptions },
+      placeholder: 'Informações sobre prescrição...'
+    });
+
+    // Carregar conteúdo existente
+    const factsContent = document.getElementById('facts_summary_hidden').value;
+    if (factsContent) {
+      quillFactsSummary.root.innerHTML = factsContent;
+    }
+
+    const thesisContent = document.getElementById('thesis_summary_hidden').value;
+    if (thesisContent) {
+      quillThesisSummary.root.innerHTML = thesisContent;
+    }
+
+    const prescriptionContent = document.getElementById('prescription_summary_hidden').value;
+    if (prescriptionContent) {
+      quillPrescriptionSummary.root.innerHTML = prescriptionContent;
+    }
+
+    // Sincronizar editores com campos hidden no submit
+    document.getElementById('caseForm').addEventListener('submit', function(e) {
+      document.getElementById('facts_summary_hidden').value = quillFactsSummary.root.innerHTML;
+      document.getElementById('thesis_summary_hidden').value = quillThesisSummary.root.innerHTML;
+      document.getElementById('prescription_summary_hidden').value = quillPrescriptionSummary.root.innerHTML;
+    });
   });
 </script>
 {% endblock %}
