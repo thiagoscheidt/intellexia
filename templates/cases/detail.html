@@ -144,7 +144,7 @@
             <div class="mb-4">
               <h6 class="text-primary mb-2"><i class="bi bi-bookmark-star"></i> Resumo dos Fatos</h6>
               {% if case.facts_summary %}
-              <p class="mb-0">{{ case.facts_summary }}</p>
+              <div class="mb-0">{{ case.facts_summary|safe }}</div>
               {% else %}
               <p class="text-muted mb-0"><i class="bi bi-info-circle"></i> Nenhum resumo cadastrado ainda.</p>
               {% endif %}
@@ -155,7 +155,7 @@
             <div class="mb-4">
               <h6 class="text-primary mb-2"><i class="bi bi-scales"></i> Teses Jurídicas</h6>
               {% if case.thesis_summary %}
-              <p class="mb-0">{{ case.thesis_summary }}</p>
+              <div class="mb-0">{{ case.thesis_summary|safe }}</div>
               {% else %}
               <p class="text-muted mb-0"><i class="bi bi-info-circle"></i> Nenhuma tese cadastrada ainda.</p>
               {% endif %}
@@ -166,7 +166,7 @@
             <div>
               <h6 class="text-primary mb-2"><i class="bi bi-calendar-check"></i> Informações sobre Prescrição</h6>
               {% if case.prescription_summary %}
-              <p class="mb-0">{{ case.prescription_summary }}</p>
+              <div class="mb-0">{{ case.prescription_summary|safe }}</div>
               {% else %}
               <p class="text-muted mb-0"><i class="bi bi-info-circle"></i> Nenhuma informação cadastrada ainda.</p>
               {% endif %}

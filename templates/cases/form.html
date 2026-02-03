@@ -474,6 +474,11 @@
       caseForm.addEventListener('submit', (e) => {
         e.preventDefault(); // Sempre prevenir primeiro
 
+        // Sincronizar Quill editors com campos hidden ANTES de validar
+        document.getElementById('facts_summary_hidden').value = quillFactsSummary.root.innerHTML;
+        document.getElementById('thesis_summary_hidden').value = quillThesisSummary.root.innerHTML;
+        document.getElementById('prescription_summary_hidden').value = quillPrescriptionSummary.root.innerHTML;
+
         const errors = validateAllSteps();
 
         console.log('Validação executada. Erros encontrados:', errors);
@@ -543,13 +548,6 @@
     if (prescriptionContent) {
       quillPrescriptionSummary.root.innerHTML = prescriptionContent;
     }
-
-    // Sincronizar editores com campos hidden no submit
-    document.getElementById('caseForm').addEventListener('submit', function(e) {
-      document.getElementById('facts_summary_hidden').value = quillFactsSummary.root.innerHTML;
-      document.getElementById('thesis_summary_hidden').value = quillThesisSummary.root.innerHTML;
-      document.getElementById('prescription_summary_hidden').value = quillPrescriptionSummary.root.innerHTML;
-    });
   });
 </script>
 {% endblock %}

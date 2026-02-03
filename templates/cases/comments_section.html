@@ -40,8 +40,8 @@
 
                 <div class="mb-3">
                     <label class="form-label">Comentário <span class="text-danger">*</span></label>
-                    <textarea id="commentContent" class="form-control" rows="6" placeholder="Escreva seu comentário..."
-                        required></textarea>
+                    <div id="newCommentEditor" style="height: 200px; background: white;"></div>
+                    <textarea id="commentContent" style="display: none;" required></textarea>
                 </div>
 
                 <div class="mb-3">
@@ -79,8 +79,8 @@
             <div class="modal-body">
                 <div class="mb-3">
                     <label class="form-label">Sua Resposta <span class="text-danger">*</span></label>
-                    <textarea id="replyContent" class="form-control" rows="4"
-                        placeholder="Escreva sua resposta..."></textarea>
+                    <div id="replyCommentEditor" style="height: 150px; background: white;"></div>
+                    <textarea id="replyContent" style="display: none;"></textarea>
                 </div>
             </div>
             <div class="modal-footer">
@@ -170,10 +170,10 @@
     // Salvar novo comentário
     async function saveComment() {
         const title = document.getElementById('commentTitle').value;
-        const content = document.getElementById('commentContent').value;
+        const content = quillNewComment.root.innerHTML;
         const type = document.getElementById('commentType').value;
 
-        if (!content.trim()) {
+        if (!content.trim() || content === '<p><br></p>') {
             alert('Escreva um comentário');
             return;
         }
@@ -188,8 +188,8 @@
             if (response.ok) {
                 bootstrap.Modal.getInstance(document.getElementById('newCommentModal')).hide();
                 document.getElementById('commentTitle').value = '';
-                document.getElementById('commentContent').value = '';
-                loadComments();w
+                quillNewComment.root.innerHTML = '';
+                loadComments();
             } else {
                 alert('Erro ao salvar comentário');
             }
@@ -248,9 +248,9 @@
 
     // Salvar resposta
     async function saveReply() {
-        const content = document.getElementById('replyContent').value;
+        const content = quillReplyComment.root.innerHTML;
 
-        if (!content.trim()) {
+        if (!content.trim() || content === '<p><br></p>') {
             alert('Escreva uma resposta');
             return;
         }
@@ -264,6 +264,7 @@
 
             if (response.ok) {
                 bootstrap.Modal.getInstance(document.getElementById('replyCommentModal')).hide();
+                quillReplyComment.root.innerHTML = '';
                 loadReplies(currentReplyCommentId);
             } else {
                 alert('Erro ao salvar resposta');
@@ -372,6 +373,36 @@
             return date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
         }
     }
+
+    // Inicializar Quill Editors para comentários
+    const toolbarOptions = [
+        ['bold', 'italic', 'underline', 'strike'],
+        ['blockquote', 'code-block'],
+        [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+        ['clean']
+    ];
+
+    const quillNewComment = new Quill('#newCommentEditor', {
+        theme: 'snow',
+        modules: { toolbar: toolbarOptions },
+        placeholder: 'Escreva seu comentário...'
+    });
+
+    const quillReplyComment = new Quill('#replyCommentEditor', {
+        theme: 'snow',
+        modules: { toolbar: toolbarOptions },
+        placeholder: 'Escreva sua resposta...'
+    });
+
+    // Sincronizar Quill com textarea no modal de novo comentário
+    document.getElementById('newCommentModal').addEventListener('show.bs.modal', function() {
+        quillNewComment.root.innerHTML = '';
+    });
+
+    // Sincronizar Quill com textarea no modal de resposta
+    document.getElementById('replyCommentModal').addEventListener('show.bs.modal', function() {
+        quillReplyComment.root.innerHTML = '';
+    });
 </script>
 
 <style>
