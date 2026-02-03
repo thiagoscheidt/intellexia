@@ -198,8 +198,8 @@
                     <th><i class="bi bi-person"></i> Segurado</th>
                     <th><i class="bi bi-info-circle"></i> Motivo FAP</th>
                     <th><i class="bi bi-calendar"></i> Data Acidente</th>
-                    <th><i class="bi bi-calendar-check"></i> Início Benefício</th>
-                    <th><i class="bi bi-calendar-x"></i> Fim Benefício</th>
+                    <th><i class="bi bi-calendar-range"></i> Vigências FAP</th>
+                    <th><i class="bi bi-gear"></i> Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -214,18 +214,31 @@
                     <td><span class="badge bg-light text-dark">{{ benefit.benefit_type }}</span></td>
                     <td>{{ benefit.insured_name }}</td>
                     <td>
-                      {% if benefit.fap_reason %}
-                      <span class="badge bg-info">{{ fap_reason_map.get(benefit.fap_reason, benefit.fap_reason) }}</span>
+                      {% if benefit.fap_reason_obj %}
+                      <span class="badge bg-info">{{ benefit.fap_reason_obj.display_name }}</span>
                       {% else %}
                       <span class="text-muted">-</span>
                       {% endif %}
                     </td>
                     <td><small>{{ benefit.accident_date.strftime('%d/%m/%Y') if benefit.accident_date else '-'
                         }}</small></td>
-                    <td><small>{{ benefit.data_inicio_beneficio.strftime('%d/%m/%Y') if benefit.data_inicio_beneficio
-                        else '-' }}</small></td>
-                    <td><small>{{ benefit.data_fim_beneficio.strftime('%d/%m/%Y') if benefit.data_fim_beneficio else '-'
-                        }}</small></td>
+                    <td>
+                      {% if benefit.fap_vigencia_years %}
+                      <span class="badge bg-warning text-dark">
+                        {% for year in benefit.fap_vigencia_years.split(',') %}
+                          {{ year }}{% if not loop.last %}<br>{% endif %}
+                        {% endfor %}
+                      </span>
+                      {% else %}
+                      <span class="text-muted">-</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal"
+                        data-bs-target="#benefitModal{{ benefit.id }}" title="Visualizar detalhes">
+                        <i class="bi bi-eye"></i>
+                      </button>
+                    </td>
                   </tr>
                   {% endfor %}
                 </tbody>
@@ -250,6 +263,135 @@
             {% endif %}
           </div>
         </div>
+
+        <!-- Modais de Benefícios -->
+        {% for benefit in benefits[:3] %}
+        <div class="modal fade" id="benefitModal{{ benefit.id }}" tabindex="-1"
+          aria-labelledby="benefitModalLabel{{ benefit.id }}" aria-hidden="true">
+          <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+              <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="benefitModalLabel{{ benefit.id }}">
+                  <i class="bi bi-briefcase"></i> Benefício #{{ benefit.benefit_number }}
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"
+                  aria-label="Close"></button>
+              </div>
+              <div class="modal-body">
+                <div class="row mb-3">
+                  <div class="col-md-6">
+                    <small class="text-muted"><i class="bi bi-tag"></i> Número do Benefício</small>
+                    <h6>{{ benefit.benefit_number }}</h6>
+                  </div>
+                  <div class="col-md-6">
+                    <small class="text-muted"><i class="bi bi-bookmark"></i> Tipo</small>
+                    <h6><span class="badge bg-light text-dark">{{ benefit.benefit_type }}</span></h6>
+                  </div>
+                </div>
+
+                <div class="row mb-3">
+                  <div class="col-md-6">
+                    <small class="text-muted"><i class="bi bi-person"></i> Nome do Segurado</small>
+                    <h6>{{ benefit.insured_name }}</h6>
+                  </div>
+                  <div class="col-md-6">
+                    <small class="text-muted"><i class="bi bi-card-text"></i> NIT/PIS</small>
+                    <h6>{{ benefit.insured_nit or '-' }}</h6>
+                  </div>
+                </div>
+
+                <hr class="my-3">
+
+                <h6 class="text-primary mb-3"><i class="bi bi-exclamation-triangle-fill"></i> Informações do Acidente</h6>
+
+                <div class="row mb-3">
+                  <div class="col-md-6">
+                    <small class="text-muted"><i class="bi bi-calendar"></i> Data do Acidente</small>
+                    <h6>{{ benefit.accident_date.strftime('%d/%m/%Y') if benefit.accident_date else '-' }}</h6>
+                  </div>
+                  <div class="col-md-6">
+                    <small class="text-muted"><i class="bi bi-building"></i> Empresa</small>
+                    <h6>{{ benefit.accident_company_name or '-' }}</h6>
+                  </div>
+                </div>
+
+                <div class="row mb-3">
+                  <div class="col-md-6">
+                    <small class="text-muted"><i class="bi bi-file-text"></i> Número da CAT</small>
+                    <h6>{{ benefit.numero_cat or '-' }}</h6>
+                  </div>
+                  <div class="col-md-6">
+                    <small class="text-muted"><i class="bi bi-file-text"></i> Número do BO</small>
+                    <h6>{{ benefit.numero_bo or '-' }}</h6>
+                  </div>
+                </div>
+
+                <hr class="my-3">
+
+                <h6 class="text-primary mb-3"><i class="bi bi-gift-fill"></i> Informações do Benefício</h6>
+
+                <div class="row mb-3">
+                  <div class="col-md-6">
+                    <small class="text-muted"><i class="bi bi-calendar-check"></i> Data de Início</small>
+                    <h6>{{ benefit.data_inicio_beneficio.strftime('%d/%m/%Y') if benefit.data_inicio_beneficio else '-'
+                      }}</h6>
+                  </div>
+                  <div class="col-md-6">
+                    <small class="text-muted"><i class="bi bi-calendar-x"></i> Data de Fim</small>
+                    <h6>{{ benefit.data_fim_beneficio.strftime('%d/%m/%Y') if benefit.data_fim_beneficio else '-' }}</h6>
+                  </div>
+                </div>
+
+                <hr class="my-3">
+
+                <h6 class="text-primary mb-3"><i class="bi bi-shield-check"></i> Informações da Contestação FAP</h6>
+
+                <div class="row mb-3">
+                  <div class="col-md-6">
+                    <small class="text-muted"><i class="bi bi-info-circle"></i> Motivo da Contestação</small>
+                    <h6>
+                      {% if benefit.fap_reason_obj %}
+                      <span class="badge bg-info">{{ benefit.fap_reason_obj.display_name }}</span>
+                      {% else %}
+                      <span class="text-muted">-</span>
+                      {% endif %}
+                    </h6>
+                  </div>
+                  <div class="col-md-6">
+                    <small class="text-muted"><i class="bi bi-calendar-range"></i> Vigências FAP</small>
+                    <h6>
+                      {% if benefit.fap_vigencia_years %}
+                      <span class="badge bg-warning text-dark">
+                        {% for year in benefit.fap_vigencia_years.split(',') %}
+                          {{ year }}{% if not loop.last %},&nbsp;{% endif %}
+                        {% endfor %}
+                      </span>
+                      {% else %}
+                      <span class="text-muted">-</span>
+                      {% endif %}
+                    </h6>
+                  </div>
+                </div>
+
+                {% if benefit.notes %}
+                <hr class="my-3">
+                <h6 class="text-primary mb-3"><i class="bi bi-chat-left-text"></i> Observações</h6>
+                <p class="text-muted mb-0">{{ benefit.notes }}</p>
+                {% endif %}
+              </div>
+              <div class="modal-footer">
+                <a href="{{ url_for('benefits.case_benefit_edit', case_id=case.id, benefit_id=benefit.id) }}"
+                  class="btn btn-sm btn-primary">
+                  <i class="bi bi-pencil"></i> Editar
+                </a>
+                <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">
+                  <i class="bi bi-x-circle"></i> Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endfor %}
 
         <!-- Documentos -->
         <div class="card shadow-sm mt-4">
