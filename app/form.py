@@ -205,6 +205,10 @@ class CaseBenefitForm(FlaskForm):
         'Empresa onde ocorreu o Acidente',
         validators=[Optional(), Length(max=255)]
     )
+    accident_summary = TextAreaField(
+        'Resumo do Acidente',
+        validators=[Optional()]
+    )
     fap_reason_id = SelectField(
         'Motivo da Contestação FAP',
         coerce=int_or_none_coerce,
@@ -247,6 +251,10 @@ class CaseBenefitContextForm(FlaskForm):
     accident_company_name = StringField(
         'Empresa onde ocorreu o Acidente',
         validators=[Optional(), Length(max=255)]
+    )
+    accident_summary = TextAreaField(
+        'Resumo do Acidente',
+        validators=[Optional()]
     )
     fap_reason_id = SelectField(
         'Motivo da Contestação FAP',

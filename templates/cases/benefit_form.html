@@ -254,6 +254,22 @@
                 </div>
               </div>
 
+              <div class="row">
+                <div class="col-md-12">
+                  <div class="mb-3">
+                    {{ form.accident_summary.label(class="form-label") }}
+                    {{ form.accident_summary(class="form-control" + (" is-invalid" if
+                    form.accident_summary.errors else ""), rows="4") }}
+                    {% if form.accident_summary.errors %}
+                    <div class="invalid-feedback">
+                      {% for error in form.accident_summary.errors %}{{ error }}{% endfor %}
+                    </div>
+                    {% endif %}
+                    <div class="form-text">Descreva os detalhes do acidente de forma concisa</div>
+                  </div>
+                </div>
+              </div>
+
               <div class="row mb-4 mt-3">
                 <div class="col-12">
                   <div class="alert alert-light section-header p-3" role="alert">

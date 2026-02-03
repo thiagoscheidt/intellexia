@@ -79,6 +79,7 @@ def case_benefit_new(case_id):
             data_fim_beneficio=form.data_fim_beneficio.data,
             accident_date=form.accident_date.data,
             accident_company_name=form.accident_company_name.data,
+            accident_summary=form.accident_summary.data,
             fap_reason_id=int(form.fap_reason_id.data) if form.fap_reason_id.data else None,
             fap_vigencia_years=','.join(form.fap_vigencia_years.data) if form.fap_vigencia_years.data else None,
             notes=form.notes.data
@@ -144,6 +145,7 @@ def case_benefit_edit(case_id, benefit_id):
         benefit.data_fim_beneficio = form.data_fim_beneficio.data
         benefit.accident_date = form.accident_date.data
         benefit.accident_company_name = form.accident_company_name.data
+        benefit.accident_summary = form.accident_summary.data
         benefit.fap_reason_id = int(form.fap_reason_id.data) if form.fap_reason_id.data else None
         benefit.fap_vigencia_years = ','.join(form.fap_vigencia_years.data) if form.fap_vigencia_years.data else None
         benefit.notes = form.notes.data

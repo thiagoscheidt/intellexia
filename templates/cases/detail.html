@@ -315,6 +315,15 @@
                   </div>
                 </div>
 
+                {% if benefit.accident_summary %}
+                <div class="row mb-3">
+                  <div class="col-md-12">
+                    <small class="text-muted"><i class="bi bi-file-text"></i> Resumo do Acidente</small>
+                    <p class="text-muted mb-0" style="white-space: pre-wrap;">{{ benefit.accident_summary }}</p>
+                  </div>
+                </div>
+                {% endif %}
+
                 <div class="row mb-3">
                   <div class="col-md-6">
                     <small class="text-muted"><i class="bi bi-file-text"></i> Número da CAT</small>
