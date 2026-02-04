@@ -72,6 +72,8 @@ def process_pending_sentences(batch_size: int = 10) -> int:
 
     for item in pending_items:
         try:
+            # Marcar como processando antes de iniciar
+            print(f"Iniciando processamento: {item.id} - {item.original_filename}")
             item.status = 'processing'
             item.error_message = None
             db.session.commit()
