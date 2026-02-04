@@ -420,6 +420,44 @@ class AiDocumentSummary(db.Model):
         return f'<AiDocumentSummary {self.original_filename}>'
 
 
+class JudicialSentenceAnalysis(db.Model):
+    """Tabela judicial_sentence_analysis - Análise de sentenças judiciais por IA"""
+    __tablename__ = 'judicial_sentence_analysis'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    
+    # Informações do arquivo da sentença
+    original_filename = db.Column(db.String(255), nullable=False)
+    file_path = db.Column(db.String(500), nullable=False)
+    file_size = db.Column(db.Integer)  # Tamanho em bytes
+    file_type = db.Column(db.String(50))  # PDF, DOCX, TXT, etc.
+    
+    # Informações do arquivo da petição inicial (opcional)
+    petition_filename = db.Column(db.String(255))
+    petition_file_path = db.Column(db.String(500))
+    petition_file_size = db.Column(db.Integer)
+    petition_file_type = db.Column(db.String(50))
+    
+    # Status e análise
+    status = db.Column(db.String(20), default='pending')  # pending, processing, completed, error
+    analysis_result = db.Column(db.Text)  # Resultado da análise pela IA
+    error_message = db.Column(db.Text)  # Mensagem de erro caso falhe
+    
+    # Metadados
+    processed_at = db.Column(db.DateTime)  # Data/hora do processamento
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relacionamentos
+    user = db.relationship('User')
+    law_firm = db.relationship('LawFirm')
+    
+    def __repr__(self):
+        return f'<JudicialSentenceAnalysis {self.original_filename}>'
+
+
 class KnowledgeBase(db.Model):
     """Tabela knowledge_base - Base de conhecimento com arquivos do escritório"""
     __tablename__ = 'knowledge_base'

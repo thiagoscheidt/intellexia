@@ -1,5 +1,6 @@
 from flask import Flask
 import os
+import json
 from pathlib import Path
 
 # Carregar variáveis do .env se existir
@@ -68,6 +69,19 @@ app.register_blueprint(case_comments_bp)
 # Importar middlewares e contexto (mantém funcionalidade anterior)
 from app.middlewares import init_app_middlewares
 init_app_middlewares(app)
+
+# Registrar filtro Jinja para converter JSON
+@app.template_filter('from_json')
+def from_json_filter(value):
+    """Converte string JSON para objeto Python"""
+    if not value:
+        return {}
+    try:
+        if isinstance(value, str):
+            return json.loads(value)
+        return value
+    except (json.JSONDecodeError, TypeError):
+        return {}
 
 if __name__ == '__main__':
     # Criar tabelas apenas quando executando diretamente

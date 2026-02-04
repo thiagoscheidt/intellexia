@@ -110,6 +110,13 @@
               </a>
             </li>
             <li class="nav-item">
+              <a href="{{ url_for('tools.judicial_sentence_analysis_list') }}"
+                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('tools.judicial_sentence_analysis') else '' }}">
+                <i class="nav-icon bi bi-file-earmark-text"></i>
+                <p>Análise de Sentença</p>
+              </a>
+            </li>
+            <li class="nav-item">
               <a href="{{ url_for('tools.datajud_search') }}"
                 class="nav-link {{ 'active' if request.endpoint == 'tools.datajud_search' else '' }}">
                 <i class="nav-icon bi bi-search"></i>

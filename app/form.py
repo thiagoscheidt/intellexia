@@ -342,3 +342,22 @@ class AiDocumentSummaryForm(FlaskForm):
         ]
     )
     submit = SubmitField('Enviar para Resumo')
+
+# ========================
+# FORMULÁRIO: Análise de Sentença Judicial
+# ========================
+class JudicialSentenceAnalysisForm(FlaskForm):
+    file = FileField(
+        'Sentença Judicial',
+        validators=[
+            DataRequired(),
+            FileAllowed(['pdf', 'docx', 'txt', 'doc'], 'Somente arquivos PDF, DOCX ou TXT são permitidos!')
+        ]
+    )
+    petition_file = FileField(
+        'Petição Inicial (Opcional)',
+        validators=[
+            FileAllowed(['pdf', 'docx', 'txt', 'doc'], 'Somente arquivos PDF, DOCX ou TXT são permitidos!')
+        ]
+    )
+    submit = SubmitField('Enviar para Análise')

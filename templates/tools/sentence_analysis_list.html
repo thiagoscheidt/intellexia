@@ -1,0 +1,131 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Lista de Análises de Sentenças - IntellexIA{% endblock %}
+
+{% block content %}
+
+<!-- Cabeçalho da página -->
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card border-0 shadow-sm" style="border-radius: 16px; overflow: hidden;">
+      <div class="card-body" style="background: linear-gradient(135deg, #f8f9ff 0%, #eef1ff 100%);">
+        <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+          <div class="d-flex align-items-center gap-3">
+            <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
+              style="width: 56px; height: 56px; box-shadow: 0 6px 14px rgba(102,126,234,0.18);">
+              <i class="bi bi-file-earmark-text" style="font-size: 1.6rem; color: #667eea;"></i>
+            </div>
+            <div>
+              <h1 class="h4 mb-1" style="font-weight: 700; letter-spacing: .2px;">Análise de Sentenças Judiciais</h1>
+              <small class="text-muted">Histórico de sentenças analisadas por IA</small>
+            </div>
+          </div>
+          <div>
+            <a href="{{ url_for('tools.judicial_sentence_analysis_upload') }}" class="btn btn-primary">
+              <i class="bi bi-cloud-upload"></i> Enviar Sentença
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-12">
+        <div class="card card-primary card-outline shadow-sm">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-list-ul"></i> Sentenças Analisadas</h3>
+          </div>
+          <div class="card-body">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+              <i class="bi bi-info-circle"></i> {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            {% if sentences %}
+            <div class="table-responsive">
+              <table class="table table-hover">
+                <thead>
+                  <tr>
+                    <th><i class="bi bi-file-earmark"></i> Arquivo</th>
+                    <th><i class="bi bi-file-code"></i> Tipo</th>
+                    <th><i class="bi bi-hdd"></i> Tamanho</th>
+                    <th><i class="bi bi-activity"></i> Status</th>
+                    <th><i class="bi bi-calendar"></i> Data Envio</th>
+                    <th><i class="bi bi-gear"></i> Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for sentence in sentences %}
+                  <tr>
+                    <td>
+                      <i class="bi bi-file-earmark-pdf text-danger me-2"></i>
+                      <strong>{{ sentence.original_filename }}</strong>
+                    </td>
+                    <td><span class="badge bg-secondary">{{ sentence.file_type }}</span></td>
+                    <td>{{ (sentence.file_size / 1024 / 1024)|round(2) }} MB</td>
+                    <td>
+                      {% if sentence.status == 'completed' %}
+                      <span class="badge bg-success"><i class="bi bi-check-circle"></i> Concluído</span>
+                      {% elif sentence.status == 'processing' %}
+                      <span class="badge bg-warning"><i class="bi bi-hourglass-split"></i> Processando</span>
+                      {% elif sentence.status == 'pending' %}
+                      <span class="badge bg-info"><i class="bi bi-clock"></i> Pendente</span>
+                      {% elif sentence.status == 'error' %}
+                      <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Erro</span>
+                      {% endif %}
+                    </td>
+                    <td>{{ sentence.uploaded_at.strftime('%d/%m/%Y %H:%M') if sentence.uploaded_at else '-' }}</td>
+                    <td>
+                      <div class="btn-group" role="group">
+                        <a href="{{ url_for('tools.judicial_sentence_analysis_detail', sentence_id=sentence.id) }}" 
+                           class="btn btn-sm btn-outline-primary" title="Ver Detalhes">
+                          <i class="bi bi-eye"></i>
+                        </a>
+                        {% if sentence.status == 'error' %}
+                        <form method="POST" action="{{ url_for('tools.judicial_sentence_analysis_reprocess', sentence_id=sentence.id) }}" style="display: inline;">
+                          <button type="submit" class="btn btn-sm btn-outline-warning" title="Reprocessar">
+                            <i class="bi bi-arrow-clockwise"></i>
+                          </button>
+                        </form>
+                        {% endif %}
+                        <form method="POST" action="{{ url_for('tools.judicial_sentence_analysis_delete', sentence_id=sentence.id) }}" 
+                              onsubmit="return confirm('Tem certeza que deseja deletar esta análise?');" style="display: inline;">
+                          <button type="submit" class="btn btn-sm btn-outline-danger" title="Deletar">
+                            <i class="bi bi-trash"></i>
+                          </button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info text-center">
+              <i class="bi bi-info-circle display-4 d-block mb-3"></i>
+              <h5>Nenhuma sentença analisada ainda</h5>
+              <p class="mb-3">Envie sua primeira sentença judicial para análise automática por IA.</p>
+              <a href="{{ url_for('tools.judicial_sentence_analysis_upload') }}" class="btn btn-primary">
+                <i class="bi bi-cloud-upload"></i> Enviar Primeira Sentença
+              </a>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

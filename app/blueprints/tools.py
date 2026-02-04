@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify
-from app.models import db, AiDocumentSummary
+from app.models import db, AiDocumentSummary, JudicialSentenceAnalysis
 from app.agents.file_agent import FileAgent
 from app.agents.agent_document_reader import AgentDocumentReader
 from app.utils.document_utils import extract_text_from_docx, is_docx_file
@@ -370,3 +370,154 @@ def datajud_search():
         classes=classes,
         erro=erro
     )
+
+
+# ========================
+# ANÁLISE DE SENTENÇA JUDICIAL
+# ========================
+
+@tools_bp.route('/sentence-analysis')
+@require_law_firm
+def judicial_sentence_analysis_list():
+    """Lista todas as análises de sentenças judiciais"""
+    law_firm_id = get_current_law_firm_id()
+    sentences = JudicialSentenceAnalysis.query.filter_by(law_firm_id=law_firm_id).order_by(JudicialSentenceAnalysis.uploaded_at.desc()).all()
+    return render_template('tools/sentence_analysis_list.html', sentences=sentences)
+
+
+@tools_bp.route('/sentence-analysis/upload', methods=['GET', 'POST'])
+@require_law_firm
+def judicial_sentence_analysis_upload():
+    """Upload de sentença judicial para análise por IA"""
+    from app.form import JudicialSentenceAnalysisForm
+    
+    form = JudicialSentenceAnalysisForm()
+    
+    if form.validate_on_submit():
+        file = form.file.data
+        petition_file = form.petition_file.data
+        
+        if file:
+            try:
+                # Processar arquivo da sentença
+                filename = secure_filename(file.filename)
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                unique_filename = f"{timestamp}_{filename}"
+                
+                upload_dir = os.path.join('uploads', 'sentence_analysis')
+                os.makedirs(upload_dir, exist_ok=True)
+                file_path = os.path.join(upload_dir, unique_filename)
+                
+                file.save(file_path)
+                
+                file_size = os.path.getsize(file_path)
+                file_extension = os.path.splitext(filename)[1].lower().replace('.', '')
+                
+                sentence = JudicialSentenceAnalysis(
+                    user_id=session.get('user_id'),
+                    law_firm_id=get_current_law_firm_id(),
+                    original_filename=filename,
+                    file_path=file_path,
+                    file_size=file_size,
+                    file_type=file_extension.upper(),
+                    status='pending'
+                )
+                
+                # Processar petição inicial se fornecida
+                if petition_file:
+                    petition_filename = secure_filename(petition_file.filename)
+                    unique_petition_filename = f"{timestamp}_petition_{petition_filename}"
+                    petition_file_path = os.path.join(upload_dir, unique_petition_filename)
+                    
+                    petition_file.save(petition_file_path)
+                    
+                    petition_file_size = os.path.getsize(petition_file_path)
+                    petition_extension = os.path.splitext(petition_filename)[1].lower().replace('.', '')
+                    
+                    sentence.petition_filename = petition_filename
+                    sentence.petition_file_path = petition_file_path
+                    sentence.petition_file_size = petition_file_size
+                    sentence.petition_file_type = petition_extension.upper()
+                
+                db.session.add(sentence)
+                db.session.commit()
+                
+                # TODO: Processar com agente de IA
+                # A implementação do agente será feita posteriormente
+                # Por enquanto, apenas marca como pendente
+                
+                flash('Sentença enviada com sucesso! A análise será processada em breve.', 'success')
+                return redirect(url_for('tools.judicial_sentence_analysis_detail', sentence_id=sentence.id))
+                
+            except Exception as e:
+                db.session.rollback()
+                flash(f'Erro ao enviar sentença: {str(e)}', 'danger')
+    
+    return render_template('tools/sentence_analysis_upload.html', form=form)
+
+
+@tools_bp.route('/sentence-analysis/<int:sentence_id>')
+@require_law_firm
+def judicial_sentence_analysis_detail(sentence_id):
+    """Detalhes da análise de uma sentença judicial"""
+    sentence = JudicialSentenceAnalysis.query.get_or_404(sentence_id)
+    
+    if sentence.law_firm_id != get_current_law_firm_id():
+        flash('Acesso não autorizado', 'danger')
+        return redirect(url_for('tools.judicial_sentence_analysis_list'))
+    
+    return render_template('tools/sentence_analysis_detail.html', sentence=sentence)
+
+
+@tools_bp.route('/sentence-analysis/<int:sentence_id>/delete', methods=['POST'])
+@require_law_firm
+def judicial_sentence_analysis_delete(sentence_id):
+    """Deletar análise de sentença judicial"""
+    sentence = JudicialSentenceAnalysis.query.get_or_404(sentence_id)
+    
+    if sentence.law_firm_id != get_current_law_firm_id():
+        flash('Acesso não autorizado', 'danger')
+        return redirect(url_for('tools.judicial_sentence_analysis_list'))
+    
+    try:
+        # Deletar arquivos físicos
+        if os.path.exists(sentence.file_path):
+            os.remove(sentence.file_path)
+        
+        if sentence.petition_file_path and os.path.exists(sentence.petition_file_path):
+            os.remove(sentence.petition_file_path)
+        
+        db.session.delete(sentence)
+        db.session.commit()
+        
+        flash('Análise deletada com sucesso!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao deletar análise: {str(e)}', 'danger')
+    
+    return redirect(url_for('tools.judicial_sentence_analysis_list'))
+
+
+@tools_bp.route('/sentence-analysis/<int:sentence_id>/reprocess', methods=['POST'])
+@require_law_firm
+def judicial_sentence_analysis_reprocess(sentence_id):
+    """Reprocessar análise de sentença judicial - coloca de volta na fila"""
+    sentence = JudicialSentenceAnalysis.query.get_or_404(sentence_id)
+    
+    if sentence.law_firm_id != get_current_law_firm_id():
+        flash('Acesso não autorizado', 'danger')
+        return redirect(url_for('tools.judicial_sentence_analysis_list'))
+    
+    try:
+        # Retorna para a fila (pending) para ser processada novamente
+        sentence.status = 'pending'
+        sentence.error_message = None
+        sentence.analysis_result = None
+        db.session.commit()
+        
+        flash('Sentença marcada para reprocessamento! O script irá processar em breve.', 'info')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao reprocessar sentença: {str(e)}', 'danger')
+    
+    return redirect(url_for('tools.judicial_sentence_analysis_detail', sentence_id=sentence_id))

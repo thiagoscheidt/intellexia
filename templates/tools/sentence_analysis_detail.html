@@ -1,0 +1,535 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Detalhes da Análise - IntellexIA{% endblock %}
+
+{% block content %}
+
+<!-- Cabeçalho da página -->
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card border-0 shadow-sm" style="border-radius: 16px; overflow: hidden;">
+      <div class="card-body" style="background: linear-gradient(135deg, #f8f9ff 0%, #eef1ff 100%);">
+        <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+          <div class="d-flex align-items-center gap-3">
+            <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
+              style="width: 56px; height: 56px; box-shadow: 0 6px 14px rgba(102,126,234,0.18);">
+              <i class="bi bi-file-earmark-text" style="font-size: 1.6rem; color: #667eea;"></i>
+            </div>
+            <div>
+              <h1 class="h4 mb-1" style="font-weight: 700; letter-spacing: .2px;">Detalhes da Análise</h1>
+              <small class="text-muted">{{ sentence.original_filename }}</small>
+            </div>
+          </div>
+          <div>
+            <nav aria-label="breadcrumb">
+              <ol class="breadcrumb mb-0 bg-transparent small">
+                <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('tools.judicial_sentence_analysis_list') }}">Análise de Sentenças</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Detalhes</li>
+              </ol>
+            </nav>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <!-- Coluna Principal -->
+      <div class="col-md-8">
+        <!-- Informações do Arquivo -->
+        <div class="card card-primary card-outline shadow-sm mb-4">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-file-earmark"></i> Informações dos Arquivos</h3>
+          </div>
+          <div class="card-body">
+            <h6 class="text-primary mb-3"><i class="bi bi-file-earmark-text"></i> Sentença Judicial</h6>
+            <div class="row mb-4">
+              <div class="col-md-6 mb-3">
+                <small class="text-muted d-block"><i class="bi bi-file-text"></i> Nome do Arquivo</small>
+                <h6 class="mb-0">{{ sentence.original_filename }}</h6>
+              </div>
+              <div class="col-md-3 mb-3">
+                <small class="text-muted d-block"><i class="bi bi-file-code"></i> Tipo</small>
+                <span class="badge bg-secondary">{{ sentence.file_type }}</span>
+              </div>
+              <div class="col-md-3 mb-3">
+                <small class="text-muted d-block"><i class="bi bi-hdd"></i> Tamanho</small>
+                <h6 class="mb-0">{{ (sentence.file_size / 1024 / 1024)|round(2) }} MB</h6>
+              </div>
+            </div>
+
+            {% if sentence.petition_filename %}
+            <hr class="my-3">
+            <h6 class="text-info mb-3"><i class="bi bi-file-earmark-arrow-up"></i> Petição Inicial</h6>
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <small class="text-muted d-block"><i class="bi bi-file-text"></i> Nome do Arquivo</small>
+                <h6 class="mb-0">{{ sentence.petition_filename }}</h6>
+              </div>
+              <div class="col-md-3 mb-3">
+                <small class="text-muted d-block"><i class="bi bi-file-code"></i> Tipo</small>
+                <span class="badge bg-secondary">{{ sentence.petition_file_type }}</span>
+              </div>
+              <div class="col-md-3 mb-3">
+                <small class="text-muted d-block"><i class="bi bi-hdd"></i> Tamanho</small>
+                <h6 class="mb-0">{{ (sentence.petition_file_size / 1024 / 1024)|round(2) }} MB</h6>
+              </div>
+            </div>
+            {% else %}
+            <div class="alert alert-light border mt-3">
+              <i class="bi bi-info-circle"></i> Nenhuma petição inicial foi fornecida para esta análise.
+            </div>
+            {% endif %}
+
+            <hr class="my-3">
+            <div class="row">
+              <div class="col-md-6 mb-3">
+                <small class="text-muted d-block"><i class="bi bi-calendar-upload"></i> Data de Envio</small>
+                <h6 class="mb-0">{{ sentence.uploaded_at.strftime('%d/%m/%Y às %H:%M') if sentence.uploaded_at else '-' }}</h6>
+              </div>
+              <div class="col-md-6 mb-3">
+                <small class="text-muted d-block"><i class="bi bi-calendar-check"></i> Data de Processamento</small>
+                <h6 class="mb-0">{{ sentence.processed_at.strftime('%d/%m/%Y às %H:%M') if sentence.processed_at else 'Ainda não processado' }}</h6>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Análise da IA -->
+        {% if sentence.status == 'completed' and sentence.analysis_result %}
+        {% set analysis = sentence.analysis_result|from_json %}
+        
+        <!-- Resumo -->
+        <div class="card card-success card-outline shadow-sm mb-4">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-file-text"></i> Resumo da Sentença</h3>
+          </div>
+          <div class="card-body">
+            {% if analysis.summary %}
+            <div class="alert alert-light border">
+              <strong>Resumo Geral:</strong><br>
+              {{ analysis.summary }}
+            </div>
+            {% endif %}
+            
+            {% if analysis.summary_short %}
+            <h6 class="text-muted mb-2"><i class="bi bi-card-text"></i> Resumo Curto</h6>
+            <p>{{ analysis.summary_short }}</p>
+            {% endif %}
+            
+            {% if analysis.summary_long %}
+            <h6 class="text-muted mb-2 mt-3"><i class="bi bi-file-earmark-text"></i> Resumo Detalhado</h6>
+            <p style="text-align: justify;">{{ analysis.summary_long }}</p>
+            {% endif %}
+            
+            {% if analysis.key_points %}
+            <h6 class="text-muted mb-2 mt-3"><i class="bi bi-bookmark-check"></i> Pontos-Chave</h6>
+            <ul>
+              {% for point in analysis.key_points %}
+              <li>{{ point }}</li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Informações do Processo -->
+        {% if analysis.sentence_info %}
+        {% set info = analysis.sentence_info %}
+        
+        <div class="card card-primary card-outline shadow-sm mb-4">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-info-circle"></i> Informações do Processo</h3>
+          </div>
+          <div class="card-body">
+            <div class="row">
+              {% if info.process_number %}
+              <div class="col-md-6 mb-3">
+                <small class="text-muted d-block"><i class="bi bi-hash"></i> Número do Processo</small>
+                <h6 class="mb-0">{{ info.process_number }}</h6>
+              </div>
+              {% endif %}
+              
+              {% if info.case_value %}
+              <div class="col-md-6 mb-3">
+                <small class="text-muted d-block"><i class="bi bi-cash"></i> Valor da Causa</small>
+                <h6 class="mb-0">{{ info.case_value }}</h6>
+              </div>
+              {% endif %}
+              
+              {% if info.judgment_date %}
+              <div class="col-md-4 mb-3">
+                <small class="text-muted d-block"><i class="bi bi-calendar-check"></i> Data da Sentença</small>
+                <h6 class="mb-0">{{ info.judgment_date }}</h6>
+              </div>
+              {% endif %}
+              
+              {% if info.start_year %}
+              <div class="col-md-4 mb-3">
+                <small class="text-muted d-block"><i class="bi bi-calendar"></i> Ano de Início</small>
+                <h6 class="mb-0">{{ info.start_year }}</h6>
+              </div>
+              {% endif %}
+              
+              {% if info.court_tag %}
+              <div class="col-md-4 mb-3">
+                <small class="text-muted d-block"><i class="bi bi-building"></i> Tribunal</small>
+                <span class="badge bg-primary">{{ info.court_tag }}</span>
+              </div>
+              {% endif %}
+              
+              {% if info.nature %}
+              <div class="col-md-6 mb-3">
+                <small class="text-muted d-block"><i class="bi bi-tag"></i> Natureza</small>
+                <h6 class="mb-0">{{ info.nature }}</h6>
+              </div>
+              {% endif %}
+              
+              {% if info.judicial_power %}
+              <div class="col-md-6 mb-3">
+                <small class="text-muted d-block"><i class="bi bi-bank"></i> Poder Judiciário</small>
+                <h6 class="mb-0">{{ info.judicial_power }}</h6>
+              </div>
+              {% endif %}
+              
+              {% if info.judge %}
+              <div class="col-md-6 mb-3">
+                <small class="text-muted d-block"><i class="bi bi-person-badge"></i> Juiz</small>
+                <h6 class="mb-0">{{ info.judge }}</h6>
+              </div>
+              {% endif %}
+              
+              {% if info.origin_court %}
+              <div class="col-md-6 mb-3">
+                <small class="text-muted d-block"><i class="bi bi-geo-alt"></i> Tribunal de Origem</small>
+                <h6 class="mb-0">{{ info.origin_court }}</h6>
+              </div>
+              {% endif %}
+            </div>
+            
+            {% if info.subjects %}
+            <hr class="my-3">
+            <h6 class="text-muted mb-2"><i class="bi bi-bookmarks"></i> Assuntos</h6>
+            <div>
+              {% for subject in info.subjects %}
+              <span class="badge bg-info me-1 mb-1">{{ subject }}</span>
+              {% endfor %}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Partes -->
+        {% if info.parties and (info.parties.active_pole or info.parties.passive_pole) %}
+        <div class="card card-info card-outline shadow-sm mb-4">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-people"></i> Partes do Processo</h3>
+          </div>
+          <div class="card-body">
+            {% if info.parties.active_pole %}
+            <h6 class="text-success mb-3"><i class="bi bi-person-check"></i> Polo Ativo</h6>
+            {% for party in info.parties.active_pole %}
+            <div class="border-start border-success border-3 ps-3 mb-3">
+              <strong>{{ party.name }}</strong> <span class="badge bg-success">{{ party.role }}</span>
+              {% if party.lawyers %}
+              <div class="small text-muted mt-1">
+                <i class="bi bi-briefcase"></i> Advogados: {{ party.lawyers|join(', ') }}
+              </div>
+              {% endif %}
+            </div>
+            {% endfor %}
+            {% endif %}
+            
+            {% if info.parties.passive_pole %}
+            <h6 class="text-danger mb-3 mt-4"><i class="bi bi-person-x"></i> Polo Passivo</h6>
+            {% for party in info.parties.passive_pole %}
+            <div class="border-start border-danger border-3 ps-3 mb-3">
+              <strong>{{ party.name }}</strong> <span class="badge bg-danger">{{ party.role }}</span>
+              {% if party.lawyers %}
+              <div class="small text-muted mt-1">
+                <i class="bi bi-briefcase"></i> Advogados: {{ party.lawyers|join(', ') }}
+              </div>
+              {% endif %}
+            </div>
+            {% endfor %}
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Dispositivo e Resultado -->
+        <div class="card card-warning card-outline shadow-sm mb-4">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-hammer"></i> Dispositivo e Resultado</h3>
+          </div>
+          <div class="card-body">
+            {% if info.overall_result %}
+            <div class="alert {% if info.overall_result == 'Procedente' %}alert-success{% elif info.overall_result == 'Improcedente' %}alert-danger{% else %}alert-warning{% endif %}">
+              <strong><i class="bi bi-award"></i> Resultado Geral:</strong> {{ info.overall_result }}
+            </div>
+            {% endif %}
+            
+            {% if info.operative_part %}
+            <h6 class="text-muted mb-2"><i class="bi bi-file-earmark-check"></i> Dispositivo</h6>
+            <div class="border-start border-warning border-3 ps-3 py-2" style="background-color: #fff9e6;">
+              {{ info.operative_part }}
+            </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Decisões Específicas -->
+        {% if info.decisions %}
+        <div class="card card-secondary card-outline shadow-sm mb-4">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-list-check"></i> Decisões por Pedido</h3>
+          </div>
+          <div class="card-body">
+            {% for decision in info.decisions %}
+            <div class="mb-3 pb-3 {% if not loop.last %}border-bottom{% endif %}">
+              <h6 class="mb-2">
+                <span class="badge {% if decision.result == 'Procedente' %}bg-success{% elif decision.result == 'Improcedente' %}bg-danger{% else %}bg-warning{% endif %}">
+                  {{ decision.result }}
+                </span>
+                {{ decision.subject }}
+              </h6>
+              {% if decision.reasoning %}
+              <p class="small text-muted mb-0">{{ decision.reasoning }}</p>
+              {% endif %}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Análise FAP -->
+        {% if info.fap_benefits_analysis %}
+        <div class="card card-danger card-outline shadow-sm mb-4">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-clipboard-data"></i> Análise de Benefícios FAP</h3>
+          </div>
+          <div class="card-body">
+            <div class="table-responsive">
+              <table class="table table-sm table-hover">
+                <thead class="table-light">
+                  <tr>
+                    <th>Benefício</th>
+                    <th>Segurado</th>
+                    <th>Tipo de Acidente</th>
+                    <th>Resultado</th>
+                    <th>Fundamentação</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for benefit in info.fap_benefits_analysis %}
+                  <tr>
+                    <td><strong>{{ benefit.benefit_number }}</strong></td>
+                    <td>{{ benefit.insured_name }}</td>
+                    <td>{{ benefit.accident_type }}</td>
+                    <td>
+                      <span class="badge {% if benefit.result == 'Aceito' %}bg-success{% elif benefit.result == 'Rejeitado' %}bg-danger{% else %}bg-warning{% endif %}">
+                        {{ benefit.result }}
+                      </span>
+                    </td>
+                    <td class="small">{{ benefit.reasoning }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Fundamentação Legal -->
+        {% if info.legal_grounds or info.jurisprudence_cited %}
+        <div class="card card-light shadow-sm mb-4">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-book"></i> Fundamentação Legal</h3>
+          </div>
+          <div class="card-body">
+            {% if info.legal_grounds %}
+            <h6 class="text-muted mb-2"><i class="bi bi-journal-text"></i> Fundamentos Legais</h6>
+            <ul class="mb-3">
+              {% for ground in info.legal_grounds %}
+              <li>{{ ground }}</li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+            
+            {% if info.jurisprudence_cited %}
+            <h6 class="text-muted mb-2 {% if info.legal_grounds %}mt-3{% endif %}"><i class="bi bi-scales"></i> Jurisprudência Citada</h6>
+            <ul>
+              {% for jurisp in info.jurisprudence_cited %}
+              <li>{{ jurisp }}</li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Recursos Possíveis -->
+        {% if info.possible_appeals %}
+        <div class="card card-dark card-outline shadow-sm mb-4">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-arrow-up-circle"></i> Recursos Possíveis</h3>
+          </div>
+          <div class="card-body">
+            <ul>
+              {% for appeal in info.possible_appeals %}
+              <li>{{ appeal }}</li>
+              {% endfor %}
+            </ul>
+          </div>
+        </div>
+        {% endif %}
+        
+        {% endif %}
+        {% elif sentence.status == 'processing' %}
+        <div class="card card-warning card-outline shadow-sm">
+          <div class="card-body">
+            <div class="alert alert-warning mb-0">
+              <i class="bi bi-hourglass-split"></i>
+              <strong>Processando...</strong><br>
+              A análise está sendo gerada pela IA. Por favor, aguarde alguns instantes e recarregue a página.
+            </div>
+          </div>
+        </div>
+        {% elif sentence.status == 'pending' %}
+        <div class="card card-info card-outline shadow-sm">
+          <div class="card-body">
+            <div class="alert alert-info mb-0">
+              <i class="bi bi-clock"></i>
+              <strong>Aguardando processamento</strong><br>
+              A sentença está na fila para ser analisada pela IA.
+            </div>
+          </div>
+        </div>
+        {% elif sentence.status == 'error' %}
+        <div class="card card-danger card-outline shadow-sm">
+          <div class="card-body">
+            <div class="alert alert-danger">
+              <i class="bi bi-x-circle"></i>
+              <strong>Erro ao processar</strong><br>
+              {{ sentence.error_message if sentence.error_message else 'Ocorreu um erro desconhecido durante o processamento.' }}
+            </div>
+            <form method="POST" action="{{ url_for('tools.judicial_sentence_analysis_reprocess', sentence_id=sentence.id) }}" class="mt-3">
+              <button type="submit" class="btn btn-warning">
+                <i class="bi bi-arrow-clockwise"></i> Tentar Reprocessar
+              </button>
+            </form>
+          </div>
+        </div>
+        {% else %}
+        <div class="card card-secondary card-outline shadow-sm">
+          <div class="card-body">
+            <div class="alert alert-secondary mb-0">
+              <i class="bi bi-info-circle"></i>
+              Nenhuma análise disponível ainda.
+            </div>
+          </div>
+        </div>
+        {% endif %}
+      </div>
+
+      <!-- Sidebar -->
+      <div class="col-md-4">
+        <!-- Status -->
+        <div class="card card-info card-outline shadow-sm mb-4">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-activity"></i> Status</h3>
+          </div>
+          <div class="card-body text-center">
+            {% if sentence.status == 'completed' %}
+            <div class="mb-3">
+              <i class="bi bi-check-circle text-success" style="font-size: 3rem;"></i>
+            </div>
+            <h5 class="text-success">Análise Concluída</h5>
+            <p class="text-muted small mb-0">A sentença foi analisada com sucesso pela IA.</p>
+            {% elif sentence.status == 'processing' %}
+            <div class="mb-3">
+              <div class="spinner-border text-warning" style="width: 3rem; height: 3rem;" role="status">
+                <span class="visually-hidden">Processando...</span>
+              </div>
+            </div>
+            <h5 class="text-warning">Processando</h5>
+            <p class="text-muted small mb-0">A IA está analisando a sentença.</p>
+            {% elif sentence.status == 'pending' %}
+            <div class="mb-3">
+              <i class="bi bi-clock text-info" style="font-size: 3rem;"></i>
+            </div>
+            <h5 class="text-info">Pendente</h5>
+            <p class="text-muted small mb-0">Aguardando análise pela IA.</p>
+            {% elif sentence.status == 'error' %}
+            <div class="mb-3">
+              <i class="bi bi-x-circle text-danger" style="font-size: 3rem;"></i>
+            </div>
+            <h5 class="text-danger">Erro</h5>
+            <p class="text-muted small mb-0">Ocorreu um erro no processamento.</p>
+            {% endif %}
+          </div>
+        </div>
+
+        <!-- Ações -->
+        <div class="card card-warning card-outline shadow-sm">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-gear"></i> Ações</h3>
+          </div>
+          <div class="card-body">
+            <div class="d-grid gap-2">
+              <a href="{{ url_for('tools.judicial_sentence_analysis_list') }}" class="btn btn-secondary">
+                <i class="bi bi-arrow-left"></i> Voltar para Lista
+              </a>
+              
+              {% if sentence.status == 'error' %}
+              <form method="POST" action="{{ url_for('tools.judicial_sentence_analysis_reprocess', sentence_id=sentence.id) }}">
+                <button type="submit" class="btn btn-warning w-100">
+                  <i class="bi bi-arrow-clockwise"></i> Reprocessar
+                </button>
+              </form>
+              {% endif %}
+              
+              <form method="POST" action="{{ url_for('tools.judicial_sentence_analysis_delete', sentence_id=sentence.id) }}" 
+                    onsubmit="return confirm('Tem certeza que deseja deletar esta análise?');">
+                <button type="submit" class="btn btn-danger w-100">
+                  <i class="bi bi-trash"></i> Deletar
+                </button>
+              </form>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+.analysis-content {
+  line-height: 1.8;
+  font-size: 1rem;
+}
+
+.analysis-content h1,
+.analysis-content h2,
+.analysis-content h3 {
+  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+  color: #2c3e50;
+}
+
+.analysis-content ul,
+.analysis-content ol {
+  margin-left: 1.5rem;
+}
+
+.analysis-content p {
+  margin-bottom: 1rem;
+}
+</style>
+
+{% endblock %}

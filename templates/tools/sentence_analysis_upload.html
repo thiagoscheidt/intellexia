@@ -1,0 +1,163 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Análise de Sentença Judicial - IntellexIA{% endblock %}
+
+{% block content %}
+
+<!-- Cabeçalho da página -->
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card border-0 shadow-sm" style="border-radius: 16px; overflow: hidden;">
+      <div class="card-body" style="background: linear-gradient(135deg, #f8f9ff 0%, #eef1ff 100%);">
+        <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+          <div class="d-flex align-items-center gap-3">
+            <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
+              style="width: 56px; height: 56px; box-shadow: 0 6px 14px rgba(102,126,234,0.18);">
+              <i class="bi bi-file-earmark-text" style="font-size: 1.6rem; color: #667eea;"></i>
+            </div>
+            <div>
+              <h1 class="h4 mb-1" style="font-weight: 700; letter-spacing: .2px;">Análise de Sentença Judicial</h1>
+              <small class="text-muted">Envie a sentença para análise automática por IA</small>
+            </div>
+          </div>
+          <div>
+            <nav aria-label="breadcrumb">
+              <ol class="breadcrumb mb-0 bg-transparent small">
+                <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('tools.judicial_sentence_analysis_list') }}">Análise de Sentenças</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Enviar Sentença</li>
+              </ol>
+            </nav>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-md-8 offset-md-2">
+        <div class="card card-primary card-outline shadow-sm">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-robot"></i> Upload para Análise por IA</h3>
+          </div>
+          <form method="POST" enctype="multipart/form-data" id="uploadForm">
+            {{ form.hidden_tag() }}
+            <div class="card-body">
+              {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+              {% for category, message in messages %}
+              <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                <i class="bi bi-info-circle"></i> {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+              </div>
+              {% endfor %}
+              {% endif %}
+              {% endwith %}
+
+              <div class="alert alert-info">
+                <i class="bi bi-lightbulb"></i>
+                <strong>Como funciona:</strong>
+                <ul class="mb-0 mt-2">
+                  <li>Envie a sentença judicial em PDF, DOCX ou TXT</li>
+                  <li><strong>Opcional:</strong> Envie também a petição inicial para análise comparativa</li>
+                  <li>A IA irá processar e analisar automaticamente</li>
+                  <li>Você receberá uma análise detalhada com:</li>
+                  <ul>
+                    <li>Dispositivo da sentença</li>
+                    <li>Fundamentos jurídicos utilizados</li>
+                    <li>Análise de procedência/improcedência</li>
+                    <li>Comparação entre pedidos e decisão (se petição fornecida)</li>
+                    <li>Pontos relevantes para recursos</li>
+                  </ul>
+                  <li>Tamanho máximo: 16 MB por arquivo</li>
+                </ul>
+              </div>
+
+              <div class="mb-3">
+                {{ form.file.label(class="form-label") }}
+                <span class="text-danger">*</span>
+                {{ form.file(class="form-control", accept=".pdf,.docx,.doc,.txt") }}
+                {% if form.file.errors %}
+                <div class="text-danger mt-1">
+                  {% for error in form.file.errors %}
+                  <small>{{ error }}</small><br>
+                  {% endfor %}
+                </div>
+                {% endif %}
+                <small class="form-text text-muted">
+                  Formatos aceitos: PDF, DOCX, TXT
+                </small>
+              </div>
+
+              <div class="mb-3">
+                {{ form.petition_file.label(class="form-label") }}
+                {{ form.petition_file(class="form-control", accept=".pdf,.docx,.doc,.txt") }}
+                {% if form.petition_file.errors %}
+                <div class="text-danger mt-1">
+                  {% for error in form.petition_file.errors %}
+                  <small>{{ error }}</small><br>
+                  {% endfor %}
+                </div>
+                {% endif %}
+                <small class="form-text text-muted">
+                  <i class="bi bi-info-circle"></i> Opcional: Envie a petição inicial para a IA comparar os pedidos com a decisão judicial
+                </small>
+              </div>
+
+              <div class="alert alert-warning">
+                <i class="bi bi-exclamation-triangle"></i>
+                <strong>Atenção:</strong> A análise será gerada automaticamente após o upload.
+                Este processo pode levar alguns minutos dependendo do tamanho do documento.
+              </div>
+            </div>
+
+            <div class="card-footer">
+              <div class="d-flex justify-content-between">
+                <a href="{{ url_for('tools.judicial_sentence_analysis_list') }}" class="btn btn-secondary">
+                  <i class="bi bi-arrow-left"></i> Voltar
+                </a>
+                <button type="submit" class="btn btn-primary" id="submitBtn">
+                  <span id="btnText">
+                    <i class="bi bi-cloud-upload"></i> {{ form.submit.label.text }}
+                  </span>
+                  <span id="btnLoading" style="display: none;">
+                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    Enviando e processando...
+                  </span>
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.getElementById('uploadForm').addEventListener('submit', function (e) {
+    const submitBtn = document.getElementById('submitBtn');
+    const btnText = document.getElementById('btnText');
+    const btnLoading = document.getElementById('btnLoading');
+    const fileInput = document.querySelector('input[type="file"]');
+
+    // Validar se arquivo foi selecionado
+    if (!fileInput.files || fileInput.files.length === 0) {
+      e.preventDefault();
+      alert('Por favor, selecione um arquivo antes de enviar.');
+      return false;
+    }
+
+    // Desabilitar botão e mostrar loading
+    submitBtn.disabled = true;
+    btnText.style.display = 'none';
+    btnLoading.style.display = 'inline-block';
+
+    // Adicionar classe de loading
+    submitBtn.classList.add('disabled');
+  });
+</script>
+{% endblock %}
