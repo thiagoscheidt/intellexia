@@ -3,20 +3,32 @@
 {% block title %}Detalhes do Caso - IntellexIA{% endblock %}
 
 {% block content %}
-<div class="app-content-header border-bottom border-light">
+<div class="app-content">
   <div class="container-fluid">
-    <div class="row align-items-center">
-      <div class="col-sm-6">
-        <h3 class="mb-0"><i class="bi bi-file-text text-primary"></i> Detalhes do Caso #{{ case.id }}</h3>
-      </div>
-      <div class="col-sm-6">
-        <ol class="breadcrumb float-sm-end mb-0">
-          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i>
-              Home</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_list') }}"><i class="bi bi-folder"></i> Casos</a>
-          </li>
-          <li class="breadcrumb-item active" aria-current="page"><i class="bi bi-eye"></i> Detalhes</li>
-        </ol>
+    <div class="row mb-3">
+      <div class="col-12">
+        <div class="card border-0 shadow-sm" style="border-radius: 12px; overflow: hidden;">
+          <div class="card-body" style="background: linear-gradient(135deg, #f8f9ff 0%, #eef1ff 100%); padding: 1.5rem;">
+            <div class="d-flex align-items-center justify-content-between">
+              <div class="d-flex align-items-center gap-3">
+                <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
+                  style="width: 48px; height: 48px; box-shadow: 0 4px 10px rgba(102,126,234,0.15);">
+                  <i class="bi bi-file-text" style="font-size: 1.4rem; color: #667eea;"></i>
+                </div>
+                <div>
+                  <h3 class="mb-1" style="font-weight: 700; font-size: 1.3rem;">{{ case.title }}</h3>
+                  <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb mb-0" style="font-size: 0.85rem;">
+                      <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
+                      <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_list') }}"><i class="bi bi-folder"></i> Casos</a></li>
+                      <li class="breadcrumb-item active">Caso #{{ case.id }}</li>
+                    </ol>
+                  </nav>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -27,8 +39,8 @@
     <div class="row">
       <div class="col-md-8">
         <!-- Informações do Caso -->
-        <div class="card shadow-sm">
-          <div class="card-header bg-gradient bg-primary text-white border-0">
+        <div class="card card-primary card-outline shadow-sm">
+          <div class="card-header">
             <h3 class="card-title mb-0"><i class="bi bi-file-earmark-text"></i> Informações do Caso</h3>
             <div class="card-tools">
               <button class="btn btn-sm btn-light" data-bs-toggle="modal" data-bs-target="#updateStatusModal">
@@ -40,111 +52,144 @@
             </div>
           </div>
           <div class="card-body">
-            <div class="row mb-3">
-              <div class="col-md-6">
-                <div class="mb-3">
-                  <small class="text-muted d-block"><i class="bi bi-tag"></i> Título</small>
-                  <h5 class="mb-0 text-dark">{{ case.title }}</h5>
+            <!-- Título e Cliente -->
+            <div class="row g-3 mb-4">
+              <div class="col-md-8">
+                <div class="d-flex align-items-start">
+                  <div class="flex-shrink-0">
+                    <div class="rounded-circle bg-primary bg-opacity-10 d-flex align-items-center justify-content-center" 
+                         style="width: 42px; height: 42px;">
+                      <i class="bi bi-file-text text-primary" style="font-size: 1.2rem;"></i>
+                    </div>
+                  </div>
+                  <div class="flex-grow-1 ms-3">
+                    <small class="text-muted d-block mb-1"><i class="bi bi-tag"></i> Título do Caso</small>
+                    <h5 class="mb-0 fw-bold">{{ case.title }}</h5>
+                  </div>
                 </div>
               </div>
-              <div class="col-md-6">
-                <div class="mb-3">
-                  <small class="text-muted d-block"><i class="bi bi-person"></i> Cliente</small>
-                  <h5 class="mb-0 text-dark">{{ case.client.name if case.client else 'Não informado' }}</h5>
+              <div class="col-md-4">
+                <div class="d-flex align-items-start">
+                  <div class="flex-shrink-0">
+                    <div class="rounded-circle bg-success bg-opacity-10 d-flex align-items-center justify-content-center" 
+                         style="width: 42px; height: 42px;">
+                      <i class="bi bi-person text-success" style="font-size: 1.2rem;"></i>
+                    </div>
+                  </div>
+                  <div class="flex-grow-1 ms-3">
+                    <small class="text-muted d-block mb-1"><i class="bi bi-person"></i> Cliente</small>
+                    <h6 class="mb-0">{{ case.client.name if case.client else 'Não informado' }}</h6>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div class="row mb-3">
+            <hr class="my-3">
+
+            <!-- Status e Situação -->
+            <div class="row g-3 mb-4">
               <div class="col-md-6">
-                <div class="mb-3">
-                  <small class="text-muted d-block"><i class="bi bi-bookmark"></i> Tipo de Caso</small>
-                  {% set case_type_map = {
-                  'fap': 'Revisão FAP - AÇÃO REVISIONAL DO FATOR ACIDENTÁRIO DE PREVENÇÃO',
-                  'previdenciario': 'Previdenciário',
-                  'trabalhista': 'Trabalhista',
-                  'outros': 'Outros'
-                  } %}
-                  {% if case.case_type %}
-                  <span class="badge bg-primary">{{ case_type_map.get(case.case_type, case.case_type) }}</span>
-                  {% else %}
-                  <span class="text-muted">Não informado</span>
-                  {% endif %}
-                </div>
-              </div>
-              <div class="col-md-6">
-                <div class="mb-3">
-                  <small class="text-muted d-block"><i class="bi bi-shield-check"></i> Status</small>
-                  {% set status_colors = {
-                  'active': 'success',
-                  'ativo': 'success',
-                  'inactive': 'secondary',
-                  'inativo': 'secondary',
-                  'em_andamento': 'warning',
-                  'in_progress': 'warning',
-                  'concluido': 'info',
-                  'completed': 'info',
-                  'arquivado': 'danger',
-                  'archived': 'danger'
-                  } %}
-                  {% if case.status %}
-                  <span class="badge bg-{{ status_colors.get(case.status.lower(), 'secondary') }} p-2">
-                    {% if case.status.lower() in ['ativo', 'active'] %}
-                    <i class="bi bi-check-circle"></i> Ativo
-                    {% elif case.status.lower() in ['em_andamento', 'in_progress'] %}
-                    <i class="bi bi-hourglass-split"></i> Em Andamento
-                    {% elif case.status.lower() in ['concluido', 'completed'] %}
-                    <i class="bi bi-check-double"></i> Concluído
-                    {% elif case.status.lower() in ['arquivado', 'archived'] %}
-                    <i class="bi bi-archive"></i> Arquivado
-                    {% elif case.status.lower() in ['inativo', 'inactive'] %}
-                    <i class="bi bi-x-circle"></i> Inativo
+                <div class="info-box shadow-none border">
+                  <span class="info-box-icon bg-primary bg-opacity-10">
+                    <i class="bi bi-bookmark text-primary"></i>
+                  </span>
+                  <div class="info-box-content">
+                    <span class="info-box-text small">Tipo de Caso</span>
+                    {% set case_type_map = {
+                    'fap': 'Revisão FAP',
+                    'previdenciario': 'Previdenciário',
+                    'trabalhista': 'Trabalhista',
+                    'outros': 'Outros'
+                    } %}
+                    {% if case.case_type %}
+                    <span class="info-box-number small">{{ case_type_map.get(case.case_type, case.case_type) }}</span>
                     {% else %}
-                    {{ case.status }}
+                    <span class="text-muted small">Não informado</span>
                     {% endif %}
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <div class="info-box shadow-none border">
+                  <span class="info-box-icon bg-success bg-opacity-10">
+                    <i class="bi bi-shield-check text-success"></i>
                   </span>
-                  {% else %}
-                  <span class="text-muted">Não informado</span>
-                  {% endif %}
+                  <div class="info-box-content">
+                    <span class="info-box-text small">Status</span>
+                    {% if case.status %}
+                    <span class="info-box-number small">
+                      {% if case.status.lower() in ['ativo', 'active'] %}
+                      <i class="bi bi-check-circle text-success"></i> Ativo
+                      {% elif case.status.lower() in ['em_andamento', 'in_progress'] %}
+                      <i class="bi bi-hourglass-split text-warning"></i> Em Andamento
+                      {% elif case.status.lower() in ['concluido', 'completed'] %}
+                      <i class="bi bi-check-double text-info"></i> Concluído
+                      {% elif case.status.lower() in ['arquivado', 'archived'] %}
+                      <i class="bi bi-archive text-danger"></i> Arquivado
+                      {% elif case.status.lower() in ['inativo', 'inactive'] %}
+                      <i class="bi bi-x-circle text-secondary"></i> Inativo
+                      {% else %}
+                      {{ case.status }}
+                      {% endif %}
+                    </span>
+                    {% else %}
+                    <span class="text-muted small">Não informado</span>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <div class="info-box shadow-none border">
+                  <span class="info-box-icon bg-info bg-opacity-10">
+                    <i class="bi bi-flag text-info"></i>
+                  </span>
+                  <div class="info-box-content">
+                    <span class="info-box-text small">Situação do Processo</span>
+                    {% if case.status_obj %}
+                    <span class="info-box-number small">{{ case.status_obj.status_name }}</span>
+                    {% else %}
+                    <span class="text-muted small">Não informado</span>
+                    {% endif %}
+                  </div>
+                </div>
+              </div>
+
+              <div class="col-md-6">
+                <div class="info-box shadow-none border">
+                  <span class="info-box-icon bg-success bg-opacity-10">
+                    <i class="bi bi-cash-coin text-success"></i>
+                  </span>
+                  <div class="info-box-content">
+                    <span class="info-box-text small">Valor da Causa</span>
+                    {% if case.value_cause %}
+                    <span class="info-box-number text-success small">R$ {{ "{:,.2f}".format(case.value_cause).replace(',', 'X').replace('.', ',').replace('X', '.') }}</span>
+                    {% else %}
+                    <span class="text-muted small">Não informado</span>
+                    {% endif %}
+                  </div>
                 </div>
               </div>
             </div>
 
-            <!-- Nota: Motivo/Enquadramento FAP agora é exibido em cada benefício -->
-
-            <div class="row">
-              <div class="col-md-6">
-                <div class="mb-3">
-                  <small class="text-muted d-block"><i class="bi bi-list-check"></i> Situação do Processo</small>
-                  {% if case.status_obj %}
-                  <span class="badge bg-info p-2">
-                    <i class="bi bi-flag"></i> {{ case.status_obj.status_name }}
-                  </span>
+            <!-- Período FAP e Data de Ajuizamento -->
+            <div class="row g-3">
+              <div class="col-md-4 col-sm-6">
+                <div class="p-3 border rounded bg-light">
+                  <small class="text-muted d-block mb-2"><i class="bi bi-calendar-range"></i> Período FAP</small>
+                  {% if case.fap_start_year or case.fap_end_year %}
+                  <h6 class="mb-0 text-primary">
+                    {{ case.fap_start_year or '?' }} - {{ case.fap_end_year or '?' }}
+                  </h6>
                   {% else %}
                   <span class="text-muted">Não informado</span>
                   {% endif %}
                 </div>
               </div>
-              <div class="col-md-6">
-                <!-- Espaço reservado para futuras informações -->
-              </div>
-            </div>
-
-            <div class="row">
-              <div class="col-md-6">
-                <div class="mb-3">
-                  <small class="text-muted d-block"><i class="bi bi-cash-coin"></i> Valor da Causa</small>
-                  {% if case.value_cause %}
-                  <h6 class="mb-0 text-success">R$ {{ "{:,.2f}".format(case.value_cause).replace(',', 'X').replace('.',
-                    ',').replace('X', '.') }}</h6>
-                  {% else %}
-                  <span class="text-muted">Não informado</span>
-                  {% endif %}
-                </div>
-              </div>
-              <div class="col-md-6">
-                <div class="mb-3">
-                  <small class="text-muted d-block"><i class="bi bi-calendar-event"></i> Data de Ajuizamento</small>
+              <div class="col-md-4 col-sm-6">
+                <div class="p-3 border rounded bg-light">
+                  <small class="text-muted d-block mb-2"><i class="bi bi-calendar-event"></i> Data de Ajuizamento</small>
                   {% if case.filing_date %}
                   <h6 class="mb-0">{{ case.filing_date.strftime('%d/%m/%Y') }}</h6>
                   {% else %}
@@ -152,13 +197,19 @@
                   {% endif %}
                 </div>
               </div>
+              <div class="col-md-4 col-sm-6">
+                <div class="p-3 border rounded bg-light">
+                  <small class="text-muted d-block mb-2"><i class="bi bi-calendar-check"></i> Criado em</small>
+                  <h6 class="mb-0">{{ case.created_at.strftime('%d/%m/%Y') if case.created_at else '-' }}</h6>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
         <!-- Resumos -->
-        <div class="card shadow-sm mt-4">
-          <div class="card-header bg-gradient bg-info text-white border-0">
+        <div class="card card-info card-outline shadow-sm mt-4">
+          <div class="card-header">
             <h3 class="card-title mb-0"><i class="bi bi-chat-left-text"></i> Resumos</h3>
           </div>
           <div class="card-body">
@@ -196,8 +247,8 @@
         </div>
 
         <!-- Benefícios -->
-        <div class="card shadow-sm mt-4">
-          <div class="card-header bg-gradient bg-success text-white border-0">
+        <div class="card card-success card-outline shadow-sm mt-4">
+          <div class="card-header">
             <div class="d-flex justify-content-between align-items-start">
               <div>
                 <h3 class="card-title"><i class="bi bi-briefcase"></i> Benefícios com Motivo FAP</h3>
@@ -432,8 +483,8 @@
         {% endfor %}
 
         <!-- Documentos -->
-        <div class="card shadow-sm mt-4">
-          <div class="card-header bg-gradient bg-warning text-white border-0">
+        <div class="card card-warning card-outline shadow-sm mt-4">
+          <div class="card-header">
             <h3 class="card-title mb-0"><i class="bi bi-file-earmark-pdf"></i> Documentos</h3>
             <div class="card-tools">
               <a href="{{ url_for('documents.case_documents_list', case_id=case_id) }}" class="btn btn-sm btn-light">
@@ -501,8 +552,8 @@
         </div>
 
         <!-- Petições Geradas com IA -->
-        <div class="card shadow-sm mt-4">
-          <div class="card-header bg-gradient bg-danger text-white border-0">
+        <div class="card card-danger card-outline shadow-sm mt-4">
+          <div class="card-header">
             <h3 class="card-title mb-0"><i class="bi bi-robot"></i> Petições Geradas com IA</h3>
             <div class="card-tools">
               {% if petitions %}
@@ -583,8 +634,8 @@
 
       <div class="col-md-4">
         <!-- Ações Rápidas -->
-        <div class="card shadow-sm">
-          <div class="card-header bg-gradient bg-primary text-white border-0">
+        <div class="card card-primary card-outline shadow-sm">
+          <div class="card-header">
             <h3 class="card-title mb-0">
               <i class="bi bi-lightning-charge"></i> Ações Rápidas
             </h3>
@@ -614,8 +665,8 @@
         </div>
 
         <!-- Advogados -->
-        <div class="card shadow-sm mt-3">
-          <div class="card-header bg-gradient bg-secondary text-white border-0">
+        <div class="card card-secondary card-outline shadow-sm mt-3">
+          <div class="card-header">
             <h3 class="card-title mb-0"><i class="bi bi-person-check"></i> Advogados do Caso</h3>
             <div class="card-tools">
               <button class="btn btn-sm btn-light" data-bs-toggle="modal" data-bs-target="#addLawyerModal">
@@ -722,8 +773,8 @@
         </div>
 
         <!-- Vara Judicial -->
-        <div class="card shadow-sm mt-3">
-          <div class="card-header bg-gradient bg-info text-white border-0">
+        <div class="card card-info card-outline shadow-sm mt-3">
+          <div class="card-header">
             <h3 class="card-title mb-0"><i class="bi bi-scales"></i> Vara Judicial</h3>
           </div>
           <div class="card-body">
@@ -752,8 +803,8 @@
         </div>
 
         <!-- Estatísticas -->
-        <div class="card shadow-sm mt-3">
-          <div class="card-header bg-gradient bg-success text-white border-0">
+        <div class="card card-success card-outline shadow-sm mt-3">
+          <div class="card-header">
             <h3 class="card-title mb-0"><i class="bi bi-graph-up"></i> Resumo</h3>
           </div>
           <div class="card-body">
@@ -788,7 +839,7 @@
 <div class="modal fade" id="updateStatusModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
-      <div class="modal-header bg-primary text-white">
+      <div class="modal-header">
         <h5 class="modal-title">
           <i class="bi bi-flag"></i> Atualizar Situação do Processo
         </h5>
