@@ -31,6 +31,9 @@
           <div class="card-header bg-gradient bg-primary text-white border-0">
             <h3 class="card-title mb-0"><i class="bi bi-file-earmark-text"></i> Informações do Caso</h3>
             <div class="card-tools">
+              <button class="btn btn-sm btn-light" data-bs-toggle="modal" data-bs-target="#updateStatusModal">
+                <i class="bi bi-flag"></i> Atualizar Situação
+              </button>
               <a href="{{ url_for('cases.case_edit', case_id=case_id) }}" class="btn btn-sm btn-light">
                 <i class="bi bi-pencil"></i> Editar
               </a>
@@ -112,6 +115,24 @@
             <div class="row">
               <div class="col-md-6">
                 <div class="mb-3">
+                  <small class="text-muted d-block"><i class="bi bi-list-check"></i> Situação do Processo</small>
+                  {% if case.status_obj %}
+                  <span class="badge bg-info p-2">
+                    <i class="bi bi-flag"></i> {{ case.status_obj.status_name }}
+                  </span>
+                  {% else %}
+                  <span class="text-muted">Não informado</span>
+                  {% endif %}
+                </div>
+              </div>
+              <div class="col-md-6">
+                <!-- Espaço reservado para futuras informações -->
+              </div>
+            </div>
+
+            <div class="row">
+              <div class="col-md-6">
+                <div class="mb-3">
                   <small class="text-muted d-block"><i class="bi bi-cash-coin"></i> Valor da Causa</small>
                   {% if case.value_cause %}
                   <h6 class="mb-0 text-success">R$ {{ "{:,.2f}".format(case.value_cause).replace(',', 'X').replace('.',
@@ -177,21 +198,28 @@
         <!-- Benefícios -->
         <div class="card shadow-sm mt-4">
           <div class="card-header bg-gradient bg-success text-white border-0">
-            <h3 class="card-title mb-0"><i class="bi bi-briefcase"></i> Benefícios</h3>
-            <div class="card-tools">
-              <a href="{{ url_for('benefits.case_benefits_list', case_id=case_id) }}" class="btn btn-sm btn-light">
-                <i class="bi bi-eye"></i> Ver Todos
-              </a>
-              <a href="{{ url_for('benefits.case_benefits_import', case_id=case_id) }}" class="btn btn-sm btn-light">
-                <i class="bi bi-file-earmark-arrow-up"></i> Importar
-              </a>
-              <a href="{{ url_for('benefits.case_benefit_new', case_id=case_id) }}" class="btn btn-sm btn-light">
-                <i class="bi bi-plus-circle"></i> Adicionar
-              </a>
+            <div class="d-flex justify-content-between align-items-start">
+              <div>
+                <h3 class="card-title"><i class="bi bi-briefcase"></i> Benefícios com Motivo FAP</h3>
+                <br>
+                <small class="text-white-50">Apenas benefícios com motivo de revisão FAP definido</small>
+              </div>
+              <div class="card-tools">
+                <a href="{{ url_for('benefits.case_benefits_list', case_id=case_id) }}" class="btn btn-sm btn-light">
+                  <i class="bi bi-eye"></i> Ver Todos
+                </a>
+                <a href="{{ url_for('benefits.case_benefits_import', case_id=case_id) }}" class="btn btn-sm btn-light">
+                  <i class="bi bi-file-earmark-arrow-up"></i> Importar
+                </a>
+                <a href="{{ url_for('benefits.case_benefit_new', case_id=case_id) }}" class="btn btn-sm btn-light">
+                  <i class="bi bi-plus-circle"></i> Adicionar
+                </a>
+              </div>
             </div>
           </div>
-          <div class="card-body">
-            {% if benefits %}
+          <div class="card-body p-1">
+            {% set benefits_with_fap_reason = benefits|selectattr('fap_reason_id')|list %}
+            {% if benefits_with_fap_reason %}
             <div class="table-responsive">
               <table class="table table-sm table-hover">
                 <thead class="table-light">
@@ -206,7 +234,7 @@
                   </tr>
                 </thead>
                 <tbody>
-                  {% for benefit in benefits[:3] %}
+                  {% for benefit in benefits_with_fap_reason %}
                   <tr>
                     <td><strong>{{ benefit.benefit_number }}</strong></td>
                     <td><span class="badge bg-light text-dark">{{ benefit.benefit_type }}</span></td>
@@ -242,28 +270,29 @@
                 </tbody>
               </table>
             </div>
-            {% if benefits|length > 3 %}
-            <div class="text-center mt-2">
-              <a href="{{ url_for('benefits.case_benefits_list', case_id=case_id) }}"
-                class="btn btn-sm btn-outline-success">
-                <i class="bi bi-eye"></i> Ver todos os {{ benefits|length }} benefícios
-              </a>
-            </div>
             {% endif %}
-            {% else %}
-            <div class="alert alert-info mb-0">
-              <i class="bi bi-info-circle"></i> Nenhum benefício cadastrado ainda.
-              <a href="{{ url_for('benefits.case_benefit_new', case_id=case_id) }}"
-                class="btn btn-outline-success btn-sm ms-2">
-                <i class="bi bi-plus-circle"></i> Adicionar primeiro benefício
-              </a>
+          </div>
+          <div class="card-footer bg-light">
+            <div class="row text-center">
+              <div class="col-md-4">
+                <div class="text-muted small mb-1">Total Cadastrados</div>
+                <h5 class="mb-0"><strong>{{ benefits|length }}</strong></h5>
+              </div>
+              <div class="col-md-4">
+                <div class="text-muted small mb-1">Com Motivo FAP</div>
+                <h5 class="mb-0"><strong class="text-success">{{ benefits_with_fap_reason|length }}</strong></h5>
+              </div>
+              <div class="col-md-4">
+                <div class="text-muted small mb-1">Sem Contestação FAP</div>
+                {% set benefits_without_fap = benefits|rejectattr('fap_reason_id')|list %}
+                <h5 class="mb-0"><strong class="text-warning">{{ benefits_without_fap|length }}</strong></h5>
+              </div>
             </div>
-            {% endif %}
           </div>
         </div>
 
         <!-- Modais de Benefícios -->
-        {% for benefit in benefits[:3] %}
+        {% for benefit in benefits_with_fap_reason %}
         <div class="modal fade" id="benefitModal{{ benefit.id }}" tabindex="-1"
           aria-labelledby="benefitModalLabel{{ benefit.id }}" aria-hidden="true">
           <div class="modal-dialog modal-lg">
@@ -318,7 +347,7 @@
                 <div class="row mb-3">
                   <div class="col-md-12">
                     <small class="text-muted"><i class="bi bi-file-text"></i> Resumo do Acidente</small>
-                    <p class="text-muted mb-0" style="white-space: pre-wrap;">{{ benefit.accident_summary }}</p>
+                    <p class="text-muted mb-0" style="white-space: pre-wrap;">{{ benefit.accident_summary|safe }}</p>
                   </div>
                 </div>
                 {% endif %}
@@ -385,7 +414,7 @@
                 {% if benefit.notes %}
                 <hr class="my-3">
                 <h6 class="text-primary mb-3"><i class="bi bi-chat-left-text"></i> Observações</h6>
-                <p class="text-muted mb-0">{{ benefit.notes }}</p>
+                <p class="text-muted mb-0" style="white-space: pre-wrap;">{{ benefit.notes|safe }}</p>
                 {% endif %}
               </div>
               <div class="modal-footer">
@@ -415,7 +444,7 @@
               </a>
             </div>
           </div>
-          <div class="card-body">
+          <div class="card-body p-1">
             {% if documents %}
             <div class="table-responsive">
               <table class="table table-sm table-hover">
@@ -694,7 +723,7 @@
 
         <!-- Vara Judicial -->
         <div class="card shadow-sm mt-3">
-          <div class="card-header bg-gradient bg-teal text-white border-0">
+          <div class="card-header bg-gradient bg-info text-white border-0">
             <h3 class="card-title mb-0"><i class="bi bi-scales"></i> Vara Judicial</h3>
           </div>
           <div class="card-body">
@@ -750,6 +779,43 @@
             {% endif %}
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Atualizar Situação do Caso -->
+<div class="modal fade" id="updateStatusModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-primary text-white">
+        <h5 class="modal-title">
+          <i class="bi bi-flag"></i> Atualizar Situação do Processo
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body">
+        <form id="updateStatusForm" method="POST" action="{{ url_for('cases.update_case_status', case_id=case_id) }}">
+          <div class="mb-3">
+            <label class="form-label">Situação do Processo <span class="text-danger">*</span></label>
+            <select name="case_status_id" class="form-select" required>
+              {% for status in all_case_statuses %}
+              <option value="{{ status.id }}" {% if case.case_status_id == status.id %}selected{% endif %}>
+                {{ status.status_name }}
+              </option>
+              {% endfor %}
+            </select>
+            <small class="form-text text-muted">Selecione a situação atual do processo</small>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">
+          <i class="bi bi-x-circle"></i> Cancelar
+        </button>
+        <button type="submit" form="updateStatusForm" class="btn btn-primary">
+          <i class="bi bi-check-circle"></i> Salvar Situação
+        </button>
       </div>
     </div>
   </div>

@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, session, jsonify, redirect, url_for, flash, send_file
-from app.models import db, Case, Client, CaseBenefit, Document, Petition, CaseLawyer, Lawyer, CaseCompetence, CasesKnowledgeBase, CaseTemplate
+from app.models import db, Case, Client, CaseBenefit, Document, Petition, CaseLawyer, Lawyer, CaseCompetence, CasesKnowledgeBase, CaseTemplate, CaseStatus
 from app.agents.case_knowledge_ingestor import CaseKnowledgeIngestor
 from datetime import datetime
 from decimal import Decimal
@@ -497,7 +497,26 @@ def case_detail(case_id):
     petitions = Petition.query.filter_by(case_id=case_id).order_by(Petition.version.desc()).all()
     case_lawyers = CaseLawyer.query.filter_by(case_id=case_id).all()
     all_lawyers = Lawyer.query.order_by(Lawyer.name).all()
-    return render_template('cases/detail.html', case=case, case_id=case_id, benefits=benefits, documents=documents, competences=competences, petitions=petitions, case_lawyers=case_lawyers, all_lawyers=all_lawyers)
+    all_case_statuses = CaseStatus.query.order_by(CaseStatus.status_order).all()
+    return render_template('cases/detail.html', case=case, case_id=case_id, benefits=benefits, documents=documents, competences=competences, petitions=petitions, case_lawyers=case_lawyers, all_lawyers=all_lawyers, all_case_statuses=all_case_statuses)
+
+@cases_bp.route('/<int:case_id>/update-status', methods=['POST'])
+@require_law_firm
+def update_case_status(case_id):
+    """Atualizar situação do caso"""
+    law_firm_id = get_current_law_firm_id()
+    case = Case.query.filter_by(id=case_id, law_firm_id=law_firm_id).first_or_404()
+    
+    case_status_id = request.form.get('case_status_id')
+    
+    if case_status_id:
+        case.case_status_id = int(case_status_id)
+        db.session.commit()
+        flash('Situação do caso atualizada com sucesso!', 'success')
+    else:
+        flash('Erro ao atualizar situação do caso.', 'error')
+    
+    return redirect(url_for('cases.case_detail', case_id=case_id))
 
 @cases_bp.route('/<int:case_id>/edit', methods=['GET', 'POST'])
 @require_law_firm

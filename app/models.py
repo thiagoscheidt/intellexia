@@ -181,6 +181,23 @@ class Lawyer(db.Model):
         return f'<Lawyer {self.name} - OAB: {self.oab_number}>'
 
 
+class CaseStatus(db.Model):
+    """Tabela case_status - Situações do processo"""
+    __tablename__ = 'case_status'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    status_name = db.Column(db.String(100), nullable=False, unique=True)
+    status_order = db.Column(db.Integer, nullable=False)
+    description = db.Column(db.Text)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    
+    # Relacionamento
+    cases = db.relationship('Case', back_populates='status_obj')
+    
+    def __repr__(self):
+        return f'<CaseStatus {self.status_name}>'
+
+
 class Case(db.Model):
     """Tabela cases - Casos jurídicos"""
     __tablename__ = 'cases'
@@ -189,6 +206,7 @@ class Case(db.Model):
     law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
     client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), nullable=False, index=True)
     court_id = db.Column(db.Integer, db.ForeignKey('courts.id'), index=True)
+    case_status_id = db.Column(db.Integer, db.ForeignKey('case_status.id'), default=1, index=True)
     title = db.Column(db.String(255), nullable=False)
     case_type = db.Column(db.String(50), nullable=False)
     fap_start_year = db.Column(db.SmallInteger)
@@ -206,6 +224,7 @@ class Case(db.Model):
     law_firm = db.relationship('LawFirm')
     client = db.relationship('Client', back_populates='cases')
     court = db.relationship('Court', back_populates='cases')
+    status_obj = db.relationship('CaseStatus', back_populates='cases')
     case_lawyers = db.relationship('CaseLawyer', back_populates='case', cascade='all, delete-orphan')
     competences = db.relationship('CaseCompetence', back_populates='case', cascade='all, delete-orphan')
     benefits = db.relationship('CaseBenefit', back_populates='case', cascade='all, delete-orphan')
