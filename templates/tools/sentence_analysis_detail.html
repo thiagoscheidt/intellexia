@@ -532,4 +532,13 @@
 }
 </style>
 
+<script>
+// Auto-refresh quando status for pending ou processing
+{% if sentence.status in ['pending', 'processing'] %}
+  setTimeout(function() {
+    location.reload();
+  }, 10000); // 10 segundos
+{% endif %}
+</script>
+
 {% endblock %}
