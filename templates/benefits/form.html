@@ -77,7 +77,7 @@
                 <div class="col-md-6">
                   <div class="mb-3">
                     {{ form.numero_cat.label(class="form-label") }}
-                      {{ form.fap_reason_id(class="form-select select2") }}
+                    {{ form.fap_reason_id(class="form-select select2") }}
                     {% if form.numero_cat.errors %}
                     <div class="invalid-feedback">
                       {% for error in form.numero_cat.errors %}{{ error }}{% endfor %}

@@ -1,0 +1,131 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Importar Benefícios - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="app-content-header border-bottom border-light">
+    <div class="container-fluid">
+        <div class="row align-items-center">
+            <div class="col-sm-6">
+                <h3 class="mb-0"><i class="bi bi-file-earmark-arrow-up text-success"></i> Importar Benefícios</h3>
+                <small class="text-muted">Caso #{{ case.id }} - {{ case.title }}</small>
+            </div>
+            <div class="col-sm-6">
+                <ol class="breadcrumb float-sm-end mb-0">
+                    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i
+                                class="bi bi-house"></i> Home</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_list') }}"><i class="bi bi-folder"></i>
+                            Casos</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('cases.case_detail', case_id=case.id) }}"><i
+                                class="bi bi-eye"></i> Detalhes</a></li>
+                    <li class="breadcrumb-item active" aria-current="page"><i class="bi bi-file-earmark-arrow-up"></i>
+                        Importar</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="app-content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-gradient bg-success text-white border-0">
+                        <h3 class="card-title mb-0"><i class="bi bi-upload"></i> Enviar arquivo</h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="POST" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="file" class="form-label fw-bold">
+                                    <i class="bi bi-file-earmark-spreadsheet"></i> Arquivo Excel (.xlsx)
+                                </label>
+                                <input type="file" class="form-control" id="file" name="file" accept=".xlsx" required>
+                                <div class="form-text">A primeira linha deve conter os nomes dos campos.</div>
+                            </div>
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-success">
+                                    <i class="bi bi-file-earmark-arrow-up"></i> Importar
+                                </button>
+                                <a href="{{ url_for('benefits.case_benefits_list', case_id=case.id) }}"
+                                    class="btn btn-outline-secondary">
+                                    <i class="bi bi-arrow-left"></i> Voltar
+                                </a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                {% if summary %}
+                <div class="alert alert-info mt-3">
+                    <i class="bi bi-info-circle"></i>
+                    Importação finalizada. Adicionados: <strong>{{ summary.created }}</strong> | Atualizados: <strong>{{
+                        summary.updated }}</strong> | Ignorados: <strong>{{ summary.skipped }}</strong> | Avisos:
+                    <strong>{{ summary.errors_count }}</strong>
+                </div>
+                {% endif %}
+
+                {% if errors %}
+                <div class="card shadow-sm mt-3">
+                    <div class="card-header bg-gradient bg-warning text-white border-0">
+                        <h3 class="card-title mb-0"><i class="bi bi-exclamation-triangle"></i> Avisos da importação</h3>
+                    </div>
+                    <div class="card-body">
+                        <ul class="mb-0">
+                            {% for error in errors %}
+                            <li>{{ error }}</li>
+                            {% endfor %}
+                        </ul>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+
+            <div class="col-lg-4">
+                <div class="card shadow-sm">
+                    <div class="card-header bg-gradient bg-primary text-white border-0">
+                        <h3 class="card-title mb-0"><i class="bi bi-info-circle"></i> Como preparar o arquivo</h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="mb-2">Campos esperados no Excel:</p>
+                        <ul class="mb-2">
+                            <li>ITEM</li>
+                            <li>Número do Benefício</li>
+                            <li>Número da CAT</li>
+                            <li>CNPJ do Empregador</li>
+                            <li>TIPO</li>
+                            <li>NIT do Empregado</li>
+                            <li>CPF do Beneficiário</li>
+                            <li>Data de Nascimento do Beneficiário</li>
+                            <li>Renda Mensal Inicial(RMI)(R$)</li>
+                            <li>Data de Despacho do Benefício (DDB)</li>
+                            <li>Data de Início do Benefício (DIB)</li>
+                            <li>Data de Cessação do Benefício (DCB)</li>
+                            <li>CUSTO</li>
+                            <li>DATA DA CAT</li>
+                            <li>NOME</li>
+                            <li>OBS</li>
+                            <li>TELA FAP</li>
+                            <li>CÁLCULO</li>
+                            <li>GERID</li>
+                        </ul>
+
+                        <div class="alert alert-light border mb-0">
+                            <div class="fw-bold mb-1">Exemplo de cabeçalho:</div>
+                            <small>ITEM,Número do Benefício,Número da CAT,CNPJ do Empregador,TIPO,NIT do Empregado,CPF
+                                do Beneficiário,Data de Nascimento do Beneficiário,Renda Mensal Inicial(RMI)(R$),Data de
+                                Despacho do Benefício (DDB),Data de Início do Benefício (DIB),Data de Cessação do
+                                Benefício (DCB),CUSTO,DATA DA CAT,NOME,OBS,TELA FAP,CÁLCULO,GERID</small>
+                        </div>
+                        <div class="alert alert-light border mt-2 mb-0">
+                            <div class="fw-bold mb-1">Vigência FAP por planilha:</div>
+                            <small>Se o nome da planilha for numérico (ex: 2021), ele será usado como vigência. Se o
+                                benefício já existir, apenas a vigência é adicionada.</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

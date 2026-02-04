@@ -1,7 +1,60 @@
 from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify
 from app.models import db, CaseBenefit, Case, FapReason
-from datetime import datetime
+from datetime import datetime, date
 from functools import wraps
+from werkzeug.utils import secure_filename
+from openpyxl import load_workbook
+import unicodedata
+
+def _normalize_header(value):
+    if value is None:
+        return ''
+    text = str(value).strip().lower()
+    text = unicodedata.normalize('NFKD', text)
+    text = ''.join(ch for ch in text if not unicodedata.combining(ch))
+    for token in [' ', '-', '.', '/', '\\', ':', '(', ')', '$']:
+        text = text.replace(token, '_')
+    while '__' in text:
+        text = text.replace('__', '_')
+    return text.strip('_')
+
+def _parse_date(value):
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    if isinstance(value, date):
+        return value
+    text = str(value).strip()
+    if not text:
+        return None
+    for fmt in ('%d/%m/%Y', '%Y-%m-%d', '%d-%m-%Y', '%Y/%m/%d'):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+def _read_excel_rows(file_storage):
+    workbook = load_workbook(filename=file_storage, data_only=True)
+    data_rows = []
+    for sheet in workbook.worksheets:
+        rows = list(sheet.iter_rows(values_only=True))
+        if not rows:
+            continue
+        headers = rows[0]
+        if not headers or all(header is None or str(header).strip() == '' for header in headers):
+            continue
+        for row_index, row in enumerate(rows[1:], start=2):
+            if row is None:
+                continue
+            row_dict = {'__sheet__': sheet.title, '__row__': row_index}
+            for idx, header in enumerate(headers):
+                if header is None:
+                    continue
+                row_dict[str(header)] = row[idx] if idx < len(row) else None
+            data_rows.append(row_dict)
+    return data_rows
 
 benefits_bp = Blueprint('benefits', __name__, url_prefix='/benefits')
 
@@ -44,6 +97,172 @@ def case_benefits_list(case_id):
     case = Case.query.get_or_404(case_id)
     benefits = CaseBenefit.query.filter_by(case_id=case_id).order_by(CaseBenefit.created_at.desc()).all()
     return render_template('cases/benefits_list.html', case=case, benefits=benefits)
+
+@benefits_bp.route('/case/<int:case_id>/import', methods=['GET', 'POST'])
+def case_benefits_import(case_id):
+    case = Case.query.get_or_404(case_id)
+    errors = []
+    summary = None
+
+    header_map = {
+        'item': 'item',
+        'numero_do_beneficio': 'benefit_number',
+        'numero_da_cat': 'numero_cat',
+        'cnpj_do_empregador': 'cnpj_empregador',
+        'tipo': 'benefit_type',
+        'nit_do_empregado': 'insured_nit',
+        'cpf_do_beneficiario': 'cpf_beneficiario',
+        'data_de_nascimento_do_beneficiario': 'data_nascimento_beneficiario',
+        'renda_mensal_inicial_rmi_r': 'rmi',
+        'data_de_despacho_do_beneficio_ddb': 'ddb',
+        'data_de_inicio_do_beneficio_dib': 'data_inicio_beneficio',
+        'data_de_cessacao_do_beneficio_dcb': 'data_fim_beneficio',
+        'custo': 'custo',
+        'data_da_cat': 'accident_date',
+        'nome': 'insured_name',
+        'obs': 'notes',
+        'tela_fap': 'tela_fap',
+        'calculo': 'calculo',
+        'gerid': 'gerid'
+    }
+
+    if request.method == 'POST':
+        file = request.files.get('file')
+        if not file or not file.filename:
+            flash('Selecione um arquivo Excel (.xlsx) para importar.', 'warning')
+            return render_template('cases/benefits_import.html', case=case, errors=errors, summary=summary)
+
+        filename = secure_filename(file.filename)
+        ext = filename.rsplit('.', 1)[-1].lower() if '.' in filename else ''
+
+        if ext == 'xlsx':
+            rows = _read_excel_rows(file)
+        else:
+            flash('Formato não suportado. Use Excel (.xlsx).', 'danger')
+            return render_template('cases/benefits_import.html', case=case, errors=errors, summary=summary)
+
+        if not rows:
+            flash('Arquivo vazio ou sem linhas de dados.', 'warning')
+            return render_template('cases/benefits_import.html', case=case, errors=errors, summary=summary)
+
+        created = 0
+        updated = 0
+        skipped = 0
+
+        for index, row in enumerate(rows, start=2):
+            if not row:
+                continue
+            sheet_name = row.pop('__sheet__', 'Planilha')
+            row_number = row.pop('__row__', index)
+            vigencia_year = sheet_name.strip() if isinstance(sheet_name, str) else None
+            if not (vigencia_year and vigencia_year.isdigit()):
+                vigencia_year = None
+            if all(value is None or str(value).strip() == '' for value in row.values()):
+                continue
+
+            raw_data = {}
+            for header, value in row.items():
+                normalized = _normalize_header(header)
+                field = header_map.get(normalized)
+                if not field:
+                    continue
+                raw_data[field] = value
+
+            benefit_number = str(raw_data.get('benefit_number', '')).strip()
+            benefit_type = str(raw_data.get('benefit_type', '')).strip()
+            insured_name = str(raw_data.get('insured_name', '')).strip()
+
+            if not benefit_number or not benefit_type or not insured_name:
+                skipped += 1
+                errors.append(
+                    f'Planilha {sheet_name} - linha {row_number}: campos obrigatórios ausentes (Número do Benefício, TIPO, NOME).'
+                )
+                continue
+
+            existing_benefit = CaseBenefit.query.filter_by(
+                case_id=case_id,
+                benefit_number=benefit_number
+            ).first()
+
+            if existing_benefit:
+                if vigencia_year:
+                    existing_years = []
+                    if existing_benefit.fap_vigencia_years:
+                        existing_years = [
+                            year.strip() for year in existing_benefit.fap_vigencia_years.split(',') if year.strip()
+                        ]
+                    if vigencia_year not in existing_years:
+                        existing_years.append(vigencia_year)
+                        existing_benefit.fap_vigencia_years = ','.join(existing_years)
+                updated += 1
+                continue
+
+            extra_notes = []
+            extra_map = {
+                'item': 'ITEM',
+                'cnpj_empregador': 'CNPJ do Empregador',
+                'cpf_beneficiario': 'CPF do Beneficiário',
+                'data_nascimento_beneficiario': 'Data de Nascimento',
+                'rmi': 'RMI (R$)',
+                'ddb': 'Data de Despacho (DDB)',
+                'custo': 'Custo',
+                'tela_fap': 'Tela FAP',
+                'calculo': 'Cálculo',
+                'gerid': 'GERID'
+            }
+            for key, label in extra_map.items():
+                value = raw_data.get(key)
+                if value not in (None, ''):
+                    extra_notes.append(f'{label}: {value}')
+
+            base_notes = str(raw_data.get('notes')).strip() if raw_data.get('notes') else ''
+            if base_notes and extra_notes:
+                notes_value = f"{base_notes}\n" + "\n".join(extra_notes)
+            elif base_notes:
+                notes_value = base_notes
+            elif extra_notes:
+                notes_value = "\n".join(extra_notes)
+            else:
+                notes_value = None
+
+            benefit = CaseBenefit(
+                case_id=case_id,
+                benefit_number=benefit_number,
+                benefit_type=benefit_type,
+                insured_name=insured_name,
+                insured_nit=str(raw_data.get('insured_nit')).strip() if raw_data.get('insured_nit') else None,
+                numero_cat=str(raw_data.get('numero_cat')).strip() if raw_data.get('numero_cat') else None,
+                data_inicio_beneficio=_parse_date(raw_data.get('data_inicio_beneficio')),
+                data_fim_beneficio=_parse_date(raw_data.get('data_fim_beneficio')),
+                accident_date=_parse_date(raw_data.get('accident_date')),
+                fap_vigencia_years=vigencia_year,
+                notes=notes_value
+            )
+
+            db.session.add(benefit)
+            created += 1
+
+        if created == 0 and updated == 0:
+            flash('Nenhum benefício foi importado.', 'warning')
+            return render_template('cases/benefits_import.html', case=case, errors=errors, summary=summary)
+
+        db.session.commit()
+
+        summary = {
+            'created': created,
+            'updated': updated,
+            'skipped': skipped,
+            'errors_count': len(errors)
+        }
+
+        if errors:
+            flash('Importação concluída com avisos. Verifique os detalhes abaixo.', 'warning')
+            return render_template('cases/benefits_import.html', case=case, errors=errors, summary=summary)
+
+        flash(f'Importação concluída: {created} benefício(s) adicionados, {updated} atualizado(s).', 'success')
+        return redirect(url_for('benefits.case_benefits_list', case_id=case_id))
+
+    return render_template('cases/benefits_import.html', case=case, errors=errors, summary=summary)
 
 @benefits_bp.route('/case/<int:case_id>/new', methods=['GET', 'POST'])
 def case_benefit_new(case_id):
