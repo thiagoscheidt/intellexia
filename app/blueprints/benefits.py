@@ -164,7 +164,17 @@ def case_benefits_import(case_id):
             for header, value in row.items():
                 normalized = _normalize_header(header)
                 field = header_map.get(normalized)
+                if not field and 'obs' in normalized:
+                    field = 'notes'
                 if not field:
+                    continue
+                if field == 'notes':
+                    if value not in (None, ''):
+                        existing_notes = raw_data.get('notes')
+                        if existing_notes:
+                            raw_data['notes'] = f"{existing_notes}\n{value}"
+                        else:
+                            raw_data['notes'] = value
                     continue
                 raw_data[field] = value
 
@@ -224,6 +234,9 @@ def case_benefits_import(case_id):
                 notes_value = "\n".join(extra_notes)
             else:
                 notes_value = None
+
+            print(base_notes)
+            exit()
 
             benefit = CaseBenefit(
                 case_id=case_id,
