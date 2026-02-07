@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify
 from app.models import db, CaseBenefit, Case, FapReason
+from app.agents.fap_case_classifier_agent import FapCaseClassifierAgent
 from datetime import datetime, date
 from functools import wraps
 from werkzeug.utils import secure_filename
@@ -101,6 +102,7 @@ def case_benefits_list(case_id):
 @benefits_bp.route('/case/<int:case_id>/import', methods=['GET', 'POST'])
 def case_benefits_import(case_id):
     case = Case.query.get_or_404(case_id)
+    classifier_agent = FapCaseClassifierAgent(law_firm_id=case.law_firm_id)
     errors = []
     summary = None
 
@@ -235,7 +237,31 @@ def case_benefits_import(case_id):
             else:
                 notes_value = None
 
-            print(base_notes)
+            benefit_description_parts = []
+            if notes_value:
+                benefit_description_parts.append(f"Observações: {notes_value}")
+            benefit_description_parts.extend([
+                f"Número do benefício: {benefit_number}",
+                f"Tipo do benefício: {benefit_type}",
+                f"Segurado: {insured_name}",
+            ])
+            if raw_data.get('insured_nit'):
+                benefit_description_parts.append(f"NIT: {raw_data.get('insured_nit')}")
+            if raw_data.get('numero_cat'):
+                benefit_description_parts.append(f"Número da CAT: {raw_data.get('numero_cat')}")
+            if raw_data.get('accident_date'):
+                benefit_description_parts.append(f"Data do acidente: {raw_data.get('accident_date')}")
+
+            benefit_description = "\n".join(benefit_description_parts)
+
+            fap_reason_id = None
+            try:
+                classification = classifier_agent.determineFapReason(benefit_description)
+                fap_reason_id = classification.id
+            except Exception:
+                fap_reason_id = None
+
+            print(fap_reason_id, benefit_description)
             exit()
 
             benefit = CaseBenefit(
@@ -249,6 +275,7 @@ def case_benefits_import(case_id):
                 data_fim_beneficio=_parse_date(raw_data.get('data_fim_beneficio')),
                 accident_date=_parse_date(raw_data.get('accident_date')),
                 fap_vigencia_years=vigencia_year,
+                fap_reason_id=fap_reason_id,
                 notes=notes_value
             )
 
