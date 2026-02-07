@@ -8,7 +8,8 @@ from docx.shared import Inches, Pt
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
-from app.models import Case, CaseBenefit, Document as DocumentModel
+from app.models import Case, CaseBenefit, Document as DocumentModel, CaseTemplate
+from app.agents.fap_section_generator_agent import FapSectionGeneratorAgent
 from datetime import datetime
 from copy import deepcopy
 from docxcompose.composer import Composer
@@ -69,34 +70,49 @@ class AgentDocumentGenerator:
         
         # Buscar benefícios do caso
         benefits = CaseBenefit.query.filter_by(case_id=case_id).all()
-        
-        # Obter fap_reason do primeiro benefício (se houver múltiplos, pegar o primeiro)
-        fap_reason = benefits[0].fap_reason if benefits and benefits[0].fap_reason else None
-        
-        # Selecionar template baseado no fap_reason se não foi especificado
-        if template_path is None:
-            template_path = self._select_template_by_fap_reason(fap_reason)
-        
-        # Carregar templates
+
+        # Agrupar benefícios por Motivo FAP (via relacionamento) usando template_id
+        benefits_by_reason = {}
+        for benefit in benefits:
+            reason_obj = benefit.fap_reason_obj
+            template_id = reason_obj.template_id if reason_obj else None
+            if not template_id:
+                continue
+            benefits_by_reason.setdefault(template_id, []).append(benefit)
+
+        # Carregar template BASE
         document_base = Document("templates_docx/modelo_acidente_trajeto_inicio.docx")
-        document_content = Document(template_path)
-        
-        # Preencher campos do template BASE com dados do caso (cabeçalho/rodapé inicial)
-        self._replace_placeholders_in_document(document_base, case, benefits)
-        
-        # Preencher campos do template CONTEÚDO com dados do caso
-        self._replace_placeholders_in_document(document_content, case, benefits)
-        
-        # Adicionar benefícios nas tabelas
-        self._add_benefits_to_tables(document_content, case, benefits)
-        
-        # Inserir imagens de documentos anexados
-        self._insert_document_images(document_content, case_id)
-        
+
         # Usar Composer para mesclar documentos preservando estilos e formatação
         composer = Composer(document_base)
-        composer.append(document_content)
+        section_agent = FapSectionGeneratorAgent()
 
+        # Se houver grupos por motivo, gerar um conteúdo por template_id
+        if benefits_by_reason:
+            for template_id, grouped_benefits in benefits_by_reason.items():
+                if template_path:
+                    template_file_path = template_path
+                else:
+                    template_record = CaseTemplate.query.get(template_id)
+                    template_file_path = template_record.file_path if template_record else None
+                    if not template_file_path:
+                        template_file_path = self._select_template_by_fap_reason(None)
+
+                document_content = Document(template_file_path)
+                benefit_for_context = grouped_benefits[0] if grouped_benefits else None
+                case_data = self._build_case_data(case, benefit_for_context)
+                populated = section_agent.populate_template_with_case_data(document_content, case_data)
+                composer.append(populated.get("document", document_content))
+        else:
+            # Fallback: usar um único template padrão
+            template_file_path = template_path or self._select_template_by_fap_reason(None)
+            document_content = Document(template_file_path)
+            benefit_for_context = benefits[0] if benefits else None
+            case_data = self._build_case_data(case, benefit_for_context)
+            populated = section_agent.populate_template_with_case_data(document_content, case_data)
+            composer.append(populated.get("document", document_content))
+
+        # Documento final unificado com todos os templates processados
         return composer.doc
     
     def _append_document_content(self, base_doc, source_doc):
@@ -125,6 +141,38 @@ class AgentDocumentGenerator:
         
         # Retornar template específico ou padrão
         return template_mapping.get(fap_reason, 'templates_docx/modelo_acidente_trajeto.docx')
+
+    def _build_case_data(self, case: Case, benefit: Optional[CaseBenefit]) -> str:
+        """Monta string de dados do caso/benefício para o agente de seções."""
+        benefit_lines = []
+        if benefit:
+            benefit_lines = [
+                f"- Tipo: {benefit.benefit_type or 'Não informado'}",
+                f"- Número do benefício: {benefit.benefit_number or 'Não informado'}",
+                f"- Segurado: {benefit.insured_name or 'Não informado'}",
+                f"- NIT/PIS: {benefit.insured_nit or 'Não informado'}",
+                f"- CAT: {benefit.numero_cat or 'Não informado'}",
+                f"- BO: {benefit.numero_bo or 'Não informado'}",
+                f"- Data do acidente: {benefit.accident_date.strftime('%d/%m/%Y') if benefit.accident_date else 'Não informado'}",
+                f"- DIB: {benefit.data_inicio_beneficio.strftime('%d/%m/%Y') if benefit.data_inicio_beneficio else 'Não informado'}",
+                f"- DCB: {benefit.data_fim_beneficio.strftime('%d/%m/%Y') if benefit.data_fim_beneficio else 'Não informado'}",
+            ]
+
+        return "\n".join([
+            "DADOS DO CASO:",
+            f"- Título: {case.title}",
+            f"- Tipo: {case.case_type}",
+            f"- Número: {case.id}",
+            f"- Ano FAP: {self._format_years_range(case.fap_start_year, case.fap_end_year) or 'Não informado'}",
+            "",
+            "CLIENTE:",
+            f"- Nome/Razão Social: {case.client.name if case.client else 'Não informado'}",
+            f"- CNPJ: {case.client.cnpj if case.client else 'Não informado'}",
+            f"- Endereço: {self._format_address(case.client) if case.client else 'Não informado'}",
+            "",
+            "BENEFÍCIO (EXEMPLO DA CATEGORIA):",
+            *benefit_lines,
+        ])
     
     def get_placeholders_preview(self, case, benefits):
         """

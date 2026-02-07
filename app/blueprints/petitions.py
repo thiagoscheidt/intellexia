@@ -126,7 +126,6 @@ def case_petition_generate(case_id):
                     
                     petition_content = _extract_text_from_docx(docx_document)
                     
-                    template_name = agent._select_template_by_fap_reason(case.fap_reason).split('/')[-1]
                     flash(f'Petição FAP gerada com sucesso!', 'success')
 
                     #flash(f'Petição FAP gerada com sucesso usando template: {template_name}!', 'success')

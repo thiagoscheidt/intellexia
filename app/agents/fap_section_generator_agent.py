@@ -15,7 +15,6 @@ from docx import Document
 root_dir = PathLib(__file__).parent.parent.parent
 sys.path.insert(0, str(root_dir))
 
-from main import app
 
 load_dotenv()
 
