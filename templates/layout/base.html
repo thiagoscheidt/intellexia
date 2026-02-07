@@ -43,6 +43,36 @@
   <!--begin::Required Plugin(AdminLTE)-->
   <link rel="stylesheet" href="{{ url_for('static', filename='css/adminlte.css') }}" />
   <!--end::Required Plugin(AdminLTE)-->
+  <style>
+    .page-hero {
+      background: linear-gradient(135deg, #f8f9ff 0%, #eef1ff 100%);
+    }
+
+    .page-hero-icon {
+      width: 56px;
+      height: 56px;
+      background: #ffffff;
+      box-shadow: 0 6px 14px rgba(102, 126, 234, 0.18);
+    }
+
+    .page-hero-icon__glyph {
+      font-size: 1.6rem;
+      color: #667eea;
+    }
+
+    [data-bs-theme="dark"] .page-hero {
+      background: linear-gradient(135deg, #1b1f2a 0%, #23283a 100%);
+    }
+
+    [data-bs-theme="dark"] .page-hero-icon {
+      background: #111827;
+      box-shadow: 0 6px 14px rgba(0, 0, 0, 0.45);
+    }
+
+    [data-bs-theme="dark"] .page-hero-icon__glyph {
+      color: #9aa7ff;
+    }
+  </style>
   <!-- apexcharts -->
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/apexcharts@3.37.1/dist/apexcharts.css"
     integrity="sha256-4MX+61mt9NVvvuPjUWdUdyfZfxSB1/Rf9WtqRHgG5S0=" crossorigin="anonymous" />

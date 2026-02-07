@@ -29,9 +29,13 @@ def create_fap_reasons_table(law_firm_id=None):
         print("=" * 80)
         
         try:
-            print("\nCriando tabela fap_reasons...")
+            print("\nRemovendo tabela fap_reasons (se existir)...")
+            db.session.execute(text("DROP TABLE IF EXISTS fap_reasons"))
+            db.session.commit()
+
+            print("Criando tabela fap_reasons...")
             db.session.execute(text("""
-                CREATE TABLE IF NOT EXISTS fap_reasons (
+                CREATE TABLE fap_reasons (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     law_firm_id INTEGER NOT NULL,
                     display_name VARCHAR(100) NOT NULL,
