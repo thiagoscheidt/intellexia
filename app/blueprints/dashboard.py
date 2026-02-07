@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify
 from app.models import db, Case, User
+from sqlalchemy import and_
 from datetime import datetime
 from functools import wraps
 from decimal import Decimal
@@ -41,7 +42,7 @@ def dashboard():
         law_firm = user.law_firm if user else None
         law_firm_id = get_current_law_firm_id()
         
-        from app.models import Client, CaseBenefit, Lawyer, Document, KnowledgeBase, KnowledgeCategory
+        from app.models import Client, CaseBenefit, Lawyer, Document, KnowledgeBase, KnowledgeCategory, FapReason
         
         total_cases = Case.query.filter_by(law_firm_id=law_firm_id).count()
         active_cases = Case.query.filter_by(law_firm_id=law_firm_id, status='active').count()
@@ -75,6 +76,32 @@ def dashboard():
             db.func.count(Case.id).label('count')
         ).filter(Case.law_firm_id == law_firm_id).group_by(Case.status).all()
         cases_by_status = {status: count for status, count in cases_by_status_result}
+
+        fap_reason_stats_result = (db.session.query(
+            FapReason.display_name,
+            db.func.count(CaseBenefit.id).label('count')
+        ).outerjoin(
+            CaseBenefit, CaseBenefit.fap_reason_id == FapReason.id
+        ).outerjoin(
+            Case, and_(Case.id == CaseBenefit.case_id, Case.law_firm_id == law_firm_id)
+        ).filter(
+            FapReason.law_firm_id == law_firm_id,
+            FapReason.is_active == True
+        ).group_by(
+            FapReason.id, FapReason.display_name
+        ).order_by(
+            db.func.count(CaseBenefit.id).desc(),
+            FapReason.display_name.asc()
+        ).all())
+
+        fap_reason_stats = [
+            {'name': name, 'count': count} for name, count in fap_reason_stats_result
+        ]
+
+        fap_reason_unclassified = CaseBenefit.query.join(Case).filter(
+            Case.law_firm_id == law_firm_id,
+            CaseBenefit.fap_reason_id.is_(None)
+        ).count()
 
         # Casos abertos por mês (usando created_at) – processado em Python para portabilidade entre bancos
         from collections import defaultdict
@@ -126,6 +153,8 @@ def dashboard():
             total_cause_value=total_cause_value,
             cases_by_type=cases_by_type,
             cases_by_status=cases_by_status,
+            fap_reason_stats=fap_reason_stats,
+            fap_reason_unclassified=fap_reason_unclassified,
             total_users=total_users,
             total_courts=total_courts,
             cases_by_month=cases_by_month,

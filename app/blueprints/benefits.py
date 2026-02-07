@@ -261,9 +261,6 @@ def case_benefits_import(case_id):
             except Exception:
                 fap_reason_id = None
 
-            print(fap_reason_id, benefit_description)
-            exit()
-
             benefit = CaseBenefit(
                 case_id=case_id,
                 benefit_number=benefit_number,

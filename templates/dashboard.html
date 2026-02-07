@@ -10,7 +10,8 @@
   <div class="col-12">
     <div class="card border-0 shadow-sm" style="border-radius: 16px; overflow: hidden;">
       <div class="card-body" style="background: linear-gradient(135deg, #f8f9ff 0%, #eef1ff 100%);">
-        <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+        <div
+          class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
           <div class="d-flex align-items-center gap-3">
             <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
               style="width: 56px; height: 56px; box-shadow: 0 6px 14px rgba(102,126,234,0.18);">
@@ -38,22 +39,26 @@
 <div class="row mb-4 mt-4">
   <div class="col-12">
     <div class="card border-0 shadow-lg" style="border-radius: 15px; overflow: hidden;">
-      <div class="card-header text-white" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1.2rem;">
+      <div class="card-header text-white"
+        style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1.2rem;">
         <div class="d-flex align-items-center justify-content-between">
           <div class="d-flex align-items-center">
             <div class="me-3">
-              <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width: 40px; height: 40px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+              <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
+                style="width: 40px; height: 40px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
                 <i class="bi bi-book-fill" style="font-size: 1.2rem; color: #667eea;"></i>
               </div>
             </div>
             <div>
-              <h3 class="card-title mb-0" style="font-weight: 600; font-size: 1.1rem;">Base de Conhecimento do Escritório</h3>
+              <h3 class="card-title mb-0" style="font-weight: 600; font-size: 1.1rem;">Base de Conhecimento do
+                Escritório</h3>
               <br>
               <small class="opacity-75">Resumo dos documentos, categorias e tags cadastrados</small>
             </div>
           </div>
           <div>
-            <a href="{{ url_for('knowledge_base.list') }}" class="btn btn-light shadow-sm" style="border-radius: 8px; padding: 0.5rem 1.5rem;">
+            <a href="{{ url_for('knowledge_base.list') }}" class="btn btn-light shadow-sm"
+              style="border-radius: 8px; padding: 0.5rem 1.5rem;">
               <i class="bi bi-arrow-right-circle"></i> Acessar Base de Conhecimento
             </a>
           </div>
@@ -77,7 +82,8 @@
           <div class="col-md-4">
             <div class="d-flex align-items-center">
               <div class="me-3">
-                <span class="badge bg-warning text-dark" style="font-size: 1.2rem; padding: 12px 16px; border-radius: 50%;">
+                <span class="badge bg-warning text-dark"
+                  style="font-size: 1.2rem; padding: 12px 16px; border-radius: 50%;">
                   <i class="bi bi-folder-fill"></i>
                 </span>
               </div>
@@ -383,52 +389,53 @@
     </div>
     {% endif %}
 
-    <div class="card mt-3">
-      <div class="card-header">
-        <h3 class="card-title">
+  </div>
+</div>
+
+<div class="row mt-3">
+  <div class="col-12">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <h3 class="card-title mb-0">
           <i class="bi bi-bar-chart me-1"></i>
-          Distribuições
+          Motivos FAP (Benefícios)
         </h3>
+        <div class="d-flex align-items-center gap-3">
+          <div class="d-flex align-items-center">
+            <span class="badge bg-secondary me-2">{{ total_benefits or 0 }}</span>
+            <span class="text-muted">Benefícios no total</span>
+          </div>
+          <div class="d-flex align-items-center">
+            <span class="badge bg-warning text-dark me-2">{{ fap_reason_unclassified or 0 }}</span>
+            <span class="text-muted">Sem motivo definido</span>
+          </div>
+        </div>
       </div>
       <div class="card-body">
-        {% if cases_by_type %}
-        <h6>Por Tipo de Caso:</h6>
-        <ul class="list-unstyled">
-          {% for case_type, count in cases_by_type.items() %}
-          <li>
-            <span class="badge bg-secondary me-2">{{ count }}</span>
-            {% if case_type == 'fap' %}
-            Revisão FAP - AÇÃO REVISIONAL DO FATOR ACIDENTÁRIO DE PREVENÇÃO
-            {% elif case_type == 'previdenciario' %}
-            Previdenciário
-            {% elif case_type == 'trabalhista' %}
-            Trabalhista
-            {% elif case_type == 'outros' %}
-            Outros
+        <div class="row g-4">
+          <div class="col-lg-5">
+            {% if fap_reason_stats %}
+            <h6>Por Motivo FAP:</h6>
+            <ul class="list-unstyled mb-0">
+              {% for item in fap_reason_stats %}
+              <li class="mb-1">
+                <span class="badge bg-primary me-2">{{ item.count }}</span>
+                {{ item.name }}
+              </li>
+              {% endfor %}
+            </ul>
             {% else %}
-            {{ case_type|title }}
+            <div class="alert alert-light mb-0">Sem motivos FAP cadastrados.</div>
             {% endif %}
-          </li>
-          {% endfor %}
-        </ul>
-        {% endif %}
-
-        {% if cases_by_status %}
-        <h6 class="mt-3">Por Status:</h6>
-        <ul class="list-unstyled">
-          {% for status, count in cases_by_status.items() %}
-          <li>
-            {% if status == 'active' %}
-            <span class="badge bg-success me-2">{{ count }}</span> Ativos
-            {% elif status == 'draft' %}
-            <span class="badge bg-warning me-2">{{ count }}</span> Rascunhos
+          </div>
+          <div class="col-lg-7">
+            {% if fap_reason_stats %}
+            <canvas id="chartFapReasons" height="220"></canvas>
             {% else %}
-            <span class="badge bg-secondary me-2">{{ count }}</span> {{ status|title }}
+            <div class="alert alert-light mb-0">Sem dados para exibir gráfico.</div>
             {% endif %}
-          </li>
-          {% endfor %}
-        </ul>
-        {% endif %}
+          </div>
+        </div>
       </div>
     </div>
   </div>
@@ -515,6 +522,7 @@
   }};
   const casesByType = {{ cases_by_type|default ({}) | tojson }};
   const casesByMonth = {{ cases_by_month|default ({}) | tojson }};
+  const fapReasonStats = {{ fap_reason_stats|default ([]) | tojson }};
 
   // Helper to transform dict into labels/data arrays
   const toSeries = (obj, labelMap) => {
@@ -610,6 +618,35 @@
         },
         options: {
           plugins: { legend: { position: 'bottom' } },
+        },
+      });
+    }
+  }
+
+  // FAP reasons chart
+  if (Array.isArray(fapReasonStats) && fapReasonStats.length) {
+    const labels = fapReasonStats.map(item => item.name);
+    const data = fapReasonStats.map(item => item.count);
+    const ctx = document.getElementById('chartFapReasons');
+    if (ctx) {
+      new Chart(ctx, {
+        type: 'bar',
+        data: {
+          labels,
+          datasets: [{
+            label: 'Benefícios',
+            data,
+            backgroundColor: labels.map((_, i) => palette[i % palette.length]),
+            borderRadius: 6,
+          }],
+        },
+        options: {
+          indexAxis: 'y',
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { beginAtZero: true, ticks: { precision: 0 } },
+            y: { ticks: { autoSkip: false } },
+          },
         },
       });
     }
