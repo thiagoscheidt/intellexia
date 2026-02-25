@@ -13,6 +13,7 @@ import os
 import sys
 import json
 from datetime import datetime
+from rich import print
 
 PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
 if PROJECT_ROOT not in sys.path:
@@ -21,28 +22,77 @@ if PROJECT_ROOT not in sys.path:
 from main import app
 from app.models import db, JudicialSentenceAnalysis
 from app.agents.agent_sentence_summary import AgentSentenceSummary
+from app.agents.agent_initial_petition_analysis import AgentInitialPetitionAnalysis
 
 
 def analyze_sentence_with_ai(sentence_path: str, petition_path: str | None = None) -> str | None:
     """
-    Analisa a sentença judicial usando IA e retorna o resultado em JSON.
+    Analisa a sentença judicial usando IA e, se disponível, extrai os pedidos da petição inicial.
 
     Args:
         sentence_path: caminho do arquivo da sentença
-        petition_path: caminho da petição inicial (opcional, não usado por enquanto)
+        petition_path: caminho da petição inicial (opcional) - pedidos serão extraídos e usados como contexto
 
     Returns:
         str: JSON com o resultado da análise ou None em caso de erro
     """
     try:
+        # PASSO 1: Extrair pedidos e benefícios da petição ANTES de analisar a sentença (se houver)
+        petition_requests_list = None
+        petition_requests_data = None
+        petition_benefits_data = None
+        
+        if petition_path and os.path.exists(petition_path):
+            petition_agent = AgentInitialPetitionAnalysis()
+            
+            # 1.1 Extrair pedidos
+            print(f"Extraindo pedidos da petição inicial: {petition_path}")
+            try:
+                petition_requests_data = petition_agent.extract_petition_requests(file_path=petition_path)
+                # Extrai a lista simples de pedidos para usar como contexto
+                petition_requests_list = petition_requests_data.get('all_requests', [])
+                print(f"✓ {len(petition_requests_list)} pedidos extraídos da petição")
+            except Exception as petition_error:
+                print(f"Erro ao extrair pedidos da petição inicial: {petition_error}")
+                import traceback
+                traceback.print_exc()
+            
+            # 1.2 Extrair benefícios (especialmente importante para processos FAP)
+            print(f"Extraindo benefícios da petição inicial: {petition_path}")
+            try:
+                petition_benefits_data = petition_agent.extract_benefits_and_reasons(file_path=petition_path)
+                benefits_count = len(petition_benefits_data.get('benefits', []))
+                print(f"✓ {benefits_count} benefícios extraídos da petição")
+            except Exception as benefits_error:
+                print(f"Erro ao extrair benefícios da petição inicial: {benefits_error}")
+                import traceback
+                traceback.print_exc()
+        elif petition_path:
+            print(f"Petição inicial informada, mas arquivo não encontrado: {petition_path}")
+        
+        # PASSO 2: Analisar a sentença (com pedidos e benefícios da petição como contexto, se disponíveis)
         print(f"Analisando sentença: {sentence_path}")
         sentence_agent = AgentSentenceSummary()
         
-        # Analisa a sentença
-        sentence_analysis = sentence_agent.summarizeSentence(file_path=sentence_path)
+        sentence_analysis = sentence_agent.summarizeSentence(
+            file_path=sentence_path,
+            petition_requests=petition_requests_list,
+            petition_benefits=petition_benefits_data
+        )
+
+        # PASSO 3: Montar resultado final
+        combined_analysis = sentence_analysis
+        
+        # Incluir dados completos dos pedidos da petição (com detalhamento) se foram extraídos
+        if petition_requests_data:
+            combined_analysis["petition_requests"] = petition_requests_data
+        
+        # Incluir dados dos benefícios da petição se foram extraídos
+        if petition_benefits_data:
+            combined_analysis["petition_benefits"] = petition_benefits_data
         
         # Converte para JSON
-        result_json = json.dumps(sentence_analysis, ensure_ascii=False, indent=2)
+        result_json = json.dumps(combined_analysis, ensure_ascii=False, indent=2)
         
         print("Análise concluída com sucesso!")
         return result_json

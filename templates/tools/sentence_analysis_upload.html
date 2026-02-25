@@ -9,7 +9,8 @@
   <div class="col-12">
     <div class="card border-0 shadow-sm" style="border-radius: 16px; overflow: hidden;">
       <div class="card-body" style="background: linear-gradient(135deg, #f8f9ff 0%, #eef1ff 100%);">
-        <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+        <div
+          class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
           <div class="d-flex align-items-center gap-3">
             <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
               style="width: 56px; height: 56px; box-shadow: 0 6px 14px rgba(102,126,234,0.18);">
@@ -23,8 +24,10 @@
           <div>
             <nav aria-label="breadcrumb">
               <ol class="breadcrumb mb-0 bg-transparent small">
-                <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
-                <li class="breadcrumb-item"><a href="{{ url_for('tools.judicial_sentence_analysis_list') }}">Análise de Sentenças</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i>
+                    Home</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('tools.judicial_sentence_analysis_list') }}">Análise de
+                    Sentenças</a></li>
                 <li class="breadcrumb-item active" aria-current="page">Enviar Sentença</li>
               </ol>
             </nav>
@@ -94,7 +97,7 @@
 
               <div class="mb-3">
                 {{ form.petition_file.label(class="form-label") }}
-                {{ form.petition_file(class="form-control", accept=".pdf,.docx,.doc,.txt", disabled=true) }}
+                {{ form.petition_file(class="form-control", accept=".pdf,.docx,.doc,.txt") }}
                 {% if form.petition_file.errors %}
                 <div class="text-danger mt-1">
                   {% for error in form.petition_file.errors %}
@@ -103,7 +106,7 @@
                 </div>
                 {% endif %}
                 <small class="form-text text-muted">
-                  <i class="bi bi-info-circle"></i> Funcionalidade temporariamente desabilitada
+                  Formatos aceitos: PDF, DOCX, TXT
                 </small>
               </div>
 

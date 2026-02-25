@@ -184,7 +184,7 @@ def case_petition_generate(case_id):
                 
             except Exception as e:
                 petition.status = 'error'
-                petition.error_message = str(e)
+                petition.error_messageto = str(e)
                 db.session.commit()
                 flash(f'Erro ao gerar petição: {str(e)}', 'danger')
                 
