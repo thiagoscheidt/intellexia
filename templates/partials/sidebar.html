@@ -43,6 +43,34 @@
         </li>
 
         <li
+          class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('process_panel.') else '' }}">
+          <a href="#"
+            class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('process_panel.') else '' }}">
+            <i class="nav-icon bi bi-balance-scale"></i>
+            <p>
+              Painel de Processos
+              <i class="nav-arrow bi bi-chevron-right"></i>
+            </p>
+          </a>
+          <ul class="nav nav-treeview">
+            <li class="nav-item">
+              <a href="{{ url_for('process_panel.list_processes') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'process_panel.list_processes' else '' }}">
+                <i class="nav-icon bi bi-list"></i>
+                <p>Meus Processos</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('process_panel.new_process') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'process_panel.new_process' else '' }}">
+                <i class="nav-icon bi bi-plus-square"></i>
+                <p>Novo Processo</p>
+              </a>
+            </li>
+          </ul>
+        </li>
+
+        <li
           class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint.startswith('cases.') or request.endpoint.startswith('benefits.') or request.endpoint.startswith('documents.') or request.endpoint.startswith('petitions.') or request.endpoint.startswith('fap_reasons.')) else '' }}">
           <a href="#"
             class="nav-link {{ 'active' if request.endpoint and (request.endpoint.startswith('cases.') or request.endpoint.startswith('benefits.') or request.endpoint.startswith('documents.') or request.endpoint.startswith('petitions.') or request.endpoint.startswith('fap_reasons.')) else '' }}">

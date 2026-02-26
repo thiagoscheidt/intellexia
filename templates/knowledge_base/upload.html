@@ -372,6 +372,13 @@
 
         const applyMask = () => {
             lawsuitInput.value = formatCnj(lawsuitInput.value);
+            // Validar se tem exatamente 20 dígitos (campo opcional, só valida se preenchido)
+            const digits = lawsuitInput.value.replace(/\D/g, '');
+            if (digits.length > 0 && digits.length < 20) {
+                lawsuitInput.setCustomValidity('O número do processo deve ter exatamente 20 dígitos');
+            } else {
+                lawsuitInput.setCustomValidity('');
+            }
         };
 
         lawsuitInput.addEventListener('input', applyMask);

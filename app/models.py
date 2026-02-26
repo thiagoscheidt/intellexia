@@ -440,6 +440,9 @@ class JudicialSentenceAnalysis(db.Model):
     petition_file_size = db.Column(db.Integer)
     petition_file_type = db.Column(db.String(50))
     
+    # Número do processo judicial (opcional, para vincular ao painel de processos)
+    process_number = db.Column(db.String(25), index=True)  # CNJ format: NNNNNNN-DD.AAAA.J.TR.OOOO
+    
     # Status e análise
     status = db.Column(db.String(20), default='pending')  # pending, processing, completed, error
     analysis_result = db.Column(db.Text)  # Resultado da análise pela IA
@@ -771,3 +774,51 @@ class CaseComment(db.Model):
     
     def __repr__(self):
         return f'<CaseComment {self.id}>'
+
+
+class JudicialProcess(db.Model):
+    """Tabela judicial_processes - Painel centralizado de processos judiciais"""
+    __tablename__ = 'judicial_processes'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    case_id = db.Column(db.Integer, db.ForeignKey('cases.id'), index=True)  # Opcional - pode não ter caso criado
+    
+    # Identificação do processo (CNJ format: NNNNNNN-DD.AAAA.J.TR.OOOO)
+    process_number = db.Column(db.String(25), nullable=False, unique=True, index=True)
+    
+    # Informações do processo
+    title = db.Column(db.String(255))
+    description = db.Column(db.Text)
+    
+    # Status
+    status = db.Column(db.String(50), default='ativo')  # ativo, suspenso, encerrado, aguardando
+    
+    # Dados do processo (preenchidos por DataJud ou manualmente)
+    judge_name = db.Column(db.String(255))
+    tribunal = db.Column(db.String(255))
+    section = db.Column(db.String(100))
+    origin_unit = db.Column(db.String(255))
+    case_value = db.Column(db.Numeric(15, 2))
+    filing_date = db.Column(db.Date)
+    last_update = db.Column(db.DateTime)  # Última atualização de dados do processo
+    
+    # Notas internas
+    internal_notes = db.Column(db.Text)
+    
+    # Auditoria
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relacionamentos
+    law_firm = db.relationship('LawFirm')
+    user = db.relationship('User')
+    case = db.relationship('Case', backref='judicial_processes')
+    sentence_analyses = db.relationship('JudicialSentenceAnalysis', 
+                                       primaryjoin='JudicialProcess.process_number==foreign(JudicialSentenceAnalysis.process_number)',
+                                       foreign_keys='[JudicialSentenceAnalysis.process_number]',
+                                       viewonly=True)
+    
+    def __repr__(self):
+        return f'<JudicialProcess {self.process_number}>'

@@ -196,6 +196,13 @@
 
     const applyMask = () => {
       processInput.value = formatCnj(processInput.value);
+      // Validar se tem exatamente 20 dígitos (campo opcional)
+      const digits = processInput.value.replace(/\D/g, '');
+      if (digits.length > 0 && digits.length < 20) {
+        processInput.setCustomValidity('O número do processo deve ter exatamente 20 dígitos');
+      } else {
+        processInput.setCustomValidity('');
+      }
     };
 
     processInput.addEventListener('input', applyMask);

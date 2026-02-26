@@ -1,0 +1,288 @@
+{% extends "layout/base.html" %}
+
+{% block title %}
+    {% if action == 'novo' %}Novo Processo{% else %}Editar Processo{% endif %}
+{% endblock %}
+
+{% block content %}
+<div class="app-content-header">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-sm-6">
+        <h3 class="mb-0">
+          {% if action == 'novo' %}
+            <i class="bi bi-file-earmark-plus me-2"></i>Novo Processo
+          {% else %}
+            <i class="bi bi-pencil-square me-2"></i>Editar Processo
+          {% endif %}
+        </h3>
+      </div>
+      <div class="col-sm-6">
+        <ol class="breadcrumb float-sm-end">
+          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house-fill"></i> Home</a></li>
+          <li class="breadcrumb-item"><a href="{{ url_for('process_panel.list_processes') }}"><i class="bi bi-diagram-3-fill"></i> Processos</a></li>
+          <li class="breadcrumb-item active" aria-current="page">
+            {% if action == 'novo' %}Novo Processo{% else %}Editar{% endif %}
+          </li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-12">
+        <div class="row">
+          <div class="col-lg-8 offset-lg-2">
+        <!-- Informativo -->
+        {% if action == 'novo' %}
+        <div class="card mb-4 border-0 shadow-sm" style="border-radius: 12px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+          <div class="card-body text-white py-3">
+            <div class="d-flex align-items-center">
+              <div class="rounded-circle d-flex align-items-center justify-content-center me-3" 
+                   style="width: 50px; height: 50px; background: rgba(255, 255, 255, 0.2);">
+                <i class="bi bi-info-circle" style="font-size: 24px;"></i>
+              </div>
+              <div>
+                <h5 class="mb-1">Registre um novo processo judicial</h5>
+                <p class="mb-0 small">Centralize todas as informações do processo em um único lugar</p>
+              </div>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+
+        <!-- Formulário -->
+        <div class="card card-primary card-outline shadow-sm">
+          <div class="card-header">
+            <h3 class="card-title">
+              <i class="bi bi-file-earmark-text me-2"></i>Dados do Processo
+            </h3>
+          </div>
+          <div class="card-body">
+                    <form method="POST" class="needs-validation">
+                        
+                        <!-- Número do Processo -->
+                        <div class="mb-3">
+                            <label for="process_number" class="form-label">
+                                Número do Processo <span class="text-danger">*</span>
+                            </label>
+                            <input 
+                                type="text" 
+                                class="form-control" 
+                                id="process_number"
+                                name="process_number"
+                                placeholder="NNNNNNN-DD.AAAA.J.TR.OOOO"
+                                value="{{ process.process_number if process else '' }}"
+                                {% if action == 'editar' %}readonly{% endif %}
+                                maxlength="25"
+                                inputmode="numeric"
+                                required
+                            >
+                            <small class="text-muted d-block mt-1">
+                                Formato CNJ: 7 dígitos - 2 verificadores . 4 ano . 1 segmento . 2 tribunal . 4 origem
+                            </small>
+                        </div>
+
+                        <!-- Título -->
+                        <div class="mb-3">
+                            <label for="title" class="form-label">Título do Caso</label>
+                            <input 
+                                type="text" 
+                                class="form-control" 
+                                id="title"
+                                name="title"
+                                placeholder="Ex: Ação ordinária - Acidente do Trabalho"
+                                value="{{ process.title if process else '' }}"
+                            >
+                            <small class="text-muted">Deixe em branco para usar o número do processo</small>
+                        </div>
+
+                        <!-- Descrição -->
+                        <div class="mb-3">
+                            <label for="description" class="form-label">Descrição</label>
+                            <textarea 
+                                class="form-control" 
+                                id="description"
+                                name="description"
+                                rows="3"
+                                placeholder="Descreva brevemente o caso..."
+                            >{{ process.description if process else '' }}</textarea>
+                        </div>
+
+                        <!-- Dados do Tribunal -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="tribunal" class="form-label">Tribunal</label>
+                                    <input 
+                                        type="text" 
+                                        class="form-control" 
+                                        id="tribunal"
+                                        name="tribunal"
+                                        placeholder="Ex: TRT 2ª Região"
+                                        value="{{ process.tribunal if process else '' }}"
+                                    >
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="section" class="form-label">Seção</label>
+                                    <input 
+                                        type="text" 
+                                        class="form-control" 
+                                        id="section"
+                                        name="section"
+                                        placeholder="Ex: 3ª Seção"
+                                        value="{{ process.section if process else '' }}"
+                                    >
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Juiz e Origem -->
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="judge_name" class="form-label">Nome do Juiz</label>
+                                    <input 
+                                        type="text" 
+                                        class="form-control" 
+                                        id="judge_name"
+                                        name="judge_name"
+                                        placeholder="Ex: Dr. João Silva"
+                                        value="{{ process.judge_name if process else '' }}"
+                                    >
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label for="origin_unit" class="form-label">Unidade de Origem</label>
+                                    <input 
+                                        type="text" 
+                                        class="form-control" 
+                                        id="origin_unit"
+                                        name="origin_unit"
+                                        placeholder="Ex: Vara do Trabalho"
+                                        value="{{ process.origin_unit if process else '' }}"
+                                    >
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Associar a um Caso -->
+                        <div class="mb-3">
+                            <label for="case_id" class="form-label">Associar a um Caso (Opcional)</label>
+                            <select class="form-select" id="case_id" name="case_id">
+                                <option value="">-- Nenhum caso selecionado --</option>
+                                {% for case in cases %}
+                                    <option value="{{ case.id }}" 
+                                        {% if process and process.case_id == case.id %}selected{% endif %}>
+                                        {{ case.title }} ({{ case.client.name if case.client else 'N/A' }})
+                                    </option>
+                                {% endfor %}
+                            </select>
+                            <small class="text-muted">Você pode vincular este processo a um caso existente</small>
+                        </div>
+
+                        <!-- Status -->
+                        <div class="mb-3">
+                            <label for="status" class="form-label">Status</label>
+                            <select class="form-select" id="status" name="status">
+                                <option value="ativo" {% if not process or process.status == 'ativo' %}selected{% endif %}>
+                                    Ativo
+                                </option>
+                                <option value="suspenso" {% if process and process.status == 'suspenso' %}selected{% endif %}>
+                                    Suspenso
+                                </option>
+                                <option value="encerrado" {% if process and process.status == 'encerrado' %}selected{% endif %}>
+                                    Encerrado
+                                </option>
+                                <option value="aguardando" {% if process and process.status == 'aguardando' %}selected{% endif %}>
+                                    Aguardando
+                                </option>
+                            </select>
+                        </div>
+
+                        <!-- Notas Internas -->
+                        <div class="mb-3">
+                            <label for="internal_notes" class="form-label">Notas Internas</label>
+                            <textarea 
+                                class="form-control" 
+                                id="internal_notes"
+                                name="internal_notes"
+                                rows="3"
+                                placeholder="Anotações internas sobre o processo..."
+                            >{{ process.internal_notes if process else '' }}</textarea>
+                            <small class="text-muted">Somente visível para sua equipe</small>
+                        </div>
+
+                        <!-- Botões -->
+                        <div class="d-flex gap-3 mt-4 border-top pt-4">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-check-circle me-2"></i>
+                                {% if action == 'novo' %}Criar Processo{% else %}Salvar Alterações{% endif %}
+                            </button>
+                            <a href="{{ url_for('process_panel.list_processes') }}" class="btn btn-secondary">
+                                <i class="bi bi-x-circle me-2"></i>Cancelar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+      </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Script para aplicar máscara CNJ -->
+<script>
+function formatCnj(value) {
+    // Remove tudo que não é dígito
+    let digits = value.replace(/\D/g, '');
+    
+    // Limita a 20 dígitos
+    digits = digits.substring(0, 20);
+    
+    // Aplica a formatação: NNNNNNN-DD.AAAA.J.TR.OOOO
+    if (digits.length > 0) {
+        let formatted = digits.substring(0, 7);
+        if (digits.length > 7) formatted += '-' + digits.substring(7, 9);
+        if (digits.length > 9) formatted += '.' + digits.substring(9, 13);
+        if (digits.length > 13) formatted += '.' + digits.substring(13, 14);
+        if (digits.length > 14) formatted += '.' + digits.substring(14, 16);
+        if (digits.length > 16) formatted += '.' + digits.substring(16, 20);
+        return formatted;
+    }
+    return digits;
+}
+
+const processNumberInput = document.getElementById('process_number');
+if (processNumberInput && !processNumberInput.readOnly) {
+    processNumberInput.addEventListener('input', function(e) {
+        this.value = formatCnj(this.value);
+    });
+    
+    processNumberInput.addEventListener('blur', function(e) {
+        this.value = formatCnj(this.value);
+        // Validar se tem exatamente 20 dígitos (25 caracteres formatados)
+        const digits = this.value.replace(/\D/g, '');
+        if (digits.length > 0 && digits.length < 20) {
+            this.setCustomValidity('O número do processo deve ter exatamente 20 dígitos');
+        } else {
+            this.setCustomValidity('');
+        }
+    });
+    
+    processNumberInput.addEventListener('paste', function(e) {
+        setTimeout(() => {
+            this.value = formatCnj(this.value);
+        }, 10);
+    });
+}
+</script>
+{% endblock %}
