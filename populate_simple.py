@@ -20,10 +20,26 @@ sys.path.insert(0, str(project_root))
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
 
+
+def build_database_uri() -> str:
+    database_url = os.environ.get('DATABASE_URL')
+    if database_url:
+        return database_url
+
+    mysql_database = os.environ.get('MYSQL_DATABASE')
+    if mysql_database:
+        mysql_host = os.environ.get('MYSQL_HOST', 'localhost')
+        mysql_port = os.environ.get('MYSQL_PORT', '3306')
+        mysql_user = os.environ.get('MYSQL_USER', 'root')
+        mysql_password = os.environ.get('MYSQL_PASSWORD', 'password')
+        return f"mysql+pymysql://{mysql_user}:{mysql_password}@{mysql_host}:{mysql_port}/{mysql_database}?charset=utf8mb4"
+
+    return 'sqlite:///intellexia.db'
+
 # Criar aplicação Flask
 app = Flask(__name__)
 app.secret_key = 'dev-key-for-population'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///intellexia.db'
+app.config['SQLALCHEMY_DATABASE_URI'] = build_database_uri()
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Inicializar SQLAlchemy

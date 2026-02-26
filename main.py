@@ -16,21 +16,23 @@ if env_path.exists():
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-in-production')
 
-# Configuração do banco de dados baseada no ambiente
-environment = os.environ.get('ENVIRONMENT', 'development')
+def build_database_uri() -> str:
+    database_url = os.environ.get('DATABASE_URL')
+    if database_url:
+        return database_url
 
-if environment == 'production':
-    # MySQL para produção
-    mysql_host = os.environ.get('MYSQL_HOST', 'localhost')
-    mysql_port = os.environ.get('MYSQL_PORT', '3306')
-    mysql_user = os.environ.get('MYSQL_USER', 'root')
-    mysql_password = os.environ.get('MYSQL_PASSWORD', 'password')
-    mysql_database = os.environ.get('MYSQL_DATABASE', 'intellexia')
-    
-    app.config['SQLALCHEMY_DATABASE_URI'] = f"mysql+pymysql://{mysql_user}:{mysql_password}@{mysql_host}:{mysql_port}/{mysql_database}?charset=utf8mb4"
-else:
-    # SQLite para desenvolvimento
-    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///intellexia.db'
+    mysql_database = os.environ.get('MYSQL_DATABASE')
+    if mysql_database:
+        mysql_host = os.environ.get('MYSQL_HOST', 'localhost')
+        mysql_port = os.environ.get('MYSQL_PORT', '3306')
+        mysql_user = os.environ.get('MYSQL_USER', 'root')
+        mysql_password = os.environ.get('MYSQL_PASSWORD', 'password')
+        return f"mysql+pymysql://{mysql_user}:{mysql_password}@{mysql_host}:{mysql_port}/{mysql_database}?charset=utf8mb4"
+
+    return 'sqlite:///intellexia.db'
+
+
+app.config['SQLALCHEMY_DATABASE_URI'] = build_database_uri()
 
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 

@@ -59,10 +59,14 @@ def clean_existing_data():
             db.session.rollback()
             return False
         
-        # Resetar o auto-increment (SQLite)
+        # Resetar o auto-increment (SQLite/MySQL)
         try:
             print("\n🔄 Resetando o auto-increment do ID...")
-            db.session.execute(text("DELETE FROM sqlite_sequence WHERE name='case_templates'"))
+            dialect = db.engine.dialect.name
+            if dialect == 'sqlite':
+                db.session.execute(text("DELETE FROM sqlite_sequence WHERE name='case_templates'"))
+            elif dialect in ('mysql', 'mariadb'):
+                db.session.execute(text("ALTER TABLE case_templates AUTO_INCREMENT = 1"))
             db.session.commit()
             print("   ✅ Auto-increment resetado (próximo ID será 1)")
         except Exception as e:
