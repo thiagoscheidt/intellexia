@@ -1,0 +1,225 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Gerar Recurso Judicial - IntellexIA{% endblock %}
+
+{% block content %}
+
+<!-- Cabeçalho da página -->
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card border-0 shadow-sm" style="border-radius: 16px; overflow: hidden;">
+      <div class="card-body" style="background: linear-gradient(135deg, #fff8f0 0%, #fff0e0 100%);">
+        <div
+          class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+          <div class="d-flex align-items-center gap-3">
+            <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
+              style="width: 56px; height: 56px; box-shadow: 0 6px 14px rgba(234,126,102,0.18);">
+              <i class="bi bi-arrow-up-circle" style="font-size: 1.6rem; color: #ea7e66;"></i>
+            </div>
+            <div>
+              <h1 class="h4 mb-1" style="font-weight: 700; letter-spacing: .2px;">Gerar Recurso Judicial</h1>
+              <small class="text-muted">Crie um recurso automaticamente baseado na análise da sentença</small>
+            </div>
+          </div>
+          <div>
+            <nav aria-label="breadcrumb">
+              <ol class="breadcrumb mb-0 bg-transparent small">
+                <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i>
+                    Home</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('tools.judicial_sentence_analysis_list') }}">Análise de
+                    Sentenças</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('tools.judicial_sentence_analysis_detail', sentence_id=sentence.id) }}">Detalhes</a></li>
+                <li class="breadcrumb-item active" aria-current="page">Gerar Recurso</li>
+              </ol>
+            </nav>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-md-8">
+        <div class="card card-warning card-outline shadow-sm">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-robot"></i> Geração Automática de Recurso</h3>
+          </div>
+          <form method="POST" id="appealForm">
+            {{ form.hidden_tag() }}
+            <div class="card-body">
+              {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+              {% for category, message in messages %}
+              <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                <i class="bi bi-info-circle"></i> {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+              </div>
+              {% endfor %}
+              {% endif %}
+              {% endwith %}
+
+              <div class="alert alert-info">
+                <i class="bi bi-lightbulb"></i>
+                <strong>Como funciona:</strong>
+                <ul class="mb-0 mt-2">
+                  <li>Selecione o tipo de recurso desejado</li>
+                  <li>Forneça argumentos e observações adicionais (opcional)</li>
+                  <li>A IA irá gerar um recurso completo e bem fundamentado</li>
+                  <li>O recurso incluirá:
+                    <ul>
+                      <li>Qualificação das partes</li>
+                      <li>Narrativa dos fatos</li>
+                      <li>Fundamentação jurídica</li>
+                      <li>Citação de jurisprudências</li>
+                      <li>Pedidos específicos</li>
+                    </ul>
+                  </li>
+                  <li>Você poderá revisar e editar o documento gerado</li>
+                </ul>
+              </div>
+
+              <div class="mb-3">
+                {{ form.appeal_type.label(class="form-label") }}
+                <span class="text-danger">*</span>
+                {{ form.appeal_type(class="form-select") }}
+                {% if form.appeal_type.errors %}
+                <div class="text-danger mt-1">
+                  {% for error in form.appeal_type.errors %}
+                  <small>{{ error }}</small><br>
+                  {% endfor %}
+                </div>
+                {% endif %}
+                <small class="form-text text-muted">
+                  Escolha o tipo de recurso mais adequado conforme a situação
+                </small>
+              </div>
+
+              <div class="mb-3">
+                {{ form.user_notes.label(class="form-label") }}
+                {{ form.user_notes(class="form-control", rows="8", placeholder="Exemplo: Enfatizar a questão da prescrição quinquenal. Mencionar o precedente STJ REsp 1234567. Argumentar sobre a inversão do ônus da prova...") }}
+                {% if form.user_notes.errors %}
+                <div class="text-danger mt-1">
+                  {% for error in form.user_notes.errors %}
+                  <small>{{ error }}</small><br>
+                  {% endfor %}
+                </div>
+                {% endif %}
+                <small class="form-text text-muted">
+                  {{ form.user_notes.description }}
+                </small>
+              </div>
+
+              <div class="d-grid gap-2">
+                {{ form.submit(class="btn btn-warning btn-lg") }}
+                <a href="{{ url_for('tools.judicial_sentence_analysis_detail', sentence_id=sentence.id) }}" class="btn btn-outline-secondary">
+                  <i class="bi bi-arrow-left"></i> Voltar
+                </a>
+              </div>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <!-- Sidebar com informações da sentença -->
+      <div class="col-md-4">
+        <div class="card card-info card-outline shadow-sm">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-info-circle"></i> Informações da Sentença</h3>
+          </div>
+          <div class="card-body">
+            {% if sentence.analysis_result %}
+            {% set analysis = sentence.analysis_result|from_json %}
+            {% set info = analysis.sentence_info %}
+            
+            {% if info.process_number %}
+            <div class="mb-3">
+              <small class="text-muted d-block"><i class="bi bi-file-earmark-text"></i> Processo</small>
+              <strong>{{ info.process_number }}</strong>
+            </div>
+            {% endif %}
+
+            {% if info.judgment_date %}
+            <div class="mb-3">
+              <small class="text-muted d-block"><i class="bi bi-calendar"></i> Data da Sentença</small>
+              <strong>{{ info.judgment_date }}</strong>
+            </div>
+            {% endif %}
+
+            {% if info.overall_result %}
+            <div class="mb-3">
+              <small class="text-muted d-block"><i class="bi bi-gavel"></i> Resultado</small>
+              <span class="badge {% if info.overall_result == 'Procedente' %}bg-success{% elif info.overall_result == 'Improcedente' %}bg-danger{% else %}bg-warning{% endif %}">
+                {{ info.overall_result }}
+              </span>
+            </div>
+            {% endif %}
+
+            {% if info.judge %}
+            <div class="mb-3">
+              <small class="text-muted d-block"><i class="bi bi-person"></i> Magistrado</small>
+              <strong>{{ info.judge }}</strong>
+            </div>
+            {% endif %}
+
+            {% if info.origin_court %}
+            <div class="mb-3">
+              <small class="text-muted d-block"><i class="bi bi-building"></i> Tribunal</small>
+              <strong>{{ info.origin_court }}</strong>
+            </div>
+            {% endif %}
+
+            {% if info.possible_appeals %}
+            <div class="mb-3">
+              <small class="text-muted d-block"><i class="bi bi-lightbulb"></i> Recursos Sugeridos pela IA</small>
+              <div class="d-flex flex-wrap gap-1 mt-2">
+                {% for appeal in info.possible_appeals %}
+                <span class="badge bg-info">{{ appeal }}</span>
+                {% endfor %}
+              </div>
+            </div>
+            {% endif %}
+
+            {% else %}
+            <div class="alert alert-warning mb-0">
+              <i class="bi bi-exclamation-triangle"></i> Análise da sentença não disponível
+            </div>
+            {% endif %}
+          </div>
+        </div>
+
+        <div class="card card-secondary card-outline shadow-sm mt-3">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-question-circle"></i> Dicas</h3>
+          </div>
+          <div class="card-body">
+            <ul class="small mb-0">
+              <li>Seja específico nos argumentos adicionais</li>
+              <li>Mencione artigos de lei, súmulas e precedentes relevantes</li>
+              <li>Indique pontos que considera mais importantes</li>
+              <li>A IA usará seus argumentos para enriquecer o recurso</li>
+              <li>Você poderá revisar e editar o documento final</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  // Validação do formulário
+  document.getElementById('appealForm').addEventListener('submit', function(e) {
+    const appealType = document.querySelector('select[name="appeal_type"]').value;
+    
+    if (!appealType) {
+      e.preventDefault();
+      alert('Por favor, selecione o tipo de recurso');
+      return false;
+    }
+  });
+</script>
+
+{% endblock %}

@@ -1,0 +1,128 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Recursos Gerados - IntellexIA{% endblock %}
+
+{% block content %}
+
+<!-- Cabecalho da pagina -->
+<div class="row mb-4">
+  <div class="col-12">
+    <div class="card border-0 shadow-sm" style="border-radius: 16px; overflow: hidden;">
+      <div class="card-body" style="background: linear-gradient(135deg, #fff8f0 0%, #fff0e0 100%);">
+        <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+          <div class="d-flex align-items-center gap-3">
+            <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
+              style="width: 56px; height: 56px; box-shadow: 0 6px 14px rgba(234,126,102,0.18);">
+              <i class="bi bi-arrow-up-circle" style="font-size: 1.6rem; color: #ea7e66;"></i>
+            </div>
+            <div>
+              <h1 class="h4 mb-1" style="font-weight: 700; letter-spacing: .2px;">Recursos Judiciais</h1>
+              <small class="text-muted">Historico de recursos gerados por IA</small>
+            </div>
+          </div>
+          <div>
+            <a href="{{ url_for('tools.judicial_sentence_analysis_list') }}" class="btn btn-outline-secondary">
+              <i class="bi bi-file-earmark-text"></i> Ver Sentencas
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-12">
+        <div class="card card-warning card-outline shadow-sm">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-list-ul"></i> Recursos Gerados</h3>
+          </div>
+          <div class="card-body">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+              <i class="bi bi-info-circle"></i> {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
+            {% endif %}
+            {% endwith %}
+
+            {% if appeals %}
+            <div class="table-responsive">
+              <table class="table table-hover">
+                <thead>
+                  <tr>
+                    <th><i class="bi bi-file-earmark-text"></i> Sentenca</th>
+                    <th><i class="bi bi-arrow-up-circle"></i> Tipo</th>
+                    <th><i class="bi bi-activity"></i> Status</th>
+                    <th><i class="bi bi-calendar"></i> Data Criacao</th>
+                    <th><i class="bi bi-gear"></i> Acoes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for appeal in appeals %}
+                  <tr>
+                    <td>
+                      <i class="bi bi-file-earmark-pdf text-danger me-2"></i>
+                      <strong>{{ appeal.sentence_analysis.original_filename if appeal.sentence_analysis else '-' }}</strong>
+                    </td>
+                    <td><span class="badge bg-secondary">{{ appeal.appeal_type }}</span></td>
+                    <td>
+                      {% if appeal.status == 'completed' %}
+                      <span class="badge bg-success"><i class="bi bi-check-circle"></i> Concluido</span>
+                      {% elif appeal.status == 'processing' %}
+                      <span class="badge bg-warning"><i class="bi bi-hourglass-split"></i> Processando</span>
+                      {% elif appeal.status == 'pending' %}
+                      <span class="badge bg-info"><i class="bi bi-clock"></i> Pendente</span>
+                      {% elif appeal.status == 'error' %}
+                      <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Erro</span>
+                      {% endif %}
+                    </td>
+                    <td>{{ appeal.created_at.strftime('%d/%m/%Y %H:%M') if appeal.created_at else '-' }}</td>
+                    <td>
+                      <div class="btn-group" role="group">
+                        <a href="{{ url_for('tools.appeal_detail', appeal_id=appeal.id) }}"
+                           class="btn btn-sm btn-outline-primary" title="Ver Detalhes">
+                          <i class="bi bi-eye"></i>
+                        </a>
+                        {% if appeal.status == 'completed' and appeal.generated_file_path %}
+                        <a href="{{ url_for('tools.appeal_download', appeal_id=appeal.id) }}"
+                           class="btn btn-sm btn-outline-success" title="Baixar DOCX">
+                          <i class="bi bi-download"></i>
+                        </a>
+                        {% endif %}
+                        <form method="POST" action="{{ url_for('tools.appeal_delete', appeal_id=appeal.id) }}"
+                              onsubmit="return confirm('Tem certeza que deseja deletar este recurso?');" style="display: inline;">
+                          <button type="submit" class="btn btn-sm btn-outline-danger" title="Deletar">
+                            <i class="bi bi-trash"></i>
+                          </button>
+                        </form>
+                      </div>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info text-center">
+              <i class="bi bi-info-circle display-4 d-block mb-3"></i>
+              <h5>Nenhum recurso gerado ainda</h5>
+              <p class="mb-3">Gere um recurso a partir de uma sentenca analisada.</p>
+              <a href="{{ url_for('tools.judicial_sentence_analysis_list') }}" class="btn btn-warning">
+                <i class="bi bi-arrow-up-circle"></i> Ver Sentencas
+              </a>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}

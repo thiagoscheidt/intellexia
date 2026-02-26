@@ -8,6 +8,7 @@ dependencies = [
     "bcrypt>=5.0.0",
     "docling>=2.71.0",
     "docxcompose>=1.4.0",
+    "docxtpl>=0.20.2",
     "dotenv>=0.9.9",
     "faiss-cpu>=1.13.2",
     "flask>=3.1.2",

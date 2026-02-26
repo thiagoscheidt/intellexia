@@ -398,22 +398,6 @@
           </div>
         </div>
         {% endif %}
-
-        <!-- Recursos Possíveis -->
-        {% if info.possible_appeals %}
-        <div class="card card-dark card-outline shadow-sm mb-4">
-          <div class="card-header">
-            <h3 class="card-title"><i class="bi bi-arrow-up-circle"></i> Recursos Possíveis</h3>
-          </div>
-          <div class="card-body">
-            <ul>
-              {% for appeal in info.possible_appeals %}
-              <li>{{ appeal }}</li>
-              {% endfor %}
-            </ul>
-          </div>
-        </div>
-        {% endif %}
         
         {% endif %}
         {% elif sentence.status == 'processing' %}
@@ -529,6 +513,33 @@
             </div>
           </div>
         </div>
+
+        <!-- Recursos Possíveis (Sugestão da IA) -->
+        {% if sentence.status == 'completed' and sentence.analysis_result %}
+        {% set analysis_parsed = sentence.analysis_result|from_json %}
+        {% set info = analysis_parsed.sentence_info %}
+        {% if info.possible_appeals %}
+        <div class="card card-info card-outline shadow-sm mt-3">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-lightbulb"></i> Recursos Possíveis <span class="badge bg-info ms-2">Sugestão da IA</span></h3>
+          </div>
+          <div class="card-body">
+            <div class="d-flex flex-wrap gap-2">
+              {% for appeal in info.possible_appeals %}
+              <a href="{{ url_for('tools.appeal_create', sentence_id=sentence.id) }}" class="btn btn-outline-info">
+                <i class="bi bi-arrow-up-circle"></i> Gerar {{ appeal }}
+              </a>
+              {% endfor %}
+            </div>
+            <div class="alert alert-light border mt-3 mb-0">
+              <small class="text-muted">
+                <i class="bi bi-info-circle"></i> Estes são recursos sugeridos pela IA com base na análise da sentença. Clique para gerar o recurso automaticamente.
+              </small>
+            </div>
+          </div>
+        </div>
+        {% endif %}
+        {% endif %}
       </div>
     </div>
   </div>

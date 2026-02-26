@@ -453,9 +453,43 @@ class JudicialSentenceAnalysis(db.Model):
     # Relacionamentos
     user = db.relationship('User')
     law_firm = db.relationship('LawFirm')
+    appeals = db.relationship('JudicialAppeal', back_populates='sentence_analysis', cascade='all, delete-orphan')
     
     def __repr__(self):
         return f'<JudicialSentenceAnalysis {self.original_filename}>'
+
+
+class JudicialAppeal(db.Model):
+    """Tabela judicial_appeals - Recursos judiciais gerados por IA"""
+    __tablename__ = 'judicial_appeals'
+    
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    sentence_analysis_id = db.Column(db.Integer, db.ForeignKey('judicial_sentence_analysis.id'), nullable=False, index=True)
+    
+    # Informações do recurso
+    appeal_type = db.Column(db.String(100), nullable=False)  # Apelação, Embargos de Declaração, Agravo, etc.
+    user_notes = db.Column(db.Text)  # Observações e argumentos adicionais do usuário
+    
+    # Status e resultado
+    status = db.Column(db.String(20), default='pending')  # pending, processing, completed, error
+    generated_content = db.Column(db.Text)  # Conteúdo gerado pela IA
+    generated_file_path = db.Column(db.String(500))  # Caminho do arquivo DOCX gerado
+    error_message = db.Column(db.Text)  # Mensagem de erro caso falhe
+    
+    # Metadados
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    processed_at = db.Column(db.DateTime)  # Data/hora do processamento
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    
+    # Relacionamentos
+    user = db.relationship('User')
+    law_firm = db.relationship('LawFirm')
+    sentence_analysis = db.relationship('JudicialSentenceAnalysis', back_populates='appeals')
+    
+    def __repr__(self):
+        return f'<JudicialAppeal {self.appeal_type} - Sentence #{self.sentence_analysis_id}>'
 
 
 class KnowledgeBase(db.Model):

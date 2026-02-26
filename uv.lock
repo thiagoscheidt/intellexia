@@ -647,6 +647,20 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/5d/25/07597a0fda04adf2f2fc375f48f704612a91c0c1da64f4c18e78a4a26630/docxcompose-1.4.0.tar.gz", hash = "sha256:bcf2799a0b63c29eb77a3d799a2f28443ae0f69f8691ff3d753f706be515c3e9", size = 20219, upload-time = "2022-12-14T09:45:09.195Z" }
 
 [[package]]
+name = "docxtpl"
+version = "0.20.2"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "jinja2" },
+    { name = "lxml" },
+    { name = "python-docx" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/b2/b4/4435f3fcb1357ec441079c4af1dda3ea926fad6dcead4aed2d93b369944e/docxtpl-0.20.2.tar.gz", hash = "sha256:eddf3350d70b4d123208e801d585bcb313d21044a377a14f75a66d0965841de1", size = 17890, upload-time = "2025-11-13T12:47:15.943Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a4/ad/e07939d8e020e513d3860400413ba1e0e06102c469639b440d921337efef/docxtpl-0.20.2-py3-none-any.whl", hash = "sha256:626d5c570a46a62b2ca73b4d08f1c240fa031a5bc45371e1466a4fe184923d10", size = 17881, upload-time = "2025-11-13T12:47:13.704Z" },
+]
+
+[[package]]
 name = "dotenv"
 version = "0.9.9"
 source = { registry = "https://pypi.org/simple" }
@@ -996,6 +1010,7 @@ dependencies = [
     { name = "bcrypt" },
     { name = "docling" },
     { name = "docxcompose" },
+    { name = "docxtpl" },
     { name = "dotenv" },
     { name = "faiss-cpu" },
     { name = "flask" },
@@ -1031,6 +1046,7 @@ requires-dist = [
     { name = "bcrypt", specifier = ">=5.0.0" },
     { name = "docling", specifier = ">=2.71.0" },
     { name = "docxcompose", specifier = ">=1.4.0" },
+    { name = "docxtpl", specifier = ">=0.20.2" },
     { name = "dotenv", specifier = ">=0.9.9" },
     { name = "faiss-cpu", specifier = ">=1.13.2" },
     { name = "flask", specifier = ">=3.1.2" },

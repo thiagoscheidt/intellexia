@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify, send_file
-from app.models import db, AiDocumentSummary, JudicialSentenceAnalysis
+from app.models import db, AiDocumentSummary, JudicialSentenceAnalysis, JudicialAppeal
 from app.agents.file_agent import FileAgent
 from app.agents.agent_document_reader import AgentDocumentReader
 from app.utils.document_utils import extract_text_from_docx, is_docx_file
@@ -606,4 +606,128 @@ def download_petition_file(sentence_id):
         sentence.petition_file_path,
         as_attachment=True,
         download_name=sentence.petition_filename
+    )
+
+
+# ==================== Rotas de Recursos Judiciais ====================
+
+@tools_bp.route('/appeals')
+@require_law_firm
+def appeal_list():
+    """Lista de recursos judiciais gerados"""
+    law_firm_id = get_current_law_firm_id()
+    appeals = (
+        JudicialAppeal.query
+        .filter_by(law_firm_id=law_firm_id)
+        .order_by(JudicialAppeal.created_at.desc())
+        .all()
+    )
+    return render_template('tools/appeal_list.html', appeals=appeals)
+
+@tools_bp.route('/appeal/create/<int:sentence_id>', methods=['GET', 'POST'])
+@require_law_firm
+def appeal_create(sentence_id):
+    """Formulário para criar um recurso judicial"""
+    from app.form import JudicialAppealForm
+    
+    # Verificar se a sentença existe e pertence ao escritório
+    sentence = JudicialSentenceAnalysis.query.get_or_404(sentence_id)
+    
+    if sentence.law_firm_id != get_current_law_firm_id():
+        flash('Acesso não autorizado', 'danger')
+        return redirect(url_for('tools.judicial_sentence_analysis_list'))
+    
+    if sentence.status != 'completed':
+        flash('A análise da sentença precisa estar concluída para gerar recursos', 'warning')
+        return redirect(url_for('tools.judicial_sentence_analysis_detail', sentence_id=sentence_id))
+    
+    form = JudicialAppealForm()
+    
+    if form.validate_on_submit():
+        try:
+            # Criar registro do recurso
+            appeal = JudicialAppeal(
+                user_id=session.get('user_id'),
+                law_firm_id=get_current_law_firm_id(),
+                sentence_analysis_id=sentence_id,
+                appeal_type=form.appeal_type.data,
+                user_notes=form.user_notes.data,
+                status='pending'
+            )
+            
+            db.session.add(appeal)
+            db.session.commit()
+            
+            flash('Recurso criado com sucesso! Será processado em breve.', 'success')
+            return redirect(url_for('tools.appeal_detail', appeal_id=appeal.id))
+            
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Erro ao criar recurso: {str(e)}', 'danger')
+    
+    return render_template('tools/appeal_create.html', form=form, sentence=sentence)
+
+
+@tools_bp.route('/appeal/<int:appeal_id>')
+@require_law_firm
+def appeal_detail(appeal_id):
+    """Detalhes de um recurso judicial"""
+    appeal = JudicialAppeal.query.get_or_404(appeal_id)
+    
+    if appeal.law_firm_id != get_current_law_firm_id():
+        flash('Acesso não autorizado', 'danger')
+        return redirect(url_for('tools.judicial_sentence_analysis_list'))
+    
+    return render_template('tools/appeal_detail.html', appeal=appeal)
+
+
+@tools_bp.route('/appeal/<int:appeal_id>/delete', methods=['POST'])
+@require_law_firm
+def appeal_delete(appeal_id):
+    """Deletar um recurso"""
+    appeal = JudicialAppeal.query.get_or_404(appeal_id)
+    
+    if appeal.law_firm_id != get_current_law_firm_id():
+        flash('Acesso não autorizado', 'danger')
+        return redirect(url_for('tools.judicial_sentence_analysis_list'))
+    
+    try:
+        sentence_id = appeal.sentence_analysis_id
+        
+        # Deletar arquivo gerado se existir
+        if appeal.generated_file_path and os.path.exists(appeal.generated_file_path):
+            os.remove(appeal.generated_file_path)
+        
+        db.session.delete(appeal)
+        db.session.commit()
+        
+        flash('Recurso deletado com sucesso', 'success')
+        return redirect(url_for('tools.judicial_sentence_analysis_detail', sentence_id=sentence_id))
+        
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao deletar recurso: {str(e)}', 'danger')
+        return redirect(url_for('tools.appeal_detail', appeal_id=appeal_id))
+
+
+@tools_bp.route('/appeal/<int:appeal_id>/download')
+@require_law_firm
+def appeal_download(appeal_id):
+    """Download do arquivo do recurso gerado"""
+    appeal = JudicialAppeal.query.get_or_404(appeal_id)
+    
+    if appeal.law_firm_id != get_current_law_firm_id():
+        flash('Acesso não autorizado', 'danger')
+        return redirect(url_for('tools.judicial_sentence_analysis_list'))
+    
+    if not appeal.generated_file_path or not os.path.exists(appeal.generated_file_path):
+        flash('Arquivo de recurso não encontrado', 'danger')
+        return redirect(url_for('tools.appeal_detail', appeal_id=appeal_id))
+    
+    filename = f"Recurso_{appeal.appeal_type.replace(' ', '_')}_{appeal.id}.docx"
+    
+    return send_file(
+        appeal.generated_file_path,
+        as_attachment=True,
+        download_name=filename
     )

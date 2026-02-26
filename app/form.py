@@ -344,6 +344,31 @@ class AiDocumentSummaryForm(FlaskForm):
     submit = SubmitField('Enviar para Resumo')
 
 # ========================
+# FORMULÁRIO: Recurso Judicial
+# ========================
+class JudicialAppealForm(FlaskForm):
+    """Formulário para criar um recurso judicial"""
+    appeal_type = SelectField(
+        'Tipo de Recurso',
+        choices=[
+            ('', 'Selecione o tipo de recurso'),
+            ('Apelação', 'Apelação'),
+            ('Embargos de Declaração', 'Embargos de Declaração'),
+            ('Agravo de Instrumento', 'Agravo de Instrumento'),
+            ('Agravo Interno', 'Agravo Interno'),
+            ('Recurso Especial', 'Recurso Especial (STJ)'),
+            ('Recurso Extraordinário', 'Recurso Extraordinário (STF)'),
+            ('Recurso Inominado', 'Recurso Inominado (Juizados Especiais)'),
+        ],
+        validators=[DataRequired(message='Selecione o tipo de recurso')]
+    )
+    user_notes = TextAreaField(
+        'Argumentos e Observações Adicionais',
+        validators=[Optional()],
+        description='Forneça argumentos, fundamentos ou observações adicionais que devem ser incluídos no recurso'
+    )
+    submit = SubmitField('Gerar Recurso')
+# ========================
 # FORMULÁRIO: Análise de Sentença Judicial
 # ========================
 class JudicialSentenceAnalysisForm(FlaskForm):
