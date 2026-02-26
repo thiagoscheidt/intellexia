@@ -259,7 +259,7 @@ class CaseCompetence(db.Model):
     __tablename__ = 'case_competences'
     
     id = db.Column(db.Integer, primary_key=True)
-    case_id = db.Column(db.BigInteger, db.ForeignKey('cases.id'), nullable=False, index=True)
+    case_id = db.Column(db.Integer, db.ForeignKey('cases.id'), nullable=False, index=True)
     competence_month = db.Column(db.SmallInteger, nullable=False)  # 1 a 12
     competence_year = db.Column(db.SmallInteger, nullable=False)
     status = db.Column(db.Enum('prescribed', 'valid', name='competence_status'), nullable=False)
@@ -278,7 +278,7 @@ class CaseBenefit(db.Model):
     __tablename__ = 'case_benefits'
     
     id = db.Column(db.Integer, primary_key=True)
-    case_id = db.Column(db.BigInteger, db.ForeignKey('cases.id'), nullable=False, index=True)
+    case_id = db.Column(db.Integer, db.ForeignKey('cases.id'), nullable=False, index=True)
     benefit_number = db.Column(db.String(50), nullable=False, index=True)
     benefit_type = db.Column(db.String(10), nullable=False)  # B91, B94, etc.
     insured_name = db.Column(db.String(255), nullable=False)
