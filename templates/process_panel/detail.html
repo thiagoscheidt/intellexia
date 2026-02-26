@@ -343,8 +343,19 @@
                           </td>
                           <td><small class="text-muted">{{ doc.uploaded_at.strftime('%d/%m/%Y') }}</small></td>
                           <td class="text-end">
+                            <a href="{{ url_for('knowledge_base.details', file_id=doc.id) }}" 
+                               class="btn btn-sm btn-outline-secondary me-1"
+                               title="Ver detalhes">
+                              <i class="bi bi-info-circle"></i>
+                            </a>
+                            <a href="{{ url_for('knowledge_base.view', file_id=doc.id) }}" 
+                               class="btn btn-sm btn-outline-info me-1"
+                               title="Visualizar documento">
+                              <i class="bi bi-eye"></i>
+                            </a>
                             <a href="{{ url_for('knowledge_base.download', file_id=doc.id) }}" 
-                               class="btn btn-sm btn-outline-primary">
+                               class="btn btn-sm btn-outline-primary"
+                               title="Baixar documento">
                               <i class="bi bi-download"></i>
                             </a>
                           </td>

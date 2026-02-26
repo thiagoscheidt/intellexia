@@ -145,7 +145,8 @@ class KnowledgeIngestor:
 
         results = self.qdrant.query_points(
             collection_name=self.collection,
-            query=vector
+            query=vector,
+            limit=20
         )
         
         context = "\n".join([item.payload['text'] for item in results.points])
