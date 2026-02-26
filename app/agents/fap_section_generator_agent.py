@@ -25,7 +25,7 @@ class DocumentMappingSchema(BaseModel):
 class FapSectionGeneratorAgent:
     def __init__(self):
         self.llm = ChatOpenAI(
-            model="gpt-5-mini-mini",
+            model="gpt-5-mini",
             temperature=0
         )
         # Nota: Vamos processar a resposta JSON manualmente ao invés de usar structured_output

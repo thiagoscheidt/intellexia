@@ -370,7 +370,7 @@ OPENAI_MODEL=gpt-5-mini
 ### Ajustar Modelo
 ```python
 # Em app/agents/agent_document_reader.py
-def __init__(self, model_name="gpt-5-mini-mini"):  # Modelo mais barato
+def __init__(self, model_name="gpt-5-mini"):  # Modelo mais barato
     self.model = ChatOpenAI(model=model_name)
 ```
 

@@ -124,7 +124,7 @@ class FapCaseClassifierAgent:
         reasons_text = "\n".join(reasons_list)
         
         llm = ChatOpenAI(
-            model="gpt-5-mini-mini",
+            model="gpt-5-mini",
             temperature=0
         ).with_structured_output(ResponseSchema)
 
