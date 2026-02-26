@@ -69,6 +69,32 @@
       box-shadow: 0 6px 14px rgba(0, 0, 0, 0.45);
     }
 
+    .sidebar-mini.sidebar-collapse .app-wrapper {
+      grid-template-columns: var(--lte-sidebar-mini-width) 1fr;
+      padding-left: 73px;
+    }
+
+    .sidebar-mini.sidebar-collapse .app-sidebar {
+      position: fixed;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: var(--lte-sidebar-mini-width);
+      max-width: var(--lte-sidebar-mini-width);
+      z-index: 1040;
+    }
+
+    .sidebar-mini.sidebar-collapse .app-sidebar:hover {
+      width: var(--lte-sidebar-width);
+      max-width: var(--lte-sidebar-width);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+    }
+
+    .sidebar-mini.sidebar-collapse .app-main {
+      margin-left: 0;
+      padding-left: 0;
+    }
+
     [data-bs-theme="dark"] .page-hero-icon__glyph {
       color: #9aa7ff;
     }
