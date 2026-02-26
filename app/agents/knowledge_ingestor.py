@@ -19,6 +19,7 @@ from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.datamodel.base_models import InputFormat
 from docling.datamodel.accelerator_options import AcceleratorOptions, AcceleratorDevice
 from pydantic import BaseModel, Field
+from app.agents.query_enhancer_agent import QueryEnhancerAgent
 
 
 load_dotenv()
@@ -53,6 +54,7 @@ class KnowledgeIngestor:
         self.collection = collection_name
         self.qdrant = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=60)
         self.openai = OpenAI()
+        self.query_enhancer = QueryEnhancerAgent()
         self._ensure_collection()
 
     def _ensure_collection(self) -> None:
@@ -140,18 +142,22 @@ class KnowledgeIngestor:
         )
         return embedding_request.data[0].embedding
     
-    def ask_knowledge_base(self, question: str) -> dict:
-        vector = self.create_embedding_vector(question)
+    def ask_knowledge_base(self, question: str, history=None) -> dict:
+        improved_question = self.query_enhancer.enhance_question(question, history=history)
+        print("pergunta original:", question)
+        print("pergunta melhorada:", improved_question)
+        vector = self.create_embedding_vector(improved_question)
 
         results = self.qdrant.query_points(
             collection_name=self.collection,
             query=vector,
-            limit=20
+            limit=10
         )
         
         context = "\n".join([item.payload['text'] for item in results.points])
-        print(context)
         return {
+            "original_question": question,
+            "improved_question": improved_question,
             "context": context,
             "results": results
         }
@@ -297,7 +303,7 @@ class KnowledgeIngestor:
             dict com 'answer' (str), 'sources' (list) e 'history_id' (int, se salvo no banco)
         """
         # Buscar contexto na base vetorial
-        context_data = self.ask_knowledge_base(question)
+        context_data = self.ask_knowledge_base(question, history=history)
 
         # Preparar contexto com identificação de fontes
         context_with_sources = []
@@ -321,7 +327,7 @@ class KnowledgeIngestor:
 
         # Usar LLM para gerar resposta baseada no contexto
         llm = ChatOpenAI(
-            model="gpt-5-mini",
+            model="gpt-4o-mini",
             temperature=0
         ).with_structured_output(ResponseSchema)
 
@@ -395,6 +401,7 @@ class KnowledgeIngestor:
             "answer": response.answer,
             "sources": used_sources,
             "sources_detail": sources_detail,  # Nova informação detalhada
+            "search_query": context_data.get("improved_question", question),
             "response_time_ms": response_time_ms
         }
         
