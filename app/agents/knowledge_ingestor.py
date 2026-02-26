@@ -320,7 +320,7 @@ class KnowledgeIngestor:
 
         # Usar LLM para gerar resposta baseada no contexto
         llm = ChatOpenAI(
-            model="gpt-4o-mini",
+            model="gpt-5-mini-mini",
             temperature=0
         ).with_structured_output(ResponseSchema)
 

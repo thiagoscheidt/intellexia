@@ -2,7 +2,7 @@
 
 ## 📋 Visão Geral
 
-Sistema completo de análise automática de documentos usando **OpenAI GPT-4o** através dos agentes `FileAgent` e `AgentDocumentReader`.
+Sistema completo de análise automática de documentos usando **OpenAI gpt-5-mini** através dos agentes `FileAgent` e `AgentDocumentReader`.
 
 ---
 
@@ -18,7 +18,7 @@ Sistema completo de análise automática de documentos usando **OpenAI GPT-4o** 
 
 #### 2. **AgentDocumentReader** (`app/agents/agent_document_reader.py`)
 - **Função**: Análise jurídica de documentos
-- **Modelo**: GPT-4o (ajustável)
+- **Modelo**: gpt-5-mini (ajustável)
 - **Métodos**:
   - `analyze_document(file_id)` → Retorna resumo estruturado
 
@@ -363,14 +363,14 @@ http://localhost:5000/tools/document-summary/{id}
 # OpenAI API Key
 OPENAI_API_KEY=sk-...
 
-# Modelo (opcional, padrão: gpt-4o)
-OPENAI_MODEL=gpt-4o
+# Modelo (opcional, padrão: gpt-5-mini)
+OPENAI_MODEL=gpt-5-mini
 ```
 
 ### Ajustar Modelo
 ```python
 # Em app/agents/agent_document_reader.py
-def __init__(self, model_name="gpt-4o-mini"):  # Modelo mais barato
+def __init__(self, model_name="gpt-5-mini-mini"):  # Modelo mais barato
     self.model = ChatOpenAI(model=model_name)
 ```
 
@@ -403,7 +403,7 @@ def case_document_new():
 
 - [x] FileAgent implementado
 - [x] AgentDocumentReader implementado
-- [x] Modelo ajustado para GPT-4o
+- [x] Modelo ajustado para gpt-5-mini
 - [x] Integração com documents_bp
 - [x] Integração com tools_bp
 - [x] Templates atualizados

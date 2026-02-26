@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 from markitdown import MarkItDown
 from langchain_openai import ChatOpenAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_community.embeddings import HuggingFaceEmbeddings
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from app.agents.file_agent import FileAgent
 
@@ -113,7 +113,7 @@ class BenefitsExtractionResult(BaseModel):
 class AgentInitialPetitionAnalysis:
     model_name = None
 
-    def __init__(self, model_name: str = "gpt-4o"):
+    def __init__(self, model_name: str = "gpt-5-mini"):
         self.model_name = model_name
 
     def extract_petition_requests(self, file_path: Optional[str] = None, text_content: Optional[str] = None) -> dict:
@@ -336,6 +336,121 @@ class AgentInitialPetitionAnalysis:
         ])
 
         print("✓ Extração de benefícios concluída")
+        return response.to_dict()
+
+    def extract_benefits_and_reasons_from_requests(self, file_path: Optional[str] = None, text_content: Optional[str] = None) -> dict:
+        """
+        Extrai benefícios e motivos de revisão focando na parte de pedidos da petição.
+        Estrutura baseada em extract_benefits_and_reasons, mas com estratégia de busca
+        semelhante à extract_petition_requests.
+
+        Args:
+            file_path: Caminho do arquivo da petição
+            text_content: Texto já extraído da petição
+
+        Returns:
+            dict: Dicionário com lista de benefícios e seus motivos de revisão
+        """
+        if not file_path and not text_content:
+            raise ValueError("É necessário fornecer file_path ou text_content")
+
+        # ==============================
+        # 1. EXTRAIR TEXTO DO DOCUMENTO
+        # ==============================
+        extracted_text = ""
+        if text_content:
+            extracted_text = text_content if isinstance(text_content, str) else str(text_content)
+        else:
+            md = MarkItDown()
+            print("Iniciando conversão da petição para extração de benefícios (foco em pedidos)...")
+            result = md.convert(file_path)
+            extracted_text = result.text_content or ""
+
+        if not extracted_text.strip():
+            raise ValueError("Não foi possível extrair texto do documento")
+
+        print(f"Texto extraído: {len(extracted_text)} caracteres")
+
+        # ==============================
+        # 2. FOCAR NO FINAL DA PETIÇÃO
+        # Pedidos geralmente ficam nos últimos 40% do documento
+        # ==============================
+        text_for_search = extracted_text[int(len(extracted_text) * 0.6):]
+        print(f"Focando nos últimos 40% do documento: {len(text_for_search)} caracteres")
+
+        # ==============================
+        # 3. QUEBRAR EM CHUNKS
+        # ==============================
+        splitter = RecursiveCharacterTextSplitter(
+            chunk_size=2000,
+            chunk_overlap=150
+        )
+        documents = splitter.create_documents([text_for_search])
+        print(f"Total de chunks criados: {len(documents)}")
+
+        # ==============================
+        # 4. EMBEDDINGS LOCAIS
+        # ==============================
+        print("Carregando modelo de embeddings local...")
+        embeddings = HuggingFaceEmbeddings(
+            model_name="sentence-transformers/all-MiniLM-L6-v2"
+        )
+
+        # ==============================
+        # 5. CRIAR FAISS EM MEMÓRIA
+        # ==============================
+        print("Criando índice FAISS em memória...")
+        vectorstore = FAISS.from_documents(documents, embeddings)
+
+        # ==============================
+        # 6. BUSCAR TRECHOS RELEVANTES SOBRE PEDIDOS
+        # ==============================
+        query = """
+        Trecho da petição inicial onde o advogado faz os pedidos ao juiz,
+        incluindo requerimentos finais, condenações, solicitações, tutelas de urgência,
+        pedidos principais, subsidiários e acessórios, citação do réu, honorários advocatícios.
+        """
+
+        print("Buscando trechos relevantes sobre pedidos (foco em benefícios)...")
+        results = vectorstore.similarity_search(query, k=6)
+
+        relevant_text = "\n\n---TRECHO---\n\n".join([r.page_content for r in results])
+        print(f"Trechos relevantes encontrados: {len(results)} chunks, {len(relevant_text)} caracteres")
+
+        # ==============================
+        # 7. ENVIAR PARA O LLM
+        # ==============================
+        user_prompt = (
+            "Extraia os benefícios previdenciários/acidentários citados nos PEDIDOS da petição e os motivos de revisão.\n\n"
+            "INSTRUÇÕES:\n"
+            "Para cada benefício identificado, extraia:\n"
+            "- benefit_number: número do benefício (NB), se mencionado\n"
+            "- insured_name: nome do segurado titular do benefício\n"
+            "- benefit_type: tipo (B91-Auxílio-doença acidentário, B92-Aposentadoria por invalidez, B93-Pensão por morte, B94-Auxílio-acidente, ou outro)\n"
+            "- accident_date: data do acidente, se mencionada\n"
+            "- revision_reason: motivo principal da revisão/contestação deste benefício\n"
+            "- legal_basis: lista de fundamentos legais específicos para a revisão deste benefício\n"
+            "- facts_summary: resumo dos fatos relacionados especificamente a este benefício\n\n"
+            "No campo 'general_revision_context', descreva o contexto geral dos pedidos de revisão dos benefícios.\n\n"
+            "Se não houver benefício nos pedidos, retorne lista vazia em 'benefits'.\n\n"
+            f"TRECHOS RELEVANTES DA PETIÇÃO:\n\n{relevant_text}"
+        )
+
+        llm = ChatOpenAI(
+            model=self.model_name,
+            temperature=0.1,
+        ).with_structured_output(BenefitsExtractionResult)
+
+        print("Enviando trechos para análise pelo LLM...")
+        response = llm.invoke([
+            {
+                "role": "system",
+                "content": "Você é um assistente jurídico especializado em processos previdenciários e revisão de FAP. Extraia benefícios e motivos de revisão de forma estruturada e completa.",
+            },
+            {"role": "user", "content": user_prompt},
+        ])
+
+        print("✓ Extração de benefícios (foco em pedidos) concluída")
         return response.to_dict()
 
     def analyze_initial_petition(self, file_path: Optional[str] = None, text_content: Optional[str] = None) -> dict:

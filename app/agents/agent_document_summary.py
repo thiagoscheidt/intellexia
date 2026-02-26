@@ -75,7 +75,7 @@ class DocumentSummary(BaseModel):
 class AgentDocumentSummary:
     model_name = None
 
-    def __init__(self, model_name: str = "gpt-4o"):
+    def __init__(self, model_name: str = "gpt-5-mini"):
         self.model_name = model_name
 
     def summarizeDocument(self, file_path: Optional[str] = None, text_content: Optional[str] = None) -> dict:

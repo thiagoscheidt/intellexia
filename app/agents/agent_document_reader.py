@@ -11,7 +11,7 @@ class AgentDocumentReader:
     model = None
     prompt = None
 
-    def __init__(self, model_name="gpt-4o"):
+    def __init__(self, model_name="gpt-5-mini"):
         self.model = ChatOpenAI(model=model_name)
         self.prompt = DocumentReaderPrompt()
 

@@ -43,7 +43,7 @@ def analyze_sentence_with_ai(sentence_path: str, petition_path: str | None = Non
         petition_benefits_data = None
         
         if petition_path and os.path.exists(petition_path):
-            petition_agent = AgentInitialPetitionAnalysis()
+            petition_agent = AgentInitialPetitionAnalysis(model_name="gpt-5-nano")
             
             # 1.1 Extrair pedidos
             print(f"Extraindo pedidos da petição inicial: {petition_path}")
@@ -60,7 +60,8 @@ def analyze_sentence_with_ai(sentence_path: str, petition_path: str | None = Non
             # 1.2 Extrair benefícios (especialmente importante para processos FAP)
             print(f"Extraindo benefícios da petição inicial: {petition_path}")
             try:
-                petition_benefits_data = petition_agent.extract_benefits_and_reasons(file_path=petition_path)
+                #petition_benefits_data = petition_agent.extract_benefits_and_reasons(file_path=petition_path)
+                petition_benefits_data = petition_agent.extract_benefits_and_reasons_from_requests(file_path=petition_path)
                 benefits_count = len(petition_benefits_data.get('benefits', []))
                 print(f"✓ {benefits_count} benefícios extraídos da petição")
             except Exception as benefits_error:

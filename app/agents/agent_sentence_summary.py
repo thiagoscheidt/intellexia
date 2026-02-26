@@ -37,7 +37,7 @@ class Parties(BaseModel):
 class Decision(BaseModel):
     """Modelo para uma decisão específica"""
     subject: str = Field(default="", description="Assunto da decisão")
-    result: str = Field(default="", description="Resultado (Procedente, Improcedente, Parcialmente Procedente)")
+    result: str = Field(default="", description="Resultado (Procedente, Improcedente, Parcialmente Procedente, Não mencionado na sentença)")
     reasoning: str = Field(default="", description="Fundamentação breve da decisão")
 
 
@@ -46,7 +46,7 @@ class FapBenefitAnalysis(BaseModel):
     benefit_number: str = Field(default="", description="Número do benefício (NB)")
     insured_name: str = Field(default="", description="Nome do segurado")
     accident_type: str = Field(default="", description="Tipo/natureza do acidente")
-    result: str = Field(default="", description="Resultado da análise (Aceito, Rejeitado, Parcialmente Aceito)")
+    result: str = Field(default="", description="Resultado da análise (Aceito, Rejeitado, Parcialmente Aceito, Não mencionado na sentença)")
     reasoning: str = Field(default="", description="Fundamentação breve da decisão sobre o benefício")
 
 
@@ -54,7 +54,7 @@ class PetitionRequestCoverage(BaseModel):
     """Modelo para análise de cobertura dos pedidos da petição"""
     request: str = Field(default="", description="Pedido da petição inicial")
     was_analyzed: bool = Field(default=False, description="Se o pedido foi analisado na sentença")
-    decision_result: str = Field(default="", description="Resultado da decisão sobre este pedido")
+    decision_result: str = Field(default="", description="Resultado da decisão sobre este pedido (incluindo 'Não mencionado na sentença')")
     comments: str = Field(default="", description="Observações sobre o pedido")
 
 
@@ -108,7 +108,7 @@ class SentenceSummary(BaseModel):
 class AgentSentenceSummary:
     model_name = None
 
-    def __init__(self, model_name: str = "gpt-4o"):
+    def __init__(self, model_name: str = "gpt-5-mini"):
         self.model_name = model_name
 
     def summarizeSentence(self, file_path: Optional[str] = None, text_content: Optional[str] = None, petition_requests: Optional[List[str]] = None, petition_benefits: Optional[dict] = None) -> dict:
@@ -225,14 +225,15 @@ class AgentSentenceSummary:
             "  - 'DEFIRO PARCIALMENTE'\n"
             "- decisions: array de decisões específicas sobre cada pedido com:\n"
             "  - subject: o pedido/questão\n"
-            "  - result: resultado (Procedente/Improcedente/Parcialmente Procedente)\n"
+            "  - result: resultado (Procedente/Improcedente/Parcialmente Procedente/Não mencionado na sentença)\n"
             "  - reasoning: fundamentação breve\n"
             "  IMPORTANTE: ao preencher 'result', priorize o verbo decisório explícito do texto (deferido, indeferido, deferido parcialmente).\n"
+            "  Se o pedido não constar no decisum, use exatamente: 'Não mencionado na sentença'.\n"
             "- fap_benefits_analysis: SE FOR PROCESSO FAP (Revisão de FAP), array com análise de cada benefício:\n"
             "  - benefit_number: número do benefício (NB)\n"
             "  - insured_name: nome do segurado\n"
             "  - accident_type: tipo/natureza do acidente\n"
-            "  - result: resultado (Aceito, Rejeitado, Parcialmente Aceito)\n"
+            "  - result: resultado (Aceito, Rejeitado, Parcialmente Aceito, Não mencionado na sentença)\n"
             "  - reasoning: fundamentação breve da decisão sobre o benefício\n"
             "  (Se NÃO for processo FAP, deixe este campo como array vazio)\n"
             "- legal_grounds: lista de legislações, artigos e fundamentos utilizados\n"
@@ -242,7 +243,7 @@ class AgentSentenceSummary:
             "analise cada um deles com:\n"
             "  - request: texto do pedido da petição\n"
             "  - was_analyzed: true/false se foi analisado na sentença\n"
-            "  - decision_result: resultado (Procedente/Improcedente/Parcialmente Procedente/Não analisado)\n"
+            "  - decision_result: resultado (Procedente/Improcedente/Parcialmente Procedente/Não mencionado na sentença)\n"
             "  - comments: observações sobre o tratamento dado ao pedido na sentença\n\n"
             f"SENTENÇA:\n{extracted_text}"
         )

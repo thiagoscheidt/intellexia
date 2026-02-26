@@ -1,7 +1,7 @@
 # ✅ Resumo Executivo - Implementação de Análise de Documentos por IA
 
 ## 🎯 Objetivo
-Implementar análise automática de documentos jurídicos usando **OpenAI GPT-4o** com salvamento dos resultados no banco de dados e exibição nas telas de visualização.
+Implementar análise automática de documentos jurídicos usando **OpenAI gpt-5-mini** com salvamento dos resultados no banco de dados e exibição nas telas de visualização.
 
 ---
 
@@ -14,7 +14,7 @@ Implementar análise automática de documentos jurídicos usando **OpenAI GPT-4o
   - Retorna file_id para processamento
   
 - ✅ **AgentDocumentReader** (`app/agents/agent_document_reader.py`)
-  - Modelo ajustado: `gpt-4o` (corrigido de gpt-5.2)
+  - Modelo ajustado: `gpt-5-mini` (corrigido de gpt-5.2)
   - Análise jurídica especializada
   - Retorna resumo estruturado
 
@@ -83,7 +83,7 @@ Implementar análise automática de documentos jurídicos usando **OpenAI GPT-4o
 
 ### Agentes
 3. ✅ `app/agents/agent_document_reader.py`
-   - Corrigido modelo de `gpt-5.2` para `gpt-4o`
+   - Corrigido modelo de `gpt-5.2` para `gpt-5-mini`
 
 ### Templates
 4. ✅ `templates/cases/document_view.html`
@@ -199,7 +199,7 @@ POST /tools/document-summary/<doc_id>/reprocess
 ### Agentes
 - [x] FileAgent funcionando
 - [x] AgentDocumentReader funcionando
-- [x] Modelo GPT-4o configurado
+- [x] Modelo gpt-5-mini configurado
 - [x] Prompt jurídico especializado
 
 ### Blueprints

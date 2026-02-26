@@ -13,7 +13,7 @@ class AgentTextGenerator:
     Agent para geração de textos jurídicos baseado em modelos de arquivo
     """
     
-    def __init__(self, model_name="gpt-4o"):
+    def __init__(self, model_name="gpt-5-mini"):
         self.model = ChatOpenAI(model=model_name, temperature=0.3)
         self.openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self.template_file_id = None
@@ -121,7 +121,7 @@ Gere o texto completo seguindo exatamente a estrutura e formato do modelo, subst
             assistant = self.openai_client.beta.assistants.create(
                 name="Gerador de Petições",
                 instructions=system_prompt,
-                model="gpt-4o",
+                model="gpt-5-mini",
                 tools=[{"type": "file_search"}],
                 tool_resources={
                     "file_search": {
@@ -191,7 +191,7 @@ Gere o texto completo seguindo exatamente a estrutura e formato do modelo, subst
         ]
         
         response = self.openai_client.chat.completions.create(
-            model="gpt-4o",
+            model="gpt-5-mini",
             messages=messages,
             temperature=0.3
         )

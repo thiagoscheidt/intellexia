@@ -28,7 +28,7 @@ A **Base de Conhecimento** é um módulo essencial do IntellexIA que permite ger
 - Gerenciamento CRUD de tags
 
 ### 4. **Resumos Automáticos com IA** ✅ IMPLEMENTADO
-- **Geração em tempo real** via GPT-4o (OpenAI)
+- **Geração em tempo real** via gpt-5-mini (OpenAI)
 - **Múltiplos formatos**: Resumo curto, resumo longo, pontos-chave
 - **Armazenamento JSON** estruturado para persistência
 - **Botão interativo** para gerar/regenerar resumos
@@ -52,80 +52,80 @@ A **Base de Conhecimento** é um módulo essencial do IntellexIA que permite ger
 ## 🗄️ Estrutura do Banco de Dados
 
 ### Tabela: `knowledge_base`
-| Campo              | Tipo         | Descrição                    |
-| ------------------ | ------------ | ---------------------------- |
-| id                 | Integer      | Chave primária               |
-| user_id            | Integer      | FK para usuário que enviou   |
-| law_firm_id        | Integer      | FK para escritório           |
-| original_filename  | String(255)  | Nome original do arquivo     |
-| file_path          | String(500)  | Caminho do arquivo           |
-| file_size          | Integer      | Tamanho em bytes             |
-| file_type          | String(50)   | Tipo (PDF, DOCX, TXT)        |
-| description        | Text         | Descrição do documento       |
-| category           | String(100)  | Categoria do documento       |
-| tags               | Text         | Tags separadas por vírgula   |
-| lawsuit_number     | String(100)  | Número do processo (opcional)|
-| is_active          | Boolean      | Soft-delete                  |
-| uploaded_at        | DateTime     | Data do upload               |
-| updated_at         | DateTime     | Última atualização           |
+| Campo             | Tipo        | Descrição                     |
+| ----------------- | ----------- | ----------------------------- |
+| id                | Integer     | Chave primária                |
+| user_id           | Integer     | FK para usuário que enviou    |
+| law_firm_id       | Integer     | FK para escritório            |
+| original_filename | String(255) | Nome original do arquivo      |
+| file_path         | String(500) | Caminho do arquivo            |
+| file_size         | Integer     | Tamanho em bytes              |
+| file_type         | String(50)  | Tipo (PDF, DOCX, TXT)         |
+| description       | Text        | Descrição do documento        |
+| category          | String(100) | Categoria do documento        |
+| tags              | Text        | Tags separadas por vírgula    |
+| lawsuit_number    | String(100) | Número do processo (opcional) |
+| is_active         | Boolean     | Soft-delete                   |
+| uploaded_at       | DateTime    | Data do upload                |
+| updated_at        | DateTime    | Última atualização            |
 
 ### Tabela: `knowledge_categories`
-| Campo         | Tipo      | Descrição                    |
-| ------------- | --------- | ---------------------------- |
-| id            | Integer   | Chave primária               |
-| law_firm_id   | Integer   | FK para escritório           |
-| name          | String    | Nome da categoria            |
-| icon          | String    | Emoji ou ícone Bootstrap     |
-| description   | Text      | Descrição da categoria       |
-| color         | String    | Cor em hexadecimal           |
-| display_order | Integer   | Ordem de exibição            |
-| is_active     | Boolean   | Status da categoria          |
-| created_at    | DateTime  | Data de criação              |
-| updated_at    | DateTime  | Última atualização           |
+| Campo         | Tipo     | Descrição                |
+| ------------- | -------- | ------------------------ |
+| id            | Integer  | Chave primária           |
+| law_firm_id   | Integer  | FK para escritório       |
+| name          | String   | Nome da categoria        |
+| icon          | String   | Emoji ou ícone Bootstrap |
+| description   | Text     | Descrição da categoria   |
+| color         | String   | Cor em hexadecimal       |
+| display_order | Integer  | Ordem de exibição        |
+| is_active     | Boolean  | Status da categoria      |
+| created_at    | DateTime | Data de criação          |
+| updated_at    | DateTime | Última atualização       |
 
 ### Tabela: `knowledge_tags`
-| Campo         | Tipo      | Descrição                    |
-| ------------- | --------- | ---------------------------- |
-| id            | Integer   | Chave primária               |
-| law_firm_id   | Integer   | FK para escritório           |
-| name          | String    | Nome da tag                  |
-| icon          | String    | Emoji ou ícone Bootstrap     |
-| description   | Text      | Descrição da tag             |
-| color         | String    | Cor em hexadecimal           |
-| display_order | Integer   | Ordem de exibição            |
-| is_active     | Boolean   | Status da tag                |
-| created_at    | DateTime  | Data de criação              |
-| updated_at    | DateTime  | Última atualização           |
+| Campo         | Tipo     | Descrição                |
+| ------------- | -------- | ------------------------ |
+| id            | Integer  | Chave primária           |
+| law_firm_id   | Integer  | FK para escritório       |
+| name          | String   | Nome da tag              |
+| icon          | String   | Emoji ou ícone Bootstrap |
+| description   | Text     | Descrição da tag         |
+| color         | String   | Cor em hexadecimal       |
+| display_order | Integer  | Ordem de exibição        |
+| is_active     | Boolean  | Status da tag            |
+| created_at    | DateTime | Data de criação          |
+| updated_at    | DateTime | Última atualização       |
 
 ### Tabela: `knowledge_summaries` ✅ IMPLEMENTADA
-| Campo              | Tipo      | Descrição                                    |
-| ------------------ | --------- | -------------------------------------------- |
-| id                 | Integer   | Chave primária                               |
-| knowledge_base_id  | Integer   | FK para documento                            |
-| payload            | JSON      | JSON estruturado com resumos e metadados:     |
-|                    |           | - `summary_short`: Resumo curto (1-2 linhas) |
-|                    |           | - `summary_long`: Resumo longo completo      |
-|                    |           | - `key_points`: Array com pontos-chave       |
-|                    |           | - `language`: Idioma detectado               |
-|                    |           | - `word_count`: Contagem de palavras         |
-|                    |           | - `processing_time`: Tempo de processamento  |
-| created_at         | DateTime  | Data de criação do resumo                    |
-| updated_at         | DateTime  | Última atualização do resumo                 |
+| Campo             | Tipo     | Descrição                                    |
+| ----------------- | -------- | -------------------------------------------- |
+| id                | Integer  | Chave primária                               |
+| knowledge_base_id | Integer  | FK para documento                            |
+| payload           | JSON     | JSON estruturado com resumos e metadados:    |
+|                   |          | - `summary_short`: Resumo curto (1-2 linhas) |
+|                   |          | - `summary_long`: Resumo longo completo      |
+|                   |          | - `key_points`: Array com pontos-chave       |
+|                   |          | - `language`: Idioma detectado               |
+|                   |          | - `word_count`: Contagem de palavras         |
+|                   |          | - `processing_time`: Tempo de processamento  |
+| created_at        | DateTime | Data de criação do resumo                    |
+| updated_at        | DateTime | Última atualização do resumo                 |
 
 ### Tabela: `knowledge_chat_history`
-| Campo         | Tipo      | Descrição                    |
-| ------------- | --------- | ---------------------------- |
-| id            | Integer   | Chave primária               |
-| user_id       | Integer   | FK para usuário              |
-| law_firm_id   | Integer   | FK para escritório           |
-| question      | Text      | Pergunta do usuário          |
-| answer        | Text      | Resposta da IA               |
-| sources       | Text      | JSON com fontes utilizadas   |
-| response_time_ms | Integer | Tempo de resposta (ms)       |
-| tokens_used   | Integer   | Tokens utilizados            |
-| user_rating   | Integer   | Avaliação 1-5                |
-| user_feedback | Text      | Feedback do usuário          |
-| created_at    | DateTime  | Data da pergunta             |
+| Campo            | Tipo     | Descrição                  |
+| ---------------- | -------- | -------------------------- |
+| id               | Integer  | Chave primária             |
+| user_id          | Integer  | FK para usuário            |
+| law_firm_id      | Integer  | FK para escritório         |
+| question         | Text     | Pergunta do usuário        |
+| answer           | Text     | Resposta da IA             |
+| sources          | Text     | JSON com fontes utilizadas |
+| response_time_ms | Integer  | Tempo de resposta (ms)     |
+| tokens_used      | Integer  | Tokens utilizados          |
+| user_rating      | Integer  | Avaliação 1-5              |
+| user_feedback    | Text     | Feedback do usuário        |
+| created_at       | DateTime | Data da pergunta           |
 
 ## 📁 Estrutura de Arquivos
 
@@ -204,7 +204,7 @@ python database/populate_default_tags.py
 3. **Processamento em tempo real**:
    - Arquivo é convertido para markdown (MarkItDown)
    - Texto é truncado em 24KB (configurável via `SUMMARY_MAX_CHARS`)
-   - GPT-4o gera resumos estruturados via prompt especializado
+   - gpt-5-mini gera resumos estruturados via prompt especializado
    - Resultado é armazenado em JSON
 4. **O resumo exibe**:
    - ✅ Resumo curto (1-2 linhas)
@@ -303,7 +303,7 @@ A classe `KnowledgeIngestor` em `app/agents/knowledge_ingestor.py` é responsáv
 2. Converte arquivo para markdown via MarkItDown
    - Suporta: PDF, DOCX, PPTX, Excel, imagens, etc.
 3. Trunca em 24KB (SUMMARY_MAX_CHARS, configurável)
-4. Envia para GPT-4o com prompt especializado
+4. Envia para gpt-5-mini com prompt especializado
 5. Retorna JSON com estrutura:
 {
     "summary_short": "Resumo de 1-2 linhas",
@@ -312,7 +312,7 @@ A classe `KnowledgeIngestor` em `app/agents/knowledge_ingestor.py` é responsáv
     "language": "pt",
     "word_count": 12345,
     "processing_time_ms": 2500,
-    "model": "gpt-4o",
+    "model": "gpt-5-mini",
     "timestamp": "2026-01-30T14:30:00Z"
 }
 ```
@@ -335,16 +335,16 @@ SUMMARY_MAX_CHARS=24000  # Limite de caracteres
 
 ## 📊 Permissões
 
-| Funcionalidade | Admin | User |
-| -------------- | ----- | ---- |
-| Listar documentos | ✅ | ✅ |
-| Upload | ✅ | ✅ |
-| Visualizar detalhes | ✅ | ✅ |
-| Gerar resumo | ✅ | ✅ |
-| Deletar próprio | ✅ | ✅ |
-| Gerenciar categorias | ✅ | ❌ |
-| Gerenciar tags | ✅ | ❌ |
-| Pesquisar com IA | ✅ | ✅ |
+| Funcionalidade       | Admin | User |
+| -------------------- | ----- | ---- |
+| Listar documentos    | ✅     | ✅    |
+| Upload               | ✅     | ✅    |
+| Visualizar detalhes  | ✅     | ✅    |
+| Gerar resumo         | ✅     | ✅    |
+| Deletar próprio      | ✅     | ✅    |
+| Gerenciar categorias | ✅     | ❌    |
+| Gerenciar tags       | ✅     | ❌    |
+| Pesquisar com IA     | ✅     | ✅    |
 
 ## 🔐 Segurança
 
@@ -394,7 +394,7 @@ SUMMARY_MAX_CHARS=24000  # Limite de caracteres
 - **SQLAlchemy**: ORM para acesso ao banco
 - **Soft-Delete**: Usar `is_active=False` ao invés de DELETE
 - **MarkItDown**: Conversão de documentos para markdown (PDFs, DOCX, etc)
-- **OpenAI GPT-4o**: Geração de resumos estruturados
+- **OpenAI gpt-5-mini**: Geração de resumos estruturados
 
 ## 🔄 Versão
 
@@ -406,7 +406,7 @@ SUMMARY_MAX_CHARS=24000  # Limite de caracteres
 - ✅ Categorias customizáveis por escritório
 - ✅ Tags com seletor Select2 múltiplo
 - ✅ Dashboard com estatísticas
-- ✅ **Resumos automáticos com IA (GPT-4o)** - ⭐ NOVO JANEIRO 2026!
+- ✅ **Resumos automáticos com IA (gpt-5-mini)** - ⭐ NOVO JANEIRO 2026!
 - ✅ Pesquisa inteligente com integração Qdrant
 - ✅ Chat conversacional com histórico
 - ✅ Multi-tenant com isolamento de dados

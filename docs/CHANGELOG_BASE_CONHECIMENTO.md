@@ -7,7 +7,7 @@ Todas as atualizações e mudanças notáveis neste projeto estão documentadas 
 ### ✨ Adicionado
 
 #### 🤖 Resumos Automáticos com IA (Feature Principal)
-- **Integração com OpenAI GPT-4o** para geração automática de resumos
+- **Integração com OpenAI gpt-5-mini** para geração automática de resumos
 - **Classe `AgentDocumentSummary`** em `app/agents/agent_document_summary.py`
   - Suporta conversão de múltiplos formatos (PDF, DOCX, PPTX, Excel, imagens)
   - Truncamento automático de documentos grandes (24KB configurável)
@@ -98,7 +98,7 @@ SUMMARY_MAX_CHARS=24000              # Limite de caracteres para resumo
 ### 📦 Dependências Novas
 
 - `markitdown`: Conversão de documentos para markdown
-- `openai`: Client da API OpenAI (GPT-4o)
+- `openai`: Client da API OpenAI (gpt-5-mini)
 
 ### 🧪 Testes Realizados
 
@@ -110,13 +110,13 @@ SUMMARY_MAX_CHARS=24000              # Limite de caracteres para resumo
 
 ### 📊 Relatório de Status
 
-| Componente | Status | Notas |
-| --- | --- | --- |
-| Geração de resumos | ✅ Pronto | Integrado com GPT-4o |
-| Armazenamento JSON | ✅ Pronto | Tabela criada e indexada |
-| Interface de usuário | ✅ Pronto | Abas e pontos-chave |
-| Documentação | ✅ Completo | BASE_CONHECIMENTO.md |
-| Testes | ✅ Básicos | Funcional em produção |
+| Componente           | Status     | Notas                    |
+| -------------------- | ---------- | ------------------------ |
+| Geração de resumos   | ✅ Pronto   | Integrado com gpt-5-mini |
+| Armazenamento JSON   | ✅ Pronto   | Tabela criada e indexada |
+| Interface de usuário | ✅ Pronto   | Abas e pontos-chave      |
+| Documentação         | ✅ Completo | BASE_CONHECIMENTO.md     |
+| Testes               | ✅ Básicos  | Funcional em produção    |
 
 ### 🔄 Próximas Versões
 
