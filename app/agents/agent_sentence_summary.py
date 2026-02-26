@@ -111,7 +111,7 @@ class AgentSentenceSummary:
     def __init__(self, model_name: str = "gpt-5-mini"):
         self.model_name = model_name
 
-    def summarizeSentence(self, file_path: Optional[str] = None, text_content: Optional[str] = None, petition_requests: Optional[List[str]] = None, petition_benefits: Optional[dict] = None) -> dict:
+    def summarizeSentence(self, file_path: Optional[str] = None, text_content: Optional[str] = None, petition_requests: Optional[List[str]] = None, petition_benefits: Optional[str | dict] = None) -> dict:
         """
         Gera um resumo estruturado em JSON para uma sentença judicial.
 
@@ -164,29 +164,44 @@ class AgentSentenceSummary:
         
         # Preparar contexto dos benefícios da petição, se disponível
         benefits_context = ""
-        if petition_benefits and petition_benefits.get('benefits'):
-            benefits_list = petition_benefits.get('benefits', [])
-            benefits_context = (
-                "\n\n=== BENEFÍCIOS MENCIONADOS NA PETIÇÃO INICIAL (use como contexto) ===\n"
-                f"Contexto geral: {petition_benefits.get('general_revision_context', 'Revisão de benefícios')}\n\n"
-                "Os seguintes benefícios foram identificados na petição inicial:\n"
-            )
-            for idx, benefit in enumerate(benefits_list, 1):
-                benefits_context += f"\n{idx}. Benefício NB {benefit.get('benefit_number', 'não informado')}:\n"
-                benefits_context += f"   - Segurado: {benefit.get('insured_name', '')}\n"
-                benefits_context += f"   - Tipo: {benefit.get('benefit_type', '')}\n"
-                if benefit.get('accident_date'):
-                    benefits_context += f"   - Data do acidente: {benefit.get('accident_date')}\n"
-                benefits_context += f"   - Motivo da revisão: {benefit.get('revision_reason', '')}\n"
-            benefits_context += (
-                "\nIMPORTANTE: No campo 'fap_benefits_analysis', analise como CADA UM desses benefícios "
-                "foi tratado na sentença. Para cada benefício, extraia:\n"
-                "- benefit_number: número do benefício (NB)\n"
-                "- insured_name: nome do segurado\n"
-                "- accident_type: tipo/natureza do acidente\n"
-                "- result: resultado da análise (Aceito, Rejeitado, Parcialmente Aceito)\n"
-                "- reasoning: fundamentação da decisão sobre o benefício\n\n"
-            )
+        if petition_benefits:
+            if isinstance(petition_benefits, str):
+                # Se for texto (string), usar diretamente como contexto
+                benefits_context = (
+                    "\n\n=== BENEFÍCIOS MENCIONADOS NA PETIÇÃO INICIAL (use como contexto) ===\n"
+                    f"{petition_benefits}\n"
+                    "\nIMPORTANTE: Para CADA benefício listado acima, procure na sentença:\n"
+                    "- SE encontrar análise/decisão → preencha 'result' com: Aceito, Rejeitado ou Parcialmente Aceito\n"
+                    "- SE NÃO encontrar menção → preencha 'result' com: Não mencionado na sentença\n"
+                    "\nNo campo 'fap_benefits_analysis', inclua TODOS os benefícios (tanto mencionados quanto não mencionados).\n"
+                )
+            elif isinstance(petition_benefits, dict) and petition_benefits.get('benefits'):
+                # Se for dicion (dict com estrutura), processar como antes
+                benefits_list = petition_benefits.get('benefits', [])
+                benefits_context = (
+                    "\n\n=== BENEFÍCIOS MENCIONADOS NA PETIÇÃO INICIAL (use como contexto) ===\n"
+                    f"Contexto geral: {petition_benefits.get('general_revision_context', 'Revisão de benefícios')}\n\n"
+                    "Os seguintes benefícios foram identificados na petição inicial:\n"
+                )
+                for idx, benefit in enumerate(benefits_list, 1):
+                    benefits_context += f"\n{idx}. Benefício NB {benefit.get('benefit_number', 'não informado')}:\n"
+                    benefits_context += f"   - Segurado: {benefit.get('insured_name', '')}\n"
+                    benefits_context += f"   - Tipo: {benefit.get('benefit_type', '')}\n"
+                    if benefit.get('accident_date'):
+                        benefits_context += f"   - Data do acidente: {benefit.get('accident_date')}\n"
+                    benefits_context += f"   - Motivo da revisão: {benefit.get('revision_reason', '')}\n"
+                benefits_context += (
+                    "\nIMPORTANTE: Para CADA benefício listado acima, procure na sentença:\n"
+                    "- SE encontrar análise/decisão → preencha 'result' com: Aceito, Rejeitado ou Parcialmente Aceito\n"
+                    "- SE NÃO encontrar menção → preencha 'result' com: Não mencionado na sentença\n"
+                    "\nNo campo 'fap_benefits_analysis', inclua TODOS os benefícios da petição (tanto mencionados quanto não mencionados).\n"
+                    "\nPara cada benefício, extraia:\n"
+                    "- benefit_number: número do benefício (NB)\n"
+                    "- insured_name: nome do segurado\n"
+                    "- accident_type: tipo/natureza do acidente\n"
+                    "- result: Aceito | Rejeitado | Parcialmente Aceito | Não mencionado na sentença\n"
+                    "- reasoning: fundamentação da decisão (ou explicação do porquê não foi mencionado)\n\n"
+                )
 
         user_prompt = (
             "Resuma a sentença judicial abaixo. Preserve informações jurídicas relevantes. "

@@ -1,9 +1,11 @@
 import os
+import re
 from typing import Optional, List
 
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from markitdown import MarkItDown
+import pdfplumber
 from langchain_openai import ChatOpenAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
@@ -90,12 +92,10 @@ class PetitionRequestsOnly(BaseModel):
 class BenefitRevisionRequest(BaseModel):
     """Modelo para benefício com pedido de revisão"""
     benefit_number: str = Field(default="", description="Número do benefício (NB)")
+    nit_number: str = Field(default="", description="Número do NIT")
     insured_name: str = Field(default="", description="Nome do segurado")
     benefit_type: str = Field(default="", description="Tipo do benefício (B91, B92, B93, B94, etc)")
-    accident_date: str = Field(default="", description="Data do acidente")
-    revision_reason: str = Field(default="", description="Motivo da revisão/contestação")
-    legal_basis: List[str] = Field(default_factory=list, description="Fundamentos legais para a revisão")
-    facts_summary: str = Field(default="", description="Resumo dos fatos relacionados ao benefício")
+    fap_vigencia_year: str = Field(default="", description="Ano da vigência do FAP")
 
 
 class BenefitsExtractionResult(BaseModel):
@@ -106,6 +106,27 @@ class BenefitsExtractionResult(BaseModel):
     def to_dict(self) -> dict:
         return self.model_dump(by_alias=True)
     
+    def to_json(self) -> str:
+        return self.model_dump_json(by_alias=True)
+
+
+class BenefitRequestItem(BaseModel):
+    """Modelo simplificado para benefício extraído de pedidos"""
+    benefit_number: str = Field(default="", description="Número do benefício (NB)")
+    nit_number: str = Field(default="", description="Número do NIT")
+    insured_name: str = Field(default="", description="Nome do segurado")
+    benefit_type: str = Field(default="", description="Tipo do benefício (B91, B92, B93, B94, etc)")
+    fap_vigencia_year: str = Field(default="", description="Ano da vigência do FAP")
+
+
+class BenefitsRequestsExtractionResult(BaseModel):
+    """Modelo para resultado da extração de benefícios nos pedidos"""
+    benefits: List[BenefitRequestItem] = Field(default_factory=list, description="Lista de benefícios identificados")
+    general_revision_context: str = Field(default="", description="Contexto geral da revisão de todos os benefícios")
+
+    def to_dict(self) -> dict:
+        return self.model_dump(by_alias=True)
+
     def to_json(self) -> str:
         return self.model_dump_json(by_alias=True)
 
@@ -228,115 +249,38 @@ class AgentInitialPetitionAnalysis:
         print("✓ Extração de pedidos concluída")
         return response.to_dict()
 
-    def extract_benefits_and_reasons(self, file_path: Optional[str] = None, text_content: Optional[str] = None) -> dict:
+    def extract_table_text_from_petition(self, file_path: Optional[str] = None, text_content: Optional[str] = None) -> str:
         """
-        Extrai benefícios e motivos de revisão de uma petição (especialmente para processos FAP).
+        Extrai tabelas de benefícios do PDF e retorna como texto formatado.
+        Sem análise de IA - apenas extração de tabelas.
         
         Args:
             file_path: Caminho do arquivo da petição
-            text_content: Texto já extraído da petição
+            text_content: Texto já extraído da petição (ignorado se file_path for fornecido)
             
         Returns:
-            dict: Dicionário com lista de benefícios e seus motivos de revisão
+            str: Texto formatado com as tabelas extraídas (headers + dados)
         """
         if not file_path and not text_content:
             raise ValueError("É necessário fornecer file_path ou text_content")
 
         # ==============================
-        # 1. EXTRAIR TEXTO DO DOCUMENTO
+        # 1. EXTRAIR TABELAS DO PDF
         # ==============================
-        extracted_text = ""
-        if text_content:
-            extracted_text = text_content if isinstance(text_content, str) else str(text_content)
+        if file_path and os.path.splitext(file_path)[1].lower() == ".pdf":
+            print("Extraindo tabelas com pdfplumber...")
+            table_rows = self._extract_benefits_table_rows_pdfplumber(file_path)
+            
+            if table_rows:
+                formatted_text = "\n".join(table_rows)
+                print(f"✓ Tabelas extraídas: {len(table_rows)} linhas")
+                return formatted_text
+            else:
+                print("⚠ Nenhuma tabela de benefícios encontrada no PDF")
+                return ""
         else:
-            md = MarkItDown()
-            print("Iniciando conversão da petição para extração de benefícios...")
-            result = md.convert(file_path)
-            extracted_text = result.text_content or ""
-
-        if not extracted_text.strip():
-            raise ValueError("Não foi possível extrair texto do documento")
-
-        print(f"Texto extraído: {len(extracted_text)} caracteres")
-
-        # ==============================
-        # 2. CRIAR CHUNKS DO DOCUMENTO INTEIRO
-        # Para benefícios, precisamos buscar em todo o documento
-        # ==============================
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=2000,
-            chunk_overlap=200
-        )
-        documents = splitter.create_documents([extracted_text])
-        print(f"Total de chunks criados: {len(documents)}")
-
-        # ==============================
-        # 3. EMBEDDINGS LOCAIS
-        # ==============================
-        print("Carregando modelo de embeddings local...")
-        embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2"
-        )
-
-        # ==============================
-        # 4. CRIAR FAISS EM MEMÓRIA
-        # ==============================
-        print("Criando índice FAISS em memória...")
-        vectorstore = FAISS.from_documents(documents, embeddings)
-
-        # ==============================
-        # 5. BUSCAR TRECHOS SOBRE BENEFÍCIOS
-        # ==============================
-        query = """
-        Trechos da petição que mencionam benefícios previdenciários, acidentários,
-        números de benefícios (NB), segurados, acidentes de trabalho, CAT,
-        auxílio-doença acidentário (B91), aposentadoria por invalidez (B92),
-        pensão por morte (B93), auxílio-acidente (B94), FAP, revisão de FAP,
-        motivos de contestação, enquadramento incorreto, nexo causal.
-        """
-        
-        print("Buscando trechos relevantes sobre benefícios...")
-        results = vectorstore.similarity_search(query, k=8)
-        
-        # Combinar os trechos encontrados
-        relevant_text = "\n\n---TRECHO---\n\n".join([r.page_content for r in results])
-        print(f"Trechos relevantes encontrados: {len(results)} chunks, {len(relevant_text)} caracteres")
-
-        # ==============================
-        # 6. ENVIAR PARA O LLM
-        # ==============================
-        user_prompt = (
-            "Extraia TODOS os benefícios previdenciários/acidentários mencionados na petição e seus motivos de revisão.\n\n"
-            "INSTRUÇÕES:\n"
-            "Para cada benefício identificado, extraia:\n"
-            "- benefit_number: número do benefício (NB), se mencionado\n"
-            "- insured_name: nome do segurado titular do benefício\n"
-            "- benefit_type: tipo (B91-Auxílio-doença acidentário, B92-Aposentadoria por invalidez, B93-Pensão por morte, B94-Auxílio-acidente, ou outro)\n"
-            "- accident_date: data do acidente, se mencionada\n"
-            "- revision_reason: motivo principal da revisão/contestação deste benefício (ex: enquadramento incorreto, não caracterização de nexo causal, ausência de CAT, etc)\n"
-            "- legal_basis: lista de fundamentos legais específicos para a revisão deste benefício\n"
-            "- facts_summary: resumo dos fatos relacionados especificamente a este benefício\n\n"
-            "No campo 'general_revision_context', forneça o contexto geral da ação de revisão (ex: 'Revisão de FAP - Fator Acidentário de Prevenção').\n\n"
-            "Seja completo e extraia TODOS os benefícios mencionados.\n\n"
-            f"TRECHOS RELEVANTES DA PETIÇÃO:\n\n{relevant_text}"
-        )
-
-        llm = ChatOpenAI(
-            model=self.model_name,
-            temperature=0.1,
-        ).with_structured_output(BenefitsExtractionResult)
-
-        print("Enviando trechos para análise pelo LLM...")
-        response = llm.invoke([
-            {
-                "role": "system",
-                "content": "Você é um assistente jurídico especializado em processos previdenciários e revisão de FAP. Extraia benefícios e motivos de revisão de forma estruturada e completa.",
-            },
-            {"role": "user", "content": user_prompt},
-        ])
-
-        print("✓ Extração de benefícios concluída")
-        return response.to_dict()
+            print("⚠ Arquivo não é PDF ou não fornecido")
+            return ""
 
     def extract_benefits_and_reasons_from_requests(self, file_path: Optional[str] = None, text_content: Optional[str] = None) -> dict:
         """
@@ -372,86 +316,172 @@ class AgentInitialPetitionAnalysis:
         print(f"Texto extraído: {len(extracted_text)} caracteres")
 
         # ==============================
-        # 2. FOCAR NO FINAL DA PETIÇÃO
-        # Pedidos geralmente ficam nos últimos 40% do documento
+        # 2. USAR O DOCUMENTO INTEIRO
         # ==============================
-        text_for_search = extracted_text[int(len(extracted_text) * 0.6):]
-        print(f"Focando nos últimos 40% do documento: {len(text_for_search)} caracteres")
+        text_for_search = extracted_text
+        print(f"Usando documento inteiro: {len(text_for_search)} caracteres")
 
         # ==============================
-        # 3. QUEBRAR EM CHUNKS
+        # 2.1 EXTRAIR TABELAS COM PDFPLUMBER (SE FOR PDF)
         # ==============================
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=2000,
-            chunk_overlap=150
-        )
-        documents = splitter.create_documents([text_for_search])
-        print(f"Total de chunks criados: {len(documents)}")
+        table_rows: List[str] = []
+        if file_path and os.path.splitext(file_path)[1].lower() == ".pdf":
+            print("Extraindo tabelas com pdfplumber...")
+            table_rows = self._extract_benefits_table_rows_pdfplumber(file_path)
 
+        if table_rows:
+            print(f"Tabelas detectadas: {len(table_rows)} linhas")
+            relevant_text = "\n".join(table_rows)
+        else:
+            relevant_text = ""
         # ==============================
-        # 4. EMBEDDINGS LOCAIS
+        # 3. QUEBRAR EM CHUNKS E USAR FAISS (SE NAO HOUVER TABELAS)
         # ==============================
-        print("Carregando modelo de embeddings local...")
-        embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2"
-        )
+        if not relevant_text:
+            splitter = RecursiveCharacterTextSplitter(
+                chunk_size=2000,
+                chunk_overlap=150
+            )
+            documents = splitter.create_documents([text_for_search])
+            print(f"Total de chunks criados: {len(documents)}")
 
-        # ==============================
-        # 5. CRIAR FAISS EM MEMÓRIA
-        # ==============================
-        print("Criando índice FAISS em memória...")
-        vectorstore = FAISS.from_documents(documents, embeddings)
+            # ==============================
+            # 4. EMBEDDINGS LOCAIS
+            # ==============================
+            print("Carregando modelo de embeddings local...")
+            embeddings = HuggingFaceEmbeddings(
+                model_name="sentence-transformers/all-MiniLM-L6-v2"
+            )
 
-        # ==============================
-        # 6. BUSCAR TRECHOS RELEVANTES SOBRE PEDIDOS
-        # ==============================
-        query = """
-        Trecho da petição inicial onde o advogado faz os pedidos ao juiz,
-        incluindo requerimentos finais, condenações, solicitações, tutelas de urgência,
-        pedidos principais, subsidiários e acessórios, citação do réu, honorários advocatícios.
-        """
+            # ==============================
+            # 5. CRIAR FAISS EM MEMÓRIA
+            # ==============================
+            print("Criando índice FAISS em memória...")
+            vectorstore = FAISS.from_documents(documents, embeddings)
 
-        print("Buscando trechos relevantes sobre pedidos (foco em benefícios)...")
-        results = vectorstore.similarity_search(query, k=6)
+            # ==============================
+            # 6. BUSCAR TRECHOS RELEVANTES SOBRE BENEFÍCIOS
+            # ==============================
+            query = """
+            Trechos que contem tabelas ou listas com beneficios e segurados, incluindo:
+            Vigencias do FAP, CNPJ, Empregado/Segurado, NIT, Tipo do beneficio (B91, B92, B93, B94),
+            numero do beneficio, acidentes de trabalho, CAT, revisao de FAP.
+            """
 
-        relevant_text = "\n\n---TRECHO---\n\n".join([r.page_content for r in results])
-        print(f"Trechos relevantes encontrados: {len(results)} chunks, {len(relevant_text)} caracteres")
+            print("Buscando trechos relevantes sobre benefícios...")
+            results = vectorstore.similarity_search(query, k=8)
+
+            relevant_text = "\n\n---TRECHO---\n\n".join([r.page_content for r in results])
+            print(f"Trechos relevantes encontrados: {len(results)} chunks, {len(relevant_text)} caracteres")
 
         # ==============================
         # 7. ENVIAR PARA O LLM
         # ==============================
         user_prompt = (
-            "Extraia os benefícios previdenciários/acidentários citados nos PEDIDOS da petição e os motivos de revisão.\n\n"
-            "INSTRUÇÕES:\n"
-            "Para cada benefício identificado, extraia:\n"
-            "- benefit_number: número do benefício (NB), se mencionado\n"
-            "- insured_name: nome do segurado titular do benefício\n"
-            "- benefit_type: tipo (B91-Auxílio-doença acidentário, B92-Aposentadoria por invalidez, B93-Pensão por morte, B94-Auxílio-acidente, ou outro)\n"
-            "- accident_date: data do acidente, se mencionada\n"
-            "- revision_reason: motivo principal da revisão/contestação deste benefício\n"
-            "- legal_basis: lista de fundamentos legais específicos para a revisão deste benefício\n"
-            "- facts_summary: resumo dos fatos relacionados especificamente a este benefício\n\n"
-            "No campo 'general_revision_context', descreva o contexto geral dos pedidos de revisão dos benefícios.\n\n"
-            "Se não houver benefício nos pedidos, retorne lista vazia em 'benefits'.\n\n"
-            f"TRECHOS RELEVANTES DA PETIÇÃO:\n\n{relevant_text}"
+            "Extraia os benefícios previdenciários/acidentários das tabelas abaixo.\n\n"
+            "INSTRUÇÕES PARA MAPEAMENTO DE COLUNAS:\n"
+            "As tabelas podem ter estruturas diferentes. Você deve:\n"
+            "1. Observar o header (primeira linha) de cada tabela para entender quais são as colunas\n"
+            "2. Identificar as colunas relevantes por seu significado e nome, não por posição fixa\n"
+            "3. Buscar pelas seguintes colunas (os nomes podem variar):\n"
+            "   - VIGÊNCIA FAP, Vigência, Year, Ano, FAP, Período → para fap_vigencia_year\n"
+            "   - NIT, NIT do Segurado → para nit_number\n"
+            "   - SEGURADO, Empregado, Nome, Beneficiário, Titular → para insured_name\n"
+            "   - TIPO, Tipo de Benefício, Código, B-type → para benefit_type (B91, B92, B93, B94, etc)\n"
+            "   - BENEFÍCIO, Nº Benefício, Número Benefício, NB → para benefit_number\n\n"
+            "PROCESSAMENTO:\n"
+            "Para cada linha de dados da tabela, extraia os 5 campos acima conforme seus nomes reais:\n"
+            "- benefit_number: número do benefício\n"
+            "- nit_number: número do NIT (11 dígitos)\n"
+            "- insured_name: nome completo do segurado/beneficiário\n"
+            "- benefit_type: tipo do benefício (B91, B92, B93, B94, B31, B42, B46, etc)\n"
+            "- fap_vigencia_year: ano da vigência (2022, 2023, etc)\n\n"
+            "No campo 'general_revision_context', descreva o contexto geral dos benefícios listados nas tabelas.\n\n"
+            "Se não houver benefícios ou tabelas, retorne lista vazia em 'benefits'.\n"
+            "Se algum campo não estiver disponível na tabela, deixe em branco (\"\").\n\n"
+            f"TABELAS DA PETIÇÃO:\n\n{relevant_text}"
         )
 
         llm = ChatOpenAI(
             model=self.model_name,
             temperature=0.1,
-        ).with_structured_output(BenefitsExtractionResult)
+        ).with_structured_output(BenefitsRequestsExtractionResult)
 
-        print("Enviando trechos para análise pelo LLM...")
+        print("Enviando tabelas para análise pelo LLM...")
         response = llm.invoke([
             {
                 "role": "system",
-                "content": "Você é um assistente jurídico especializado em processos previdenciários e revisão de FAP. Extraia benefícios e motivos de revisão de forma estruturada e completa.",
+                "content": "Você é um assistente jurídico especializado em processos previdenciários e revisão de FAP. Extraia benefícios de tabelas, mapeando autonomamente as colunas com base em seus nomes e significados.",
             },
             {"role": "user", "content": user_prompt},
         ])
 
-        print("✓ Extração de benefícios (foco em pedidos) concluída")
+        print("✓ Extração de benefícios concluída")
         return response.to_dict()
+
+    @staticmethod
+    def _extract_benefits_table_rows_pdfplumber(file_path: str) -> List[str]:
+        """
+        Extrai tabelas procurando por padrões nas linhas de dados.
+        Normaliza quebras de linha e formata consistentemente.
+        """
+        nit_re = re.compile(r"\b\d{11}\b")
+        benefit_type_re = re.compile(r"\bB\d{2}\b", re.IGNORECASE)
+        benefit_number_re = re.compile(r"\b\d{9,11}\b")
+        year_re = re.compile(r"\b(20\d{2})\b")
+
+        rows_with_headers: List[tuple] = []  # (header, data_rows)
+
+        try:
+            with pdfplumber.open(file_path) as pdf:
+                for page in pdf.pages:
+                    tables = page.extract_tables() or []
+                    for table in tables:
+                        if not table or len(table) < 2:
+                            continue
+                        
+                        # Usar primeiro row como header (sem processamento)
+                        header_row = table[0]
+                        header_text = " | ".join([str(cell).strip() if cell else "" for cell in header_row])
+                        
+                        data_rows = []
+                        # Processar linhas de dados (a partir da 2ª linha)
+                        for row in table[1:]:
+                            if not row:
+                                continue
+                            
+                            # Converter todos para string e juntar
+                            row_text = " | ".join([str(cell).strip() if cell else "" for cell in row if cell])
+                            
+                            if not row_text:
+                                continue
+                            
+                            # Validar se a linha tem os padrões esperados (todos necessários)
+                            has_nit = nit_re.search(row_text)
+                            has_benefit_type = benefit_type_re.search(row_text)
+                            has_benefit_number = benefit_number_re.search(row_text)
+                            has_year = year_re.search(row_text)
+                            
+                            if has_nit and has_benefit_type and has_benefit_number and has_year:
+                                # Linha válida - adicionar sem processamento
+                                if row_text not in data_rows:
+                                    data_rows.append(row_text)
+                        
+                        if data_rows:
+                            rows_with_headers.append((header_text, data_rows))
+        except Exception as exc:
+            print(f"Falha ao extrair tabelas com pdfplumber: {exc}")
+            import traceback
+            traceback.print_exc()
+
+        # Formatar resultado: header + dados para cada tabela
+        result = []
+        for header, data_rows in rows_with_headers:
+            result.append(header)
+            result.extend(data_rows)
+            result.append("")  # Linha vazia separando tabelas
+        
+        return result
 
     def analyze_initial_petition(self, file_path: Optional[str] = None, text_content: Optional[str] = None) -> dict:
         if not file_path and not text_content:

@@ -46,24 +46,28 @@ def analyze_sentence_with_ai(sentence_path: str, petition_path: str | None = Non
             petition_agent = AgentInitialPetitionAnalysis(model_name="gpt-5-nano")
             
             # 1.1 Extrair pedidos
-            print(f"Extraindo pedidos da petição inicial: {petition_path}")
-            try:
-                petition_requests_data = petition_agent.extract_petition_requests(file_path=petition_path)
-                # Extrai a lista simples de pedidos para usar como contexto
-                petition_requests_list = petition_requests_data.get('all_requests', [])
-                print(f"✓ {len(petition_requests_list)} pedidos extraídos da petição")
-            except Exception as petition_error:
-                print(f"Erro ao extrair pedidos da petição inicial: {petition_error}")
-                import traceback
-                traceback.print_exc()
+            # print(f"Extraindo pedidos da petição inicial: {petition_path}")
+            # try:
+            #     petition_requests_data = petition_agent.extract_petition_requests(file_path=petition_path)
+            #     # Extrai a lista simples de pedidos para usar como contexto
+            #     petition_requests_list = petition_requests_data.get('all_requests', [])
+            #     print(f"✓ {len(petition_requests_list)} pedidos extraídos da petição")
+            # except Exception as petition_error:
+            #     print(f"Erro ao extrair pedidos da petição inicial: {petition_error}")
+            #     import traceback
+            #     traceback.print_exc()
             
             # 1.2 Extrair benefícios (especialmente importante para processos FAP)
             print(f"Extraindo benefícios da petição inicial: {petition_path}")
             try:
                 #petition_benefits_data = petition_agent.extract_benefits_and_reasons(file_path=petition_path)
-                petition_benefits_data = petition_agent.extract_benefits_and_reasons_from_requests(file_path=petition_path)
-                benefits_count = len(petition_benefits_data.get('benefits', []))
-                print(f"✓ {benefits_count} benefícios extraídos da petição")
+                petition_benefits_data = petition_agent.extract_table_text_from_petition(file_path=petition_path)
+
+                print("Benefícios extraídos da petição:")
+                if petition_benefits_data:
+                    print(f"✓ Tabelas de benefícios extraídas")
+                else:
+                    print(f"⚠ Nenhuma tabela de benefícios encontrada")
             except Exception as benefits_error:
                 print(f"Erro ao extrair benefícios da petição inicial: {benefits_error}")
                 import traceback

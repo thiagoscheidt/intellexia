@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify
+from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify, send_file
 from app.models import db, AiDocumentSummary, JudicialSentenceAnalysis
 from app.agents.file_agent import FileAgent
 from app.agents.agent_document_reader import AgentDocumentReader
@@ -521,3 +521,89 @@ def judicial_sentence_analysis_reprocess(sentence_id):
         flash(f'Erro ao reprocessar sentença: {str(e)}', 'danger')
     
     return redirect(url_for('tools.judicial_sentence_analysis_detail', sentence_id=sentence_id))
+
+
+@tools_bp.route('/sentence-analysis/<int:sentence_id>/view-sentence')
+@require_law_firm
+def view_sentence_file(sentence_id):
+    """Visualizar arquivo da sentença"""
+    sentence = JudicialSentenceAnalysis.query.get_or_404(sentence_id)
+    
+    if sentence.law_firm_id != get_current_law_firm_id():
+        flash('Acesso não autorizado', 'danger')
+        return redirect(url_for('tools.judicial_sentence_analysis_list'))
+    
+    if not sentence.file_path or not os.path.exists(sentence.file_path):
+        flash('Arquivo da sentença não encontrado', 'danger')
+        return redirect(url_for('tools.judicial_sentence_analysis_detail', sentence_id=sentence_id))
+    
+    return send_file(
+        sentence.file_path,
+        as_attachment=False,
+        download_name=sentence.original_filename,
+        mimetype='application/pdf' if sentence.file_type.lower() == 'pdf' else 'application/msword'
+    )
+
+
+@tools_bp.route('/sentence-analysis/<int:sentence_id>/download-sentence')
+@require_law_firm
+def download_sentence_file(sentence_id):
+    """Baixar arquivo da sentença"""
+    sentence = JudicialSentenceAnalysis.query.get_or_404(sentence_id)
+    
+    if sentence.law_firm_id != get_current_law_firm_id():
+        flash('Acesso não autorizado', 'danger')
+        return redirect(url_for('tools.judicial_sentence_analysis_list'))
+    
+    if not sentence.file_path or not os.path.exists(sentence.file_path):
+        flash('Arquivo da sentença não encontrado', 'danger')
+        return redirect(url_for('tools.judicial_sentence_analysis_detail', sentence_id=sentence_id))
+    
+    return send_file(
+        sentence.file_path,
+        as_attachment=True,
+        download_name=sentence.original_filename
+    )
+
+
+@tools_bp.route('/sentence-analysis/<int:sentence_id>/view-petition')
+@require_law_firm
+def view_petition_file(sentence_id):
+    """Visualizar arquivo da petição"""
+    sentence = JudicialSentenceAnalysis.query.get_or_404(sentence_id)
+    
+    if sentence.law_firm_id != get_current_law_firm_id():
+        flash('Acesso não autorizado', 'danger')
+        return redirect(url_for('tools.judicial_sentence_analysis_list'))
+    
+    if not sentence.petition_file_path or not os.path.exists(sentence.petition_file_path):
+        flash('Arquivo de petição não encontrado', 'danger')
+        return redirect(url_for('tools.judicial_sentence_analysis_detail', sentence_id=sentence_id))
+    
+    return send_file(
+        sentence.petition_file_path,
+        as_attachment=False,
+        download_name=sentence.petition_filename,
+        mimetype='application/pdf' if sentence.petition_file_type.lower() == 'pdf' else 'application/msword'
+    )
+
+
+@tools_bp.route('/sentence-analysis/<int:sentence_id>/download-petition')
+@require_law_firm
+def download_petition_file(sentence_id):
+    """Baixar arquivo da petição"""
+    sentence = JudicialSentenceAnalysis.query.get_or_404(sentence_id)
+    
+    if sentence.law_firm_id != get_current_law_firm_id():
+        flash('Acesso não autorizado', 'danger')
+        return redirect(url_for('tools.judicial_sentence_analysis_list'))
+    
+    if not sentence.petition_file_path or not os.path.exists(sentence.petition_file_path):
+        flash('Arquivo de petição não encontrado', 'danger')
+        return redirect(url_for('tools.judicial_sentence_analysis_detail', sentence_id=sentence_id))
+    
+    return send_file(
+        sentence.petition_file_path,
+        as_attachment=True,
+        download_name=sentence.petition_filename
+    )
