@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import time
@@ -29,6 +30,15 @@ QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
 QUERY_MODEL = os.getenv("KB_QUERY_MODEL", "gpt-4o-mini")
 ROUTER_MODEL = os.getenv("KB_ROUTER_MODEL", "gpt-5-nano")
+KB_AGENT_DEBUG = os.getenv("KB_AGENT_DEBUG", "false").strip().lower() in {"1", "true", "yes", "on"}
+KB_MAX_HISTORY_MESSAGES = int(os.getenv("KB_MAX_HISTORY_MESSAGES", "10"))
+KB_MAX_HISTORY_CHARS = int(os.getenv("KB_MAX_HISTORY_CHARS", "12000"))
+KB_MAX_CONTEXT_RESULTS = int(os.getenv("KB_MAX_CONTEXT_RESULTS", "10"))
+KB_MAX_CONTEXT_CHARS_PER_SOURCE = int(os.getenv("KB_MAX_CONTEXT_CHARS_PER_SOURCE", "3000"))
+KB_AGENT_RECURSION_LIMIT = int(os.getenv("KB_AGENT_RECURSION_LIMIT", "10"))
+
+
+logger = logging.getLogger(__name__)
 
 
 class ResponseSchema(BaseModel):
@@ -62,7 +72,14 @@ class KnowledgeQueryAgent:
         self.qdrant = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=60)
         self.openai = OpenAI()
         self.query_enhancer = QueryEnhancerAgent()
-        self.tools_registry = KnowledgeQueryTools()
+        self._last_context_data = None
+        self._last_context_text = ""
+        self._context_search_calls = 0
+        self._cached_should_use_context = None
+        self.tools_registry = KnowledgeQueryTools(
+            should_use_context_resolver=self._resolve_should_use_context,
+            context_search_resolver=self._resolve_context_search,
+        )
         self.router_llm = ChatOpenAI(model=ROUTER_MODEL, temperature=0).with_structured_output(RetrievalDecisionSchema)
         self.response_llm = ChatOpenAI(model=QUERY_MODEL, temperature=0)
 
@@ -77,6 +94,46 @@ class KnowledgeQueryAgent:
             response_format=ToolStrategy(ResponseSchema),
         )
 
+    def _build_fallback_response_llm(self):
+        return self.response_llm.with_structured_output(ResponseSchema)
+
+    def _debug_log(self, message: str, **metadata) -> None:
+        if not KB_AGENT_DEBUG:
+            return
+        if metadata:
+            logger.info("[KB_AGENT_DEBUG] %s | %s", message, json.dumps(metadata, ensure_ascii=False))
+        else:
+            logger.info("[KB_AGENT_DEBUG] %s", message)
+
+    def _normalize_history(self, history: list[dict] | None) -> list[dict]:
+        if not history:
+            return []
+
+        limited_history = history[-KB_MAX_HISTORY_MESSAGES:] if len(history) > KB_MAX_HISTORY_MESSAGES else history
+        normalized: list[dict] = []
+        total_chars = 0
+
+        for item in limited_history:
+            role = str(item.get("role", "user"))
+            content = item.get("content", "")
+            if isinstance(content, list):
+                content = " ".join(str(part) for part in content)
+            content = str(content).strip()
+            if not content:
+                continue
+
+            remaining = KB_MAX_HISTORY_CHARS - total_chars
+            if remaining <= 0:
+                break
+
+            if len(content) > remaining:
+                content = content[:remaining]
+
+            normalized.append({"role": role, "content": content})
+            total_chars += len(content)
+
+        return normalized
+
     def create_embedding_vector(self, text: str):
         embedding_request = self.openai.embeddings.create(input=text, model=EMBEDDING_MODEL)
         return embedding_request.data[0].embedding
@@ -87,7 +144,7 @@ class KnowledgeQueryAgent:
         print("pergunta melhorada:", improved_question)
         vector = self.create_embedding_vector(improved_question)
 
-        results = self.qdrant.query_points(collection_name=self.collection, query=vector, limit=10)
+        results = self.qdrant.query_points(collection_name=self.collection, query=vector, limit=KB_MAX_CONTEXT_RESULTS)
 
         context = "\n".join([item.payload["text"] for item in results.points])
         return {
@@ -96,6 +153,46 @@ class KnowledgeQueryAgent:
             "context": context,
             "results": results,
         }
+
+    def _resolve_should_use_context(self, question: str, history_preview: str = "") -> bool:
+        if self._cached_should_use_context is not None:
+            self._debug_log("Decisão de contexto em cache", should_use_context=self._cached_should_use_context)
+            return bool(self._cached_should_use_context)
+
+        history = [{"role": "user", "content": history_preview}] if history_preview else None
+        decision = self._should_retrieve_context(question, history=history)
+        self._cached_should_use_context = bool(decision.should_retrieve_context)
+        self._debug_log("Decisão de contexto calculada", should_use_context=self._cached_should_use_context)
+        return bool(self._cached_should_use_context)
+
+    def _resolve_context_search(self, question: str, history_preview: str = "") -> str:
+        self._context_search_calls += 1
+        self._debug_log("Tool buscar_contexto_base chamada", call_count=self._context_search_calls)
+
+        if self._context_search_calls > 1:
+            return "Contexto já foi buscado nesta rodada. Reutilize o contexto anterior para responder."
+
+        if self._last_context_text:
+            return self._last_context_text
+
+        context_data = self.ask_knowledge_base(question, history=None)
+        self._last_context_data = context_data
+
+        points = context_data.get("results").points if context_data and context_data.get("results") else []
+        if not points:
+            self._last_context_text = "Nenhum contexto encontrado na base vetorial para essa pergunta."
+            return self._last_context_text
+
+        context_with_sources = []
+        for idx, item in enumerate(points):
+            source = item.payload.get("source", "Fonte desconhecida")
+            text = (item.payload.get("text", "") or "")[:KB_MAX_CONTEXT_CHARS_PER_SOURCE]
+            page = item.payload.get("page")
+            source_info = f"{source} (Página {page})" if page else source
+            context_with_sources.append(f"[Fonte {idx}]: {source_info}\n{text}")
+
+        self._last_context_text = "\n\n---\n\n".join(context_with_sources)
+        return self._last_context_text
 
     def _should_retrieve_context(self, question: str, history=None) -> RetrievalDecisionSchema:
         """Decide se a pergunta precisa buscar contexto na base vetorial antes de responder."""
@@ -133,6 +230,33 @@ class KnowledgeQueryAgent:
         except Exception:
             return RetrievalDecisionSchema(should_retrieve_context=True)
 
+    def _generate_fallback_response(self, question: str, history=None) -> ResponseSchema:
+        normalized_history = self._normalize_history(history)
+        should_use_context = self._should_retrieve_context(question, history=normalized_history)
+        context_text = ""
+
+        if should_use_context.should_retrieve_context:
+            context_text = self._resolve_context_search(question)
+
+        fallback_messages = []
+        if normalized_history:
+            fallback_messages.extend(normalized_history)
+
+        fallback_prompt = (
+            "Você é um assistente jurídico especializado. "
+            "Responda em português do Brasil, sem inventar fatos, e seja objetivo.\n\n"
+            "Retorne estritamente no formato estruturado com os campos: answer, sources, suggested_questions.\n"
+            "- Em sources, use apenas índices das fontes realmente usadas (ex: ['0','2']).\n"
+            "- Se não houver base suficiente, responda com cautela e use sources vazia.\n"
+            "- suggested_questions deve conter exatamente 3 perguntas/comandos curtos e prontos para envio.\n\n"
+            f"Pergunta do usuário: {question}\n\n"
+            f"Contexto disponível:\n{context_text or 'sem contexto'}"
+        )
+        fallback_messages.append({"role": "user", "content": fallback_prompt})
+
+        fallback_llm = self._build_fallback_response_llm()
+        return fallback_llm.invoke(fallback_messages)
+
     def ask_with_llm(
         self,
         question: str,
@@ -142,37 +266,22 @@ class KnowledgeQueryAgent:
         chat_session_id: int = None,
     ) -> dict:
         """Consulta a base de conhecimento e usa LLM para gerar resposta."""
-        decision = self._should_retrieve_context(question, history=history)
-        should_retrieve = bool(decision.should_retrieve_context)
-        print("deve buscar contexto:", should_retrieve)
-
-        context_data = None
-        if should_retrieve:
-            context_data = self.ask_knowledge_base(question, history=history)
-
-        context_with_sources = []
+        self._last_context_data = None
+        self._last_context_text = ""
+        self._context_search_calls = 0
+        self._cached_should_use_context = None
         sources_map = {}
-
-        if context_data:
-            for idx, item in enumerate(context_data["results"].points):
-                source = item.payload["source"]
-                text = item.payload["text"]
-                page = item.payload.get("page")
-
-                source_info = f"{source} (Página {page})" if page else source
-                sources_map[idx] = source_info
-
-                context_with_sources.append(f"[Fonte {idx}]: {source_info}\n{text}")
-
-    
-        formatted_context = "\n\n---\n\n".join(context_with_sources) if context_with_sources else ""
 
         start_time = time.time()
 
         response_agent = self._build_response_agent()
 
         instructions = (
-            "IMPORTANTE: No campo 'sources', liste APENAS os números das fontes que você realmente usou "
+            "IMPORTANTE: Primeiro chame a tool 'decidir_uso_contexto' para decidir se deve buscar contexto (no máximo 1 vez). "
+            "Se o resultado for 'usar_contexto', chame a tool 'buscar_contexto_base' (no máximo 1 vez) "
+            "e use o retorno para responder. "
+            "Se o resultado for 'nao_usar_contexto', responda sem contexto. "
+            "No campo 'sources', liste APENAS os números das fontes que você realmente usou "
             "para responder (ex: ['0', '2']). Se não souber a resposta com base no contexto, informe "
             "claramente que não possui essa informação e retorne sources como lista vazia. "
             "Se a pergunta estiver incompleta, ambígua, ou sem dados suficientes no contexto, "
@@ -182,37 +291,60 @@ class KnowledgeQueryAgent:
             "Não use rótulos, prefixos ou metadados."
         )
 
-        context_block = (
-            f"Contexto disponível:\n\n{formatted_context}"
-            if should_retrieve
-            else "Contexto disponível: sem consulta vetorial nesta rodada."
-        )
-
         final_user_prompt = (
-            f"{context_block}\n\n"
             f"{instructions}\n\n"
             f"Pergunta do usuário: {question}"
         )
 
         messages = []
-        if history:
-            limited_history = history[-10:] if len(history) > 10 else history
-            messages.extend(limited_history)
+        normalized_history = self._normalize_history(history)
+        if normalized_history:
+            messages.extend(normalized_history)
         messages.append({"role": "user", "content": final_user_prompt})
 
-        response_payload = response_agent.invoke({"messages": messages})
-        structured_response = response_payload.get("structured_response")
-        if not structured_response:
-            raise RuntimeError("Resposta estruturada não retornada pelo create_agent")
+        self._debug_log(
+            "Invocando create_agent",
+            recursion_limit=KB_AGENT_RECURSION_LIMIT,
+            history_messages=len(normalized_history),
+            history_chars=sum(len(str(item.get("content", ""))) for item in normalized_history),
+            question_chars=len(question or ""),
+        )
 
-        response = structured_response
+        try:
+            response_payload = response_agent.invoke(
+                {"messages": messages},
+                config={"recursion_limit": KB_AGENT_RECURSION_LIMIT},
+            )
+            structured_response = response_payload.get("structured_response")
+            if not structured_response:
+                raise RuntimeError("Resposta estruturada não retornada pelo create_agent")
+            response = structured_response
+        except Exception as exc:
+            error_text = str(exc)
+            if "Recursion limit" not in error_text and "GRAPH_RECURSION_LIMIT" not in error_text:
+                raise
+
+            self._debug_log(
+                "Recursion limit atingido, ativando fallback determinístico",
+                recursion_limit=KB_AGENT_RECURSION_LIMIT,
+                error=error_text,
+            )
+            response = self._generate_fallback_response(question=question, history=history)
 
         response_time_ms = int((time.time() - start_time) * 1000)
 
         used_sources = []
         sources_detail = []
 
-        if should_retrieve and response.sources and context_data:
+        context_data = self._last_context_data
+        if context_data:
+            for idx, item in enumerate(context_data["results"].points):
+                source = item.payload["source"]
+                page = item.payload.get("page")
+                source_info = f"{source} (Página {page})" if page else source
+                sources_map[idx] = source_info
+
+        if response.sources and context_data:
             for source_ref in response.sources:
                 try:
                     numbers = re.findall(r"\d+", str(source_ref))

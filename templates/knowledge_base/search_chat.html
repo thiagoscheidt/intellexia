@@ -844,6 +844,8 @@
 
 <!-- Biblioteca para renderizar Markdown -->
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<!-- Plugin para efeito de digitação -->
+<script src="https://cdn.jsdelivr.net/npm/typed.js@2.1.0/dist/typed.umd.js"></script>
 
 <script>
   document.addEventListener('DOMContentLoaded', function () {
@@ -1036,7 +1038,7 @@
 
         (data.history || []).forEach(entry => {
           addUserMessage(entry.question);
-          addAssistantMessage(entry.answer, entry.sources || [], []);
+          addAssistantMessage(entry.answer, entry.sources || [], [], { animate: false });
           conversationHistory.push({ role: 'user', content: entry.question });
           conversationHistory.push({ role: 'assistant', content: entry.answer });
         });
@@ -1110,7 +1112,7 @@
     }
 
     // Função para adicionar resposta do assistente
-    function addAssistantMessage(answer, sources, sourcesDetail) {
+    function addAssistantMessage(answer, sources, sourcesDetail, options = { animate: true }) {
       removeLoadingMessage();
 
       const messageDiv = document.createElement('div');
@@ -1233,17 +1235,52 @@
         renderedAnswer = escapeHtml(answer);
       }
 
+      const typingTargetId = `assistant-typing-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+      const sourcesContainerId = `assistant-sources-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+
       messageDiv.innerHTML = `
         <div class="message-meta">
           <span class="message-role-badge"><i class="bi bi-robot"></i> ${assistantDisplayName}</span>
         </div>
         <div class="message-content">
-          <div class="markdown-content">${renderedAnswer}</div>
-          ${sourcesHtml}
+          <div id="${typingTargetId}" class="markdown-content"></div>
+          <div id="${sourcesContainerId}" style="display: none;"></div>
         </div>
       `;
       chatMessages.appendChild(messageDiv);
-      scrollToBottom();
+
+      const typingTargetEl = document.getElementById(typingTargetId);
+      const sourcesContainerEl = document.getElementById(sourcesContainerId);
+
+      const finalizeMessageRender = () => {
+        if (typingTargetEl) {
+          typingTargetEl.innerHTML = renderedAnswer;
+        }
+
+        if (sourcesContainerEl) {
+          sourcesContainerEl.innerHTML = sourcesHtml || '';
+          sourcesContainerEl.style.display = sourcesHtml ? 'block' : 'none';
+        }
+
+        scrollToBottom();
+      };
+
+      const shouldAnimate = options?.animate !== false;
+      if (shouldAnimate && typeof Typed !== 'undefined' && typingTargetEl) {
+        new Typed(`#${typingTargetId}`, {
+          strings: [renderedAnswer],
+          typeSpeed: 6,
+          backSpeed: 0,
+          showCursor: false,
+          smartBackspace: false,
+          contentType: 'html',
+          onComplete: finalizeMessageRender,
+        });
+        scrollToBottom();
+        return;
+      }
+
+      finalizeMessageRender();
     }
 
     // Função para adicionar mensagem de erro

@@ -68,12 +68,39 @@ class KnowledgeQueryTools:
     Adicione novos métodos com `@tool` e exponha via `get_tools`.
     """
 
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        should_use_context_resolver: Callable[[str, str], bool] | None = None,
+        context_search_resolver: Callable[[str, str], str] | None = None,
+    ) -> None:
         self._tools = [
             normalizar_pergunta_sugerida,
             criar_sugestoes_proximo_passo,
             obter_capital_pais_ficticio,
         ]
+
+        if should_use_context_resolver is not None:
+            @tool("decidir_uso_contexto")
+            def decidir_uso_contexto(pergunta: str, historico: str = "") -> str:
+                """Decide se deve buscar contexto na base vetorial antes de responder."""
+                try:
+                    should_use = bool(should_use_context_resolver(pergunta, historico))
+                    return "usar_contexto" if should_use else "nao_usar_contexto"
+                except Exception:
+                    return "usar_contexto"
+
+            self._tools.append(decidir_uso_contexto)
+
+        if context_search_resolver is not None:
+            @tool("buscar_contexto_base")
+            def buscar_contexto_base(pergunta: str, historico: str = "") -> str:
+                """Busca contexto na base vetorial e retorna trechos com índice de fonte."""
+                try:
+                    return context_search_resolver(pergunta, historico)
+                except Exception as exc:
+                    return f"Falha ao buscar contexto: {exc}"
+
+            self._tools.append(buscar_contexto_base)
 
     def register_tool(self, tool_fn: Callable) -> None:
         self._tools.append(tool_fn)
