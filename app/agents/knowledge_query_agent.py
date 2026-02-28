@@ -8,6 +8,8 @@ from datetime import datetime
 
 from dotenv import load_dotenv
 from openai import OpenAI
+from langchain.agents import create_agent
+from langchain.agents.structured_output import ToolStrategy
 from pydantic import BaseModel, Field
 from qdrant_client import QdrantClient
 from langchain_openai import ChatOpenAI
@@ -15,6 +17,7 @@ from app.models import db, KnowledgeChatHistory, KnowledgeChatSession
 
 
 from app.agents.query_enhancer_agent import QueryEnhancerAgent
+from app.agents.tools import KnowledgeQueryTools
 
 
 load_dotenv()
@@ -59,6 +62,20 @@ class KnowledgeQueryAgent:
         self.qdrant = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=60)
         self.openai = OpenAI()
         self.query_enhancer = QueryEnhancerAgent()
+        self.tools_registry = KnowledgeQueryTools()
+        self.router_llm = ChatOpenAI(model=ROUTER_MODEL, temperature=0).with_structured_output(RetrievalDecisionSchema)
+        self.response_llm = ChatOpenAI(model=QUERY_MODEL, temperature=0)
+
+    def _build_response_agent(self):
+        return create_agent(
+            model=self.response_llm,
+            system_prompt=(
+                "Você é um assistente jurídico especializado que responde perguntas com base na base de "
+                "conhecimento da empresa. Use tools quando necessário para melhorar consistência de sugestões."
+            ),
+            tools=self.tools_registry.get_tools(),
+            response_format=ToolStrategy(ResponseSchema),
+        )
 
     def create_embedding_vector(self, text: str):
         embedding_request = self.openai.embeddings.create(input=text, model=EMBEDDING_MODEL)
@@ -82,8 +99,6 @@ class KnowledgeQueryAgent:
 
     def _should_retrieve_context(self, question: str, history=None) -> RetrievalDecisionSchema:
         """Decide se a pergunta precisa buscar contexto na base vetorial antes de responder."""
-        router_llm = ChatOpenAI(model=ROUTER_MODEL, temperature=0).with_structured_output(RetrievalDecisionSchema)
-
         history_preview = ""
         if history:
             limited_history = history[-6:] if len(history) > 6 else history
@@ -114,7 +129,7 @@ class KnowledgeQueryAgent:
             },
         ]
         try:
-            return router_llm.invoke(messages)
+            return self.router_llm.invoke(messages)
         except Exception:
             return RetrievalDecisionSchema(should_retrieve_context=True)
 
@@ -154,57 +169,43 @@ class KnowledgeQueryAgent:
 
         start_time = time.time()
 
-        llm = ChatOpenAI(model=QUERY_MODEL, temperature=0).with_structured_output(ResponseSchema)
+        response_agent = self._build_response_agent()
 
-        system_message = {
-            "role": "system",
-            "content": "Você é um assistente jurídico especializado que responde perguntas com base na base de conhecimento da empresa.",
-        }
+        instructions = (
+            "IMPORTANTE: No campo 'sources', liste APENAS os números das fontes que você realmente usou "
+            "para responder (ex: ['0', '2']). Se não souber a resposta com base no contexto, informe "
+            "claramente que não possui essa informação e retorne sources como lista vazia. "
+            "Se a pergunta estiver incompleta, ambígua, ou sem dados suficientes no contexto, "
+            "não invente resposta: peça mais detalhes ao usuário com perguntas curtas e objetivas. "
+            "Sempre preencha 'suggested_questions' com exatamente 3 perguntas/comandos curtos, em português do Brasil, "
+            "prontos para clique e envio direto para a IA, baseados na resposta anterior. "
+            "Não use rótulos, prefixos ou metadados."
+        )
 
-        context_message = {
-            "role": "system",
-            "content": (
-                f"Contexto disponível:\n\n{formatted_context}\n\n"
-                "IMPORTANTE: No campo 'sources', liste APENAS os números das fontes que você realmente usou "
-                "para responder (ex: ['0', '2']). Se não souber a resposta com base no contexto, informe "
-                "claramente que não possui essa informação e retorne sources como lista vazia. "
-                "Se a pergunta estiver incompleta, ambígua, ou sem dados suficientes no contexto, "
-                "não invente resposta: peça mais detalhes ao usuário com perguntas curtas e objetivas. "
-                "Além disso, sempre preencha 'suggested_questions' com exatamente 3 perguntas de continuação, "
-                "curtas, específicas ao contexto e em português do Brasil. "
-                "Cada sugestão deve ser uma pergunta/comando pronto para clique e envio direto para a IA "
-                "(ex.: 'Faça um resumo do processo...'). Não use rótulos, prefixos ou metadados."
-            ),
-        }
+        context_block = (
+            f"Contexto disponível:\n\n{formatted_context}"
+            if should_retrieve
+            else "Contexto disponível: sem consulta vetorial nesta rodada."
+        )
 
-        no_context_message = {
-            "role": "system",
-            "content": (
-                "Você vai responder sem consultar a base vetorial nesta rodada. "
-                "No campo 'sources', retorne sempre lista vazia. "
-                "Se a pergunta estiver incompleta, ambígua ou faltar informação, peça mais detalhes "
-                "ao usuário com perguntas curtas e objetivas antes de responder. "
-                "Além disso, sempre preencha 'suggested_questions' com exatamente 3 perguntas de continuação, "
-                "curtas, úteis e em português do Brasil. "
-                "Cada sugestão deve ser uma pergunta/comando pronto para clique e envio direto para a IA. "
-                "Não use rótulos, prefixos ou metadados."
-            ),
-        }
+        final_user_prompt = (
+            f"{context_block}\n\n"
+            f"{instructions}\n\n"
+            f"Pergunta do usuário: {question}"
+        )
 
-        if history is None or len(history) == 0:
-            messages = [
-                system_message,
-                context_message if should_retrieve else no_context_message,
-                {"role": "user", "content": question},
-            ]
-        else:
+        messages = []
+        if history:
             limited_history = history[-10:] if len(history) > 10 else history
-            messages = [system_message] + limited_history + [
-                context_message if should_retrieve else no_context_message,
-                {"role": "user", "content": question},
-            ]
+            messages.extend(limited_history)
+        messages.append({"role": "user", "content": final_user_prompt})
 
-        response = llm.invoke(messages)
+        response_payload = response_agent.invoke({"messages": messages})
+        structured_response = response_payload.get("structured_response")
+        if not structured_response:
+            raise RuntimeError("Resposta estruturada não retornada pelo create_agent")
+
+        response = structured_response
 
         response_time_ms = int((time.time() - start_time) * 1000)
 
