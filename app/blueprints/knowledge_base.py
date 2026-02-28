@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify, send_file
 from app.models import db, KnowledgeBase, KnowledgeCategory, KnowledgeTag, KnowledgeSummary
-from app.agents.knowledge_ingestor import KnowledgeIngestor
+from app.agents.knowledge_ingestion_agent import KnowledgeIngestionAgent
+from app.agents.knowledge_query_agent import KnowledgeQueryAgent
 from datetime import datetime
 import builtins
 from werkzeug.utils import secure_filename
@@ -143,10 +144,10 @@ def upload():
                 # Processar arquivo com KnowledgeIngestor e inserir no Qdrant
                 try:
                     print(f"Iniciando processamento do arquivo: {filename}")
-                    ingestor = KnowledgeIngestor()
+                    ingestion_agent = KnowledgeIngestionAgent()
                     
                     # Processar arquivo e inserir no Qdrant
-                    markdown_content = ingestor.process_file(
+                    markdown_content = ingestion_agent.process_file(
                         Path(file_path), 
                         source_name=filename,
                         category=category,
@@ -769,11 +770,11 @@ def api_ask():
     try:
         user_id = get_current_user_id()
         
-        # Inicializar o ingestor
-        ingestor = KnowledgeIngestor()
+        # Inicializar o agente de consulta
+        query_agent = KnowledgeQueryAgent()
         
         # Fazer a pergunta usando o método ask_with_llm com histórico
-        result = ingestor.ask_with_llm(
+        result = query_agent.ask_with_llm(
             question=question,
             user_id=user_id,
             law_firm_id=law_firm_id,

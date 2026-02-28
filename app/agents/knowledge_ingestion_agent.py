@@ -1,0 +1,244 @@
+from __future__ import annotations
+
+import os
+import uuid
+from datetime import datetime
+from pathlib import Path
+from typing import Optional
+
+from dotenv import load_dotenv
+from openai import OpenAI
+from qdrant_client import QdrantClient
+from qdrant_client.http import models as rest
+from langchain_text_splitters import RecursiveCharacterTextSplitter
+from docling.document_converter import DocumentConverter, PdfFormatOption
+from docling.datamodel.pipeline_options import PdfPipelineOptions
+from docling.datamodel.base_models import InputFormat
+
+
+load_dotenv()
+
+EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL")
+VECTOR_SIZE = int(os.getenv("VECTOR_SIZE", "0"))
+DEFAULT_COLLECTION = os.getenv("QDRANT_COLLECTION", "knowledge_base")
+QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
+QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
+MAX_CHARS_PER_CHUNK = int(os.getenv("MAX_CHARS_PER_CHUNK", "1500"))
+
+
+class KnowledgeIngestionAgent:
+    """Recebe e processa arquivos para ingestão na base vetorial."""
+
+    def __init__(self, collection_name: str = DEFAULT_COLLECTION):
+        if not EMBEDDING_MODEL:
+            raise RuntimeError("EMBEDDING_MODEL não definido no .env")
+        if VECTOR_SIZE <= 0:
+            raise RuntimeError("VECTOR_SIZE inválido ou não definido no .env")
+
+        self.collection = collection_name
+        self.qdrant = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=60)
+        self.openai = OpenAI()
+        self._ensure_collection()
+
+    def _ensure_collection(self) -> None:
+        if self.qdrant.collection_exists(self.collection):
+            return
+        self.qdrant.create_collection(
+            collection_name=self.collection,
+            vectors_config=rest.VectorParams(size=VECTOR_SIZE, distance=rest.Distance.COSINE),
+        )
+
+    def _embed(self, text: str) -> list[float]:
+        response = self.openai.embeddings.create(input=text, model=EMBEDDING_MODEL)
+        return response.data[0].embedding
+
+    def _chunk_text(self, text: str, chunk_size: int = MAX_CHARS_PER_CHUNK) -> list[dict]:
+        """Divide o texto em chunks, mantendo informações de metadados."""
+        print(f"Iniciando Chunking de texto em pedaços de até {chunk_size} caracteres")
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=20)
+        texts = text_splitter.split_text(text)
+        return [{"text": chunk, "metadata": {}} for chunk in texts]
+
+    def ingest_document(
+        self,
+        text: str,
+        source: str,
+        category: str = None,
+        description: str = None,
+        tags: str = None,
+        lawsuit_number: str = None,
+        chunks_with_pages: list[dict] = None,
+        file_id: int = None,
+    ) -> Optional[list[str]]:
+        """Ingere documento na base vetorial."""
+        if chunks_with_pages:
+            chunks = chunks_with_pages
+        else:
+            cleaned = text.strip()
+            if not cleaned:
+                return None
+            chunks = self._chunk_text(cleaned)
+
+        point_ids: list[str] = []
+        total = len(chunks)
+        print(f"Dividindo documento '{source}' em {total} chunks")
+
+        points: list[rest.PointStruct] = []
+        for idx, chunk_data in enumerate(chunks):
+            chunk_text = chunk_data.get("text", chunk_data) if isinstance(chunk_data, dict) else chunk_data
+            chunk_page = chunk_data.get("page") if isinstance(chunk_data, dict) else None
+
+            print(
+                f"Processando chunk {idx + 1}/{total} ({len(chunk_text)} chars)"
+                + (f" - Página {chunk_page}" if chunk_page else "")
+            )
+            vector = self._embed(chunk_text)
+            point_id = str(uuid.uuid4())
+            payload = {
+                "text": chunk_text,
+                "source": source,
+                "category": category or "",
+                "description": description or "",
+                "tags": tags or "",
+                "lawsuit_number": lawsuit_number or "",
+                "chunk_index": idx,
+                "chunk_total": total,
+                "ingested_at": datetime.utcnow().isoformat() + "Z",
+            }
+
+            if file_id is not None:
+                payload["file_id"] = file_id
+
+            if chunk_page is not None:
+                payload["page"] = chunk_page
+
+            points.append(rest.PointStruct(id=point_id, vector=vector, payload=payload))
+            point_ids.append(point_id)
+
+        self.qdrant.upsert(collection_name=self.collection, points=points, wait=True)
+        return point_ids
+
+    def process_file(
+        self,
+        file_path: Path,
+        source_name: str,
+        category: str = None,
+        description: str = None,
+        tags: str = None,
+        lawsuit_number: str = None,
+        file_id: int = None,
+    ):
+        """Processa um arquivo e insere na base de conhecimento com informação de páginas."""
+        pipeline_options = PdfPipelineOptions(
+            do_ocr=False,
+            generate_page_images=False,
+            do_table_structure=False,
+            enable_parallel_processing=True,
+        )
+
+        converter = DocumentConverter(
+            format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
+        )
+        converter = DocumentConverter()
+
+        try:
+            result = converter.convert(str(file_path))
+            doc = result.document
+
+            chunks_with_pages = []
+
+            if hasattr(doc, "pages") and doc.pages:
+                print(f"Documento tem {len(doc.pages)} páginas")
+
+                for page_no in sorted(doc.pages.keys()):
+                    page_items = []
+
+                    for item in doc.iterate_items():
+                        if not hasattr(item, "text") or not item.text:
+                            continue
+
+                        item_page = None
+                        if hasattr(item, "prov") and item.prov:
+                            prov_list = item.prov if isinstance(item.prov, list) else [item.prov]
+                            for prov in prov_list:
+                                if prov and hasattr(prov, "bbox"):
+                                    bbox = prov.bbox
+                                    if hasattr(bbox, "page"):
+                                        item_page = bbox.page
+                                        break
+
+                        if item_page == page_no:
+                            page_items.append(item.text)
+
+                    if page_items:
+                        page_text = "\\n".join(page_items)
+                        page_chunks = self._chunk_text(page_text)
+
+                        for chunk_data in page_chunks:
+                            chunk_data["page"] = page_no
+                            chunks_with_pages.append(chunk_data)
+
+                        print(f"Página {page_no}: {len(page_chunks)} chunks")
+
+            if chunks_with_pages:
+                print(f"✓ Total: {len(chunks_with_pages)} chunks COM informação de página")
+                self.ingest_document(
+                    text="",
+                    source=source_name,
+                    category=category,
+                    description=description,
+                    tags=tags,
+                    lawsuit_number=lawsuit_number,
+                    chunks_with_pages=chunks_with_pages,
+                    file_id=file_id,
+                )
+            else:
+                print("⚠ Tentando abordagem alternativa: mapeamento por caracteres")
+
+                full_text = doc.export_to_markdown()
+                total_chars = len(full_text)
+
+                if hasattr(doc, "pages") and len(doc.pages) > 0:
+                    chars_per_page = total_chars // len(doc.pages)
+
+                    chunks = self._chunk_text(full_text)
+                    current_char_pos = 0
+
+                    for chunk_data in chunks:
+                        chunk_text = chunk_data["text"]
+                        estimated_page = min((current_char_pos // chars_per_page) + 1, len(doc.pages))
+                        chunk_data["page"] = estimated_page
+                        chunks_with_pages.append(chunk_data)
+                        current_char_pos += len(chunk_text)
+
+                    print(f"✓ Total: {len(chunks_with_pages)} chunks com página ESTIMADA")
+                    self.ingest_document(
+                        text="",
+                        source=source_name,
+                        category=category,
+                        description=description,
+                        tags=tags,
+                        lawsuit_number=lawsuit_number,
+                        chunks_with_pages=chunks_with_pages,
+                        file_id=file_id,
+                    )
+                else:
+                    print("✗ Processando SEM informação de páginas")
+                    self.ingest_document(
+                        text=full_text,
+                        source=source_name,
+                        category=category,
+                        description=description,
+                        tags=tags,
+                        lawsuit_number=lawsuit_number,
+                        file_id=file_id,
+                    )
+
+            return doc.export_to_markdown()
+
+        except Exception as e:
+            print(f"Erro ao processar arquivo: {str(e)}")
+            import traceback
+
+            traceback.print_exc()
+            return None

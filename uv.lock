@@ -1027,6 +1027,7 @@ dependencies = [
     { name = "pdf2image" },
     { name = "pdfplumber" },
     { name = "pillow" },
+    { name = "pymysql" },
     { name = "pypandoc" },
     { name = "python-docx" },
     { name = "qdrant-client" },
@@ -1034,11 +1035,6 @@ dependencies = [
     { name = "rich" },
     { name = "sentence-transformers" },
     { name = "zeep" },
-]
-
-[package.optional-dependencies]
-production = [
-    { name = "pymysql" },
 ]
 
 [package.metadata]
@@ -1063,7 +1059,7 @@ requires-dist = [
     { name = "pdf2image", specifier = ">=1.17.0" },
     { name = "pdfplumber", specifier = ">=0.11.9" },
     { name = "pillow", specifier = ">=11.0.0" },
-    { name = "pymysql", marker = "extra == 'production'", specifier = ">=1.1.0" },
+    { name = "pymysql", specifier = ">=1.1.0" },
     { name = "pypandoc", specifier = ">=1.16.2" },
     { name = "python-docx", specifier = ">=1.2.0" },
     { name = "qdrant-client", specifier = ">=1.16.2" },
@@ -1072,7 +1068,6 @@ requires-dist = [
     { name = "sentence-transformers", specifier = ">=5.2.3" },
     { name = "zeep", specifier = ">=4.2.1" },
 ]
-provides-extras = ["production"]
 
 [[package]]
 name = "idna"
