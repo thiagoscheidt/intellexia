@@ -156,12 +156,12 @@
               </div>
 
               <form id="question-form">
-                <div class="input-group input-group-lg shadow-sm">
-                  <input type="text" class="form-control border-0" id="question-input"
-                    placeholder="Digite sua pergunta aqui..." autocomplete="off" required
-                    style="border-radius: 30px 0 0 30px; padding-left: 25px; background: #f8f9fa;">
-                  <button class="btn btn-primary px-4" type="submit" id="send-btn"
-                    style="border-radius: 0 30px 30px 0; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none;">
+                <div class="kb-chat-input-wrapper shadow-sm">
+                  <textarea class="kb-chat-textarea" id="question-input"
+                    placeholder="Digite sua pergunta aqui... (Shift+Enter para nova linha)" autocomplete="off" required
+                    rows="1"></textarea>
+                  <button class="btn btn-primary kb-chat-send-btn" type="submit" id="send-btn"
+                    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none;">
                     <i class="bi bi-send-fill"></i> Enviar
                   </button>
                 </div>
@@ -305,9 +305,46 @@
   }
 
   /* Estilo para o input */
-  #knowledge-chat-card #question-input:focus {
-    border-color: #007bff;
-    box-shadow: 0 0 0 0.2rem rgba(0, 123, 255, 0.25);
+  #knowledge-chat-card .kb-chat-input-wrapper {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.75rem;
+    background: #f8f9fa;
+    border: 1px solid #dee2e6;
+    border-radius: 18px;
+    padding: 0.65rem 0.75rem;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+  }
+
+  #knowledge-chat-card .kb-chat-input-wrapper:focus-within {
+    border-color: #667eea;
+    box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.2);
+  }
+
+  #knowledge-chat-card .kb-chat-textarea {
+    flex: 1;
+    border: none;
+    outline: none;
+    resize: none;
+    background: transparent;
+    color: #212529;
+    font-family: inherit;
+    font-weight: 400;
+    padding: 0.35rem 0.45rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+
+  #knowledge-chat-card .kb-chat-textarea::placeholder {
+    color: #6c757d;
+  }
+
+  #knowledge-chat-card .kb-chat-send-btn {
+    border-radius: 12px;
+    padding: 0.55rem 1rem;
+    white-space: nowrap;
   }
 
   #knowledge-chat-card .example-question {
@@ -466,6 +503,11 @@
     const chatContainer = document.getElementById('chat-container');
     const exampleButtons = document.querySelectorAll('.example-question');
 
+    function autoResizeTextarea() {
+      questionInput.style.height = 'auto';
+      questionInput.style.height = `${Math.min(questionInput.scrollHeight, 180)}px`;
+    }
+
     // Histórico da conversa (formato OpenAI: [{role, content}])
     let conversationHistory = [];
 
@@ -495,7 +537,7 @@
             userMsgDiv.innerHTML = `
               <div class="message-content">
                 <strong>Você:</strong><br>
-                ${escapeHtml(entry.question)}
+                ${formatUserText(entry.question)}
               </div>
             `;
             chatMessages.appendChild(userMsgDiv);
@@ -506,10 +548,18 @@
 
             let sourcesHtml = '';
             if (entry.sources && entry.sources.length > 0) {
+              const sourceBlockId = `history-sources-${entry.id}`;
               sourcesHtml = `
                 <div class="sources">
-                  <div class="sources-title"><i class="bi bi-book"></i> Fontes:</div>
-                  ${entry.sources.map(source => `<div class="source-item">• ${escapeHtml(source)}</div>`).join('')}
+                  <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                    <div class="sources-title mb-0"><i class="bi bi-book"></i> ${entry.sources.length} arquivo(s) pesquisado(s)</div>
+                    <button type="button" class="btn btn-sm btn-outline-primary toggle-sources-btn" data-target-id="${sourceBlockId}">
+                      <i class="bi bi-folder2-open"></i> Ver arquivos
+                    </button>
+                  </div>
+                  <div id="${sourceBlockId}" class="sources-details-container" style="display: none; margin-top: 0.5rem;">
+                    ${entry.sources.map(source => `<div class="source-item">• ${escapeHtml(source)}</div>`).join('')}
+                  </div>
                 </div>
               `;
             }
@@ -562,7 +612,7 @@
       messageDiv.innerHTML = `
         <div class="message-content">
           <strong>Você:</strong><br>
-          ${escapeHtml(text)}
+          ${formatUserText(text)}
         </div>
       `;
       chatMessages.appendChild(messageDiv);
@@ -671,20 +721,38 @@
           `;
         }).join('');
 
+        const sourceBlockId = `sources-details-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
+        const filesCount = Object.keys(sourcesByFile).length;
+
         sourcesHtml = `
           <div class="sources" style="margin-top: 1rem; padding: 1rem; background: #f0f4ff; border-radius: 10px; border-left: 4px solid #667eea;">
-            <div class="sources-title" style="font-weight: 600; margin-bottom: 0.75rem; color: #667eea;">
-              <i class="bi bi-book"></i> Fontes Utilizadas:
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+              <div class="sources-title mb-0" style="font-weight: 600; color: #667eea;">
+                <i class="bi bi-book"></i> ${filesCount} arquivo(s) pesquisado(s)
+              </div>
+              <button type="button" class="btn btn-sm btn-outline-primary toggle-sources-btn" data-target-id="${sourceBlockId}">
+                <i class="bi bi-folder2-open"></i> Ver arquivos
+              </button>
             </div>
-            ${sourceItems}
+            <div id="${sourceBlockId}" class="sources-details-container" style="display: none; margin-top: 0.75rem;">
+              ${sourceItems}
+            </div>
           </div>
         `;
       } else if (sources && sources.length > 0) {
         // Fallback para formato antigo
+        const sourceBlockId = `sources-fallback-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
         sourcesHtml = `
           <div class="sources">
-            <div class="sources-title"><i class="bi bi-book"></i> Fontes:</div>
-            ${sources.map(source => `<div class="source-item">• ${escapeHtml(source)}</div>`).join('')}
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+              <div class="sources-title mb-0"><i class="bi bi-book"></i> ${sources.length} arquivo(s) pesquisado(s)</div>
+              <button type="button" class="btn btn-sm btn-outline-primary toggle-sources-btn" data-target-id="${sourceBlockId}">
+                <i class="bi bi-folder2-open"></i> Ver arquivos
+              </button>
+            </div>
+            <div id="${sourceBlockId}" class="sources-details-container" style="display: none; margin-top: 0.5rem;">
+              ${sources.map(source => `<div class="source-item">• ${escapeHtml(source)}</div>`).join('')}
+            </div>
           </div>
         `;
       }
@@ -741,6 +809,10 @@
       return div.innerHTML;
     }
 
+    function formatUserText(text) {
+      return escapeHtml(text || '').replace(/\n/g, '<br>');
+    }
+
     // Enviar pergunta
     async function sendQuestion(question) {
       if (!question.trim()) return;
@@ -753,6 +825,7 @@
 
       // Limpar input
       questionInput.value = '';
+      autoResizeTextarea();
 
       // Desabilitar botão e input
       sendBtn.disabled = true;
@@ -802,6 +875,20 @@
       }
     });
 
+    // Enter envia e Shift+Enter cria nova linha
+    questionInput.addEventListener('keydown', function (e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        const question = questionInput.value.trim();
+        if (question && !sendBtn.disabled) {
+          sendQuestion(question);
+        }
+      }
+    });
+
+    // Auto-resize do textarea
+    questionInput.addEventListener('input', autoResizeTextarea);
+
     // Event listeners para perguntas de exemplo
     exampleButtons.forEach(button => {
       button.addEventListener('click', function () {
@@ -815,37 +902,52 @@
     loadHistory();
 
     // Focar no input ao carregar
+    autoResizeTextarea();
     questionInput.focus();
 
     // EVENT LISTENERS PARA BOTÕES DE RESUMO
-    document.addEventListener('click', async function(e) {
+    document.addEventListener('click', async function (e) {
+      if (e.target.closest('.toggle-sources-btn')) {
+        const btn = e.target.closest('.toggle-sources-btn');
+        const targetId = btn.getAttribute('data-target-id');
+        const target = targetId ? document.getElementById(targetId) : null;
+        if (!target) return;
+
+        const isHidden = target.style.display === 'none';
+        target.style.display = isHidden ? 'block' : 'none';
+        btn.innerHTML = isHidden
+          ? '<i class="bi bi-folder2"></i> Ocultar arquivos'
+          : '<i class="bi bi-folder2-open"></i> Ver arquivos';
+        return;
+      }
+
       if (e.target.closest('.summary-btn')) {
         const btn = e.target.closest('.summary-btn');
         const fileId = btn.getAttribute('data-file-id');
-        
+
         if (!fileId) return;
-        
+
         // Abrir modal
         const summaryModal = new bootstrap.Modal(document.getElementById('summaryModal'));
         summaryModal.show();
-        
+
         // Carregar resumo
         try {
           const response = await fetch(`/knowledge-base/${fileId}/get-summary`);
           const data = await response.json();
-          
+
           const summaryContent = document.getElementById('summaryContent');
-          
+
           if (data.success && data.summary) {
             const summary = data.summary.payload || {};
-            
+
             let htmlContent = '';
-            
+
             // Título do documento
             if (summary.document_name) {
               htmlContent += `<h5 class="mb-3" style="color: #667eea; font-weight: 600;">📄 ${escapeHtml(summary.document_name)}</h5>`;
             }
-            
+
             // Resumo Curto
             if (summary.summary_short) {
               htmlContent += `
@@ -857,7 +959,7 @@
                 </div>
               `;
             }
-            
+
             // Resumo Longo
             if (summary.summary_long) {
               htmlContent += `
@@ -873,7 +975,7 @@
                 </div>
               `;
             }
-            
+
             // Informações Processuais (lawsuit_info)
             if (summary.lawsuit_info && Object.keys(summary.lawsuit_info).some(k => summary.lawsuit_info[k])) {
               const lawsuit = summary.lawsuit_info;
@@ -886,7 +988,7 @@
                   </div>
                   <div class="card-body small">
               `;
-              
+
               // Dados básicos do processo
               if (lawsuit.process_number) {
                 lawsuitHtml += `<div class="mb-2"><strong>Número do Processo:</strong> <code style="background: #f0f0f0; padding: 0.25rem 0.5rem; border-radius: 4px;">${escapeHtml(lawsuit.process_number)}</code></div>`;
@@ -912,7 +1014,7 @@
               if (lawsuit.judge) {
                 lawsuitHtml += `<div class="mb-2"><strong>Juiz:</strong> ${escapeHtml(lawsuit.judge)}</div>`;
               }
-              
+
               // Assuntos
               if (lawsuit.subjects && Array.isArray(lawsuit.subjects) && lawsuit.subjects.length > 0) {
                 lawsuitHtml += `
@@ -924,7 +1026,7 @@
                   </div>
                 `;
               }
-              
+
               // Polos Processuais
               if (lawsuit.parties) {
                 // Polo Ativo
@@ -951,7 +1053,7 @@
                   });
                   lawsuitHtml += `</ul></div>`;
                 }
-                
+
                 // Polo Passivo
                 if (lawsuit.parties.passive_pole && Array.isArray(lawsuit.parties.passive_pole) && lawsuit.parties.passive_pole.length > 0) {
                   lawsuitHtml += `
@@ -977,11 +1079,11 @@
                   lawsuitHtml += `</ul></div>`;
                 }
               }
-              
+
               lawsuitHtml += `</div></div>`;
               htmlContent += lawsuitHtml;
             }
-            
+
             // Principais Pontos
             if (summary.key_points && summary.key_points.length > 0) {
               htmlContent += `
@@ -1003,7 +1105,7 @@
                 </div>
               `;
             }
-            
+
             // Partes/Seções do Documento
             if (summary.sections && summary.sections.length > 0) {
               htmlContent += `
@@ -1025,7 +1127,7 @@
                 </div>
               `;
             }
-            
+
             // Partes (alternativa se chamado de "parts")
             if (summary.parts && summary.parts.length > 0) {
               htmlContent += `
@@ -1047,7 +1149,7 @@
                 </div>
               `;
             }
-            
+
             // Números de Processo
             if (summary.lawsuit_numbers && summary.lawsuit_numbers.length > 0) {
               htmlContent += `
@@ -1069,7 +1171,7 @@
                 </div>
               `;
             }
-            
+
             // Datas Importantes
             if (summary.important_dates && Object.keys(summary.important_dates).length > 0) {
               htmlContent += `
@@ -1091,7 +1193,7 @@
                 </div>
               `;
             }
-            
+
             // Documentos Relacionados
             if (summary.related_documents && summary.related_documents.length > 0) {
               htmlContent += `
@@ -1113,7 +1215,7 @@
                 </div>
               `;
             }
-            
+
             // Conclusão
             if (summary.conclusion) {
               htmlContent += `
@@ -1125,11 +1227,11 @@
                 </div>
               `;
             }
-            
+
             if (!htmlContent) {
               htmlContent = `<p class="text-muted text-center py-4"><i class="bi bi-inbox"></i> Nenhum resumo disponível para este documento.</p>`;
             }
-            
+
             summaryContent.innerHTML = htmlContent;
           } else {
             summaryContent.innerHTML = `
