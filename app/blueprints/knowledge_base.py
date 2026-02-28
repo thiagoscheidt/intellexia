@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify, send_file
-from app.models import db, KnowledgeBase, KnowledgeCategory, KnowledgeTag, KnowledgeSummary
+from app.models import db, KnowledgeBase, KnowledgeCategory, KnowledgeTag, KnowledgeSummary, KnowledgeChatHistory, KnowledgeChatSession
 from app.agents.knowledge_ingestion_agent import KnowledgeIngestionAgent
 from app.agents.knowledge_query_agent import KnowledgeQueryAgent
 from datetime import datetime
@@ -8,6 +8,7 @@ from werkzeug.utils import secure_filename
 from pathlib import Path
 from app.agents.agent_document_summary import AgentDocumentSummary
 import os
+import json as json_lib
 
 knowledge_base_bp = Blueprint('knowledge_base', __name__, url_prefix='/knowledge-base')
 
@@ -762,6 +763,7 @@ def api_ask():
     
     data = request.get_json()
     question = data.get('question', '').strip()
+    chat_id = data.get('chat_id')
     conversation_history = data.get('history', [])  # Histórico da conversa atual
     
     if not question:
@@ -769,6 +771,26 @@ def api_ask():
     
     try:
         user_id = get_current_user_id()
+
+        chat_session = None
+        if chat_id:
+            chat_session = KnowledgeChatSession.query.filter_by(
+                id=chat_id,
+                user_id=user_id,
+                law_firm_id=law_firm_id,
+                is_active=True,
+            ).first()
+            if not chat_session:
+                return jsonify({'success': False, 'error': 'Chat não encontrado'}), 404
+        else:
+            generated_title = question[:80].strip() or 'Novo chat'
+            chat_session = KnowledgeChatSession(
+                user_id=user_id,
+                law_firm_id=law_firm_id,
+                title=generated_title,
+            )
+            db.session.add(chat_session)
+            db.session.commit()
         
         # Inicializar o agente de consulta
         query_agent = KnowledgeQueryAgent()
@@ -778,7 +800,8 @@ def api_ask():
             question=question,
             user_id=user_id,
             law_firm_id=law_firm_id,
-            history=conversation_history if conversation_history else None
+            history=conversation_history if conversation_history else None,
+            chat_session_id=chat_session.id,
         )
         
         return jsonify({
@@ -786,7 +809,9 @@ def api_ask():
             'answer': result['answer'],
             'sources': result['sources'],
             'sources_detail': result.get('sources_detail', []),
-            'history_id': result.get('history_id')
+            'history_id': result.get('history_id'),
+            'chat_id': chat_session.id,
+            'chat_title': chat_session.title,
         })
     except Exception as e:
         print(f"Erro ao processar pergunta: {str(e)}")
@@ -805,16 +830,20 @@ def api_history():
         return jsonify({'success': False, 'error': 'Não autorizado'}), 401
     
     try:
-        from app.models import KnowledgeChatHistory
-        import json as json_lib
+        chat_id = request.args.get('chat_id', type=int)
         
         # Buscar últimas 50 conversas do usuário
         limit = request.args.get('limit', 50, type=int)
         
-        history_entries = KnowledgeChatHistory.query.filter_by(
+        history_query = KnowledgeChatHistory.query.filter_by(
             user_id=user_id,
-            law_firm_id=law_firm_id
-        ).order_by(KnowledgeChatHistory.created_at.desc()).limit(limit).all()
+            law_firm_id=law_firm_id,
+        )
+
+        if chat_id:
+            history_query = history_query.filter_by(chat_session_id=chat_id)
+
+        history_entries = history_query.order_by(KnowledgeChatHistory.created_at.desc()).limit(limit).all()
         
         # Formatar para o frontend
         history_data = []
@@ -857,10 +886,13 @@ def api_clear_history():
         return jsonify({'success': False, 'error': 'Não autorizado'}), 401
     
     try:
-        from app.models import KnowledgeChatHistory
-        
         # Deletar histórico do usuário
         KnowledgeChatHistory.query.filter_by(
+            user_id=user_id,
+            law_firm_id=law_firm_id
+        ).delete()
+
+        KnowledgeChatSession.query.filter_by(
             user_id=user_id,
             law_firm_id=law_firm_id
         ).delete()
@@ -878,3 +910,167 @@ def api_clear_history():
             'success': False,
             'error': f'Erro ao limpar histórico: {str(e)}'
         }), 500
+
+
+@knowledge_base_bp.route('/api/chats', methods=['GET'])
+def api_chats_list():
+    """Lista chats do usuário (estilo threads)."""
+    law_firm_id = get_current_law_firm_id()
+    user_id = get_current_user_id()
+
+    if not law_firm_id or not user_id:
+        return jsonify({'success': False, 'error': 'Não autorizado'}), 401
+
+    try:
+        chats = KnowledgeChatSession.query.filter_by(
+            user_id=user_id,
+            law_firm_id=law_firm_id,
+            is_active=True,
+        ).order_by(KnowledgeChatSession.updated_at.desc()).all()
+
+        chats_data = []
+        for chat in chats:
+            last_message = KnowledgeChatHistory.query.filter_by(
+                chat_session_id=chat.id,
+                user_id=user_id,
+                law_firm_id=law_firm_id,
+            ).order_by(KnowledgeChatHistory.created_at.desc()).first()
+
+            chats_data.append({
+                'id': chat.id,
+                'title': chat.title or 'Novo chat',
+                'last_message': last_message.question if last_message else '',
+                'updated_at': chat.updated_at.isoformat() if chat.updated_at else None,
+                'created_at': chat.created_at.isoformat() if chat.created_at else None,
+                'messages_count': len(chat.messages),
+            })
+
+        return jsonify({'success': True, 'chats': chats_data})
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Erro ao listar chats: {str(e)}'}), 500
+
+
+@knowledge_base_bp.route('/api/chats', methods=['POST'])
+def api_chats_create():
+    """Cria um novo chat."""
+    law_firm_id = get_current_law_firm_id()
+    user_id = get_current_user_id()
+
+    if not law_firm_id or not user_id:
+        return jsonify({'success': False, 'error': 'Não autorizado'}), 401
+
+    try:
+        data = request.get_json(silent=True) or {}
+        title = (data.get('title') or '').strip()[:255] or 'Novo chat'
+
+        chat = KnowledgeChatSession(
+            user_id=user_id,
+            law_firm_id=law_firm_id,
+            title=title,
+        )
+        db.session.add(chat)
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'chat': {
+                'id': chat.id,
+                'title': chat.title,
+                'updated_at': chat.updated_at.isoformat() if chat.updated_at else None,
+                'created_at': chat.created_at.isoformat() if chat.created_at else None,
+                'messages_count': 0,
+            }
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': f'Erro ao criar chat: {str(e)}'}), 500
+
+
+@knowledge_base_bp.route('/api/chats/<int:chat_id>/history', methods=['GET'])
+def api_chat_history(chat_id: int):
+    """Recupera histórico de uma conversa específica."""
+    law_firm_id = get_current_law_firm_id()
+    user_id = get_current_user_id()
+
+    if not law_firm_id or not user_id:
+        return jsonify({'success': False, 'error': 'Não autorizado'}), 401
+
+    try:
+        chat = KnowledgeChatSession.query.filter_by(
+            id=chat_id,
+            user_id=user_id,
+            law_firm_id=law_firm_id,
+            is_active=True,
+        ).first()
+        if not chat:
+            return jsonify({'success': False, 'error': 'Chat não encontrado'}), 404
+
+        entries = KnowledgeChatHistory.query.filter_by(
+            chat_session_id=chat.id,
+            user_id=user_id,
+            law_firm_id=law_firm_id,
+        ).order_by(KnowledgeChatHistory.created_at.asc()).all()
+
+        history_data = []
+        for entry in entries:
+            sources_detail = []
+            if entry.sources:
+                try:
+                    sources_list = json_lib.loads(entry.sources)
+                    for source in sources_list:
+                        sources_detail.append(source)
+                except Exception:
+                    pass
+
+            history_data.append({
+                'id': entry.id,
+                'question': entry.question,
+                'answer': entry.answer,
+                'sources': sources_detail,
+                'created_at': entry.created_at.isoformat() if entry.created_at else None,
+            })
+
+        return jsonify({
+            'success': True,
+            'chat': {
+                'id': chat.id,
+                'title': chat.title,
+            },
+            'history': history_data,
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': f'Erro ao recuperar histórico do chat: {str(e)}'}), 500
+
+
+@knowledge_base_bp.route('/api/chats/<int:chat_id>', methods=['DELETE'])
+def api_chat_delete(chat_id: int):
+    """Remove um chat e seu histórico."""
+    law_firm_id = get_current_law_firm_id()
+    user_id = get_current_user_id()
+
+    if not law_firm_id or not user_id:
+        return jsonify({'success': False, 'error': 'Não autorizado'}), 401
+
+    try:
+        chat = KnowledgeChatSession.query.filter_by(
+            id=chat_id,
+            user_id=user_id,
+            law_firm_id=law_firm_id,
+        ).first()
+
+        if not chat:
+            return jsonify({'success': False, 'error': 'Chat não encontrado'}), 404
+
+        KnowledgeChatHistory.query.filter_by(
+            chat_session_id=chat.id,
+            user_id=user_id,
+            law_firm_id=law_firm_id,
+        ).delete()
+
+        db.session.delete(chat)
+        db.session.commit()
+
+        return jsonify({'success': True, 'message': 'Chat removido com sucesso'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': f'Erro ao remover chat: {str(e)}'}), 500

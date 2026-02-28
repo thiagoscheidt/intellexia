@@ -34,10 +34,18 @@ class KnowledgeIngestor:
     def ask_knowledge_base(self, question: str, history=None) -> dict:
         return self.query_agent.ask_knowledge_base(question, history=history)
 
-    def ask_with_llm(self, question: str, user_id: int = None, law_firm_id: int = None, history=None) -> dict:
+    def ask_with_llm(
+        self,
+        question: str,
+        user_id: int = None,
+        law_firm_id: int = None,
+        history=None,
+        chat_session_id: int = None,
+    ) -> dict:
         return self.query_agent.ask_with_llm(
             question=question,
             user_id=user_id,
             law_firm_id=law_firm_id,
             history=history,
+            chat_session_id=chat_session_id,
         )

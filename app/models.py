@@ -597,6 +597,7 @@ class KnowledgeChatHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
     law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    chat_session_id = db.Column(db.Integer, db.ForeignKey('knowledge_chat_sessions.id'), index=True)
     
     # Pergunta e resposta
     question = db.Column(db.Text, nullable=False)
@@ -617,6 +618,7 @@ class KnowledgeChatHistory(db.Model):
     # Relacionamentos
     user = db.relationship('User')
     law_firm = db.relationship('LawFirm')
+    chat_session = db.relationship('KnowledgeChatSession', back_populates='messages')
     
     def __repr__(self):
         return f'<KnowledgeChatHistory {self.id}>'
@@ -641,6 +643,31 @@ class KnowledgeSummary(db.Model):
     
     def __repr__(self):
         return f'<KnowledgeSummary {self.id}>'
+
+
+class KnowledgeChatSession(db.Model):
+    """Tabela knowledge_chat_sessions - Conversas do chat da base de conhecimento"""
+    __tablename__ = 'knowledge_chat_sessions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    title = db.Column(db.String(255), nullable=False, default='Novo chat')
+    is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False, index=True)
+
+    user = db.relationship('User')
+    law_firm = db.relationship('LawFirm')
+    messages = db.relationship(
+        'KnowledgeChatHistory',
+        back_populates='chat_session',
+        cascade='all, delete-orphan'
+    )
+
+    def __repr__(self):
+        return f'<KnowledgeChatSession {self.id}>'
 
 
 class CasesKnowledgeBase(db.Model):

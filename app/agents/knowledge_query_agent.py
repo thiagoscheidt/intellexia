@@ -4,13 +4,14 @@ import json
 import os
 import re
 import time
+from datetime import datetime
 
 from dotenv import load_dotenv
 from openai import OpenAI
 from pydantic import BaseModel, Field
 from qdrant_client import QdrantClient
 from langchain_openai import ChatOpenAI
-from app.models import db, KnowledgeChatHistory
+from app.models import db, KnowledgeChatHistory, KnowledgeChatSession
 
 
 from app.agents.query_enhancer_agent import QueryEnhancerAgent
@@ -110,7 +111,14 @@ class KnowledgeQueryAgent:
         except Exception:
             return RetrievalDecisionSchema(should_retrieve_context=True)
 
-    def ask_with_llm(self, question: str, user_id: int = None, law_firm_id: int = None, history=None) -> dict:
+    def ask_with_llm(
+        self,
+        question: str,
+        user_id: int = None,
+        law_firm_id: int = None,
+        history=None,
+        chat_session_id: int = None,
+    ) -> dict:
         """Consulta a base de conhecimento e usa LLM para gerar resposta."""
         decision = self._should_retrieve_context(question, history=history)
         should_retrieve = bool(decision.should_retrieve_context)
@@ -228,6 +236,7 @@ class KnowledgeQueryAgent:
                 history_entry = KnowledgeChatHistory(
                     user_id=user_id,
                     law_firm_id=law_firm_id,
+                    chat_session_id=chat_session_id,
                     question=question,
                     answer=response.answer,
                     sources=json.dumps(used_sources, ensure_ascii=False),
@@ -235,6 +244,17 @@ class KnowledgeQueryAgent:
                 )
 
                 db.session.add(history_entry)
+
+                if chat_session_id:
+                    chat_session = KnowledgeChatSession.query.filter_by(
+                        id=chat_session_id,
+                        user_id=user_id,
+                        law_firm_id=law_firm_id,
+                        is_active=True,
+                    ).first()
+                    if chat_session:
+                        chat_session.updated_at = datetime.utcnow()
+
                 db.session.commit()
 
                 result["history_id"] = history_entry.id
