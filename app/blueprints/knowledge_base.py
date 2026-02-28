@@ -12,6 +12,21 @@ import json as json_lib
 
 knowledge_base_bp = Blueprint('knowledge_base', __name__, url_prefix='/knowledge-base')
 
+
+def _generate_chat_title_from_question(question: str) -> str:
+    """Gera um título curto e legível para o chat com base na pergunta."""
+    if not question:
+        return 'Novo chat'
+
+    cleaned = " ".join(question.strip().split())
+    if not cleaned:
+        return 'Novo chat'
+
+    max_len = 80
+    if len(cleaned) <= max_len:
+        return cleaned
+    return f"{cleaned[:max_len].rstrip()}..."
+
 def get_current_law_firm_id():
     """Retorna o ID do escritório do usuário logado"""
     return session.get('law_firm_id')
@@ -782,8 +797,19 @@ def api_ask():
             ).first()
             if not chat_session:
                 return jsonify({'success': False, 'error': 'Chat não encontrado'}), 404
+
+            # Se for o primeiro envio de um chat recém-criado, define título automático
+            if (not chat_session.title or chat_session.title.strip().lower() == 'novo chat'):
+                has_messages = KnowledgeChatHistory.query.filter_by(
+                    chat_session_id=chat_session.id,
+                    user_id=user_id,
+                    law_firm_id=law_firm_id,
+                ).first()
+                if not has_messages:
+                    chat_session.title = _generate_chat_title_from_question(question)
+                    db.session.commit()
         else:
-            generated_title = question[:80].strip() or 'Novo chat'
+            generated_title = _generate_chat_title_from_question(question)
             chat_session = KnowledgeChatSession(
                 user_id=user_id,
                 law_firm_id=law_firm_id,
@@ -809,6 +835,7 @@ def api_ask():
             'answer': result['answer'],
             'sources': result['sources'],
             'sources_detail': result.get('sources_detail', []),
+            'suggested_questions': result.get('suggested_questions', []),
             'history_id': result.get('history_id'),
             'chat_id': chat_session.id,
             'chat_title': chat_session.title,
@@ -936,9 +963,15 @@ def api_chats_list():
                 law_firm_id=law_firm_id,
             ).order_by(KnowledgeChatHistory.created_at.desc()).first()
 
+            chat_title = (chat.title or '').strip()
+            if (not chat_title or chat_title.lower() == 'novo chat') and last_message and last_message.question:
+                chat_title = _generate_chat_title_from_question(last_message.question)
+            if not chat_title:
+                chat_title = 'Novo chat'
+
             chats_data.append({
                 'id': chat.id,
-                'title': chat.title or 'Novo chat',
+                'title': chat_title,
                 'last_message': last_message.question if last_message else '',
                 'updated_at': chat.updated_at.isoformat() if chat.updated_at else None,
                 'created_at': chat.created_at.isoformat() if chat.created_at else None,

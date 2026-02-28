@@ -112,9 +112,9 @@
               <!-- Exemplos de perguntas - acima do input -->
               <div class="kb-suggestions mb-3">
                 <small class="kb-suggestions-title d-block mb-2">
-                  <i class="bi bi-stars"></i> <strong>Perguntas sugeridas:</strong>
+                  <i class="bi bi-stars"></i> <strong>Sugestões de perguntas para você enviar à IA:</strong>
                 </small>
-                <div class="d-flex flex-wrap gap-2">
+                <div id="suggested-questions-container" class="d-flex flex-wrap gap-2">
                   <button class="btn btn-sm btn-outline-primary example-question"
                     data-question="Qual o prazo para contestação do FAP?">
                     <i class="bi bi-lightning-fill"></i> Prazo contestação FAP
@@ -163,9 +163,29 @@
     --kb-shadow-md: 0 10px 24px rgba(15, 23, 42, 0.12);
   }
 
+  html,
+  body {
+    overflow: hidden !important;
+    height: 100% !important;
+  }
+
+  body::-webkit-scrollbar {
+    display: none;
+  }
+
   .app-main>.app-content {
     padding: 0 !important;
-    height: calc(100vh - 56px) !important;
+    height: 100vh !important;
+    overflow: hidden !important;
+  }
+
+  .app-header {
+    display: none !important;
+  }
+
+  .app-main {
+    margin-top: 0 !important;
+    padding-top: 0 !important;
     overflow: hidden !important;
   }
 
@@ -225,6 +245,12 @@
   #chat-sessions-list {
     flex: 1;
     overflow-y: auto;
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  #chat-sessions-list::-webkit-scrollbar {
+    display: none;
   }
 
   .chat-session-item {
@@ -394,6 +420,35 @@
     font-size: 0.85rem;
   }
 
+  #knowledge-chat-card .source-card {
+    padding: 0.5rem;
+    margin-bottom: 0.5rem;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+  }
+
+  #knowledge-chat-card .sources-panel {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: #f0f4ff;
+    border-radius: 10px;
+    border-left: 4px solid #667eea;
+  }
+
+  #knowledge-chat-card .sources-panel .sources-title {
+    font-weight: 600;
+    color: #667eea;
+  }
+
+  #knowledge-chat-card .source-action-btn {
+    padding: 0.25rem 0.75rem;
+    font-size: 0.875rem;
+    text-decoration: none;
+    color: white;
+    border-radius: 8px;
+  }
+
   #knowledge-chat-card .typing-indicator {
     display: inline-flex;
     align-items: center;
@@ -506,23 +561,20 @@
     box-shadow: 0 4px 12px rgba(0, 123, 255, 0.2);
   }
 
-  /* Scrollbar personalizada */
+  #knowledge-chat-card #chat-container {
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
   #knowledge-chat-card #chat-container::-webkit-scrollbar {
-    width: 8px;
+    display: none;
   }
 
-  #knowledge-chat-card #chat-container::-webkit-scrollbar-track {
-    background: #f1f1f1;
-    border-radius: 10px;
-  }
-
-  #knowledge-chat-card #chat-container::-webkit-scrollbar-thumb {
-    background: #888;
-    border-radius: 10px;
-  }
-
+  /* Scrollbar personalizada */
+  #knowledge-chat-card #chat-container::-webkit-scrollbar-track,
+  #knowledge-chat-card #chat-container::-webkit-scrollbar-thumb,
   #knowledge-chat-card #chat-container::-webkit-scrollbar-thumb:hover {
-    background: #555;
+    background: transparent;
   }
 
   /* Estilos para markdown renderizado */
@@ -686,6 +738,22 @@
     border-left-color: var(--kb-primary);
   }
 
+  [data-bs-theme="dark"] #knowledge-chat-card .sources-panel {
+    background: linear-gradient(to right, #1f2b45 0%, #222f4f 100%);
+    border-left-color: var(--kb-primary);
+    border-color: #31446f;
+  }
+
+  [data-bs-theme="dark"] #knowledge-chat-card .sources-panel .sources-title {
+    color: var(--kb-primary);
+  }
+
+  [data-bs-theme="dark"] #knowledge-chat-card .source-card {
+    background: #1b2438;
+    border-color: #2f3c57;
+    color: var(--kb-text);
+  }
+
   [data-bs-theme="dark"] #knowledge-chat-card .source-item,
   [data-bs-theme="dark"] #knowledge-chat-card .sources-title,
   [data-bs-theme="dark"] #knowledge-chat-card .message-content blockquote {
@@ -794,13 +862,18 @@
     const sendBtn = document.getElementById('send-btn');
     const chatMessages = document.getElementById('chat-messages');
     const chatContainer = document.getElementById('chat-container');
-    const exampleButtons = document.querySelectorAll('.example-question');
+    const suggestedQuestionsContainer = document.getElementById('suggested-questions-container');
     const chatSessionsList = document.getElementById('chat-sessions-list');
     const newChatBtn = document.getElementById('new-chat-btn');
     const currentUserDisplayName = `{{ session.get('user_name', 'Você')|e }}`;
     const assistantDisplayName = 'IntellexIA';
 
     const initialWelcomeHtml = chatMessages.innerHTML;
+    const defaultSuggestedQuestions = [
+      'Qual o prazo para contestação do FAP?',
+      'Como funciona o cálculo do FAP?',
+      'O que é acidente de trajeto?'
+    ];
 
     function autoResizeTextarea() {
       questionInput.style.height = 'auto';
@@ -811,14 +884,64 @@
     let conversationHistory = [];
     let activeChatId = null;
     let chatSessions = [];
+    const loadingMessages = [
+      'Analisando sua pergunta... ',
+      'Consultando a base de conhecimento... ',
+      'Buscando os melhores trechos para responder... ',
+      'Organizando uma resposta clara para você... ',
+      'Conferindo documentos e fontes relevantes... ',
+      'Preparando a resposta com contexto jurídico... '
+    ];
 
     // Limpar mensagem inicial quando começar a conversa
     let isFirstMessage = true;
+
+    function truncateText(text, maxLength = 70) {
+      const clean = (text || '').replace(/\s+/g, ' ').trim();
+      if (clean.length <= maxLength) return clean;
+      return `${clean.slice(0, maxLength).trim()}...`;
+    }
+
+    function renderSuggestedQuestions(questions) {
+      if (!suggestedQuestionsContainer) return;
+
+      const list = (questions && questions.length > 0)
+        ? questions.slice(0, 3)
+        : defaultSuggestedQuestions;
+
+      suggestedQuestionsContainer.innerHTML = list.map((question, index) => {
+        const icons = ['bi-lightning-fill', 'bi-search', 'bi-arrow-right-circle-fill'];
+        const icon = icons[index] || 'bi-stars';
+        return `
+          <button class="btn btn-sm btn-outline-primary example-question" data-question="${escapeHtml(question)}">
+            <i class="bi ${icon}"></i> ${escapeHtml(truncateText(question, 46))}
+          </button>
+        `;
+      }).join('');
+    }
+
+    function updateSuggestedQuestions(suggestedQuestionsFromApi, lastQuestion, sourcesDetail) {
+      if (Array.isArray(suggestedQuestionsFromApi) && suggestedQuestionsFromApi.length > 0) {
+        renderSuggestedQuestions(suggestedQuestionsFromApi);
+        return;
+      }
+
+      const shortQuestion = truncateText(lastQuestion, 70);
+      const hasSources = Array.isArray(sourcesDetail) && sourcesDetail.length > 0;
+      renderSuggestedQuestions([
+        `Aprofunde este ponto: ${shortQuestion}`,
+        hasSources
+          ? 'Quais são os próximos passos práticos com base nos documentos citados?'
+          : 'Quais informações faltam para você responder com mais precisão?',
+        'Transforme a resposta em checklist de ações objetivas.'
+      ]);
+    }
 
     function resetToWelcomeScreen() {
       isFirstMessage = true;
       conversationHistory = [];
       chatMessages.innerHTML = initialWelcomeHtml;
+      renderSuggestedQuestions(defaultSuggestedQuestions);
       chatMessages.style.maxWidth = '900px';
       chatContainer.style.display = 'flex';
       chatContainer.style.alignItems = 'center';
@@ -957,6 +1080,7 @@
 
     // Função para adicionar mensagem de carregamento
     function addLoadingMessage() {
+      const loadingText = loadingMessages[Math.floor(Math.random() * loadingMessages.length)];
       const messageDiv = document.createElement('div');
       messageDiv.className = 'message message-loading';
       messageDiv.id = 'loading-message';
@@ -970,7 +1094,7 @@
             <span></span>
             <span></span>
           </div>
-          <span class="ms-2 text-muted">IA pesquisando...</span>
+          <span class="ms-2 text-muted">${loadingText}</span>
         </div>
       `;
       chatMessages.appendChild(messageDiv);
@@ -1029,30 +1153,30 @@
           }
 
           return `
-            <div class="source-item d-flex justify-content-between align-items-center" style="padding: 0.5rem; margin-bottom: 0.5rem; background: #f8f9fa; border-radius: 8px;">
+            <div class="source-item source-card d-flex justify-content-between align-items-center">
               <span>
                 <i class="bi bi-file-earmark-text"></i> ${escapeHtml(fileName)}${pageInfo}
               </span>
               <div class="d-flex gap-2">
                  ${fileId ? `
-                 <button class="btn btn-sm btn-success shadow summary-btn"
+                 <button class="btn btn-sm btn-success shadow summary-btn source-action-btn"
                    data-file-id="${fileId}"
-                   style="padding: 0.25rem 0.75rem; font-size: 0.875rem; text-decoration: none; color: white; border-radius: 8px; border: none; cursor: pointer;">
+                   style="border: none; cursor: pointer;">
                   <i class="bi bi-file-text"></i> Resumo
                  </button>
                  ` : ''}
                  ${viewUrl ? `
                  <a href="${viewUrl}" 
-                   class="btn btn-sm btn-info shadow"
+                   class="btn btn-sm btn-info shadow source-action-btn"
                    target="_blank"
-                   style="padding: 0.25rem 0.75rem; font-size: 0.875rem; text-decoration: none; color: white; border-radius: 8px;">
+                   >
                   <i class="bi bi-eye"></i> Visualizar
                  </a>
                  ` : ''}
                 <a href="${downloadUrl}" 
-                   class="btn btn-sm btn-primary shadow"
+                   class="btn btn-sm btn-primary shadow source-action-btn"
                    target="_blank"
-                   style="padding: 0.25rem 0.75rem; font-size: 0.875rem; text-decoration: none; color: white; border-radius: 8px;">
+                   >
                   <i class="bi bi-download"></i> Baixar
                 </a>
               </div>
@@ -1064,9 +1188,9 @@
         const filesCount = Object.keys(sourcesByFile).length;
 
         sourcesHtml = `
-          <div class="sources" style="margin-top: 1rem; padding: 1rem; background: #f0f4ff; border-radius: 10px; border-left: 4px solid #667eea;">
+          <div class="sources sources-panel">
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
-              <div class="sources-title mb-0" style="font-weight: 600; color: #667eea;">
+              <div class="sources-title mb-0">
                 <i class="bi bi-book"></i> ${filesCount} arquivo(s) pesquisado(s)
               </div>
               <button type="button" class="btn btn-sm btn-outline-primary toggle-sources-btn" data-target-id="${sourceBlockId}">
@@ -1195,6 +1319,7 @@
             activeChatId = data.chat_id;
           }
           addAssistantMessage(data.answer, data.sources, data.sources_detail);
+          updateSuggestedQuestions(data.suggested_questions || [], question, data.sources_detail || []);
           // Adicionar resposta ao histórico
           conversationHistory.push({ role: 'assistant', content: data.answer });
           await loadChatSessions(activeChatId);
@@ -1235,16 +1360,6 @@
     // Auto-resize do textarea
     questionInput.addEventListener('input', autoResizeTextarea);
 
-    // Event listeners para perguntas de exemplo
-    exampleButtons.forEach(button => {
-      button.addEventListener('click', function () {
-        const question = this.getAttribute('data-question');
-        questionInput.value = question;
-        autoResizeTextarea();
-        sendQuestion(question);
-      });
-    });
-
     newChatBtn.addEventListener('click', function () {
       createNewChat();
     });
@@ -1260,6 +1375,7 @@
 
     // Focar no input ao carregar
     autoResizeTextarea();
+    renderSuggestedQuestions(defaultSuggestedQuestions);
     questionInput.focus();
 
     // EVENT LISTENERS PARA BOTÕES DE RESUMO
@@ -1270,6 +1386,16 @@
         if (chatId) {
           await loadChatHistory(chatId);
         }
+        return;
+      }
+
+      if (e.target.closest('.example-question')) {
+        const btn = e.target.closest('.example-question');
+        const question = btn.getAttribute('data-question');
+        if (!question) return;
+        questionInput.value = question;
+        autoResizeTextarea();
+        sendQuestion(question);
         return;
       }
 

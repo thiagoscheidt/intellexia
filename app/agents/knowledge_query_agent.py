@@ -31,6 +31,13 @@ ROUTER_MODEL = os.getenv("KB_ROUTER_MODEL", "gpt-5-nano")
 class ResponseSchema(BaseModel):
     answer: str = Field(description="Resposta gerada para a pergunta")
     sources: list[str] = Field(description="Índices das fontes utilizadas (ex: ['0', '2'])")
+    suggested_questions: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Exatamente 3 perguntas/comandos prontos para o usuário enviar à IA como próximo passo, "
+            "baseados na resposta anterior e sem rótulos como 'Próxima ação' ou 'Próxima pergunta'."
+        ),
+    )
 
 
 class RetrievalDecisionSchema(BaseModel):
@@ -162,7 +169,11 @@ class KnowledgeQueryAgent:
                 "para responder (ex: ['0', '2']). Se não souber a resposta com base no contexto, informe "
                 "claramente que não possui essa informação e retorne sources como lista vazia. "
                 "Se a pergunta estiver incompleta, ambígua, ou sem dados suficientes no contexto, "
-                "não invente resposta: peça mais detalhes ao usuário com perguntas curtas e objetivas."
+                "não invente resposta: peça mais detalhes ao usuário com perguntas curtas e objetivas. "
+                "Além disso, sempre preencha 'suggested_questions' com exatamente 3 perguntas de continuação, "
+                "curtas, específicas ao contexto e em português do Brasil. "
+                "Cada sugestão deve ser uma pergunta/comando pronto para clique e envio direto para a IA "
+                "(ex.: 'Faça um resumo do processo...'). Não use rótulos, prefixos ou metadados."
             ),
         }
 
@@ -172,7 +183,11 @@ class KnowledgeQueryAgent:
                 "Você vai responder sem consultar a base vetorial nesta rodada. "
                 "No campo 'sources', retorne sempre lista vazia. "
                 "Se a pergunta estiver incompleta, ambígua ou faltar informação, peça mais detalhes "
-                "ao usuário com perguntas curtas e objetivas antes de responder."
+                "ao usuário com perguntas curtas e objetivas antes de responder. "
+                "Além disso, sempre preencha 'suggested_questions' com exatamente 3 perguntas de continuação, "
+                "curtas, úteis e em português do Brasil. "
+                "Cada sugestão deve ser uma pergunta/comando pronto para clique e envio direto para a IA. "
+                "Não use rótulos, prefixos ou metadados."
             ),
         }
 
@@ -223,10 +238,38 @@ class KnowledgeQueryAgent:
                 except (ValueError, IndexError):
                     continue
 
+        suggested_questions = []
+        for item in (response.suggested_questions or []):
+            if not isinstance(item, str):
+                continue
+            clean = " ".join(item.split()).strip()
+            if not clean:
+                continue
+
+            clean = re.sub(r"^(próxima\s+pergunta:|proxima\s+pergunta:|próxima\s+ação:|proxima\s+acao:)", "", clean, flags=re.IGNORECASE).strip()
+
+            if clean not in suggested_questions:
+                suggested_questions.append(clean)
+            if len(suggested_questions) >= 3:
+                break
+
+        if len(suggested_questions) < 3:
+            fallback_questions = [
+                "Faça um resumo objetivo do caso com os principais pontos e status atual.",
+                "Liste os próximos passos práticos recomendados para este caso.",
+                "Quais documentos ou informações faltam para avançar com segurança?",
+            ]
+            for fallback in fallback_questions:
+                if fallback not in suggested_questions:
+                    suggested_questions.append(fallback)
+                if len(suggested_questions) >= 3:
+                    break
+
         result = {
             "answer": response.answer,
             "sources": used_sources,
             "sources_detail": sources_detail,
+            "suggested_questions": suggested_questions,
             "search_query": context_data.get("improved_question", question) if context_data else question,
             "response_time_ms": response_time_ms,
         }
