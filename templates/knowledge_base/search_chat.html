@@ -3,170 +3,135 @@
 {% block title %}Pesquisar na Base de Conhecimento - IntellexIA{% endblock %}
 
 {% block content %}
-<div class="app-content-header"
-  style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1rem 0; margin-bottom: 0.75rem; border-radius: 0 0 15px 15px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);">
-  <div class="container-fluid">
-    <div class="row align-items-center">
-      <div class="col-sm-8">
-        <div class="d-flex align-items-center">
-          <div class="me-3">
-            <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
-              style="width: 40px; height: 40px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-              <i class="bi bi-search" style="font-size: 1.2rem; color: #667eea;"></i>
-            </div>
-          </div>
-          <div class="text-white">
-            <h3 class="mb-0" style="font-weight: 600; font-size: 1.2rem;">
-              <i class="bi bi-chat-dots-fill"></i> Pesquisar na Base de Conhecimento
-            </h3>
-          </div>
-        </div>
-      </div>
-      <div class="col-sm-4">
-        <ol class="breadcrumb float-sm-end mb-0"
-          style="background: rgba(255,255,255,0.15); padding: 0.5rem 0.75rem; border-radius: 10px; backdrop-filter: blur(10px);">
-          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"
-              class="text-white text-decoration-none"><i class="bi bi-house-fill"></i> Home</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('knowledge_base.list') }}"
-              class="text-white text-decoration-none">Base de Conhecimento</a></li>
-          <li class="breadcrumb-item active text-white" aria-current="page"><strong>Pesquisar</strong></li>
-        </ol>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="app-content">
-  <div class="container-fluid" style="height: calc(100vh - 90px);">
-    <div class="row h-100">
-      <div class="col-12 h-100">
-        <div class="card h-100" id="knowledge-chat-card" style="display: flex; flex-direction: column;">
-          <div class="card-header text-white"
-            style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 0.5rem 1rem;">
-            <div class="row align-items-center">
-              <div class="col-md-8">
-                <div class="d-flex align-items-center">
-                  <div class="me-2">
-                    <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
-                      style="width: 30px; height: 30px;">
-                      <i class="bi bi-robot" style="font-size: 1.1rem; color: #667eea;"></i>
-                    </div>
-                  </div>
-                  <div>
-                    <h3 class="mb-0" style="font-weight: 600; font-size: 1rem;">
-                      Assistente Jurídico IA
-                    </h3>
+<div id="knowledge-chat-page" class="h-100">
+  <div class="row h-100 g-0 m-0">
+    <div class="col-12 h-100 p-0">
+      <div class="card h-100" id="knowledge-chat-card" style="display: flex; flex-direction: column;">
+        <div class="card-header text-white"
+          style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 0.5rem 1rem;">
+          <div class="row align-items-center">
+            <div class="col-md-8">
+              <div class="d-flex align-items-center">
+                <div class="me-2">
+                  <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
+                    style="width: 30px; height: 30px;">
+                    <i class="bi bi-robot" style="font-size: 1.1rem; color: #667eea;"></i>
                   </div>
                 </div>
-              </div>
-              <div class="col-md-4 text-md-end">
-                <span class="badge bg-white text-dark d-inline-flex align-items-center gap-2"
-                  style="padding: 0.25rem 0.6rem; font-size: 0.8rem;">
-                  <i class="bi bi-folder-fill text-primary"></i>
-                  <strong>{{ total_documents }}</strong> documento(s)
-                </span>
+                <div>
+                  <h3 class="mb-0" style="font-weight: 600; font-size: 1rem;">
+                    Assistente Jurídico IA
+                  </h3>
+                </div>
               </div>
             </div>
+            <div class="col-md-4 text-md-end">
+              <span class="badge bg-white text-dark d-inline-flex align-items-center gap-2"
+                style="padding: 0.25rem 0.6rem; font-size: 0.8rem;">
+                <i class="bi bi-folder-fill text-primary"></i>
+                <strong>{{ total_documents }}</strong> documento(s)
+              </span>
+            </div>
           </div>
-          <div class="card-body" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 0;">
+        </div>
+        <div class="card-body" style="flex: 1; display: flex; flex-direction: column; overflow: hidden; padding: 0;">
 
-            <!-- Chat Container -->
-            <div id="chat-container" class="p-4"
-              style="flex: 1; overflow-y: auto; overflow-x: hidden; background: linear-gradient(to bottom, #f8f9fa 0%, #ffffff 100%); display: flex; align-items: center; justify-content: center;">
-              <div id="chat-messages" style="width: 100%; max-width: 900px;">
-                <div class="text-center py-3">
-                  <div class="mb-4">
-                    <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3"
-                      style="width: 100px; height: 100px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);">
-                      <i class="bi bi-chat-dots-fill text-white" style="font-size: 3rem;"></i>
-                    </div>
+          <!-- Chat Container -->
+          <div id="chat-container" class="p-4"
+            style="flex: 1; overflow-y: auto; overflow-x: hidden; background: linear-gradient(to bottom, #f8f9fa 0%, #ffffff 100%); display: flex; align-items: center; justify-content: center;">
+            <div id="chat-messages" style="width: 100%; max-width: 900px;">
+              <div class="text-center py-3">
+                <div class="mb-4">
+                  <div class="d-inline-flex align-items-center justify-content-center rounded-circle mb-3"
+                    style="width: 100px; height: 100px; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); box-shadow: 0 10px 30px rgba(102, 126, 234, 0.3);">
+                    <i class="bi bi-chat-dots-fill text-white" style="font-size: 3rem;"></i>
                   </div>
-                  <h3 class="mb-3" style="font-weight: 600; color: #2d3748;">
-                    Olá! Sou seu Assistente Jurídico
-                  </h3>
-                  <p class="text-muted mb-4" style="font-size: 1.1rem; max-width: 500px; margin: 0 auto;">
-                    Posso ajudá-lo a encontrar informações nos seus documentos da base de conhecimento
-                  </p>
+                </div>
+                <h3 class="mb-3" style="font-weight: 600; color: #2d3748;">
+                  Olá! Sou seu Assistente Jurídico
+                </h3>
+                <p class="text-muted mb-4" style="font-size: 1.1rem; max-width: 500px; margin: 0 auto;">
+                  Posso ajudá-lo a encontrar informações nos seus documentos da base de conhecimento
+                </p>
 
-                  <div class="row justify-content-center mt-5">
-                    <div class="col-md-8">
-                      <div class="row g-3">
-                        <div class="col-md-4">
-                          <div class="card border-0 shadow-sm h-100" style="transition: transform 0.2s;">
-                            <div class="card-body text-center p-3">
-                              <i class="bi bi-lightning-charge-fill text-primary mb-2" style="font-size: 2rem;"></i>
-                              <h6 class="mb-1">Rápido</h6>
-                              <small class="text-muted">Respostas instantâneas</small>
-                            </div>
+                <div class="row justify-content-center mt-5">
+                  <div class="col-md-8">
+                    <div class="row g-3">
+                      <div class="col-md-4">
+                        <div class="card border-0 shadow-sm h-100" style="transition: transform 0.2s;">
+                          <div class="card-body text-center p-3">
+                            <i class="bi bi-lightning-charge-fill text-primary mb-2" style="font-size: 2rem;"></i>
+                            <h6 class="mb-1">Rápido</h6>
+                            <small class="text-muted">Respostas instantâneas</small>
                           </div>
                         </div>
-                        <div class="col-md-4">
-                          <div class="card border-0 shadow-sm h-100" style="transition: transform 0.2s;">
-                            <div class="card-body text-center p-3">
-                              <i class="bi bi-shield-check text-success mb-2" style="font-size: 2rem;"></i>
-                              <h6 class="mb-1">Confiável</h6>
-                              <small class="text-muted">Baseado em seus docs</small>
-                            </div>
+                      </div>
+                      <div class="col-md-4">
+                        <div class="card border-0 shadow-sm h-100" style="transition: transform 0.2s;">
+                          <div class="card-body text-center p-3">
+                            <i class="bi bi-shield-check text-success mb-2" style="font-size: 2rem;"></i>
+                            <h6 class="mb-1">Confiável</h6>
+                            <small class="text-muted">Baseado em seus docs</small>
                           </div>
                         </div>
-                        <div class="col-md-4">
-                          <div class="card border-0 shadow-sm h-100" style="transition: transform 0.2s;">
-                            <div class="card-body text-center p-3">
-                              <i class="bi bi-book text-info mb-2" style="font-size: 2rem;"></i>
-                              <h6 class="mb-1">Completo</h6>
-                              <small class="text-muted">Com fontes citadas</small>
-                            </div>
+                      </div>
+                      <div class="col-md-4">
+                        <div class="card border-0 shadow-sm h-100" style="transition: transform 0.2s;">
+                          <div class="card-body text-center p-3">
+                            <i class="bi bi-book text-info mb-2" style="font-size: 2rem;"></i>
+                            <h6 class="mb-1">Completo</h6>
+                            <small class="text-muted">Com fontes citadas</small>
                           </div>
                         </div>
                       </div>
                     </div>
                   </div>
+                </div>
 
-                  <div class="mt-5">
-                    <small class="text-muted d-block mb-2">
-                      <i class="bi bi-lightbulb-fill text-warning"></i> <strong>Dica:</strong> Seja específico nas suas
-                      perguntas
-                    </small>
-                  </div>
+                <div class="mt-5">
+                  <small class="text-muted d-block mb-2">
+                    <i class="bi bi-lightbulb-fill text-warning"></i> <strong>Dica:</strong> Seja específico nas suas
+                    perguntas
+                  </small>
                 </div>
               </div>
             </div>
+          </div>
 
-            <!-- Input Area -->
-            <div class="border-top bg-white p-4" style="flex-shrink: 0; box-shadow: 0 -2px 10px rgba(0,0,0,0.05);">
-              <!-- Exemplos de perguntas - acima do input -->
-              <div class="mb-3">
-                <small class="text-muted d-block mb-2">
-                  <i class="bi bi-stars"></i> <strong>Perguntas sugeridas:</strong>
-                </small>
-                <div class="d-flex flex-wrap gap-2">
-                  <button class="btn btn-sm btn-outline-primary example-question"
-                    data-question="Qual o prazo para contestação do FAP?" style="border-radius: 20px;">
-                    <i class="bi bi-lightning-fill"></i> Prazo contestação FAP
-                  </button>
-                  <button class="btn btn-sm btn-outline-primary example-question"
-                    data-question="Como funciona o cálculo do FAP?" style="border-radius: 20px;">
-                    <i class="bi bi-calculator-fill"></i> Cálculo do FAP
-                  </button>
-                  <button class="btn btn-sm btn-outline-primary example-question"
-                    data-question="O que é acidente de trajeto?" style="border-radius: 20px;">
-                    <i class="bi bi-question-circle-fill"></i> Acidente de trajeto
-                  </button>
-                </div>
+          <!-- Input Area -->
+          <div class="border-top bg-white p-4" style="flex-shrink: 0; box-shadow: 0 -2px 10px rgba(0,0,0,0.05);">
+            <!-- Exemplos de perguntas - acima do input -->
+            <div class="mb-3">
+              <small class="text-muted d-block mb-2">
+                <i class="bi bi-stars"></i> <strong>Perguntas sugeridas:</strong>
+              </small>
+              <div class="d-flex flex-wrap gap-2">
+                <button class="btn btn-sm btn-outline-primary example-question"
+                  data-question="Qual o prazo para contestação do FAP?" style="border-radius: 20px;">
+                  <i class="bi bi-lightning-fill"></i> Prazo contestação FAP
+                </button>
+                <button class="btn btn-sm btn-outline-primary example-question"
+                  data-question="Como funciona o cálculo do FAP?" style="border-radius: 20px;">
+                  <i class="bi bi-calculator-fill"></i> Cálculo do FAP
+                </button>
+                <button class="btn btn-sm btn-outline-primary example-question"
+                  data-question="O que é acidente de trajeto?" style="border-radius: 20px;">
+                  <i class="bi bi-question-circle-fill"></i> Acidente de trajeto
+                </button>
               </div>
-
-              <form id="question-form">
-                <div class="kb-chat-input-wrapper shadow-sm">
-                  <textarea class="kb-chat-textarea" id="question-input"
-                    placeholder="Digite sua pergunta aqui... (Shift+Enter para nova linha)" autocomplete="off" required
-                    rows="1"></textarea>
-                  <button class="btn btn-primary kb-chat-send-btn" type="submit" id="send-btn"
-                    style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none;">
-                    <i class="bi bi-send-fill"></i> Enviar
-                  </button>
-                </div>
-              </form>
             </div>
+
+            <form id="question-form">
+              <div class="kb-chat-input-wrapper shadow-sm">
+                <textarea class="kb-chat-textarea" id="question-input"
+                  placeholder="Digite sua pergunta aqui... (Shift+Enter para nova linha)" autocomplete="off" required
+                  rows="1"></textarea>
+                <button class="btn btn-primary kb-chat-send-btn" type="submit" id="send-btn"
+                  style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border: none;">
+                  <i class="bi bi-send-fill"></i> Enviar
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       </div>
@@ -175,6 +140,54 @@
 </div>
 
 <style>
+  .app-main>.app-content {
+    padding: 0 !important;
+    height: calc(100vh - 56px) !important;
+    overflow: hidden !important;
+  }
+
+  .app-main>.app-content>.container-fluid {
+    height: 100% !important;
+    max-width: 100% !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: hidden !important;
+  }
+
+  .app-main>.app-content>.container-fluid>.alert {
+    margin: 0 !important;
+    border-radius: 0 !important;
+  }
+
+  .app-footer {
+    display: none !important;
+  }
+
+  #knowledge-chat-page {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  #knowledge-chat-page>.row,
+  #knowledge-chat-page>.row>.col-12 {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  #knowledge-chat-card {
+    border: 0;
+    border-radius: 0;
+    margin: 0;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  #knowledge-chat-card .card-header {
+    border-radius: 0;
+  }
+
   /* Escopar TODOS os estilos apenas para este card específico */
   #knowledge-chat-card .message {
     margin-bottom: 20px;
