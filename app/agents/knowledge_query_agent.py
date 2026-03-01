@@ -76,10 +76,7 @@ class KnowledgeQueryAgent:
         self._last_context_text = ""
         self._context_search_calls = 0
         self._cached_should_use_context = None
-        self.tools_registry = KnowledgeQueryTools(
-            should_use_context_resolver=self._resolve_should_use_context,
-            context_search_resolver=self._resolve_context_search,
-        )
+        self.tools_registry = KnowledgeQueryTools()
         self.router_llm = ChatOpenAI(model=ROUTER_MODEL, temperature=0).with_structured_output(RetrievalDecisionSchema)
         self.response_llm = ChatOpenAI(model=QUERY_MODEL, temperature=0)
 
@@ -276,11 +273,32 @@ class KnowledgeQueryAgent:
 
         response_agent = self._build_response_agent()
 
+        normalized_history = self._normalize_history(history)
+        retrieval_decision = self._should_retrieve_context(question, history=normalized_history)
+        should_use_context = bool(retrieval_decision.should_retrieve_context)
+        context_text = ""
+
+        if should_use_context:
+            context_text = self._resolve_context_search(question)
+            if (not context_text or not str(context_text).strip()) and self._last_context_text:
+                context_text = self._last_context_text
+
+        if should_use_context:
+            context_block = context_text if str(context_text or "").strip() else "contexto foi buscado, mas retornou vazio"
+        else:
+            context_block = "sem contexto (roteador decidiu não consultar base)"
+
+        self._debug_log(
+            f"Pré-processamento de contexto concluído",
+            should_use_context=should_use_context,
+            context_search_calls=self._context_search_calls,
+            context_chars=len(context_text or ""),
+            context_preview=(context_block[:240] if context_block else ""),
+        )
+
         instructions = (
-            "IMPORTANTE: Primeiro chame a tool 'decidir_uso_contexto' para decidir se deve buscar contexto (no máximo 1 vez). "
-            "Se o resultado for 'usar_contexto', chame a tool 'buscar_contexto_base' (no máximo 1 vez) "
-            "e use o retorno para responder. "
-            "Se o resultado for 'nao_usar_contexto', responda sem contexto. "
+            "IMPORTANTE: A decisão de uso de contexto e a busca na base vetorial já foram executadas antes desta etapa. "
+            "Use apenas o campo 'Contexto pré-buscado' fornecido abaixo quando ele existir. "
             "No campo 'sources', liste APENAS os números das fontes que você realmente usou "
             "para responder (ex: ['0', '2']). Se não souber a resposta com base no contexto, informe "
             "claramente que não possui essa informação e retorne sources como lista vazia. "
@@ -293,13 +311,15 @@ class KnowledgeQueryAgent:
 
         final_user_prompt = (
             f"{instructions}\n\n"
-            f"Pergunta do usuário: {question}"
+            f"Pergunta do usuário: {question}\n\n"
+            f"Contexto pré-buscado:\n{context_block}"
         )
 
         messages = []
-        normalized_history = self._normalize_history(history)
         if normalized_history:
             messages.extend(normalized_history)
+
+        print("Final user prompt:", final_user_prompt)  # --- IGNORE ---
         messages.append({"role": "user", "content": final_user_prompt})
 
         self._debug_log(
