@@ -19,13 +19,14 @@ app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-in-product
 # Configuração do banco de dados baseada no ambiente
 environment = os.environ.get('ENVIRONMENT', 'development')
 
-if environment == 'production':
+if environment == 'production' or os.environ.get('DATABASE_TYPE') == 'mysql':
     # MySQL para produção
     mysql_host = os.environ.get('MYSQL_HOST', 'localhost')
     mysql_port = os.environ.get('MYSQL_PORT', '3306')
     mysql_user = os.environ.get('MYSQL_USER', 'root')
     mysql_password = os.environ.get('MYSQL_PASSWORD', 'password')
     mysql_database = os.environ.get('MYSQL_DATABASE', 'intellexia')
+
     
     app.config['SQLALCHEMY_DATABASE_URI'] = f"mysql+pymysql://{mysql_user}:{mysql_password}@{mysql_host}:{mysql_port}/{mysql_database}?charset=utf8mb4"
 else:

@@ -3,12 +3,29 @@
 Script para popular dados de exemplo no sistema Intellexia
 Sistema de gerenciamento de casos jurídicos trabalhistas
 
+Inclui:
+- Escritório de advocacia
+- Usuários do sistema
+- Clientes
+- Varas judiciais
+- Advogados
+- Casos jurídicos
+- Benefícios
+- Competências
+- Atividades
+- Comentários
+- Categorias de conhecimento
+- Tags para documentos
+- Motivos de contestação FAP
+- Templates de casos
+
 Execute: python populate_sample_data.py
 """
 
 import os
 import sys
-from datetime import datetime, date
+import traceback
+from datetime import datetime, date, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 
@@ -21,9 +38,218 @@ def import_models():
     from main import app
     from app.models import (
         db, LawFirm, User, Client, Court, Lawyer, Case, CaseLawyer, 
-        CaseCompetence, CaseBenefit, Document, CaseActivity, CaseComment
+        CaseCompetence, CaseBenefit, Document, CaseActivity, CaseComment,
+        KnowledgeCategory, KnowledgeTag, FapReason, CaseTemplate
     )
-    return app, db, LawFirm, User, Client, Court, Lawyer, Case, CaseLawyer, CaseCompetence, CaseBenefit, Document, CaseActivity, CaseComment
+    return app, db, LawFirm, User, Client, Court, Lawyer, Case, CaseLawyer, CaseCompetence, CaseBenefit, Document, CaseActivity, CaseComment, KnowledgeCategory, KnowledgeTag, FapReason, CaseTemplate
+
+def create_knowledge_categories(db, KnowledgeCategory, law_firm):
+    """Cria categorias de conhecimento padrão"""
+    categories_data = [
+        {
+            'name': 'Jurisprudência',
+            'icon': 'book',
+            'description': 'Decisões judiciais relevantes, súmulas, precedentes',
+            'color': '#007bff',
+            'display_order': 1
+        },
+        {
+            'name': 'Legislação',
+            'icon': 'scale',
+            'description': 'Leis, decretos, portarias, normas regulamentares',
+            'color': '#28a745',
+            'display_order': 2
+        },
+        {
+            'name': 'Modelos',
+            'icon': 'file',
+            'description': 'Modelos de documentos, petições, contratos',
+            'color': '#17a2b8',
+            'display_order': 3
+        },
+        {
+            'name': 'Artigos',
+            'icon': 'newspaper',
+            'description': 'Artigos jurídicos, estudos, análises doutrinárias',
+            'color': '#ffc107',
+            'display_order': 4
+        },
+        {
+            'name': 'Manuais',
+            'icon': 'book-open',
+            'description': 'Manuais, guias práticos, tutoriais',
+            'color': '#6f42c1',
+            'display_order': 5
+        },
+        {
+            'name': 'Procedimentos',
+            'icon': 'wrench',
+            'description': 'Procedimentos internos, fluxos de trabalho',
+            'color': '#fd7e14',
+            'display_order': 6
+        },
+        {
+            'name': 'Outros',
+            'icon': 'box',
+            'description': 'Outros documentos e arquivos diversos',
+            'color': '#6c757d',
+            'display_order': 7
+        }
+    ]
+    
+    categories = []
+    for cat_data in categories_data:
+        existing = KnowledgeCategory.query.filter_by(
+            law_firm_id=law_firm.id,
+            name=cat_data['name']
+        ).first()
+        
+        if not existing:
+            category = KnowledgeCategory(
+                law_firm_id=law_firm.id,
+                **cat_data
+            )
+            db.session.add(category)
+            categories.append(category)
+            print(f"[OK] Categoria criada: {cat_data['name']}")
+        else:
+            categories.append(existing)
+            print(f"[JA EXISTE] Categoria ja existe: {cat_data['name']}")
+    
+    return categories
+
+def create_knowledge_tags(db, KnowledgeTag, law_firm):
+    """Cria tags padrão para documentos"""
+    tags_data = [
+        {"name": "Trabalhista", "icon": "scale", "description": "Direito do trabalho", "color": "#007bff", "display_order": 1},
+        {"name": "Previdenciário", "icon": "building", "description": "Direito previdenciário", "color": "#6c757d", "display_order": 2},
+        {"name": "STJ", "icon": "building", "description": "Superior Tribunal de Justiça", "color": "#28a745", "display_order": 3},
+        {"name": "STF", "icon": "scale", "description": "Supremo Tribunal Federal", "color": "#dc3545", "display_order": 4},
+        {"name": "Súmula", "icon": "list", "description": "Súmulas", "color": "#ffc107", "display_order": 5},
+        {"name": "Jurisprudência", "icon": "book", "description": "Decisões judiciais", "color": "#17a2b8", "display_order": 6},
+        {"name": "Legislação", "icon": "scroll", "description": "Leis e normas", "color": "#6f42c1", "display_order": 7},
+        {"name": "Petição", "icon": "pen", "description": "Peças processuais", "color": "#fd7e14", "display_order": 8},
+        {"name": "Recurso", "icon": "file", "description": "Recursos judiciais", "color": "#20c997", "display_order": 9},
+        {"name": "Acórdão", "icon": "scale", "description": "Decisões colegiadas", "color": "#e83e8c", "display_order": 10},
+        {"name": "Sentença", "icon": "gavel", "description": "Decisões judiciais", "color": "#343a40", "display_order": 11},
+        {"name": "Despacho", "icon": "list", "description": "Decisões interlocutórias", "color": "#6c757d", "display_order": 12},
+        {"name": "FAP", "icon": "briefcase", "description": "Fator Acidentário de Prevenção", "color": "#007bff", "display_order": 13},
+        {"name": "INSS", "icon": "building", "description": "Instituto Nacional do Seguro Social", "color": "#28a745", "display_order": 14},
+        {"name": "Acidente", "icon": "exclamation-triangle", "description": "Acidente de trabalho", "color": "#dc3545", "display_order": 15},
+        {"name": "Aposentadoria", "icon": "user", "description": "Benefícios de aposentadoria", "color": "#17a2b8", "display_order": 16},
+        {"name": "Auxílio-doença", "icon": "heart", "description": "Benefício por incapacidade", "color": "#ffc107", "display_order": 17},
+        {"name": "Pensão", "icon": "users", "description": "Pensão por morte", "color": "#6f42c1", "display_order": 18},
+    ]
+    
+    tags = []
+    for tag_data in tags_data:
+        existing = KnowledgeTag.query.filter_by(
+            law_firm_id=law_firm.id,
+            name=tag_data['name']
+        ).first()
+        
+        if not existing:
+            tag = KnowledgeTag(
+                law_firm_id=law_firm.id,
+                is_active=True,
+                created_at=datetime.now(timezone.utc),
+                updated_at=datetime.now(timezone.utc),
+                **tag_data
+            )
+            db.session.add(tag)
+            tags.append(tag)
+        else:
+            tags.append(existing)
+    
+    print(f"[OK] {len(tags)} tags criadas/existentes")
+    return tags
+
+def create_fap_reasons(db, FapReason, law_firm):
+    """Cria motivos padrão de contestação FAP"""
+    reasons_data = [
+        ("Benefício Revogado Judicialmente", "Benefício concedido por liminar e posteriormente revogado judicialmente"),
+        ("Duplicidade de Benefício em Restabelecimento", "B91 concedido duas vezes em menos de 60 dias (restabelecimento indevido)"),
+        ("Erro Material na CAT", "CAT com erro material classificando acidente típico em vez de trajeto"),
+        ("CAT de Trajeto Extemporânea", "CAT de trajeto enviada fora do prazo (extemporânea)"),
+        ("Inclusão Indevida de Acidente de Trajeto no FAP", "Inclusão de acidente de trajeto no cálculo do FAP"),
+        ("Acidente Sem Relação com o Trabalho", "Acidente ocorrido sem relação com o trabalho"),
+        ("Acidente Vinculado a Outra Empresa", "Acidente ocorrido quando empregado estava vinculado a outra empresa"),
+        ("Acidente em Outro Estabelecimento", "Acidente ocorrido em outro estabelecimento (outro CNPJ)"),
+        ("Benefício Concomitante com Aposentadoria (B91)", "B91 concedido concomitante com aposentadoria"),
+        ("Bloqueio Indevido do FAP por B92", "Bloqueio do FAP causado por B92 indevido"),
+        ("Benefício Concomitante B91 com B94", "B91 concedido junto com auxílio-acidente (B94)"),
+        ("Duplicidade de Benefício B91", "Dois B91 concedidos ao mesmo tempo"),
+        ("Auxílio-acidente com Aposentadoria", "B94 concedido concomitante com aposentadoria"),
+        ("Nexo Causal Contestado", "Inexistência de nexo causal entre atividade laboral e doença alegada"),
+        ("Benefício Prescrito", "Benefício expulso por ação do tempo ou cumprimento de condições"),
+    ]
+    
+    reasons = []
+    for display_name, description in reasons_data:
+        existing = FapReason.query.filter_by(
+            law_firm_id=law_firm.id,
+            display_name=display_name
+        ).first()
+        
+        if not existing:
+            reason = FapReason(
+                law_firm_id=law_firm.id,
+                display_name=display_name,
+                description=description,
+                is_active=True
+            )
+            db.session.add(reason)
+            reasons.append(reason)
+            print(f"✓ Motivo FAP criado: {display_name}")
+        else:
+            reasons.append(existing)
+            print(f"→ Motivo FAP já existe: {display_name}")
+    
+    return reasons
+
+def create_case_templates(db, CaseTemplate, law_firm):
+    """Cria templates de casos FAP padrão"""
+    templates_data = [
+        ("Acidente Ocorrido em outra Empresa", "Benefício atribuído a empresa diferente da real empregadora do segurado."),
+        ("Acidente Ocorrido em outro Estabelecimento", "Acidente imputado ao CNPJ errado (filial diversa)."),
+        ("Acidente não Relacionado ao Trabalho", "Evento sem nexo com o trabalho foi classificado como acidentário."),
+        ("Acidente de Trajeto", "Acidente de trajeto incluído indevidamente no FAP."),
+        ("Acidente de Trajeto - CAT Erro Material", "CAT preenchida incorretamente como típica quando era de trajeto."),
+        ("Acidente de Trajeto - CAT Extemporânea", "CAT registrada fora do prazo e incluída indevidamente no FAP."),
+        ("B91 - Duplicidade de Benefício", "Benefícios concedidos com intervalo inferior a 60 dias deveriam ser restabelecimento."),
+        ("Exclusão dos Bloqueios por B92", "Aposentadoria por invalidez bloqueou bonificação indevidamente."),
+        ("Revogação de Antecipação dos Efeitos da Tutela", "Benefício judicial cancelado permaneceu no FAP."),
+        ("B91 com Aposentadoria", "B91 concedido junto com aposentadoria."),
+        ("B91 com Auxílio-acidente", "B91 concedido simultaneamente ao B94."),
+        ("B91 com Auxílio-doença", "Dois B91 no mesmo período."),
+        ("B92 com Aposentadoria", "B92 concedido simultaneamente com aposentadoria."),
+        ("B94 com Aposentadoria", "Auxílio-acidente concedido junto com aposentadoria."),
+        ("B94 com Auxílio-acidente", "Dois auxílios-acidente concedidos."),
+    ]
+    
+    templates = []
+    for template_name, description in templates_data:
+        existing = CaseTemplate.query.filter_by(
+            law_firm_id=law_firm.id,
+            template_name=template_name
+        ).first()
+        
+        if not existing:
+            template = CaseTemplate(
+                law_firm_id=law_firm.id,
+                template_name=template_name,
+                description=description,
+                is_active=True
+            )
+            db.session.add(template)
+            templates.append(template)
+            print(f"✓ Template criado: {template_name}")
+        else:
+            templates.append(existing)
+            print(f"→ Template já existe: {template_name}")
+    
+    return templates
+
 def create_sample_law_firm(db, LawFirm):
     """Cria escritório de advocacia de exemplo"""
     from datetime import datetime, timedelta, timezone
@@ -718,11 +944,11 @@ def create_sample_comments(db, CaseComment, cases, users):
 
 def main():
     """Função principal para executar a população de dados"""
-    print("🚀 Iniciando população de dados de exemplo...")
+    print("Iniciando populacao de dados de exemplo...")
     print("=" * 50)
     
     # Importar modelos no contexto correto
-    app, db, LawFirm, User, Client, Court, Lawyer, Case, CaseLawyer, CaseCompetence, CaseBenefit, Document, CaseActivity, CaseComment = import_models()
+    app, db, LawFirm, User, Client, Court, Lawyer, Case, CaseLawyer, CaseCompetence, CaseBenefit, Document, CaseActivity, CaseComment, KnowledgeCategory, KnowledgeTag, FapReason, CaseTemplate = import_models()
     
     # Garantir que o app seja configurado corretamente
     app.config.update({
@@ -734,85 +960,105 @@ def main():
         with app.app_context():
             # Verificar se as tabelas existem
             db.create_all()
-            print("✓ Tabelas verificadas/criadas")
+            print("[OK] Tabelas verificadas/criadas")
             
             # Criar escritório de advocacia
-            print("\n🏢 Criando escritório de advocacia...")
+            print("\n[ESCRITORIO] Criando escritorio de advocacia...")
             law_firm = create_sample_law_firm(db, LawFirm)
             
             # Criar usuários do sistema
-            print("\n👤 Criando usuários...")
+            print("\n[USUARIOS] Criando usuarios...")
             users = create_sample_users(db, User, law_firm)
             
             # Commit dos dados básicos
             db.session.commit()
-            print("✓ Escritório e usuários salvos")
+            print("[OK] Escritorio e usuarios salvos")
             
-            # Criar dados de exemplo
-            print("\n📊 Criando clientes...")
+            # Criar bases de conhecimento padrão
+            print("\n[CONHECIMENTO] Criando categorias de conhecimento...")
+            categories = create_knowledge_categories(db, KnowledgeCategory, law_firm)
+            
+            print("\n[TAGS] Criando tags padrao...")
+            tags = create_knowledge_tags(db, KnowledgeTag, law_firm)
+            
+            # Commit dos dados de conhecimento
+            db.session.commit()
+            print("[OK] Base de conhecimento configurada")
+            
+            # Criar dados de exemplo para casos
+            print("\n[CLIENTES] Criando clientes...")
             clients = create_sample_clients(db, Client, law_firm)
             
-            print("\n🏛️ Criando varas judiciais...")
+            print("\n[VARAS] Criando varas judiciais...")
             courts = create_sample_courts(db, Court, law_firm)
             
-            print("\n⚖️ Criando advogados...")
+            print("\n[ADVOGADOS] Criando advogados...")
             lawyers = create_sample_lawyers(db, Lawyer, law_firm)
+            
+            print("\n[FAP] Criando motivos de contestacao FAP...")
+            fap_reasons = create_fap_reasons(db, FapReason, law_firm)
+            
+            print("\n[TEMPLATES] Criando templates de casos...")
+            templates = create_case_templates(db, CaseTemplate, law_firm)
             
             # Commit dos dados básicos
             db.session.commit()
-            print("✓ Dados básicos salvos")
+            print("[OK] Dados de setup salvos")
             
-            print("\n📋 Criando casos...")
+            print("\n[CASOS] Criando casos...")
             cases = create_sample_cases(db, Case, law_firm, clients, courts, lawyers)
             
-            print("\n🤝 Criando relações caso-advogado...")
+            print("\n[RELACOES] Criando relacoes caso-advogado...")
             case_lawyers = create_case_lawyers_relations(db, CaseLawyer, cases, lawyers)
             
-            print("\n💰 Criando benefícios...")
+            print("\n[BENEFICIOS] Criando beneficios...")
             benefits = create_sample_benefits(db, CaseBenefit, cases)
             
-            print("\n📅 Criando competências...")
+            print("\n[COMPETENCIAS] Criando competencias...")
             competences = create_sample_competences(db, CaseCompetence, cases)
             
-            print("\n📝 Criando atividades de exemplo...")
+            print("\n[ATIVIDADES] Criando atividades de exemplo...")
             activities = create_sample_activities(db, CaseActivity, cases, users)
             
-            print("\n💬 Criando comentários e discussões...")
+            print("\n[COMENTARIOS] Criando comentarios e discussoes...")
             comments = create_sample_comments(db, CaseComment, cases, users)
             
             # Commit final
             db.session.commit()
             
             print("\n" + "=" * 50)
-            print("✅ POPULAÇÃO DE DADOS CONCLUÍDA COM SUCESSO!")
-            print(f"📊 Resumo:")
-            print(f"   • 1 escritório de advocacia")
-            print(f"   • {len(users)} usuários")
-            print(f"   • {len(clients)} clientes")
-            print(f"   • {len(courts)} varas judiciais")
-            print(f"   • {len(lawyers)} advogados")
-            print(f"   • {len(cases)} casos")
-            print(f"   • {len(case_lawyers)} relações caso-advogado")
-            print(f"   • {len(benefits)} benefícios")
-            print(f"   • {len(competences)} competências")
-            print(f"   • {len(activities)} atividades")
-            print(f"   • {len(comments)} comentários")
+            print("[SUCESSO] POPULACAO DE DADOS CONCLUIDA COM EXITO!")
+            print(f"[RESUMO] Dados criados:")
+            print(f"   - 1 escritorio de advocacia")
+            print(f"   - {len(users)} usuarios")
+            print(f"   - {len(categories)} categorias de conhecimento")
+            print(f"   - {len(tags)} tags de documentos")
+            print(f"   - {len(fap_reasons)} motivos de contestacao FAP")
+            print(f"   - {len(templates)} templates de casos")
+            print(f"   - {len(clients)} clientes")
+            print(f"   - {len(courts)} varas judiciais")
+            print(f"   - {len(lawyers)} advogados")
+            print(f"   - {len(cases)} casos")
+            print(f"   - {len(case_lawyers)} relacoes caso-advogado")
+            print(f"   - {len(benefits)} beneficios")
+            print(f"   - {len(competences)} competencias")
+            print(f"   - {len(activities)} atividades")
+            print(f"   - {len(comments)} comentarios")
             print("=" * 50)
             
     except Exception as e:
-        print(f"❌ Erro durante a população de dados: {e}")
+        print(f"[ERRO] Erro durante a populacao de dados: {e}")
         try:
             db.session.rollback()
         except Exception as rollback_error:
-            print(f"⚠️  Erro no rollback: {rollback_error}")
+            print(f"[ERRO] Erro no rollback: {rollback_error}")
         raise
 
 if __name__ == '__main__':
     try:
         main()
     except Exception as e:
-        import traceback
-        print(f"\n❌ ERRO FATAL: {e}")
-        print("\n📝 Detalhes do erro:")
+        print(f"\n[ERRO FATAL] {e}")
+        print("\n[DETALHES] Detalhes do erro:")
         traceback.print_exc()
         sys.exit(1)

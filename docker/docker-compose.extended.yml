@@ -1,0 +1,80 @@
+version: '3.8'
+
+# VERSÃO ESTENDIDA COM PHPMyAdmin
+# Use: docker-compose -f docker-compose.extended.yml up -d
+
+services:
+  # MySQL Database
+  mysql:
+    image: mysql:8.0
+    container_name: intellexia-mysql
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password_123
+      MYSQL_DATABASE: intellexia
+      MYSQL_USER: intellexia
+      MYSQL_PASSWORD: intellexia_password_123
+      MYSQL_INITDB_SKIP_TZINFO: "yes"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - intellexia-network
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+      interval: 10s
+    restart: unless-stopped
+
+  # PHPMyAdmin - Interface Web para MySQL
+  phpmyadmin:
+    image: phpmyadmin:latest
+    container_name: intellexia-phpmyadmin
+    ports:
+      - "8080:80"
+    environment:
+      PMA_HOST: mysql
+      PMA_USER: intellexia
+      PMA_PASSWORD: intellexia_password_123
+      PMA_PORT: 3306
+      PMA_ROOT_PASSWORD: root_password_123
+      MYSQL_ROOT_PASSWORD: root_password_123
+    depends_on:
+      mysql:
+        condition: service_healthy
+    networks:
+      - intellexia-network
+    restart: unless-stopped
+
+  # Qdrant Vector Database
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: intellexia-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+      - ./qdrant_config.yaml:/qdrant/config/production.yaml
+    networks:
+      - intellexia-network
+    environment:
+      QDRANT_API_KEY: qdrant_api_key_123
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:6333/health"]
+      timeout: 5s
+      retries: 5
+      interval: 10s
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+    driver: local
+  qdrant_data:
+    driver: local
+
+networks:
+  intellexia-network:
+    driver: bridge

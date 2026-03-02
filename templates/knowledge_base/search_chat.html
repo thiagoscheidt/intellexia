@@ -26,11 +26,19 @@
               </div>
             </div>
             <div class="col-md-4 text-md-end">
-              <span class="badge bg-white text-dark d-inline-flex align-items-center gap-2"
-                style="padding: 0.25rem 0.6rem; font-size: 0.8rem;">
-                <i class="bi bi-folder-fill text-primary"></i>
-                <strong>{{ total_documents }}</strong> documento(s)
-              </span>
+              <div class="d-inline-flex align-items-center gap-2">
+                <span class="badge bg-white text-dark d-inline-flex align-items-center gap-2"
+                  style="padding: 0.25rem 0.6rem; font-size: 0.8rem;">
+                  <i class="bi bi-folder-fill text-primary"></i>
+                  <strong>{{ total_documents }}</strong> documento(s)
+                </span>
+                <button class="btn btn-sm btn-light rounded-circle d-flex align-items-center justify-content-center" 
+                  id="kb-theme-toggle" 
+                  title="Alternar tema"
+                  style="width: 32px; height: 32px; padding: 0;">
+                  <i class="bi bi-moon-stars" style="font-size: 1rem;"></i>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -704,6 +712,19 @@
     background: linear-gradient(to bottom, #121a2a 0%, #1a2233 100%) !important;
   }
 
+  [data-bs-theme="dark"] #chat-container h3 {
+    color: #e6ebf5 !important;
+  }
+
+  [data-bs-theme="dark"] #chat-container .card {
+    background: #1f283c !important;
+    border-color: var(--kb-border) !important;
+  }
+
+  [data-bs-theme="dark"] #chat-container .card h6 {
+    color: var(--kb-text) !important;
+  }
+
   [data-bs-theme="dark"] #knowledge-chat-card .message-user .message-content {
     background: linear-gradient(135deg, #6f85f2 0%, #7f63ad 100%);
     color: #f8faff;
@@ -869,6 +890,45 @@
     const newChatBtn = document.getElementById('new-chat-btn');
     const currentUserDisplayName = `{{ session.get('user_name', 'Você')|e }}`;
     const assistantDisplayName = 'IntellexIA';
+
+    // ===== THEME TOGGLE =====
+    const html = document.documentElement;
+    const kbThemeToggle = document.getElementById('kb-theme-toggle');
+    const kbThemeIcon = kbThemeToggle.querySelector('i');
+
+    // Recuperar tema salvo do localStorage
+    const savedTheme = localStorage.getItem('theme') || 'light';
+
+    // Aplicar tema inicial
+    if (savedTheme === 'dark') {
+      html.setAttribute('data-bs-theme', 'dark');
+      kbThemeIcon.classList.remove('bi-moon-stars');
+      kbThemeIcon.classList.add('bi-sun');
+    } else {
+      html.setAttribute('data-bs-theme', 'light');
+      kbThemeIcon.classList.remove('bi-sun');
+      kbThemeIcon.classList.add('bi-moon-stars');
+    }
+
+    // Toggle tema ao clicar
+    kbThemeToggle.addEventListener('click', function (e) {
+      e.preventDefault();
+      const currentTheme = html.getAttribute('data-bs-theme');
+      const newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+
+      // Aplicar novo tema
+      html.setAttribute('data-bs-theme', newTheme);
+      localStorage.setItem('theme', newTheme);
+
+      // Atualizar ícone
+      if (newTheme === 'dark') {
+        kbThemeIcon.classList.remove('bi-moon-stars');
+        kbThemeIcon.classList.add('bi-sun');
+      } else {
+        kbThemeIcon.classList.remove('bi-sun');
+        kbThemeIcon.classList.add('bi-moon-stars');
+      }
+    });
 
     const initialWelcomeHtml = chatMessages.innerHTML;
     const defaultSuggestedQuestions = [

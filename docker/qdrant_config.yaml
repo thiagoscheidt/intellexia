@@ -1,0 +1,33 @@
+# Configuração do Qdrant para Intellexia
+# Production configuration
+
+server:
+  http:
+    host: 0.0.0.0
+    port: 6333
+  grpc:
+    host: 0.0.0.0
+    port: 6334
+
+# Configurações de storage
+storage:
+  # Snapshots são salvos aqui
+  snapshots_path: ./snapshots
+  # Dados persistentes
+  storage_path: ./storage
+  # Configurações de performance
+  performance:
+    max_request_size_mb: 200
+    max_parallel_requests: 100
+
+# Configurações de API
+api:
+  # Timeout para requisições (em segundos)
+  read_only_api: false
+  
+# Logging
+log_level: info
+
+# Cluster (comentado para modo standalone)
+# cluster:
+#   enabled: false
