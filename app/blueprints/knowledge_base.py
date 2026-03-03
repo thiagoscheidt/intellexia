@@ -9,6 +9,7 @@ from pathlib import Path
 from app.agents.agent_document_summary import AgentDocumentSummary
 import os
 import json as json_lib
+import re
 
 knowledge_base_bp = Blueprint('knowledge_base', __name__, url_prefix='/knowledge-base')
 
@@ -34,6 +35,30 @@ def get_current_law_firm_id():
 def get_current_user_id():
     """Retorna o ID do usuário logado"""
     return session.get('user_id')
+
+def highlight_search_terms(text: str, search_query: str) -> str:
+    """Destaca os termos da busca no texto com markup HTML"""
+    if not search_query or not text:
+        return text
+    
+    # Dividir a query em palavras individuais
+    search_terms = search_query.strip().split()
+    
+    # Remover palavras muito curtas (artigos, preposições) que não devem ser destacadas
+    search_terms = [term for term in search_terms if len(term) > 2]
+    
+    highlighted_text = text
+    
+    # Destacar cada termo encontrado (case-insensitive)
+    for term in search_terms:
+        # Escape caracteres especiais de regex
+        escaped_term = re.escape(term)
+        # Criar padrão que encontra a palavra inteira (word boundary)
+        pattern = re.compile(f'({escaped_term})', re.IGNORECASE)
+        # Substituir com span de destaque
+        highlighted_text = pattern.sub(r'<mark class="highlight-term">\1</mark>', highlighted_text)
+    
+    return highlighted_text
 
 @knowledge_base_bp.route('/')
 def list():
@@ -1107,3 +1132,94 @@ def api_chat_delete(chat_id: int):
     except Exception as e:
         db.session.rollback()
         return jsonify({'success': False, 'error': f'Erro ao remover chat: {str(e)}'}), 500
+
+
+@knowledge_base_bp.route('/intelligent-search', methods=['GET', 'POST'])
+def intelligent_search():
+    """Pesquisa Inteligente - Busca semântica no Qdrant com resultados detalhados"""
+    law_firm_id = get_current_law_firm_id()
+    user_id = get_current_user_id()
+    
+    if not law_firm_id or not user_id:
+        flash('Você precisa estar logado para acessar esta página.', 'error')
+        return redirect(url_for('auth.login'))
+    
+    # Contar documentos na base de conhecimento
+    total_documents = KnowledgeBase.query.filter_by(
+        law_firm_id=law_firm_id,
+        is_active=True
+    ).count()
+    
+    search_query = ''
+    results = []
+    search_performed = False
+    
+    if request.method == 'POST':
+        search_query = request.form.get('query', '').strip()
+        
+        if search_query:
+            try:
+                # Inicializar o agente de consulta
+                query_agent = KnowledgeQueryAgent()
+                
+                # Fazer a busca vetorial diretamente
+                search_data = query_agent.ask_knowledge_base(search_query, history=None)
+                
+                # Processar os resultados
+                if search_data and search_data.get('results') and search_data['results'].points:
+                    for idx, point in enumerate(search_data['results'].points):
+                        payload = point.payload
+                        score = point.score
+                        
+                        # Buscar informações do arquivo no banco
+                        file_info = None
+                        if 'file_id' in payload and payload['file_id']:
+                            file_info = KnowledgeBase.query.filter_by(
+                                id=payload['file_id'],
+                                law_firm_id=law_firm_id
+                            ).first()
+                        
+                        # Obter o texto e aplicar highlight
+                        original_text = payload.get('text', '')
+                        highlighted_text = highlight_search_terms(original_text, search_query)
+                        
+                        result_item = {
+                            'rank': idx + 1,
+                            'text': original_text,  # Texto original sem HTML
+                            'highlighted_text': highlighted_text,  # Texto com highlight HTML
+                            'source': payload.get('source', 'Documento sem nome'),
+                            'page': payload.get('page'),
+                            'lawsuit_number': payload.get('lawsuit_number'),
+                            'category': payload.get('category'),
+                            'tags': payload.get('tags', '').split(',') if payload.get('tags') else [],
+                            'score': score,
+                            'score_percent': round(score * 100, 2),
+                            'file_id': payload.get('file_id'),
+                            'file_info': {
+                                'original_filename': file_info.original_filename if file_info else None,
+                                'description': file_info.description if file_info else None,
+                                'file_type': file_info.file_type if file_info else None,
+                            } if file_info else None
+                        }
+                        
+                        results.append(result_item)
+                
+                search_performed = True
+                
+                # Flash message com o resultado
+                if results:
+                    flash(f'Encontrados {len(results)} resultados relevantes para sua busca.', 'success')
+                else:
+                    flash('Nenhum resultado encontrado. Tente reformular sua busca.', 'info')
+                    
+            except Exception as e:
+                flash(f'Erro ao realizar a busca: {str(e)}', 'error')
+                print(f"Erro na pesquisa inteligente: {str(e)}")
+    
+    return render_template(
+        'knowledge_base/intelligent_search.html',
+        total_documents=total_documents,
+        search_query=search_query,
+        results=results,
+        search_performed=search_performed
+    )

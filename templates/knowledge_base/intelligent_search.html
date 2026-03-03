@@ -1,0 +1,539 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Pesquisa Inteligente - IntellexIA{% endblock %}
+
+{% block extra_css %}
+<style>
+    .search-hero {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        padding: 2rem 0;
+        margin-bottom: 1.5rem;
+        border-radius: 0 0 15px 15px;
+        box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);
+    }
+
+    .search-box-container {
+        background: white;
+        border-radius: 15px;
+        padding: 2.5rem;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.1);
+        margin-bottom: 2rem;
+    }
+
+    [data-bs-theme="dark"] .search-box-container {
+        background: var(--bs-body-bg);
+        border: 1px solid var(--bs-border-color);
+    }
+
+    .search-input-group {
+        position: relative;
+    }
+
+    .search-input-group .form-control {
+        border-radius: 12px;
+        border: 2px solid #e0e0e0;
+        padding: 1rem 1.5rem;
+        font-size: 1.05rem;
+        transition: all 0.3s ease;
+    }
+
+    .search-input-group .form-control:focus {
+        border-color: #667eea;
+        box-shadow: 0 0 0 0.25rem rgba(102, 126, 234, 0.15);
+    }
+
+    .search-btn {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        border: none;
+        border-radius: 12px;
+        padding: 1rem 2.5rem;
+        font-weight: 600;
+        font-size: 1.05rem;
+        transition: all 0.3s ease;
+    }
+
+    .search-btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    }
+
+    .result-card {
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 1.5rem;
+        transition: all 0.3s ease;
+        position: relative;
+    }
+
+    .result-card:hover {
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.08);
+        transform: translateY(-2px);
+        border-color: #667eea;
+    }
+
+    [data-bs-theme="dark"] .result-card {
+        background: var(--bs-body-bg);
+        border-color: var(--bs-border-color);
+    }
+
+    [data-bs-theme="dark"] .result-card:hover {
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+        border-color: #667eea;
+    }
+
+    .result-rank {
+        position: absolute;
+        top: -12px;
+        left: 20px;
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        border-radius: 20px;
+        padding: 0.25rem 0.75rem;
+        font-weight: 700;
+        font-size: 0.85rem;
+        box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+    }
+
+    .result-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: start;
+        margin-bottom: 1rem;
+        padding-top: 0.5rem;
+    }
+
+    .result-title {
+        font-size: 1.15rem;
+        font-weight: 600;
+        color: #2c3e50;
+        margin-bottom: 0.5rem;
+    }
+
+    [data-bs-theme="dark"] .result-title {
+        color: #e0e0e0;
+    }
+
+    .result-text {
+        background: #f8f9fa;
+        border-left: 4px solid #667eea;
+        padding: 1rem 1.25rem;
+        border-radius: 8px;
+        margin: 1rem 0;
+        font-size: 0.95rem;
+        line-height: 1.7;
+        color: #333;
+        font-style: italic;
+    }
+
+    [data-bs-theme="dark"] .result-text {
+        background: rgba(102, 126, 234, 0.08);
+        color: #d0d0d0;
+    }
+
+    .result-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+        margin-top: 1rem;
+        padding-top: 1rem;
+        border-top: 1px solid #e0e0e0;
+    }
+
+    [data-bs-theme="dark"] .result-meta {
+        border-top-color: var(--bs-border-color);
+    }
+
+    .meta-item {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.4rem;
+        padding: 0.4rem 0.8rem;
+        background: #f0f0f0;
+        border-radius: 8px;
+        font-size: 0.85rem;
+    }
+
+    [data-bs-theme="dark"] .meta-item {
+        background: rgba(255, 255, 255, 0.05);
+    }
+
+    .meta-item i {
+        color: #667eea;
+    }
+
+    .relevance-badge {
+        background: linear-gradient(135deg, #48c774 0%, #3ec46d 100%);
+        color: white;
+        padding: 0.4rem 0.9rem;
+        border-radius: 20px;
+        font-weight: 600;
+        font-size: 0.85rem;
+    }
+
+    .relevance-badge.high {
+        background: linear-gradient(135deg, #48c774 0%, #3ec46d 100%);
+    }
+
+    .relevance-badge.medium {
+        background: linear-gradient(135deg, #ffdd57 0%, #ffd83d 100%);
+        color: #333;
+    }
+
+    .relevance-badge.low {
+        background: linear-gradient(135deg, #ff7e67 0%, #ff6b6b 100%);
+    }
+
+    .stats-box {
+        background: linear-gradient(135deg, #667eea15 0%, #764ba215 100%);
+        border-radius: 12px;
+        padding: 1.5rem;
+        margin-bottom: 2rem;
+        text-align: center;
+    }
+
+    .stats-box h4 {
+        font-size: 2.5rem;
+        font-weight: 700;
+        color: #667eea;
+        margin-bottom: 0.5rem;
+    }
+
+    .no-results {
+        text-align: center;
+        padding: 3rem;
+        background: #f8f9fa;
+        border-radius: 12px;
+        margin-top: 2rem;
+    }
+
+    [data-bs-theme="dark"] .no-results {
+        background: rgba(255, 255, 255, 0.03);
+    }
+
+    .no-results i {
+        font-size: 4rem;
+        color: #667eea;
+        margin-bottom: 1rem;
+    }
+
+    .action-buttons {
+        display: flex;
+        gap: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .action-buttons .btn {
+        border-radius: 8px;
+        padding: 0.4rem 1rem;
+        font-size: 0.85rem;
+    }
+
+    .highlight-term {
+        background-color: #ffeb3b;
+        padding: 0.1rem 0.2rem;
+        border-radius: 2px;
+        font-weight: inherit;
+    }
+
+    [data-bs-theme="dark"] .highlight-term {
+        background-color: #ffd54f;
+        color: #000;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="search-hero">
+    <div class="container-fluid">
+        <div class="row align-items-center">
+            <div class="col-sm-8">
+                <div class="d-flex align-items-center">
+                    <div class="me-3">
+                        <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
+                            style="width: 40px; height: 40px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                            <i class="bi bi-lightbulb-fill" style="font-size: 1.2rem; color: #667eea;"></i>
+                        </div>
+                    </div>
+                    <div class="text-white">
+                        <h3 class="mb-0" style="font-weight: 600; font-size: 1.2rem;">
+                            <i class="bi bi-search"></i> Pesquisa Inteligente
+                        </h3>
+                        <small class="opacity-75">Busca semântica com IA na base de conhecimento</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-sm-4">
+                <ol class="breadcrumb float-sm-end mb-0"
+                    style="background: rgba(255,255,255,0.15); padding: 0.5rem 0.75rem; border-radius: 10px; backdrop-filter: blur(10px);">
+                    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"
+                            class="text-white text-decoration-none"><i class="bi bi-house-fill"></i> Home</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('knowledge_base.list') }}"
+                            class="text-white text-decoration-none">Base de Conhecimento</a></li>
+                    <li class="breadcrumb-item active text-white" aria-current="page"><strong>Pesquisa
+                            Inteligente</strong></li>
+                </ol>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="app-content">
+    <div class="container-fluid">
+        <!-- Caixa de Pesquisa -->
+        <div class="search-box-container">
+            <form method="POST">
+                <div class="row align-items-center">
+                    <div class="col-lg-9 mb-3 mb-lg-0">
+                        <div class="search-input-group">
+                            <label for="query" class="form-label fw-semibold mb-2">
+                                <i class="bi bi-search text-primary"></i> O que você está procurando?
+                            </label>
+                            <input type="text" class="form-control" id="query" name="query"
+                                placeholder="Digite sua busca... Ex: 'acidente de trabalho', 'FAP', 'perícia médica', etc."
+                                value="{{ search_query }}" required autofocus>
+                            <small class="text-muted mt-1 d-block">
+                                <i class="bi bi-info-circle"></i> A busca utiliza IA para encontrar os trechos mais
+                                relevantes nos documentos
+                            </small>
+                        </div>
+                    </div>
+                    <div class="col-lg-3">
+                        <button type="submit" class="btn btn-primary search-btn w-100">
+                            <i class="bi bi-search me-2"></i>Buscar
+                        </button>
+                    </div>
+                </div>
+            </form>
+
+            <!-- Info sobre a base -->
+            <div class="mt-3 text-center">
+                <small class="text-muted">
+                    <i class="bi bi-database"></i> Base de conhecimento com <strong>{{ total_documents }}</strong>
+                    documento(s) indexados
+                </small>
+            </div>
+        </div>
+
+        <!-- Resultados -->
+        {% if search_performed %}
+        <div class="row">
+            <div class="col-12">
+                {% if results %}
+                <!-- Estatísticas da busca -->
+                <div class="stats-box">
+                    <h4>{{ results|length }}</h4>
+                    <p class="mb-0 text-muted fw-semibold">resultado(s) encontrado(s) para "{{ search_query }}"</p>
+                </div>
+
+                <!-- Cards de Resultados -->
+                {% for result in results %}
+                <div class="result-card">
+                    <div class="result-rank">#{{ result.rank }}</div>
+
+                    <div class="result-header">
+                        <div class="flex-grow-1">
+                            <h5 class="result-title">
+                                <i class="bi bi-file-earmark-text text-primary"></i>
+                                {% if result.file_info and result.file_info.original_filename %}
+                                {{ result.file_info.original_filename }}
+                                {% else %}
+                                {{ result.source }}
+                                {% endif %}
+                            </h5>
+
+                            {% if result.file_info and result.file_info.description %}
+                            <p class="text-muted small mb-0">{{ result.file_info.description }}</p>
+                            {% endif %}
+                        </div>
+
+                        <div>
+                            {% if result.score_percent >= 70 %}
+                            <span class="relevance-badge high">
+                                <i class="bi bi-star-fill"></i> {{ result.score_percent }}% relevante
+                            </span>
+                            {% elif result.score_percent >= 50 %}
+                            <span class="relevance-badge medium">
+                                <i class="bi bi-star-half"></i> {{ result.score_percent }}% relevante
+                            </span>
+                            {% else %}
+                            <span class="relevance-badge low">
+                                <i class="bi bi-star"></i> {{ result.score_percent }}% relevante
+                            </span>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                    <!-- Trecho encontrado -->
+                    <div class="result-text">
+                        <i class="bi bi-quote text-primary"></i>
+                        {% if result.highlighted_text|length > 400 %}
+                        {{ (result.highlighted_text[:400] + '...')|safe }}
+                        {% else %}
+                        {{ result.highlighted_text|safe }}
+                        {% endif %}
+                    </div>
+
+                    <!-- Metadados -->
+                    <div class="result-meta">
+                        {% if result.page %}
+                        <span class="meta-item">
+                            <i class="bi bi-file-text"></i>
+                            Página {{ result.page }}
+                        </span>
+                        {% endif %}
+
+                        {% if result.lawsuit_number %}
+                        <span class="meta-item">
+                            <i class="bi bi-briefcase"></i>
+                            Processo: {{ result.lawsuit_number }}
+                        </span>
+                        {% endif %}
+
+                        {% if result.category %}
+                        <span class="meta-item">
+                            <i class="bi bi-folder"></i>
+                            {{ result.category }}
+                        </span>
+                        {% endif %}
+
+                        {% if result.file_info and result.file_info.file_type %}
+                        <span class="meta-item">
+                            <i class="bi bi-filetype-{{ result.file_info.file_type|lower }}"></i>
+                            {{ result.file_info.file_type|upper }}
+                        </span>
+                        {% endif %}
+
+                        {% if result.tags %}
+                        {% for tag in result.tags[:3] %}
+                        <span class="badge bg-secondary">
+                            <i class="bi bi-tag"></i> {{ tag.strip() }}
+                        </span>
+                        {% endfor %}
+                        {% endif %}
+                    </div>
+
+                    <!-- Ações -->
+                    <div class="action-buttons mt-3">
+                        {% if result.file_id %}
+                        <a href="{{ url_for('knowledge_base.details', file_id=result.file_id) }}"
+                            class="btn btn-sm btn-primary">
+                            <i class="bi bi-eye"></i> Ver Documento
+                        </a>
+                        <a href="{{ url_for('knowledge_base.download', file_id=result.file_id) }}"
+                            class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-download"></i> Baixar
+                        </a>
+                        {% endif %}
+                    </div>
+                </div>
+                {% endfor %}
+
+                {% else %}
+                <!-- Nenhum resultado -->
+                <div class="no-results">
+                    <i class="bi bi-search"></i>
+                    <h4>Nenhum resultado encontrado</h4>
+                    <p class="text-muted mb-4">Não encontramos documentos relevantes para "{{ search_query }}"</p>
+                    <div class="d-flex justify-content-center gap-2">
+                        <a href="{{ url_for('knowledge_base.intelligent_search') }}" class="btn btn-primary">
+                            <i class="bi bi-arrow-left"></i> Nova pesquisa
+                        </a>
+                        <a href="{{ url_for('knowledge_base.upload') }}" class="btn btn-outline-primary">
+                            <i class="bi bi-plus-circle"></i> Adicionar documento
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+        {% else %}
+        <!-- Instruções iniciais -->
+        <div class="row">
+            <div class="col-lg-8 offset-lg-2">
+                <div class="card border-0 shadow-sm" style="border-radius: 15px;">
+                    <div class="card-body p-4">
+                        <h4 class="mb-4">
+                            <i class="bi bi-info-circle text-primary"></i> Como funciona a Pesquisa Inteligente?
+                        </h4>
+
+                        <div class="row g-4">
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-start">
+                                    <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-3"
+                                        style="width: 40px; height: 40px; min-width: 40px;">
+                                        <strong>1</strong>
+                                    </div>
+                                    <div>
+                                        <h6 class="fw-bold">Busca Semântica</h6>
+                                        <p class="text-muted small mb-0">Encontra documentos por significado, não apenas
+                                            palavras-chave exatas</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-start">
+                                    <div class="rounded-circle bg-success text-white d-flex align-items-center justify-content-center me-3"
+                                        style="width: 40px; height: 40px; min-width: 40px;">
+                                        <strong>2</strong>
+                                    </div>
+                                    <div>
+                                        <h6 class="fw-bold">Trechos Relevantes</h6>
+                                        <p class="text-muted small mb-0">Mostra exatamente onde a informação foi
+                                            encontrada no documento</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-start">
+                                    <div class="rounded-circle bg-warning text-dark d-flex align-items-center justify-content-center me-3"
+                                        style="width: 40px; height: 40px; min-width: 40px;">
+                                        <strong>3</strong>
+                                    </div>
+                                    <div>
+                                        <h6 class="fw-bold">Score de Relevância</h6>
+                                        <p class="text-muted small mb-0">Indica o quão relevante cada resultado é para
+                                            sua busca</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-start">
+                                    <div class="rounded-circle bg-info text-white d-flex align-items-center justify-content-center me-3"
+                                        style="width: 40px; height: 40px; min-width: 40px;">
+                                        <strong>4</strong>
+                                    </div>
+                                    <div>
+                                        <h6 class="fw-bold">Informações Completas</h6>
+                                        <p class="text-muted small mb-0">Página, processo, categoria e tags em cada
+                                            resultado</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <div class="alert alert-light mb-0">
+                            <h6 class="alert-heading">
+                                <i class="bi bi-lightbulb text-warning"></i> Dicas para melhores resultados
+                            </h6>
+                            <ul class="mb-0 small">
+                                <li>Use termos específicos relacionados ao que procura</li>
+                                <li>Combine conceitos: "acidente trabalho indenização"</li>
+                                <li>Se não encontrar, tente sinônimos ou termos relacionados</li>
+                                <li>A busca considera o contexto e significado das palavras</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+{% endblock %}

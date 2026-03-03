@@ -267,6 +267,13 @@
           </a>
           <ul class="nav nav-treeview">
             <li class="nav-item">
+              <a href="{{ url_for('knowledge_base.intelligent_search') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.intelligent_search' else '' }}">
+                <i class="nav-icon bi bi-lightbulb-fill"></i>
+                <p>Pesquisa Inteligente</p>
+              </a>
+            </li>
+            <li class="nav-item">
               <a href="{{ url_for('knowledge_base.search_chat') }}"
                 class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.search_chat' else '' }}">
                 <i class="nav-icon bi bi-search"></i>
