@@ -175,6 +175,49 @@
         box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
     }
 
+    .results-accordion .accordion-item {
+        background: white;
+        border: 1px solid #e0e0e0;
+        border-radius: 12px;
+        margin-bottom: 0.85rem;
+        overflow: hidden;
+    }
+
+    .results-accordion .accordion-button {
+        background: #fff;
+        box-shadow: none;
+        padding: 0.95rem 1rem;
+        align-items: flex-start;
+    }
+
+    .results-accordion .accordion-button:not(.collapsed) {
+        background: #f8faff;
+        color: inherit;
+    }
+
+    .results-accordion .accordion-button:focus {
+        box-shadow: 0 0 0 0.2rem rgba(102, 126, 234, 0.15);
+        border-color: transparent;
+    }
+
+    .results-accordion .accordion-body {
+        padding: 0.95rem;
+    }
+
+    [data-bs-theme="dark"] .results-accordion .accordion-item {
+        background: var(--bs-body-bg);
+        border-color: var(--bs-border-color);
+    }
+
+    [data-bs-theme="dark"] .results-accordion .accordion-button {
+        background: var(--bs-body-bg);
+        color: #e0e0e0;
+    }
+
+    [data-bs-theme="dark"] .results-accordion .accordion-button:not(.collapsed) {
+        background: rgba(102, 126, 234, 0.12);
+    }
+
     .result-header {
         display: flex;
         justify-content: space-between;
@@ -556,15 +599,18 @@
                     <!-- Estatísticas da busca -->
                     <div class="stats-box">
                         <h4>{{ results|length }}</h4>
-                        <p class="mb-0 text-muted fw-semibold">resultado(s) encontrado(s) para "{{ search_query }}"</p>
+                        <p class="mb-0 text-muted fw-semibold">
+                            {{ results|length }} trecho(s) em {{ grouped_results|length }} arquivo(s) para "{{
+                            search_query }}"
+                        </p>
                     </div>
 
                     {% set ns = namespace(categories=[], tags=[]) %}
-                    {% for result in results %}
-                    {% if result.category and result.category not in ns.categories %}
-                    {% set ns.categories = ns.categories + [result.category] %}
+                    {% for group in grouped_results %}
+                    {% if group.category and group.category not in ns.categories %}
+                    {% set ns.categories = ns.categories + [group.category] %}
                     {% endif %}
-                    {% for tag in result.tags %}
+                    {% for tag in group.tags %}
                     {% if tag and tag.strip() and tag.strip() not in ns.tags %}
                     {% set ns.tags = ns.tags + [tag.strip()] %}
                     {% endif %}
@@ -598,115 +644,156 @@
                             </div>
                         </div>
                         <div class="results-filter-summary mt-2">
-                            Exibindo <strong id="visibleResultsCount">{{ results|length }}</strong> de <strong>{{
-                                results|length }}</strong> resultado(s).
+                            Exibindo <strong id="visibleResultsCount">{{ grouped_results|length }}</strong> de
+                            <strong>{{ grouped_results|length }}</strong> arquivo(s).
                         </div>
                     </div>
 
-                    <!-- Cards de Resultados -->
-                    {% for result in results %}
-                    <div class="result-card" data-result-item="true" data-category="{{ (result.category or '')|lower }}"
-                        data-tags="{{ result.tags|join(',')|lower }}">
-                        <div class="result-rank">#{{ result.rank }}</div>
-
-                        <div class="result-header">
-                            <div class="flex-grow-1">
-                                <h5 class="result-title">
-                                    <i class="bi bi-file-earmark-text text-primary"></i>
-                                    {% if result.file_info and result.file_info.original_filename %}
-                                    {{ result.file_info.original_filename }}
-                                    {% else %}
-                                    {{ result.source }}
+                    <!-- Resultados por Arquivo (Accordion) -->
+                    <div class="accordion results-accordion" id="resultsAccordion">
+                        {% for group in grouped_results %}
+                        {% set group_id = 'fileGroup' ~ loop.index %}
+                        <div class="accordion-item" data-result-item="true"
+                            data-category="{{ (group.category or '')|lower }}"
+                            data-tags="{{ group.tags|join(',')|lower }}">
+                            <h2 class="accordion-header" id="heading-{{ group_id }}">
+                                <button class="accordion-button {% if not loop.first %}collapsed{% endif %}"
+                                    type="button" data-bs-toggle="collapse" data-bs-target="#collapse-{{ group_id }}"
+                                    aria-expanded="{{ 'true' if loop.first else 'false' }}"
+                                    aria-controls="collapse-{{ group_id }}">
+                                    <div
+                                        class="w-100 d-flex flex-wrap align-items-start justify-content-between gap-2 pe-3">
+                                        <div>
+                                            <h5 class="result-title mb-1">
+                                                <i class="bi bi-file-earmark-text text-primary"></i>
+                                                {% if group.file_info and group.file_info.original_filename %}
+                                                {{ group.file_info.original_filename }}
+                                                {% else %}
+                                                {{ group.source }}
+                                                {% endif %}
+                                            </h5>
+                                            <div class="small text-muted">
+                                                <i class="bi bi-collection"></i> {{ group.snippets|length }} trecho(s)
+                                                relevante(s)
+                                            </div>
+                                        </div>
+                                        <div>
+                                            {% if group.score_percent >= 70 %}
+                                            <span class="relevance-badge high">
+                                                <i class="bi bi-star-fill"></i> {{ group.score_percent }}% do arquivo é
+                                                relevante
+                                            </span>
+                                            {% elif group.score_percent >= 50 %}
+                                            <span class="relevance-badge medium">
+                                                <i class="bi bi-star-half"></i> {{ group.score_percent }}% do arquivo é
+                                                relevante
+                                            </span>
+                                            {% else %}
+                                            <span class="relevance-badge low">
+                                                <i class="bi bi-star"></i> {{ group.score_percent }}% do arquivo é
+                                                relevante
+                                            </span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+                                </button>
+                            </h2>
+                            <div id="collapse-{{ group_id }}"
+                                class="accordion-collapse collapse {% if loop.first %}show{% endif %}"
+                                aria-labelledby="heading-{{ group_id }}">
+                                <div class="accordion-body">
+                                    {% if group.file_info and group.file_info.description %}
+                                    <p class="text-muted small mb-3">{{ group.file_info.description }}</p>
                                     {% endif %}
-                                </h5>
 
-                                {% if result.file_info and result.file_info.description %}
-                                <p class="text-muted small mb-0">{{ result.file_info.description }}</p>
-                                {% endif %}
+                                    {% for result in group.snippets %}
+                                    {% if not loop.first %}
+                                    <hr class="my-3">
+                                    {% endif %}
+
+                                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                                        <div class="small fw-semibold text-muted">
+                                            Trecho #{{ result.rank }}
+                                            {% if result.page %}
+                                            · Página {{ result.page }}
+                                            {% endif %}
+                                        </div>
+                                        <div>
+                                            {% if result.score_percent >= 70 %}
+                                            <span class="relevance-badge high">
+                                                <i class="bi bi-star-fill"></i> {{ result.score_percent }}% relevante
+                                            </span>
+                                            {% elif result.score_percent >= 50 %}
+                                            <span class="relevance-badge medium">
+                                                <i class="bi bi-star-half"></i> {{ result.score_percent }}% relevante
+                                            </span>
+                                            {% else %}
+                                            <span class="relevance-badge low">
+                                                <i class="bi bi-star"></i> {{ result.score_percent }}% relevante
+                                            </span>
+                                            {% endif %}
+                                        </div>
+                                    </div>
+
+                                    <div class="result-text">
+                                        <i class="bi bi-quote text-primary"></i>
+                                        {{ result.highlighted_text|safe }}
+                                    </div>
+                                    {% endfor %}
+
+                                    <div class="result-meta">
+                                        {% if group.lawsuit_number %}
+                                        <span class="meta-item">
+                                            <i class="bi bi-briefcase"></i>
+                                            Processo: {{ group.lawsuit_number }}
+                                        </span>
+                                        {% endif %}
+
+                                        {% if group.category %}
+                                        <span class="meta-item">
+                                            <i class="bi bi-folder"></i>
+                                            {{ group.category }}
+                                        </span>
+                                        {% endif %}
+
+                                        {% if group.file_info and group.file_info.file_type %}
+                                        <span class="meta-item">
+                                            <i class="bi bi-filetype-{{ group.file_info.file_type|lower }}"></i>
+                                            {{ group.file_info.file_type|upper }}
+                                        </span>
+                                        {% endif %}
+
+                                        {% if group.tags %}
+                                        {% for tag in group.tags[:5] %}
+                                        <span class="badge bg-secondary">
+                                            <i class="bi bi-tag"></i> {{ tag.strip() }}
+                                        </span>
+                                        {% endfor %}
+                                        {% endif %}
+                                    </div>
+
+                                    <div class="action-buttons mt-3">
+                                        {% if group.file_id %}
+                                        <a href="{{ url_for('knowledge_base.details', file_id=group.file_id) }}"
+                                            class="btn btn-sm btn-primary">
+                                            <i class="bi bi-eye"></i> Ver Documento
+                                        </a>
+                                        <a href="{{ url_for('knowledge_base.download', file_id=group.file_id) }}"
+                                            class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-download"></i> Baixar
+                                        </a>
+                                        {% endif %}
+                                    </div>
+                                </div>
                             </div>
-
-                            <div>
-                                {% if result.score_percent >= 70 %}
-                                <span class="relevance-badge high">
-                                    <i class="bi bi-star-fill"></i> {{ result.score_percent }}% relevante
-                                </span>
-                                {% elif result.score_percent >= 50 %}
-                                <span class="relevance-badge medium">
-                                    <i class="bi bi-star-half"></i> {{ result.score_percent }}% relevante
-                                </span>
-                                {% else %}
-                                <span class="relevance-badge low">
-                                    <i class="bi bi-star"></i> {{ result.score_percent }}% relevante
-                                </span>
-                                {% endif %}
-                            </div>
                         </div>
-
-                        <!-- Trecho encontrado -->
-                        <div class="result-text">
-                            <i class="bi bi-quote text-primary"></i>
-                            {{ result.highlighted_text|safe }}
-                        </div>
-
-                        <!-- Metadados -->
-                        <div class="result-meta">
-                            {% if result.page %}
-                            <span class="meta-item">
-                                <i class="bi bi-file-text"></i>
-                                Página {{ result.page }}
-                            </span>
-                            {% endif %}
-
-                            {% if result.lawsuit_number %}
-                            <span class="meta-item">
-                                <i class="bi bi-briefcase"></i>
-                                Processo: {{ result.lawsuit_number }}
-                            </span>
-                            {% endif %}
-
-                            {% if result.category %}
-                            <span class="meta-item">
-                                <i class="bi bi-folder"></i>
-                                {{ result.category }}
-                            </span>
-                            {% endif %}
-
-                            {% if result.file_info and result.file_info.file_type %}
-                            <span class="meta-item">
-                                <i class="bi bi-filetype-{{ result.file_info.file_type|lower }}"></i>
-                                {{ result.file_info.file_type|upper }}
-                            </span>
-                            {% endif %}
-
-                            {% if result.tags %}
-                            {% for tag in result.tags[:3] %}
-                            <span class="badge bg-secondary">
-                                <i class="bi bi-tag"></i> {{ tag.strip() }}
-                            </span>
-                            {% endfor %}
-                            {% endif %}
-                        </div>
-
-                        <!-- Ações -->
-                        <div class="action-buttons mt-3">
-                            {% if result.file_id %}
-                            <a href="{{ url_for('knowledge_base.details', file_id=result.file_id) }}"
-                                class="btn btn-sm btn-primary">
-                                <i class="bi bi-eye"></i> Ver Documento
-                            </a>
-                            <a href="{{ url_for('knowledge_base.download', file_id=result.file_id) }}"
-                                class="btn btn-sm btn-outline-primary">
-                                <i class="bi bi-download"></i> Baixar
-                            </a>
-                            {% endif %}
-                        </div>
+                        {% endfor %}
                     </div>
-                    {% endfor %}
 
                     <div id="noFilteredResults" class="no-results" style="display: none;">
                         <i class="bi bi-funnel"></i>
-                        <h4>Nenhum resultado com os filtros selecionados</h4>
-                        <p class="text-muted mb-3">Ajuste os filtros de categoria e/ou tags para visualizar resultados.
+                        <h4>Nenhum arquivo com os filtros selecionados</h4>
+                        <p class="text-muted mb-3">Ajuste os filtros de categoria e/ou tags para visualizar os arquivos.
                         </p>
                         <button type="button" class="btn btn-outline-primary btn-sm" id="clearResultFiltersEmpty">
                             <i class="bi bi-arrow-counterclockwise"></i> Limpar filtros

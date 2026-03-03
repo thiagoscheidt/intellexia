@@ -1204,6 +1204,7 @@ def intelligent_search():
     
     search_query = ''
     results = []
+    grouped_results = []
     search_performed = False
     
     if request.method == 'POST':
@@ -1290,6 +1291,53 @@ def intelligent_search():
                     results.sort(key=lambda item: item['score'], reverse=True)
                     for position, item in enumerate(results, start=1):
                         item['rank'] = position
+
+                    grouped_map = {}
+                    grouped_keys = []
+                    for item in results:
+                        group_key = item.get('file_id') or item.get('source') or f"unknown-{item.get('rank')}"
+
+                        if group_key not in grouped_map:
+                            grouped_map[group_key] = {
+                                'group_rank': item['rank'],
+                                'file_id': item.get('file_id'),
+                                'source': item.get('source'),
+                                'file_info': item.get('file_info'),
+                                'category': item.get('category'),
+                                'lawsuit_number': item.get('lawsuit_number'),
+                                'tags': [],
+                                'score': item.get('score', 0),
+                                'score_percent': item.get('score_percent', 0),
+                                'snippets': []
+                            }
+                            grouped_keys.append(group_key)
+
+                        group = grouped_map[group_key]
+                        group['snippets'].append(item)
+
+                        item_category = item.get('category')
+                        if item_category and not group.get('category'):
+                            group['category'] = item_category
+
+                        item_lawsuit = item.get('lawsuit_number')
+                        if item_lawsuit and not group.get('lawsuit_number'):
+                            group['lawsuit_number'] = item_lawsuit
+
+                        item_score = item.get('score', 0)
+                        if item_score > group.get('score', 0):
+                            group['score'] = item_score
+                            group['score_percent'] = item.get('score_percent', round(item_score * 100, 2))
+                            group['group_rank'] = item['rank']
+
+                        for tag in item.get('tags', []):
+                            normalized_tag = (tag or '').strip()
+                            if normalized_tag and normalized_tag not in group['tags']:
+                                group['tags'].append(normalized_tag)
+
+                    grouped_results = [grouped_map[key] for key in grouped_keys]
+                    grouped_results.sort(key=lambda group: group.get('score', 0), reverse=True)
+                    for group_position, group in enumerate(grouped_results, start=1):
+                        group['group_rank'] = group_position
                 
                 search_performed = True
                 
@@ -1305,5 +1353,6 @@ def intelligent_search():
         total_documents=total_documents,
         search_query=search_query,
         results=results,
+        grouped_results=grouped_results,
         search_performed=search_performed
     )
