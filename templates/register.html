@@ -5,971 +5,202 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>IntellexIA | Registro</title>
-
-    <!-- Google Font: Poppins -->
-    <link rel="stylesheet"
-        href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap">
-    <!-- Bootstrap Icons -->
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css"
-        crossorigin="anonymous">
-    <!-- Theme style -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/adminlte.css') }}">
-
-    <style>
-        :root {
-            --primary-color: #7c3aed;
-            --secondary-color: #6d28d9;
-            --success-color: #059669;
-            --danger-color: #dc2626;
-            --dark-color: #4c1d95;
-            --light-color: #f9fafb;
-            --bg-dark: #2d1b4e;
-            --bg-darker: #0f0214;
-        }
-
-        body {
-            font-family: 'Poppins', sans-serif;
-            background: linear-gradient(135deg, #4c1d95 0%, #2d1b4e 40%, #1a0033 70%, #000000 100%);
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            position: relative;
-            overflow: hidden;
-        }
-
-        /* Animated background */
-        body::before {
-            content: '';
-            position: absolute;
-            width: 200%;
-            height: 200%;
-            background: radial-gradient(circle, rgba(124, 58, 237, 0.08) 1px, transparent 1px);
-            background-size: 50px 50px;
-            animation: moveBackground 20s linear infinite;
-            z-index: 0;
-        }
-
-        @keyframes moveBackground {
-            0% {
-                transform: translate(0, 0);
-            }
-
-            100% {
-                transform: translate(50px, 50px);
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: { sans: ['Inter', 'sans-serif'] }
+                }
             }
         }
-
-        .register-box {
-            width: 440px;
-            max-width: 95%;
-            z-index: 1;
-            animation: slideIn 0.5s ease-out;
-        }
-
-        @keyframes slideIn {
-            from {
-                opacity: 0;
-                transform: translateY(-30px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .card {
-            border: none !important;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-            border-radius: 20px !important;
-            overflow: hidden;
-            backdrop-filter: blur(10px);
-            background: rgba(255, 255, 255, 0.98) !important;
-        }
-
-        .card-header {
-            background: linear-gradient(135deg, #6d28d9 0%, #4c1d95 100%) !important;
-            border: none !important;
-            padding: 2rem 1.5rem;
-        }
-
-        .card-header a {
-            color: white !important;
-            text-decoration: none;
-            font-weight: 700;
-            font-size: 2rem;
-            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
-            transition: transform 0.3s ease;
-            display: inline-block;
-        }
-
-        .card-header a:hover {
-            transform: scale(1.05);
-        }
-
-        .card-body {
-            padding: 2.5rem 2rem;
-        }
-
-        .login-box-msg {
-            font-size: 1.1rem;
-            color: #4a5568;
-            font-weight: 500;
-            margin-bottom: 0.5rem;
-        }
-
-        .step-description {
-            font-size: 0.9rem;
-            color: #6b7280;
-            margin-bottom: 2rem;
-        }
-
-        /* Progress indicator */
-        .progress-steps {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 2rem;
-            position: relative;
-        }
-
-        .progress-steps::before {
-            content: '';
-            position: absolute;
-            top: 20px;
-            left: 25%;
-            right: 25%;
-            height: 2px;
-            background: #d1d5db;
-            z-index: 0;
-        }
-
-        .progress-steps.step-2::before {
-            background: var(--primary-color);
-        }
-
-        .step-item {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            flex: 1;
-            position: relative;
-            z-index: 1;
-        }
-
-        .step-circle {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: white;
-            border: 3px solid #d1d5db;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 600;
-            color: #9ca3af;
-            transition: all 0.3s ease;
-        }
-
-        .step-item.active .step-circle {
-            border-color: var(--primary-color);
-            color: var(--primary-color);
-            background: rgba(30, 64, 175, 0.1);
-        }
-
-        .step-item.completed .step-circle {
-            border-color: var(--success-color);
-            background: var(--success-color);
-            color: white;
-        }
-
-        .step-label {
-            margin-top: 0.5rem;
-            font-size: 0.75rem;
-            color: #9ca3af;
-            font-weight: 500;
-            text-align: center;
-        }
-
-        .step-item.active .step-label {
-            color: var(--primary-color);
-        }
-
-        .step-item.completed .step-label {
-            color: var(--success-color);
-        }
-
-        /* Form steps */
-        .form-step {
-            display: none;
-            animation: fadeIn 0.3s ease-in;
-        }
-
-        .form-step.active {
-            display: block;
-        }
-
-        @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateX(20px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateX(0);
-            }
-        }
-
-        .form-control {
-            border: 2px solid #d1d5db;
-            border-radius: 10px;
-            padding: 0.75rem 1rem;
-            font-size: 0.95rem;
-            transition: all 0.3s ease;
-            background-color: #f9fafb;
-        }
-
-        .form-control:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(124, 58, 237, 0.15);
-            background-color: white;
-        }
-
-        .form-control.is-invalid {
-            border-color: var(--danger-color);
-        }
-
-        .form-control.is-valid {
-            border-color: var(--success-color);
-        }
-
-        .input-group {
-            position: relative;
-        }
-
-        .input-group-text {
-            background: transparent;
-            border: 2px solid #d1d5db;
-            border-left: none;
-            border-radius: 0 10px 10px 0;
-            color: #6b7280;
-            transition: all 0.3s ease;
-        }
-
-        .input-group:focus-within .input-group-text {
-            border-color: var(--primary-color);
-            color: var(--primary-color);
-        }
-
-        .password-toggle {
-            position: absolute;
-            right: 50px;
-            top: 50%;
-            transform: translateY(-50%);
-            cursor: pointer;
-            color: #6b7280;
-            z-index: 10;
-            transition: color 0.3s ease;
-        }
-
-        .password-toggle:hover {
-            color: var(--primary-color);
-        }
-
-        .form-check-input:checked {
-            background-color: var(--primary-color);
-            border-color: var(--primary-color);
-        }
-
-        .form-check-label {
-            color: #4a5568;
-            font-weight: 500;
-            cursor: pointer;
-            font-size: 0.9rem;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
-            border: none;
-            border-radius: 10px;
-            padding: 0.75rem 1.5rem;
-            font-weight: 600;
-            font-size: 1rem;
-            transition: all 0.3s ease;
-            position: relative;
-            overflow: hidden;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 10px 20px rgba(124, 58, 237, 0.5);
-        }
-
-        .btn-primary:active {
-            transform: translateY(0);
-        }
-
-        .btn-primary:disabled {
-            opacity: 0.7;
-            cursor: not-allowed;
-        }
-
-        .btn-loading {
-            pointer-events: none;
-        }
-
-        .spinner {
-            display: inline-block;
-            width: 16px;
-            height: 16px;
-            border: 2px solid rgba(255, 255, 255, 0.3);
-            border-top-color: white;
-            border-radius: 50%;
-            animation: spin 0.6s linear infinite;
-            margin-right: 8px;
-        }
-
-        @keyframes spin {
-            to {
-                transform: rotate(360deg);
-            }
-        }
-
-        .card-body a {
-            color: var(--primary-color);
-            text-decoration: none;
-            font-weight: 500;
-            transition: all 0.3s ease;
-        }
-
-        .card-body a:hover {
-            color: var(--secondary-color);
-            text-decoration: underline;
-        }
-
-        .divider {
-            display: flex;
-            align-items: center;
-            text-align: center;
-            margin: 1.5rem 0;
-            color: #9ca3af;
-            font-size: 0.85rem;
-        }
-
-        .divider::before,
-        .divider::after {
-            content: '';
-            flex: 1;
-            border-bottom: 1px solid #d1d5db;
-        }
-
-        .divider span {
-            padding: 0 1rem;
-        }
-
-        .alert {
-            border: none;
-            border-radius: 10px;
-            animation: slideDown 0.3s ease-out;
-        }
-
-        @keyframes slideDown {
-            from {
-                opacity: 0;
-                transform: translateY(-10px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .invalid-feedback,
-        .valid-feedback {
-            font-size: 0.85rem;
-            margin-top: 0.5rem;
-            display: none;
-        }
-
-        .invalid-feedback {
-            color: var(--danger-color);
-        }
-
-        .valid-feedback {
-            color: var(--success-color);
-        }
-
-        .form-control.is-invalid~.invalid-feedback,
-        .form-control.is-valid~.valid-feedback {
-            display: block;
-        }
-
-        /* Responsive */
-        @media (max-width: 576px) {
-            .register-box {
-                width: 100%;
-                margin: 1rem;
-            }
-
-            .card-body {
-                padding: 1.5rem 1.25rem;
-            }
-
-            .card-header a {
-                font-size: 1.5rem;
-            }
-        }
-    </style>
+    </script>
 </head>
 
-<body class="hold-transition">
-    <div class="register-box">
-        <div class="card">
-            <div class="card-header text-center">
-                <a href="{{ url_for('auth.login') }}"><b>Intellex</b>IA</a>
-            </div>
-            <div class="card-body">
-                <!-- Progress Steps -->
-                <div class="progress-steps" id="progressSteps">
-                    <div class="step-item active" data-step="1">
-                        <div class="step-circle">1</div>
-                        <div class="step-label">Escritório</div>
+<body class="min-h-screen bg-[#0A0B0F] text-slate-100 antialiased">
+    <div class="relative flex min-h-screen items-center justify-center overflow-hidden px-4 py-10">
+        <div
+            class="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_15%_25%,rgba(148,163,184,0.08),transparent_35%),radial-gradient(circle_at_80%_75%,rgba(99,102,241,0.12),transparent_40%)]">
+        </div>
+
+        <main
+            class="relative z-10 w-full max-w-3xl rounded-3xl border border-slate-800 bg-[#11131A] shadow-[0_24px_80px_rgba(0,0,0,0.45)]">
+            <div class="grid md:grid-cols-5">
+                <aside class="md:col-span-2 border-b border-slate-800 p-8 md:border-b-0 md:border-r">
+                    <img src="{{ url_for('static', filename='assets/img/logo_maior.png') }}" alt="IntellexIA"
+                        class="h-14 w-auto object-contain">
+                    <h1 class="mt-6 text-2xl font-semibold text-white">Crie sua conta</h1>
+                    <p class="mt-2 text-sm leading-relaxed text-slate-400">Configure seu escritório em poucos passos e
+                        comece a gerenciar seus casos com inteligência.</p>
+
+                    <div class="mt-8 space-y-4 text-sm text-slate-400">
+                        <div class="rounded-xl border border-slate-800 bg-[#0B0D12] px-4 py-3">Cadastro rápido de
+                            escritório e usuário administrador.</div>
+                        <div class="rounded-xl border border-slate-800 bg-[#0B0D12] px-4 py-3">Acesso imediato às
+                            funcionalidades da plataforma.</div>
                     </div>
-                    <div class="step-item" data-step="2">
-                        <div class="step-circle">2</div>
-                        <div class="step-label">Seus dados</div>
-                    </div>
-                </div>
+                </aside>
 
-                <p class="login-box-msg" id="stepTitle">Dados do Escritório 🏢</p>
-                <p class="step-description" id="stepDescription">
-                    Primeiro, vamos cadastrar as informações do seu escritório de advocacia.
-                </p>
+                <section class="md:col-span-3 p-8">
+                    <div id="alert" class="mb-4 hidden rounded-xl border px-4 py-3 text-sm"></div>
 
-                <form action="{{ url_for('auth.register_post') }}" method="post" id="registerForm" novalidate>
-                    <!-- Step 1: Law Firm Data -->
-                    <div class="form-step active" data-step="1">
-                        <div class="mb-3">
-                            <div class="input-group">
-                                <input type="text" class="form-control" placeholder="Nome do escritório"
-                                    name="law_firm_name" id="lawFirmName" required minlength="3">
-                                <div class="input-group-text">
-                                    <i class="bi bi-building"></i>
+                    <form id="register-form" class="space-y-6" novalidate>
+                        <div>
+                            <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-indigo-300">Dados do
+                                usuário</h2>
+                            <div class="grid gap-4 md:grid-cols-2">
+                                <div class="md:col-span-2">
+                                    <label for="full_name" class="mb-1.5 block text-sm font-medium text-slate-300">Nome
+                                        completo *</label>
+                                    <input id="full_name" name="full_name" type="text" required
+                                        placeholder="Ex: João Silva Santos"
+                                        class="w-full rounded-xl border border-slate-700 bg-[#0B0D12] px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20">
                                 </div>
-                            </div>
-                            <div class="invalid-feedback">O nome deve ter pelo menos 3 caracteres.</div>
-                            <div class="valid-feedback">Nome válido!</div>
-                        </div>
-
-                        <div class="mb-3">
-                            <div class="input-group">
-                                <input type="text" class="form-control" placeholder="CNPJ do escritório"
-                                    name="law_firm_cnpj" id="lawFirmCnpj" required>
-                                <div class="input-group-text">
-                                    <i class="bi bi-card-text"></i>
+                                <div>
+                                    <label for="email" class="mb-1.5 block text-sm font-medium text-slate-300">Email
+                                        *</label>
+                                    <input id="email" name="email" type="email" required placeholder="voce@empresa.com"
+                                        autocomplete="email"
+                                        class="w-full rounded-xl border border-slate-700 bg-[#0B0D12] px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20">
                                 </div>
-                            </div>
-                            <div class="invalid-feedback">CNPJ inválido.</div>
-                            <div class="valid-feedback">CNPJ válido!</div>
-                        </div>
-
-                        <button type="button" class="btn btn-primary w-100 mb-3" id="nextStepBtn">
-                            <span>Próximo passo</span>
-                            <i class="bi bi-arrow-right ms-2"></i>
-                        </button>
-                    </div>
-
-                    <!-- Step 2: User Data -->
-                    <div class="form-step" data-step="2">
-                        <div class="mb-3">
-                            <div class="input-group">
-                                <input type="text" class="form-control" placeholder="Digite seu nome completo"
-                                    name="full_name" id="fullName" required minlength="3">
-                                <div class="input-group-text">
-                                    <i class="bi bi-person"></i>
+                                <div>
+                                    <label for="oab_number"
+                                        class="mb-1.5 block text-sm font-medium text-slate-300">OAB</label>
+                                    <input id="oab_number" name="oab_number" type="text" placeholder="Ex: SP 123456"
+                                        class="w-full rounded-xl border border-slate-700 bg-[#0B0D12] px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20">
                                 </div>
-                            </div>
-                            <div class="invalid-feedback">O nome deve ter pelo menos 3 caracteres.</div>
-                            <div class="valid-feedback">Nome válido!</div>
-                        </div>
-
-                        <div class="mb-3">
-                            <div class="input-group">
-                                <input type="text" class="form-control" placeholder="Número da OAB (opcional)"
-                                    name="oab_number" id="oabNumber">
-                                <div class="input-group-text">
-                                    <i class="bi bi-award"></i>
+                                <div>
+                                    <label for="password" class="mb-1.5 block text-sm font-medium text-slate-300">Senha
+                                        *</label>
+                                    <input id="password" name="password" type="password" minlength="6" required
+                                        placeholder="Mínimo 6 caracteres" autocomplete="new-password"
+                                        class="w-full rounded-xl border border-slate-700 bg-[#0B0D12] px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20">
+                                </div>
+                                <div>
+                                    <label for="password_confirm"
+                                        class="mb-1.5 block text-sm font-medium text-slate-300">Confirmar senha
+                                        *</label>
+                                    <input id="password_confirm" name="password_confirm" type="password" minlength="6"
+                                        required placeholder="Repita a senha" autocomplete="new-password"
+                                        class="w-full rounded-xl border border-slate-700 bg-[#0B0D12] px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20">
                                 </div>
                             </div>
                         </div>
 
-                        <div class="mb-3">
-                            <div class="input-group">
-                                <input type="email" class="form-control" placeholder="Digite seu email" name="email"
-                                    id="email" required>
-                                <div class="input-group-text">
-                                    <i class="bi bi-envelope"></i>
+                        <div>
+                            <h2 class="mb-3 text-sm font-semibold uppercase tracking-wide text-indigo-300">Dados do
+                                escritório</h2>
+                            <div class="grid gap-4 md:grid-cols-2">
+                                <div class="md:col-span-2">
+                                    <label for="law_firm_name"
+                                        class="mb-1.5 block text-sm font-medium text-slate-300">Nome do escritório
+                                        *</label>
+                                    <input id="law_firm_name" name="law_firm_name" type="text" required
+                                        placeholder="Ex: Silva & Associados"
+                                        class="w-full rounded-xl border border-slate-700 bg-[#0B0D12] px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20">
                                 </div>
-                            </div>
-                            <div class="invalid-feedback">Por favor, insira um email válido.</div>
-                            <div class="valid-feedback">Email válido!</div>
-                        </div>
-
-                        <div class="mb-3">
-                            <div class="input-group">
-                                <input type="password" class="form-control" placeholder="Digite sua senha"
-                                    name="password" id="password" required minlength="6">
-                                <span class="password-toggle" id="togglePassword">
-                                    <i class="bi bi-eye"></i>
-                                </span>
-                                <div class="input-group-text">
-                                    <i class="bi bi-lock"></i>
+                                <div>
+                                    <label for="law_firm_cnpj"
+                                        class="mb-1.5 block text-sm font-medium text-slate-300">CNPJ *</label>
+                                    <input id="law_firm_cnpj" name="law_firm_cnpj" type="text" required
+                                        placeholder="00.000.000/0000-00"
+                                        class="w-full rounded-xl border border-slate-700 bg-[#0B0D12] px-3 py-2.5 text-sm text-slate-100 placeholder:text-slate-500 outline-none transition focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/20">
                                 </div>
-                            </div>
-                            <div class="invalid-feedback">A senha deve ter pelo menos 6 caracteres.</div>
-                            <div class="valid-feedback">Senha válida!</div>
-                        </div>
-
-                        <div class="mb-3">
-                            <div class="input-group">
-                                <input type="password" class="form-control" placeholder="Confirme sua senha"
-                                    name="password_confirm" id="passwordConfirm" required>
-                                <span class="password-toggle" id="togglePasswordConfirm">
-                                    <i class="bi bi-eye"></i>
-                                </span>
-                                <div class="input-group-text">
-                                    <i class="bi bi-lock-fill"></i>
-                                </div>
-                            </div>
-                            <div class="invalid-feedback">As senhas não coincidem.</div>
-                            <div class="valid-feedback">Senhas coincidem!</div>
-                        </div>
-
-                        <div class="mb-4">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" value="1" id="agreeTerms" name="terms"
-                                    required>
-                                <label class="form-check-label" for="agreeTerms">
-                                    Eu concordo com os <a href="#">termos de uso</a>
+                                <label class="inline-flex items-center gap-2 self-end text-sm text-slate-400">
+                                    <input id="terms" name="terms" type="checkbox" required
+                                        class="h-4 w-4 rounded border-slate-600 bg-slate-900 text-indigo-500 focus:ring-indigo-500">
+                                    Aceito os termos de uso
                                 </label>
                             </div>
                         </div>
 
-                        <div class="d-flex gap-2">
-                            <button type="button" class="btn btn-outline-secondary" id="prevStepBtn"
-                                style="flex: 0 0 auto; border: 2px solid #d1d5db; color: #4a5568;">
-                                <i class="bi bi-arrow-left"></i>
-                            </button>
-                            <button type="submit" class="btn btn-primary flex-fill" id="submitBtn">
-                                <span id="btnText">Criar conta</span>
-                            </button>
-                        </div>
-                    </div>
-                </form>
+                        <button id="submit-btn" type="submit"
+                            class="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/30 disabled:cursor-not-allowed disabled:opacity-70">
+                            <span id="submit-spinner"
+                                class="hidden h-4 w-4 animate-spin rounded-full border-2 border-white/30 border-t-white"></span>
+                            <span id="submit-text">Criar conta</span>
+                        </button>
+                    </form>
 
-                <div class="divider">
-                    <span>Já tem uma conta?</span>
-                </div>
-
-                <div class="text-center">
-                    <a href="{{ url_for('auth.login') }}">Fazer login</a>
-                </div>
-
-                <!-- Alert for messages -->
-                <div id="alert-container" class="mt-3" style="display: none;">
-                    <div class="alert alert-dismissible">
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                        <i class="bi me-2" id="alert-icon"></i>
-                        <span id="alert-message"></span>
-                    </div>
-                </div>
+                    <p class="mt-6 text-center text-sm text-slate-400">
+                        Já possui conta?
+                        <a href="{{ url_for('auth.login') }}"
+                            class="font-semibold text-indigo-300 hover:text-indigo-200">Fazer login</a>
+                    </p>
+                </section>
             </div>
-        </div>
+        </main>
     </div>
 
-    <!-- Bootstrap 5 -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"
-        crossorigin="anonymous"></script>
-
     <script>
-        document.addEventListener('DOMContentLoaded', function () {
-            const form = document.getElementById('registerForm');
-            const lawFirmNameInput = document.getElementById('lawFirmName');
-            const lawFirmCnpjInput = document.getElementById('lawFirmCnpj');
-            const fullNameInput = document.getElementById('fullName');
-            const emailInput = document.getElementById('email');
-            const passwordInput = document.getElementById('password');
-            const passwordConfirmInput = document.getElementById('passwordConfirm');
-            const agreeTerms = document.getElementById('agreeTerms');
-            const submitBtn = document.getElementById('submitBtn');
-            const btnText = document.getElementById('btnText');
-            const nextStepBtn = document.getElementById('nextStepBtn');
-            const prevStepBtn = document.getElementById('prevStepBtn');
-            const togglePassword = document.getElementById('togglePassword');
-            const togglePasswordConfirm = document.getElementById('togglePasswordConfirm');
-            const alertContainer = document.getElementById('alert-container');
-            const alertMessage = document.getElementById('alert-message');
-            const alertIcon = document.getElementById('alert-icon');
-            const progressSteps = document.getElementById('progressSteps');
-            const stepTitle = document.getElementById('stepTitle');
-            const stepDescription = document.getElementById('stepDescription');
+        const form = document.getElementById('register-form');
+        const alertBox = document.getElementById('alert');
+        const submitBtn = document.getElementById('submit-btn');
+        const submitSpinner = document.getElementById('submit-spinner');
+        const submitText = document.getElementById('submit-text');
 
-            let currentStep = 1;
+        function showAlert(message, type) {
+            const isSuccess = type === 'success';
+            alertBox.className = `mb-4 rounded-xl border px-4 py-3 text-sm ${isSuccess
+                ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                : 'border-rose-500/30 bg-rose-500/10 text-rose-300'}`;
+            alertBox.textContent = message;
+        }
 
-            // Toggle password visibility
-            if (togglePassword) {
-                togglePassword.addEventListener('click', function () {
-                    const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-                    passwordInput.setAttribute('type', type);
+        function setLoading(loading) {
+            submitBtn.disabled = loading;
+            submitSpinner.classList.toggle('hidden', !loading);
+            submitText.textContent = loading ? 'Criando conta...' : 'Criar conta';
+        }
 
-                    const icon = this.querySelector('i');
-                    icon.classList.toggle('bi-eye');
-                    icon.classList.toggle('bi-eye-slash');
-                });
+        form.addEventListener('submit', async function (event) {
+            event.preventDefault();
+            alertBox.classList.add('hidden');
+
+            const password = document.getElementById('password').value;
+            const passwordConfirm = document.getElementById('password_confirm').value;
+            const terms = document.getElementById('terms').checked;
+
+            if (password !== passwordConfirm) {
+                showAlert('As senhas não coincidem.', 'error');
+                return;
             }
 
-            if (togglePasswordConfirm) {
-                togglePasswordConfirm.addEventListener('click', function () {
-                    const type = passwordConfirmInput.getAttribute('type') === 'password' ? 'text' : 'password';
-                    passwordConfirmInput.setAttribute('type', type);
-
-                    const icon = this.querySelector('i');
-                    icon.classList.toggle('bi-eye');
-                    icon.classList.toggle('bi-eye-slash');
-                });
+            if (!terms) {
+                showAlert('Você deve aceitar os termos de uso.', 'error');
+                return;
             }
 
-            // CNPJ mask
-            lawFirmCnpjInput.addEventListener('input', function (e) {
-                let value = e.target.value.replace(/\D/g, '');
-                if (value.length <= 14) {
-                    value = value.replace(/^(\d{2})(\d)/, '$1.$2');
-                    value = value.replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3');
-                    value = value.replace(/\.(\d{3})(\d)/, '.$1/$2');
-                    value = value.replace(/(\d{4})(\d)/, '$1-$2');
-                    e.target.value = value;
-                }
-            });
+            const formData = new FormData(form);
+            setLoading(true);
 
-            // Navigation between steps
-            nextStepBtn.addEventListener('click', function () {
-                const isLawFirmNameValid = validateLawFirmName(lawFirmNameInput);
-                const isLawFirmCnpjValid = validateCNPJ(lawFirmCnpjInput);
-
-                if (!isLawFirmNameValid || !isLawFirmCnpjValid) {
-                    showAlert('Por favor, preencha corretamente os dados do escritório.', 'warning');
-                    return;
-                }
-
-                goToStep(2);
-            });
-
-            prevStepBtn.addEventListener('click', function () {
-                goToStep(1);
-            });
-
-            function goToStep(step) {
-                // Hide all steps
-                document.querySelectorAll('.form-step').forEach(s => s.classList.remove('active'));
-                document.querySelectorAll('.step-item').forEach(s => s.classList.remove('active', 'completed'));
-
-                // Show current step
-                document.querySelector(`.form-step[data-step="${step}"]`).classList.add('active');
-                document.querySelector(`.step-item[data-step="${step}"]`).classList.add('active');
-
-                // Mark previous steps as completed
-                for (let i = 1; i < step; i++) {
-                    document.querySelector(`.step-item[data-step="${i}"]`).classList.add('completed');
-                }
-
-                // Update progress bar
-                if (step === 2) {
-                    progressSteps.classList.add('step-2');
-                } else {
-                    progressSteps.classList.remove('step-2');
-                }
-
-                // Update title and description
-                if (step === 1) {
-                    stepTitle.textContent = 'Dados do Escritório 🏢';
-                    stepDescription.textContent = 'Primeiro, vamos cadastrar as informações do seu escritório de advocacia.';
-                } else {
-                    stepTitle.textContent = 'Seus Dados Pessoais 👤';
-                    stepDescription.textContent = 'Agora, preencha suas informações pessoais para criar sua conta.';
-                }
-
-                currentStep = step;
-
-                // Scroll to top
-                window.scrollTo({ top: 0, behavior: 'smooth' });
-            }
-
-            // Validation functions
-            function validateLawFirmName(input) {
-                const value = input.value.trim();
-
-                if (!value) {
-                    input.classList.remove('is-valid', 'is-invalid');
-                    return false;
-                }
-
-                if (value.length >= 3) {
-                    input.classList.remove('is-invalid');
-                    input.classList.add('is-valid');
-                    return true;
-                } else {
-                    input.classList.remove('is-valid');
-                    input.classList.add('is-invalid');
-                    return false;
-                }
-            }
-
-            function validateCNPJ(input) {
-                const value = input.value.replace(/\D/g, '');
-
-                if (!value) {
-                    input.classList.remove('is-valid', 'is-invalid');
-                    return false;
-                }
-
-                if (value.length === 14) {
-                    input.classList.remove('is-invalid');
-                    input.classList.add('is-valid');
-                    return true;
-                } else {
-                    input.classList.remove('is-valid');
-                    input.classList.add('is-invalid');
-                    return false;
-                }
-            }
-
-            function validateFullName(input) {
-                const value = input.value.trim();
-
-                if (!value) {
-                    input.classList.remove('is-valid', 'is-invalid');
-                    return false;
-                }
-
-                if (value.length >= 3) {
-                    input.classList.remove('is-invalid');
-                    input.classList.add('is-valid');
-                    return true;
-                } else {
-                    input.classList.remove('is-valid');
-                    input.classList.add('is-invalid');
-                    return false;
-                }
-            }
-
-            function validateEmail(input) {
-                const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-                const value = input.value.trim();
-
-                if (!value) {
-                    input.classList.remove('is-valid', 'is-invalid');
-                    return false;
-                }
-
-                if (emailRegex.test(value)) {
-                    input.classList.remove('is-invalid');
-                    input.classList.add('is-valid');
-                    return true;
-                } else {
-                    input.classList.remove('is-valid');
-                    input.classList.add('is-invalid');
-                    return false;
-                }
-            }
-
-            function validatePassword(input) {
-                const value = input.value;
-
-                if (!value) {
-                    input.classList.remove('is-valid', 'is-invalid');
-                    return false;
-                }
-
-                if (value.length >= 6) {
-                    input.classList.remove('is-invalid');
-                    input.classList.add('is-valid');
-                    return true;
-                } else {
-                    input.classList.remove('is-valid');
-                    input.classList.add('is-invalid');
-                    return false;
-                }
-            }
-
-            function validatePasswordConfirm(input) {
-                const value = input.value;
-                const passwordValue = passwordInput.value;
-
-                if (!value) {
-                    input.classList.remove('is-valid', 'is-invalid');
-                    return false;
-                }
-
-                if (value === passwordValue && value.length >= 6) {
-                    input.classList.remove('is-invalid');
-                    input.classList.add('is-valid');
-                    return true;
-                } else {
-                    input.classList.remove('is-valid');
-                    input.classList.add('is-invalid');
-                    return false;
-                }
-            }
-
-            // Input validation events - Step 1
-            lawFirmNameInput.addEventListener('blur', function () {
-                validateLawFirmName(this);
-            });
-
-            lawFirmNameInput.addEventListener('input', function () {
-                if (this.classList.contains('is-invalid') || this.classList.contains('is-valid')) {
-                    validateLawFirmName(this);
-                }
-            });
-
-            lawFirmCnpjInput.addEventListener('blur', function () {
-                validateCNPJ(this);
-            });
-
-            // Input validation events - Step 2
-            fullNameInput.addEventListener('blur', function () {
-                validateFullName(this);
-            });
-
-            fullNameInput.addEventListener('input', function () {
-                if (this.classList.contains('is-invalid') || this.classList.contains('is-valid')) {
-                    validateFullName(this);
-                }
-            });
-
-            emailInput.addEventListener('blur', function () {
-                validateEmail(this);
-            });
-
-            emailInput.addEventListener('input', function () {
-                if (this.classList.contains('is-invalid') || this.classList.contains('is-valid')) {
-                    validateEmail(this);
-                }
-            });
-
-            passwordInput.addEventListener('blur', function () {
-                validatePassword(this);
-            });
-
-            passwordInput.addEventListener('input', function () {
-                if (this.classList.contains('is-invalid') || this.classList.contains('is-valid')) {
-                    validatePassword(this);
-                }
-                if (passwordConfirmInput.value) {
-                    validatePasswordConfirm(passwordConfirmInput);
-                }
-            });
-
-            passwordConfirmInput.addEventListener('blur', function () {
-                validatePasswordConfirm(this);
-            });
-
-            passwordConfirmInput.addEventListener('input', function () {
-                if (this.classList.contains('is-invalid') || this.classList.contains('is-valid')) {
-                    validatePasswordConfirm(this);
-                }
-            });
-
-            function showAlert(message, type) {
-                const alert = alertContainer.querySelector('.alert');
-                const iconClass = {
-                    'success': 'bi-check-circle-fill',
-                    'danger': 'bi-x-circle-fill',
-                    'warning': 'bi-exclamation-triangle-fill',
-                    'info': 'bi-info-circle-fill'
-                };
-
-                alertMessage.textContent = message;
-                alertIcon.className = `bi me-2 ${iconClass[type] || iconClass.info}`;
-                alert.className = `alert alert-${type || 'info'} alert-dismissible`;
-                alertContainer.style.display = 'block';
-
-                setTimeout(() => {
-                    alertContainer.style.display = 'none';
-                }, 5000);
-            }
-
-            // Form submission
-            form.addEventListener('submit', function (e) {
-                e.preventDefault();
-
-                // Validate all fields
-                const isFullNameValid = validateFullName(fullNameInput);
-                const isEmailValid = validateEmail(emailInput);
-                const isPasswordValid = validatePassword(passwordInput);
-                const isPasswordConfirmValid = validatePasswordConfirm(passwordConfirmInput);
-
-                if (!isFullNameValid || !isEmailValid || !isPasswordValid || !isPasswordConfirmValid) {
-                    showAlert('Por favor, corrija os erros no formulário.', 'warning');
-                    return;
-                }
-
-                if (passwordInput.value !== passwordConfirmInput.value) {
-                    showAlert('As senhas não coincidem.', 'warning');
-                    return;
-                }
-
-                if (!agreeTerms.checked) {
-                    showAlert('Você precisa concordar com os termos de uso.', 'warning');
-                    return;
-                }
-
-                // Show loading state
-                submitBtn.classList.add('btn-loading');
-                submitBtn.disabled = true;
-                btnText.innerHTML = '<span class="spinner"></span>Criando conta...';
-
-                const formData = new FormData(form);
-
-                fetch(form.action, {
+            try {
+                const response = await fetch("{{ url_for('auth.register_post') }}", {
                     method: 'POST',
                     body: formData,
-                    headers: {
-                        'X-Requested-With': 'XMLHttpRequest'
-                    }
-                })
-                    .then(response => response.json())
-                    .then(data => {
-                        if (data.success) {
-                            btnText.innerHTML = '<i class="bi bi-check-circle me-2"></i>Conta criada!';
-                            showAlert('Conta criada com sucesso! Redirecionando...', 'success');
+                    headers: { 'X-Requested-With': 'XMLHttpRequest' }
+                });
 
-                            setTimeout(() => {
-                                window.location.href = `{{ url_for('auth.login') }}?message=${encodeURIComponent(data.message || 'Conta criada com sucesso!')}&type=success`;
-                            }, 1500);
-                        } else {
-                            submitBtn.classList.remove('btn-loading');
-                            submitBtn.disabled = false;
-                            btnText.textContent = 'Criar conta';
+                const data = await response.json();
+                if (data.success) {
+                    showAlert(data.message || 'Conta criada com sucesso!', 'success');
+                    setTimeout(() => {
+                        window.location.href = "{{ url_for('auth.login') }}";
+                    }, 700);
+                    return;
+                }
 
-                            showAlert(data.message || 'Erro no registro. Tente novamente.', 'danger');
-                        }
-                    })
-                    .catch(error => {
-                        console.error('Error:', error);
-
-                        submitBtn.classList.remove('btn-loading');
-                        submitBtn.disabled = false;
-                        btnText.textContent = 'Criar conta';
-
-                        showAlert('Erro de conexão. Verifique sua internet e tente novamente.', 'danger');
-                    });
-            });
+                showAlert(data.message || 'Não foi possível criar a conta.', 'error');
+            } catch (error) {
+                showAlert('Erro de conexão. Tente novamente.', 'error');
+            } finally {
+                setLoading(false);
+            }
         });
     </script>
-
 </body>
 
 </html>
