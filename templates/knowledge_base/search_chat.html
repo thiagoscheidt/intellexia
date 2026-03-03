@@ -195,6 +195,12 @@
     margin-top: 0 !important;
     padding-top: 0 !important;
     overflow: hidden !important;
+    z-index: 1 !important;
+    position: relative !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    padding-left: 5px !important;
+    padding-right: 0 !important;
   }
 
   .app-main>.app-content>.container-fluid {
@@ -218,6 +224,27 @@
     height: 100%;
     min-height: 0;
     overflow: hidden;
+    width: 100%;
+  }
+
+  /* Garantir que o chat ocupa a tela inteira mesmo com sidebar flutuante */
+  body.sidebar-mini.sidebar-collapse #knowledge-chat-page {
+    width: 100%;
+    margin-left: 0;
+  }
+
+  /* Remove margin-left do app-main na página do chat */
+  #knowledge-chat-page .app-main {
+    margin-left: 0 !important;
+  }
+
+  /* Sobrescrever a regra global da sidebar flutuante para o chat */
+  #knowledge-chat-page {
+    margin-left: 0 !important;
+  }
+
+  body.sidebar-mini.sidebar-collapse #knowledge-chat-page .app-main {
+    margin-left: 0 !important;
   }
 
   #knowledge-chat-page>.row,
@@ -234,6 +261,8 @@
     min-height: 0;
     overflow: hidden;
     background: var(--kb-surface);
+    z-index: 1 !important;
+    position: relative !important;
   }
 
   #knowledge-chat-card .card-header {

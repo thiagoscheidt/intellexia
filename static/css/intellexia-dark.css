@@ -150,8 +150,30 @@ body.sidebar-mini.sidebar-collapse .app-sidebar:hover {
 body.sidebar-mini.sidebar-collapse .app-main,
 body.sidebar-mini.sidebar-collapse .app-header {
     margin-left: 60px !important;
+    margin-right: 0 !important;
     z-index: 1;
     position: relative;
+}
+
+/* Garantir margens iguais no container de conteúdo */
+.app-content .container-fluid {
+    padding-left: 1.5rem !important;
+    padding-right: 1.5rem !important;
+}
+
+/* Margens balanceadas para app-main */
+.app-main {
+    margin-right: 0 !important;
+}
+
+/* Footer também respeita a margem esquerda quando sidebar está floating */
+body.sidebar-mini.sidebar-collapse .app-footer {
+    margin-left: 60px !important;
+    margin-right: 0 !important;
+}
+
+.app-footer {
+    margin-right: 0 !important;
 }
 
 /* Overlay para fechar sidebar ao clicar fora (opcional) */
