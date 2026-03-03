@@ -131,13 +131,19 @@ body.sidebar-mini.sidebar-collapse .app-sidebar {
     left: 0;
     top: 0;
     height: 100vh;
-    z-index: 1030;
+    z-index: 1045 !important;
     transition: width 0.3s ease;
 }
 
 /* Expandir sidebar ao hover sem mover conteúdo */
 body.sidebar-mini.sidebar-collapse .app-sidebar:hover {
     width: 280px !important;
+}
+
+/* Sidebar brand fica acima de tudo */
+.sidebar-brand {
+    z-index: 1045 !important;
+    position: relative;
 }
 
 /* Garantir que o conteúdo não se move quando sidebar expande*/
@@ -165,4 +171,80 @@ body.sidebar-mini.sidebar-collapse::before {
 body.sidebar-mini.sidebar-collapse:has(.app-sidebar:hover)::before {
     background: rgba(0, 0, 0, 0.5);
     pointer-events: all;
+}
+
+/* ===== USER MENU DROPDOWN Z-INDEX FIX ===== */
+/* Garantir que o dropdown do menu de usuário sempre fica acima de todo conteúdo */
+.app-header,
+.navbar {
+    z-index: 1040 !important;
+    position: relative;
+}
+
+.user-menu .dropdown-menu,
+.dropdown-menu {
+    z-index: 1050 !important;
+    position: absolute;
+}
+
+/* Garante que notificações também ficam acima */
+.navbar-nav .dropdown-menu {
+    z-index: 1050 !important;
+}
+
+/* ===== CARD STYLES FOR DARK MODE ===== */
+/* Corrigir cards com variantes de cores em dark mode */
+[data-bs-theme="dark"] .card-light,
+[data-bs-theme="dark"] .card-primary,
+[data-bs-theme="dark"] .card-secondary,
+[data-bs-theme="dark"] .card-success,
+[data-bs-theme="dark"] .card-danger,
+[data-bs-theme="dark"] .card-warning,
+[data-bs-theme="dark"] .card-info {
+    background: #11131a !important;
+    border-color: #2a2f3a !important;
+}
+
+[data-bs-theme="dark"] .card-light .card-header,
+[data-bs-theme="dark"] .card-primary .card-header,
+[data-bs-theme="dark"] .card-secondary .card-header,
+[data-bs-theme="dark"] .card-success .card-header,
+[data-bs-theme="dark"] .card-danger .card-header,
+[data-bs-theme="dark"] .card-warning .card-header,
+[data-bs-theme="dark"] .card-info .card-header {
+    background: #0f1117 !important;
+    border-color: #2a2f3a !important;
+    color: #e2e8f0 !important;
+}
+
+[data-bs-theme="dark"] .card-light .card-title,
+[data-bs-theme="dark"] .card-primary .card-title,
+[data-bs-theme="dark"] .card-secondary .card-title,
+[data-bs-theme="dark"] .card-success .card-title,
+[data-bs-theme="dark"] .card-danger .card-title,
+[data-bs-theme="dark"] .card-warning .card-title,
+[data-bs-theme="dark"] .card-info .card-title {
+    color: #e2e8f0 !important;
+}
+
+[data-bs-theme="dark"] .card-light .card-body,
+[data-bs-theme="dark"] .card-primary .card-body,
+[data-bs-theme="dark"] .card-secondary .card-body,
+[data-bs-theme="dark"] .card-success .card-body,
+[data-bs-theme="dark"] .card-danger .card-body,
+[data-bs-theme="dark"] .card-warning .card-body,
+[data-bs-theme="dark"] .card-info .card-body {
+    background: #11131a !important;
+    color: #e2e8f0 !important;
+}
+
+/* Garantir que labels dentro de cards escuros sejam legíveis */
+[data-bs-theme="dark"] .card-light .form-label,
+[data-bs-theme="dark"] .card-primary .form-label,
+[data-bs-theme="dark"] .card-secondary .form-label,
+[data-bs-theme="dark"] .card-success .form-label,
+[data-bs-theme="dark"] .card-danger .form-label,
+[data-bs-theme="dark"] .card-warning .form-label,
+[data-bs-theme="dark"] .card-info .form-label {
+    color: #cbd5e1 !important;
 }
