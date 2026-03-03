@@ -42,7 +42,7 @@ def dashboard():
         law_firm = user.law_firm if user else None
         law_firm_id = get_current_law_firm_id()
         
-        from app.models import Client, CaseBenefit, Lawyer, Document, KnowledgeBase, KnowledgeCategory, FapReason
+        from app.models import Client, CaseBenefit, Lawyer, Document, KnowledgeBase, KnowledgeCategory, FapReason, JudicialProcess
         
         total_cases = Case.query.filter_by(law_firm_id=law_firm_id).count()
         active_cases = Case.query.filter_by(law_firm_id=law_firm_id, status='active').count()
@@ -60,6 +60,11 @@ def dashboard():
         
         total_documents = Document.query.join(Case).filter(Case.law_firm_id == law_firm_id).count()
         documents_for_ai = Document.query.join(Case).filter(Case.law_firm_id == law_firm_id, Document.use_in_ai == True).count()
+
+        total_processes = JudicialProcess.query.filter_by(law_firm_id=law_firm_id).count()
+        active_processes = JudicialProcess.query.filter_by(law_firm_id=law_firm_id, status='ativo').count()
+        suspended_processes = JudicialProcess.query.filter_by(law_firm_id=law_firm_id, status='suspenso').count()
+        closed_processes = JudicialProcess.query.filter_by(law_firm_id=law_firm_id, status='encerrado').count()
         
         recent_cases = Case.query.filter_by(law_firm_id=law_firm_id).order_by(Case.created_at.desc()).limit(5).all()
         
@@ -149,6 +154,10 @@ def dashboard():
             total_lawyers=total_lawyers,
             total_documents=total_documents,
             documents_for_ai=documents_for_ai,
+            total_processes=total_processes,
+            active_processes=active_processes,
+            suspended_processes=suspended_processes,
+            closed_processes=closed_processes,
             recent_cases=recent_cases,
             total_cause_value=total_cause_value,
             cases_by_type=cases_by_type,
@@ -177,6 +186,10 @@ def dashboard():
             total_benefits=0,
             total_lawyers=0,
             total_documents=0,
+            total_processes=0,
+            active_processes=0,
+            suspended_processes=0,
+            closed_processes=0,
             recent_cases=[],
             total_cause_value=0,
             cases_by_type={},
