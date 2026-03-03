@@ -1,11 +1,9 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify, send_file
 from app.models import db, KnowledgeBase, KnowledgeCategory, KnowledgeTag, KnowledgeSummary, KnowledgeChatHistory, KnowledgeChatSession
-from app.agents.knowledge_ingestion_agent import KnowledgeIngestionAgent
 from app.agents.knowledge_query_agent import KnowledgeQueryAgent
 from datetime import datetime
 import builtins
 from werkzeug.utils import secure_filename
-from pathlib import Path
 from app.agents.agent_document_summary import AgentDocumentSummary
 import os
 import json as json_lib
@@ -234,58 +232,11 @@ def upload():
             try:
                 db.session.add(knowledge_file)
                 db.session.commit()
-                
-                # Processar arquivo com KnowledgeIngestor e inserir no Qdrant
-                try:
-                    print(f"Iniciando processamento do arquivo: {filename}")
-                    knowledge_file.processing_status = 'processing'
-                    knowledge_file.processing_error_message = None
-                    db.session.commit()
 
-                    ingestion_agent = KnowledgeIngestionAgent()
-                    
-                    # Processar arquivo e inserir no Qdrant
-                    markdown_content = ingestion_agent.process_file(
-                        Path(file_path), 
-                        source_name=filename,
-                        category=category,
-                        description=description,
-                        tags=tags,
-                        lawsuit_number=lawsuit_number,
-                        file_id=knowledge_file.id
-                    )
-                    
-                    if markdown_content:
-                        print(f"Arquivo processado com sucesso: {filename}")
-                        knowledge_file.processing_status = 'completed'
-                        knowledge_file.processed_at = datetime.utcnow()
-                        knowledge_file.processing_error_message = None
-                        db.session.commit()
-
-                        flash(
-                            f'Arquivo "{filename}" adicionado com sucesso à base de conhecimento e processado pela IA!', 
-                            'success'
-                        )
-                    else:
-                        print(f"Aviso: Arquivo salvo mas não foi possível processar: {filename}")
-                        knowledge_file.processing_status = 'error'
-                        knowledge_file.processing_error_message = 'Processamento não retornou conteúdo.'
-                        db.session.commit()
-
-                        flash(
-                            f'Arquivo "{filename}" adicionado à base de conhecimento, mas houve problema no processamento pela IA.', 
-                            'warning'
-                        )
-                except Exception as e:
-                    print(f"Erro ao processar arquivo com IA: {str(e)}")
-                    knowledge_file.processing_status = 'error'
-                    knowledge_file.processing_error_message = str(e)
-                    db.session.commit()
-
-                    flash(
-                        f'Arquivo "{filename}" foi salvo, mas ocorreu um erro no processamento pela IA: {str(e)}', 
-                        'warning'
-                    )
+                flash(
+                    f'Arquivo "{filename}" adicionado com sucesso e está aguardando processamento.',
+                    'success'
+                )
                 
                 return redirect(url_for('knowledge_base.list'))
             except Exception as e:

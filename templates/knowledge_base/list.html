@@ -136,6 +136,7 @@
                                         <tr>
                                             <th>Arquivo</th>
                                             <th>Tipo</th>
+                                            <th>Status de Processamento</th>
                                             <th>Categoria</th>
                                             <th>Número do Processo</th>
                                             <th>Descrição</th>
@@ -161,6 +162,23 @@
                                             </td>
                                             <td>
                                                 <span class="badge bg-info">{{ file.file_type }}</span>
+                                            </td>
+                                            <td>
+                                                {% set status = file.processing_status or 'pending' %}
+                                                {% if status == 'completed' %}
+                                                <span class="badge bg-success">Processado</span>
+                                                {% elif status == 'processing' %}
+                                                <span class="badge bg-warning text-dark">Em processamento</span>
+                                                {% elif status == 'error' %}
+                                                <span class="badge bg-danger">Erro no processamento</span>
+                                                {% else %}
+                                                <span class="badge bg-secondary">Aguardando processamento</span>
+                                                {% endif %}
+                                                {% if status == 'error' and file.processing_error_message %}
+                                                <br>
+                                                <small class="text-danger">{{ file.processing_error_message[:60] }}{% if
+                                                    file.processing_error_message|length > 60 %}...{% endif %}</small>
+                                                {% endif %}
                                             </td>
                                             <td>
                                                 {% if file.category %}
