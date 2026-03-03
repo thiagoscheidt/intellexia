@@ -10,6 +10,7 @@ from app.agents.agent_document_summary import AgentDocumentSummary
 import os
 import json as json_lib
 import re
+import unicodedata
 
 knowledge_base_bp = Blueprint('knowledge_base', __name__, url_prefix='/knowledge-base')
 
@@ -90,6 +91,26 @@ def _looks_like_name_query(query: str) -> bool:
             alpha_parts += 1
 
     return alpha_parts >= 2
+
+
+def _normalize_for_match(value: str) -> str:
+    """Normaliza texto para comparação robusta (acentos, pontuação e espaços)."""
+    if not value:
+        return ""
+
+    normalized = unicodedata.normalize('NFKD', value)
+    normalized = ''.join(ch for ch in normalized if not unicodedata.combining(ch))
+    normalized = normalized.lower()
+    normalized = re.sub(r'[^a-z0-9\s]', ' ', normalized)
+    normalized = re.sub(r'\s+', ' ', normalized).strip()
+    return normalized
+
+
+def _name_tokens(query: str):
+    """Extrai tokens relevantes de nome, removendo conectores comuns."""
+    ignored = {'de', 'da', 'do', 'dos', 'das', 'e'}
+    normalized_query = _normalize_for_match(query)
+    return [token for token in normalized_query.split(' ') if token and token not in ignored and len(token) >= 2]
 
 @knowledge_base_bp.route('/')
 def list():
@@ -1198,8 +1219,9 @@ def intelligent_search():
                 
                 # Processar os resultados
                 if search_data and search_data.get('results') and search_data['results'].points:
-                    query_lower = search_query.lower()
+                    query_normalized = _normalize_for_match(search_query)
                     name_query = _looks_like_name_query(search_query)
+                    query_tokens = _name_tokens(search_query)
 
                     for idx, point in enumerate(search_data['results'].points):
                         payload = point.payload
@@ -1219,16 +1241,26 @@ def intelligent_search():
 
                         source_name = payload.get('source', '') or ''
                         description_text = payload.get('description', '') or ''
+                        candidate_text = f"{original_text} {source_name} {description_text}"
+                        candidate_normalized = _normalize_for_match(candidate_text)
 
                         has_literal_match = (
-                            query_lower in original_text.lower()
-                            or query_lower in source_name.lower()
-                            or query_lower in description_text.lower()
+                            bool(query_normalized) and query_normalized in candidate_normalized
                         )
 
                         adjusted_score = base_score
                         if has_literal_match:
                             adjusted_score += 0.30 if name_query else 0.08
+
+                        if name_query and query_tokens:
+                            matched_tokens = sum(1 for token in query_tokens if token in candidate_normalized)
+                            token_coverage = matched_tokens / len(query_tokens)
+
+                            adjusted_score += 0.22 * token_coverage
+                            if token_coverage >= 0.95:
+                                adjusted_score += 0.10
+                            elif token_coverage >= 0.75:
+                                adjusted_score += 0.05
 
                         adjusted_score = min(adjusted_score, 1.0)
                         
@@ -1261,10 +1293,7 @@ def intelligent_search():
                 
                 search_performed = True
                 
-                # Flash message com o resultado
-                if results:
-                    flash(f'Encontrados {len(results)} resultados relevantes para sua busca.', 'success')
-                else:
+                if not results:
                     flash('Nenhum resultado encontrado. Tente reformular sua busca.', 'info')
                     
             except Exception as e:
