@@ -229,7 +229,8 @@
     }
 
     #knowledge-chat-page #chat-messages {
-      max-width: 820px !important;
+      width: 100% !important;
+      max-width: none !important;
     }
 
     #knowledge-chat-page #chat-sessions-sidebar {
@@ -302,7 +303,7 @@
 
     #knowledge-chat-card {
       border: 0;
-      border-radius: 0;
+      border-radius: 0 !important;
       margin: 0;
       min-height: 0;
       overflow: hidden;
@@ -312,7 +313,14 @@
     }
 
     #knowledge-chat-card .card-header {
-      border-radius: 0;
+      border-radius: 0 !important;
+    }
+
+    #knowledge-chat-card .card-body,
+    #chat-main-panel,
+    #chat-container,
+    #knowledge-chat-card .kb-input-area {
+      border-radius: 0 !important;
     }
 
     #chat-sessions-sidebar {
@@ -378,6 +386,7 @@
       margin-bottom: 16px;
       animation: kb-fadeIn 0.4s ease-out;
       clear: both;
+      width: 100%;
     }
 
     @keyframes kb-fadeIn {
@@ -393,6 +402,9 @@
     }
 
     #knowledge-chat-card .message-user {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
       text-align: right;
     }
 
@@ -437,6 +449,7 @@
       background: linear-gradient(135deg, #6f85f2 0%, #7b57ab 100%);
       color: white;
       display: inline-block;
+      margin-left: auto;
       padding: 12px 16px;
       border-radius: 14px;
       max-width: 82%;
@@ -447,6 +460,9 @@
     }
 
     #knowledge-chat-card .message-assistant {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
       text-align: left;
     }
 
@@ -465,6 +481,9 @@
     }
 
     #knowledge-chat-card .message-loading {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
       text-align: left;
     }
 
@@ -1386,8 +1405,24 @@
 
         const typingTargetEl = document.getElementById(typingTargetId);
         const sourcesContainerEl = document.getElementById(sourcesContainerId);
+        let typingScrollInterval = null;
+
+        const startTypingAutoScroll = () => {
+          if (typingScrollInterval) return;
+          typingScrollInterval = window.setInterval(() => {
+            scrollToBottom();
+          }, 60);
+        };
+
+        const stopTypingAutoScroll = () => {
+          if (!typingScrollInterval) return;
+          window.clearInterval(typingScrollInterval);
+          typingScrollInterval = null;
+        };
 
         const finalizeMessageRender = () => {
+          stopTypingAutoScroll();
+
           if (typingTargetEl) {
             typingTargetEl.innerHTML = renderedAnswer;
           }
@@ -1409,6 +1444,7 @@
             showCursor: false,
             smartBackspace: false,
             contentType: 'html',
+            onBegin: startTypingAutoScroll,
             onComplete: finalizeMessageRender,
           });
           scrollToBottom();

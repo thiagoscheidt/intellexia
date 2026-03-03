@@ -517,6 +517,9 @@ class KnowledgeBase(db.Model):
     
     # Status
     is_active = db.Column(db.Boolean, default=True)
+    processing_status = db.Column(db.String(20), default='pending')  # pending, processing, completed, error
+    processing_error_message = db.Column(db.Text)
+    processed_at = db.Column(db.DateTime)
     
     # Auditoria
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)

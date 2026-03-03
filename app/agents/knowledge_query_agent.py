@@ -135,13 +135,14 @@ class KnowledgeQueryAgent:
         embedding_request = self.openai.embeddings.create(input=text, model=EMBEDDING_MODEL)
         return embedding_request.data[0].embedding
 
-    def ask_knowledge_base(self, question: str, history=None) -> dict:
+    def ask_knowledge_base(self, question: str, history=None, limit: int | None = None) -> dict:
         improved_question = self.query_enhancer.enhance_question(question, history=history)
         print("pergunta original:", question)
         print("pergunta melhorada:", improved_question)
         vector = self.create_embedding_vector(improved_question)
 
-        results = self.qdrant.query_points(collection_name=self.collection, query=vector, limit=KB_MAX_CONTEXT_RESULTS)
+        query_limit = limit if limit is not None else KB_MAX_CONTEXT_RESULTS
+        results = self.qdrant.query_points(collection_name=self.collection, query=vector, limit=query_limit)
 
         context = "\n".join([item.payload["text"] for item in results.points])
         return {

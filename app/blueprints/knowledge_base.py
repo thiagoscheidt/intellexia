@@ -227,7 +227,8 @@ def upload():
                 description=description,
                 category=category,
                 tags=tags,
-                lawsuit_number=lawsuit_number
+                lawsuit_number=lawsuit_number,
+                processing_status='pending'
             )
             
             try:
@@ -237,6 +238,10 @@ def upload():
                 # Processar arquivo com KnowledgeIngestor e inserir no Qdrant
                 try:
                     print(f"Iniciando processamento do arquivo: {filename}")
+                    knowledge_file.processing_status = 'processing'
+                    knowledge_file.processing_error_message = None
+                    db.session.commit()
+
                     ingestion_agent = KnowledgeIngestionAgent()
                     
                     # Processar arquivo e inserir no Qdrant
@@ -252,18 +257,31 @@ def upload():
                     
                     if markdown_content:
                         print(f"Arquivo processado com sucesso: {filename}")
+                        knowledge_file.processing_status = 'completed'
+                        knowledge_file.processed_at = datetime.utcnow()
+                        knowledge_file.processing_error_message = None
+                        db.session.commit()
+
                         flash(
                             f'Arquivo "{filename}" adicionado com sucesso à base de conhecimento e processado pela IA!', 
                             'success'
                         )
                     else:
                         print(f"Aviso: Arquivo salvo mas não foi possível processar: {filename}")
+                        knowledge_file.processing_status = 'error'
+                        knowledge_file.processing_error_message = 'Processamento não retornou conteúdo.'
+                        db.session.commit()
+
                         flash(
                             f'Arquivo "{filename}" adicionado à base de conhecimento, mas houve problema no processamento pela IA.', 
                             'warning'
                         )
                 except Exception as e:
                     print(f"Erro ao processar arquivo com IA: {str(e)}")
+                    knowledge_file.processing_status = 'error'
+                    knowledge_file.processing_error_message = str(e)
+                    db.session.commit()
+
                     flash(
                         f'Arquivo "{filename}" foi salvo, mas ocorreu um erro no processamento pela IA: {str(e)}', 
                         'warning'
@@ -1216,7 +1234,7 @@ def intelligent_search():
                 query_agent = KnowledgeQueryAgent()
                 
                 # Fazer a busca vetorial diretamente
-                search_data = query_agent.ask_knowledge_base(search_query, history=None)
+                search_data = query_agent.ask_knowledge_base(search_query, history=None, limit=50)
                 
                 # Processar os resultados
                 if search_data and search_data.get('results') and search_data['results'].points:
@@ -1264,6 +1282,8 @@ def intelligent_search():
                                 adjusted_score += 0.05
 
                         adjusted_score = min(adjusted_score, 1.0)
+                        if adjusted_score <= 0.30:
+                            continue
                         
                         result_item = {
                             'rank': idx + 1,

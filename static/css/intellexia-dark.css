@@ -149,9 +149,8 @@ body.sidebar-mini.sidebar-collapse .app-sidebar:hover {
 /* Garantir que o conteúdo não se move quando sidebar expande*/
 body.sidebar-mini.sidebar-collapse .app-main,
 body.sidebar-mini.sidebar-collapse .app-header {
-    margin-left: 60px !important;
+    margin-left: 69px !important;
     margin-right: 0 !important;
-    z-index: 1;
     position: relative;
 }
 
@@ -168,7 +167,7 @@ body.sidebar-mini.sidebar-collapse .app-header {
 
 /* Footer também respeita a margem esquerda quando sidebar está floating */
 body.sidebar-mini.sidebar-collapse .app-footer {
-    margin-left: 60px !important;
+    margin-left: 69px !important;
     margin-right: 0 !important;
 }
 
