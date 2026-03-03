@@ -123,3 +123,46 @@
 [data-bs-theme="dark"] a:hover {
     color: #c7d2fe;
 }
+
+/* ===== SIDEBAR FLOATING BEHAVIOR ===== */
+/* Quando sidebar está em modo mini/collapsed, ela flutua ao passar o mouse */
+body.sidebar-mini.sidebar-collapse .app-sidebar {
+    position: fixed !important;
+    left: 0;
+    top: 0;
+    height: 100vh;
+    z-index: 1030;
+    transition: width 0.3s ease;
+}
+
+/* Expandir sidebar ao hover sem mover conteúdo */
+body.sidebar-mini.sidebar-collapse .app-sidebar:hover {
+    width: 280px !important;
+}
+
+/* Garantir que o conteúdo não se move quando sidebar expande*/
+body.sidebar-mini.sidebar-collapse .app-main,
+body.sidebar-mini.sidebar-collapse .app-header {
+    margin-left: 60px !important;
+    z-index: 1;
+    position: relative;
+}
+
+/* Overlay para fechar sidebar ao clicar fora (opcional) */
+body.sidebar-mini.sidebar-collapse::before {
+    content: '';
+    position: fixed;
+    left: 60px;
+    top: 0;
+    width: calc(100% - 60px);
+    height: 100%;
+    background: rgba(0, 0, 0, 0);
+    z-index: 1020;
+    pointer-events: none;
+    transition: background 0.3s ease;
+}
+
+body.sidebar-mini.sidebar-collapse:has(.app-sidebar:hover)::before {
+    background: rgba(0, 0, 0, 0.5);
+    pointer-events: all;
+}

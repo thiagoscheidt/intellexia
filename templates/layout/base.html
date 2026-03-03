@@ -160,6 +160,8 @@
       const body = document.body;
       const themeToggle = document.getElementById('theme-toggle');
       const icon = themeToggle.querySelector('i');
+      const sidebar = document.querySelector('.app-sidebar');
+      const appMain = document.querySelector('.app-main');
 
       // ===== SIDEBAR MINI STATE MANAGEMENT =====
       const savedSidebarState = localStorage.getItem('sidebarState') || 'mini';
@@ -175,6 +177,33 @@
         const isMini = body.classList.contains('sidebar-collapse');
         localStorage.setItem('sidebarState', isMini ? 'normal' : 'mini');
       });
+
+      // ===== FLOATING SIDEBAR CLOSE ON CLICK OUTSIDE =====
+      // Fechar sidebar ao clicar fora quando está flutuando
+      if (sidebar && appMain && body.classList.contains('sidebar-collapse')) {
+        appMain.addEventListener('click', function (e) {
+          // Se sidebar está expandida (hover), fechar removendo hover
+          if (!body.classList.contains('sidebar-collapse')) return;
+          
+          // Remove o :hover state clicando fora
+          if (window.innerWidth <= 768) {
+            sidebar.style.width = '';
+          }
+        });
+
+        // Fechar ao clicar em links da sidebar
+        const sidebarLinks = sidebar.querySelectorAll('a[href]');
+        sidebarLinks.forEach(link => {
+          link.addEventListener('click', function () {
+            if (body.classList.contains('sidebar-collapse') && window.innerWidth <= 768) {
+              // Em mobile, fechar após clicar
+              setTimeout(() => {
+                sidebar.blur();
+              }, 100);
+            }
+          });
+        });
+      }
 
       // ===== THEME TOGGLE =====
       // Recuperar tema salvo do localStorage
