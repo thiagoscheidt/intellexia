@@ -1,0 +1,44 @@
+{% macro page_hero(title, subtitle='', icon='bi bi-diagram-3', breadcrumbs=None) %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-0 shadow-sm" style="border-radius: 16px; overflow: hidden;">
+            <div class="card-body page-hero">
+                <div
+                    class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center page-hero-icon">
+                            <i class="{{ icon }} page-hero-icon__glyph"></i>
+                        </div>
+                        <div>
+                            <h1 class="h4 mb-1" style="font-weight: 700; letter-spacing: .2px;">{{ title }}</h1>
+                            {% if subtitle %}
+                            <small class="text-muted">{{ subtitle }}</small>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div>
+                        {% if breadcrumbs %}
+                        <nav aria-label="breadcrumb">
+                            <ol class="breadcrumb mb-0 bg-transparent small">
+                                {% for item in breadcrumbs %}
+                                <li class="breadcrumb-item {{ 'active' if item.active else '' }}" {% if item.active
+                                    %}aria-current="page" {% endif %}>
+                                    {% if item.href and not item.active %}
+                                    <a href="{{ item.href }}">{{ item.label }}</a>
+                                    {% else %}
+                                    {{ item.label }}
+                                    {% endif %}
+                                </li>
+                                {% endfor %}
+                            </ol>
+                        </nav>
+                        {% elif caller is defined %}
+                        {{ caller() }}
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}

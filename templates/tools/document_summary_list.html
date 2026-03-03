@@ -1,24 +1,13 @@
 {% extends "layout/base.html" %}
 
+{% from "partials/page_hero.html" import page_hero %}
+
 {% block title %}Resumo de Documentos - IntellexIA{% endblock %}
 
 {% block content %}
-<div class="app-content-header">
-  <div class="container-fluid">
-    <div class="row">
-      <div class="col-sm-6">
-        <h3 class="mb-0"><i class="bi bi-file-earmark-text"></i>Análise de Documentos</h3>
-      </div>
-      <div class="col-sm-6">
-        <ol class="breadcrumb float-sm-end">
-          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
-          <li class="breadcrumb-item"><a href="#">Ferramentas</a></li>
-          <li class="breadcrumb-item active" aria-current="page">Análise de Documentos</li>
-        </ol>
-      </div>
-    </div>
-  </div>
-</div>
+{% call page_hero(title='Análise de Documentos', subtitle=hero_subtitle|default(''), icon='bi bi-file-earmark-text') %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb mb-0 bg-transparent small"><li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li><li class="breadcrumb-item active" aria-current="page">Análise de Documentos</li></ol></nav>
+{% endcall %}
 
 <div class="app-content">
   <div class="container-fluid">

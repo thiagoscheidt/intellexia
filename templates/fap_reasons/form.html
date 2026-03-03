@@ -1,25 +1,13 @@
 {% extends "layout/base.html" %}
 
+{% from "partials/page_hero.html" import page_hero %}
+
 {% block title %}{{ title }} - IntellexIA{% endblock %}
 
 {% block content %}
-<div class="app-content-header border-bottom border-light">
-  <div class="container-fluid">
-    <div class="row align-items-center">
-      <div class="col-sm-6">
-        <h3 class="mb-0"><i class="bi bi-tag text-primary"></i> {{ title }}</h3>
-      </div>
-      <div class="col-sm-6">
-        <ol class="breadcrumb float-sm-end mb-0">
-          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_list') }}"><i class="bi bi-briefcase"></i> Casos</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('fap_reasons.list') }}"><i class="bi bi-tags"></i> Motivos FAP</a></li>
-          <li class="breadcrumb-item active" aria-current="page">{{ title }}</li>
-        </ol>
-      </div>
-    </div>
-  </div>
-</div>
+{% call page_hero(title=title, subtitle=hero_subtitle|default(''), icon='bi bi-tag') %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb mb-0 bg-transparent small"><li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li><li class="breadcrumb-item active" aria-current="page">{{ title }}</li></ol></nav>
+{% endcall %}
 
 <div class="app-content">
   <div class="container-fluid">

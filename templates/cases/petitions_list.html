@@ -1,25 +1,13 @@
 {% extends "layout/base.html" %}
 
+{% from "partials/page_hero.html" import page_hero %}
+
 {% block title %}Petições do Caso - IntellexIA{% endblock %}
 
 {% block content %}
-<div class="app-content-header">
-  <div class="container-fluid">
-    <div class="row">
-      <div class="col-sm-6">
-        <h3 class="mb-0">Petições do Caso #{{ case_id }}</h3>
-      </div>
-      <div class="col-sm-6">
-        <ol class="breadcrumb float-sm-end">
-          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_list') }}">Casos</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('cases.case_detail', case_id=case_id) }}">Caso #{{ case_id }}</a></li>
-          <li class="breadcrumb-item active" aria-current="page">Petições</li>
-        </ol>
-      </div>
-    </div>
-  </div>
-</div>
+{% call page_hero(title='Petições do Caso #{{ case_id }}', subtitle=hero_subtitle|default(''), icon='bi bi-diagram-3') %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb mb-0 bg-transparent small"><li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li><li class="breadcrumb-item active" aria-current="page">Petições do Caso #{{ case_id }}</li></ol></nav>
+{% endcall %}
 
 <div class="app-content">
   <div class="container-fluid">

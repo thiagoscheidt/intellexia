@@ -1,23 +1,13 @@
 {% extends "layout/base.html" %}
 
+{% from "partials/page_hero.html" import page_hero %}
+
 {% block title %}Lista de Varas - IntellexIA{% endblock %}
 
 {% block content %}
-<div class="app-content-header">
-  <div class="container-fluid">
-    <div class="row">
-      <div class="col-sm-6">
-        <h3 class="mb-0"><i class="bi bi-bank"></i> Varas Judiciais</h3>
-      </div>
-      <div class="col-sm-6">
-        <ol class="breadcrumb float-sm-end">
-          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
-          <li class="breadcrumb-item active" aria-current="page">Varas</li>
-        </ol>
-      </div>
-    </div>
-  </div>
-</div>
+{% call page_hero(title='Varas Judiciais', subtitle=hero_subtitle|default(''), icon='bi bi-bank') %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb mb-0 bg-transparent small"><li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li><li class="breadcrumb-item active" aria-current="page">Varas Judiciais</li></ol></nav>
+{% endcall %}
 
 <div class="app-content">
   <div class="container-fluid">

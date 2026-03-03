@@ -1,28 +1,13 @@
 {% extends "layout/base.html" %}
 
+{% from "partials/page_hero.html" import page_hero %}
+
 {% block title %}Visualizar Documento - IntellexIA{% endblock %}
 
 {% block content %}
-<div class="app-content-header">
-  <div class="container-fluid">
-    <div class="row">
-      <div class="col-sm-6">
-        <h3 class="mb-0">Visualizar Documento</h3>
-      </div>
-      <div class="col-sm-6">
-        <ol class="breadcrumb float-sm-end">
-          <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}">Home</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('cases.cases_list') }}">Casos</a></li>
-          <li class="breadcrumb-item"><a href="{{ url_for('cases.case_detail', case_id=case_id) }}">Caso #{{ case_id
-              }}</a></li>
-          <li class="breadcrumb-item"><a
-              href="{{ url_for('documents.case_documents_list', case_id=case_id) }}">Documentos</a></li>
-          <li class="breadcrumb-item active" aria-current="page">Visualizar</li>
-        </ol>
-      </div>
-    </div>
-  </div>
-</div>
+{% call page_hero(title='Visualizar Documento', subtitle=hero_subtitle|default(''), icon='bi bi-diagram-3') %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb mb-0 bg-transparent small"><li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li><li class="breadcrumb-item active" aria-current="page">Visualizar Documento</li></ol></nav>
+{% endcall %}
 
 <div class="app-content">
   <div class="container-fluid">
