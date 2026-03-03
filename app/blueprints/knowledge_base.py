@@ -1228,7 +1228,7 @@ def intelligent_search():
 
                         adjusted_score = base_score
                         if has_literal_match:
-                            adjusted_score += 0.20 if name_query else 0.08
+                            adjusted_score += 0.30 if name_query else 0.08
 
                         adjusted_score = min(adjusted_score, 1.0)
                         
