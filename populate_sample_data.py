@@ -39,9 +39,54 @@ def import_models():
     from app.models import (
         db, LawFirm, User, Client, Court, Lawyer, Case, CaseLawyer, 
         CaseCompetence, CaseBenefit, Document, CaseActivity, CaseComment,
+        CaseStatus,
         KnowledgeCategory, KnowledgeTag, FapReason, CaseTemplate
     )
-    return app, db, LawFirm, User, Client, Court, Lawyer, Case, CaseLawyer, CaseCompetence, CaseBenefit, Document, CaseActivity, CaseComment, KnowledgeCategory, KnowledgeTag, FapReason, CaseTemplate
+    return app, db, LawFirm, User, Client, Court, Lawyer, Case, CaseLawyer, CaseCompetence, CaseBenefit, Document, CaseActivity, CaseComment, CaseStatus, KnowledgeCategory, KnowledgeTag, FapReason, CaseTemplate
+
+def ensure_case_statuses(db, CaseStatus):
+    """Garante que os status padrão de casos existam no banco"""
+    statuses_data = [
+        ("Novo caso recebido", 1, "Novo caso foi recebido"),
+        ("Em análise jurídica inicial", 2, "Análise jurídica inicial em progresso"),
+        ("Aguardando documentos do cliente", 3, "Aguardando documentos do cliente"),
+        ("Documentos recebidos", 4, "Documentos do cliente foram recebidos"),
+        ("Petição em elaboração", 5, "Petição está sendo elaborada"),
+        ("Petição em revisão", 6, "Petição em fase de revisão"),
+        ("Petição finalizada", 7, "Petição foi finalizada"),
+        ("Aguardando protocolo", 8, "Aguardando protocolo da petição"),
+        ("Petição protocolada", 9, "Petição foi protocolada"),
+        ("Número do processo recebido", 10, "Número do processo foi recebido"),
+        ("Aguardando despacho inicial do juiz", 11, "Aguardando despacho inicial do juiz"),
+        ("Em andamento", 12, "Processo em andamento"),
+        ("Prazo em aberto", 13, "Prazo em aberto para ação"),
+        ("Caso suspenso", 14, "Caso foi suspenso"),
+        ("Caso encerrado / arquivado", 15, "Caso foi encerrado ou arquivado"),
+    ]
+
+    created_count = 0
+    for status_name, status_order, description in statuses_data:
+        existing = CaseStatus.query.filter_by(status_name=status_name).first()
+        if not existing:
+            status = CaseStatus(
+                status_name=status_name,
+                status_order=status_order,
+                description=description
+            )
+            db.session.add(status)
+            created_count += 1
+
+    if created_count > 0:
+        db.session.flush()
+        print(f"✓ Criados {created_count} status de caso")
+    else:
+        print("→ Status de caso já existem")
+
+    default_status = CaseStatus.query.order_by(CaseStatus.status_order.asc()).first()
+    if not default_status:
+        raise ValueError("Nao foi possivel obter status padrão de caso")
+
+    return default_status.id
 
 def create_knowledge_categories(db, KnowledgeCategory, law_firm):
     """Cria categorias de conhecimento padrão"""
@@ -207,38 +252,49 @@ def create_fap_reasons(db, FapReason, law_firm):
     
     return reasons
 
-def create_case_templates(db, CaseTemplate, law_firm):
+def create_case_templates(db, CaseTemplate, law_firm, users):
     """Cria templates de casos FAP padrão"""
     templates_data = [
-        ("Acidente Ocorrido em outra Empresa", "Benefício atribuído a empresa diferente da real empregadora do segurado."),
-        ("Acidente Ocorrido em outro Estabelecimento", "Acidente imputado ao CNPJ errado (filial diversa)."),
-        ("Acidente não Relacionado ao Trabalho", "Evento sem nexo com o trabalho foi classificado como acidentário."),
-        ("Acidente de Trajeto", "Acidente de trajeto incluído indevidamente no FAP."),
-        ("Acidente de Trajeto - CAT Erro Material", "CAT preenchida incorretamente como típica quando era de trajeto."),
-        ("Acidente de Trajeto - CAT Extemporânea", "CAT registrada fora do prazo e incluída indevidamente no FAP."),
-        ("B91 - Duplicidade de Benefício", "Benefícios concedidos com intervalo inferior a 60 dias deveriam ser restabelecimento."),
-        ("Exclusão dos Bloqueios por B92", "Aposentadoria por invalidez bloqueou bonificação indevidamente."),
-        ("Revogação de Antecipação dos Efeitos da Tutela", "Benefício judicial cancelado permaneceu no FAP."),
-        ("B91 com Aposentadoria", "B91 concedido junto com aposentadoria."),
-        ("B91 com Auxílio-acidente", "B91 concedido simultaneamente ao B94."),
-        ("B91 com Auxílio-doença", "Dois B91 no mesmo período."),
-        ("B92 com Aposentadoria", "B92 concedido simultaneamente com aposentadoria."),
-        ("B94 com Aposentadoria", "Auxílio-acidente concedido junto com aposentadoria."),
-        ("B94 com Auxílio-acidente", "Dois auxílios-acidente concedidos."),
+        ("Acidente Ocorrido em outra Empresa", "Benefício atribuído a empresa diferente da real empregadora do segurado.", "Erro de vínculo empregatício"),
+        ("Acidente Ocorrido em outro Estabelecimento", "Acidente imputado ao CNPJ errado (filial diversa).", "Erro de estabelecimento"),
+        ("Acidente não Relacionado ao Trabalho", "Evento sem nexo com o trabalho foi classificado como acidentário.", "Erro de nexo causal"),
+        ("Acidente de Trajeto", "Acidente de trajeto incluído indevidamente no FAP.", "Acidente de trajeto"),
+        ("Acidente de Trajeto - CAT Erro Material", "CAT preenchida incorretamente como típica quando era de trajeto.", "Acidente de trajeto / erro material"),
+        ("Acidente de Trajeto - CAT Extemporânea", "CAT registrada fora do prazo e incluída indevidamente no FAP.", "Acidente de trajeto / CAT fora do prazo"),
+        ("B91 - Duplicidade de Benefício", "Benefícios concedidos com intervalo inferior a 60 dias deveriam ser restabelecimento.", "Duplicidade de benefício"),
+        ("Exclusão dos Bloqueios por B92", "Aposentadoria por invalidez bloqueou bonificação indevidamente.", "Bloqueio indevido do FAP"),
+        ("Revogação de Antecipação dos Efeitos da Tutela", "Benefício judicial cancelado permaneceu no FAP.", "Benefício judicial cancelado"),
+        ("B91 com Aposentadoria", "B91 concedido junto com aposentadoria.", "Benefício concomitante"),
+        ("B91 com Auxílio-acidente", "B91 concedido simultaneamente ao B94.", "Benefício concomitante"),
+        ("B91 com Auxílio-doença", "Dois B91 no mesmo período.", "Duplicidade de benefício"),
+        ("B92 com Aposentadoria", "B92 concedido simultaneamente com aposentadoria.", "Benefício concomitante"),
+        ("B94 com Aposentadoria", "Auxílio-acidente concedido junto com aposentadoria.", "Benefício concomitante"),
+        ("B94 com Auxílio-acidente", "Dois auxílios-acidente concedidos.", "Duplicidade de benefício"),
     ]
     
+    owner_user_id = users[0].id if users else None
+    if owner_user_id is None:
+        raise ValueError("Nao foi possivel identificar usuario para criacao dos templates")
+
     templates = []
-    for template_name, description in templates_data:
+    for template_name, resumo_curto, categoria in templates_data:
         existing = CaseTemplate.query.filter_by(
             law_firm_id=law_firm.id,
             template_name=template_name
         ).first()
         
         if not existing:
+            original_filename = f"{template_name}.docx"
+            file_path = f"uploads/templates/{law_firm.id}/{original_filename}"
             template = CaseTemplate(
+                user_id=owner_user_id,
                 law_firm_id=law_firm.id,
                 template_name=template_name,
-                description=description,
+                resumo_curto=resumo_curto,
+                categoria=categoria,
+                original_filename=original_filename,
+                file_path=file_path,
+                file_type='DOCX',
                 is_active=True
             )
             db.session.add(template)
@@ -519,7 +575,7 @@ def create_sample_lawyers(db, Lawyer, law_firm):
     
     return lawyers
 
-def create_sample_cases(db, Case, law_firm, clients, courts, lawyers):
+def create_sample_cases(db, Case, law_firm, clients, courts, lawyers, default_case_status_id):
     """Cria casos jurídicos de exemplo"""
     cases_data = [
         {
@@ -581,6 +637,7 @@ def create_sample_cases(db, Case, law_firm, clients, courts, lawyers):
         # Atribuir cliente e vara
         data['client_id'] = clients[i % len(clients)].id
         data['court_id'] = courts[i % len(courts)].id
+        data['case_status_id'] = default_case_status_id
         
         # Verificar se já existe
         existing = Case.query.filter_by(title=data['title']).first()
@@ -948,7 +1005,7 @@ def main():
     print("=" * 50)
     
     # Importar modelos no contexto correto
-    app, db, LawFirm, User, Client, Court, Lawyer, Case, CaseLawyer, CaseCompetence, CaseBenefit, Document, CaseActivity, CaseComment, KnowledgeCategory, KnowledgeTag, FapReason, CaseTemplate = import_models()
+    app, db, LawFirm, User, Client, Court, Lawyer, Case, CaseLawyer, CaseCompetence, CaseBenefit, Document, CaseActivity, CaseComment, CaseStatus, KnowledgeCategory, KnowledgeTag, FapReason, CaseTemplate = import_models()
     
     # Garantir que o app seja configurado corretamente
     app.config.update({
@@ -999,14 +1056,17 @@ def main():
             fap_reasons = create_fap_reasons(db, FapReason, law_firm)
             
             print("\n[TEMPLATES] Criando templates de casos...")
-            templates = create_case_templates(db, CaseTemplate, law_firm)
+            templates = create_case_templates(db, CaseTemplate, law_firm, users)
+
+            print("\n[STATUS] Garantindo status de casos...")
+            default_case_status_id = ensure_case_statuses(db, CaseStatus)
             
             # Commit dos dados básicos
             db.session.commit()
             print("[OK] Dados de setup salvos")
             
             print("\n[CASOS] Criando casos...")
-            cases = create_sample_cases(db, Case, law_firm, clients, courts, lawyers)
+            cases = create_sample_cases(db, Case, law_firm, clients, courts, lawyers, default_case_status_id)
             
             print("\n[RELACOES] Criando relacoes caso-advogado...")
             case_lawyers = create_case_lawyers_relations(db, CaseLawyer, cases, lawyers)
@@ -1049,7 +1109,8 @@ def main():
     except Exception as e:
         print(f"[ERRO] Erro durante a populacao de dados: {e}")
         try:
-            db.session.rollback()
+            with app.app_context():
+                db.session.rollback()
         except Exception as rollback_error:
             print(f"[ERRO] Erro no rollback: {rollback_error}")
         raise
