@@ -326,6 +326,45 @@
     [data-bs-theme="dark"] .tips-box h6 {
         color: #d7deed;
     }
+
+    .results-filter-panel {
+        border: 1px solid #e7eaf2;
+        border-radius: 12px;
+        background: #fbfcff;
+        padding: .9rem;
+        margin-bottom: 1rem;
+    }
+
+    .results-filter-panel .form-label {
+        font-size: .78rem;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+        color: #5f6b84;
+        margin-bottom: .3rem;
+    }
+
+    .results-filter-panel .form-select {
+        font-size: .84rem;
+        border-radius: 8px;
+    }
+
+    .results-filter-summary {
+        font-size: .8rem;
+        color: #6b7280;
+    }
+
+    [data-bs-theme="dark"] .results-filter-panel {
+        background: #182031;
+        border-color: #2b3650;
+    }
+
+    [data-bs-theme="dark"] .results-filter-panel .form-label {
+        color: #b4c0d6;
+    }
+
+    [data-bs-theme="dark"] .results-filter-summary {
+        color: #a7b2c7;
+    }
 </style>
 {% endblock %}
 
@@ -413,9 +452,54 @@
                         <p class="mb-0 text-muted fw-semibold">resultado(s) encontrado(s) para "{{ search_query }}"</p>
                     </div>
 
+                    {% set ns = namespace(categories=[], tags=[]) %}
+                    {% for result in results %}
+                    {% if result.category and result.category not in ns.categories %}
+                    {% set ns.categories = ns.categories + [result.category] %}
+                    {% endif %}
+                    {% for tag in result.tags %}
+                    {% if tag and tag.strip() and tag.strip() not in ns.tags %}
+                    {% set ns.tags = ns.tags + [tag.strip()] %}
+                    {% endif %}
+                    {% endfor %}
+                    {% endfor %}
+
+                    <div class="results-filter-panel">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-md-4">
+                                <label for="filterCategory" class="form-label">Categoria</label>
+                                <select id="filterCategory" class="form-select form-select-sm">
+                                    <option value="">Todas as categorias</option>
+                                    {% for category in ns.categories|sort %}
+                                    <option value="{{ category|lower }}">{{ category }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="filterTag" class="form-label">Tag</label>
+                                <select id="filterTag" class="form-select form-select-sm">
+                                    <option value="">Todas as tags</option>
+                                    {% for tag in ns.tags|sort %}
+                                    <option value="{{ tag|lower }}">{{ tag }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-4 d-flex gap-2 justify-content-md-end">
+                                <button type="button" id="clearResultFilters" class="btn btn-outline-secondary btn-sm">
+                                    <i class="bi bi-x-circle"></i> Limpar filtros
+                                </button>
+                            </div>
+                        </div>
+                        <div class="results-filter-summary mt-2">
+                            Exibindo <strong id="visibleResultsCount">{{ results|length }}</strong> de <strong>{{
+                                results|length }}</strong> resultado(s).
+                        </div>
+                    </div>
+
                     <!-- Cards de Resultados -->
                     {% for result in results %}
-                    <div class="result-card">
+                    <div class="result-card" data-result-item="true" data-category="{{ (result.category or '')|lower }}"
+                        data-tags="{{ result.tags|join(',')|lower }}">
                         <div class="result-rank">#{{ result.rank }}</div>
 
                         <div class="result-header">
@@ -454,11 +538,7 @@
                         <!-- Trecho encontrado -->
                         <div class="result-text">
                             <i class="bi bi-quote text-primary"></i>
-                            {% if result.highlighted_text|length > 400 %}
-                            {{ (result.highlighted_text[:400] + '...')|safe }}
-                            {% else %}
                             {{ result.highlighted_text|safe }}
-                            {% endif %}
                         </div>
 
                         <!-- Metadados -->
@@ -515,6 +595,16 @@
                         </div>
                     </div>
                     {% endfor %}
+
+                    <div id="noFilteredResults" class="no-results" style="display: none;">
+                        <i class="bi bi-funnel"></i>
+                        <h4>Nenhum resultado com os filtros selecionados</h4>
+                        <p class="text-muted mb-3">Ajuste os filtros de categoria e/ou tags para visualizar resultados.
+                        </p>
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="clearResultFiltersEmpty">
+                            <i class="bi bi-arrow-counterclockwise"></i> Limpar filtros
+                        </button>
+                    </div>
 
                     {% else %}
                     <!-- Nenhum resultado -->
@@ -613,4 +703,62 @@
         </div>
     </div>
 </div>
+
+{% if search_performed and results %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const categorySelect = document.getElementById('filterCategory');
+        const tagSelect = document.getElementById('filterTag');
+        const clearBtn = document.getElementById('clearResultFilters');
+        const clearBtnEmpty = document.getElementById('clearResultFiltersEmpty');
+        const resultCards = Array.from(document.querySelectorAll('[data-result-item="true"]'));
+        const visibleCounter = document.getElementById('visibleResultsCount');
+        const emptyBox = document.getElementById('noFilteredResults');
+
+        if (!categorySelect || !tagSelect || !resultCards.length) {
+            return;
+        }
+
+        const applyFilters = () => {
+            const selectedCategory = (categorySelect.value || '').trim();
+            const selectedTag = (tagSelect.value || '').trim();
+            let visibleCount = 0;
+
+            resultCards.forEach(card => {
+                const cardCategory = (card.dataset.category || '').trim();
+                const cardTagsRaw = (card.dataset.tags || '').trim();
+                const cardTags = cardTagsRaw ? cardTagsRaw.split(',').map(t => t.trim()).filter(Boolean) : [];
+
+                const categoryMatch = !selectedCategory || cardCategory === selectedCategory;
+                const tagMatch = !selectedTag || cardTags.includes(selectedTag);
+                const isVisible = categoryMatch && tagMatch;
+
+                card.style.display = isVisible ? '' : 'none';
+                if (isVisible) visibleCount += 1;
+            });
+
+            if (visibleCounter) {
+                visibleCounter.textContent = String(visibleCount);
+            }
+
+            if (emptyBox) {
+                emptyBox.style.display = visibleCount === 0 ? '' : 'none';
+            }
+        };
+
+        const clearFilters = () => {
+            categorySelect.value = '';
+            tagSelect.value = '';
+            applyFilters();
+        };
+
+        categorySelect.addEventListener('change', applyFilters);
+        tagSelect.addEventListener('change', applyFilters);
+        if (clearBtn) clearBtn.addEventListener('click', clearFilters);
+        if (clearBtnEmpty) clearBtnEmpty.addEventListener('click', clearFilters);
+
+        applyFilters();
+    });
+</script>
+{% endif %}
 {% endblock %}

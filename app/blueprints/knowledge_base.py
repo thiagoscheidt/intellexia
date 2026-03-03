@@ -60,6 +60,37 @@ def highlight_search_terms(text: str, search_query: str) -> str:
     
     return highlighted_text
 
+
+def _looks_like_name_query(query: str) -> bool:
+    """Heurística simples para identificar buscas com cara de nome de pessoa."""
+    if not query:
+        return False
+
+    normalized_query = " ".join(query.strip().split())
+    if len(normalized_query) < 4:
+        return False
+
+    parts = normalized_query.split(" ")
+    if len(parts) < 2 or len(parts) > 5:
+        return False
+
+    disallowed_tokens = {
+        'fap', 'inss', 'processo', 'acidente', 'trabalho', 'benefício',
+        'petição', 'recurso', 'sentença', 'lei', 'decreto', 'portaria'
+    }
+
+    alpha_parts = 0
+    for part in parts:
+        cleaned = re.sub(r"[^a-zA-ZÀ-ÿ]", "", part).lower()
+        if not cleaned:
+            continue
+        if cleaned in disallowed_tokens:
+            return False
+        if len(cleaned) >= 2:
+            alpha_parts += 1
+
+    return alpha_parts >= 2
+
 @knowledge_base_bp.route('/')
 def list():
     """Lista todos os arquivos da base de conhecimento"""
@@ -1167,9 +1198,12 @@ def intelligent_search():
                 
                 # Processar os resultados
                 if search_data and search_data.get('results') and search_data['results'].points:
+                    query_lower = search_query.lower()
+                    name_query = _looks_like_name_query(search_query)
+
                     for idx, point in enumerate(search_data['results'].points):
                         payload = point.payload
-                        score = point.score
+                        base_score = float(point.score or 0)
                         
                         # Buscar informações do arquivo no banco
                         file_info = None
@@ -1182,6 +1216,21 @@ def intelligent_search():
                         # Obter o texto e aplicar highlight
                         original_text = payload.get('text', '')
                         highlighted_text = highlight_search_terms(original_text, search_query)
+
+                        source_name = payload.get('source', '') or ''
+                        description_text = payload.get('description', '') or ''
+
+                        has_literal_match = (
+                            query_lower in original_text.lower()
+                            or query_lower in source_name.lower()
+                            or query_lower in description_text.lower()
+                        )
+
+                        adjusted_score = base_score
+                        if has_literal_match:
+                            adjusted_score += 0.20 if name_query else 0.08
+
+                        adjusted_score = min(adjusted_score, 1.0)
                         
                         result_item = {
                             'rank': idx + 1,
@@ -1192,8 +1241,10 @@ def intelligent_search():
                             'lawsuit_number': payload.get('lawsuit_number'),
                             'category': payload.get('category'),
                             'tags': payload.get('tags', '').split(',') if payload.get('tags') else [],
-                            'score': score,
-                            'score_percent': round(score * 100, 2),
+                            'score': adjusted_score,
+                            'score_percent': round(adjusted_score * 100, 2),
+                            'base_score': base_score,
+                            'literal_match': has_literal_match,
                             'file_id': payload.get('file_id'),
                             'file_info': {
                                 'original_filename': file_info.original_filename if file_info else None,
@@ -1203,6 +1254,10 @@ def intelligent_search():
                         }
                         
                         results.append(result_item)
+
+                    results.sort(key=lambda item: item['score'], reverse=True)
+                    for position, item in enumerate(results, start=1):
+                        item['rank'] = position
                 
                 search_performed = True
                 
