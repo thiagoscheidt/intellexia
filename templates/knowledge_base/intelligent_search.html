@@ -3,6 +3,7 @@
 {% block title %}Pesquisa Inteligente - IntellexIA{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/knowledge-base.css') }}" />
 <style>
     .search-hero {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -241,299 +242,375 @@
         background-color: #ffd54f;
         color: #000;
     }
+
+    .how-it-works-card {
+        border-radius: 14px;
+        border: 1px solid #e6e8ef;
+        background: #ffffff;
+    }
+
+    .how-step-item {
+        border: 1px solid #edf0f6;
+        border-radius: 12px;
+        background: #f9fbff;
+        padding: 0.85rem 0.95rem;
+        height: 100%;
+    }
+
+    .how-step-badge {
+        width: 34px;
+        height: 34px;
+        min-width: 34px;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 700;
+        font-size: 0.85rem;
+        color: #fff;
+        box-shadow: 0 4px 10px rgba(31, 41, 55, 0.15);
+    }
+
+    .how-step-badge.step-1 {
+        background: linear-gradient(135deg, #4f46e5 0%, #6366f1 100%);
+    }
+
+    .how-step-badge.step-2 {
+        background: linear-gradient(135deg, #0ea5a4 0%, #14b8a6 100%);
+    }
+
+    .how-step-badge.step-3 {
+        background: linear-gradient(135deg, #d97706 0%, #f59e0b 100%);
+    }
+
+    .how-step-badge.step-4 {
+        background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+    }
+
+    .how-step-title {
+        font-size: 0.92rem;
+        font-weight: 700;
+        margin-bottom: 0.2rem;
+    }
+
+    .tips-box {
+        border: 1px solid #e8ecf3;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #f8fbff 0%, #f3f6ff 100%);
+    }
+
+    [data-bs-theme="dark"] .how-it-works-card {
+        background: #121826;
+        border-color: #2a3347;
+    }
+
+    [data-bs-theme="dark"] .how-step-item {
+        background: #1a2232;
+        border-color: #2c3750;
+    }
+
+    [data-bs-theme="dark"] .how-step-title {
+        color: #e8ecf7;
+    }
+
+    [data-bs-theme="dark"] .how-step-item p {
+        color: #aeb8cb !important;
+    }
+
+    [data-bs-theme="dark"] .tips-box {
+        background: linear-gradient(135deg, #182235 0%, #1a243b 100%);
+        border-color: #2b3958;
+    }
+
+    [data-bs-theme="dark"] .tips-box ul,
+    [data-bs-theme="dark"] .tips-box h6 {
+        color: #d7deed;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="search-hero">
-    <div class="container-fluid">
-        <div class="row align-items-center">
-            <div class="col-sm-8">
-                <div class="d-flex align-items-center">
-                    <div class="me-3">
-                        <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
-                            style="width: 40px; height: 40px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
-                            <i class="bi bi-lightbulb-fill" style="font-size: 1.2rem; color: #667eea;"></i>
+<div class="kb-compact">
+    <div class="search-hero">
+        <div class="container-fluid">
+            <div class="row align-items-center">
+                <div class="col-sm-8">
+                    <div class="d-flex align-items-center">
+                        <div class="me-3">
+                            <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
+                                style="width: 40px; height: 40px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                                <i class="bi bi-lightbulb-fill" style="font-size: 1.2rem; color: #667eea;"></i>
+                            </div>
+                        </div>
+                        <div class="text-white">
+                            <h3 class="mb-0" style="font-weight: 600; font-size: 1.2rem;">
+                                <i class="bi bi-search"></i> Pesquisa Inteligente
+                            </h3>
+                            <small class="opacity-75">Busca semântica com IA na base de conhecimento</small>
                         </div>
                     </div>
-                    <div class="text-white">
-                        <h3 class="mb-0" style="font-weight: 600; font-size: 1.2rem;">
-                            <i class="bi bi-search"></i> Pesquisa Inteligente
-                        </h3>
-                        <small class="opacity-75">Busca semântica com IA na base de conhecimento</small>
-                    </div>
                 </div>
-            </div>
-            <div class="col-sm-4">
-                <ol class="breadcrumb float-sm-end mb-0"
-                    style="background: rgba(255,255,255,0.15); padding: 0.5rem 0.75rem; border-radius: 10px; backdrop-filter: blur(10px);">
-                    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"
-                            class="text-white text-decoration-none"><i class="bi bi-house-fill"></i> Home</a></li>
-                    <li class="breadcrumb-item"><a href="{{ url_for('knowledge_base.list') }}"
-                            class="text-white text-decoration-none">Base de Conhecimento</a></li>
-                    <li class="breadcrumb-item active text-white" aria-current="page"><strong>Pesquisa
-                            Inteligente</strong></li>
-                </ol>
+                <div class="col-sm-4">
+                    <ol class="breadcrumb float-sm-end mb-0"
+                        style="background: rgba(255,255,255,0.15); padding: 0.5rem 0.75rem; border-radius: 10px; backdrop-filter: blur(10px);">
+                        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"
+                                class="text-white text-decoration-none"><i class="bi bi-house-fill"></i> Home</a></li>
+                        <li class="breadcrumb-item"><a href="{{ url_for('knowledge_base.list') }}"
+                                class="text-white text-decoration-none">Base de Conhecimento</a></li>
+                        <li class="breadcrumb-item active text-white" aria-current="page"><strong>Pesquisa
+                                Inteligente</strong></li>
+                    </ol>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
-<div class="app-content">
-    <div class="container-fluid">
-        <!-- Caixa de Pesquisa -->
-        <div class="search-box-container">
-            <form method="POST">
-                <div class="row align-items-center">
-                    <div class="col-lg-9 mb-3 mb-lg-0">
-                        <div class="search-input-group">
-                            <label for="query" class="form-label fw-semibold mb-2">
-                                <i class="bi bi-search text-primary"></i> O que você está procurando?
-                            </label>
-                            <input type="text" class="form-control" id="query" name="query"
-                                placeholder="Digite sua busca... Ex: 'acidente de trabalho', 'FAP', 'perícia médica', etc."
-                                value="{{ search_query }}" required autofocus>
-                            <small class="text-muted mt-1 d-block">
-                                <i class="bi bi-info-circle"></i> A busca utiliza IA para encontrar os trechos mais
-                                relevantes nos documentos
-                            </small>
+    <div class="app-content">
+        <div class="container-fluid">
+            <!-- Caixa de Pesquisa -->
+            <div class="search-box-container">
+                <form method="POST">
+                    <div class="row align-items-center">
+                        <div class="col-lg-9 mb-3 mb-lg-0">
+                            <div class="search-input-group">
+                                <label for="query" class="form-label fw-semibold mb-2">
+                                    <i class="bi bi-search text-primary"></i> O que você está procurando?
+                                </label>
+                                <input type="text" class="form-control" id="query" name="query"
+                                    placeholder="Digite sua busca... Ex: 'acidente de trabalho', 'FAP', 'perícia médica', etc."
+                                    value="{{ search_query }}" required autofocus>
+                                <small class="text-muted mt-1 d-block">
+                                    <i class="bi bi-info-circle"></i> A busca utiliza IA para encontrar os trechos mais
+                                    relevantes nos documentos
+                                </small>
+                            </div>
+                        </div>
+                        <div class="col-lg-3">
+                            <button type="submit" class="btn btn-primary search-btn w-100">
+                                <i class="bi bi-search me-2"></i>Buscar
+                            </button>
                         </div>
                     </div>
-                    <div class="col-lg-3">
-                        <button type="submit" class="btn btn-primary search-btn w-100">
-                            <i class="bi bi-search me-2"></i>Buscar
-                        </button>
-                    </div>
-                </div>
-            </form>
+                </form>
 
-            <!-- Info sobre a base -->
-            <div class="mt-3 text-center">
-                <small class="text-muted">
-                    <i class="bi bi-database"></i> Base de conhecimento com <strong>{{ total_documents }}</strong>
-                    documento(s) indexados
-                </small>
+                <!-- Info sobre a base -->
+                <div class="mt-3 text-center">
+                    <small class="text-muted">
+                        <i class="bi bi-database"></i> Base de conhecimento com <strong>{{ total_documents }}</strong>
+                        documento(s) indexados
+                    </small>
+                </div>
             </div>
-        </div>
 
-        <!-- Resultados -->
-        {% if search_performed %}
-        <div class="row">
-            <div class="col-12">
-                {% if results %}
-                <!-- Estatísticas da busca -->
-                <div class="stats-box">
-                    <h4>{{ results|length }}</h4>
-                    <p class="mb-0 text-muted fw-semibold">resultado(s) encontrado(s) para "{{ search_query }}"</p>
-                </div>
+            <!-- Resultados -->
+            {% if search_performed %}
+            <div class="row">
+                <div class="col-12">
+                    {% if results %}
+                    <!-- Estatísticas da busca -->
+                    <div class="stats-box">
+                        <h4>{{ results|length }}</h4>
+                        <p class="mb-0 text-muted fw-semibold">resultado(s) encontrado(s) para "{{ search_query }}"</p>
+                    </div>
 
-                <!-- Cards de Resultados -->
-                {% for result in results %}
-                <div class="result-card">
-                    <div class="result-rank">#{{ result.rank }}</div>
+                    <!-- Cards de Resultados -->
+                    {% for result in results %}
+                    <div class="result-card">
+                        <div class="result-rank">#{{ result.rank }}</div>
 
-                    <div class="result-header">
-                        <div class="flex-grow-1">
-                            <h5 class="result-title">
-                                <i class="bi bi-file-earmark-text text-primary"></i>
-                                {% if result.file_info and result.file_info.original_filename %}
-                                {{ result.file_info.original_filename }}
-                                {% else %}
-                                {{ result.source }}
+                        <div class="result-header">
+                            <div class="flex-grow-1">
+                                <h5 class="result-title">
+                                    <i class="bi bi-file-earmark-text text-primary"></i>
+                                    {% if result.file_info and result.file_info.original_filename %}
+                                    {{ result.file_info.original_filename }}
+                                    {% else %}
+                                    {{ result.source }}
+                                    {% endif %}
+                                </h5>
+
+                                {% if result.file_info and result.file_info.description %}
+                                <p class="text-muted small mb-0">{{ result.file_info.description }}</p>
                                 {% endif %}
-                            </h5>
+                            </div>
 
-                            {% if result.file_info and result.file_info.description %}
-                            <p class="text-muted small mb-0">{{ result.file_info.description }}</p>
-                            {% endif %}
+                            <div>
+                                {% if result.score_percent >= 70 %}
+                                <span class="relevance-badge high">
+                                    <i class="bi bi-star-fill"></i> {{ result.score_percent }}% relevante
+                                </span>
+                                {% elif result.score_percent >= 50 %}
+                                <span class="relevance-badge medium">
+                                    <i class="bi bi-star-half"></i> {{ result.score_percent }}% relevante
+                                </span>
+                                {% else %}
+                                <span class="relevance-badge low">
+                                    <i class="bi bi-star"></i> {{ result.score_percent }}% relevante
+                                </span>
+                                {% endif %}
+                            </div>
                         </div>
 
-                        <div>
-                            {% if result.score_percent >= 70 %}
-                            <span class="relevance-badge high">
-                                <i class="bi bi-star-fill"></i> {{ result.score_percent }}% relevante
-                            </span>
-                            {% elif result.score_percent >= 50 %}
-                            <span class="relevance-badge medium">
-                                <i class="bi bi-star-half"></i> {{ result.score_percent }}% relevante
-                            </span>
+                        <!-- Trecho encontrado -->
+                        <div class="result-text">
+                            <i class="bi bi-quote text-primary"></i>
+                            {% if result.highlighted_text|length > 400 %}
+                            {{ (result.highlighted_text[:400] + '...')|safe }}
                             {% else %}
-                            <span class="relevance-badge low">
-                                <i class="bi bi-star"></i> {{ result.score_percent }}% relevante
+                            {{ result.highlighted_text|safe }}
+                            {% endif %}
+                        </div>
+
+                        <!-- Metadados -->
+                        <div class="result-meta">
+                            {% if result.page %}
+                            <span class="meta-item">
+                                <i class="bi bi-file-text"></i>
+                                Página {{ result.page }}
                             </span>
+                            {% endif %}
+
+                            {% if result.lawsuit_number %}
+                            <span class="meta-item">
+                                <i class="bi bi-briefcase"></i>
+                                Processo: {{ result.lawsuit_number }}
+                            </span>
+                            {% endif %}
+
+                            {% if result.category %}
+                            <span class="meta-item">
+                                <i class="bi bi-folder"></i>
+                                {{ result.category }}
+                            </span>
+                            {% endif %}
+
+                            {% if result.file_info and result.file_info.file_type %}
+                            <span class="meta-item">
+                                <i class="bi bi-filetype-{{ result.file_info.file_type|lower }}"></i>
+                                {{ result.file_info.file_type|upper }}
+                            </span>
+                            {% endif %}
+
+                            {% if result.tags %}
+                            {% for tag in result.tags[:3] %}
+                            <span class="badge bg-secondary">
+                                <i class="bi bi-tag"></i> {{ tag.strip() }}
+                            </span>
+                            {% endfor %}
+                            {% endif %}
+                        </div>
+
+                        <!-- Ações -->
+                        <div class="action-buttons mt-3">
+                            {% if result.file_id %}
+                            <a href="{{ url_for('knowledge_base.details', file_id=result.file_id) }}"
+                                class="btn btn-sm btn-primary">
+                                <i class="bi bi-eye"></i> Ver Documento
+                            </a>
+                            <a href="{{ url_for('knowledge_base.download', file_id=result.file_id) }}"
+                                class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-download"></i> Baixar
+                            </a>
                             {% endif %}
                         </div>
                     </div>
+                    {% endfor %}
 
-                    <!-- Trecho encontrado -->
-                    <div class="result-text">
-                        <i class="bi bi-quote text-primary"></i>
-                        {% if result.highlighted_text|length > 400 %}
-                        {{ (result.highlighted_text[:400] + '...')|safe }}
-                        {% else %}
-                        {{ result.highlighted_text|safe }}
-                        {% endif %}
-                    </div>
-
-                    <!-- Metadados -->
-                    <div class="result-meta">
-                        {% if result.page %}
-                        <span class="meta-item">
-                            <i class="bi bi-file-text"></i>
-                            Página {{ result.page }}
-                        </span>
-                        {% endif %}
-
-                        {% if result.lawsuit_number %}
-                        <span class="meta-item">
-                            <i class="bi bi-briefcase"></i>
-                            Processo: {{ result.lawsuit_number }}
-                        </span>
-                        {% endif %}
-
-                        {% if result.category %}
-                        <span class="meta-item">
-                            <i class="bi bi-folder"></i>
-                            {{ result.category }}
-                        </span>
-                        {% endif %}
-
-                        {% if result.file_info and result.file_info.file_type %}
-                        <span class="meta-item">
-                            <i class="bi bi-filetype-{{ result.file_info.file_type|lower }}"></i>
-                            {{ result.file_info.file_type|upper }}
-                        </span>
-                        {% endif %}
-
-                        {% if result.tags %}
-                        {% for tag in result.tags[:3] %}
-                        <span class="badge bg-secondary">
-                            <i class="bi bi-tag"></i> {{ tag.strip() }}
-                        </span>
-                        {% endfor %}
-                        {% endif %}
-                    </div>
-
-                    <!-- Ações -->
-                    <div class="action-buttons mt-3">
-                        {% if result.file_id %}
-                        <a href="{{ url_for('knowledge_base.details', file_id=result.file_id) }}"
-                            class="btn btn-sm btn-primary">
-                            <i class="bi bi-eye"></i> Ver Documento
-                        </a>
-                        <a href="{{ url_for('knowledge_base.download', file_id=result.file_id) }}"
-                            class="btn btn-sm btn-outline-primary">
-                            <i class="bi bi-download"></i> Baixar
-                        </a>
-                        {% endif %}
-                    </div>
-                </div>
-                {% endfor %}
-
-                {% else %}
-                <!-- Nenhum resultado -->
-                <div class="no-results">
-                    <i class="bi bi-search"></i>
-                    <h4>Nenhum resultado encontrado</h4>
-                    <p class="text-muted mb-4">Não encontramos documentos relevantes para "{{ search_query }}"</p>
-                    <div class="d-flex justify-content-center gap-2">
-                        <a href="{{ url_for('knowledge_base.intelligent_search') }}" class="btn btn-primary">
-                            <i class="bi bi-arrow-left"></i> Nova pesquisa
-                        </a>
-                        <a href="{{ url_for('knowledge_base.upload') }}" class="btn btn-outline-primary">
-                            <i class="bi bi-plus-circle"></i> Adicionar documento
-                        </a>
-                    </div>
-                </div>
-                {% endif %}
-            </div>
-        </div>
-        {% else %}
-        <!-- Instruções iniciais -->
-        <div class="row">
-            <div class="col-lg-8 offset-lg-2">
-                <div class="card border-0 shadow-sm" style="border-radius: 15px;">
-                    <div class="card-body p-4">
-                        <h4 class="mb-4">
-                            <i class="bi bi-info-circle text-primary"></i> Como funciona a Pesquisa Inteligente?
-                        </h4>
-
-                        <div class="row g-4">
-                            <div class="col-md-6">
-                                <div class="d-flex align-items-start">
-                                    <div class="rounded-circle bg-primary text-white d-flex align-items-center justify-content-center me-3"
-                                        style="width: 40px; height: 40px; min-width: 40px;">
-                                        <strong>1</strong>
-                                    </div>
-                                    <div>
-                                        <h6 class="fw-bold">Busca Semântica</h6>
-                                        <p class="text-muted small mb-0">Encontra documentos por significado, não apenas
-                                            palavras-chave exatas</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="col-md-6">
-                                <div class="d-flex align-items-start">
-                                    <div class="rounded-circle bg-success text-white d-flex align-items-center justify-content-center me-3"
-                                        style="width: 40px; height: 40px; min-width: 40px;">
-                                        <strong>2</strong>
-                                    </div>
-                                    <div>
-                                        <h6 class="fw-bold">Trechos Relevantes</h6>
-                                        <p class="text-muted small mb-0">Mostra exatamente onde a informação foi
-                                            encontrada no documento</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="col-md-6">
-                                <div class="d-flex align-items-start">
-                                    <div class="rounded-circle bg-warning text-dark d-flex align-items-center justify-content-center me-3"
-                                        style="width: 40px; height: 40px; min-width: 40px;">
-                                        <strong>3</strong>
-                                    </div>
-                                    <div>
-                                        <h6 class="fw-bold">Score de Relevância</h6>
-                                        <p class="text-muted small mb-0">Indica o quão relevante cada resultado é para
-                                            sua busca</p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="col-md-6">
-                                <div class="d-flex align-items-start">
-                                    <div class="rounded-circle bg-info text-white d-flex align-items-center justify-content-center me-3"
-                                        style="width: 40px; height: 40px; min-width: 40px;">
-                                        <strong>4</strong>
-                                    </div>
-                                    <div>
-                                        <h6 class="fw-bold">Informações Completas</h6>
-                                        <p class="text-muted small mb-0">Página, processo, categoria e tags em cada
-                                            resultado</p>
-                                    </div>
-                                </div>
-                            </div>
+                    {% else %}
+                    <!-- Nenhum resultado -->
+                    <div class="no-results">
+                        <i class="bi bi-search"></i>
+                        <h4>Nenhum resultado encontrado</h4>
+                        <p class="text-muted mb-4">Não encontramos documentos relevantes para "{{ search_query }}"</p>
+                        <div class="d-flex justify-content-center gap-2">
+                            <a href="{{ url_for('knowledge_base.intelligent_search') }}" class="btn btn-primary">
+                                <i class="bi bi-arrow-left"></i> Nova pesquisa
+                            </a>
+                            <a href="{{ url_for('knowledge_base.upload') }}" class="btn btn-outline-primary">
+                                <i class="bi bi-plus-circle"></i> Adicionar documento
+                            </a>
                         </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% else %}
+            <!-- Instruções iniciais -->
+            <div class="row">
+                <div class="col-lg-8 offset-lg-2">
+                    <div class="card border-0 shadow-sm how-it-works-card">
+                        <div class="card-body p-4">
+                            <h4 class="mb-4">
+                                <i class="bi bi-info-circle text-primary"></i> Como funciona a Pesquisa Inteligente?
+                            </h4>
 
-                        <hr class="my-4">
+                            <div class="row g-4">
+                                <div class="col-md-6">
+                                    <div class="d-flex align-items-start how-step-item">
+                                        <span class="how-step-badge step-1 me-3">1</span>
+                                        <div>
+                                            <h6 class="how-step-title">Busca Semântica</h6>
+                                            <p class="text-muted small mb-0">Encontra documentos por significado, não
+                                                apenas
+                                                palavras-chave exatas</p>
+                                        </div>
+                                    </div>
+                                </div>
 
-                        <div class="alert alert-light mb-0">
-                            <h6 class="alert-heading">
-                                <i class="bi bi-lightbulb text-warning"></i> Dicas para melhores resultados
-                            </h6>
-                            <ul class="mb-0 small">
-                                <li>Use termos específicos relacionados ao que procura</li>
-                                <li>Combine conceitos: "acidente trabalho indenização"</li>
-                                <li>Se não encontrar, tente sinônimos ou termos relacionados</li>
-                                <li>A busca considera o contexto e significado das palavras</li>
-                            </ul>
+                                <div class="col-md-6">
+                                    <div class="d-flex align-items-start how-step-item">
+                                        <span class="how-step-badge step-2 me-3">2</span>
+                                        <div>
+                                            <h6 class="how-step-title">Trechos Relevantes</h6>
+                                            <p class="text-muted small mb-0">Mostra exatamente onde a informação foi
+                                                encontrada no documento</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="d-flex align-items-start how-step-item">
+                                        <span class="how-step-badge step-3 me-3">3</span>
+                                        <div>
+                                            <h6 class="how-step-title">Score de Relevância</h6>
+                                            <p class="text-muted small mb-0">Indica o quão relevante cada resultado é
+                                                para
+                                                sua busca</p>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <div class="col-md-6">
+                                    <div class="d-flex align-items-start how-step-item">
+                                        <span class="how-step-badge step-4 me-3">4</span>
+                                        <div>
+                                            <h6 class="how-step-title">Informações Completas</h6>
+                                            <p class="text-muted small mb-0">Página, processo, categoria e tags em cada
+                                                resultado</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <hr class="my-4">
+
+                            <div class="alert alert-light mb-0 tips-box">
+                                <h6 class="alert-heading">
+                                    <i class="bi bi-lightbulb text-warning"></i> Dicas para melhores resultados
+                                </h6>
+                                <ul class="mb-0 small">
+                                    <li>Use termos específicos relacionados ao que procura</li>
+                                    <li>Combine conceitos: "acidente trabalho indenização"</li>
+                                    <li>Se não encontrar, tente sinônimos ou termos relacionados</li>
+                                    <li>A busca considera o contexto e significado das palavras</li>
+                                </ul>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
+            {% endif %}
         </div>
-        {% endif %}
     </div>
 </div>
 {% endblock %}
