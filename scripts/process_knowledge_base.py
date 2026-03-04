@@ -12,6 +12,7 @@ import argparse
 import builtins
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
@@ -46,34 +47,16 @@ def _build_query(file_id: int | None = None, include_errors: bool = False):
     ).order_by(KnowledgeBase.uploaded_at.desc())
 
 
-def process_pending_knowledge_files(
-    batch_size: int = 10,
-    file_id: int | None = None,
-    include_errors: bool = False,
-) -> int:
-    """Processa arquivos pendentes da base de conhecimento."""
-    query = _build_query(file_id=file_id, include_errors=include_errors)
-
-    if file_id:
-        items = query.all()
-    else:
-        items = query.limit(batch_size).all()
-
-    print(f"Itens elegíveis para processamento: {len(items)}")
-
-    if not items:
-        if file_id:
-            print(f"Nenhum arquivo elegível encontrado para o ID {file_id}.")
-        else:
-            print("Nenhum arquivo pendente encontrado.")
-        return 0
-
-    ingestion_agent = KnowledgeIngestionAgent()
-    summary_agent = AgentDocumentSummary()
-    processed = 0
-
-    for item in items:
+def _process_single_knowledge_file(item_id: int) -> bool:
+    """Processa um único arquivo da base de conhecimento."""
+    with app.app_context():
+        item = None
         try:
+            item = KnowledgeBase.query.filter_by(id=item_id, is_active=True).first()
+            if not item:
+                print(f"Arquivo ID {item_id} não encontrado ou inativo.")
+                return False
+
             print(f"Iniciando processamento: {item.id} - {item.original_filename}")
 
             item.processing_status = 'processing'
@@ -83,6 +66,9 @@ def process_pending_knowledge_files(
             file_path = Path(item.file_path)
             if not file_path.exists():
                 raise FileNotFoundError(f"Arquivo não encontrado no caminho: {item.file_path}")
+
+            ingestion_agent = KnowledgeIngestionAgent()
+            summary_agent = AgentDocumentSummary()
 
             markdown_content = ingestion_agent.process_file(
                 file_path=file_path,
@@ -98,7 +84,6 @@ def process_pending_knowledge_files(
                 raise RuntimeError("Processamento não retornou conteúdo.")
 
             summary_payload = summary_agent.summarizeDocument(file_path=item.file_path)
-
             if not summary_payload:
                 raise RuntimeError("Geração de resumo não retornou conteúdo.")
 
@@ -135,17 +120,62 @@ def process_pending_knowledge_files(
             item.processing_error_message = None
             db.session.commit()
 
-            processed += 1
             print(f"Processado com sucesso: {item.id} - {item.original_filename}")
+            return True
 
         except Exception as error:
             db.session.rollback()
 
-            item.processing_status = 'error'
-            item.processing_error_message = str(error)
-            db.session.commit()
+            if item is not None:
+                try:
+                    item.processing_status = 'error'
+                    item.processing_error_message = str(error)
+                    db.session.commit()
+                except Exception:
+                    db.session.rollback()
 
-            print(f"Erro ao processar {item.id} - {item.original_filename}: {error}")
+            print(f"Erro ao processar ID {item_id}: {error}")
+            return False
+        finally:
+            db.session.remove()
+
+
+def process_pending_knowledge_files(
+    batch_size: int = 10,
+    file_id: int | None = None,
+    include_errors: bool = False,
+    max_workers: int = 3,
+) -> int:
+    """Processa arquivos pendentes da base de conhecimento."""
+    query = _build_query(file_id=file_id, include_errors=include_errors)
+
+    if file_id:
+        items = query.all()
+    else:
+        items = query.limit(batch_size).all()
+
+    print(f"Itens elegíveis para processamento: {len(items)}")
+
+    if not items:
+        if file_id:
+            print(f"Nenhum arquivo elegível encontrado para o ID {file_id}.")
+        else:
+            print("Nenhum arquivo pendente encontrado.")
+        return 0
+
+    item_ids = [item.id for item in items]
+    workers = max(1, min(max_workers, len(item_ids)))
+    print(f"Processando em paralelo com {workers} thread(s)...")
+
+    if workers == 1:
+        return sum(1 for item_id in item_ids if _process_single_knowledge_file(item_id))
+
+    processed = 0
+    with ThreadPoolExecutor(max_workers=workers) as executor:
+        futures = [executor.submit(_process_single_knowledge_file, item_id) for item_id in item_ids]
+        for future in as_completed(futures):
+            if future.result():
+                processed += 1
 
     return processed
 
@@ -154,6 +184,7 @@ def parse_args():
     parser = argparse.ArgumentParser(description='Processa arquivos pendentes da base de conhecimento')
     parser.add_argument('--batch-size', type=int, default=10, help='Quantidade máxima de itens por execução')
     parser.add_argument('--file-id', type=int, help='Processa apenas o arquivo com esse ID')
+    parser.add_argument('--max-workers', type=int, default=3, help='Quantidade de threads paralelas para processamento')
     parser.add_argument(
         '--include-errors',
         action='store_true',
@@ -170,5 +201,6 @@ if __name__ == '__main__':
             batch_size=args.batch_size,
             file_id=args.file_id,
             include_errors=args.include_errors,
+            max_workers=args.max_workers,
         )
         print(f"Total processado: {total}")
