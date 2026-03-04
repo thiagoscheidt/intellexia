@@ -143,14 +143,22 @@
                 </div>
 
                 <form id="question-form">
+                  <input type="file" id="chat-file-input" class="d-none" multiple
+                    accept=".pdf,.doc,.docx,.txt,.md,.csv,.json,.xml,.html,.htm,.log" />
+                  <div id="chat-file-list" class="kb-chat-file-list mb-2 small text-muted"></div>
                   <div class="kb-chat-input-wrapper shadow-sm">
                     <textarea class="kb-chat-textarea" id="question-input"
                       placeholder="Digite sua pergunta aqui... (Shift+Enter para nova linha)" autocomplete="off"
-                      required rows="1"></textarea>
+                      rows="1"></textarea>
+                    <button type="button" class="btn btn-outline-secondary kb-chat-attach-btn" id="chat-attach-btn"
+                      title="Anexar arquivos">
+                      <i class="bi bi-paperclip"></i>
+                    </button>
                     <button class="btn btn-primary kb-chat-send-btn" type="submit" id="send-btn">
                       <i class="bi bi-send-fill"></i> Enviar
                     </button>
                   </div>
+                  <small class="text-muted d-block mt-2">Anexos são usados como contexto adicional da resposta</small>
                 </form>
               </div>
             </div>
@@ -648,6 +656,52 @@
       box-shadow: 0 6px 14px rgba(102, 126, 234, 0.28);
     }
 
+    #knowledge-chat-card .kb-chat-attach-btn {
+      border-radius: 10px;
+      padding: 0.55rem 0.7rem;
+      border: 1px solid var(--kb-border);
+      background: #ffffff;
+      color: var(--kb-text-muted);
+      white-space: nowrap;
+    }
+
+    #knowledge-chat-card .kb-chat-attach-btn:hover,
+    #knowledge-chat-card .kb-chat-attach-btn:focus {
+      border-color: var(--kb-primary);
+      color: var(--kb-primary);
+      background: #f3f6ff;
+    }
+
+    #knowledge-chat-card .kb-chat-file-list {
+      min-height: 1.9rem;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.4rem;
+    }
+
+    #knowledge-chat-card .kb-file-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      border: 1px solid #d9e0ef;
+      border-radius: 999px;
+      background: #f7f9ff;
+      color: #42516b;
+      padding: 0.22rem 0.6rem;
+      font-size: 0.78rem;
+      line-height: 1.15;
+      max-width: 100%;
+    }
+
+    #knowledge-chat-card .kb-file-chip__name {
+      display: inline-block;
+      max-width: 260px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      vertical-align: bottom;
+    }
+
     #knowledge-chat-card .kb-chat-send-btn:hover,
     #knowledge-chat-card .kb-chat-send-btn:focus {
       background: linear-gradient(135deg, var(--kb-primary-dark) 0%, var(--kb-accent) 100%);
@@ -880,6 +934,29 @@
       border-color: var(--kb-border);
     }
 
+    [data-bs-theme="dark"] #knowledge-chat-card .kb-chat-attach-btn {
+      background: #1f283c !important;
+      border-color: #3a4763 !important;
+      color: #c7d3eb !important;
+    }
+
+    [data-bs-theme="dark"] #knowledge-chat-card .kb-chat-attach-btn:hover,
+    [data-bs-theme="dark"] #knowledge-chat-card .kb-chat-attach-btn:focus {
+      background: #24314a !important;
+      border-color: rgba(142, 162, 255, 0.55) !important;
+      color: #dfe7ff !important;
+    }
+
+    [data-bs-theme="dark"] #knowledge-chat-card .kb-chat-file-list {
+      color: #93a0bc !important;
+    }
+
+    [data-bs-theme="dark"] #knowledge-chat-card .kb-file-chip {
+      background: #1f283c;
+      border-color: #3a4763;
+      color: #c7d3eb;
+    }
+
     [data-bs-theme="dark"] #knowledge-chat-card .kb-input-area {
       background: #141c2d;
       border-top-color: var(--kb-border);
@@ -982,6 +1059,9 @@
       const suggestedQuestionsContainer = document.getElementById('suggested-questions-container');
       const chatSessionsList = document.getElementById('chat-sessions-list');
       const newChatBtn = document.getElementById('new-chat-btn');
+      const attachBtn = document.getElementById('chat-attach-btn');
+      const chatFileInput = document.getElementById('chat-file-input');
+      const chatFileList = document.getElementById('chat-file-list');
       const currentUserDisplayName = `{{ session.get('user_name', 'Você')|e }}`;
       const assistantDisplayName = 'IntellexIA';
 
@@ -1486,15 +1566,44 @@
         return escapeHtml(text || '').replace(/\n/g, '<br>');
       }
 
+      function renderSelectedFiles() {
+        if (!chatFileList || !chatFileInput) return;
+        const files = Array.from(chatFileInput.files || []);
+        if (!files.length) {
+          chatFileList.innerHTML = '';
+          return;
+        }
+
+        chatFileList.innerHTML = files
+          .map((file) => `
+            <span class="kb-file-chip" title="${escapeHtml(file.name)}">
+              <i class="bi bi-paperclip"></i>
+              <span class="kb-file-chip__name">${escapeHtml(file.name)}</span>
+            </span>
+          `)
+          .join('');
+      }
+
       // Enviar pergunta
       async function sendQuestion(question) {
-        if (!question.trim()) return;
+        const selectedFiles = Array.from(chatFileInput?.files || []);
+        const normalizedQuestion = (question || '').trim();
+
+        if (!normalizedQuestion && selectedFiles.length === 0) {
+          questionInput.focus();
+          return;
+        }
+
+        const effectiveQuestion = normalizedQuestion || 'Analise os anexos enviados e resuma os pontos principais.';
+        const userMessage = selectedFiles.length
+          ? `${effectiveQuestion}\n\n📎 Anexos: ${selectedFiles.map((file) => file.name).join(', ')}`
+          : effectiveQuestion;
 
         // Adicionar mensagem do usuário
-        addUserMessage(question);
+        addUserMessage(userMessage);
 
         // Adicionar ao histórico da conversa
-        conversationHistory.push({ role: 'user', content: question });
+        conversationHistory.push({ role: 'user', content: effectiveQuestion });
 
         // Limpar input
         questionInput.value = '';
@@ -1508,16 +1617,19 @@
         addLoadingMessage();
 
         try {
+          const formData = new FormData();
+          formData.append('question', effectiveQuestion);
+          formData.append('history', JSON.stringify(conversationHistory));
+          if (activeChatId) {
+            formData.append('chat_id', String(activeChatId));
+          }
+          selectedFiles.forEach((file) => {
+            formData.append('files', file);
+          });
+
           const response = await fetch('{{ url_for("knowledge_base.api_ask") }}', {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              question: question,
-              history: conversationHistory,
-              chat_id: activeChatId
-            })
+            body: formData
           });
 
           const data = await response.json();
@@ -1527,7 +1639,7 @@
               activeChatId = data.chat_id;
             }
             addAssistantMessage(data.answer, data.sources, data.sources_detail);
-            updateSuggestedQuestions(data.suggested_questions || [], question, data.sources_detail || []);
+            updateSuggestedQuestions(data.suggested_questions || [], effectiveQuestion, data.sources_detail || []);
             // Adicionar resposta ao histórico
             conversationHistory.push({ role: 'assistant', content: data.answer });
             await loadChatSessions(activeChatId);
@@ -1541,6 +1653,10 @@
           // Reabilitar botão e input
           sendBtn.disabled = false;
           questionInput.disabled = false;
+          if (chatFileInput) {
+            chatFileInput.value = '';
+            renderSelectedFiles();
+          }
           questionInput.focus();
         }
       }
@@ -1548,18 +1664,16 @@
       // Event listener para o formulário
       questionForm.addEventListener('submit', function (e) {
         e.preventDefault();
-        const question = questionInput.value.trim();
-        if (question) {
-          sendQuestion(question);
-        }
+        sendQuestion(questionInput.value);
       });
 
       // Enter envia e Shift+Enter cria nova linha
       questionInput.addEventListener('keydown', function (e) {
         if (e.key === 'Enter' && !e.shiftKey) {
           e.preventDefault();
-          const question = questionInput.value.trim();
-          if (question && !sendBtn.disabled) {
+          const question = questionInput.value;
+          const hasFiles = (chatFileInput?.files?.length || 0) > 0;
+          if ((question.trim() || hasFiles) && !sendBtn.disabled) {
             sendQuestion(question);
           }
         }
@@ -1567,6 +1681,13 @@
 
       // Auto-resize do textarea
       questionInput.addEventListener('input', autoResizeTextarea);
+
+      if (attachBtn && chatFileInput) {
+        attachBtn.addEventListener('click', function () {
+          chatFileInput.click();
+        });
+        chatFileInput.addEventListener('change', renderSelectedFiles);
+      }
 
       newChatBtn.addEventListener('click', function () {
         createNewChat();

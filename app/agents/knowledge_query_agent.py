@@ -228,13 +228,21 @@ class KnowledgeQueryAgent:
         except Exception:
             return RetrievalDecisionSchema(should_retrieve_context=True)
 
-    def _generate_fallback_response(self, question: str, history=None) -> ResponseSchema:
+    def _generate_fallback_response(
+        self,
+        question: str,
+        history=None,
+        attachments_context: str = "",
+        attachments_file_ids: list[str] | None = None,
+        has_attachments: bool = False,
+    ) -> ResponseSchema:
         normalized_history = self._normalize_history(history)
-        should_use_context = self._should_retrieve_context(question, history=normalized_history)
         context_text = ""
 
-        if should_use_context.should_retrieve_context:
-            context_text = self._resolve_context_search(question)
+        if not has_attachments:
+            should_use_context = self._should_retrieve_context(question, history=normalized_history)
+            if should_use_context.should_retrieve_context:
+                context_text = self._resolve_context_search(question)
 
         fallback_messages = []
         if normalized_history:
@@ -248,7 +256,8 @@ class KnowledgeQueryAgent:
             "- Se não houver base suficiente, responda com cautela e use sources vazia.\n"
             "- suggested_questions deve conter exatamente 3 perguntas/comandos curtos e prontos para envio.\n\n"
             f"Pergunta do usuário: {question}\n\n"
-            f"Contexto disponível:\n{context_text or 'sem contexto'}"
+            f"Contexto disponível:\n{context_text or 'sem contexto'}\n\n"
+            f"Conteúdo de anexos enviados na conversa:\n{attachments_context or 'sem anexos'}"
         )
         fallback_messages.append({"role": "user", "content": fallback_prompt})
 
@@ -262,6 +271,9 @@ class KnowledgeQueryAgent:
         law_firm_id: int = None,
         history=None,
         chat_session_id: int = None,
+        attachments_context: str = "",
+        attachments_file_ids: list[str] | None = None,
+        has_attachments: bool = False,
     ) -> dict:
         """Consulta a base de conhecimento e usa LLM para gerar resposta."""
         self._last_context_data = None
@@ -275,9 +287,16 @@ class KnowledgeQueryAgent:
         response_agent = self._build_response_agent()
 
         normalized_history = self._normalize_history(history)
-        retrieval_decision = self._should_retrieve_context(question, history=normalized_history)
-        should_use_context = bool(retrieval_decision.should_retrieve_context)
+        retrieval_decision = None
+        should_use_context = False if has_attachments else None
         context_text = ""
+
+        if has_attachments:
+            should_use_context = False
+            context_text = ""
+        else:
+            retrieval_decision = self._should_retrieve_context(question, history=normalized_history)
+            should_use_context = bool(retrieval_decision.should_retrieve_context)
 
         if should_use_context:
             context_text = self._resolve_context_search(question)
@@ -300,6 +319,7 @@ class KnowledgeQueryAgent:
         instructions = (
             "IMPORTANTE: A decisão de uso de contexto e a busca na base vetorial já foram executadas antes desta etapa. "
             "Use apenas o campo 'Contexto pré-buscado' fornecido abaixo quando ele existir. "
+            "Quando houver anexos enviados na conversa, use também o campo 'Conteúdo de anexos'. "
             "No campo 'sources', liste APENAS os números das fontes que você realmente usou "
             "para responder (ex: ['0', '2']). Se não souber a resposta com base no contexto, informe "
             "claramente que não possui essa informação e retorne sources como lista vazia. "
@@ -313,7 +333,8 @@ class KnowledgeQueryAgent:
         final_user_prompt = (
             f"{instructions}\n\n"
             f"Pergunta do usuário: {question}\n\n"
-            f"Contexto pré-buscado:\n{context_block}"
+            f"Contexto pré-buscado:\n{context_block}\n\n"
+            f"Conteúdo de anexos:\n{attachments_context or 'sem anexos'}"
         )
 
         messages = []
@@ -350,7 +371,13 @@ class KnowledgeQueryAgent:
                 recursion_limit=KB_AGENT_RECURSION_LIMIT,
                 error=error_text,
             )
-            response = self._generate_fallback_response(question=question, history=history)
+            response = self._generate_fallback_response(
+                question=question,
+                history=history,
+                attachments_context=attachments_context,
+                attachments_file_ids=attachments_file_ids,
+                has_attachments=has_attachments,
+            )
 
         response_time_ms = int((time.time() - start_time) * 1000)
 

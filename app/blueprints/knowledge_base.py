@@ -1,114 +1,26 @@
-from flask import Blueprint, render_template, request, redirect, url_for, session, flash, jsonify, send_file
+from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file
 from app.models import db, KnowledgeBase, KnowledgeCategory, KnowledgeTag, KnowledgeSummary, KnowledgeChatHistory, KnowledgeChatSession
 from app.agents.knowledge_query_agent import KnowledgeQueryAgent
 from datetime import datetime
 import builtins
 from werkzeug.utils import secure_filename
 from app.agents.agent_document_summary import AgentDocumentSummary
+from app.services.knowledge_base.chat_context import build_attachments_context
+from app.services.knowledge_base.search_helpers import (
+    highlight_search_terms,
+    looks_like_name_query,
+    name_tokens,
+    normalize_for_match,
+)
+from app.services.knowledge_base.session_helpers import (
+    generate_chat_title_from_question,
+    get_current_law_firm_id,
+    get_current_user_id,
+)
 import os
 import json as json_lib
-import re
-import unicodedata
 
 knowledge_base_bp = Blueprint('knowledge_base', __name__, url_prefix='/knowledge-base')
-
-
-def _generate_chat_title_from_question(question: str) -> str:
-    """Gera um título curto e legível para o chat com base na pergunta."""
-    if not question:
-        return 'Novo chat'
-
-    cleaned = " ".join(question.strip().split())
-    if not cleaned:
-        return 'Novo chat'
-
-    max_len = 80
-    if len(cleaned) <= max_len:
-        return cleaned
-    return f"{cleaned[:max_len].rstrip()}..."
-
-def get_current_law_firm_id():
-    """Retorna o ID do escritório do usuário logado"""
-    return session.get('law_firm_id')
-
-def get_current_user_id():
-    """Retorna o ID do usuário logado"""
-    return session.get('user_id')
-
-def highlight_search_terms(text: str, search_query: str) -> str:
-    """Destaca os termos da busca no texto com markup HTML"""
-    if not search_query or not text:
-        return text
-    
-    # Dividir a query em palavras individuais
-    search_terms = search_query.strip().split()
-    
-    # Remover palavras muito curtas (artigos, preposições) que não devem ser destacadas
-    search_terms = [term for term in search_terms if len(term) > 2]
-    
-    highlighted_text = text
-    
-    # Destacar cada termo encontrado (case-insensitive)
-    for term in search_terms:
-        # Escape caracteres especiais de regex
-        escaped_term = re.escape(term)
-        # Criar padrão que encontra a palavra inteira (word boundary)
-        pattern = re.compile(f'({escaped_term})', re.IGNORECASE)
-        # Substituir com span de destaque
-        highlighted_text = pattern.sub(r'<mark class="highlight-term">\1</mark>', highlighted_text)
-    
-    return highlighted_text
-
-
-def _looks_like_name_query(query: str) -> bool:
-    """Heurística simples para identificar buscas com cara de nome de pessoa."""
-    if not query:
-        return False
-
-    normalized_query = " ".join(query.strip().split())
-    if len(normalized_query) < 4:
-        return False
-
-    parts = normalized_query.split(" ")
-    if len(parts) < 2 or len(parts) > 5:
-        return False
-
-    disallowed_tokens = {
-        'fap', 'inss', 'processo', 'acidente', 'trabalho', 'benefício',
-        'petição', 'recurso', 'sentença', 'lei', 'decreto', 'portaria'
-    }
-
-    alpha_parts = 0
-    for part in parts:
-        cleaned = re.sub(r"[^a-zA-ZÀ-ÿ]", "", part).lower()
-        if not cleaned:
-            continue
-        if cleaned in disallowed_tokens:
-            return False
-        if len(cleaned) >= 2:
-            alpha_parts += 1
-
-    return alpha_parts >= 2
-
-
-def _normalize_for_match(value: str) -> str:
-    """Normaliza texto para comparação robusta (acentos, pontuação e espaços)."""
-    if not value:
-        return ""
-
-    normalized = unicodedata.normalize('NFKD', value)
-    normalized = ''.join(ch for ch in normalized if not unicodedata.combining(ch))
-    normalized = normalized.lower()
-    normalized = re.sub(r'[^a-z0-9\s]', ' ', normalized)
-    normalized = re.sub(r'\s+', ' ', normalized).strip()
-    return normalized
-
-
-def _name_tokens(query: str):
-    """Extrai tokens relevantes de nome, removendo conectores comuns."""
-    ignored = {'de', 'da', 'do', 'dos', 'das', 'e'}
-    normalized_query = _normalize_for_match(query)
-    return [token for token in normalized_query.split(' ') if token and token not in ignored and len(token) >= 2]
 
 @knowledge_base_bp.route('/')
 def list():
@@ -822,16 +734,40 @@ def api_ask():
     if not law_firm_id:
         return jsonify({'success': False, 'error': 'Não autorizado'}), 401
     
-    data = request.get_json()
-    question = data.get('question', '').strip()
-    chat_id = data.get('chat_id')
-    conversation_history = data.get('history', [])  # Histórico da conversa atual
+    data = request.get_json(silent=True) if request.is_json else None
+
+    if data is not None:
+        question = str(data.get('question', '')).strip()
+        chat_id = data.get('chat_id')
+        conversation_history = data.get('history', [])
+        uploaded_files = []
+    else:
+        question = str(request.form.get('question', '')).strip()
+        chat_id = request.form.get('chat_id')
+        raw_history = request.form.get('history', '[]')
+        try:
+            conversation_history = json_lib.loads(raw_history) if raw_history else []
+        except Exception:
+            conversation_history = []
+        uploaded_files = request.files.getlist('files')
+
+    try:
+        chat_id = int(chat_id) if chat_id not in (None, '', 'null') else None
+    except (ValueError, TypeError):
+        chat_id = None
     
     if not question:
         return jsonify({'success': False, 'error': 'Pergunta não pode estar vazia'}), 400
     
     try:
         user_id = get_current_user_id()
+        attachments_context, attachments_file_ids = build_attachments_context(
+            uploaded_files,
+            law_firm_id=law_firm_id,
+            user_id=user_id,
+            question=question,
+            history=conversation_history if conversation_history else None,
+        )
 
         chat_session = None
         if chat_id:
@@ -852,10 +788,10 @@ def api_ask():
                     law_firm_id=law_firm_id,
                 ).first()
                 if not has_messages:
-                    chat_session.title = _generate_chat_title_from_question(question)
+                    chat_session.title = generate_chat_title_from_question(question)
                     db.session.commit()
         else:
-            generated_title = _generate_chat_title_from_question(question)
+            generated_title = generate_chat_title_from_question(question)
             chat_session = KnowledgeChatSession(
                 user_id=user_id,
                 law_firm_id=law_firm_id,
@@ -874,6 +810,9 @@ def api_ask():
             law_firm_id=law_firm_id,
             history=conversation_history if conversation_history else None,
             chat_session_id=chat_session.id,
+            attachments_context=attachments_context,
+            attachments_file_ids=attachments_file_ids,
+            has_attachments=bool(uploaded_files),
         )
         
         return jsonify({
@@ -1011,7 +950,7 @@ def api_chats_list():
 
             chat_title = (chat.title or '').strip()
             if (not chat_title or chat_title.lower() == 'novo chat') and last_message and last_message.question:
-                chat_title = _generate_chat_title_from_question(last_message.question)
+                chat_title = generate_chat_title_from_question(last_message.question)
             if not chat_title:
                 chat_title = 'Novo chat'
 
@@ -1189,9 +1128,9 @@ def intelligent_search():
                 
                 # Processar os resultados
                 if search_data and search_data.get('results') and search_data['results'].points:
-                    query_normalized = _normalize_for_match(search_query)
-                    name_query = _looks_like_name_query(search_query)
-                    query_tokens = _name_tokens(search_query)
+                    query_normalized = normalize_for_match(search_query)
+                    name_query = looks_like_name_query(search_query)
+                    query_tokens = name_tokens(search_query)
 
                     for idx, point in enumerate(search_data['results'].points):
                         payload = point.payload
@@ -1212,7 +1151,7 @@ def intelligent_search():
                         source_name = payload.get('source', '') or ''
                         description_text = payload.get('description', '') or ''
                         candidate_text = f"{original_text} {source_name} {description_text}"
-                        candidate_normalized = _normalize_for_match(candidate_text)
+                        candidate_normalized = normalize_for_match(candidate_text)
 
                         has_literal_match = (
                             bool(query_normalized) and query_normalized in candidate_normalized
