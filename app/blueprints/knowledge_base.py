@@ -19,8 +19,24 @@ from app.services.knowledge_base.session_helpers import (
 )
 import os
 import json as json_lib
+import hashlib
 
 knowledge_base_bp = Blueprint('knowledge_base', __name__, url_prefix='/knowledge-base')
+
+
+def _compute_file_hash(file_storage):
+    """Calcula hash SHA-256 do arquivo enviado sem perder a posição para salvar depois."""
+    hasher = hashlib.sha256()
+
+    file_storage.stream.seek(0)
+    while True:
+        chunk = file_storage.stream.read(8192)
+        if not chunk:
+            break
+        hasher.update(chunk)
+    file_storage.stream.seek(0)
+
+    return hasher.hexdigest()
 
 @knowledge_base_bp.route('/')
 def list():
@@ -67,6 +83,111 @@ def list():
         current_search=search
     )
 
+
+@knowledge_base_bp.route('/folders')
+def folders_view():
+    """Visualização em pastas (estilo drive): categorias -> arquivos da categoria"""
+    law_firm_id = get_current_law_firm_id()
+    if not law_firm_id:
+        flash('Você precisa estar logado para acessar esta página.', 'error')
+        return redirect(url_for('auth.login'))
+
+    search = request.args.get('search', '').strip()
+    selected_category = request.args.get('category', '').strip()
+
+    categories_from_db = KnowledgeCategory.query.filter_by(
+        law_firm_id=law_firm_id,
+        is_active=True
+    ).order_by(KnowledgeCategory.display_order.asc()).all()
+
+    base_query = KnowledgeBase.query.filter_by(law_firm_id=law_firm_id, is_active=True)
+    total_files = base_query.count()
+
+    # Modo 1: pasta selecionada -> listar arquivos da categoria
+    if selected_category:
+        category_query = base_query
+
+        if selected_category == '__uncategorized__':
+            category_query = category_query.filter(
+                db.or_(
+                    KnowledgeBase.category.is_(None),
+                    KnowledgeBase.category == ''
+                )
+            )
+            selected_category_label = 'Sem categoria'
+        else:
+            category_query = category_query.filter(KnowledgeBase.category == selected_category)
+            selected_category_label = selected_category
+
+        if search:
+            category_query = category_query.filter(
+                db.or_(
+                    KnowledgeBase.original_filename.ilike(f'%{search}%'),
+                    KnowledgeBase.description.ilike(f'%{search}%'),
+                    KnowledgeBase.tags.ilike(f'%{search}%'),
+                    KnowledgeBase.lawsuit_number.ilike(f'%{search}%')
+                )
+            )
+
+        category_files = category_query.order_by(KnowledgeBase.uploaded_at.desc()).all()
+
+        return render_template(
+            'knowledge_base/folders_view.html',
+            total_files=total_files,
+            current_search=search,
+            selected_category=selected_category,
+            selected_category_label=selected_category_label,
+            category_files=category_files,
+            categories_data=[],
+        )
+
+    # Modo 2: raiz -> listar apenas pastas (categorias)
+    all_files = base_query.all()
+    category_counts = {}
+    for file in all_files:
+        category_name = (file.category or '').strip() or 'Sem categoria'
+        category_counts[category_name] = category_counts.get(category_name, 0) + 1
+
+    ordered_names = []
+    for category in categories_from_db:
+        category_name = (category.name or '').strip()
+        if category_name and category_name not in ordered_names:
+            ordered_names.append(category_name)
+
+    # Categorias existentes em arquivos mas não cadastradas em KnowledgeCategory
+    for category_name in category_counts.keys():
+        if category_name != 'Sem categoria' and category_name not in ordered_names:
+            ordered_names.append(category_name)
+
+    # Sempre mostrar a pasta "Sem categoria"
+    if 'Sem categoria' not in ordered_names:
+        ordered_names.append('Sem categoria')
+
+    categories_data = []
+    search_lower = search.lower() if search else ''
+
+    for category_name in ordered_names:
+        if search_lower and search_lower not in category_name.lower():
+            continue
+
+        categories_data.append({
+            'name': category_name,
+            'count': category_counts.get(category_name, 0),
+            'param_value': '__uncategorized__' if category_name == 'Sem categoria' else category_name,
+        })
+
+    categories_data.sort(key=lambda item: item['name'].lower())
+
+    return render_template(
+        'knowledge_base/folders_view.html',
+        total_files=total_files,
+        current_search=search,
+        selected_category=None,
+        selected_category_label=None,
+        category_files=[],
+        categories_data=categories_data,
+    )
+
 @knowledge_base_bp.route('/upload', methods=['GET', 'POST'])
 def upload():
     """Permite fazer upload de novos arquivos para a base de conhecimento"""
@@ -110,6 +231,20 @@ def upload():
         
         # Salvar arquivo
         if file:
+            file_hash = _compute_file_hash(file)
+
+            duplicate = KnowledgeBase.query.filter_by(
+                law_firm_id=law_firm_id,
+                file_hash=file_hash
+            ).first()
+
+            if duplicate:
+                flash(
+                    f'Upload bloqueado: o arquivo "{file.filename}" está duplicado (mesmo conteúdo já cadastrado).',
+                    'error'
+                )
+                return redirect(request.url)
+
             filename = secure_filename(file.filename)
             upload_dir = f"uploads/knowledge_base/{law_firm_id}"
             os.makedirs(upload_dir, exist_ok=True)
@@ -134,6 +269,7 @@ def upload():
                 file_path=file_path,
                 file_size=file_size,
                 file_type=file_type,
+                file_hash=file_hash,
                 description=description,
                 category=category,
                 tags=tags,
@@ -160,6 +296,144 @@ def upload():
                 return redirect(request.url)
     
     return render_template('knowledge_base/upload.html', categories=categories)
+
+
+@knowledge_base_bp.route('/upload-multiple', methods=['GET', 'POST'])
+def upload_multiple():
+    """Permite fazer upload de múltiplos arquivos (máximo 10) para a base de conhecimento"""
+    law_firm_id = get_current_law_firm_id()
+    user_id = get_current_user_id()
+
+    if not law_firm_id or not user_id:
+        flash('Você precisa estar logado para acessar esta página.', 'error')
+        return redirect(url_for('auth.login'))
+
+    categories = KnowledgeCategory.query.filter_by(
+        law_firm_id=law_firm_id,
+        is_active=True
+    ).order_by(KnowledgeCategory.display_order).all()
+
+    if request.method == 'POST':
+        uploaded_files = request.files.getlist('files') if 'files' in request.files else []
+        uploaded_files = [
+            file for file in uploaded_files
+            if file and file.filename and file.filename.strip()
+        ]
+
+        if not uploaded_files:
+            flash('Nenhum arquivo foi selecionado.', 'error')
+            return redirect(request.url)
+
+        if len(uploaded_files) > 10:
+            flash('Você pode enviar no máximo 10 arquivos por vez.', 'error')
+            return redirect(request.url)
+
+        description = request.form.get('description', '').strip()
+        category = request.form.get('category', '').strip()
+        lawsuit_number = request.form.get('lawsuit_number', '').strip()
+
+        tags_text = request.form.get('tags', '').strip()
+        tags_list = [tag.strip() for tag in tags_text.split(',') if tag.strip()]
+        tags = ','.join(tags_list)
+
+        allowed_extensions = {'pdf', 'doc', 'docx', 'txt', 'odt', 'rtf'}
+        invalid_files = []
+        duplicate_files = []
+        seen_hashes_in_batch = set()
+
+        for file in uploaded_files:
+            ext = os.path.splitext(file.filename)[1].lower().lstrip('.')
+            if ext not in allowed_extensions:
+                invalid_files.append(file.filename)
+                continue
+
+            file_hash = _compute_file_hash(file)
+
+            # Duplicado dentro do próprio lote
+            if file_hash in seen_hashes_in_batch:
+                duplicate_files.append(file.filename)
+                continue
+
+            seen_hashes_in_batch.add(file_hash)
+
+            # Duplicado já existente no banco
+            existing_duplicate = KnowledgeBase.query.filter_by(
+                law_firm_id=law_firm_id,
+                file_hash=file_hash
+            ).first()
+            if existing_duplicate:
+                duplicate_files.append(file.filename)
+
+        if invalid_files:
+            flash(
+                f'Formato não permitido: {", ".join(invalid_files)}. Formatos aceitos: PDF, DOC, DOCX, TXT, ODT, RTF.',
+                'error'
+            )
+            return redirect(request.url)
+
+        if duplicate_files:
+            flash(
+                f'Upload bloqueado: arquivo(s) duplicado(s) detectado(s): {", ".join(duplicate_files)}.',
+                'error'
+            )
+            return redirect(request.url)
+
+        upload_dir = f"uploads/knowledge_base/{law_firm_id}"
+        os.makedirs(upload_dir, exist_ok=True)
+
+        saved_paths = []
+        saved_filenames = []
+
+        try:
+            for file in uploaded_files:
+                file_hash = _compute_file_hash(file)
+                filename = secure_filename(file.filename)
+
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+                name, ext = os.path.splitext(filename)
+                filename_with_timestamp = f"{name}_{timestamp}{ext}"
+
+                file_path = os.path.join(upload_dir, filename_with_timestamp)
+                file.save(file_path)
+
+                file_size = os.path.getsize(file_path)
+                file_type = ext.lstrip('.').upper() if ext else 'DESCONHECIDO'
+
+                knowledge_file = KnowledgeBase(
+                    user_id=user_id,
+                    law_firm_id=law_firm_id,
+                    original_filename=filename,
+                    file_path=file_path,
+                    file_size=file_size,
+                    file_type=file_type,
+                    file_hash=file_hash,
+                    description=description,
+                    category=category,
+                    tags=tags,
+                    lawsuit_number=lawsuit_number,
+                    processing_status='pending'
+                )
+
+                db.session.add(knowledge_file)
+                saved_paths.append(file_path)
+                saved_filenames.append(filename)
+
+            db.session.commit()
+            flash(
+                f'{len(saved_filenames)} arquivo(s) adicionado(s) com sucesso e aguardando processamento.',
+                'success'
+            )
+            return redirect(url_for('knowledge_base.list'))
+
+        except Exception as e:
+            db.session.rollback()
+            for path in saved_paths:
+                if os.path.exists(path):
+                    os.remove(path)
+            flash(f'Erro ao salvar arquivos: {str(e)}', 'error')
+            return redirect(request.url)
+
+    return render_template('knowledge_base/upload_multiple.html', categories=categories)
 
 # ROTAS PARA GERENCIAR CATEGORIAS
 

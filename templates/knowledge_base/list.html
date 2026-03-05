@@ -63,6 +63,11 @@
                                     </div>
                                 </div>
                                 <div class="card-tools d-flex gap-2">
+                                    <a href="{{ url_for('knowledge_base.folders_view') }}"
+                                        class="btn btn-light shadow-sm"
+                                        style="border-radius: 8px; padding: 0.5rem 1rem;">
+                                        <i class="bi bi-folder2-open"></i> Visualização em Pastas
+                                    </a>
                                     <a href="{{ url_for('knowledge_base.intelligent_search') }}"
                                         class="btn btn-light shadow-sm"
                                         style="border-radius: 8px; padding: 0.5rem 1rem;">
@@ -81,6 +86,11 @@
                                     <a href="{{ url_for('knowledge_base.upload') }}" class="btn btn-light shadow-sm"
                                         style="border-radius: 8px; padding: 0.5rem 1rem;">
                                         <i class="bi bi-plus-circle-fill"></i> Adicionar Arquivo
+                                    </a>
+                                    <a href="{{ url_for('knowledge_base.upload_multiple') }}"
+                                        class="btn btn-light shadow-sm"
+                                        style="border-radius: 8px; padding: 0.5rem 1rem;">
+                                        <i class="bi bi-files"></i> Upload Múltiplo
                                     </a>
                                 </div>
                             </div>
@@ -224,7 +234,7 @@
                                                         <i class="bi bi-download"></i>
                                                     </a>
                                                     <button type="button" class="btn btn-danger btn-sm"
-                                                        onclick="deleteFile({{ file.id }}, '{{ file.original_filename }}')"
+                                                        onclick='deleteFile({{ file.id }}, {{ file.original_filename|tojson }})'
                                                         title="Excluir">
                                                         <i class="bi bi-trash"></i>
                                                     </button>

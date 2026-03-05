@@ -113,6 +113,62 @@
         </li>
 
         <li
+          class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('knowledge_base.') else '' }}">
+          <a href="#"
+            class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('knowledge_base.') else '' }}">
+            <i class="nav-icon bi bi-book"></i>
+            <p>
+              Base de Conhecimento
+              <i class="nav-arrow bi bi-chevron-right"></i>
+            </p>
+          </a>
+          <ul class="nav nav-treeview">
+            <li class="nav-item">
+              <a href="{{ url_for('knowledge_base.intelligent_search') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.intelligent_search' else '' }}">
+                <i class="nav-icon bi bi-lightbulb-fill"></i>
+                <p>Pesquisa Inteligente</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('knowledge_base.search_chat') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.search_chat' else '' }}">
+                <i class="nav-icon bi bi-robot"></i>
+                <p>Assistente Jurídico</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('knowledge_base.list') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.list' else '' }}">
+                <i class="nav-icon bi bi-list"></i>
+                <p>Listar Arquivos</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('knowledge_base.folders_view') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.folders_view' else '' }}">
+                <i class="nav-icon bi bi-folder2-open"></i>
+                <p>Visualização em Pastas</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('knowledge_base.upload') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.upload' else '' }}">
+                <i class="nav-icon bi bi-cloud-upload"></i>
+                <p>Adicionar Arquivo</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('knowledge_base.upload_multiple') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.upload_multiple' else '' }}">
+                <i class="nav-icon bi bi-files"></i>
+                <p>Adicionar Vários Arquivos</p>
+              </a>
+            </li>
+          </ul>
+        </li>
+
+        <li
           class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint.startswith('tools.') or request.endpoint == 'assistant.legal_assistant') else '' }}">
           <a href="#"
             class="nav-link {{ 'active' if request.endpoint and (request.endpoint.startswith('tools.') or request.endpoint == 'assistant.legal_assistant') else '' }}">
@@ -250,62 +306,6 @@
                 class="nav-link {{ 'active' if request.endpoint == 'benefits.benefits_list' else '' }}">
                 <i class="nav-icon bi bi-list"></i>
                 <p>Todos os Benefícios</p>
-              </a>
-            </li>
-          </ul>
-        </li>
-
-        <li
-          class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('knowledge_base.') else '' }}">
-          <a href="#"
-            class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('knowledge_base.') else '' }}">
-            <i class="nav-icon bi bi-book"></i>
-            <p>
-              Base de Conhecimento
-              <i class="nav-arrow bi bi-chevron-right"></i>
-            </p>
-          </a>
-          <ul class="nav nav-treeview">
-            <li class="nav-item">
-              <a href="{{ url_for('knowledge_base.intelligent_search') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.intelligent_search' else '' }}">
-                <i class="nav-icon bi bi-lightbulb-fill"></i>
-                <p>Pesquisa Inteligente</p>
-              </a>
-            </li>
-            <li class="nav-item">
-              <a href="{{ url_for('knowledge_base.search_chat') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.search_chat' else '' }}">
-                <i class="nav-icon bi bi-robot"></i>
-                <p>Assistente Jurídico</p>
-              </a>
-            </li>
-            <li class="nav-item">
-              <a href="{{ url_for('knowledge_base.list') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.list' else '' }}">
-                <i class="nav-icon bi bi-list"></i>
-                <p>Listar Arquivos</p>
-              </a>
-            </li>
-            <li class="nav-item">
-              <a href="{{ url_for('knowledge_base.upload') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.upload' else '' }}">
-                <i class="nav-icon bi bi-cloud-upload"></i>
-                <p>Adicionar Arquivo</p>
-              </a>
-            </li>
-            <li class="nav-item">
-              <a href="{{ url_for('knowledge_base.categories_list') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.categories_list' else '' }}">
-                <i class="nav-icon bi bi-folder"></i>
-                <p>Categorias</p>
-              </a>
-            </li>
-            <li class="nav-item">
-              <a href="{{ url_for('knowledge_base.tags_list') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.tags_list' else '' }}">
-                <i class="nav-icon bi bi-tags-fill"></i>
-                <p>Tags</p>
               </a>
             </li>
           </ul>

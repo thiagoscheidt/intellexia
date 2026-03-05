@@ -1,0 +1,497 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Base de Conhecimento (Pastas) - IntellexIA{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/knowledge-base.css') }}" />
+<style>
+    .kb-compact {
+        --kb-primary: #667eea;
+        --kb-secondary: #764ba2;
+        --kb-bg: #f4f6ff;
+        --kb-surface: #ffffff;
+        --kb-border: #e2e7fb;
+        --kb-border-strong: #cfd8f8;
+        --kb-soft: #eef2ff;
+        --kb-soft-2: #f6f3ff;
+        --kb-text: #2f3f73;
+        --kb-muted: #64739a;
+        --kb-row-hover: #f1f4ff;
+    }
+
+    [data-bs-theme="dark"] .kb-compact {
+        --kb-primary: #8fa2ff;
+        --kb-secondary: #b08ae6;
+        --kb-bg: #121826;
+        --kb-surface: #1a2233;
+        --kb-border: #2a3550;
+        --kb-border-strong: #3c4f78;
+        --kb-soft: #222d46;
+        --kb-soft-2: #2a2340;
+        --kb-text: #e8edff;
+        --kb-muted: #a7b3d1;
+        --kb-row-hover: #202b42;
+    }
+
+    .drive-shell {
+        background: var(--kb-bg);
+        border-radius: 14px;
+        border: 1px solid var(--kb-border);
+        padding: 1rem;
+    }
+
+    .drive-toolbar {
+        background: var(--kb-surface);
+        border: 1px solid var(--kb-border);
+        border-radius: 12px;
+        padding: 0.9rem;
+    }
+
+    .folder-section {
+        background: var(--kb-surface);
+        border: 1px solid var(--kb-border);
+        border-radius: 12px;
+        margin-top: 1rem;
+        overflow: hidden;
+    }
+
+    .folder-header {
+        background: linear-gradient(135deg, color-mix(in srgb, var(--kb-primary) 16%, transparent), color-mix(in srgb, var(--kb-secondary) 10%, transparent));
+        border-bottom: 1px solid var(--kb-border);
+        padding: 0.75rem 1rem;
+    }
+
+    .folder-title {
+        font-weight: 600;
+        color: #334155;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .file-list-wrap {
+        padding: 0.5rem 0;
+        overflow-x: auto;
+    }
+
+    .drive-list {
+        width: 100%;
+        border-collapse: collapse;
+        min-width: 980px;
+    }
+
+    .drive-list thead th {
+        font-size: 0.78rem;
+        font-weight: 600;
+        color: var(--kb-muted);
+        background: var(--kb-soft);
+        border-bottom: 1px solid var(--kb-border);
+        padding: 0.7rem 0.85rem;
+        text-transform: uppercase;
+        letter-spacing: .02em;
+        white-space: nowrap;
+    }
+
+    .drive-list tbody td {
+        border-bottom: 1px solid var(--kb-border);
+        padding: 0.8rem 0.85rem;
+        vertical-align: middle;
+    }
+
+    .drive-list tbody tr:hover {
+        background: var(--kb-row-hover);
+    }
+
+    .file-name-cell {
+        display: flex;
+        align-items: center;
+        gap: 0.65rem;
+        min-width: 280px;
+    }
+
+    .file-name-main {
+        font-size: 0.9rem;
+        font-weight: 600;
+        color: var(--kb-text);
+        line-height: 1.2;
+    }
+
+    .file-name-sub {
+        font-size: 0.78rem;
+        color: var(--kb-muted);
+        max-width: 360px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .list-muted {
+        font-size: 0.82rem;
+        color: var(--kb-muted);
+        white-space: nowrap;
+    }
+
+    .category-folder {
+        display: block;
+        text-decoration: none;
+        color: inherit;
+        background: var(--kb-surface);
+        border: 1px solid var(--kb-border);
+        border-radius: 12px;
+        padding: 1rem;
+        transition: all .15s ease;
+    }
+
+    .category-folder:hover {
+        border-color: var(--kb-border-strong);
+        box-shadow: 0 6px 16px rgba(102, 126, 234, 0.12);
+        transform: translateY(-1px);
+        color: inherit;
+        background: linear-gradient(135deg, var(--kb-soft), var(--kb-soft-2));
+    }
+
+    .category-folder-name {
+        font-weight: 600;
+        color: var(--kb-text);
+        margin-top: 0.5rem;
+    }
+
+    .kb-accent-icon {
+        color: var(--kb-primary);
+    }
+
+    .btn-kb-outline {
+        border: 1px solid var(--kb-border-strong);
+        color: var(--kb-primary);
+        background: var(--kb-surface);
+    }
+
+    .btn-kb-outline:hover {
+        background: var(--kb-soft);
+        border-color: var(--kb-primary);
+        color: var(--kb-primary);
+    }
+
+    .btn-kb-primary {
+        color: #fff;
+        border: none;
+        background: linear-gradient(135deg, var(--kb-primary), var(--kb-secondary));
+    }
+
+    .btn-kb-primary:hover {
+        color: #fff;
+        filter: brightness(0.96);
+    }
+
+    .btn-kb-ghost {
+        border: 1px solid var(--kb-border-strong);
+        color: var(--kb-secondary);
+        background: var(--kb-surface);
+    }
+
+    .btn-kb-ghost:hover {
+        color: var(--kb-secondary);
+        background: var(--kb-soft-2);
+    }
+
+    .kb-compact .form-control {
+        background: var(--kb-surface);
+        border-color: var(--kb-border-strong);
+        color: var(--kb-text);
+    }
+
+    .kb-compact .form-control::placeholder {
+        color: var(--kb-muted);
+        opacity: 0.85;
+    }
+
+    .kb-compact .form-control:focus {
+        border-color: var(--kb-primary);
+        box-shadow: 0 0 0 0.2rem color-mix(in srgb, var(--kb-primary) 22%, transparent);
+    }
+
+    .kb-compact .text-muted {
+        color: var(--kb-muted) !important;
+    }
+
+    .kb-compact .breadcrumb,
+    .kb-compact .breadcrumb-item,
+    .kb-compact .breadcrumb-item a {
+        color: var(--kb-muted) !important;
+    }
+
+    .kb-compact .breadcrumb-item.active {
+        color: var(--kb-text) !important;
+    }
+
+    .kb-compact .badge.bg-light {
+        background: var(--kb-soft) !important;
+        color: var(--kb-text) !important;
+        border-color: var(--kb-border-strong) !important;
+    }
+
+    .kb-compact .alert-info {
+        background: color-mix(in srgb, var(--kb-primary) 18%, var(--kb-surface));
+        border-color: var(--kb-border-strong);
+        color: var(--kb-text);
+    }
+
+    .kb-compact .btn-outline-primary,
+    .kb-compact .btn-outline-secondary,
+    .kb-compact .btn-outline-danger {
+        background: transparent;
+    }
+
+    [data-bs-theme="dark"] .kb-compact .btn-outline-primary {
+        color: #a8b8ff;
+        border-color: #5d76cc;
+    }
+
+    [data-bs-theme="dark"] .kb-compact .btn-outline-secondary {
+        color: #c5d0ec;
+        border-color: #5f6f96;
+    }
+
+    [data-bs-theme="dark"] .kb-compact .btn-outline-danger {
+        color: #f3a2aa;
+        border-color: #b46371;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="kb-compact">
+    <div class="app-content-header" style="padding: 0.75rem 0 0.25rem;">
+        <div class="container-fluid">
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-hdd-stack-fill kb-accent-icon"></i>
+                    <h3 class="mb-0" style="font-size: 1.1rem; font-weight: 600; color: var(--kb-text);">
+                        Base de Conhecimento
+                    </h3>
+                </div>
+                <ol class="breadcrumb mb-0" style="background: transparent; padding: 0;">
+                    <li class="breadcrumb-item">
+                        <a href="{{ url_for('dashboard.dashboard') }}" class="text-decoration-none">Home</a>
+                    </li>
+                    <li class="breadcrumb-item active" aria-current="page">Pastas</li>
+                </ol>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-content">
+        <div class="container-fluid">
+            <div class="drive-shell">
+                <div class="drive-toolbar mb-3">
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                        <div>
+                            {% if selected_category %}
+                            <div class="fw-semibold" style="color: var(--kb-text);">Arquivos da pasta: {{
+                                selected_category_label }}</div>
+                            <small class="text-muted">{{ category_files|length }} arquivo(s) nesta categoria • {{
+                                total_files }} no total</small>
+                            {% else %}
+                            <div class="fw-semibold" style="color: var(--kb-text);">Pastas por categoria</div>
+                            <small class="text-muted">{{ categories_data|length }} pasta(s) • {{ total_files }}
+                                arquivo(s) no total</small>
+                            {% endif %}
+                        </div>
+                        <div class="d-flex gap-2">
+                            {% if selected_category %}
+                            <a href="{{ url_for('knowledge_base.folders_view') }}" class="btn btn-kb-outline btn-sm">
+                                <i class="bi bi-arrow-left"></i> Voltar para pastas
+                            </a>
+                            {% endif %}
+                            <a href="{{ url_for('knowledge_base.list') }}" class="btn btn-kb-outline btn-sm">
+                                <i class="bi bi-table"></i> Tabela
+                            </a>
+                            <a href="{{ url_for('knowledge_base.upload_multiple') }}" class="btn btn-kb-outline btn-sm">
+                                <i class="bi bi-files"></i> Adicionar vários arquivos
+                            </a>
+                            <a href="{{ url_for('knowledge_base.categories_list') }}" class="btn btn-kb-outline btn-sm">
+                                <i class="bi bi-folder"></i> Categorias
+                            </a>
+                            <a href="{{ url_for('knowledge_base.tags_list') }}" class="btn btn-kb-outline btn-sm">
+                                <i class="bi bi-tags-fill"></i> Tags
+                            </a>
+                            <a href="{{ url_for('knowledge_base.upload') }}" class="btn btn-kb-primary btn-sm">
+                                <i class="bi bi-plus-circle"></i> Novo arquivo
+                            </a>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="drive-toolbar mb-2">
+                    <form method="GET" class="row g-2 align-items-end">
+                        {% if selected_category %}
+                        <input type="hidden" name="category" value="{{ selected_category }}">
+                        {% endif %}
+                        <div class="col-md-5">
+                            <label for="search" class="form-label mb-1"><i class="bi bi-search kb-accent-icon"></i>
+                                Buscar</label>
+                            <input type="text" class="form-control" id="search" name="search"
+                                placeholder="{% if selected_category %}Nome, descrição, tags ou processo...{% else %}Buscar pasta por categoria...{% endif %}"
+                                value="{{ current_search }}" style="border-radius: 10px;">
+                        </div>
+                        <div class="col-md-4 d-flex align-items-end gap-2">
+                            <button type="submit" class="btn btn-kb-primary" style="border-radius: 10px;">
+                                <i class="bi bi-search"></i> Buscar
+                            </button>
+                            <a href="{% if selected_category %}{{ url_for('knowledge_base.folders_view', category=selected_category) }}{% else %}{{ url_for('knowledge_base.folders_view') }}{% endif %}"
+                                class="btn btn-kb-ghost" style="border-radius: 10px;">
+                                <i class="bi bi-arrow-clockwise"></i>
+                            </a>
+                        </div>
+                    </form>
+                </div>
+
+                {% if selected_category %}
+                {% if category_files|length == 0 %}
+                <div class="alert alert-info mb-0">
+                    <i class="bi bi-info-circle"></i>
+                    Nenhum arquivo encontrado para os filtros informados.
+                </div>
+                {% else %}
+                <section class="folder-section">
+                    <div class="folder-header d-flex align-items-center justify-content-between">
+                        <h5 class="folder-title">
+                            <i class="bi bi-folder-fill" style="color: var(--kb-secondary);"></i>
+                            {{ selected_category_label }}
+                        </h5>
+                        <span class="badge bg-light text-secondary border">{{ category_files|length }} item(ns)</span>
+                    </div>
+                    <div class="file-list-wrap">
+                        <table class="drive-list">
+                            <thead>
+                                <tr>
+                                    <th>Nome</th>
+                                    <th>Tipo</th>
+                                    <th>Tamanho</th>
+                                    <th>Processo</th>
+                                    <th>Data upload</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for file in category_files %}
+                                <tr>
+                                    <td>
+                                        <div class="file-name-cell">
+                                            <i class="bi bi-file-earmark-text kb-accent-icon"
+                                                style="font-size: 1.1rem;"></i>
+                                            <div>
+                                                <div class="file-name-main" title="{{ file.original_filename }}">
+                                                    {{ file.original_filename }}
+                                                </div>
+                                                <div class="file-name-sub" title="{{ file.description or '' }}">
+                                                    {{ file.description if file.description else 'Sem descrição' }}
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="badge bg-light text-secondary border">{{ file.file_type or '-'
+                                            }}</span>
+                                    </td>
+                                    <td class="list-muted">
+                                        {% if file.file_size %}
+                                        {% if file.file_size < 1024 %} {{ file.file_size }} B {% elif file.file_size <
+                                            1048576 %} {{ "%.2f" |format(file.file_size / 1024) }} KB {% else %}
+                                            {{ "%.2f" |format(file.file_size / 1048576) }} MB {% endif %} {% else %} -
+                                            {% endif %} </td>
+                                    <td class="list-muted">
+                                        {{ file.lawsuit_number if file.lawsuit_number else '-' }}
+                                    </td>
+                                    <td class="list-muted">
+                                        {{ file.uploaded_at.strftime('%d/%m/%Y %H:%M') if file.uploaded_at else '-' }}
+                                    </td>
+                                    <td>
+                                        <div class="d-flex gap-1">
+                                            <a href="{{ url_for('knowledge_base.details', file_id=file.id) }}"
+                                                class="btn btn-sm btn-outline-primary" title="Detalhes">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                            <a href="{{ url_for('knowledge_base.download', file_id=file.id) }}"
+                                                class="btn btn-sm btn-outline-secondary" title="Baixar">
+                                                <i class="bi bi-download"></i>
+                                            </a>
+                                            <button type="button" class="btn btn-sm btn-outline-danger js-delete-file"
+                                                data-file-id="{{ file.id }}"
+                                                data-file-name="{{ file.original_filename|e }}" title="Excluir">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+                {% endif %}
+                {% else %}
+                {% if categories_data|length == 0 %}
+                <div class="alert alert-info mb-0">
+                    <i class="bi bi-info-circle"></i>
+                    Nenhuma categoria encontrada para os filtros informados.
+                </div>
+                {% else %}
+                <div class="row g-3">
+                    {% for category in categories_data %}
+                    <div class="col-xl-3 col-lg-4 col-md-6 col-12">
+                        <a class="category-folder"
+                            href="{{ url_for('knowledge_base.folders_view', category=category.param_value) }}">
+                            <div class="d-flex align-items-center justify-content-between">
+                                <i class="bi bi-folder-fill" style="font-size: 1.8rem; color: var(--kb-secondary);"></i>
+                                <span class="badge bg-light text-secondary border">{{ category.count }}</span>
+                            </div>
+                            <div class="category-folder-name">{{ category.name }}</div>
+                            <small class="text-muted">Abrir pasta</small>
+                        </a>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endif %}
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('click', function (event) {
+            const deleteButton = event.target.closest('.js-delete-file');
+            if (!deleteButton) {
+                return;
+            }
+
+            const fileId = deleteButton.dataset.fileId;
+            const filename = deleteButton.dataset.fileName || 'arquivo';
+            deleteFile(fileId, filename);
+        });
+
+        function deleteFile(fileId, filename) {
+            if (confirm('Tem certeza que deseja remover o arquivo "' + filename + '" da base de conhecimento?')) {
+                fetch(`/knowledge-base/${fileId}/delete`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            location.reload();
+                        } else {
+                            alert('Erro ao remover arquivo: ' + data.message);
+                        }
+                    })
+                    .catch(error => {
+                        alert('Erro ao remover arquivo: ' + error);
+                    });
+            }
+        }
+    </script>
+</div>
+{% endblock %}

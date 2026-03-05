@@ -1,0 +1,330 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Upload Múltiplo - Base de Conhecimento - IntellexIA{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/knowledge-base.css') }}" />
+<style>
+    .drop-zone {
+        border: 2px dashed #667eea;
+        border-radius: 12px;
+        background: rgba(102, 126, 234, 0.05);
+        padding: 2rem;
+        text-align: center;
+        transition: all .15s ease;
+        cursor: pointer;
+    }
+
+    .drop-zone.drag-over {
+        background: rgba(102, 126, 234, 0.12);
+        border-color: #764ba2;
+    }
+
+    .file-list-preview {
+        max-height: 180px;
+        overflow-y: auto;
+        border: 1px solid #e9ecef;
+        border-radius: 10px;
+        padding: 0.5rem 0.75rem;
+        background: #fff;
+    }
+
+    .file-list-preview li {
+        font-size: 0.9rem;
+        color: #495057;
+        margin-bottom: 0.25rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="kb-compact">
+    <div class="app-content-header"
+        style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1rem 0; margin-bottom: 0.75rem; border-radius: 0 0 15px 15px; box-shadow: 0 4px 15px rgba(102, 126, 234, 0.2);">
+        <div class="container-fluid">
+            <div class="row align-items-center">
+                <div class="col-sm-8">
+                    <div class="d-flex align-items-center">
+                        <div class="me-3">
+                            <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
+                                style="width: 40px; height: 40px; box-shadow: 0 4px 10px rgba(0,0,0,0.1);">
+                                <i class="bi bi-files" style="font-size: 1.2rem; color: #667eea;"></i>
+                            </div>
+                        </div>
+                        <div class="text-white">
+                            <h3 class="mb-0" style="font-weight: 600; font-size: 1.2rem;">
+                                <i class="bi bi-cloud-upload-fill"></i> Upload Múltiplo
+                            </h3>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-sm-4">
+                    <ol class="breadcrumb float-sm-end mb-0"
+                        style="background: rgba(255,255,255,0.15); padding: 0.5rem 0.75rem; border-radius: 10px; backdrop-filter: blur(10px);">
+                        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"
+                                class="text-white text-decoration-none"><i class="bi bi-house-fill"></i> Home</a></li>
+                        <li class="breadcrumb-item"><a href="{{ url_for('knowledge_base.list') }}"
+                                class="text-white text-decoration-none">Base de Conhecimento</a></li>
+                        <li class="breadcrumb-item active text-white" aria-current="page"><strong>Upload
+                                Múltiplo</strong></li>
+                    </ol>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="app-content">
+        <div class="container-fluid">
+            <div class="row">
+                <div class="col-md-8 offset-md-2">
+                    <div class="card border-0 shadow-lg" style="border-radius: 15px; overflow: hidden;">
+                        <div class="card-header text-white"
+                            style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 1.25rem;">
+                            <h3 class="card-title mb-0" style="font-weight: 600; font-size: 1.15rem;">
+                                Enviar múltiplos arquivos (máximo 10)
+                            </h3>
+                        </div>
+                        <form method="POST" enctype="multipart/form-data" id="multiUploadForm">
+                            <div class="card-body" style="padding: 2rem;">
+                                <div class="alert alert-info border-0 shadow-sm mb-4">
+                                    <i class="bi bi-info-circle"></i>
+                                    Arraste e solte até <strong>10 arquivos</strong> ou clique para selecionar.
+                                    Os campos de categoria/descrição/tags/processo são <strong>opcionais</strong>.
+                                    <br>
+                                    <i class="bi bi-robot"></i>
+                                    Após o envio, a <strong>IA/agente de IA</strong> fará o processamento e pode definir
+                                    automaticamente <strong>categoria</strong>, <strong>tags</strong> e
+                                    <strong>número do processo</strong>.
+                                </div>
+
+                                <div class="mb-4">
+                                    <label class="form-label fw-bold d-block">
+                                        <i class="bi bi-files text-primary"></i> Arquivos *
+                                    </label>
+                                    <input type="file" class="d-none" id="files" name="files" required multiple
+                                        accept=".pdf,.doc,.docx,.txt,.odt,.rtf">
+
+                                    <div id="dropZone" class="drop-zone">
+                                        <i class="bi bi-cloud-arrow-up-fill text-primary" style="font-size: 2rem;"></i>
+                                        <h5 class="mt-2 mb-1">Arraste arquivos aqui</h5>
+                                        <p class="text-muted mb-2">ou clique para selecionar</p>
+                                        <button type="button" id="pickFilesBtn" class="btn btn-outline-primary btn-sm">
+                                            <i class="bi bi-folder2-open"></i> Escolher arquivos
+                                        </button>
+                                        <div class="mt-2"><small class="text-muted">Máximo de 10 arquivos por
+                                                envio.</small></div>
+                                    </div>
+
+                                    <small class="form-text text-muted d-block mt-2" id="filesCounter">Nenhum arquivo
+                                        selecionado.</small>
+                                    <ul id="selectedFilesList" class="file-list-preview mt-2 mb-0 d-none"></ul>
+                                </div>
+
+                                <div class="accordion" id="optionalMetaAccordion">
+                                    <div class="accordion-item">
+                                        <h2 class="accordion-header" id="optionalMetaHeading">
+                                            <button class="accordion-button collapsed" type="button"
+                                                data-bs-toggle="collapse" data-bs-target="#optionalMetaCollapse"
+                                                aria-expanded="false" aria-controls="optionalMetaCollapse">
+                                                Metadados opcionais (aplicados a todos os arquivos)
+                                            </button>
+                                        </h2>
+                                        <div id="optionalMetaCollapse" class="accordion-collapse collapse"
+                                            aria-labelledby="optionalMetaHeading"
+                                            data-bs-parent="#optionalMetaAccordion">
+                                            <div class="accordion-body">
+                                                <div class="mb-3">
+                                                    <label for="category" class="form-label fw-bold">
+                                                        <i class="bi bi-folder text-warning"></i> Categoria (opcional)
+                                                    </label>
+                                                    <select class="form-select form-select-lg border-2 shadow-sm"
+                                                        id="category" name="category" style="border-radius: 10px;">
+                                                        <option value="">Selecione uma categoria...</option>
+                                                        {% for cat in categories %}
+                                                        <option value="{{ cat.name }}">{{ cat.icon }} {{ cat.name }}
+                                                        </option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+
+                                                <div class="mb-3">
+                                                    <label for="description" class="form-label fw-bold">
+                                                        <i class="bi bi-chat-left-text text-info"></i> Descrição
+                                                        (opcional)
+                                                    </label>
+                                                    <textarea class="form-control form-control-lg border-2 shadow-sm"
+                                                        id="description" name="description" rows="3"
+                                                        placeholder="Descreva o conteúdo dos arquivos..."
+                                                        style="border-radius: 10px;"></textarea>
+                                                </div>
+
+                                                <div class="mb-3">
+                                                    <label for="tags" class="form-label fw-bold">
+                                                        <i class="bi bi-tags text-success"></i> Tags (opcional)
+                                                    </label>
+                                                    <input type="text"
+                                                        class="form-control form-control-lg border-2 shadow-sm"
+                                                        id="tags" name="tags"
+                                                        placeholder="Ex: jurisprudência, recurso, trabalhista"
+                                                        style="border-radius: 10px;">
+                                                    <small class="form-text text-muted d-block mt-2">Separe as tags por
+                                                        vírgula.</small>
+                                                </div>
+
+                                                <div class="mb-1">
+                                                    <label for="lawsuit_number" class="form-label fw-bold">
+                                                        <i class="bi bi-briefcase text-primary"></i> Número do Processo
+                                                        (opcional)
+                                                    </label>
+                                                    <input type="text"
+                                                        class="form-control form-control-lg border-2 shadow-sm"
+                                                        id="lawsuit_number" name="lawsuit_number"
+                                                        placeholder="Ex: 0001234-56.2024.8.26.0100"
+                                                        style="border-radius: 10px;">
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card-footer bg-light" style="padding: 1.5rem;">
+                                <div class="d-flex justify-content-between align-items-center">
+                                    <a href="{{ url_for('knowledge_base.list') }}"
+                                        class="btn btn-outline-secondary btn-lg"
+                                        style="border-radius: 10px; padding: 0.75rem 2rem;">
+                                        <i class="bi bi-arrow-left-circle"></i> Voltar
+                                    </a>
+                                    <button type="submit" id="multiUploadBtn" class="btn btn-lg shadow"
+                                        style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; border: none; border-radius: 10px; padding: 0.75rem 2.5rem;">
+                                        <span id="multiUploadBtnText"><i class="bi bi-cloud-upload-fill"></i> Enviar
+                                            arquivos</span>
+                                        <span id="multiUploadBtnLoading" style="display: none;">
+                                            <span class="spinner-border spinner-border-sm me-2" role="status"
+                                                aria-hidden="true"></span>
+                                            Enviando...
+                                        </span>
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const filesInput = document.getElementById('files');
+        const filesCounter = document.getElementById('filesCounter');
+        const selectedFilesList = document.getElementById('selectedFilesList');
+        const dropZone = document.getElementById('dropZone');
+        const pickFilesBtn = document.getElementById('pickFilesBtn');
+        const multiUploadForm = document.getElementById('multiUploadForm');
+        const multiUploadBtn = document.getElementById('multiUploadBtn');
+        const multiUploadBtnText = document.getElementById('multiUploadBtnText');
+        const multiUploadBtnLoading = document.getElementById('multiUploadBtnLoading');
+        const allowedExtensions = ['pdf', 'doc', 'docx', 'txt', 'odt', 'rtf'];
+
+        function renderSelectedFiles(files) {
+            const count = files.length;
+
+            if (count === 0) {
+                filesCounter.textContent = 'Nenhum arquivo selecionado.';
+                selectedFilesList.classList.add('d-none');
+                selectedFilesList.innerHTML = '';
+                return;
+            }
+
+            filesCounter.textContent = `${count} arquivo(s) selecionado(s).`;
+            selectedFilesList.classList.remove('d-none');
+            selectedFilesList.innerHTML = files
+                .map((file) => `<li><i class="bi bi-file-earmark-text me-1"></i>${file.name}</li>`)
+                .join('');
+        }
+
+        function applyFiles(files) {
+            const validFiles = [];
+            const invalidFiles = [];
+
+            files.forEach((file) => {
+                const ext = (file.name.split('.').pop() || '').toLowerCase();
+                if (!allowedExtensions.includes(ext)) {
+                    invalidFiles.push(file.name);
+                    return;
+                }
+                validFiles.push(file);
+            });
+
+            if (invalidFiles.length > 0) {
+                alert(`Formato não permitido: ${invalidFiles.join(', ')}.`);
+            }
+
+            if (validFiles.length > 10) {
+                alert('Você pode selecionar no máximo 10 arquivos por envio.');
+                return;
+            }
+
+            const dataTransfer = new DataTransfer();
+            validFiles.forEach((file) => dataTransfer.items.add(file));
+            filesInput.files = dataTransfer.files;
+            renderSelectedFiles(validFiles);
+        }
+
+        pickFilesBtn.addEventListener('click', function () {
+            filesInput.click();
+        });
+
+        dropZone.addEventListener('click', function (event) {
+            if (event.target.id !== 'pickFilesBtn') {
+                filesInput.click();
+            }
+        });
+
+        ['dragenter', 'dragover'].forEach((eventName) => {
+            dropZone.addEventListener(eventName, function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                dropZone.classList.add('drag-over');
+            });
+        });
+
+        ['dragleave', 'dragend', 'drop'].forEach((eventName) => {
+            dropZone.addEventListener(eventName, function (event) {
+                event.preventDefault();
+                event.stopPropagation();
+                dropZone.classList.remove('drag-over');
+            });
+        });
+
+        dropZone.addEventListener('drop', function (event) {
+            const files = Array.from((event.dataTransfer && event.dataTransfer.files) || []);
+            applyFiles(files);
+        });
+
+        filesInput.addEventListener('change', function () {
+            const files = Array.from(filesInput.files || []);
+            applyFiles(files);
+        });
+
+        multiUploadForm.addEventListener('submit', function (event) {
+            const count = (filesInput.files || []).length;
+            if (count === 0) {
+                event.preventDefault();
+                alert('Selecione pelo menos um arquivo.');
+                return;
+            }
+
+            if (count > 10) {
+                event.preventDefault();
+                alert('Você pode enviar no máximo 10 arquivos por envio.');
+                return;
+            }
+
+            multiUploadBtn.disabled = true;
+            multiUploadBtnText.style.display = 'none';
+            multiUploadBtnLoading.style.display = 'inline-block';
+        });
+    </script>
+</div>
+{% endblock %}
