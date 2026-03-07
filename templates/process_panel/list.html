@@ -92,6 +92,10 @@
           <div class="card-header">
             <h3 class="card-title mb-0"><i class="bi bi-list-ul"></i> Lista de Processos</h3>
             <div class="card-tools">
+              <a href="{{ url_for('process_panel.list_processes', view='kanban', q=search_query, status=status_filter) }}"
+                class="btn btn-outline-dark btn-sm me-1">
+                <i class="bi bi-kanban"></i> Kanban
+              </a>
               <a href="{{ url_for('process_panel.manage_judicial_phases') }}"
                 class="btn btn-outline-secondary btn-sm me-1">
                 <i class="bi bi-kanban"></i> Fases Judiciais
@@ -127,6 +131,7 @@
               <div class="collapse" id="filtersCollapse">
                 <div class="card-body">
                   <form method="get" class="row g-3">
+                    <input type="hidden" name="view" value="{{ current_view or 'table' }}">
                     <div class="col-md-6">
                       <label for="search_query" class="form-label">
                         <i class="bi bi-search"></i> Buscar
@@ -184,6 +189,14 @@
                         <strong>{{ process.title or process.process_number }}</strong>
                         {% if process.description %}
                         <br><small class="text-muted">{{ process.description[:60] }}...</small>
+                        {% endif %}
+                        {% if process.plaintiff_client or process.defendant %}
+                        <br>
+                        <small class="text-muted">
+                          {% if process.plaintiff_client %}<span class="me-2">Ativo: {{ process.plaintiff_client.name
+                            }}</span>{% endif %}
+                          {% if process.defendant %}<span>Passivo: {{ process.defendant.name }}</span>{% endif %}
+                        </small>
                         {% endif %}
                       </div>
                     </td>

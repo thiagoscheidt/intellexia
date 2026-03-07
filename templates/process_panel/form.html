@@ -143,6 +143,39 @@ subtitle=hero_subtitle|default(''), icon='bi bi-file-earmark-plus') %}
                                             existente</small>
                                     </div>
 
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="plaintiff_client_id" class="form-label">Polo Ativo
+                                                    (Cliente)</label>
+                                                <select class="form-select" id="plaintiff_client_id"
+                                                    name="plaintiff_client_id">
+                                                    <option value="">-- Não informado --</option>
+                                                    {% for client in clients %}
+                                                    <option value="{{ client.id }}" {% if process and
+                                                        process.plaintiff_client_id==client.id %}selected{% endif %}>
+                                                        {{ client.name }}
+                                                    </option>
+                                                    {% endfor %}
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="defendant_id" class="form-label">Polo Passivo (Réu)</label>
+                                                <select class="form-select" id="defendant_id" name="defendant_id">
+                                                    <option value="">-- Não informado --</option>
+                                                    {% for defendant in defendants %}
+                                                    <option value="{{ defendant.id }}" {% if process and
+                                                        process.defendant_id==defendant.id %}selected{% endif %}>
+                                                        {{ defendant.name }}
+                                                    </option>
+                                                    {% endfor %}
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     <!-- Status -->
                                     <div class="mb-3">
                                         <label for="status" class="form-label">Status</label>

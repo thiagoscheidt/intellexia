@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, session, jsonify, redirec
 from app.models import (
     db, JudicialProcess, JudicialSentenceAnalysis, JudicialAppeal, 
     KnowledgeBase, Case, User, JudicialPhase, JudicialDocumentType, JudicialEvent,
-    JudicialProcessNote
+    JudicialProcessNote, Client, JudicialDefendant
 )
 from datetime import datetime
 from functools import wraps
@@ -584,6 +584,118 @@ def toggle_document_type_status(doc_type_id):
     return redirect(url_for('process_panel.manage_document_types'))
 
 
+@process_panel_bp.route('/config/polos-passivos')
+@require_law_firm
+def manage_defendants():
+    """Tela para gerenciamento de polos passivos (réus)."""
+    law_firm_id = get_current_law_firm_id()
+
+    defendants = JudicialDefendant.query.filter_by(
+        law_firm_id=law_firm_id
+    ).order_by(JudicialDefendant.name.asc()).all()
+
+    return render_template(
+        'process_panel/defendants_management.html',
+        defendants=defendants,
+    )
+
+
+@process_panel_bp.route('/config/polos-passivos/criar', methods=['POST'])
+@require_law_firm
+def create_defendant():
+    """Cria novo polo passivo (réu)."""
+    law_firm_id = get_current_law_firm_id()
+
+    name = request.form.get('name', '').strip()
+
+    if not name:
+        flash('Informe o nome do polo passivo.', 'danger')
+        return redirect(url_for('process_panel.manage_defendants'))
+
+    exists = JudicialDefendant.query.filter_by(law_firm_id=law_firm_id, name=name).first()
+    if exists:
+        flash(f'Já existe um polo passivo com o nome "{name}".', 'warning')
+        return redirect(url_for('process_panel.manage_defendants'))
+
+    try:
+        db.session.add(
+            JudicialDefendant(
+                law_firm_id=law_firm_id,
+                name=name,
+                is_active=True,
+            )
+        )
+        db.session.commit()
+        flash('Polo passivo cadastrado com sucesso.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao cadastrar polo passivo: {str(e)}', 'danger')
+
+    return redirect(url_for('process_panel.manage_defendants'))
+
+
+@process_panel_bp.route('/config/polos-passivos/<int:defendant_id>/atualizar', methods=['POST'])
+@require_law_firm
+def update_defendant(defendant_id):
+    """Atualiza polo passivo (réu)."""
+    law_firm_id = get_current_law_firm_id()
+
+    defendant = JudicialDefendant.query.filter_by(
+        id=defendant_id,
+        law_firm_id=law_firm_id
+    ).first_or_404()
+
+    name = request.form.get('name', '').strip()
+
+    if not name:
+        flash('Nome do polo passivo é obrigatório.', 'danger')
+        return redirect(url_for('process_panel.manage_defendants'))
+
+    duplicated = JudicialDefendant.query.filter(
+        JudicialDefendant.law_firm_id == law_firm_id,
+        JudicialDefendant.name == name,
+        JudicialDefendant.id != defendant.id,
+    ).first()
+
+    if duplicated:
+        flash(f'Já existe outro polo passivo com o nome "{name}".', 'warning')
+        return redirect(url_for('process_panel.manage_defendants'))
+
+    try:
+        defendant.name = name
+        defendant.updated_at = datetime.utcnow()
+        db.session.commit()
+        flash('Polo passivo atualizado com sucesso.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao atualizar polo passivo: {str(e)}', 'danger')
+
+    return redirect(url_for('process_panel.manage_defendants'))
+
+
+@process_panel_bp.route('/config/polos-passivos/<int:defendant_id>/status', methods=['POST'])
+@require_law_firm
+def toggle_defendant_status(defendant_id):
+    """Ativa/desativa polo passivo (réu)."""
+    law_firm_id = get_current_law_firm_id()
+
+    defendant = JudicialDefendant.query.filter_by(
+        id=defendant_id,
+        law_firm_id=law_firm_id
+    ).first_or_404()
+
+    try:
+        defendant.is_active = not defendant.is_active
+        defendant.updated_at = datetime.utcnow()
+        db.session.commit()
+        flash('Status do polo passivo atualizado.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao alterar status do polo passivo: {str(e)}', 'danger')
+
+    return redirect(url_for('process_panel.manage_defendants'))
+
+
 @process_panel_bp.route('/')
 @require_law_firm
 def list_processes():
@@ -593,6 +705,10 @@ def list_processes():
     # Filtros
     search_query = request.args.get('q', '').strip()
     status_filter = request.args.get('status', '')
+    client_filter = request.args.get('client_id', type=int)
+    view_mode = request.args.get('view', 'table').strip().lower()
+    if view_mode not in {'table', 'kanban'}:
+        view_mode = 'table'
     page = request.args.get('page', 1, type=int)
     
     query = JudicialProcess.query.filter_by(law_firm_id=law_firm_id)
@@ -610,11 +726,18 @@ def list_processes():
     # Filtro por status
     if status_filter:
         query = query.filter(JudicialProcess.status == status_filter)
+
+    # Filtro por cliente (polo ativo)
+    if client_filter:
+        query = query.filter(JudicialProcess.plaintiff_client_id == client_filter)
     
-    # Paginação
-    processes = query.order_by(JudicialProcess.created_at.desc()).paginate(
-        page=page, per_page=15
-    )
+    ordered_query = query.order_by(JudicialProcess.created_at.desc())
+
+    if view_mode == 'kanban':
+        processes_list = ordered_query.all()
+    else:
+        processes = ordered_query.paginate(page=page, per_page=15)
+        processes_list = processes.items
     
     # Estatísticas
     stats = {
@@ -625,21 +748,77 @@ def list_processes():
     }
 
     process_phases = {}
-    for process in processes.items:
-        latest_event = JudicialEvent.query.filter_by(process_id=process.id).order_by(
+    process_ids = [process.id for process in processes_list]
+    if process_ids:
+        latest_events = JudicialEvent.query.filter(
+            JudicialEvent.process_id.in_(process_ids)
+        ).order_by(
+            JudicialEvent.process_id.asc(),
             JudicialEvent.event_date.desc(),
             JudicialEvent.id.desc()
-        ).first()
-        process_phases[process.id] = latest_event.phase if latest_event else None
-    
+        ).all()
+
+        for event in latest_events:
+            if event.process_id not in process_phases:
+                process_phases[event.process_id] = event.phase
+
+    if view_mode == 'kanban':
+        clients = Client.query.filter_by(law_firm_id=law_firm_id).order_by(Client.name.asc()).all()
+
+        configured_phases = JudicialPhase.query.filter_by(
+            law_firm_id=law_firm_id
+        ).order_by(JudicialPhase.display_order.asc(), JudicialPhase.name.asc()).all()
+
+        kanban_columns = []
+        columns_by_key = {}
+
+        for phase in configured_phases:
+            column = {
+                'key': phase.key,
+                'label': phase.name,
+                'processes': []
+            }
+            kanban_columns.append(column)
+            columns_by_key[phase.key] = column
+
+        unassigned_processes = []
+        for process in processes_list:
+            phase_key = process_phases.get(process.id)
+            phase_column = columns_by_key.get(phase_key)
+            if phase_column:
+                phase_column['processes'].append(process)
+            else:
+                unassigned_processes.append(process)
+
+        if unassigned_processes:
+            kanban_columns.append({
+                'key': '__unassigned__',
+                'label': 'Sem fase',
+                'processes': unassigned_processes,
+            })
+
+        return render_template(
+            'process_panel/list_kanban.html',
+            search_query=search_query,
+            status_filter=status_filter,
+            client_filter=client_filter,
+            clients=clients,
+            stats=stats,
+            kanban_columns=kanban_columns,
+            process_phases=process_phases,
+            current_view=view_mode,
+        )
+
     return render_template(
         'process_panel/list.html',
         processes=processes,
         search_query=search_query,
         status_filter=status_filter,
+        client_filter=client_filter,
         stats=stats,
         process_phases=process_phases,
         judicial_phases_labels=JUDICIAL_PHASES,
+        current_view=view_mode,
     )
 
 
@@ -652,10 +831,32 @@ def new_process():
     
     if request.method == 'POST':
         process_number = request.form.get('process_number', '').strip().upper()
+        plaintiff_client_id = request.form.get('plaintiff_client_id', type=int)
+        defendant_id = request.form.get('defendant_id', type=int)
         uploaded_files = [
             file for file in request.files.getlist('documents')
             if file and file.filename and file.filename.strip()
         ]
+
+        plaintiff_client = None
+        if plaintiff_client_id:
+            plaintiff_client = Client.query.filter_by(
+                id=plaintiff_client_id,
+                law_firm_id=law_firm_id
+            ).first()
+            if not plaintiff_client:
+                flash('Polo ativo (cliente) inválido.', 'danger')
+                return redirect(url_for('process_panel.new_process'))
+
+        defendant = None
+        if defendant_id:
+            defendant = JudicialDefendant.query.filter_by(
+                id=defendant_id,
+                law_firm_id=law_firm_id
+            ).first()
+            if not defendant:
+                flash('Polo passivo (réu) inválido.', 'danger')
+                return redirect(url_for('process_panel.new_process'))
         
         # Validações
         if not process_number:
@@ -683,7 +884,9 @@ def new_process():
                 user_id=user_id,
                 process_number=process_number,
                 title=process_number,
-                status='ativo'
+                status='ativo',
+                plaintiff_client_id=plaintiff_client.id if plaintiff_client else None,
+                defendant_id=defendant.id if defendant else None,
             )
 
             upload_dir = f"uploads/knowledge_base/{law_firm_id}"
@@ -763,7 +966,18 @@ def new_process():
             return redirect(url_for('process_panel.new_process'))
     
     # GET - Mostrar formulário simplificado
-    return render_template('process_panel/form_new_simple.html', action='novo')
+    clients = Client.query.filter_by(law_firm_id=law_firm_id).order_by(Client.name.asc()).all()
+    defendants = JudicialDefendant.query.filter_by(
+        law_firm_id=law_firm_id,
+        is_active=True
+    ).order_by(JudicialDefendant.name.asc()).all()
+
+    return render_template(
+        'process_panel/form_new_simple.html',
+        action='novo',
+        clients=clients,
+        defendants=defendants,
+    )
 
 
 @process_panel_bp.route('/<int:process_id>')
@@ -876,6 +1090,64 @@ def create_process_note(process_id):
     return redirect(url_for('process_panel.detail', process_id=process.id) + '#notes')
 
 
+@process_panel_bp.route('/<int:process_id>/phase', methods=['POST'])
+@require_law_firm
+def update_process_phase_kanban(process_id):
+    """Atualiza a fase do processo via interação no Kanban."""
+    law_firm_id = get_current_law_firm_id()
+
+    process = JudicialProcess.query.filter_by(
+        id=process_id,
+        law_firm_id=law_firm_id
+    ).first_or_404()
+
+    payload = request.get_json(silent=True) or {}
+    new_phase_key = (payload.get('phase_key') or '').strip()
+
+    if not new_phase_key:
+        return jsonify({'success': False, 'error': 'Fase inválida'}), 400
+
+    phase = JudicialPhase.query.filter_by(
+        law_firm_id=law_firm_id,
+        key=new_phase_key,
+        is_active=True
+    ).first()
+
+    if not phase:
+        return jsonify({'success': False, 'error': 'Fase não encontrada'}), 404
+
+    latest_event = JudicialEvent.query.filter_by(process_id=process.id).order_by(
+        JudicialEvent.event_date.desc(),
+        JudicialEvent.id.desc()
+    ).first()
+    current_phase_key = latest_event.phase if latest_event else None
+
+    if current_phase_key == new_phase_key:
+        return jsonify({'success': True, 'message': 'Fase já está atualizada'})
+
+    try:
+        db.session.add(
+            JudicialEvent(
+                process_id=process.id,
+                type='atualizacao_fase_kanban',
+                phase=new_phase_key,
+                description='Fase atualizada por arrastar e soltar no Kanban.',
+                event_date=datetime.utcnow(),
+            )
+        )
+        process.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        return jsonify({
+            'success': True,
+            'phase_key': new_phase_key,
+            'phase_label': phase.name,
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 @process_panel_bp.route('/<int:process_id>/editar', methods=['GET', 'POST'])
 @require_law_firm
 def edit(process_id):
@@ -901,9 +1173,30 @@ def edit(process_id):
     
     if request.method == 'POST':
         selected_phase_key = request.form.get('current_phase', '').strip()
+        plaintiff_client_id = request.form.get('plaintiff_client_id', type=int)
+        defendant_id = request.form.get('defendant_id', type=int)
+
         if selected_phase_key and selected_phase_key not in valid_phase_keys:
             flash('Fase selecionada é inválida.', 'danger')
             return redirect(url_for('process_panel.edit', process_id=process.id))
+
+        if plaintiff_client_id:
+            plaintiff_client = Client.query.filter_by(
+                id=plaintiff_client_id,
+                law_firm_id=law_firm_id
+            ).first()
+            if not plaintiff_client:
+                flash('Polo ativo (cliente) inválido.', 'danger')
+                return redirect(url_for('process_panel.edit', process_id=process.id))
+
+        if defendant_id:
+            defendant = JudicialDefendant.query.filter_by(
+                id=defendant_id,
+                law_firm_id=law_firm_id
+            ).first()
+            if not defendant:
+                flash('Polo passivo (réu) inválido.', 'danger')
+                return redirect(url_for('process_panel.edit', process_id=process.id))
 
         # Atualizar campos
         process.title = request.form.get('title', '').strip() or process.title
@@ -914,6 +1207,8 @@ def edit(process_id):
         process.origin_unit = request.form.get('origin_unit', '').strip()
         process.status = request.form.get('status', process.status)
         process.case_id = request.form.get('case_id') or None
+        process.plaintiff_client_id = plaintiff_client_id or None
+        process.defendant_id = defendant_id or None
 
         should_create_phase_event = bool(selected_phase_key) and selected_phase_key != current_phase_key
         
@@ -938,10 +1233,17 @@ def edit(process_id):
             flash(f'Erro ao atualizar: {str(e)}', 'danger')
     
     cases = Case.query.filter_by(law_firm_id=law_firm_id).order_by(Case.title).all()
+    clients = Client.query.filter_by(law_firm_id=law_firm_id).order_by(Client.name.asc()).all()
+    defendants = JudicialDefendant.query.filter_by(
+        law_firm_id=law_firm_id
+    ).order_by(JudicialDefendant.name.asc()).all()
+
     return render_template(
         'process_panel/form.html',
         process=process,
         cases=cases,
+        clients=clients,
+        defendants=defendants,
         action='editar',
         phase_options=phase_options,
         current_phase_key=current_phase_key,

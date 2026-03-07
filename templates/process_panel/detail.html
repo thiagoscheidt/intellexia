@@ -135,6 +135,21 @@
                 </div>
                 {% endif %}
 
+                <div class="mb-3">
+                  <label class="form-label text-muted small">Polo Ativo</label>
+                  <p class="mb-0">
+                    <strong>{{ process.plaintiff_client.name if process.plaintiff_client else 'Não informado'
+                      }}</strong>
+                  </p>
+                </div>
+
+                <div class="mb-3">
+                  <label class="form-label text-muted small">Polo Passivo</label>
+                  <p class="mb-0">
+                    <strong>{{ process.defendant.name if process.defendant else 'Não informado' }}</strong>
+                  </p>
+                </div>
+
                 <div class="mb-0">
                   <label class="form-label text-muted small">Criado em</label>
                   <p class="mb-0"><i class="bi bi-calendar-event"></i> {{ process.created_at.strftime('%d/%m/%Y às

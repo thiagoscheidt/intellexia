@@ -133,9 +133,40 @@ class Client(db.Model):
     # Relacionamentos
     law_firm = db.relationship('LawFirm')
     cases = db.relationship('Case', back_populates='client')
+    judicial_processes_as_plaintiff = db.relationship(
+        'JudicialProcess',
+        foreign_keys='JudicialProcess.plaintiff_client_id',
+        back_populates='plaintiff_client'
+    )
     
     def __repr__(self):
         return f'<Client {self.name}>'
+
+
+class JudicialDefendant(db.Model):
+    """Tabela judicial_defendants - Polos passivos (réus) dos processos judiciais."""
+    __tablename__ = 'judicial_defendants'
+    __table_args__ = (
+        db.UniqueConstraint('law_firm_id', 'name', name='uq_judicial_defendants_law_firm_name'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    name = db.Column(db.String(255), nullable=False, index=True)
+    is_active = db.Column(db.Boolean, default=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    law_firm = db.relationship('LawFirm')
+    judicial_processes = db.relationship(
+        'JudicialProcess',
+        foreign_keys='JudicialProcess.defendant_id',
+        back_populates='defendant'
+    )
+
+    def __repr__(self):
+        return f'<JudicialDefendant {self.name}>'
 
 
 class Court(db.Model):
@@ -870,6 +901,8 @@ class JudicialProcess(db.Model):
     law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     case_id = db.Column(db.Integer, db.ForeignKey('cases.id'), index=True)  # Opcional - pode não ter caso criado
+    plaintiff_client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), index=True)
+    defendant_id = db.Column(db.Integer, db.ForeignKey('judicial_defendants.id'), index=True)
     
     # Identificação do processo (CNJ format: NNNNNNN-DD.AAAA.J.TR.OOOO)
     process_number = db.Column(db.String(25), nullable=False, unique=True, index=True)
@@ -901,6 +934,8 @@ class JudicialProcess(db.Model):
     law_firm = db.relationship('LawFirm')
     user = db.relationship('User')
     case = db.relationship('Case', backref='judicial_processes')
+    plaintiff_client = db.relationship('Client', back_populates='judicial_processes_as_plaintiff')
+    defendant = db.relationship('JudicialDefendant', back_populates='judicial_processes')
     notes = db.relationship('JudicialProcessNote', back_populates='process', cascade='all, delete-orphan')
     events = db.relationship('JudicialEvent', back_populates='process', cascade='all, delete-orphan')
     sentence_analyses = db.relationship('JudicialSentenceAnalysis', 

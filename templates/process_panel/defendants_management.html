@@ -1,0 +1,126 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Polos Passivos (Réus) - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-0 shadow-sm" style="border-radius: 16px; overflow: hidden;">
+            <div class="card-body page-hero">
+                <div
+                    class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center page-hero-icon">
+                            <i class="bi bi-shield-exclamation page-hero-icon__glyph"></i>
+                        </div>
+                        <div>
+                            <h1 class="h4 mb-1" style="font-weight: 700; letter-spacing: .2px;">Polos Passivos (Réus)
+                            </h1>
+                            <small class="text-muted">Gerencie a lista de réus para uso no painel de processos</small>
+                        </div>
+                    </div>
+                    <div>
+                        <nav aria-label="breadcrumb">
+                            <ol class="breadcrumb mb-0 bg-transparent small">
+                                <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i
+                                            class="bi bi-house"></i> Home</a></li>
+                                <li class="breadcrumb-item"><a
+                                        href="{{ url_for('process_panel.list_processes') }}">Painel de Processos</a>
+                                </li>
+                                <li class="breadcrumb-item active" aria-current="page">Polos Passivos</li>
+                            </ol>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="app-content">
+    <div class="container-fluid">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            <i class="bi bi-info-circle"></i> {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <div class="card card-primary card-outline shadow-sm">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h3 class="card-title mb-0"><i class="bi bi-list"></i> Cadastro de Polos Passivos</h3>
+                <a href="{{ url_for('process_panel.list_processes') }}" class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-arrow-left"></i> Voltar ao Painel
+                </a>
+            </div>
+            <div class="card-body">
+                <form method="post" action="{{ url_for('process_panel.create_defendant') }}" class="row g-2 mb-4">
+                    <div class="col-md-10">
+                        <label class="form-label">Nome do Polo Passivo (Réu)</label>
+                        <input type="text" name="name" class="form-control" placeholder="Ex.: UNIÃO - FAZENDA NACIONAL"
+                            required>
+                    </div>
+                    <div class="col-md-2 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary btn-sm w-100">
+                            <i class="bi bi-plus-circle"></i> Adicionar
+                        </button>
+                    </div>
+                </form>
+
+                <div class="table-responsive">
+                    <table class="table table-sm table-hover align-middle">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Nome</th>
+                                <th>Status</th>
+                                <th class="text-end" style="width: 220px;">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for defendant in defendants %}
+                            <tr>
+                                <td colspan="3">
+                                    <form method="post"
+                                        action="{{ url_for('process_panel.update_defendant', defendant_id=defendant.id) }}"
+                                        class="row g-2 align-items-center">
+                                        <div class="col-md-8">
+                                            <input type="text" name="name" value="{{ defendant.name }}"
+                                                class="form-control form-control-sm" required>
+                                        </div>
+                                        <div class="col-md-2">
+                                            {% if defendant.is_active %}
+                                            <span class="badge bg-success">Ativo</span>
+                                            {% else %}
+                                            <span class="badge bg-secondary">Inativo</span>
+                                            {% endif %}
+                                        </div>
+                                        <div class="col-md-2 text-end d-flex justify-content-end gap-2 flex-nowrap">
+                                            <button type="submit" class="btn btn-outline-primary btn-sm">
+                                                Salvar
+                                            </button>
+                                            <button type="submit"
+                                                formaction="{{ url_for('process_panel.toggle_defendant_status', defendant_id=defendant.id) }}"
+                                                formmethod="post" class="btn btn-outline-secondary btn-sm">
+                                                {% if defendant.is_active %}Desativar{% else %}Ativar{% endif %}
+                                            </button>
+                                        </div>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% else %}
+                            <tr>
+                                <td colspan="3" class="text-center text-muted">Nenhum polo passivo cadastrado</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
