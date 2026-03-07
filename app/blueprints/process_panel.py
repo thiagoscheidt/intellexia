@@ -1,7 +1,8 @@
 from flask import Blueprint, render_template, request, session, jsonify, redirect, url_for, flash
 from app.models import (
     db, JudicialProcess, JudicialSentenceAnalysis, JudicialAppeal, 
-    KnowledgeBase, Case, User, JudicialPhase, JudicialDocumentType
+    KnowledgeBase, Case, User, JudicialPhase, JudicialDocumentType, JudicialEvent,
+    JudicialProcessNote
 )
 from datetime import datetime
 from functools import wraps
@@ -14,6 +15,42 @@ import re
 process_panel_bp = Blueprint('process_panel', __name__, url_prefix='/process-panel')
 
 
+PHASE_ORDER = {
+    "inicio_processo": 1,
+    "citacao": 2,
+    "defesa_reu": 3,
+    "manifestacao_autor": 4,
+    "saneamento": 5,
+    "producao_provas": 6,
+    "audiencia": 7,
+    "alegacoes_finais": 8,
+    "julgamento": 9,
+    "recursos": 10,
+    "julgamento_tribunal": 11,
+    "execucao": 12,
+}
+
+
+LEGACY_PHASE_ORDER = {
+    "inicio_processo": 1,
+    "citacao": 2,
+    "defesa_reu": 3,
+    "manifestacao_autor": 4,
+    "saneamento": 5,
+    "producao_provas": 6,
+    "audiencia": 7,
+    "alegacoes_finais": 8,
+    "julgamento": 9,
+    "decisoes_judiciais": 10,
+    "recursos": 11,
+    "julgamento_tribunal": 12,
+    "execucao": 13,
+    "medidas_urgentes": 14,
+    "documentos_processuais": 15,
+    "peticoes_diversas": 16,
+}
+
+
 JUDICIAL_PHASES = {
     "inicio_processo": "Início do Processo",
     "citacao": "Citação e Intimação",
@@ -24,10 +61,10 @@ JUDICIAL_PHASES = {
     "audiencia": "Audiência",
     "alegacoes_finais": "Alegações Finais",
     "julgamento": "Julgamento",
-    "decisoes_judiciais": "Decisões Judiciais",
     "recursos": "Recursos",
     "julgamento_tribunal": "Julgamento em Tribunal",
     "execucao": "Execução / Cumprimento de Sentença",
+    "decisoes_judiciais": "Decisões Judiciais",
     "medidas_urgentes": "Tutelas e Medidas Urgentes",
     "documentos_processuais": "Documentos Processuais",
     "peticoes_diversas": "Petições Diversas"
@@ -113,15 +150,31 @@ def _ensure_judicial_config_defaults(law_firm_id):
         for phase in JudicialPhase.query.filter_by(law_firm_id=law_firm_id).all()
     }
 
+    # Migração automática de ordem legada para a ordem solicitada pelo usuário.
+    has_legacy_order = bool(phases_by_key) and all(
+        (phases_by_key[key].display_order or 0) == legacy_order
+        for key, legacy_order in LEGACY_PHASE_ORDER.items()
+        if key in phases_by_key
+    )
+
+    if has_legacy_order:
+        for phase_key, phase_order in PHASE_ORDER.items():
+            phase = phases_by_key.get(phase_key)
+            if phase and phase.display_order != phase_order:
+                phase.display_order = phase_order
+                created_any = True
+
     for order, (phase_key, phase_name) in enumerate(JUDICIAL_PHASES.items(), start=1):
         if phase_key in phases_by_key:
             continue
+
+        display_order = PHASE_ORDER.get(phase_key, order)
 
         phase = JudicialPhase(
             law_firm_id=law_firm_id,
             key=phase_key,
             name=phase_name,
-            display_order=order,
+            display_order=display_order,
             is_active=True,
         )
         db.session.add(phase)
@@ -331,6 +384,89 @@ def toggle_judicial_phase_status(phase_id):
     return redirect(url_for('process_panel.manage_judicial_phases'))
 
 
+@process_panel_bp.route('/config/fases/reordenar', methods=['POST'])
+@require_law_firm
+def reorder_judicial_phases():
+    """Reordena fases judiciais via drag-and-drop."""
+    law_firm_id = get_current_law_firm_id()
+    payload = request.get_json(silent=True) or {}
+    phase_ids = payload.get('phase_ids')
+
+    if not isinstance(phase_ids, list) or not phase_ids:
+        return jsonify({'success': False, 'error': 'Lista de fases inválida'}), 400
+
+    try:
+        normalized_ids = [int(phase_id) for phase_id in phase_ids]
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'error': 'IDs de fases inválidos'}), 400
+
+    unique_ids = list(dict.fromkeys(normalized_ids))
+    if len(unique_ids) != len(normalized_ids):
+        return jsonify({'success': False, 'error': 'IDs de fases duplicados'}), 400
+
+    phases = JudicialPhase.query.filter(
+        JudicialPhase.law_firm_id == law_firm_id,
+        JudicialPhase.id.in_(unique_ids)
+    ).all()
+
+    if len(phases) != len(unique_ids):
+        return jsonify({'success': False, 'error': 'Uma ou mais fases não foram encontradas'}), 404
+
+    phases_by_id = {phase.id: phase for phase in phases}
+
+    try:
+        for order, phase_id in enumerate(unique_ids, start=1):
+            phase = phases_by_id[phase_id]
+            phase.display_order = order
+            phase.updated_at = datetime.utcnow()
+
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Ordem atualizada com sucesso'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@process_panel_bp.route('/config/fases/restaurar-ordem', methods=['POST'])
+@require_law_firm
+def restore_judicial_phases_default_order():
+    """Restaura a ordem padrão configurada para as fases judiciais."""
+    law_firm_id = get_current_law_firm_id()
+
+    phases = JudicialPhase.query.filter_by(law_firm_id=law_firm_id).all()
+    phases_by_key = {phase.key: phase for phase in phases}
+
+    try:
+        assigned_order = 0
+
+        for phase_key, phase_order in PHASE_ORDER.items():
+            phase = phases_by_key.get(phase_key)
+            if not phase:
+                continue
+
+            phase.display_order = phase_order
+            phase.updated_at = datetime.utcnow()
+            assigned_order = max(assigned_order, phase_order)
+
+        remaining_phases = [
+            phase for phase in phases
+            if phase.key not in PHASE_ORDER
+        ]
+        remaining_phases.sort(key=lambda phase: ((phase.display_order or 9999), phase.name or ''))
+
+        for index, phase in enumerate(remaining_phases, start=assigned_order + 1):
+            phase.display_order = index
+            phase.updated_at = datetime.utcnow()
+
+        db.session.commit()
+        flash('Ordem padrão das fases restaurada com sucesso.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao restaurar ordem padrão: {str(e)}', 'danger')
+
+    return redirect(url_for('process_panel.manage_judicial_phases'))
+
+
 @process_panel_bp.route('/config/tipos-documento/criar', methods=['POST'])
 @require_law_firm
 def create_document_type():
@@ -487,13 +623,23 @@ def list_processes():
         'suspenso': JudicialProcess.query.filter_by(law_firm_id=law_firm_id, status='suspenso').count(),
         'encerrado': JudicialProcess.query.filter_by(law_firm_id=law_firm_id, status='encerrado').count(),
     }
+
+    process_phases = {}
+    for process in processes.items:
+        latest_event = JudicialEvent.query.filter_by(process_id=process.id).order_by(
+            JudicialEvent.event_date.desc(),
+            JudicialEvent.id.desc()
+        ).first()
+        process_phases[process.id] = latest_event.phase if latest_event else None
     
     return render_template(
         'process_panel/list.html',
         processes=processes,
         search_query=search_query,
         status_filter=status_filter,
-        stats=stats
+        stats=stats,
+        process_phases=process_phases,
+        judicial_phases_labels=JUDICIAL_PHASES,
     )
 
 
@@ -640,6 +786,21 @@ def detail(process_id):
     appeals = JudicialAppeal.query.filter(
         JudicialAppeal.user_id == session.get('user_id')
     ).all()
+
+    latest_event = JudicialEvent.query.filter_by(process_id=process.id).order_by(
+        JudicialEvent.event_date.desc(),
+        JudicialEvent.id.desc()
+    ).first()
+    current_phase_key = latest_event.phase if latest_event else None
+    current_phase_label = JUDICIAL_PHASES.get(
+        current_phase_key,
+        (current_phase_key or '').replace('_', ' ').title()
+    ) if current_phase_key else None
+
+    notes = JudicialProcessNote.query.filter_by(
+        process_id=process.id,
+        law_firm_id=law_firm_id
+    ).order_by(JudicialProcessNote.created_at.desc(), JudicialProcessNote.id.desc()).all()
     
     # Buscar documentos da knowledge base com o mesmo process_number
     # Pesquisar com e sem pontuação
@@ -662,8 +823,11 @@ def detail(process_id):
     # Dados para a dashboard
     data = {
         'process': process,
+        'current_phase_key': current_phase_key,
+        'current_phase_label': current_phase_label,
         'sentence_analyses': related_analyses,
         'appeals': related_appeals,
+        'notes': notes,
         'kb_documents': kb_documents,
         'case': process.case if process.case_id else None,
         'stats': {
@@ -676,6 +840,42 @@ def detail(process_id):
     return render_template('process_panel/detail.html', **data)
 
 
+@process_panel_bp.route('/<int:process_id>/notes', methods=['POST'])
+@require_law_firm
+def create_process_note(process_id):
+    """Cria uma nova nota/comentário para o processo judicial."""
+    law_firm_id = get_current_law_firm_id()
+    user_id = session.get('user_id')
+
+    process = JudicialProcess.query.filter_by(
+        id=process_id,
+        law_firm_id=law_firm_id
+    ).first_or_404()
+
+    content = (request.form.get('note_content') or '').strip()
+    if not content or content == '<p><br></p>':
+        flash('Escreva uma anotação antes de salvar.', 'warning')
+        return redirect(url_for('process_panel.detail', process_id=process.id) + '#notes')
+
+    try:
+        db.session.add(
+            JudicialProcessNote(
+                law_firm_id=law_firm_id,
+                process_id=process.id,
+                user_id=user_id,
+                content=content,
+            )
+        )
+        process.updated_at = datetime.utcnow()
+        db.session.commit()
+        flash('Anotação adicionada com sucesso.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao adicionar anotação: {str(e)}', 'danger')
+
+    return redirect(url_for('process_panel.detail', process_id=process.id) + '#notes')
+
+
 @process_panel_bp.route('/<int:process_id>/editar', methods=['GET', 'POST'])
 @require_law_firm
 def edit(process_id):
@@ -686,8 +886,25 @@ def edit(process_id):
         id=process_id,
         law_firm_id=law_firm_id
     ).first_or_404()
+
+    phase_options = JudicialPhase.query.filter_by(
+        law_firm_id=law_firm_id,
+        is_active=True
+    ).order_by(JudicialPhase.display_order.asc(), JudicialPhase.name.asc()).all()
+    valid_phase_keys = {phase.key for phase in phase_options}
+
+    latest_event = JudicialEvent.query.filter_by(process_id=process.id).order_by(
+        JudicialEvent.event_date.desc(),
+        JudicialEvent.id.desc()
+    ).first()
+    current_phase_key = latest_event.phase if latest_event else ''
     
     if request.method == 'POST':
+        selected_phase_key = request.form.get('current_phase', '').strip()
+        if selected_phase_key and selected_phase_key not in valid_phase_keys:
+            flash('Fase selecionada é inválida.', 'danger')
+            return redirect(url_for('process_panel.edit', process_id=process.id))
+
         # Atualizar campos
         process.title = request.form.get('title', '').strip() or process.title
         process.description = request.form.get('description', '').strip()
@@ -696,10 +913,22 @@ def edit(process_id):
         process.section = request.form.get('section', '').strip()
         process.origin_unit = request.form.get('origin_unit', '').strip()
         process.status = request.form.get('status', process.status)
-        process.internal_notes = request.form.get('internal_notes', '').strip()
         process.case_id = request.form.get('case_id') or None
+
+        should_create_phase_event = bool(selected_phase_key) and selected_phase_key != current_phase_key
         
         try:
+            if should_create_phase_event:
+                db.session.add(
+                    JudicialEvent(
+                        process_id=process.id,
+                        type='atualizacao_fase_manual',
+                        phase=selected_phase_key,
+                        description='Fase atualizada manualmente na edição do processo.',
+                        event_date=datetime.utcnow(),
+                    )
+                )
+
             process.updated_at = datetime.utcnow()
             db.session.commit()
             flash('Processo atualizado com sucesso!', 'success')
@@ -709,7 +938,15 @@ def edit(process_id):
             flash(f'Erro ao atualizar: {str(e)}', 'danger')
     
     cases = Case.query.filter_by(law_firm_id=law_firm_id).order_by(Case.title).all()
-    return render_template('process_panel/form.html', process=process, cases=cases, action='editar')
+    return render_template(
+        'process_panel/form.html',
+        process=process,
+        cases=cases,
+        action='editar',
+        phase_options=phase_options,
+        current_phase_key=current_phase_key,
+        phase_labels=JUDICIAL_PHASES,
+    )
 
 
 @process_panel_bp.route('/<int:process_id>/deletar', methods=['POST'])

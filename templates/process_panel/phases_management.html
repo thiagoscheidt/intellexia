@@ -3,6 +3,16 @@
 {% block title %}Fases Judiciais - IntellexIA{% endblock %}
 
 {% block content %}
+<style>
+    .phase-row.dragging {
+        opacity: .45;
+    }
+
+    .phase-drag-handle {
+        cursor: grab;
+    }
+</style>
+
 <div class="row mb-4">
     <div class="col-12">
         <div class="card border-0 shadow-sm" style="border-radius: 16px; overflow: hidden;">
@@ -54,10 +64,19 @@
                 <div class="card card-primary card-outline shadow-sm">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <h3 class="card-title mb-0"><i class="bi bi-kanban"></i> Fases Judiciais</h3>
-                        <a href="{{ url_for('process_panel.manage_document_types') }}"
-                            class="btn btn-outline-secondary btn-sm">
-                            <i class="bi bi-file-earmark-text"></i> Ir para Tipos de Documento
-                        </a>
+                        <div class="d-flex align-items-center gap-2">
+                            <form method="post"
+                                action="{{ url_for('process_panel.restore_judicial_phases_default_order') }}"
+                                onsubmit="return confirm('Deseja restaurar a ordem padrão das fases?');">
+                                <button type="submit" class="btn btn-outline-warning btn-sm">
+                                    <i class="bi bi-arrow-counterclockwise"></i> Restaurar ordem padrão
+                                </button>
+                            </form>
+                            <a href="{{ url_for('process_panel.manage_document_types') }}"
+                                class="btn btn-outline-secondary btn-sm">
+                                <i class="bi bi-file-earmark-text"></i> Ir para Tipos de Documento
+                            </a>
+                        </div>
                     </div>
                     <div class="card-body">
                         <form method="post" action="{{ url_for('process_panel.create_judicial_phase') }}"
@@ -82,24 +101,35 @@
                             <table class="table table-sm table-hover align-middle">
                                 <thead class="table-light">
                                     <tr>
+                                        <th style="width: 130px;">Ordem</th>
                                         <th>Nome</th>
                                         <th>Chave</th>
                                         <th>Status</th>
                                         <th class="text-end" style="width: 220px;">Ações</th>
                                     </tr>
                                 </thead>
-                                <tbody>
+                                <tbody id="phases-tbody"
+                                    data-reorder-url="{{ url_for('process_panel.reorder_judicial_phases') }}">
                                     {% for phase in phases %}
-                                    <tr>
-                                        <td colspan="4">
+                                    <tr class="phase-row" data-phase-id="{{ phase.id }}">
+                                        <td colspan="5">
                                             <form method="post"
                                                 action="{{ url_for('process_panel.update_judicial_phase', phase_id=phase.id) }}"
                                                 class="row g-2 align-items-center">
-                                                <div class="col-md-4">
+                                                <div class="col-md-2 d-flex align-items-center gap-2">
+                                                    <button type="button"
+                                                        class="btn btn-light btn-sm border phase-drag-handle"
+                                                        draggable="true" title="Arraste para mudar a ordem">
+                                                        ↕
+                                                    </button>
+                                                    <span class="badge text-bg-light border phase-order-value">{{
+                                                        phase.display_order }}</span>
+                                                </div>
+                                                <div class="col-md-3">
                                                     <input type="text" name="name" value="{{ phase.name }}"
                                                         class="form-control form-control-sm" required>
                                                 </div>
-                                                <div class="col-md-3">
+                                                <div class="col-md-2">
                                                     <input type="text" name="key" value="{{ phase.key }}"
                                                         class="form-control form-control-sm" required>
                                                 </div>
@@ -126,7 +156,7 @@
                                     </tr>
                                     {% else %}
                                     <tr>
-                                        <td colspan="4" class="text-center text-muted">Nenhuma fase cadastrada</td>
+                                        <td colspan="5" class="text-center text-muted">Nenhuma fase cadastrada</td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
@@ -138,4 +168,94 @@
         </div>
     </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const tbody = document.getElementById('phases-tbody');
+        if (!tbody) return;
+
+        let draggedRow = null;
+        let isPersisting = false;
+
+        function updateOrderBadges() {
+            const rows = [...tbody.querySelectorAll('.phase-row')];
+            rows.forEach((row, index) => {
+                const badge = row.querySelector('.phase-order-value');
+                if (badge) {
+                    badge.textContent = String(index + 1);
+                }
+            });
+        }
+
+        function persistOrder() {
+            if (isPersisting) return;
+            isPersisting = true;
+
+            const phaseIds = [...tbody.querySelectorAll('.phase-row')].map((row) => Number(row.dataset.phaseId));
+
+            fetch(tbody.dataset.reorderUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                body: JSON.stringify({ phase_ids: phaseIds })
+            })
+                .then((response) => response.json())
+                .then((payload) => {
+                    if (!payload.success) {
+                        window.location.reload();
+                        return;
+                    }
+                    updateOrderBadges();
+                })
+                .catch(() => {
+                    window.location.reload();
+                })
+                .finally(() => {
+                    isPersisting = false;
+                });
+        }
+
+        tbody.querySelectorAll('.phase-drag-handle').forEach((handle) => {
+            handle.addEventListener('dragstart', function (event) {
+                draggedRow = event.target.closest('.phase-row');
+                if (!draggedRow) return;
+
+                draggedRow.classList.add('dragging');
+                event.dataTransfer.effectAllowed = 'move';
+                event.dataTransfer.setData('text/plain', draggedRow.dataset.phaseId);
+            });
+
+            handle.addEventListener('dragend', function () {
+                if (draggedRow) {
+                    draggedRow.classList.remove('dragging');
+                }
+                draggedRow = null;
+            });
+        });
+
+        tbody.querySelectorAll('.phase-row').forEach((row) => {
+            row.addEventListener('dragover', function (event) {
+                event.preventDefault();
+                if (!draggedRow || draggedRow === row) return;
+
+                const rect = row.getBoundingClientRect();
+                const shouldInsertBefore = event.clientY < rect.top + rect.height / 2;
+
+                if (shouldInsertBefore) {
+                    tbody.insertBefore(draggedRow, row);
+                } else {
+                    tbody.insertBefore(draggedRow, row.nextSibling);
+                }
+            });
+
+            row.addEventListener('drop', function (event) {
+                event.preventDefault();
+                if (!draggedRow) return;
+                persistOrder();
+            });
+        });
+    });
+</script>
 {% endblock %}

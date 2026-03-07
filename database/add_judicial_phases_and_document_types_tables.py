@@ -15,6 +15,22 @@ from main import app
 from app.models import db, LawFirm, JudicialPhase, JudicialDocumentType
 
 
+PHASE_ORDER = {
+    "inicio_processo": 1,
+    "citacao": 2,
+    "defesa_reu": 3,
+    "manifestacao_autor": 4,
+    "saneamento": 5,
+    "producao_provas": 6,
+    "audiencia": 7,
+    "alegacoes_finais": 8,
+    "julgamento": 9,
+    "recursos": 10,
+    "julgamento_tribunal": 11,
+    "execucao": 12,
+}
+
+
 JUDICIAL_PHASES = {
     "inicio_processo": "Início do Processo",
     "citacao": "Citação e Intimação",
@@ -25,10 +41,10 @@ JUDICIAL_PHASES = {
     "audiencia": "Audiência",
     "alegacoes_finais": "Alegações Finais",
     "julgamento": "Julgamento",
-    "decisoes_judiciais": "Decisões Judiciais",
     "recursos": "Recursos",
     "julgamento_tribunal": "Julgamento em Tribunal",
     "execucao": "Execução / Cumprimento de Sentença",
+    "decisoes_judiciais": "Decisões Judiciais",
     "medidas_urgentes": "Tutelas e Medidas Urgentes",
     "documentos_processuais": "Documentos Processuais",
     "peticoes_diversas": "Petições Diversas"
@@ -104,11 +120,14 @@ def migrate():
                 for order, (phase_key, phase_name) in enumerate(JUDICIAL_PHASES.items(), start=1):
                     if phase_key in phases_by_key:
                         continue
+
+                    display_order = PHASE_ORDER.get(phase_key, order)
+
                     phase = JudicialPhase(
                         law_firm_id=law_firm.id,
                         key=phase_key,
                         name=phase_name,
-                        display_order=order,
+                        display_order=display_order,
                         is_active=True,
                     )
                     db.session.add(phase)

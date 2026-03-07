@@ -14,6 +14,7 @@ database/
 ├── add_benefit_cat_bo_columns.py       # Adiciona colunas numero_cat e numero_bo em case_benefits
 ├── add_ai_document_summaries_table.py  # Adiciona tabela ai_document_summaries
 ├── add_judicial_phases_and_document_types_tables.py # Cria tabelas de fases e tipos documentais judiciais
+├── add_judicial_process_notes_table.py # Cria tabela de notas/comentários dos processos
 └── [futuros scripts de migração]
 ```
 

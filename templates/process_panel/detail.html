@@ -97,6 +97,16 @@
                   </div>
                 </div>
 
+                {% if current_phase_label %}
+                <div class="mb-3">
+                  <label class="form-label text-muted small">Fase Atual</label>
+                  <div>
+                    <span class="badge bg-light text-dark"><i class="bi bi-signpost-2 me-1"></i>{{ current_phase_label
+                      }}</span>
+                  </div>
+                </div>
+                {% endif %}
+
                 {% if process.tribunal %}
                 <div class="mb-3">
                   <label class="form-label text-muted small">Tribunal</label>
@@ -387,25 +397,45 @@
 
                   <!-- Tab: Notas Internas -->
                   <div class="tab-pane fade" id="notes" role="tabpanel">
-                    {% if process.internal_notes %}
-                    <div class="alert alert-info">
-                      <i class="bi bi-journal-text me-2"></i>
-                      <span>{{ process.internal_notes }}</span>
+                    <div class="row g-3">
+                      <div class="col-12">
+                        <div class="d-flex justify-content-end">
+                          <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal"
+                            data-bs-target="#newProcessNoteModal">
+                            <i class="bi bi-plus-circle me-2"></i>Nova anotação
+                          </button>
+                        </div>
+                      </div>
+
+                      <div class="col-12">
+                        {% if notes %}
+                        <div class="d-flex flex-column gap-3">
+                          {% for note in notes %}
+                          <div class="card shadow-sm">
+                            <div class="card-header bg-light d-flex justify-content-between align-items-center">
+                              <small class="text-muted">
+                                <i class="bi bi-person-circle me-1"></i>
+                                {{ note.user.name if note.user else 'Usuário' }}
+                              </small>
+                              <small class="text-muted">
+                                <i class="bi bi-clock me-1"></i>
+                                {{ note.created_at.strftime('%d/%m/%Y às %H:%M') }}
+                              </small>
+                            </div>
+                            <div class="card-body">
+                              <div class="mb-0">{{ note.content | safe }}</div>
+                            </div>
+                          </div>
+                          {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="text-center py-4">
+                          <i class="bi bi-journal-x text-muted" style="font-size: 2.5rem;"></i>
+                          <p class="text-muted mt-3 mb-0">Nenhuma anotação registrada para este processo.</p>
+                        </div>
+                        {% endif %}
+                      </div>
                     </div>
-                    <a href="{{ url_for('process_panel.edit', process_id=process.id) }}"
-                      class="btn btn-secondary btn-sm">
-                      <i class="bi bi-pencil me-2"></i>Editar Notas
-                    </a>
-                    {% else %}
-                    <div class="text-center py-5">
-                      <i class="bi bi-journal-x text-muted" style="font-size: 3rem;"></i>
-                      <p class="text-muted mt-3 mb-3">Nenhuma nota registrada</p>
-                      <a href="{{ url_for('process_panel.edit', process_id=process.id) }}"
-                        class="btn btn-primary btn-sm">
-                        <i class="bi bi-plus-circle me-2"></i>Adicionar Nota
-                      </a>
-                    </div>
-                    {% endif %}
                   </div>
                 </div>
               </div>
@@ -416,5 +446,75 @@
     </div>
   </div>
 </div>
+
+<!-- Modal Nova Anotação -->
+<div class="modal fade" id="newProcessNoteModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-journal-plus me-2"></i>Nova anotação</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <form method="post" action="{{ url_for('process_panel.create_process_note', process_id=process.id) }}"
+        id="processNoteForm">
+        <div class="modal-body">
+          <div id="processNoteEditor" style="height: 220px;"></div>
+          <textarea name="note_content" id="note_content" style="display: none;"></textarea>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary" id="saveProcessNoteBtn">
+            <i class="bi bi-send me-2"></i>Salvar anotação
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const editorElement = document.getElementById('processNoteEditor');
+    const hiddenInput = document.getElementById('note_content');
+    const form = document.getElementById('processNoteForm');
+    const modalElement = document.getElementById('newProcessNoteModal');
+
+    if (!editorElement || !hiddenInput || !form || !modalElement) {
+      return;
+    }
+
+    const toolbarOptions = [
+      ['bold', 'italic', 'underline', 'strike'],
+      ['blockquote', 'code-block'],
+      [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+      ['clean']
+    ];
+
+    const quill = new Quill('#processNoteEditor', {
+      theme: 'snow',
+      modules: { toolbar: toolbarOptions },
+      placeholder: 'Escreva uma anotação ou comentário...'
+    });
+
+    modalElement.addEventListener('shown.bs.modal', function () {
+      quill.focus();
+    });
+
+    modalElement.addEventListener('hidden.bs.modal', function () {
+      quill.setText('');
+      hiddenInput.value = '';
+    });
+
+    form.addEventListener('submit', function (event) {
+      hiddenInput.value = quill.root.innerHTML;
+      const plainText = quill.getText().trim();
+
+      if (!plainText) {
+        event.preventDefault();
+        alert('Escreva uma anotação antes de salvar.');
+      }
+    });
+  });
+</script>
 
 {% endblock %}

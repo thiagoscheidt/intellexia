@@ -166,14 +166,22 @@ subtitle=hero_subtitle|default(''), icon='bi bi-file-earmark-plus') %}
                                         </select>
                                     </div>
 
-                                    <!-- Notas Internas -->
+                                    {% if action == 'editar' %}
                                     <div class="mb-3">
-                                        <label for="internal_notes" class="form-label">Notas Internas</label>
-                                        <textarea class="form-control" id="internal_notes" name="internal_notes"
-                                            rows="3"
-                                            placeholder="Anotações internas sobre o processo...">{{ process.internal_notes if process else '' }}</textarea>
-                                        <small class="text-muted">Somente visível para sua equipe</small>
+                                        <label for="current_phase" class="form-label">Fase do Processo</label>
+                                        <select class="form-select" id="current_phase" name="current_phase">
+                                            <option value="">-- Não alterar fase atual --</option>
+                                            {% for phase in phase_options %}
+                                            <option value="{{ phase.key }}" {% if current_phase_key==phase.key
+                                                %}selected{% endif %}>
+                                                {{ phase_labels.get(phase.key, phase.name) }}
+                                            </option>
+                                            {% endfor %}
+                                        </select>
+                                        <small class="text-muted">Ao salvar, a mudança de fase é registrada no histórico
+                                            do processo.</small>
                                     </div>
+                                    {% endif %}
 
                                     <!-- Botões -->
                                     <div class="d-flex gap-3 mt-4 border-top pt-4">

@@ -168,6 +168,7 @@
                     <th><i class="bi bi-card-text"></i> Título</th>
                     <th><i class="bi bi-building"></i> Tribunal</th>
                     <th><i class="bi bi-flag"></i> Status</th>
+                    <th><i class="bi bi-signpost"></i> Fase</th>
                     <th><i class="bi bi-calendar"></i> Criado em</th>
                     <th class="text-end">Ações</th>
                   </tr>
@@ -202,6 +203,16 @@
                       <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Encerrado</span>
                       {% else %}
                       <span class="badge bg-secondary">{{ process.status }}</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% set phase_key = process_phases.get(process.id) %}
+                      {% if phase_key %}
+                      <span class="badge bg-light text-dark">
+                        {{ judicial_phases_labels.get(phase_key, phase_key|replace('_', ' ')|title) }}
+                      </span>
+                      {% else %}
+                      <span class="text-muted">-</span>
                       {% endif %}
                     </td>
                     <td>

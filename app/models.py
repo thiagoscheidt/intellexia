@@ -901,6 +901,7 @@ class JudicialProcess(db.Model):
     law_firm = db.relationship('LawFirm')
     user = db.relationship('User')
     case = db.relationship('Case', backref='judicial_processes')
+    notes = db.relationship('JudicialProcessNote', back_populates='process', cascade='all, delete-orphan')
     events = db.relationship('JudicialEvent', back_populates='process', cascade='all, delete-orphan')
     sentence_analyses = db.relationship('JudicialSentenceAnalysis', 
                                        primaryjoin='JudicialProcess.process_number==foreign(JudicialSentenceAnalysis.process_number)',
@@ -909,6 +910,28 @@ class JudicialProcess(db.Model):
     
     def __repr__(self):
         return f'<JudicialProcess {self.process_number}>'
+
+
+class JudicialProcessNote(db.Model):
+    """Tabela judicial_process_notes - Notas e comentários vinculados ao processo judicial."""
+    __tablename__ = 'judicial_process_notes'
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    process_id = db.Column(db.Integer, db.ForeignKey('judicial_processes.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+
+    content = db.Column(db.Text, nullable=False)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    law_firm = db.relationship('LawFirm')
+    process = db.relationship('JudicialProcess', back_populates='notes')
+    user = db.relationship('User')
+
+    def __repr__(self):
+        return f'<JudicialProcessNote {self.id} - Process {self.process_id}>'
 
 
 class JudicialEvent(db.Model):
