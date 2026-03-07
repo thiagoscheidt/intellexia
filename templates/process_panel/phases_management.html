@@ -1,0 +1,141 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Fases Judiciais - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-0 shadow-sm" style="border-radius: 16px; overflow: hidden;">
+            <div class="card-body page-hero">
+                <div
+                    class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center page-hero-icon">
+                            <i class="bi bi-diagram-2 page-hero-icon__glyph"></i>
+                        </div>
+                        <div>
+                            <h1 class="h4 mb-1" style="font-weight: 700; letter-spacing: .2px;">Fases Judiciais</h1>
+                            <small class="text-muted">Gerencie as fases processuais do escritório</small>
+                        </div>
+                    </div>
+                    <div>
+                        <nav aria-label="breadcrumb">
+                            <ol class="breadcrumb mb-0 bg-transparent small">
+                                <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i
+                                            class="bi bi-house"></i> Home</a></li>
+                                <li class="breadcrumb-item"><a
+                                        href="{{ url_for('process_panel.list_processes') }}">Painel de Processos</a>
+                                </li>
+                                <li class="breadcrumb-item active" aria-current="page">Fases Judiciais</li>
+                            </ol>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="app-content">
+    <div class="container-fluid">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            <i class="bi bi-info-circle"></i> {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <div class="row g-4">
+            <div class="col-12">
+                <div class="card card-primary card-outline shadow-sm">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h3 class="card-title mb-0"><i class="bi bi-kanban"></i> Fases Judiciais</h3>
+                        <a href="{{ url_for('process_panel.manage_document_types') }}"
+                            class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-file-earmark-text"></i> Ir para Tipos de Documento
+                        </a>
+                    </div>
+                    <div class="card-body">
+                        <form method="post" action="{{ url_for('process_panel.create_judicial_phase') }}"
+                            class="row g-2 mb-4">
+                            <div class="col-md-6">
+                                <label class="form-label">Nome da fase</label>
+                                <input type="text" name="name" class="form-control" placeholder="Ex.: Julgamento"
+                                    required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Chave (slug)</label>
+                                <input type="text" name="key" class="form-control" placeholder="Ex.: julgamento">
+                            </div>
+                            <div class="col-12">
+                                <button type="submit" class="btn btn-primary btn-sm">
+                                    <i class="bi bi-plus-circle"></i> Adicionar Fase
+                                </button>
+                            </div>
+                        </form>
+
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Nome</th>
+                                        <th>Chave</th>
+                                        <th>Status</th>
+                                        <th class="text-end" style="width: 220px;">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for phase in phases %}
+                                    <tr>
+                                        <td colspan="4">
+                                            <form method="post"
+                                                action="{{ url_for('process_panel.update_judicial_phase', phase_id=phase.id) }}"
+                                                class="row g-2 align-items-center">
+                                                <div class="col-md-4">
+                                                    <input type="text" name="name" value="{{ phase.name }}"
+                                                        class="form-control form-control-sm" required>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <input type="text" name="key" value="{{ phase.key }}"
+                                                        class="form-control form-control-sm" required>
+                                                </div>
+                                                <div class="col-md-2">
+                                                    {% if phase.is_active %}
+                                                    <span class="badge bg-success">Ativa</span>
+                                                    {% else %}
+                                                    <span class="badge bg-secondary">Inativa</span>
+                                                    {% endif %}
+                                                </div>
+                                                <div
+                                                    class="col-md-3 text-end d-flex justify-content-end gap-2 flex-nowrap">
+                                                    <button type="submit" class="btn btn-outline-primary btn-sm">
+                                                        Salvar
+                                                    </button>
+                                                    <button type="submit"
+                                                        formaction="{{ url_for('process_panel.toggle_judicial_phase_status', phase_id=phase.id) }}"
+                                                        formmethod="post" class="btn btn-outline-secondary btn-sm">
+                                                        {% if phase.is_active %}Desativar{% else %}Ativar{% endif %}
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    {% else %}
+                                    <tr>
+                                        <td colspan="4" class="text-center text-muted">Nenhuma fase cadastrada</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -807,6 +807,61 @@ class CaseComment(db.Model):
         return f'<CaseComment {self.id}>'
 
 
+class JudicialPhase(db.Model):
+    """Tabela judicial_phases - Fases processuais configuráveis por escritório."""
+    __tablename__ = 'judicial_phases'
+    __table_args__ = (
+        db.UniqueConstraint('law_firm_id', 'key', name='uq_judicial_phases_law_firm_key'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+
+    key = db.Column(db.String(100), nullable=False, index=True)
+    name = db.Column(db.String(255), nullable=False)
+    display_order = db.Column(db.Integer, default=0)
+    is_active = db.Column(db.Boolean, default=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    law_firm = db.relationship('LawFirm')
+    document_types = db.relationship(
+        'JudicialDocumentType',
+        back_populates='phase',
+        cascade='all, delete-orphan'
+    )
+
+    def __repr__(self):
+        return f'<JudicialPhase {self.key}>'
+
+
+class JudicialDocumentType(db.Model):
+    """Tabela judicial_document_types - Tipos documentais vinculados a fases processuais."""
+    __tablename__ = 'judicial_document_types'
+    __table_args__ = (
+        db.UniqueConstraint('law_firm_id', 'key', name='uq_judicial_document_types_law_firm_key'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    phase_id = db.Column(db.Integer, db.ForeignKey('judicial_phases.id'), nullable=False, index=True)
+
+    key = db.Column(db.String(120), nullable=False, index=True)
+    name = db.Column(db.String(255), nullable=False)
+    is_active = db.Column(db.Boolean, default=True)
+    display_order = db.Column(db.Integer, default=0)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    law_firm = db.relationship('LawFirm')
+    phase = db.relationship('JudicialPhase', back_populates='document_types')
+
+    def __repr__(self):
+        return f'<JudicialDocumentType {self.key}>'
+
+
 class JudicialProcess(db.Model):
     """Tabela judicial_processes - Painel centralizado de processos judiciais"""
     __tablename__ = 'judicial_processes'
@@ -846,6 +901,7 @@ class JudicialProcess(db.Model):
     law_firm = db.relationship('LawFirm')
     user = db.relationship('User')
     case = db.relationship('Case', backref='judicial_processes')
+    events = db.relationship('JudicialEvent', back_populates='process', cascade='all, delete-orphan')
     sentence_analyses = db.relationship('JudicialSentenceAnalysis', 
                                        primaryjoin='JudicialProcess.process_number==foreign(JudicialSentenceAnalysis.process_number)',
                                        foreign_keys='[JudicialSentenceAnalysis.process_number]',
@@ -853,3 +909,86 @@ class JudicialProcess(db.Model):
     
     def __repr__(self):
         return f'<JudicialProcess {self.process_number}>'
+
+
+class JudicialEvent(db.Model):
+    """Tabela judicial_events - Eventos processuais agregadores de movimentações e documentos.
+
+    Exemplos de evento:
+    - petição inicial protocolada
+    - contestação apresentada
+    - sentença proferida
+    - apelação interposta
+    - audiência realizada
+    - documento juntado
+    """
+    __tablename__ = 'judicial_events'
+
+    id = db.Column(db.Integer, primary_key=True)
+    process_id = db.Column(db.Integer, db.ForeignKey('judicial_processes.id'), nullable=False, index=True)
+
+    # Tipo do evento (slug): peticao_inicial, contestacao, sentenca, apelacao, etc.
+    type = db.Column(db.String(100), nullable=False)
+
+    # Fase do processo: inicio_processo, defesa_reu, julgamento, recursos, execucao
+    phase = db.Column(db.String(100), nullable=False)
+
+    description = db.Column(db.Text)
+    event_date = db.Column(db.DateTime, nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relacionamentos
+    process = db.relationship('JudicialProcess', back_populates='events')
+    movements = db.relationship('JudicialMovement', back_populates='event', cascade='all, delete-orphan')
+    documents = db.relationship('JudicialDocument', back_populates='event', cascade='all, delete-orphan')
+
+    def __repr__(self):
+        return f'<JudicialEvent {self.type} - Process {self.process_id}>'
+
+
+class JudicialMovement(db.Model):
+    """Tabela judicial_movements - Movimentações cronológicas (timeline) de um evento processual."""
+    __tablename__ = 'judicial_movements'
+
+    id = db.Column(db.Integer, primary_key=True)
+    process_id = db.Column(db.Integer, db.ForeignKey('judicial_processes.id'), nullable=False, index=True)
+    event_id = db.Column(db.Integer, db.ForeignKey('judicial_events.id'), nullable=False, index=True)
+
+    title = db.Column(db.String(255), nullable=False)
+    movement_date = db.Column(db.DateTime, nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relacionamentos
+    process = db.relationship('JudicialProcess')
+    event = db.relationship('JudicialEvent', back_populates='movements')
+
+    def __repr__(self):
+        return f'<JudicialMovement {self.title} - Event {self.event_id}>'
+
+
+class JudicialDocument(db.Model):
+    """Tabela judicial_documents - Documentos anexados a um evento processual.
+
+    O documento pode opcionalmente referenciar um item já existente em KnowledgeBase.
+    """
+    __tablename__ = 'judicial_documents'
+
+    id = db.Column(db.Integer, primary_key=True)
+    process_id = db.Column(db.Integer, db.ForeignKey('judicial_processes.id'), nullable=False, index=True)
+    event_id = db.Column(db.Integer, db.ForeignKey('judicial_events.id'), nullable=False, index=True)
+    knowledge_base_id = db.Column(db.Integer, db.ForeignKey('knowledge_base.id'), index=True)
+
+    type = db.Column(db.String(100), nullable=False)
+    file_name = db.Column(db.String(255), nullable=False)
+    file_path = db.Column(db.String(500), nullable=False)
+    uploaded_by = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    # Relacionamentos
+    process = db.relationship('JudicialProcess')
+    event = db.relationship('JudicialEvent', back_populates='documents')
+    knowledge_base = db.relationship('KnowledgeBase')
+    uploader = db.relationship('User', foreign_keys=[uploaded_by])
+
+    def __repr__(self):
+        return f'<JudicialDocument {self.file_name} - Event {self.event_id}>'

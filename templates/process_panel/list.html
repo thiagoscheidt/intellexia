@@ -9,7 +9,8 @@
   <div class="col-12">
     <div class="card border-0 shadow-sm" style="border-radius: 16px; overflow: hidden;">
       <div class="card-body page-hero">
-        <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+        <div
+          class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
           <div class="d-flex align-items-center gap-3">
             <div class="rounded-circle d-flex align-items-center justify-content-center page-hero-icon">
               <i class="bi bi-diagram-3 page-hero-icon__glyph"></i>
@@ -22,7 +23,8 @@
           <div>
             <nav aria-label="breadcrumb">
               <ol class="breadcrumb mb-0 bg-transparent small">
-                <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
+                <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i>
+                    Home</a></li>
                 <li class="breadcrumb-item active" aria-current="page">Painel de Processos</li>
               </ol>
             </nav>
@@ -90,6 +92,10 @@
           <div class="card-header">
             <h3 class="card-title mb-0"><i class="bi bi-list-ul"></i> Lista de Processos</h3>
             <div class="card-tools">
+              <a href="{{ url_for('process_panel.manage_judicial_phases') }}"
+                class="btn btn-outline-secondary btn-sm me-1">
+                <i class="bi bi-kanban"></i> Fases Judiciais
+              </a>
               <a href="{{ url_for('process_panel.new_process') }}" class="btn btn-primary btn-sm">
                 <i class="bi bi-plus-circle"></i> Novo Processo
               </a>
@@ -125,30 +131,26 @@
                       <label for="search_query" class="form-label">
                         <i class="bi bi-search"></i> Buscar
                       </label>
-                      <input 
-                          type="text"
-                          id="search_query"
-                          name="q" 
-                          class="form-control" 
-                          placeholder="Número, título ou tribunal..."
-                          value="{{ search_query }}"
-                      >
+                      <input type="text" id="search_query" name="q" class="form-control"
+                        placeholder="Número, título ou tribunal..." value="{{ search_query }}">
                     </div>
                     <div class="col-md-3">
                       <label for="status_filter" class="form-label">
                         <i class="bi bi-flag"></i> Status
                       </label>
                       <select name="status" id="status_filter" class="form-select">
-                          <option value="">Todos os Status</option>
-                          <option value="ativo" {% if status_filter == 'ativo' %}selected{% endif %}>Ativo</option>
-                          <option value="suspenso" {% if status_filter == 'suspenso' %}selected{% endif %}>Suspenso</option>
-                          <option value="encerrado" {% if status_filter == 'encerrado' %}selected{% endif %}>Encerrado</option>
-                          <option value="aguardando" {% if status_filter == 'aguardando' %}selected{% endif %}>Aguardando</option>
+                        <option value="">Todos os Status</option>
+                        <option value="ativo" {% if status_filter=='ativo' %}selected{% endif %}>Ativo</option>
+                        <option value="suspenso" {% if status_filter=='suspenso' %}selected{% endif %}>Suspenso</option>
+                        <option value="encerrado" {% if status_filter=='encerrado' %}selected{% endif %}>Encerrado
+                        </option>
+                        <option value="aguardando" {% if status_filter=='aguardando' %}selected{% endif %}>Aguardando
+                        </option>
                       </select>
                     </div>
                     <div class="col-md-3 d-flex align-items-end">
                       <button type="submit" class="btn btn-primary w-100">
-                          <i class="bi bi-search"></i> Filtrar
+                        <i class="bi bi-search"></i> Filtrar
                       </button>
                     </div>
                   </form>
@@ -186,33 +188,34 @@
                     </td>
                     <td>
                       {% if process.tribunal %}
-                        <span class="badge bg-light text-dark">{{ process.tribunal }}</span>
+                      <span class="badge bg-light text-dark">{{ process.tribunal }}</span>
                       {% else %}
-                        <span class="text-muted">-</span>
+                      <span class="text-muted">-</span>
                       {% endif %}
                     </td>
                     <td>
                       {% if process.status == 'ativo' %}
-                        <span class="badge bg-success"><i class="bi bi-check-circle"></i> Ativo</span>
+                      <span class="badge bg-success"><i class="bi bi-check-circle"></i> Ativo</span>
                       {% elif process.status == 'suspenso' %}
-                        <span class="badge bg-warning"><i class="bi bi-pause-circle"></i> Suspenso</span>
+                      <span class="badge bg-warning"><i class="bi bi-pause-circle"></i> Suspenso</span>
                       {% elif process.status == 'encerrado' %}
-                        <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Encerrado</span>
+                      <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Encerrado</span>
                       {% else %}
-                        <span class="badge bg-secondary">{{ process.status }}</span>
+                      <span class="badge bg-secondary">{{ process.status }}</span>
                       {% endif %}
                     </td>
                     <td>
-                      <small class="text-muted"><i class="bi bi-calendar-event"></i> {{ process.created_at.strftime('%d/%m/%Y') }}</small>
+                      <small class="text-muted"><i class="bi bi-calendar-event"></i> {{
+                        process.created_at.strftime('%d/%m/%Y') }}</small>
                     </td>
                     <td class="text-end">
                       <div class="btn-group btn-group-sm" role="group">
-                        <a href="{{ url_for('process_panel.detail', process_id=process.id) }}" 
-                           class="btn btn-outline-primary" title="Ver detalhes">
+                        <a href="{{ url_for('process_panel.detail', process_id=process.id) }}"
+                          class="btn btn-outline-primary" title="Ver detalhes">
                           <i class="bi bi-eye"></i>
                         </a>
-                        <a href="{{ url_for('process_panel.edit', process_id=process.id) }}" 
-                           class="btn btn-outline-secondary" title="Editar">
+                        <a href="{{ url_for('process_panel.edit', process_id=process.id) }}"
+                          class="btn btn-outline-secondary" title="Editar">
                           <i class="bi bi-pencil"></i>
                         </a>
                         <button type="button" class="btn btn-outline-danger" title="Deletar"
@@ -220,9 +223,8 @@
                           <i class="bi bi-trash"></i>
                         </button>
                       </div>
-                      <form id="delete-form-{{ process.id }}" method="POST" 
-                            action="{{ url_for('process_panel.delete', process_id=process.id) }}" 
-                            style="display: none;">
+                      <form id="delete-form-{{ process.id }}" method="POST"
+                        action="{{ url_for('process_panel.delete', process_id=process.id) }}" style="display: none;">
                       </form>
                     </td>
                   </tr>
@@ -234,53 +236,58 @@
             <!-- Paginação -->
             {% if processes.pages > 1 %}
             <nav class="p-3" aria-label="Paginação">
-                <ul class="pagination mb-0 justify-content-center">
-                    {% if processes.has_prev %}
-                        <li class="page-item">
-                            <a class="page-link" href="{{ url_for('process_panel.list_processes', page=1, q=search_query, status=status_filter) }}">
-                                <i class="bi bi-chevron-bar-left"></i>
-                            </a>
-                        </li>
-                        <li class="page-item">
-                            <a class="page-link" href="{{ url_for('process_panel.list_processes', page=processes.prev_num, q=search_query, status=status_filter) }}">
-                                Anterior
-                            </a>
-                        </li>
-                    {% endif %}
+              <ul class="pagination mb-0 justify-content-center">
+                {% if processes.has_prev %}
+                <li class="page-item">
+                  <a class="page-link"
+                    href="{{ url_for('process_panel.list_processes', page=1, q=search_query, status=status_filter) }}">
+                    <i class="bi bi-chevron-bar-left"></i>
+                  </a>
+                </li>
+                <li class="page-item">
+                  <a class="page-link"
+                    href="{{ url_for('process_panel.list_processes', page=processes.prev_num, q=search_query, status=status_filter) }}">
+                    Anterior
+                  </a>
+                </li>
+                {% endif %}
 
-                    {% for page_num in processes.iter_pages() %}
-                        {% if page_num %}
-                            {% if page_num == processes.page %}
-                                <li class="page-item active">
-                                    <span class="page-link">{{ page_num }}</span>
-                                </li>
-                            {% else %}
-                                <li class="page-item">
-                                    <a class="page-link" href="{{ url_for('process_panel.list_processes', page=page_num, q=search_query, status=status_filter) }}">
-                                        {{ page_num }}
-                                    </a>
-                                </li>
-                            {% endif %}
-                        {% else %}
-                            <li class="page-item disabled">
-                                <span class="page-link">...</span>
-                            </li>
-                        {% endif %}
-                    {% endfor %}
+                {% for page_num in processes.iter_pages() %}
+                {% if page_num %}
+                {% if page_num == processes.page %}
+                <li class="page-item active">
+                  <span class="page-link">{{ page_num }}</span>
+                </li>
+                {% else %}
+                <li class="page-item">
+                  <a class="page-link"
+                    href="{{ url_for('process_panel.list_processes', page=page_num, q=search_query, status=status_filter) }}">
+                    {{ page_num }}
+                  </a>
+                </li>
+                {% endif %}
+                {% else %}
+                <li class="page-item disabled">
+                  <span class="page-link">...</span>
+                </li>
+                {% endif %}
+                {% endfor %}
 
-                    {% if processes.has_next %}
-                        <li class="page-item">
-                            <a class="page-link" href="{{ url_for('process_panel.list_processes', page=processes.next_num, q=search_query, status=status_filter) }}">
-                                Próx ima
-                            </a>
-                        </li>
-                        <li class="page-item">
-                            <a class="page-link" href="{{ url_for('process_panel.list_processes', page=processes.pages, q=search_query, status=status_filter) }}">
-                                <i class="bi bi-chevron-bar-right"></i>
-                            </a>
-                        </li>
-                    {% endif %}
-                </ul>
+                {% if processes.has_next %}
+                <li class="page-item">
+                  <a class="page-link"
+                    href="{{ url_for('process_panel.list_processes', page=processes.next_num, q=search_query, status=status_filter) }}">
+                    Próx ima
+                  </a>
+                </li>
+                <li class="page-item">
+                  <a class="page-link"
+                    href="{{ url_for('process_panel.list_processes', page=processes.pages, q=search_query, status=status_filter) }}">
+                    <i class="bi bi-chevron-bar-right"></i>
+                  </a>
+                </li>
+                {% endif %}
+              </ul>
             </nav>
             {% endif %}
 
@@ -292,9 +299,9 @@
               <h5 class="text-muted">Nenhum processo encontrado</h5>
               <p class="text-muted mb-4">
                 {% if search_query or status_filter %}
-                  Tente ajustar seus filtros de busca
+                Tente ajustar seus filtros de busca
                 {% else %}
-                  Comece criando um novo processo para centralizar informações judiciais
+                Comece criando um novo processo para centralizar informações judiciais
                 {% endif %}
               </p>
               <a href="{{ url_for('process_panel.new_process') }}" class="btn btn-primary">

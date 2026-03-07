@@ -1,0 +1,163 @@
+{% extends "layout/base.html" %}
+
+{% block title %}Tipos de Documento Judiciais - IntellexIA{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card border-0 shadow-sm" style="border-radius: 16px; overflow: hidden;">
+            <div class="card-body page-hero">
+                <div
+                    class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center page-hero-icon">
+                            <i class="bi bi-file-earmark-text page-hero-icon__glyph"></i>
+                        </div>
+                        <div>
+                            <h1 class="h4 mb-1" style="font-weight: 700; letter-spacing: .2px;">Tipos de Documento
+                                Judiciais</h1>
+                            <small class="text-muted">Gerencie os tipos de documento e a fase judicial associada</small>
+                        </div>
+                    </div>
+                    <div>
+                        <nav aria-label="breadcrumb">
+                            <ol class="breadcrumb mb-0 bg-transparent small">
+                                <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i
+                                            class="bi bi-house"></i> Home</a></li>
+                                <li class="breadcrumb-item"><a
+                                        href="{{ url_for('process_panel.list_processes') }}">Painel de Processos</a>
+                                </li>
+                                <li class="breadcrumb-item active" aria-current="page">Tipos de Documento</li>
+                            </ol>
+                        </nav>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="app-content">
+    <div class="container-fluid">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+            <i class="bi bi-info-circle"></i> {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+        {% endif %}
+        {% endwith %}
+
+        <div class="row g-4">
+            <div class="col-12">
+                <div class="card card-primary card-outline shadow-sm">
+                    <div class="card-header d-flex justify-content-between align-items-center">
+                        <h3 class="card-title mb-0"><i class="bi bi-file-earmark-text"></i> Tipos de Documento</h3>
+                        <a href="{{ url_for('process_panel.manage_judicial_phases') }}"
+                            class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-kanban"></i> Ir para Fases Judiciais
+                        </a>
+                    </div>
+                    <div class="card-body">
+                        <form method="post" action="{{ url_for('process_panel.create_document_type') }}"
+                            class="row g-2 mb-4">
+                            <div class="col-md-4">
+                                <label class="form-label">Nome</label>
+                                <input type="text" name="name" class="form-control" placeholder="Ex.: Contestação"
+                                    required>
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Chave</label>
+                                <input type="text" name="key" class="form-control" placeholder="Ex.: contestacao">
+                            </div>
+                            <div class="col-md-3">
+                                <label class="form-label">Fase</label>
+                                <select name="phase_id" class="form-select" required>
+                                    <option value="">Selecione</option>
+                                    {% for phase in phases if phase.is_active %}
+                                    <option value="{{ phase.id }}">{{ phase.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            <div class="col-md-2 d-flex align-items-end">
+                                <button type="submit" class="btn btn-primary btn-sm w-100">
+                                    <i class="bi bi-plus-circle"></i> Adicionar
+                                </button>
+                            </div>
+                        </form>
+
+                        <div class="table-responsive">
+                            <table class="table table-sm table-hover align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Nome</th>
+                                        <th>Chave</th>
+                                        <th>Fase</th>
+                                        <th>Status</th>
+                                        <th class="text-end" style="width: 220px;">Ações</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for doc_type in document_types %}
+                                    <tr>
+                                        <td colspan="5">
+                                            <form method="post"
+                                                action="{{ url_for('process_panel.update_document_type', doc_type_id=doc_type.id) }}"
+                                                class="row g-2 align-items-center">
+                                                <div class="col-md-3">
+                                                    <input type="text" name="name" value="{{ doc_type.name }}"
+                                                        class="form-control form-control-sm" required>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <input type="text" name="key" value="{{ doc_type.key }}"
+                                                        class="form-control form-control-sm" required>
+                                                </div>
+                                                <div class="col-md-3">
+                                                    <select name="phase_id" class="form-select form-select-sm" required>
+                                                        {% for phase in phases %}
+                                                        <option value="{{ phase.id }}" {% if doc_type.phase_id==phase.id
+                                                            %}selected{% endif %}>
+                                                            {{ phase.name }}
+                                                        </option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                                                <div class="col-md-1">
+                                                    {% if doc_type.is_active %}
+                                                    <span class="badge bg-success">Ativo</span>
+                                                    {% else %}
+                                                    <span class="badge bg-secondary">Inativo</span>
+                                                    {% endif %}
+                                                </div>
+                                                <div
+                                                    class="col-md-2 text-end d-flex justify-content-end gap-2 flex-nowrap">
+                                                    <button type="submit" class="btn btn-outline-primary btn-sm">
+                                                        Salvar
+                                                    </button>
+                                                    <button type="submit"
+                                                        formaction="{{ url_for('process_panel.toggle_document_type_status', doc_type_id=doc_type.id) }}"
+                                                        formmethod="post" class="btn btn-outline-secondary btn-sm">
+                                                        {% if doc_type.is_active %}Desativar{% else %}Ativar{% endif %}
+                                                    </button>
+                                                </div>
+                                            </form>
+                                        </td>
+                                    </tr>
+                                    {% else %}
+                                    <tr>
+                                        <td colspan="5" class="text-center text-muted">Nenhum tipo de documento
+                                            cadastrado</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

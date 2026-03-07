@@ -311,16 +311,59 @@
           </ul>
         </li>
 
+        <li
+          class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint == 'process_panel.manage_judicial_phases' or request.endpoint == 'process_panel.manage_document_types' or request.endpoint.startswith('knowledge_base.categories') or request.endpoint.startswith('knowledge_base.tags') or request.endpoint == 'settings.law_firm_settings') else '' }}">
+          <a href="#"
+            class="nav-link {{ 'active' if request.endpoint and (request.endpoint == 'process_panel.manage_judicial_phases' or request.endpoint == 'process_panel.manage_document_types' or request.endpoint.startswith('knowledge_base.categories') or request.endpoint.startswith('knowledge_base.tags') or request.endpoint == 'settings.law_firm_settings') else '' }}">
+            <i class="nav-icon bi bi-gear"></i>
+            <p>
+              Configurações
+              <i class="nav-arrow bi bi-chevron-right"></i>
+            </p>
+          </a>
+          <ul class="nav nav-treeview">
+            <li class="nav-item">
+              <a href="{{ url_for('process_panel.manage_judicial_phases') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'process_panel.manage_judicial_phases' else '' }}">
+                <i class="nav-icon bi bi-kanban"></i>
+                <p>Fases Judiciais</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('process_panel.manage_document_types') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'process_panel.manage_document_types' else '' }}">
+                <i class="nav-icon bi bi-file-earmark-text"></i>
+                <p>Tipos de Documento</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('knowledge_base.categories_list') }}"
+                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('knowledge_base.categories') else '' }}">
+                <i class="nav-icon bi bi-folder"></i>
+                <p>Categorias</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('knowledge_base.tags_list') }}"
+                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('knowledge_base.tags') else '' }}">
+                <i class="nav-icon bi bi-tags"></i>
+                <p>Tags</p>
+              </a>
+            </li>
+            {% if session.get('user_role') == 'admin' %}
+            <li class="nav-item">
+              <a href="{{ url_for('settings.law_firm_settings') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'settings.law_firm_settings' else '' }}">
+                <i class="nav-icon bi bi-building-gear"></i>
+                <p>Configurações do Escritório</p>
+              </a>
+            </li>
+            {% endif %}
+          </ul>
+        </li>
+
         {% if session.get('user_role') == 'admin' %}
         <li class="nav-header">ADMINISTRAÇÃO</li>
-
-        <li class="nav-item">
-          <a href="{{ url_for('settings.law_firm_settings') }}"
-            class="nav-link {{ 'active' if request.endpoint == 'settings.law_firm_settings' else '' }}">
-            <i class="nav-icon bi bi-gear"></i>
-            <p>Configurações do Escritório</p>
-          </a>
-        </li>
 
         <li class="nav-item">
           <a href="{{ url_for('admin_users.list_users') }}"

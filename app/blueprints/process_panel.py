@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, session, jsonify, redirect, url_for, flash
 from app.models import (
     db, JudicialProcess, JudicialSentenceAnalysis, JudicialAppeal, 
-    KnowledgeBase, Case, User
+    KnowledgeBase, Case, User, JudicialPhase, JudicialDocumentType
 )
 from datetime import datetime
 from functools import wraps
@@ -9,8 +9,74 @@ from sqlalchemy import or_, and_
 from werkzeug.utils import secure_filename
 import hashlib
 import os
+import re
 
 process_panel_bp = Blueprint('process_panel', __name__, url_prefix='/process-panel')
+
+
+JUDICIAL_PHASES = {
+    "inicio_processo": "Início do Processo",
+    "citacao": "Citação e Intimação",
+    "defesa_reu": "Defesa do Réu",
+    "manifestacao_autor": "Manifestação do Autor",
+    "saneamento": "Saneamento do Processo",
+    "producao_provas": "Produção de Provas",
+    "audiencia": "Audiência",
+    "alegacoes_finais": "Alegações Finais",
+    "julgamento": "Julgamento",
+    "decisoes_judiciais": "Decisões Judiciais",
+    "recursos": "Recursos",
+    "julgamento_tribunal": "Julgamento em Tribunal",
+    "execucao": "Execução / Cumprimento de Sentença",
+    "medidas_urgentes": "Tutelas e Medidas Urgentes",
+    "documentos_processuais": "Documentos Processuais",
+    "peticoes_diversas": "Petições Diversas"
+}
+
+
+DOCUMENT_TYPES = {
+    "peticao_inicial": {"name": "Petição Inicial", "phase": "inicio_processo"},
+    "emenda_inicial": {"name": "Emenda à Petição Inicial", "phase": "inicio_processo"},
+    "citacao": {"name": "Citação", "phase": "citacao"},
+    "contestacao": {"name": "Contestação", "phase": "defesa_reu"},
+    "reconvencao": {"name": "Reconvenção", "phase": "defesa_reu"},
+    "replica": {"name": "Réplica", "phase": "manifestacao_autor"},
+    "manifestacao": {"name": "Manifestação", "phase": "peticoes_diversas"},
+    "peticao_intermediaria": {"name": "Petição Intermediária", "phase": "peticoes_diversas"},
+    "juntada_documentos": {"name": "Juntada de Documentos", "phase": "peticoes_diversas"},
+    "pedido_tutela_urgencia": {"name": "Pedido de Tutela de Urgência", "phase": "medidas_urgentes"},
+    "pedido_liminar": {"name": "Pedido de Liminar", "phase": "medidas_urgentes"},
+    "despacho": {"name": "Despacho", "phase": "decisoes_judiciais"},
+    "decisao_interlocutoria": {"name": "Decisão Interlocutória", "phase": "decisoes_judiciais"},
+    "decisao_saneamento": {"name": "Decisão de Saneamento", "phase": "saneamento"},
+    "requerimento_prova": {"name": "Requerimento de Prova", "phase": "producao_provas"},
+    "laudo_pericial": {"name": "Laudo Pericial", "phase": "producao_provas"},
+    "manifestacao_laudo": {"name": "Manifestação sobre Laudo", "phase": "producao_provas"},
+    "ata_audiencia": {"name": "Ata de Audiência", "phase": "audiencia"},
+    "termo_audiencia": {"name": "Termo de Audiência", "phase": "audiencia"},
+    "memoriais": {"name": "Memoriais / Alegações Finais", "phase": "alegacoes_finais"},
+    "sentenca": {"name": "Sentença", "phase": "julgamento"},
+    "embargos_declaracao": {"name": "Embargos de Declaração", "phase": "recursos"},
+    "apelacao": {"name": "Apelação", "phase": "recursos"},
+    "contrarrazoes_apelacao": {"name": "Contrarrazões de Apelação", "phase": "recursos"},
+    "agravo_instrumento": {"name": "Agravo de Instrumento", "phase": "recursos"},
+    "agravo_interno": {"name": "Agravo Interno", "phase": "recursos"},
+    "recurso_especial": {"name": "Recurso Especial", "phase": "recursos"},
+    "recurso_extraordinario": {"name": "Recurso Extraordinário", "phase": "recursos"},
+    "acordao": {"name": "Acórdão", "phase": "julgamento_tribunal"},
+    "certidao_julgamento": {"name": "Certidão de Julgamento", "phase": "julgamento_tribunal"},
+    "cumprimento_sentenca": {"name": "Pedido de Cumprimento de Sentença", "phase": "execucao"},
+    "impugnacao_cumprimento": {"name": "Impugnação ao Cumprimento de Sentença", "phase": "execucao"},
+    "calculo_liquidacao": {"name": "Cálculo de Liquidação", "phase": "execucao"},
+    "pedido_penhora": {"name": "Pedido de Penhora", "phase": "execucao"},
+    "auto_penhora": {"name": "Auto de Penhora", "phase": "execucao"},
+    "avaliacao_bens": {"name": "Avaliação de Bens", "phase": "execucao"},
+    "edital_leilao": {"name": "Edital de Leilão", "phase": "execucao"},
+    "certidao": {"name": "Certidão", "phase": "documentos_processuais"},
+    "oficio": {"name": "Ofício Judicial", "phase": "documentos_processuais"},
+    "mandado": {"name": "Mandado Judicial", "phase": "documentos_processuais"},
+    "alvara": {"name": "Alvará Judicial", "phase": "documentos_processuais"}
+}
 
 
 def _compute_file_hash(file_storage):
@@ -26,6 +92,72 @@ def _compute_file_hash(file_storage):
     file_storage.stream.seek(0)
 
     return hasher.hexdigest()
+
+
+def _normalize_slug(value):
+    """Normaliza texto para chave em snake_case."""
+    value = (value or '').strip().lower()
+    value = re.sub(r'[^a-z0-9]+', '_', value)
+    return value.strip('_')
+
+
+def _ensure_judicial_config_defaults(law_firm_id):
+    """Garante tabelas e registros padrão de fases e tipos de documento por escritório."""
+    JudicialPhase.__table__.create(bind=db.engine, checkfirst=True)
+    JudicialDocumentType.__table__.create(bind=db.engine, checkfirst=True)
+
+    created_any = False
+
+    phases_by_key = {
+        phase.key: phase
+        for phase in JudicialPhase.query.filter_by(law_firm_id=law_firm_id).all()
+    }
+
+    for order, (phase_key, phase_name) in enumerate(JUDICIAL_PHASES.items(), start=1):
+        if phase_key in phases_by_key:
+            continue
+
+        phase = JudicialPhase(
+            law_firm_id=law_firm_id,
+            key=phase_key,
+            name=phase_name,
+            display_order=order,
+            is_active=True,
+        )
+        db.session.add(phase)
+        phases_by_key[phase_key] = phase
+        created_any = True
+
+    if created_any:
+        db.session.flush()
+
+    existing_type_keys = {
+        doc_type.key
+        for doc_type in JudicialDocumentType.query.filter_by(law_firm_id=law_firm_id).all()
+    }
+
+    for order, (doc_key, doc_payload) in enumerate(DOCUMENT_TYPES.items(), start=1):
+        if doc_key in existing_type_keys:
+            continue
+
+        phase = phases_by_key.get(doc_payload['phase'])
+        if not phase:
+            continue
+
+        db.session.add(
+            JudicialDocumentType(
+                law_firm_id=law_firm_id,
+                phase_id=phase.id,
+                key=doc_key,
+                name=doc_payload['name'],
+                display_order=order,
+                is_active=True,
+            )
+        )
+        created_any = True
+
+    if created_any:
+        db.session.commit()
 
 
 def get_current_law_firm_id():
@@ -44,6 +176,276 @@ def require_law_firm(f):
                 return redirect(url_for('auth.login'))
         return f(*args, **kwargs)
     return decorated_function
+
+
+@process_panel_bp.route('/config/fases-documentos')
+@require_law_firm
+def manage_judicial_config_legacy():
+    """Rota legada: redireciona para tela separada de fases judiciais."""
+    return redirect(url_for('process_panel.manage_judicial_phases'))
+
+
+@process_panel_bp.route('/config/fases')
+@require_law_firm
+def manage_judicial_phases():
+    """Tela para gerenciamento de fases judiciais."""
+    law_firm_id = get_current_law_firm_id()
+
+    try:
+        _ensure_judicial_config_defaults(law_firm_id)
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao preparar configuração judicial: {str(e)}', 'danger')
+
+    phases = JudicialPhase.query.filter_by(
+        law_firm_id=law_firm_id
+    ).order_by(JudicialPhase.display_order.asc(), JudicialPhase.name.asc()).all()
+
+    return render_template(
+        'process_panel/phases_management.html',
+        phases=phases,
+    )
+
+
+@process_panel_bp.route('/config/tipos-documento')
+@require_law_firm
+def manage_document_types():
+    """Tela para gerenciamento de tipos de documento judiciais."""
+    law_firm_id = get_current_law_firm_id()
+
+    try:
+        _ensure_judicial_config_defaults(law_firm_id)
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao preparar configuração judicial: {str(e)}', 'danger')
+
+    phases = JudicialPhase.query.filter_by(
+        law_firm_id=law_firm_id
+    ).order_by(JudicialPhase.display_order.asc(), JudicialPhase.name.asc()).all()
+
+    document_types = JudicialDocumentType.query.filter_by(
+        law_firm_id=law_firm_id
+    ).order_by(JudicialDocumentType.display_order.asc(), JudicialDocumentType.name.asc()).all()
+
+    return render_template(
+        'process_panel/document_types_management.html',
+        phases=phases,
+        document_types=document_types
+    )
+
+
+@process_panel_bp.route('/config/fases/criar', methods=['POST'])
+@require_law_firm
+def create_judicial_phase():
+    """Cria nova fase judicial."""
+    law_firm_id = get_current_law_firm_id()
+
+    name = request.form.get('name', '').strip()
+    key = _normalize_slug(request.form.get('key', '').strip() or name)
+
+    if not name or not key:
+        flash('Informe nome e chave válidos para a fase.', 'danger')
+        return redirect(url_for('process_panel.manage_judicial_phases'))
+
+    exists = JudicialPhase.query.filter_by(law_firm_id=law_firm_id, key=key).first()
+    if exists:
+        flash(f'Já existe uma fase com a chave "{key}".', 'warning')
+        return redirect(url_for('process_panel.manage_judicial_phases'))
+
+    max_order = db.session.query(db.func.max(JudicialPhase.display_order)).filter_by(
+        law_firm_id=law_firm_id
+    ).scalar() or 0
+
+    try:
+        db.session.add(
+            JudicialPhase(
+                law_firm_id=law_firm_id,
+                key=key,
+                name=name,
+                display_order=max_order + 1,
+                is_active=True,
+            )
+        )
+        db.session.commit()
+        flash('Fase judicial criada com sucesso.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao criar fase judicial: {str(e)}', 'danger')
+
+    return redirect(url_for('process_panel.manage_judicial_phases'))
+
+
+@process_panel_bp.route('/config/fases/<int:phase_id>/atualizar', methods=['POST'])
+@require_law_firm
+def update_judicial_phase(phase_id):
+    """Atualiza fase judicial."""
+    law_firm_id = get_current_law_firm_id()
+    phase = JudicialPhase.query.filter_by(id=phase_id, law_firm_id=law_firm_id).first_or_404()
+
+    name = request.form.get('name', '').strip()
+    key = _normalize_slug(request.form.get('key', '').strip())
+
+    if not name or not key:
+        flash('Nome e chave são obrigatórios.', 'danger')
+        return redirect(url_for('process_panel.manage_judicial_phases'))
+
+    duplicated = JudicialPhase.query.filter(
+        JudicialPhase.law_firm_id == law_firm_id,
+        JudicialPhase.key == key,
+        JudicialPhase.id != phase.id,
+    ).first()
+
+    if duplicated:
+        flash(f'Já existe outra fase com a chave "{key}".', 'warning')
+        return redirect(url_for('process_panel.manage_judicial_phases'))
+
+    try:
+        phase.name = name
+        phase.key = key
+        phase.updated_at = datetime.utcnow()
+        db.session.commit()
+        flash('Fase judicial atualizada com sucesso.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao atualizar fase judicial: {str(e)}', 'danger')
+
+    return redirect(url_for('process_panel.manage_judicial_phases'))
+
+
+@process_panel_bp.route('/config/fases/<int:phase_id>/status', methods=['POST'])
+@require_law_firm
+def toggle_judicial_phase_status(phase_id):
+    """Ativa/desativa fase judicial."""
+    law_firm_id = get_current_law_firm_id()
+    phase = JudicialPhase.query.filter_by(id=phase_id, law_firm_id=law_firm_id).first_or_404()
+
+    try:
+        phase.is_active = not phase.is_active
+        phase.updated_at = datetime.utcnow()
+        db.session.commit()
+        flash('Status da fase atualizado.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao alterar status da fase: {str(e)}', 'danger')
+
+    return redirect(url_for('process_panel.manage_judicial_phases'))
+
+
+@process_panel_bp.route('/config/tipos-documento/criar', methods=['POST'])
+@require_law_firm
+def create_document_type():
+    """Cria novo tipo de documento judicial."""
+    law_firm_id = get_current_law_firm_id()
+
+    name = request.form.get('name', '').strip()
+    key = _normalize_slug(request.form.get('key', '').strip() or name)
+    phase_id = request.form.get('phase_id', type=int)
+
+    if not name or not key or not phase_id:
+        flash('Informe nome, chave e fase para o tipo de documento.', 'danger')
+        return redirect(url_for('process_panel.manage_document_types'))
+
+    phase = JudicialPhase.query.filter_by(id=phase_id, law_firm_id=law_firm_id).first()
+    if not phase:
+        flash('Fase selecionada é inválida.', 'danger')
+        return redirect(url_for('process_panel.manage_document_types'))
+
+    exists = JudicialDocumentType.query.filter_by(law_firm_id=law_firm_id, key=key).first()
+    if exists:
+        flash(f'Já existe tipo de documento com a chave "{key}".', 'warning')
+        return redirect(url_for('process_panel.manage_document_types'))
+
+    max_order = db.session.query(db.func.max(JudicialDocumentType.display_order)).filter_by(
+        law_firm_id=law_firm_id
+    ).scalar() or 0
+
+    try:
+        db.session.add(
+            JudicialDocumentType(
+                law_firm_id=law_firm_id,
+                phase_id=phase_id,
+                key=key,
+                name=name,
+                display_order=max_order + 1,
+                is_active=True,
+            )
+        )
+        db.session.commit()
+        flash('Tipo de documento criado com sucesso.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao criar tipo de documento: {str(e)}', 'danger')
+
+    return redirect(url_for('process_panel.manage_document_types'))
+
+
+@process_panel_bp.route('/config/tipos-documento/<int:doc_type_id>/atualizar', methods=['POST'])
+@require_law_firm
+def update_document_type(doc_type_id):
+    """Atualiza tipo de documento judicial."""
+    law_firm_id = get_current_law_firm_id()
+    doc_type = JudicialDocumentType.query.filter_by(
+        id=doc_type_id,
+        law_firm_id=law_firm_id
+    ).first_or_404()
+
+    name = request.form.get('name', '').strip()
+    key = _normalize_slug(request.form.get('key', '').strip())
+    phase_id = request.form.get('phase_id', type=int)
+
+    if not name or not key or not phase_id:
+        flash('Nome, chave e fase são obrigatórios.', 'danger')
+        return redirect(url_for('process_panel.manage_document_types'))
+
+    phase = JudicialPhase.query.filter_by(id=phase_id, law_firm_id=law_firm_id).first()
+    if not phase:
+        flash('Fase selecionada é inválida.', 'danger')
+        return redirect(url_for('process_panel.manage_document_types'))
+
+    duplicated = JudicialDocumentType.query.filter(
+        JudicialDocumentType.law_firm_id == law_firm_id,
+        JudicialDocumentType.key == key,
+        JudicialDocumentType.id != doc_type.id,
+    ).first()
+
+    if duplicated:
+        flash(f'Já existe outro tipo de documento com a chave "{key}".', 'warning')
+        return redirect(url_for('process_panel.manage_document_types'))
+
+    try:
+        doc_type.name = name
+        doc_type.key = key
+        doc_type.phase_id = phase_id
+        doc_type.updated_at = datetime.utcnow()
+        db.session.commit()
+        flash('Tipo de documento atualizado com sucesso.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao atualizar tipo de documento: {str(e)}', 'danger')
+
+    return redirect(url_for('process_panel.manage_document_types'))
+
+
+@process_panel_bp.route('/config/tipos-documento/<int:doc_type_id>/status', methods=['POST'])
+@require_law_firm
+def toggle_document_type_status(doc_type_id):
+    """Ativa/desativa tipo de documento."""
+    law_firm_id = get_current_law_firm_id()
+    doc_type = JudicialDocumentType.query.filter_by(
+        id=doc_type_id,
+        law_firm_id=law_firm_id
+    ).first_or_404()
+
+    try:
+        doc_type.is_active = not doc_type.is_active
+        doc_type.updated_at = datetime.utcnow()
+        db.session.commit()
+        flash('Status do tipo de documento atualizado.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao alterar status do tipo de documento: {str(e)}', 'danger')
+
+    return redirect(url_for('process_panel.manage_document_types'))
 
 
 @process_panel_bp.route('/')
