@@ -7,397 +7,411 @@
 {% block content %}
 {% call page_hero(title=process.process_number, subtitle=hero_subtitle|default(''), icon='bi bi-diagram-3') %}
 <nav aria-label="breadcrumb">
-          <ol class="breadcrumb mb-4 bg-transparent small">
-            <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house-fill"></i> Home</a></li>
-            <li class="breadcrumb-item"><a href="{{ url_for('process_panel.list_processes') }}"><i class="bi bi-diagram-3-fill"></i> Processos</a></li>
-            <li class="breadcrumb-item active">{{ process.process_number }}</li>
-          </ol>
-        </nav>
+  <ol class="breadcrumb mb-4 bg-transparent small">
+    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house-fill"></i> Home</a>
+    </li>
+    <li class="breadcrumb-item"><a href="{{ url_for('process_panel.list_processes') }}"><i
+          class="bi bi-diagram-3-fill"></i> Processos</a></li>
+    <li class="breadcrumb-item active">{{ process.process_number }}</li>
+  </ol>
+</nav>
 {% endcall %}
 
 <div class="app-content">
   <div class="container-fluid">
     <div class="row">
       <div class="col-12">
-    <!-- Estatísticas -->
-    <div class="row mb-4">
-      <div class="col-lg-3 col-6">
-        <div class="info-box shadow-sm">
-          <span class="info-box-icon bg-primary bg-opacity-10">
-            <i class="bi bi-file-earmark-text text-primary" style="font-size: 2rem;"></i>
-          </span>
-          <div class="info-box-content">
-            <span class="info-box-text">Análises</span>
-            <span class="info-box-number">{{ stats.analyses_count }}</span>
-          </div>
-        </div>
-      </div>
-      <div class="col-lg-3 col-6">
-        <div class="info-box shadow-sm">
-          <span class="info-box-icon bg-success bg-opacity-10">
-            <i class="bi bi-arrow-up-circle text-success" style="font-size: 2rem;"></i>
-          </span>
-          <div class="info-box-content">
-            <span class="info-box-text">Recursos</span>
-            <span class="info-box-number">{{ stats.appeals_count }}</span>
-          </div>
-        </div>
-      </div>
-      <div class="col-lg-3 col-6">
-        <div class="info-box shadow-sm">
-          <span class="info-box-icon bg-info bg-opacity-10">
-            <i class="bi bi-files text-info" style="font-size: 2rem;"></i>
-          </span>
-          <div class="info-box-content">
-            <span class="info-box-text">Documentos</span>
-            <span class="info-box-number">{{ stats.documents_count }}</span>
-          </div>
-        </div>
-      </div>
-      <div class="col-lg-3 col-6">
-        <div class="info-box shadow-sm">
-          <span class="info-box-icon bg-warning bg-opacity-10">
-            <i class="bi bi-briefcase text-warning" style="font-size: 2rem;"></i>
-          </span>
-          <div class="info-box-content">
-            <span class="info-box-text">Casos</span>
-            <span class="info-box-number">{% if case %}1{% else %}0{% endif %}</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div class="row">
-      <!-- Informações Principais -->
-      <div class="col-md-4 mb-4">
-        <div class="card card-primary card-outline shadow-sm">
-          <div class="card-header">
-            <h3 class="card-title"><i class="bi bi-info-circle me-2"></i>Informações</h3>
-          </div>
-          <div class="card-body">
-            <div class="mb-3">
-              <label class="form-label text-muted small">Status</label>
-              <div>
-                {% if process.status == 'ativo' %}
-                  <span class="badge bg-success"><i class="bi bi-check-circle"></i> Ativo</span>
-                {% elif process.status == 'suspenso' %}
-                  <span class="badge bg-warning"><i class="bi bi-pause-circle"></i> Suspenso</span>
-                {% elif process.status == 'encerrado' %}
-                  <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Encerrado</span>
-                {% else %}
-                  <span class="badge bg-secondary">{{ process.status }}</span>
-                {% endif %}
+        <!-- Estatísticas -->
+        <div class="row mb-4">
+          <div class="col-lg-3 col-6">
+            <div class="info-box shadow-sm">
+              <span class="info-box-icon bg-primary bg-opacity-10">
+                <i class="bi bi-file-earmark-text text-primary" style="font-size: 2rem;"></i>
+              </span>
+              <div class="info-box-content">
+                <span class="info-box-text">Análises</span>
+                <span class="info-box-number">{{ stats.analyses_count }}</span>
               </div>
             </div>
-            
-            {% if process.tribunal %}
-            <div class="mb-3">
-              <label class="form-label text-muted small">Tribunal</label>
-              <p class="mb-0"><strong>{{ process.tribunal }}</strong></p>
+          </div>
+          <div class="col-lg-3 col-6">
+            <div class="info-box shadow-sm">
+              <span class="info-box-icon bg-success bg-opacity-10">
+                <i class="bi bi-arrow-up-circle text-success" style="font-size: 2rem;"></i>
+              </span>
+              <div class="info-box-content">
+                <span class="info-box-text">Recursos</span>
+                <span class="info-box-number">{{ stats.appeals_count }}</span>
+              </div>
             </div>
-            {% endif %}
-            
-            {% if process.judge_name %}
-            <div class="mb-3">
-              <label class="form-label text-muted small">Juiz</label>
-              <p class="mb-0"><strong>{{ process.judge_name }}</strong></p>
+          </div>
+          <div class="col-lg-3 col-6">
+            <div class="info-box shadow-sm">
+              <span class="info-box-icon bg-info bg-opacity-10">
+                <i class="bi bi-files text-info" style="font-size: 2rem;"></i>
+              </span>
+              <div class="info-box-content">
+                <span class="info-box-text">Documentos</span>
+                <span class="info-box-number">{{ stats.documents_count }}</span>
+              </div>
             </div>
-            {% endif %}
-            
-            {% if process.origin_unit %}
-            <div class="mb-3">
-              <label class="form-label text-muted small">Unidade de Origem</label>
-              <p class="mb-0"><strong>{{ process.origin_unit }}</strong></p>
-            </div>
-            {% endif %}
-            
-            <div class="mb-0">
-              <label class="form-label text-muted small">Criado em</label>
-              <p class="mb-0"><i class="bi bi-calendar-event"></i> {{ process.created_at.strftime('%d/%m/%Y às %H:%M') }}</p>
+          </div>
+          <div class="col-lg-3 col-6">
+            <div class="info-box shadow-sm">
+              <span class="info-box-icon bg-warning bg-opacity-10">
+                <i class="bi bi-briefcase text-warning" style="font-size: 2rem;"></i>
+              </span>
+              <div class="info-box-content">
+                <span class="info-box-text">Casos</span>
+                <span class="info-box-number">{% if case %}1{% else %}0{% endif %}</span>
+              </div>
             </div>
           </div>
         </div>
 
-        <!-- Descrição -->
-        {% if process.description %}
-        <div class="card card-light shadow-sm mt-3">
-          <div class="card-header">
-            <h3 class="card-title"><i class="bi bi-card-text me-2"></i>Descrição</h3>
-          </div>
-          <div class="card-body">
-            <p class="mb-0">{{ process.description }}</p>
-          </div>
-        </div>
-        {% endif %}
-      </div>
+        <div class="row">
+          <!-- Informações Principais -->
+          <div class="col-md-4 mb-4">
+            <div class="card card-primary card-outline shadow-sm">
+              <div class="card-header">
+                <h3 class="card-title"><i class="bi bi-info-circle me-2"></i>Informações</h3>
+                <div class="card-tools">
+                  <a href="{{ url_for('process_panel.edit', process_id=process.id) }}" class="btn btn-sm btn-primary">
+                    <i class="bi bi-pencil me-1"></i>Editar Processo
+                  </a>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="mb-3">
+                  <label class="form-label text-muted small">Status</label>
+                  <div>
+                    {% if process.status == 'ativo' %}
+                    <span class="badge bg-success"><i class="bi bi-check-circle"></i> Ativo</span>
+                    {% elif process.status == 'suspenso' %}
+                    <span class="badge bg-warning"><i class="bi bi-pause-circle"></i> Suspenso</span>
+                    {% elif process.status == 'encerrado' %}
+                    <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Encerrado</span>
+                    {% else %}
+                    <span class="badge bg-secondary">{{ process.status }}</span>
+                    {% endif %}
+                  </div>
+                </div>
 
-      <!-- Tabs com conteúdo relacionado -->
-      <div class="col-md-8">
-        <div class="card card-primary card-outline card-tabs shadow-sm">
-          <div class="card-header p-0 pt-1">
-            <ul class="nav nav-tabs" role="tablist">
-              <li class="nav-item" role="presentation">
-                <a class="nav-link active" id="analyses-tab" data-bs-toggle="tab" href="#analyses" role="tab">
-                  <i class="bi bi-file-earmark-text me-2"></i>Análises
-                  <span class="badge bg-primary ms-1">{{ stats.analyses_count }}</span>
-                </a>
-              </li>
-              <li class="nav-item" role="presentation">
-                <a class="nav-link" id="appeals-tab" data-bs-toggle="tab" href="#appeals" role="tab">
-                  <i class="bi bi-arrow-up-circle me-2"></i>Recursos
-                  <span class="badge bg-success ms-1">{{ stats.appeals_count }}</span>
-                </a>
-              </li>
-              <li class="nav-item" role="presentation">
-                <a class="nav-link" id="documents-tab" data-bs-toggle="tab" href="#documents" role="tab">
-                  <i class="bi bi-files me-2"></i>Documentos
-                  <span class="badge bg-info ms-1">{{ stats.documents_count }}</span>
-                </a>
-              </li>
-              {% if case %}
-              <li class="nav-item" role="presentation">
-                <a class="nav-link" id="case-tab" data-bs-toggle="tab" href="#case" role="tab">
-                  <i class="bi bi-briefcase me-2"></i>Caso
-                </a>
-              </li>
-              {% endif %}
-              <li class="nav-item" role="presentation">
-                <a class="nav-link" id="notes-tab" data-bs-toggle="tab" href="#notes" role="tab">
-                  <i class="bi bi-journal-text me-2"></i>Notas
-                </a>
-              </li>
-            </ul>
+                {% if process.tribunal %}
+                <div class="mb-3">
+                  <label class="form-label text-muted small">Tribunal</label>
+                  <p class="mb-0"><strong>{{ process.tribunal }}</strong></p>
+                </div>
+                {% endif %}
+
+                {% if process.section %}
+                <div class="mb-3">
+                  <label class="form-label text-muted small">Seção</label>
+                  <p class="mb-0"><strong>{{ process.section }}</strong></p>
+                </div>
+                {% endif %}
+
+                {% if process.judge_name %}
+                <div class="mb-3">
+                  <label class="form-label text-muted small">Juiz</label>
+                  <p class="mb-0"><strong>{{ process.judge_name }}</strong></p>
+                </div>
+                {% endif %}
+
+                {% if process.origin_unit %}
+                <div class="mb-3">
+                  <label class="form-label text-muted small">Unidade de Origem</label>
+                  <p class="mb-0"><strong>{{ process.origin_unit }}</strong></p>
+                </div>
+                {% endif %}
+
+                <div class="mb-0">
+                  <label class="form-label text-muted small">Criado em</label>
+                  <p class="mb-0"><i class="bi bi-calendar-event"></i> {{ process.created_at.strftime('%d/%m/%Y às
+                    %H:%M') }}</p>
+                </div>
+              </div>
+            </div>
+
+            <!-- Descrição -->
+            {% if process.description %}
+            <div class="card card-light shadow-sm mt-3">
+              <div class="card-header">
+                <h3 class="card-title"><i class="bi bi-card-text me-2"></i>Descrição</h3>
+              </div>
+              <div class="card-body">
+                <p class="mb-0">{{ process.description }}</p>
+              </div>
+            </div>
+            {% endif %}
           </div>
 
-          <div class="card-body">
-            <div class="tab-content">
-              <!-- Tab: Análises de Sentença -->
-              <div class="tab-pane fade show active" id="analyses" role="tabpanel">
-                {% if sentence_analyses %}
-                  <div class="table-responsive">
-                    <table class="table table-hover table-striped align-middle">
-                      <thead class="table-light">
-                        <tr>
-                          <th><i class="bi bi-file-earmark-pdf"></i> Arquivo</th>
-                          <th><i class="bi bi-flag"></i> Status</th>
-                          <th><i class="bi bi-calendar"></i> Criado em</th>
-                          <th class="text-end">Ações</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {% for analysis in sentence_analyses %}
-                        <tr>
-                          <td>
-                            <i class="bi bi-file-earmark-pdf text-danger me-2"></i>
-                            {{ analysis.original_filename }}
-                          </td>
-                          <td>
-                            {% if analysis.status == 'completed' %}
+          <!-- Tabs com conteúdo relacionado -->
+          <div class="col-md-8">
+            <div class="card card-primary card-outline card-tabs shadow-sm">
+              <div class="card-header p-0 pt-1">
+                <ul class="nav nav-tabs" role="tablist">
+                  <li class="nav-item" role="presentation">
+                    <a class="nav-link active" id="analyses-tab" data-bs-toggle="tab" href="#analyses" role="tab">
+                      <i class="bi bi-file-earmark-text me-2"></i>Análises
+                      <span class="badge bg-primary ms-1">{{ stats.analyses_count }}</span>
+                    </a>
+                  </li>
+                  <li class="nav-item" role="presentation">
+                    <a class="nav-link" id="appeals-tab" data-bs-toggle="tab" href="#appeals" role="tab">
+                      <i class="bi bi-arrow-up-circle me-2"></i>Recursos
+                      <span class="badge bg-success ms-1">{{ stats.appeals_count }}</span>
+                    </a>
+                  </li>
+                  <li class="nav-item" role="presentation">
+                    <a class="nav-link" id="documents-tab" data-bs-toggle="tab" href="#documents" role="tab">
+                      <i class="bi bi-files me-2"></i>Documentos
+                      <span class="badge bg-info ms-1">{{ stats.documents_count }}</span>
+                    </a>
+                  </li>
+                  {% if case %}
+                  <li class="nav-item" role="presentation">
+                    <a class="nav-link" id="case-tab" data-bs-toggle="tab" href="#case" role="tab">
+                      <i class="bi bi-briefcase me-2"></i>Caso
+                    </a>
+                  </li>
+                  {% endif %}
+                  <li class="nav-item" role="presentation">
+                    <a class="nav-link" id="notes-tab" data-bs-toggle="tab" href="#notes" role="tab">
+                      <i class="bi bi-journal-text me-2"></i>Notas
+                    </a>
+                  </li>
+                </ul>
+              </div>
+
+              <div class="card-body">
+                <div class="tab-content">
+                  <!-- Tab: Análises de Sentença -->
+                  <div class="tab-pane fade show active" id="analyses" role="tabpanel">
+                    {% if sentence_analyses %}
+                    <div class="table-responsive">
+                      <table class="table table-hover table-striped align-middle">
+                        <thead class="table-light">
+                          <tr>
+                            <th><i class="bi bi-file-earmark-pdf"></i> Arquivo</th>
+                            <th><i class="bi bi-flag"></i> Status</th>
+                            <th><i class="bi bi-calendar"></i> Criado em</th>
+                            <th class="text-end">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {% for analysis in sentence_analyses %}
+                          <tr>
+                            <td>
+                              <i class="bi bi-file-earmark-pdf text-danger me-2"></i>
+                              {{ analysis.original_filename }}
+                            </td>
+                            <td>
+                              {% if analysis.status == 'completed' %}
                               <span class="badge bg-success"><i class="bi bi-check-circle"></i> Concluído</span>
-                            {% elif analysis.status == 'processing' %}
+                              {% elif analysis.status == 'processing' %}
                               <span class="badge bg-info"><i class="bi bi-hourglass-split"></i> Processando</span>
-                            {% elif analysis.status == 'error' %}
+                              {% elif analysis.status == 'error' %}
                               <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Erro</span>
-                            {% else %}
+                              {% else %}
                               <span class="badge bg-secondary">{{ analysis.status }}</span>
-                            {% endif %}
-                          </td>
-                          <td><small class="text-muted">{{ analysis.uploaded_at.strftime('%d/%m/%Y') }}</small></td>
-                          <td class="text-end">
-                            <a href="{{ url_for('tools.judicial_sentence_analysis_detail', sentence_id=analysis.id) }}" 
-                               class="btn btn-sm btn-outline-primary">
-                              <i class="bi bi-eye"></i> Ver
-                            </a>
-                          </td>
-                        </tr>
-                        {% endfor %}
-                      </tbody>
-                    </table>
+                              {% endif %}
+                            </td>
+                            <td><small class="text-muted">{{ analysis.uploaded_at.strftime('%d/%m/%Y') }}</small></td>
+                            <td class="text-end">
+                              <a href="{{ url_for('tools.judicial_sentence_analysis_detail', sentence_id=analysis.id) }}"
+                                class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i> Ver
+                              </a>
+                            </td>
+                          </tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                      <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
+                      <p class="text-muted mt-3 mb-3">Nenhuma análise de sentença encontrada</p>
+                      <a href="{{ url_for('tools.judicial_sentence_analysis_upload') }}" class="btn btn-primary btn-sm">
+                        <i class="bi bi-plus-circle me-2"></i>Enviar Análise
+                      </a>
+                    </div>
+                    {% endif %}
                   </div>
-                {% else %}
-                  <div class="text-center py-5">
-                    <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
-                    <p class="text-muted mt-3 mb-3">Nenhuma análise de sentença encontrada</p>
-                    <a href="{{ url_for('tools.judicial_sentence_analysis_upload') }}" class="btn btn-primary btn-sm">
-                      <i class="bi bi-plus-circle me-2"></i>Enviar Análise
-                    </a>
-                  </div>
-                {% endif %}
-              </div>
 
-              <!-- Tab: Recursos Judiciais -->
-              <div class="tab-pane fade" id="appeals" role="tabpanel">
-                {% if appeals %}
-                  <div class="table-responsive">
-                    <table class="table table-hover table-striped align-middle">
-                      <thead class="table-light">
-                        <tr>
-                          <th><i class="bi bi-arrow-up-circle"></i> Tipo de Recurso</th>
-                          <th><i class="bi bi-flag"></i> Status</th>
-                          <th><i class="bi bi-calendar"></i> Data de Criação</th>
-                          <th class="text-end">Ações</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {% for appeal in appeals %}
-                        <tr>
-                          <td><strong>{{ appeal.appeal_type }}</strong></td>
-                          <td>
-                            {% if appeal.status == 'completed' %}
+                  <!-- Tab: Recursos Judiciais -->
+                  <div class="tab-pane fade" id="appeals" role="tabpanel">
+                    {% if appeals %}
+                    <div class="table-responsive">
+                      <table class="table table-hover table-striped align-middle">
+                        <thead class="table-light">
+                          <tr>
+                            <th><i class="bi bi-arrow-up-circle"></i> Tipo de Recurso</th>
+                            <th><i class="bi bi-flag"></i> Status</th>
+                            <th><i class="bi bi-calendar"></i> Data de Criação</th>
+                            <th class="text-end">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {% for appeal in appeals %}
+                          <tr>
+                            <td><strong>{{ appeal.appeal_type }}</strong></td>
+                            <td>
+                              {% if appeal.status == 'completed' %}
                               <span class="badge bg-success"><i class="bi bi-check-circle"></i> Concluído</span>
-                            {% elif appeal.status == 'processing' %}
+                              {% elif appeal.status == 'processing' %}
                               <span class="badge bg-info"><i class="bi bi-hourglass-split"></i> Processando</span>
-                            {% elif appeal.status == 'error' %}
+                              {% elif appeal.status == 'error' %}
                               <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Erro</span>
-                            {% else %}
+                              {% else %}
                               <span class="badge bg-secondary">{{ appeal.status }}</span>
-                            {% endif %}
-                          </td>
-                          <td><small class="text-muted">{{ appeal.created_at.strftime('%d/%m/%Y') }}</small></td>
-                          <td class="text-end">
-                            <a href="{{ url_for('tools.appeal_detail', appeal_id=appeal.id) }}" 
-                               class="btn btn-sm btn-outline-primary">
-                              <i class="bi bi-eye"></i> Ver
-                            </a>
-                          </td>
-                        </tr>
-                        {% endfor %}
-                      </tbody>
-                    </table>
+                              {% endif %}
+                            </td>
+                            <td><small class="text-muted">{{ appeal.created_at.strftime('%d/%m/%Y') }}</small></td>
+                            <td class="text-end">
+                              <a href="{{ url_for('tools.appeal_detail', appeal_id=appeal.id) }}"
+                                class="btn btn-sm btn-outline-primary">
+                                <i class="bi bi-eye"></i> Ver
+                              </a>
+                            </td>
+                          </tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                      <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
+                      <p class="text-muted mt-3 mb-0">Nenhum recurso judicial encontrado</p>
+                      <p class="text-muted small">Crie um a partir de uma análise de sentença</p>
+                    </div>
+                    {% endif %}
                   </div>
-                {% else %}
-                  <div class="text-center py-5">
-                    <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
-                    <p class="text-muted mt-3 mb-0">Nenhum recurso judicial encontrado</p>
-                    <p class="text-muted small">Crie um a partir de uma análise de sentença</p>
-                  </div>
-                {% endif %}
-              </div>
 
-              <!-- Tab: Documentos da Base de Conhecimento -->
-              <div class="tab-pane fade" id="documents" role="tabpanel">
-                {% if kb_documents %}
-                  <div class="table-responsive">
-                    <table class="table table-hover table-striped align-middle">
-                      <thead class="table-light">
-                        <tr>
-                          <th><i class="bi bi-file-earmark"></i> Documento</th>
-                          <th><i class="bi bi-tag"></i> Categoria</th>
-                          <th><i class="bi bi-calendar"></i> Enviado em</th>
-                          <th class="text-end">Ações</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {% for doc in kb_documents %}
-                        <tr>
-                          <td>
-                            <i class="bi bi-file-earmark me-2"></i>
-                            {{ doc.original_filename }}
-                          </td>
-                          <td>
-                            {% if doc.category %}
+                  <!-- Tab: Documentos da Base de Conhecimento -->
+                  <div class="tab-pane fade" id="documents" role="tabpanel">
+                    {% if kb_documents %}
+                    <div class="table-responsive">
+                      <table class="table table-hover table-striped align-middle">
+                        <thead class="table-light">
+                          <tr>
+                            <th><i class="bi bi-file-earmark"></i> Documento</th>
+                            <th><i class="bi bi-tag"></i> Categoria</th>
+                            <th><i class="bi bi-calendar"></i> Enviado em</th>
+                            <th class="text-end">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {% for doc in kb_documents %}
+                          <tr>
+                            <td>
+                              <i class="bi bi-file-earmark me-2"></i>
+                              {{ doc.original_filename }}
+                            </td>
+                            <td>
+                              {% if doc.category %}
                               <span class="badge bg-light text-dark">{{ doc.category }}</span>
-                            {% else %}
+                              {% else %}
                               <span class="text-muted">-</span>
-                            {% endif %}
-                          </td>
-                          <td><small class="text-muted">{{ doc.uploaded_at.strftime('%d/%m/%Y') }}</small></td>
-                          <td class="text-end">
-                            <a href="{{ url_for('knowledge_base.details', file_id=doc.id) }}" 
-                               class="btn btn-sm btn-outline-secondary me-1"
-                               title="Ver detalhes">
-                              <i class="bi bi-info-circle"></i>
-                            </a>
-                            <a href="{{ url_for('knowledge_base.view', file_id=doc.id) }}" 
-                               class="btn btn-sm btn-outline-info me-1"
-                               title="Visualizar documento">
-                              <i class="bi bi-eye"></i>
-                            </a>
-                            <a href="{{ url_for('knowledge_base.download', file_id=doc.id) }}" 
-                               class="btn btn-sm btn-outline-primary"
-                               title="Baixar documento">
-                              <i class="bi bi-download"></i>
-                            </a>
-                          </td>
-                        </tr>
-                        {% endfor %}
-                      </tbody>
-                    </table>
+                              {% endif %}
+                            </td>
+                            <td><small class="text-muted">{{ doc.uploaded_at.strftime('%d/%m/%Y') }}</small></td>
+                            <td class="text-end">
+                              <a href="{{ url_for('knowledge_base.details', file_id=doc.id) }}"
+                                class="btn btn-sm btn-outline-secondary me-1" title="Ver detalhes">
+                                <i class="bi bi-info-circle"></i>
+                              </a>
+                              <a href="{{ url_for('knowledge_base.view', file_id=doc.id) }}"
+                                class="btn btn-sm btn-outline-info me-1" title="Visualizar documento">
+                                <i class="bi bi-eye"></i>
+                              </a>
+                              <a href="{{ url_for('knowledge_base.download', file_id=doc.id) }}"
+                                class="btn btn-sm btn-outline-primary" title="Baixar documento">
+                                <i class="bi bi-download"></i>
+                              </a>
+                            </td>
+                          </tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                      <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
+                      <p class="text-muted mt-3 mb-3">Nenhum documento encontrado</p>
+                      <a href="{{ url_for('knowledge_base.upload') }}" class="btn btn-primary btn-sm">
+                        <i class="bi bi-plus-circle me-2"></i>Enviar Documento
+                      </a>
+                    </div>
+                    {% endif %}
                   </div>
-                {% else %}
-                  <div class="text-center py-5">
-                    <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
-                    <p class="text-muted mt-3 mb-3">Nenhum documento encontrado</p>
-                    <a href="{{ url_for('knowledge_base.upload') }}" class="btn btn-primary btn-sm">
-                      <i class="bi bi-plus-circle me-2"></i>Enviar Documento
-                    </a>
-                  </div>
-                {% endif %}
-              </div>
 
-              <!-- Tab: Caso Associado -->
-              {% if case %}
-              <div class="tab-pane fade" id="case" role="tabpanel">
-                <div class="row">
-                  <div class="col-md-8">
-                    <dl class="row">
-                      <dt class="col-sm-4">Título</dt>
-                      <dd class="col-sm-8">{{ case.title }}</dd>
-                      
-                      <dt class="col-sm-4">Tipo</dt>
-                      <dd class="col-sm-8">{{ case.case_type }}</dd>
-                      
-                      <dt class="col-sm-4">Cliente</dt>
-                      <dd class="col-sm-8">
-                        {% if case.client %}
-                          <a href="{{ url_for('clients.client_detail', client_id=case.client.id) }}">
-                            {{ case.client.name }}
-                          </a>
-                        {% else %}
-                          -
-                        {% endif %}
-                      </dd>
-                      
-                      <dt class="col-sm-4">Status</dt>
-                      <dd class="col-sm-8">
-                        <span class="badge bg-secondary">{{ case.status }}</span>
-                      </dd>
-                    </dl>
+                  <!-- Tab: Caso Associado -->
+                  {% if case %}
+                  <div class="tab-pane fade" id="case" role="tabpanel">
+                    <div class="row">
+                      <div class="col-md-8">
+                        <dl class="row">
+                          <dt class="col-sm-4">Título</dt>
+                          <dd class="col-sm-8">{{ case.title }}</dd>
+
+                          <dt class="col-sm-4">Tipo</dt>
+                          <dd class="col-sm-8">{{ case.case_type }}</dd>
+
+                          <dt class="col-sm-4">Cliente</dt>
+                          <dd class="col-sm-8">
+                            {% if case.client %}
+                            <a href="{{ url_for('clients.client_detail', client_id=case.client.id) }}">
+                              {{ case.client.name }}
+                            </a>
+                            {% else %}
+                            -
+                            {% endif %}
+                          </dd>
+
+                          <dt class="col-sm-4">Status</dt>
+                          <dd class="col-sm-8">
+                            <span class="badge bg-secondary">{{ case.status }}</span>
+                          </dd>
+                        </dl>
+                      </div>
+                      <div class="col-md-4 text-end">
+                        <a href="{{ url_for('cases.case_detail', case_id=case.id) }}" class="btn btn-primary">
+                          <i class="bi bi-arrow-right me-2"></i>Ver Caso
+                        </a>
+                      </div>
+                    </div>
                   </div>
-                  <div class="col-md-4 text-end">
-                    <a href="{{ url_for('cases.case_detail', case_id=case.id) }}" class="btn btn-primary">
-                      <i class="bi bi-arrow-right me-2"></i>Ver Caso
+                  {% endif %}
+
+                  <!-- Tab: Notas Internas -->
+                  <div class="tab-pane fade" id="notes" role="tabpanel">
+                    {% if process.internal_notes %}
+                    <div class="alert alert-info">
+                      <i class="bi bi-journal-text me-2"></i>
+                      <span>{{ process.internal_notes }}</span>
+                    </div>
+                    <a href="{{ url_for('process_panel.edit', process_id=process.id) }}"
+                      class="btn btn-secondary btn-sm">
+                      <i class="bi bi-pencil me-2"></i>Editar Notas
                     </a>
+                    {% else %}
+                    <div class="text-center py-5">
+                      <i class="bi bi-journal-x text-muted" style="font-size: 3rem;"></i>
+                      <p class="text-muted mt-3 mb-3">Nenhuma nota registrada</p>
+                      <a href="{{ url_for('process_panel.edit', process_id=process.id) }}"
+                        class="btn btn-primary btn-sm">
+                        <i class="bi bi-plus-circle me-2"></i>Adicionar Nota
+                      </a>
+                    </div>
+                    {% endif %}
                   </div>
                 </div>
               </div>
-              {% endif %}
-
-              <!-- Tab: Notas Internas -->
-              <div class="tab-pane fade" id="notes" role="tabpanel">
-                {% if process.internal_notes %}
-                  <div class="alert alert-info">
-                    <i class="bi bi-journal-text me-2"></i>
-                    <span>{{ process.internal_notes }}</span>
-                  </div>
-                  <a href="{{ url_for('process_panel.edit', process_id=process.id) }}" class="btn btn-secondary btn-sm">
-                    <i class="bi bi-pencil me-2"></i>Editar Notas
-                  </a>
-                {% else %}
-                  <div class="text-center py-5">
-                    <i class="bi bi-journal-x text-muted" style="font-size: 3rem;"></i>
-                    <p class="text-muted mt-3 mb-3">Nenhuma nota registrada</p>
-                    <a href="{{ url_for('process_panel.edit', process_id=process.id) }}" class="btn btn-primary btn-sm">
-                      <i class="bi bi-plus-circle me-2"></i>Adicionar Nota
-                    </a>
-                  </div>
-                {% endif %}
-              </div>
             </div>
           </div>
         </div>
-      </div>
-    </div>
       </div>
     </div>
   </div>

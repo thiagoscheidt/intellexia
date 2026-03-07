@@ -1,0 +1,110 @@
+{% extends "layout/base.html" %}
+
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}Novo Processo{% endblock %}
+
+{% block content %}
+{% call page_hero(title='Novo Processo', subtitle='Cadastro rápido com número do processo e documentos', icon='bi
+bi-file-earmark-plus') %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-0 bg-transparent small">
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a>
+        </li>
+        <li class="breadcrumb-item"><a href="{{ url_for('process_panel.list_processes') }}">Painel de Processos</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Novo Processo</li>
+    </ol>
+</nav>
+{% endcall %}
+
+<div class="app-content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-lg-8 offset-lg-2">
+                <div class="card card-primary card-outline shadow-sm">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0"><i class="bi bi-lightning-charge me-2"></i>Cadastro Rápido</h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="POST" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="process_number" class="form-label">
+                                    Número do Processo <span class="text-danger">*</span>
+                                </label>
+                                <input type="text" class="form-control" id="process_number" name="process_number"
+                                    placeholder="NNNNNNN-DD.AAAA.J.TR.OOOO" maxlength="25" inputmode="numeric" required>
+                                <small class="text-muted d-block mt-1">
+                                    Formato CNJ: 7 dígitos - 2 verificadores . 4 ano . 1 segmento . 2 tribunal . 4
+                                    origem
+                                </small>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="documents" class="form-label">
+                                    Documentos para Base de Conhecimento <span class="text-danger">*</span>
+                                </label>
+                                <input type="file" class="form-control" id="documents" name="documents" multiple
+                                    required>
+                                <small class="text-muted d-block mt-1">
+                                    Os arquivos enviados serão vinculados ao número do processo e salvos na base de
+                                    conhecimento, sem categoria e sem tags.
+                                </small>
+                            </div>
+
+                            <div class="d-flex gap-3 mt-4 border-top pt-4">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check-circle me-2"></i>Criar Processo e Enviar Documentos
+                                </button>
+                                <a href="{{ url_for('process_panel.list_processes') }}" class="btn btn-secondary">
+                                    <i class="bi bi-x-circle me-2"></i>Cancelar
+                                </a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="alert alert-info mt-3 mb-0">
+                    <i class="bi bi-info-circle me-2"></i>
+                    Depois do cadastro rápido, use <strong>Editar Processo</strong> para completar tribunal, juiz,
+                    seção, unidade de origem e demais informações.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function formatCnj(value) {
+        let digits = value.replace(/\D/g, '');
+        digits = digits.substring(0, 20);
+
+        if (digits.length > 0) {
+            let formatted = digits.substring(0, 7);
+            if (digits.length > 7) formatted += '-' + digits.substring(7, 9);
+            if (digits.length > 9) formatted += '.' + digits.substring(9, 13);
+            if (digits.length > 13) formatted += '.' + digits.substring(13, 14);
+            if (digits.length > 14) formatted += '.' + digits.substring(14, 16);
+            if (digits.length > 16) formatted += '.' + digits.substring(16, 20);
+            return formatted;
+        }
+        return digits;
+    }
+
+    const processNumberInput = document.getElementById('process_number');
+    if (processNumberInput) {
+        processNumberInput.addEventListener('input', function () {
+            this.value = formatCnj(this.value);
+        });
+
+        processNumberInput.addEventListener('blur', function () {
+            this.value = formatCnj(this.value);
+            const digits = this.value.replace(/\D/g, '');
+            if (digits.length > 0 && digits.length < 20) {
+                this.setCustomValidity('O número do processo deve ter exatamente 20 dígitos');
+            } else {
+                this.setCustomValidity('');
+            }
+        });
+    }
+</script>
+{% endblock %}

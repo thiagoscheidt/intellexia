@@ -6,8 +6,26 @@ from app.models import (
 from datetime import datetime
 from functools import wraps
 from sqlalchemy import or_, and_
+from werkzeug.utils import secure_filename
+import hashlib
+import os
 
 process_panel_bp = Blueprint('process_panel', __name__, url_prefix='/process-panel')
+
+
+def _compute_file_hash(file_storage):
+    """Calcula hash SHA-256 sem perder posição do stream para salvar depois."""
+    hasher = hashlib.sha256()
+
+    file_storage.stream.seek(0)
+    while True:
+        chunk = file_storage.stream.read(8192)
+        if not chunk:
+            break
+        hasher.update(chunk)
+    file_storage.stream.seek(0)
+
+    return hasher.hexdigest()
 
 
 def get_current_law_firm_id():
@@ -80,21 +98,24 @@ def list_processes():
 @process_panel_bp.route('/novo', methods=['GET', 'POST'])
 @require_law_firm
 def new_process():
-    """Criar um novo processo judicial"""
+    """Criar processo simplificado (número CNJ + documentos para base de conhecimento)."""
     law_firm_id = get_current_law_firm_id()
     user_id = session.get('user_id')
     
     if request.method == 'POST':
         process_number = request.form.get('process_number', '').strip().upper()
-        title = request.form.get('title', '').strip()
-        description = request.form.get('description', '').strip()
-        judge_name = request.form.get('judge_name', '').strip()
-        tribunal = request.form.get('tribunal', '').strip()
-        case_id = request.form.get('case_id')
+        uploaded_files = [
+            file for file in request.files.getlist('documents')
+            if file and file.filename and file.filename.strip()
+        ]
         
         # Validações
         if not process_number:
             flash('Número do processo é obrigatório', 'danger')
+            return redirect(url_for('process_panel.new_process'))
+
+        if not uploaded_files:
+            flash('Envie ao menos um documento para a base de conhecimento.', 'danger')
             return redirect(url_for('process_panel.new_process'))
         
         # Verificar se processo já existe
@@ -113,28 +134,88 @@ def new_process():
                 law_firm_id=law_firm_id,
                 user_id=user_id,
                 process_number=process_number,
-                title=title or process_number,
-                description=description,
-                judge_name=judge_name,
-                tribunal=tribunal,
-                case_id=case_id if case_id else None,
+                title=process_number,
                 status='ativo'
             )
+
+            upload_dir = f"uploads/knowledge_base/{law_firm_id}"
+            os.makedirs(upload_dir, exist_ok=True)
+
+            saved_file_paths = []
+            duplicates_count = 0
+            uploaded_count = 0
+
+            for file in uploaded_files:
+                file_hash = _compute_file_hash(file)
+
+                duplicate = KnowledgeBase.query.filter_by(
+                    law_firm_id=law_firm_id,
+                    file_hash=file_hash
+                ).first()
+
+                if duplicate:
+                    duplicates_count += 1
+                    continue
+
+                filename = secure_filename(file.filename)
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+                name, ext = os.path.splitext(filename)
+                filename_with_timestamp = f"{name}_{timestamp}{ext}"
+                file_path = os.path.join(upload_dir, filename_with_timestamp)
+
+                file.save(file_path)
+                saved_file_paths.append(file_path)
+
+                file_size = os.path.getsize(file_path)
+                file_type = ext.lstrip('.').upper() if ext else 'DESCONHECIDO'
+
+                kb_entry = KnowledgeBase(
+                    user_id=user_id,
+                    law_firm_id=law_firm_id,
+                    original_filename=filename,
+                    file_path=file_path,
+                    file_size=file_size,
+                    file_type=file_type,
+                    file_hash=file_hash,
+                    description='',
+                    category='',
+                    tags='',
+                    lawsuit_number=process_number,
+                    processing_status='pending'
+                )
+                db.session.add(kb_entry)
+                uploaded_count += 1
+
+            if uploaded_count == 0:
+                flash('Nenhum arquivo novo foi enviado (todos os arquivos já existem na base).', 'warning')
+                return redirect(url_for('process_panel.new_process'))
             
             db.session.add(new_proc)
             db.session.commit()
-            
-            flash(f'Processo {process_number} criado com sucesso!', 'success')
+
+            if duplicates_count > 0:
+                flash(
+                    f'Processo {process_number} criado. {uploaded_count} documento(s) enviado(s) e {duplicates_count} duplicado(s) ignorado(s).',
+                    'success'
+                )
+            else:
+                flash(
+                    f'Processo {process_number} criado com sucesso! {uploaded_count} documento(s) enviado(s) para a base de conhecimento.',
+                    'success'
+                )
+
             return redirect(url_for('process_panel.detail', process_id=new_proc.id))
             
         except Exception as e:
             db.session.rollback()
+            for file_path in locals().get('saved_file_paths', []):
+                if os.path.exists(file_path):
+                    os.remove(file_path)
             flash(f'Erro ao criar processo: {str(e)}', 'danger')
             return redirect(url_for('process_panel.new_process'))
     
-    # GET - Mostrar formulário
-    cases = Case.query.filter_by(law_firm_id=law_firm_id).order_by(Case.title).all()
-    return render_template('process_panel/form.html', cases=cases, action='novo')
+    # GET - Mostrar formulário simplificado
+    return render_template('process_panel/form_new_simple.html', action='novo')
 
 
 @process_panel_bp.route('/<int:process_id>')
