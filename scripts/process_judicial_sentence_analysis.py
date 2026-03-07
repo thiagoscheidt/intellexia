@@ -21,8 +21,8 @@ if PROJECT_ROOT not in sys.path:
 
 from main import app
 from app.models import db, JudicialSentenceAnalysis
-from app.agents.agent_sentence_summary import AgentSentenceSummary
-from app.agents.agent_initial_petition_analysis import AgentInitialPetitionAnalysis
+from app.agents.document_processing.agent_sentence_summary import AgentSentenceSummary
+from app.agents.document_processing.agent_initial_petition_analysis import AgentInitialPetitionAnalysis
 
 
 def analyze_sentence_with_ai(sentence_path: str, petition_path: str | None = None) -> str | None:

@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify
 from app.models import db, CaseBenefit, Case, FapReason
-from app.agents.fap_case_classifier_agent import FapCaseClassifierAgent
+from app.agents.fap.fap_case_classifier_agent import FapCaseClassifierAgent
 from datetime import datetime, date
 from functools import wraps
 from werkzeug.utils import secure_filename

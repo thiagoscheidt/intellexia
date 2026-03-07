@@ -1,6 +1,6 @@
 from flask import Blueprint, render_template, request, session, jsonify, redirect, url_for, flash, send_file
 from app.models import db, Case, Client, CaseBenefit, Document, Petition, CaseLawyer, Lawyer, CaseCompetence, CasesKnowledgeBase, CaseTemplate, CaseStatus
-from app.agents.case_knowledge_ingestor import CaseKnowledgeIngestor
+from app.agents.knowledge_base.case_knowledge_ingestor import CaseKnowledgeIngestor
 from datetime import datetime
 from decimal import Decimal
 from functools import wraps

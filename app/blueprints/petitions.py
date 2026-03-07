@@ -73,7 +73,7 @@ def case_petition_generate(case_id):
                 os.makedirs(os.path.dirname(temp_path), exist_ok=True)
                 file.save(temp_path)
                 
-                from app.agents.file_agent import FileAgent
+                from app.agents.core.file_agent import FileAgent
                 file_agent = FileAgent()
                 template_file_id = file_agent.upload_file(os.path.abspath(temp_path))
                 
@@ -130,7 +130,7 @@ def case_petition_generate(case_id):
 
                     #flash(f'Petição FAP gerada com sucesso usando template: {template_name}!', 'success')
                 else:
-                    from app.agents.agent_text_generator import AgentTextGenerator
+                    from app.agents.legal_drafting.agent_text_generator import AgentTextGenerator
                     agent = AgentTextGenerator()
                     
                     case_data = {

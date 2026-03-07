@@ -1,10 +1,10 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file
 from app.models import db, KnowledgeBase, KnowledgeCategory, KnowledgeTag, KnowledgeSummary, KnowledgeChatHistory, KnowledgeChatSession
-from app.agents.knowledge_query_agent import KnowledgeQueryAgent
+from app.agents.knowledge_base.knowledge_query_agent import KnowledgeQueryAgent
 from datetime import datetime
 import builtins
 from werkzeug.utils import secure_filename
-from app.agents.agent_document_summary import AgentDocumentSummary
+from app.agents.document_processing.agent_document_summary import AgentDocumentSummary
 from app.services.knowledge_base.chat_context import build_attachments_context
 from app.services.knowledge_base.search_helpers import (
     highlight_search_terms,

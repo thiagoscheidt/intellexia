@@ -24,8 +24,8 @@ if PROJECT_ROOT not in sys.path:
 
 from main import app
 from app.models import db, KnowledgeBase, KnowledgeSummary
-from app.agents.knowledge_ingestion_agent import KnowledgeIngestionAgent
-from app.agents.agent_document_summary import AgentDocumentSummary
+from app.agents.knowledge_base.knowledge_ingestion_agent import KnowledgeIngestionAgent
+from app.agents.document_processing.agent_document_summary import AgentDocumentSummary
 
 
 def _build_query(file_id: int | None = None, include_errors: bool = False):

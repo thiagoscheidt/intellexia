@@ -1,5 +1,5 @@
-from app.agents.file_agent import FileAgent
-from app.agents.agent_document_reader import AgentDocumentReader
+from app.agents.core.file_agent import FileAgent
+from app.agents.document_processing.agent_document_reader import AgentDocumentReader
 from main import app
 from flask import jsonify, render_template, session, request, redirect, url_for, flash
 from app.models import db, Client, Court, Lawyer, Case, CaseLawyer, CaseBenefit, Document, CaseCompetence, Petition, User, LawFirm

@@ -17,8 +17,8 @@ from langchain_openai import ChatOpenAI
 from app.models import db, KnowledgeChatHistory, KnowledgeChatSession
 
 
-from app.agents.query_enhancer_agent import QueryEnhancerAgent
-from app.agents.tools import KnowledgeQueryTools
+from app.agents.knowledge_base.query_enhancer_agent import QueryEnhancerAgent
+from app.agents.knowledge_base.tools import KnowledgeQueryTools
 
 
 load_dotenv()

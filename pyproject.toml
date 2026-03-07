@@ -3,7 +3,7 @@ name = "ia-peticao"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.14"
+requires-python = ">=3.11,<3.14"
 dependencies = [
     "bcrypt>=5.0.0",
     "docling>=2.71.0",

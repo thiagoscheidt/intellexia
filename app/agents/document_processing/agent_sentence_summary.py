@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from markitdown import MarkItDown
 from langchain_openai import ChatOpenAI
-from app.agents.file_agent import FileAgent
+from app.agents.core.file_agent import FileAgent
 from rich import print
 
 load_dotenv()

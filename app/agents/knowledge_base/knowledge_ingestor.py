@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.agents.knowledge_ingestion_agent import KnowledgeIngestionAgent
-from app.agents.knowledge_query_agent import KnowledgeQueryAgent
+from app.agents.knowledge_base.knowledge_ingestion_agent import KnowledgeIngestionAgent
+from app.agents.knowledge_base.knowledge_query_agent import KnowledgeQueryAgent
 
 
 class KnowledgeIngestor:

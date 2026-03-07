@@ -20,7 +20,7 @@ from docling.document_converter import DocumentConverter
 from pydantic import BaseModel, Field
 
 # Adicionar o diretório raiz ao path para imports do app
-root_dir = PathLib(__file__).parent.parent.parent
+root_dir = PathLib(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(root_dir))
 
 from flask import current_app, has_app_context

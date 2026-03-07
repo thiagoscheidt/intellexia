@@ -12,7 +12,7 @@ from pydantic import BaseModel, Field
 from docx import Document
 
 # Adicionar o diretório raiz ao path para imports do app
-root_dir = PathLib(__file__).parent.parent.parent
+root_dir = PathLib(__file__).parent.parent.parent.parent
 sys.path.insert(0, str(root_dir))
 
 

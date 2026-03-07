@@ -9,7 +9,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from markitdown import MarkItDown
 from werkzeug.utils import secure_filename
 
-from app.agents.query_enhancer_agent import QueryEnhancerAgent
+from app.agents.knowledge_base.query_enhancer_agent import QueryEnhancerAgent
 
 ATTACHMENT_LARGE_TOKEN_THRESHOLD = 10000
 

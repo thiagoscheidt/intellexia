@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify, send_file
 from app.models import db, AiDocumentSummary, JudicialSentenceAnalysis, JudicialAppeal
-from app.agents.file_agent import FileAgent
-from app.agents.agent_document_reader import AgentDocumentReader
+from app.agents.core.file_agent import FileAgent
+from app.agents.document_processing.agent_document_reader import AgentDocumentReader
 from app.utils.document_utils import extract_text_from_docx, is_docx_file
 from datetime import datetime
 from functools import wraps

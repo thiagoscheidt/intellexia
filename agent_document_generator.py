@@ -9,13 +9,14 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from app.models import Case, CaseBenefit, Document as DocumentModel, CaseTemplate
-from app.agents.fap_section_generator_agent import FapSectionGeneratorAgent
+from app.agents.fap.fap_section_generator_agent import FapSectionGeneratorAgent
 from datetime import datetime
 from copy import deepcopy
 from docxcompose.composer import Composer
 import os
 from pdf2image import convert_from_path
 from PIL import Image
+from typing import Optional
 
 _ = load_dotenv()
 

@@ -23,7 +23,7 @@ if PROJECT_ROOT not in sys.path:
 
 from main import app
 from app.models import db, JudicialAppeal, JudicialSentenceAnalysis
-from app.agents.agent_appeal_generator import AgentAppealGenerator
+from app.agents.legal_drafting.agent_appeal_generator import AgentAppealGenerator
 
 
 def create_docx_from_appeal(appeal_content: dict, output_path: str) -> bool:

@@ -10,7 +10,7 @@ from langchain_openai import ChatOpenAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
-from app.agents.file_agent import FileAgent
+from app.agents.core.file_agent import FileAgent
 
 load_dotenv()
 
