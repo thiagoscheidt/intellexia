@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, session, jsonify, redirec
 from app.models import (
     db, JudicialProcess, JudicialSentenceAnalysis, JudicialAppeal, 
     KnowledgeBase, Case, User, JudicialPhase, JudicialDocumentType, JudicialEvent,
-    JudicialProcessNote, Client, JudicialDefendant
+    JudicialProcessNote, Client, JudicialDefendant, JudicialDocument
 )
 from datetime import datetime
 from functools import wraps
@@ -1029,6 +1029,78 @@ def detail(process_id):
             ) == process_number_clean
         )
     ).all()
+
+    configured_phases = JudicialPhase.query.filter_by(law_firm_id=law_firm_id).all()
+    phase_labels_by_key = {phase.key: phase.name for phase in configured_phases}
+
+    configured_document_types = JudicialDocumentType.query.filter_by(law_firm_id=law_firm_id).all()
+    document_type_labels_by_key = {doc_type.key: doc_type.name for doc_type in configured_document_types}
+
+    judicial_documents = JudicialDocument.query.filter_by(
+        process_id=process.id
+    ).order_by(JudicialDocument.created_at.desc(), JudicialDocument.id.desc()).all()
+
+    judicial_documents_by_kb = {}
+    for judicial_doc in judicial_documents:
+        if judicial_doc.knowledge_base_id and judicial_doc.knowledge_base_id not in judicial_documents_by_kb:
+            judicial_documents_by_kb[judicial_doc.knowledge_base_id] = judicial_doc
+
+    documents_list = []
+
+    for kb_doc in kb_documents:
+        judicial_doc = judicial_documents_by_kb.get(kb_doc.id)
+
+        phase_key = judicial_doc.event.phase if judicial_doc and judicial_doc.event else None
+        phase_label = None
+        if phase_key:
+            phase_label = phase_labels_by_key.get(
+                phase_key,
+                JUDICIAL_PHASES.get(phase_key, phase_key.replace('_', ' ').title())
+            )
+
+        doc_type_key = judicial_doc.type if judicial_doc else None
+        doc_type_label = None
+        if doc_type_key:
+            doc_type_label = document_type_labels_by_key.get(
+                doc_type_key,
+                doc_type_key.replace('_', ' ').title()
+            )
+
+        documents_list.append({
+            'filename': kb_doc.original_filename,
+            'category': kb_doc.category,
+            'uploaded_at': kb_doc.uploaded_at,
+            'phase_label': phase_label,
+            'doc_type_label': doc_type_label,
+            'knowledge_base_id': kb_doc.id,
+        })
+
+    for judicial_doc in judicial_documents:
+        if judicial_doc.knowledge_base_id:
+            continue
+
+        phase_key = judicial_doc.event.phase if judicial_doc.event else None
+        phase_label = None
+        if phase_key:
+            phase_label = phase_labels_by_key.get(
+                phase_key,
+                JUDICIAL_PHASES.get(phase_key, phase_key.replace('_', ' ').title())
+            )
+
+        doc_type_key = judicial_doc.type
+        doc_type_label = document_type_labels_by_key.get(
+            doc_type_key,
+            doc_type_key.replace('_', ' ').title() if doc_type_key else None
+        )
+
+        documents_list.append({
+            'filename': judicial_doc.file_name,
+            'category': None,
+            'uploaded_at': judicial_doc.created_at,
+            'phase_label': phase_label,
+            'doc_type_label': doc_type_label,
+            'knowledge_base_id': None,
+        })
     
     # Filtrar analyses e appeals por process_number
     related_analyses = [a for a in sentence_analyses if hasattr(a, 'process_number') and a.process_number == process.process_number]
@@ -1043,15 +1115,144 @@ def detail(process_id):
         'appeals': related_appeals,
         'notes': notes,
         'kb_documents': kb_documents,
+        'documents_list': documents_list,
         'case': process.case if process.case_id else None,
         'stats': {
             'analyses_count': len(related_analyses),
             'appeals_count': len(related_appeals),
-            'documents_count': len(kb_documents),
+            'documents_count': len(documents_list),
         }
     }
     
     return render_template('process_panel/detail.html', **data)
+
+
+@process_panel_bp.route('/<int:process_id>/documentos/novo', methods=['GET', 'POST'])
+@require_law_firm
+def new_process_document(process_id):
+    """Tela própria para adicionar documento ao processo e à base de conhecimento."""
+    law_firm_id = get_current_law_firm_id()
+    user_id = session.get('user_id')
+
+    process = JudicialProcess.query.filter_by(
+        id=process_id,
+        law_firm_id=law_firm_id
+    ).first_or_404()
+
+    try:
+        _ensure_judicial_config_defaults(law_firm_id)
+    except Exception:
+        db.session.rollback()
+
+    document_types = JudicialDocumentType.query.filter_by(
+        law_firm_id=law_firm_id,
+        is_active=True
+    ).join(JudicialPhase, JudicialPhase.id == JudicialDocumentType.phase_id).order_by(
+        JudicialPhase.display_order.asc(),
+        JudicialDocumentType.display_order.asc(),
+        JudicialDocumentType.name.asc()
+    ).all()
+
+    if request.method == 'POST':
+        doc_type_id = request.form.get('document_type_id', type=int)
+        description = request.form.get('description', '').strip()
+        file = request.files.get('document')
+
+        if not doc_type_id:
+            flash('Selecione o tipo de documento.', 'danger')
+            return redirect(url_for('process_panel.new_process_document', process_id=process.id))
+
+        if not file or not file.filename or not file.filename.strip():
+            flash('Selecione um arquivo para upload.', 'danger')
+            return redirect(url_for('process_panel.new_process_document', process_id=process.id))
+
+        document_type = JudicialDocumentType.query.filter_by(
+            id=doc_type_id,
+            law_firm_id=law_firm_id,
+            is_active=True
+        ).first()
+
+        if not document_type:
+            flash('Tipo de documento inválido.', 'danger')
+            return redirect(url_for('process_panel.new_process_document', process_id=process.id))
+
+        saved_file_path = None
+
+        try:
+            upload_dir = os.path.join('uploads', 'knowledge_base', str(law_firm_id), f'process_{process.id}')
+            os.makedirs(upload_dir, exist_ok=True)
+
+            original_filename = secure_filename(file.filename)
+            timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+            name, ext = os.path.splitext(original_filename)
+            filename_with_timestamp = f"{name}_{timestamp}{ext}"
+            saved_file_path = os.path.join(upload_dir, filename_with_timestamp)
+
+            file_hash = _compute_file_hash(file)
+            file.save(saved_file_path)
+
+            file_size = os.path.getsize(saved_file_path)
+            file_type = ext.lstrip('.').upper() if ext else 'DESCONHECIDO'
+
+            kb_entry = KnowledgeBase(
+                user_id=user_id,
+                law_firm_id=law_firm_id,
+                original_filename=original_filename,
+                file_path=saved_file_path,
+                file_size=file_size,
+                file_type=file_type,
+                file_hash=file_hash,
+                description=description,
+                category=document_type.phase.name if document_type.phase else '',
+                tags=document_type.name,
+                lawsuit_number=process.process_number,
+                processing_status='pending',
+            )
+            db.session.add(kb_entry)
+            db.session.flush()
+
+            event = JudicialEvent(
+                process_id=process.id,
+                type=document_type.key,
+                phase=document_type.phase.key,
+                description=(
+                    f'Documento {document_type.name} adicionado ao processo.'
+                    if not description else description
+                ),
+                event_date=datetime.utcnow(),
+            )
+            db.session.add(event)
+            db.session.flush()
+
+            db.session.add(
+                JudicialDocument(
+                    process_id=process.id,
+                    event_id=event.id,
+                    knowledge_base_id=kb_entry.id,
+                    type=document_type.key,
+                    file_name=original_filename,
+                    file_path=saved_file_path,
+                    uploaded_by=user_id,
+                )
+            )
+
+            process.updated_at = datetime.utcnow()
+            db.session.commit()
+
+            flash('Documento adicionado ao processo com sucesso.', 'success')
+            return redirect(url_for('process_panel.detail', process_id=process.id) + '#documents')
+        except Exception as e:
+            db.session.rollback()
+            if saved_file_path and os.path.exists(saved_file_path):
+                os.remove(saved_file_path)
+            flash(f'Erro ao adicionar documento: {str(e)}', 'danger')
+            return redirect(url_for('process_panel.new_process_document', process_id=process.id))
+
+    return render_template(
+        'process_panel/document_form.html',
+        process=process,
+        document_types=document_types,
+    )
 
 
 @process_panel_bp.route('/<int:process_id>/notes', methods=['POST'])

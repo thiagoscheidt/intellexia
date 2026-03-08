@@ -1,0 +1,91 @@
+{% extends "layout/base.html" %}
+
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}Adicionar Documento - {{ process.process_number }}{% endblock %}
+
+{% block content %}
+{% call page_hero(title='Adicionar Documento ao Processo', subtitle=process.process_number, icon='bi
+bi-file-earmark-arrow-up') %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-0 bg-transparent small">
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a>
+        </li>
+        <li class="breadcrumb-item"><a href="{{ url_for('process_panel.list_processes') }}">Processos</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('process_panel.detail', process_id=process.id) }}">{{
+                process.process_number }}</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Adicionar Documento</li>
+    </ol>
+</nav>
+{% endcall %}
+
+<div class="app-content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-lg-8 offset-lg-2">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    <i class="bi bi-info-circle"></i> {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                {% endfor %}
+                {% endif %}
+                {% endwith %}
+
+                <div class="card card-primary card-outline shadow-sm">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0"><i class="bi bi-upload me-2"></i>Novo Documento do Processo</h3>
+                    </div>
+                    <div class="card-body">
+                        <form method="post" enctype="multipart/form-data">
+                            <div class="mb-3">
+                                <label for="document_type_id" class="form-label">Tipo de Documento <span
+                                        class="text-danger">*</span></label>
+                                <select id="document_type_id" name="document_type_id" class="form-select" required>
+                                    <option value="">Selecione...</option>
+                                    {% for document_type in document_types %}
+                                    <option value="{{ document_type.id }}">{{ document_type.name }}{% if
+                                        document_type.phase %} — {{ document_type.phase.name }}{% endif %}</option>
+                                    {% endfor %}
+                                </select>
+                                <small class="text-muted">Selecione o tipo para vincular corretamente a fase do
+                                    processo.</small>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="document" class="form-label">Arquivo <span
+                                        class="text-danger">*</span></label>
+                                <input id="document" type="file" name="document" class="form-control" required>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="description" class="form-label">Descrição (opcional)</label>
+                                <textarea id="description" name="description" rows="3" class="form-control"
+                                    placeholder="Observações sobre este documento..."></textarea>
+                            </div>
+
+                            <div class="d-flex gap-2 mt-4 border-top pt-4">
+                                <button type="submit" class="btn btn-primary">
+                                    <i class="bi bi-check-circle me-2"></i>Adicionar Documento
+                                </button>
+                                <a href="{{ url_for('process_panel.detail', process_id=process.id) }}#documents"
+                                    class="btn btn-secondary">
+                                    <i class="bi bi-arrow-left me-2"></i>Voltar
+                                </a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+
+                <div class="alert alert-info mt-3 mb-0">
+                    <i class="bi bi-info-circle me-2"></i>
+                    Este upload vincula o arquivo ao processo e também salva na base de conhecimento com o número
+                    <strong>{{ process.process_number }}</strong>.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

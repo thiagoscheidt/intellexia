@@ -76,7 +76,8 @@
               <div class="card-header">
                 <h3 class="card-title"><i class="bi bi-info-circle me-2"></i>Informações</h3>
                 <div class="card-tools">
-                  <a href="{{ url_for('process_panel.edit', process_id=process.id) }}" class="btn btn-sm btn-primary">
+                  <a href="{{ url_for('process_panel.edit', process_id=process.id) }}" class="btn btn-sm btn-primary"
+                    target="_blank" rel="noopener noreferrer">
                     <i class="bi bi-pencil me-1"></i>Editar Processo
                   </a>
                 </div>
@@ -177,7 +178,13 @@
               <div class="card-header p-0 pt-1">
                 <ul class="nav nav-tabs" role="tablist">
                   <li class="nav-item" role="presentation">
-                    <a class="nav-link active" id="analyses-tab" data-bs-toggle="tab" href="#analyses" role="tab">
+                    <a class="nav-link active" id="documents-tab" data-bs-toggle="tab" href="#documents" role="tab">
+                      <i class="bi bi-files me-2"></i>Documentos
+                      <span class="badge bg-info ms-1">{{ stats.documents_count }}</span>
+                    </a>
+                  </li>
+                  <li class="nav-item" role="presentation">
+                    <a class="nav-link" id="analyses-tab" data-bs-toggle="tab" href="#analyses" role="tab">
                       <i class="bi bi-file-earmark-text me-2"></i>Análises
                       <span class="badge bg-primary ms-1">{{ stats.analyses_count }}</span>
                     </a>
@@ -186,12 +193,6 @@
                     <a class="nav-link" id="appeals-tab" data-bs-toggle="tab" href="#appeals" role="tab">
                       <i class="bi bi-arrow-up-circle me-2"></i>Recursos
                       <span class="badge bg-success ms-1">{{ stats.appeals_count }}</span>
-                    </a>
-                  </li>
-                  <li class="nav-item" role="presentation">
-                    <a class="nav-link" id="documents-tab" data-bs-toggle="tab" href="#documents" role="tab">
-                      <i class="bi bi-files me-2"></i>Documentos
-                      <span class="badge bg-info ms-1">{{ stats.documents_count }}</span>
                     </a>
                   </li>
                   {% if case %}
@@ -211,8 +212,96 @@
 
               <div class="card-body">
                 <div class="tab-content">
+                  <!-- Tab: Documentos -->
+                  <div class="tab-pane fade show active" id="documents" role="tabpanel">
+                    <div class="d-flex justify-content-end mb-3">
+                      <a href="{{ url_for('process_panel.new_process_document', process_id=process.id) }}"
+                        class="btn btn-primary btn-sm" target="_blank" rel="noopener noreferrer">
+                        <i class="bi bi-plus-circle me-2"></i>Adicionar Documento
+                      </a>
+                    </div>
+                    {% if documents_list %}
+                    <div class="table-responsive">
+                      <table class="table table-hover table-striped align-middle">
+                        <thead class="table-light">
+                          <tr>
+                            <th><i class="bi bi-file-earmark"></i> Documento</th>
+                            <th><i class="bi bi-signpost"></i> Fase</th>
+                            <th><i class="bi bi-file-earmark-text"></i> Tipo de Documento</th>
+                            <th><i class="bi bi-calendar"></i> Enviado em</th>
+                            <th class="text-end">Ações</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {% for doc in documents_list %}
+                          <tr>
+                            <td>
+                              <i class="bi bi-file-earmark me-2"></i>
+                              {{ doc.filename }}
+                            </td>
+                            <td>
+                              {% if doc.phase_label %}
+                              <span class="badge bg-light text-dark">{{ doc.phase_label }}</span>
+                              {% else %}
+                              <span class="text-muted">Não informado</span>
+                              {% endif %}
+                            </td>
+                            <td>
+                              {% if doc.doc_type_label %}
+                              <span class="badge bg-light text-dark">{{ doc.doc_type_label }}</span>
+                              {% else %}
+                              <span class="text-muted">Não informado</span>
+                              {% endif %}
+                            </td>
+                            <td>
+                              {% if doc.uploaded_at %}
+                              <small class="text-muted">{{ doc.uploaded_at.strftime('%d/%m/%Y') }}</small>
+                              {% else %}
+                              <span class="text-muted">-</span>
+                              {% endif %}
+                            </td>
+                            <td class="text-end text-nowrap">
+                              {% if doc.knowledge_base_id %}
+                              <div class="btn-group btn-group-sm" role="group" aria-label="Ações do documento">
+                                <a href="{{ url_for('knowledge_base.details', file_id=doc.knowledge_base_id) }}"
+                                  class="btn btn-outline-secondary" title="Ver detalhes" target="_blank"
+                                  rel="noopener noreferrer">
+                                  <i class="bi bi-info-circle"></i>
+                                </a>
+                                <a href="{{ url_for('knowledge_base.view', file_id=doc.knowledge_base_id) }}"
+                                  class="btn btn-outline-info" title="Visualizar documento" target="_blank"
+                                  rel="noopener noreferrer">
+                                  <i class="bi bi-eye"></i>
+                                </a>
+                                <a href="{{ url_for('knowledge_base.download', file_id=doc.knowledge_base_id) }}"
+                                  class="btn btn-outline-primary" title="Baixar documento" target="_blank"
+                                  rel="noopener noreferrer">
+                                  <i class="bi bi-download"></i>
+                                </a>
+                              </div>
+                              {% else %}
+                              <span class="text-muted">-</span>
+                              {% endif %}
+                            </td>
+                          </tr>
+                          {% endfor %}
+                        </tbody>
+                      </table>
+                    </div>
+                    {% else %}
+                    <div class="text-center py-5">
+                      <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
+                      <p class="text-muted mt-3 mb-3">Nenhum documento encontrado</p>
+                      <a href="{{ url_for('process_panel.new_process_document', process_id=process.id) }}"
+                        class="btn btn-primary btn-sm" target="_blank" rel="noopener noreferrer">
+                        <i class="bi bi-plus-circle me-2"></i>Adicionar Documento
+                      </a>
+                    </div>
+                    {% endif %}
+                  </div>
+
                   <!-- Tab: Análises de Sentença -->
-                  <div class="tab-pane fade show active" id="analyses" role="tabpanel">
+                  <div class="tab-pane fade" id="analyses" role="tabpanel">
                     {% if sentence_analyses %}
                     <div class="table-responsive">
                       <table class="table table-hover table-striped align-middle">
@@ -245,7 +334,7 @@
                             <td><small class="text-muted">{{ analysis.uploaded_at.strftime('%d/%m/%Y') }}</small></td>
                             <td class="text-end">
                               <a href="{{ url_for('tools.judicial_sentence_analysis_detail', sentence_id=analysis.id) }}"
-                                class="btn btn-sm btn-outline-primary">
+                                class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener noreferrer">
                                 <i class="bi bi-eye"></i> Ver
                               </a>
                             </td>
@@ -258,7 +347,8 @@
                     <div class="text-center py-5">
                       <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
                       <p class="text-muted mt-3 mb-3">Nenhuma análise de sentença encontrada</p>
-                      <a href="{{ url_for('tools.judicial_sentence_analysis_upload') }}" class="btn btn-primary btn-sm">
+                      <a href="{{ url_for('tools.judicial_sentence_analysis_upload') }}" class="btn btn-primary btn-sm"
+                        target="_blank" rel="noopener noreferrer">
                         <i class="bi bi-plus-circle me-2"></i>Enviar Análise
                       </a>
                     </div>
@@ -296,7 +386,7 @@
                             <td><small class="text-muted">{{ appeal.created_at.strftime('%d/%m/%Y') }}</small></td>
                             <td class="text-end">
                               <a href="{{ url_for('tools.appeal_detail', appeal_id=appeal.id) }}"
-                                class="btn btn-sm btn-outline-primary">
+                                class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener noreferrer">
                                 <i class="bi bi-eye"></i> Ver
                               </a>
                             </td>
@@ -310,64 +400,6 @@
                       <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
                       <p class="text-muted mt-3 mb-0">Nenhum recurso judicial encontrado</p>
                       <p class="text-muted small">Crie um a partir de uma análise de sentença</p>
-                    </div>
-                    {% endif %}
-                  </div>
-
-                  <!-- Tab: Documentos da Base de Conhecimento -->
-                  <div class="tab-pane fade" id="documents" role="tabpanel">
-                    {% if kb_documents %}
-                    <div class="table-responsive">
-                      <table class="table table-hover table-striped align-middle">
-                        <thead class="table-light">
-                          <tr>
-                            <th><i class="bi bi-file-earmark"></i> Documento</th>
-                            <th><i class="bi bi-tag"></i> Categoria</th>
-                            <th><i class="bi bi-calendar"></i> Enviado em</th>
-                            <th class="text-end">Ações</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {% for doc in kb_documents %}
-                          <tr>
-                            <td>
-                              <i class="bi bi-file-earmark me-2"></i>
-                              {{ doc.original_filename }}
-                            </td>
-                            <td>
-                              {% if doc.category %}
-                              <span class="badge bg-light text-dark">{{ doc.category }}</span>
-                              {% else %}
-                              <span class="text-muted">-</span>
-                              {% endif %}
-                            </td>
-                            <td><small class="text-muted">{{ doc.uploaded_at.strftime('%d/%m/%Y') }}</small></td>
-                            <td class="text-end">
-                              <a href="{{ url_for('knowledge_base.details', file_id=doc.id) }}"
-                                class="btn btn-sm btn-outline-secondary me-1" title="Ver detalhes">
-                                <i class="bi bi-info-circle"></i>
-                              </a>
-                              <a href="{{ url_for('knowledge_base.view', file_id=doc.id) }}"
-                                class="btn btn-sm btn-outline-info me-1" title="Visualizar documento">
-                                <i class="bi bi-eye"></i>
-                              </a>
-                              <a href="{{ url_for('knowledge_base.download', file_id=doc.id) }}"
-                                class="btn btn-sm btn-outline-primary" title="Baixar documento">
-                                <i class="bi bi-download"></i>
-                              </a>
-                            </td>
-                          </tr>
-                          {% endfor %}
-                        </tbody>
-                      </table>
-                    </div>
-                    {% else %}
-                    <div class="text-center py-5">
-                      <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
-                      <p class="text-muted mt-3 mb-3">Nenhum documento encontrado</p>
-                      <a href="{{ url_for('knowledge_base.upload') }}" class="btn btn-primary btn-sm">
-                        <i class="bi bi-plus-circle me-2"></i>Enviar Documento
-                      </a>
                     </div>
                     {% endif %}
                   </div>
@@ -402,7 +434,8 @@
                         </dl>
                       </div>
                       <div class="col-md-4 text-end">
-                        <a href="{{ url_for('cases.case_detail', case_id=case.id) }}" class="btn btn-primary">
+                        <a href="{{ url_for('cases.case_detail', case_id=case.id) }}" class="btn btn-primary"
+                          target="_blank" rel="noopener noreferrer">
                           <i class="bi bi-arrow-right me-2"></i>Ver Caso
                         </a>
                       </div>
