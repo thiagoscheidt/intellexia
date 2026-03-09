@@ -938,6 +938,7 @@ class JudicialProcess(db.Model):
     defendant = db.relationship('JudicialDefendant', back_populates='judicial_processes')
     notes = db.relationship('JudicialProcessNote', back_populates='process', cascade='all, delete-orphan')
     events = db.relationship('JudicialEvent', back_populates='process', cascade='all, delete-orphan')
+    benefits = db.relationship('JudicialProcessBenefit', back_populates='process', cascade='all, delete-orphan')
     sentence_analyses = db.relationship('JudicialSentenceAnalysis', 
                                        primaryjoin='JudicialProcess.process_number==foreign(JudicialSentenceAnalysis.process_number)',
                                        foreign_keys='[JudicialSentenceAnalysis.process_number]',
@@ -1050,3 +1051,34 @@ class JudicialDocument(db.Model):
 
     def __repr__(self):
         return f'<JudicialDocument {self.file_name} - Event {self.event_id}>'
+
+
+class JudicialProcessBenefit(db.Model):
+    """Tabela judicial_process_benefits - Benefícios vinculados ao processo judicial."""
+    __tablename__ = 'judicial_process_benefits'
+    __table_args__ = (
+        db.UniqueConstraint('process_id', 'benefit_number', name='uq_judicial_process_benefit_process_number'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    process_id = db.Column(db.Integer, db.ForeignKey('judicial_processes.id'), nullable=False, index=True)
+
+    benefit_number = db.Column(db.String(50), nullable=False, index=True)
+    nit_number = db.Column(db.String(50), index=True)
+    insured_name = db.Column(db.String(255))
+    benefit_type = db.Column(db.String(20), index=True)
+    fap_vigencia_year = db.Column(db.String(10), index=True)
+
+    legal_thesis = db.Column(db.Text)
+    pfn_technical_note = db.Column(db.Text)
+    first_instance_decision = db.Column(db.Text)
+    second_instance_decision = db.Column(db.Text)
+    third_instance_decision = db.Column(db.Text)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    process = db.relationship('JudicialProcess', back_populates='benefits')
+
+    def __repr__(self):
+        return f'<JudicialProcessBenefit {self.benefit_number} - Process {self.process_id}>'

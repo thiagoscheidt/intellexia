@@ -2,7 +2,7 @@ from flask import Blueprint, render_template, request, session, jsonify, redirec
 from app.models import (
     db, JudicialProcess, JudicialSentenceAnalysis, JudicialAppeal, 
     KnowledgeBase, Case, User, JudicialPhase, JudicialDocumentType, JudicialEvent,
-    JudicialProcessNote, Client, JudicialDefendant, JudicialDocument
+    JudicialProcessNote, Client, JudicialDefendant, JudicialDocument, JudicialProcessBenefit
 )
 from datetime import datetime
 from functools import wraps
@@ -1015,6 +1015,10 @@ def detail(process_id):
         process_id=process.id,
         law_firm_id=law_firm_id
     ).order_by(JudicialProcessNote.created_at.desc(), JudicialProcessNote.id.desc()).all()
+
+    process_benefits = JudicialProcessBenefit.query.filter_by(
+        process_id=process.id
+    ).order_by(JudicialProcessBenefit.created_at.desc(), JudicialProcessBenefit.id.desc()).all()
     
     # Buscar documentos da knowledge base com o mesmo process_number
     # Pesquisar com e sem pontuação
@@ -1114,6 +1118,7 @@ def detail(process_id):
         'sentence_analyses': related_analyses,
         'appeals': related_appeals,
         'notes': notes,
+        'process_benefits': process_benefits,
         'kb_documents': kb_documents,
         'documents_list': documents_list,
         'case': process.case if process.case_id else None,
@@ -1121,6 +1126,7 @@ def detail(process_id):
             'analyses_count': len(related_analyses),
             'appeals_count': len(related_appeals),
             'documents_count': len(documents_list),
+            'benefits_count': len(process_benefits),
         }
     }
     

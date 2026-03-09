@@ -490,6 +490,52 @@
             </div>
           </div>
         </div>
+
+        <div class="row mb-4">
+          <div class="col-12">
+            <div class="card card-primary card-outline shadow-sm">
+              <div class="card-header">
+                <h3 class="card-title mb-0"><i class="bi bi-clipboard2-pulse me-2"></i>Benefícios do Processo</h3>
+                <div class="card-tools">
+                  <span class="badge bg-info">{{ stats.benefits_count }}</span>
+                </div>
+              </div>
+              <div class="card-body">
+                {% if process_benefits %}
+                <div class="table-responsive">
+                  <table class="table table-hover table-striped align-middle">
+                    <thead class="table-light">
+                      <tr>
+                        <th>NB</th>
+                        <th>NIT</th>
+                        <th>Segurado</th>
+                        <th>Tipo</th>
+                        <th>Vigência FAP</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {% for benefit in process_benefits %}
+                      <tr>
+                        <td><strong>{{ benefit.benefit_number or '-' }}</strong></td>
+                        <td>{{ benefit.nit_number or '-' }}</td>
+                        <td>{{ benefit.insured_name or '-' }}</td>
+                        <td>{{ benefit.benefit_type or '-' }}</td>
+                        <td>{{ benefit.fap_vigencia_year or '-' }}</td>
+                      </tr>
+                      {% endfor %}
+                    </tbody>
+                  </table>
+                </div>
+                {% else %}
+                <div class="text-center py-4">
+                  <i class="bi bi-inbox text-muted" style="font-size: 2.5rem;"></i>
+                  <p class="text-muted mt-3 mb-0">Nenhum benefício vinculado a este processo.</p>
+                </div>
+                {% endif %}
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   </div>
