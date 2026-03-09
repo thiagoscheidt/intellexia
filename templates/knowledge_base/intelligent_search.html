@@ -41,6 +41,98 @@
         width: 100%;
     }
 
+    .search-mode-row {
+        margin-top: .62rem;
+        display: flex;
+        align-items: center;
+        gap: .55rem;
+        flex-wrap: wrap;
+    }
+
+    .search-mode-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: .5rem;
+        padding: .32rem .68rem;
+        border-radius: 999px;
+        border: 1px solid #e3e9f5;
+        background: #f8faff;
+        line-height: 1;
+    }
+
+    [data-bs-theme="dark"] .search-mode-toggle {
+        border-color: #2f3b56;
+        background: #1a2234;
+    }
+
+    .search-mode-switch-input {
+        position: absolute;
+        opacity: 0;
+        width: 0;
+        height: 0;
+        pointer-events: none;
+    }
+
+    .search-mode-switch {
+        position: relative;
+        width: 42px;
+        height: 24px;
+        border-radius: 999px;
+        background: #cfd8ea;
+        cursor: pointer;
+        transition: background-color .2s ease;
+        flex-shrink: 0;
+    }
+
+    .search-mode-switch::after {
+        content: "";
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+        transition: transform .2s ease;
+    }
+
+    .search-mode-switch-input:checked+.search-mode-switch {
+        background: #667eea;
+    }
+
+    .search-mode-switch-input:checked+.search-mode-switch::after {
+        transform: translateX(18px);
+    }
+
+    [data-bs-theme="dark"] .search-mode-switch {
+        background: #3a4a6e;
+    }
+
+    [data-bs-theme="dark"] .search-mode-switch-input:checked+.search-mode-switch {
+        background: #7a8cff;
+    }
+
+    .search-mode-text {
+        font-size: .78rem;
+        color: #4b5a76;
+        user-select: none;
+        font-weight: 600;
+    }
+
+    [data-bs-theme="dark"] .search-mode-text {
+        color: #b9c6df;
+    }
+
+    .search-mode-state {
+        font-size: .76rem;
+        color: #6b7280;
+    }
+
+    [data-bs-theme="dark"] .search-mode-state {
+        color: #9fb0cd;
+    }
+
     .search-label {
         font-size: .78rem;
         font-weight: 700;
@@ -598,6 +690,10 @@
             min-width: auto;
             padding: 0.58rem 0.95rem;
         }
+
+        .search-mode-row {
+            gap: .45rem;
+        }
     }
 </style>
 {% endblock %}
@@ -664,6 +760,25 @@
                             <button type="submit" class="btn btn-primary search-btn" id="searchSubmitBtn">
                                 <span class="btn-content"><i class="bi bi-search me-1"></i> Buscar</span>
                             </button>
+                        </div>
+                        <div class="search-mode-row">
+                            <input type="hidden" id="searchModeInput" name="search_mode"
+                                value="{{ search_mode or 'semantic' }}">
+                            <div class="search-mode-toggle">
+                                <span class="search-mode-text">Semântica</span>
+                                <label for="searchModeSwitch" class="mb-0 d-inline-flex">
+                                    <input class="search-mode-switch-input" type="checkbox" id="searchModeSwitch" {% if search_mode == 'full_text' %}checked{% endif %}>
+                                    <span class="search-mode-switch" aria-hidden="true"></span>
+                                </label>
+                                <span class="search-mode-text">Texto</span>
+                            </div>
+                            <div class="search-mode-state" id="searchModeLabel">
+                                {% if search_mode == 'full_text' %}
+                                Modo atual: busca textual (full text)
+                                {% else %}
+                                Modo atual: busca semântica
+                                {% endif %}
+                            </div>
                         </div>
                         <small class="text-muted mt-1 d-block">
                             <i class="bi bi-info-circle"></i> A busca utiliza IA para encontrar os trechos mais
@@ -1048,18 +1163,45 @@
         const submitButton = document.getElementById('searchSubmitBtn');
         const overlay = document.getElementById('searchLoadingOverlay');
         const loadingMessage = document.getElementById('searchLoadingMessage');
+        const searchModeSwitch = document.getElementById('searchModeSwitch');
+        const searchModeInput = document.getElementById('searchModeInput');
+        const searchModeLabel = document.getElementById('searchModeLabel');
 
         if (!searchForm || !searchInput || !submitButton || !overlay || !loadingMessage) {
             return;
         }
 
-        const dynamicMessages = [
+        const semanticMessages = [
             'Preparando consulta semântica',
             'Analisando contexto da sua pergunta',
             'Comparando com documentos indexados',
             'Classificando os trechos mais relevantes',
             'Organizando os resultados por arquivo'
         ];
+
+        const fullTextMessages = [
+            'Preparando busca textual',
+            'Buscando termos exatos nos documentos',
+            'Classificando correspondências por relevância textual',
+            'Organizando os resultados por arquivo'
+        ];
+
+        const updateSearchModeUI = () => {
+            if (!searchModeSwitch || !searchModeInput || !searchModeLabel) {
+                return;
+            }
+
+            const isFullText = searchModeSwitch.checked;
+            searchModeInput.value = isFullText ? 'full_text' : 'semantic';
+            searchModeLabel.textContent = isFullText
+                ? 'Modo atual: busca textual (full text)'
+                : 'Modo atual: busca semântica';
+        };
+
+        if (searchModeSwitch) {
+            searchModeSwitch.addEventListener('change', updateSearchModeUI);
+        }
+        updateSearchModeUI();
 
         let messageIndex = 0;
         let intervalId = null;
@@ -1077,11 +1219,13 @@
 
             overlay.classList.add('is-active');
             overlay.setAttribute('aria-hidden', 'false');
-            loadingMessage.textContent = dynamicMessages[0];
+            const isFullText = searchModeInput && searchModeInput.value === 'full_text';
+            const activeMessages = isFullText ? fullTextMessages : semanticMessages;
+            loadingMessage.textContent = activeMessages[0];
 
             intervalId = window.setInterval(function () {
-                messageIndex = (messageIndex + 1) % dynamicMessages.length;
-                loadingMessage.textContent = dynamicMessages[messageIndex];
+                messageIndex = (messageIndex + 1) % activeMessages.length;
+                loadingMessage.textContent = activeMessages[messageIndex];
             }, 1200);
 
             window.setTimeout(function () {

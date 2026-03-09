@@ -6,8 +6,10 @@ import os
 import re
 import time
 from datetime import datetime
+from types import SimpleNamespace
 
 from dotenv import load_dotenv
+from meilisearch_python_sdk import Client as MeilisearchClient
 from openai import OpenAI
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ToolStrategy
@@ -28,6 +30,8 @@ VECTOR_SIZE = int(os.getenv("VECTOR_SIZE", "0"))
 DEFAULT_COLLECTION = os.getenv("QDRANT_COLLECTION", "knowledge_base")
 QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
+MEILISEARCH_HOST = os.getenv("MEILISEARCH_HOST", "http://localhost:7700")
+MEILISEARCH_API_KEY = os.getenv("MEILISEARCH_API_KEY")
 QUERY_MODEL = os.getenv("KB_QUERY_MODEL", "gpt-4o-mini")
 ROUTER_MODEL = os.getenv("KB_ROUTER_MODEL", "gpt-5-nano")
 KB_AGENT_DEBUG = os.getenv("KB_AGENT_DEBUG", "false").strip().lower() in {"1", "true", "yes", "on"}
@@ -70,6 +74,7 @@ class KnowledgeQueryAgent:
 
         self.collection = collection_name
         self.qdrant = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=60)
+        self.meilisearch = MeilisearchClient(MEILISEARCH_HOST, MEILISEARCH_API_KEY)
         self.openai = OpenAI()
         self.query_enhancer = QueryEnhancerAgent()
         self._last_context_data = None
@@ -135,21 +140,48 @@ class KnowledgeQueryAgent:
         embedding_request = self.openai.embeddings.create(input=text, model=EMBEDDING_MODEL)
         return embedding_request.data[0].embedding
 
-    def ask_knowledge_base(self, question: str, history=None, limit: int | None = None) -> dict:
-        improved_question = self.query_enhancer.enhance_question(question, history=history)
-        print("pergunta original:", question)
-        print("pergunta melhorada:", improved_question)
-        vector = self.create_embedding_vector(improved_question)
-
+    def ask_knowledge_base(
+        self,
+        question: str,
+        history=None,
+        limit: int | None = None,
+        search_mode: str = "semantic",
+    ) -> dict:
         query_limit = limit if limit is not None else KB_MAX_CONTEXT_RESULTS
-        results = self.qdrant.query_points(collection_name=self.collection, query=vector, limit=query_limit)
+        normalized_mode = str(search_mode or "semantic").strip().lower()
+        if normalized_mode in {"full-text", "literal"}:
+            normalized_mode = "full_text"
+        
+        if normalized_mode == "semantic":
+            improved_question = self.query_enhancer.enhance_question(question, history=history)
+            print("pergunta original:", question)
+            print("pergunta melhorada:", improved_question)
+            vector = self.create_embedding_vector(improved_question)
+            results = self.qdrant.query_points(collection_name=self.collection, query=vector, limit=query_limit)
+            points = results.points
+        elif normalized_mode == "full_text":
+            improved_question = question
+            print("pergunta original:", question)
+            search_results = self.meilisearch.index(self.collection).search(
+                question,
+                limit=query_limit,
+                show_ranking_score=True,
+            )
+            points = [
+                SimpleNamespace(payload=hit, score=hit.get("_rankingScore"))
+                for hit in (search_results.hits or [])
+            ]
+            results = SimpleNamespace(points=points)
+        else:
+            raise ValueError("search_mode inválido. Use 'semantic' ou 'full_text'.")
 
-        context = "\n".join([item.payload["text"] for item in results.points])
+        context = "\n".join([(item.payload.get("text") or "") for item in points])
         return {
             "original_question": question,
             "improved_question": improved_question,
             "context": context,
             "results": results,
+            "search_mode": normalized_mode,
         }
 
     def _resolve_should_use_context(self, question: str, history_preview: str = "") -> bool:

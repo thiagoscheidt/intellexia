@@ -1385,12 +1385,16 @@ def intelligent_search():
     ).count()
     
     search_query = ''
+    search_mode = 'semantic'
     results = []
     grouped_results = []
     search_performed = False
     
     if request.method == 'POST':
         search_query = request.form.get('query', '').strip()
+        search_mode = request.form.get('search_mode', 'semantic').strip().lower()
+        if search_mode not in {'semantic', 'full_text'}:
+            search_mode = 'semantic'
         
         if search_query:
             try:
@@ -1398,7 +1402,12 @@ def intelligent_search():
                 query_agent = KnowledgeQueryAgent()
                 
                 # Fazer a busca vetorial diretamente
-                search_data = query_agent.ask_knowledge_base(search_query, history=None, limit=50)
+                search_data = query_agent.ask_knowledge_base(
+                    search_query,
+                    history=None,
+                    limit=50,
+                    search_mode=search_mode,
+                )
                 
                 # Processar os resultados
                 if search_data and search_data.get('results') and search_data['results'].points:
@@ -1408,7 +1417,14 @@ def intelligent_search():
 
                     for idx, point in enumerate(search_data['results'].points):
                         payload = point.payload
-                        base_score = float(point.score or 0)
+                        point_score = getattr(point, 'score', None)
+                        if point_score is None:
+                            point_score = payload.get('_rankingScore') if isinstance(payload, dict) else None
+
+                        if point_score is None and search_mode == 'full_text':
+                            point_score = max(0.35, 1.0 - (idx * 0.02))
+
+                        base_score = float(point_score or 0)
                         
                         # Buscar informações do arquivo no banco
                         file_info = None
@@ -1432,21 +1448,22 @@ def intelligent_search():
                         )
 
                         adjusted_score = base_score
-                        if has_literal_match:
-                            adjusted_score += 0.30 if name_query else 0.08
+                        if search_mode == 'semantic':
+                            if has_literal_match:
+                                adjusted_score += 0.30 if name_query else 0.08
 
-                        if name_query and query_tokens:
-                            matched_tokens = sum(1 for token in query_tokens if token in candidate_normalized)
-                            token_coverage = matched_tokens / len(query_tokens)
+                            if name_query and query_tokens:
+                                matched_tokens = sum(1 for token in query_tokens if token in candidate_normalized)
+                                token_coverage = matched_tokens / len(query_tokens)
 
-                            adjusted_score += 0.22 * token_coverage
-                            if token_coverage >= 0.95:
-                                adjusted_score += 0.10
-                            elif token_coverage >= 0.75:
-                                adjusted_score += 0.05
+                                adjusted_score += 0.22 * token_coverage
+                                if token_coverage >= 0.95:
+                                    adjusted_score += 0.10
+                                elif token_coverage >= 0.75:
+                                    adjusted_score += 0.05
 
                         adjusted_score = min(adjusted_score, 1.0)
-                        if adjusted_score <= 0.30:
+                        if adjusted_score <= 0.30 and search_mode == 'semantic':
                             continue
                         
                         result_item = {
@@ -1536,6 +1553,7 @@ def intelligent_search():
         'knowledge_base/intelligent_search.html',
         total_documents=total_documents,
         search_query=search_query,
+        search_mode=search_mode,
         results=results,
         grouped_results=grouped_results,
         search_performed=search_performed
