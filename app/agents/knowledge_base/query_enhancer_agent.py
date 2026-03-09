@@ -1,6 +1,9 @@
 import os
+import time
 
+from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
+from app.services.token_usage_service import TokenUsageService
 
 
 class QueryEnhancerAgent:
@@ -9,6 +12,7 @@ class QueryEnhancerAgent:
     def __init__(self, model_name: str | None = None):
         self.model_name = model_name or os.getenv("QUERY_ENHANCER_MODEL", "gpt-4o-mini")
         self.llm = ChatOpenAI(model=self.model_name, temperature=0)
+        self.token_usage_service = TokenUsageService()
 
     def enhance_question(self, question: str, history: list[dict] | None = None) -> str:
         cleaned_question = (question or "").strip()
@@ -43,13 +47,49 @@ class QueryEnhancerAgent:
         )
 
         try:
-            response = self.llm.invoke(
-                [
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt},
-                ]
+            agent = create_agent(
+                model=self.llm,
+                system_prompt=system_prompt,
             )
-            improved_question = (response.content or "").strip()
+            
+            messages = [{"role": "user", "content": user_prompt}]
+            
+            call_started_at = time.time()
+            response_payload = agent.invoke({"messages": messages})
+            latency_ms = int((time.time() - call_started_at) * 1000)
+            
+            # Capturar e salvar uso de tokens
+            self.token_usage_service.capture_and_store(
+                response_payload,
+                agent_name="QueryEnhancerAgent",
+                action_name="enhance_question",
+                print_prefix="[QueryEnhancerAgent][tokens]",
+                model_name=self.model_name,
+                model_provider="openai",
+                user_id=None,
+                law_firm_id=None,
+                chat_session_id=None,
+                latency_ms=latency_ms,
+                status="success",
+                metadata_payload={
+                    "original_question": cleaned_question[:200],
+                    "has_history": len(history_lines) > 0,
+                },
+            )
+            
+            # Extrair resposta das mensagens
+            messages_result = response_payload.get("messages", [])
+            if messages_result:
+                last_message = messages_result[-1]
+                if hasattr(last_message, "content"):
+                    improved_question = (last_message.content or "").strip()
+                elif isinstance(last_message, dict):
+                    improved_question = (last_message.get("content", "") or "").strip()
+                else:
+                    improved_question = str(last_message).strip()
+            else:
+                improved_question = cleaned_question
+            
             return improved_question or cleaned_question
         except Exception as e:
             print(f"Erro ao melhorar pergunta para busca: {str(e)}")

@@ -34,9 +34,16 @@
           <ul class="nav nav-treeview">
             <li class="nav-item">
               <a href="{{ url_for('dashboard.dashboard') }}"
-                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('dashboard.') else '' }}">
+                class="nav-link {{ 'active' if request.endpoint == 'dashboard.dashboard' else '' }}">
                 <i class="nav-icon bi bi-graph-up"></i>
                 <p>Dashboard Principal</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('dashboard.dashboard_tokens') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'dashboard.dashboard_tokens' else '' }}">
+                <i class="nav-icon bi bi-cpu"></i>
+                <p>Dashboard de Tokens</p>
               </a>
             </li>
           </ul>

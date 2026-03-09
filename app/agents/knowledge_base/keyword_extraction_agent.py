@@ -1,7 +1,11 @@
 import os
 import logging
+import time
 from pydantic import BaseModel, Field
-from langchain.chat_models import init_chat_model
+from langchain_openai import ChatOpenAI
+from langchain.agents import create_agent
+from langchain.agents.structured_output import ToolStrategy
+from app.services.token_usage_service import TokenUsageService
 
 
 logger = logging.getLogger(__name__)
@@ -22,9 +26,8 @@ class KeywordExtractionAgent:
 
     def __init__(self, model_name: str | None = None):
         self.model_name = model_name or os.getenv("KB_ROUTER_MODEL", "gpt-5-nano")
-        self.llm = init_chat_model(self.model_name, temperature=0).with_structured_output(
-            KeywordExtractionSchema
-        )
+        self.llm = ChatOpenAI(model=self.model_name, temperature=0)
+        self.token_usage_service = TokenUsageService()
 
     def extract_keywords(self, question: str) -> list[str]:
         """
@@ -66,7 +69,32 @@ class KeywordExtractionAgent:
         ]
 
         try:
-            result = self.llm.invoke(messages)
+            agent = create_agent(
+                model=self.llm,
+                response_format=ToolStrategy(KeywordExtractionSchema),
+            )
+            
+            call_started_at = time.time()
+            response_payload = agent.invoke({"messages": messages})
+            latency_ms = int((time.time() - call_started_at) * 1000)
+            
+            # Capturar tokens
+            self.token_usage_service.capture_and_store(
+                response_payload,
+                agent_name="KeywordExtractionAgent",
+                action_name="extract_keywords",
+                print_prefix="[KeywordExtractionAgent][tokens]",
+                model_name=self.model_name,
+                model_provider="openai",
+                latency_ms=latency_ms,
+                status="success",
+                metadata_payload={"question_length": len(question)},
+            )
+            
+            result = response_payload.get("structured_response")
+            if not result:
+                raise RuntimeError("Resposta estruturada não retornada pelo create_agent")
+            
             logger.debug(
                 "Extração de termos-chave concluída | "
                 "extracted_type=%s | keywords_count=%d | keywords=%s",

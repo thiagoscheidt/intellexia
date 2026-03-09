@@ -1,6 +1,10 @@
 import os
+import time
 from pydantic import BaseModel, Field
-from langchain.chat_models import init_chat_model
+from langchain_openai import ChatOpenAI
+from langchain.agents import create_agent
+from langchain.agents.structured_output import ToolStrategy
+from app.services.token_usage_service import TokenUsageService
 
 
 class ContextRetrievalDecisionSchema(BaseModel):
@@ -18,9 +22,8 @@ class ContextRetrievalRoutingAgent:
 
     def __init__(self, model_name: str | None = None):
         self.model_name = model_name or os.getenv("KB_ROUTER_MODEL", "gpt-5-nano")
-        self.llm = init_chat_model(self.model_name, temperature=0).with_structured_output(
-            ContextRetrievalDecisionSchema
-        )
+        self.llm = ChatOpenAI(model=self.model_name, temperature=0)
+        self.token_usage_service = TokenUsageService()
 
     def decide_retrieval_and_mode(
         self, question: str, history: list[dict] | None = None
@@ -67,7 +70,36 @@ class ContextRetrievalRoutingAgent:
         ]
 
         try:
-            return self.llm.invoke(messages)
+            agent = create_agent(
+                model=self.llm,
+                response_format=ToolStrategy(ContextRetrievalDecisionSchema),
+            )
+            
+            call_started_at = time.time()
+            response_payload = agent.invoke({"messages": messages})
+            latency_ms = int((time.time() - call_started_at) * 1000)
+            
+            # Capturar tokens
+            self.token_usage_service.capture_and_store(
+                response_payload,
+                agent_name="ContextRetrievalRoutingAgent",
+                action_name="decide_retrieval_and_mode",
+                print_prefix="[ContextRetrievalRoutingAgent][tokens]",
+                model_name=self.model_name,
+                model_provider="openai",
+                latency_ms=latency_ms,
+                status="success",
+                metadata_payload={
+                    "question_length": len(question),
+                    "has_history": bool(history_preview),
+                },
+            )
+            
+            result = response_payload.get("structured_response")
+            if not result:
+                raise RuntimeError("Resposta estruturada não retornada pelo create_agent")
+            
+            return result
         except Exception as e:
             print(f"Erro ao decidir retrieval e modo: {str(e)}")
             return ContextRetrievalDecisionSchema(should_retrieve_context=True, search_mode="semantic")

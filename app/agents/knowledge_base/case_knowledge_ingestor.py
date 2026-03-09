@@ -14,8 +14,11 @@ from qdrant_client import QdrantClient
 from qdrant_client.http import models as rest
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_openai import ChatOpenAI
+from langchain.agents import create_agent
+from langchain.agents.structured_output import ToolStrategy
 from docling.document_converter import DocumentConverter
 from pydantic import BaseModel, Field
+from app.services.token_usage_service import TokenUsageService
 
 
 load_dotenv()
@@ -298,41 +301,62 @@ class CaseKnowledgeIngestor:
         # Medir tempo de resposta
         start_time = time.time()
 
-        # Usar LLM para gerar resposta baseada no contexto
-        llm = ChatOpenAI(
-            model="gpt-5-mini",
-            temperature=0
-        ).with_structured_output(ResponseSchema)
+        # Usar LLM com create_agent para gerar resposta baseada no contexto
+        llm = ChatOpenAI(model="gpt-5-mini", temperature=0)
+        token_usage_service = TokenUsageService()
 
         # Mensagem de sistema com instruções
-        system_message = {
-            "role": "system", 
-            "content": "Você é um assistente jurídico, que deve auxiliar na desenvolvimento de petições e outras atividades jurídicas."
-        }
-        
-        context_message = {
-            "role": "system", 
-            "content": f"Contexto disponível:\n\n{formatted_context}\n\nIMPORTANTE: No campo 'sources', liste APENAS os números das fontes que você realmente usou para responder (ex: ['0', '2']). Se não souber a resposta com base no contexto, informe claramente que não possui essa informação e retorne sources como lista vazia."
-        }
+        system_prompt = (
+            "Você é um assistente jurídico, que deve auxiliar na desenvolvimento de petições e outras atividades jurídicas.\n\n"
+            f"Contexto disponível:\n\n{formatted_context}\n\n"
+            "IMPORTANTE: No campo 'sources', liste APENAS os números das fontes que você realmente usou "
+            "para responder (ex: ['0', '2']). Se não souber a resposta com base no contexto, informe "
+            "claramente que não possui essa informação e retorne sources como lista vazia."
+        )
 
         # Construir mensagens para o LLM
         if history is None or len(history) == 0:
             # Primeira pergunta da conversa
             messages = [
-                system_message,
-                context_message,
                 {"role": "user", "content": question}
             ]
         else:
             # Limitar histórico às últimas 5 interações (10 mensagens)
             limited_history = history[-10:] if len(history) > 10 else history
             # Continuar conversa com histórico limitado
-            messages = [system_message] + limited_history + [
-                context_message,
+            messages = limited_history + [
                 {"role": "user", "content": question}
             ]
-            
-        response = llm.invoke(messages)
+        
+        agent = create_agent(
+            model=llm,
+            system_prompt=system_prompt,
+            response_format=ToolStrategy(ResponseSchema),
+        )
+        
+        call_started_at = time.time()
+        response_payload = agent.invoke({"messages": messages})
+        latency_ms = int((time.time() - call_started_at) * 1000)
+        
+        # Capturar tokens
+        token_usage_service.capture_and_store(
+            response_payload,
+            agent_name="CaseKnowledgeIngestor",
+            action_name="ask_with_llm",
+            print_prefix="[CaseKnowledgeIngestor][tokens]",
+            model_name="gpt-5-mini",
+            model_provider="openai",
+            latency_ms=latency_ms,
+            status="success",
+            metadata_payload={
+                "sources_count": len(results),
+                "question_length": len(question),
+            },
+        )
+        
+        response = response_payload.get("structured_response")
+        if not response:
+            raise RuntimeError("Resposta estruturada não retornada pelo create_agent")
         
         # Calcular tempo de resposta
         response_time_ms = int((time.time() - start_time) * 1000)

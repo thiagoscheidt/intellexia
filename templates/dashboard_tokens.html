@@ -1,0 +1,299 @@
+{% extends 'layout/base.html' %}
+
+{% block title %}Dashboard de Tokens{% endblock %}
+{% block page_title %}Dashboard de Tokens{% endblock %}
+
+{% block extra_css %}
+<style>
+  .token-card {
+    border-radius: 14px;
+    border: 1px solid var(--bs-border-color);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, .04);
+  }
+
+  .token-kpi {
+    border-radius: 12px;
+    border: 1px solid var(--bs-border-color);
+    padding: 1rem;
+    height: 100%;
+  }
+
+  .token-kpi__label {
+    font-size: .78rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--bs-secondary-color);
+  }
+
+  .token-kpi__value {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-top: .2rem;
+    line-height: 1.1;
+  }
+
+  .token-table thead th {
+    font-size: .74rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--bs-secondary-color);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-3">
+  <div class="col-12">
+    <div class="card token-card">
+      <div class="card-body d-flex flex-column flex-lg-row justify-content-between gap-3 align-items-lg-center">
+        <div>
+          <h1 class="h4 mb-1 fw-bold">Monitoramento de Tokens</h1>
+          <small class="text-body-secondary">Acompanhe consumo, custo estimado e saúde das execuções dos agentes</small>
+        </div>
+        <form method="get" class="row g-2 align-items-end">
+          <div class="col-auto">
+            <label class="form-label form-label-sm mb-1">Período (dias)</label>
+            <select name="days" class="form-select form-select-sm">
+              {% for option in [7, 15, 30, 60, 90, 180, 365] %}
+              <option value="{{ option }}" {{ 'selected' if days == option else '' }}>{{ option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-auto">
+            <label class="form-label form-label-sm mb-1">Agente</label>
+            <select name="agent" class="form-select form-select-sm">
+              <option value="">Todos</option>
+              {% for item in all_agents %}
+              <option value="{{ item }}" {{ 'selected' if selected_agent == item else '' }}>{{ item }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-auto">
+            <label class="form-label form-label-sm mb-1">Ação</label>
+            <select name="action" class="form-select form-select-sm">
+              <option value="">Todas</option>
+              {% for item in all_actions %}
+              <option value="{{ item }}" {{ 'selected' if selected_action == item else '' }}>{{ item }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-auto">
+            <label class="form-label form-label-sm mb-1">Modelo</label>
+            <select name="model" class="form-select form-select-sm">
+              <option value="">Todos</option>
+              {% for item in all_models %}
+              <option value="{{ item }}" {{ 'selected' if selected_model == item else '' }}>{{ item }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-auto d-flex gap-2">
+            <button class="btn btn-sm btn-primary" type="submit"><i class="bi bi-funnel me-1"></i>Filtrar</button>
+            <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('dashboard.dashboard_tokens') }}"><i class="bi bi-x-circle me-1"></i>Limpar</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-6 col-xl-3"><div class="token-kpi"><div class="token-kpi__label">Total de tokens</div><div class="token-kpi__value">{{ '{:,}'.format(total_tokens|int).replace(',', '.') }}</div></div></div>
+  <div class="col-md-6 col-xl-3"><div class="token-kpi"><div class="token-kpi__label">Total de chamadas</div><div class="token-kpi__value">{{ '{:,}'.format(total_calls|int).replace(',', '.') }}</div></div></div>
+  <div class="col-md-6 col-xl-3"><div class="token-kpi"><div class="token-kpi__label">Entrada / Saída</div><div class="token-kpi__value">{{ '{:,}'.format(total_input_tokens|int).replace(',', '.') }} / {{ '{:,}'.format(total_output_tokens|int).replace(',', '.') }}</div></div></div>
+  <div class="col-md-6 col-xl-3"><div class="token-kpi"><div class="token-kpi__label">Custo estimado (USD)</div><div class="token-kpi__value">$ {{ '%.6f'|format(total_cost_usd or 0) }}</div></div></div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-md-6 col-xl-3"><div class="token-kpi"><div class="token-kpi__label">Média tokens/chamada</div><div class="token-kpi__value">{{ '{:,.2f}'.format(avg_tokens_per_call or 0).replace(',', 'X').replace('.', ',').replace('X', '.') }}</div></div></div>
+  <div class="col-md-6 col-xl-3"><div class="token-kpi"><div class="token-kpi__label">Média custo/chamada</div><div class="token-kpi__value">$ {{ '%.8f'|format(avg_cost_per_call or 0) }}</div></div></div>
+  <div class="col-md-6 col-xl-3"><div class="token-kpi"><div class="token-kpi__label">Execuções com sucesso</div><div class="token-kpi__value text-success">{{ success_count }}</div></div></div>
+  <div class="col-md-6 col-xl-3"><div class="token-kpi"><div class="token-kpi__label">Execuções com erro</div><div class="token-kpi__value text-danger">{{ error_count }}</div></div></div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-lg-8">
+    <div class="card token-card">
+      <div class="card-header bg-transparent"><strong>Evolução diária</strong></div>
+      <div class="card-body"><canvas id="tokensOverTime" height="120"></canvas></div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="card token-card h-100">
+      <div class="card-header bg-transparent"><strong>Distribuição por modelo</strong></div>
+      <div class="card-body"><canvas id="tokensByModel" height="120"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-lg-6">
+    <div class="card token-card">
+      <div class="card-header bg-transparent"><strong>Top agentes por tokens</strong></div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0 token-table">
+            <thead><tr><th>Agente</th><th class="text-end">Tokens</th><th class="text-end">Chamadas</th><th class="text-end">Custo USD</th></tr></thead>
+            <tbody>
+              {% for item in top_agents %}
+              <tr>
+                <td>{{ item.name }}</td>
+                <td class="text-end">{{ '{:,}'.format(item.tokens|int).replace(',', '.') }}</td>
+                <td class="text-end">{{ item.calls }}</td>
+                <td class="text-end">{{ '%.6f'|format(item.cost_usd or 0) }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="4" class="text-center text-muted py-3">Sem dados no período</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card token-card">
+      <div class="card-header bg-transparent"><strong>Top ações por tokens</strong></div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0 token-table">
+            <thead><tr><th>Ação</th><th class="text-end">Tokens</th><th class="text-end">Chamadas</th><th class="text-end">Custo USD</th></tr></thead>
+            <tbody>
+              {% for item in top_actions %}
+              <tr>
+                <td>{{ item.name }}</td>
+                <td class="text-end">{{ '{:,}'.format(item.tokens|int).replace(',', '.') }}</td>
+                <td class="text-end">{{ item.calls }}</td>
+                <td class="text-end">{{ '%.6f'|format(item.cost_usd or 0) }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="4" class="text-center text-muted py-3">Sem dados no período</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-12">
+    <div class="card token-card">
+      <div class="card-header bg-transparent"><strong>Últimas execuções</strong></div>
+      <div class="card-body p-0">
+        <div class="table-responsive">
+          <table class="table table-sm mb-0 token-table">
+            <thead>
+              <tr>
+                <th>Data/Hora</th>
+                <th>Agente</th>
+                <th>Ação</th>
+                <th>Modelo</th>
+                <th>Status</th>
+                <th class="text-end">Input</th>
+                <th class="text-end">Output</th>
+                <th class="text-end">Total</th>
+                <th class="text-end">Latência ms</th>
+                <th class="text-end">Custo USD</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in recent_entries %}
+              <tr>
+                <td>{{ row.created_at.strftime('%d/%m/%Y %H:%M:%S') if row.created_at else '-' }}</td>
+                <td>{{ row.agent_name or '-' }}</td>
+                <td>{{ row.action_name or '-' }}</td>
+                <td>{{ row.model_name or '-' }}</td>
+                <td>
+                  {% if row.status == 'success' %}
+                    <span class="badge text-bg-success">sucesso</span>
+                  {% else %}
+                    <span class="badge text-bg-danger">erro</span>
+                  {% endif %}
+                </td>
+                <td class="text-end">{{ row.input_tokens }}</td>
+                <td class="text-end">{{ row.output_tokens }}</td>
+                <td class="text-end fw-semibold">{{ row.total_tokens }}</td>
+                <td class="text-end">{{ row.latency_ms }}</td>
+                <td class="text-end">{{ '%.8f'|format(row.cost_usd or 0) }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="10" class="text-center text-muted py-3">Nenhuma execução registrada no período selecionado</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" crossorigin="anonymous"></script>
+<script>
+  (function () {
+    const labels = {{ date_labels|tojson }};
+    const tokens = {{ date_tokens|tojson }};
+    const calls = {{ date_calls|tojson }};
+
+    const overTimeCtx = document.getElementById('tokensOverTime');
+    if (overTimeCtx && labels.length) {
+      new Chart(overTimeCtx, {
+        type: 'line',
+        data: {
+          labels,
+          datasets: [
+            {
+              label: 'Tokens',
+              data: tokens,
+              borderColor: '#4f46e5',
+              backgroundColor: 'rgba(79,70,229,0.14)',
+              yAxisID: 'yTokens',
+              tension: .3,
+              fill: true,
+            },
+            {
+              label: 'Chamadas',
+              data: calls,
+              borderColor: '#0ea5e9',
+              backgroundColor: 'rgba(14,165,233,0.1)',
+              yAxisID: 'yCalls',
+              tension: .3,
+              fill: false,
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            yTokens: { type: 'linear', position: 'left' },
+            yCalls: { type: 'linear', position: 'right', grid: { drawOnChartArea: false } }
+          }
+        }
+      });
+    }
+
+    const modelCtx = document.getElementById('tokensByModel');
+    const modelData = {{ model_distribution|tojson }};
+    if (modelCtx && modelData.length) {
+      new Chart(modelCtx, {
+        type: 'doughnut',
+        data: {
+          labels: modelData.map(i => i.name),
+          datasets: [{
+            data: modelData.map(i => i.tokens),
+            backgroundColor: ['#4f46e5', '#0ea5e9', '#22c55e', '#f59e0b', '#ef4444', '#a855f7'],
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: { legend: { position: 'bottom' } }
+        }
+      });
+    }
+  })();
+</script>
+{% endblock %}

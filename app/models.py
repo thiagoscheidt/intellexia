@@ -659,6 +659,47 @@ class KnowledgeChatHistory(db.Model):
         return f'<KnowledgeChatHistory {self.id}>'
 
 
+class AgentTokenUsage(db.Model):
+    """Tabela agent_token_usage - Log de uso de tokens por ação dos agentes."""
+    __tablename__ = 'agent_token_usage'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), index=True)
+    chat_session_id = db.Column(db.Integer, db.ForeignKey('knowledge_chat_sessions.id'), index=True)
+
+    agent_name = db.Column(db.String(120), nullable=False, index=True)
+    action_name = db.Column(db.String(160), nullable=False, index=True)
+    model_name = db.Column(db.String(120), index=True)
+    model_provider = db.Column(db.String(80), index=True)
+    request_id = db.Column(db.String(120), index=True)
+    message_role = db.Column(db.String(40), index=True)
+    finish_reason = db.Column(db.String(80), index=True)
+    status = db.Column(db.String(20), default='success', index=True)
+    error_message = db.Column(db.Text)
+
+    message_index = db.Column(db.Integer)
+    latency_ms = db.Column(db.Integer)
+    input_tokens = db.Column(db.Integer, default=0)
+    output_tokens = db.Column(db.Integer, default=0)
+    total_tokens = db.Column(db.Integer, default=0, nullable=False, index=True)
+    estimated_cost_usd = db.Column(db.Numeric(14, 8), default=Decimal('0'))
+    currency = db.Column(db.String(10), default='USD')
+
+    usage_payload = db.Column(db.JSON)
+    metadata_payload = db.Column(db.JSON)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+
+    user = db.relationship('User')
+    law_firm = db.relationship('LawFirm')
+    chat_session = db.relationship('KnowledgeChatSession')
+
+    def __repr__(self):
+        return f'<AgentTokenUsage {self.agent_name}:{self.action_name} total={self.total_tokens}>'
+
+
 class KnowledgeSummary(db.Model):
     """Tabela knowledge_summaries - Resumos gerados pela IA para arquivos da base de conhecimento"""
     __tablename__ = 'knowledge_summaries'

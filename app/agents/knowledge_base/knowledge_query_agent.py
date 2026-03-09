@@ -23,10 +23,10 @@ from app.models import db, KnowledgeChatHistory, KnowledgeChatSession
 from app.agents.knowledge_base.query_enhancer_agent import QueryEnhancerAgent
 from app.agents.knowledge_base.context_retrieval_routing_agent import (
     ContextRetrievalRoutingAgent,
-    ContextRetrievalDecisionSchema,
 )
 from app.agents.knowledge_base.keyword_extraction_agent import KeywordExtractionAgent
 from app.agents.knowledge_base.tools import KnowledgeQueryTools
+from app.services.token_usage_service import TokenUsageService
 
 
 load_dotenv()
@@ -90,6 +90,7 @@ class KnowledgeQueryAgent:
         self._context_search_calls = 0
         self._cached_should_use_context = None
         self.tools_registry = KnowledgeQueryTools()
+        self.token_usage_service = TokenUsageService()
         self.router_llm = ChatOpenAI(model=ROUTER_MODEL, temperature=0).with_structured_output(RetrievalDecisionSchema)
         self.response_llm = ChatOpenAI(model=QUERY_MODEL, temperature=0)
 
@@ -381,9 +382,29 @@ class KnowledgeQueryAgent:
         )
 
         try:
+            total_tokens = 0
+            call_started_at = time.time()
             response_payload = response_agent.invoke(
                 {"messages": messages},
                 config={"recursion_limit": KB_AGENT_RECURSION_LIMIT},
+            )
+            latency_ms = int((time.time() - call_started_at) * 1000)
+            total_tokens = self.token_usage_service.capture_and_store(
+                response_payload,
+                agent_name="KnowledgeQueryAgent",
+                action_name="ask_with_llm.create_agent",
+                print_prefix="[KnowledgeQueryAgent][tokens]",
+                model_name=QUERY_MODEL,
+                model_provider="openai",
+                user_id=user_id,
+                law_firm_id=law_firm_id,
+                chat_session_id=chat_session_id,
+                latency_ms=latency_ms,
+                status="success",
+                metadata_payload={
+                    "search_mode": search_mode,
+                    "has_attachments": has_attachments,
+                },
             )
             structured_response = response_payload.get("structured_response")
             if not structured_response:
@@ -493,6 +514,7 @@ class KnowledgeQueryAgent:
                     answer=response.answer,
                     sources=json.dumps(used_sources, ensure_ascii=False),
                     response_time_ms=response_time_ms,
+                    tokens_used=total_tokens,
                 )
 
                 db.session.add(history_entry)

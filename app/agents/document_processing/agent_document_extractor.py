@@ -1,5 +1,6 @@
 import re
 import os
+import time
 from pathlib import Path
 from typing import Any, Optional, List
 
@@ -9,10 +10,11 @@ import pdfplumber
 from pydantic import BaseModel, Field
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ToolStrategy
-from langchain.chat_models import init_chat_model
+from langchain_openai import ChatOpenAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
+from app.services.token_usage_service import TokenUsageService
 
 
 load_dotenv()
@@ -65,11 +67,11 @@ class AgentDocumentExtractor:
         self.embedding_model = embedding_model
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
-        self.chat_model = init_chat_model(
+        self.chat_model = ChatOpenAI(
             model=self.model_name,
-            model_provider=self.model_provider,
             temperature=0,
         )
+        self.token_usage_service = TokenUsageService()
 
     def _build_extraction_agent(self):
         return create_agent(
@@ -357,12 +359,28 @@ class AgentDocumentExtractor:
 
         try:
             extraction_agent = self._build_extraction_agent()
+            call_started_at = time.time()
             response_payload = extraction_agent.invoke(
                 {
                     "messages": [
                         {"role": "user", "content": user_prompt},
                     ]
                 }
+            )
+            latency_ms = int((time.time() - call_started_at) * 1000)
+            self.token_usage_service.capture_and_store(
+                response_payload,
+                agent_name="AgentDocumentExtractor",
+                action_name="extract_document_data.create_agent",
+                print_prefix="[AgentDocumentExtractor][extract_document_data][tokens]",
+                model_name=self.model_name,
+                model_provider=self.model_provider,
+                latency_ms=latency_ms,
+                status="success",
+                metadata_payload={
+                    "source_file": str(file_path),
+                    "chunks_count": chunks_count,
+                },
             )
             structured_response = response_payload.get("structured_response")
             if not structured_response:
@@ -463,12 +481,28 @@ class AgentDocumentExtractor:
 
         try:
             benefits_agent = self._build_benefits_extraction_agent()
+            call_started_at = time.time()
             response_payload = benefits_agent.invoke(
                 {
                     "messages": [
                         {"role": "user", "content": user_prompt},
                     ]
                 }
+            )
+            latency_ms = int((time.time() - call_started_at) * 1000)
+            self.token_usage_service.capture_and_store(
+                response_payload,
+                agent_name="AgentDocumentExtractor",
+                action_name="extract_benefits_from_petition.create_agent",
+                print_prefix="[AgentDocumentExtractor][extract_benefits][tokens]",
+                model_name=self.model_name,
+                model_provider=self.model_provider,
+                latency_ms=latency_ms,
+                status="success",
+                metadata_payload={
+                    "source_file": str(file_path) if file_path else None,
+                    "table_rows_count": len(table_rows),
+                },
             )
             structured_response = response_payload.get("structured_response")
             if not structured_response:

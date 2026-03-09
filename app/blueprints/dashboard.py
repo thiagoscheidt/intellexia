@@ -5,6 +5,8 @@ from datetime import datetime
 from functools import wraps
 from decimal import Decimal
 
+from app.services.token_analytics_service import TokenAnalyticsService
+
 dashboard_bp = Blueprint('dashboard', __name__)
 
 def require_law_firm(f):
@@ -198,6 +200,80 @@ def dashboard():
             user=user if 'user' in locals() else None,
             law_firm=law_firm if 'law_firm' in locals() else None
         )
+
+@dashboard_bp.route('/dashboard/tokens')
+@require_law_firm
+def dashboard_tokens():
+    """Dashboard de monitoramento de uso de tokens dos agentes."""
+    try:
+        user = User.query.get(session.get('user_id'))
+        law_firm = user.law_firm if user else None
+        law_firm_id = get_current_law_firm_id()
+
+        days_raw = request.args.get('days', '30')
+        selected_agent = (request.args.get('agent') or '').strip()
+        selected_action = (request.args.get('action') or '').strip()
+        selected_model = (request.args.get('model') or '').strip()
+
+        try:
+            days = int(days_raw)
+        except Exception:
+            days = 30
+        days = max(1, min(days, 365))
+
+        analytics_service = TokenAnalyticsService()
+        metrics = analytics_service.build_dashboard_data(
+            law_firm_id=law_firm_id,
+            days=days,
+            agent_name=selected_agent or None,
+            action_name=selected_action or None,
+            model_name=selected_model or None,
+        )
+
+        return render_template(
+            'dashboard_tokens.html',
+            user=user,
+            law_firm=law_firm,
+            days=days,
+            **metrics,
+        )
+    except Exception as e:
+        print(f"Erro no dashboard de tokens: {str(e)}")
+        from flask import flash
+        flash(f'Erro ao carregar dashboard de tokens: {str(e)}', 'danger')
+        return render_template(
+            'dashboard_tokens.html',
+            user=None,
+            law_firm=None,
+            days=30,
+            period_days=30,
+            period_start=None,
+            period_end=None,
+            total_calls=0,
+            total_input_tokens=0,
+            total_output_tokens=0,
+            total_tokens=0,
+            total_cost_usd=0,
+            avg_tokens_per_call=0,
+            avg_cost_per_call=0,
+            success_count=0,
+            error_count=0,
+            date_labels=[],
+            date_tokens=[],
+            date_calls=[],
+            date_costs=[],
+            top_agents=[],
+            top_actions=[],
+            model_distribution=[],
+            recent_entries=[],
+            all_agents=[],
+            all_actions=[],
+            all_models=[],
+            selected_agent='',
+            selected_action='',
+            selected_model='',
+        )
+
 
 @dashboard_bp.route('/api/health', methods=['GET'])
 def health_check():
