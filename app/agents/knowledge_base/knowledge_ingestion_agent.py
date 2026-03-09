@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Optional
 
 from dotenv import load_dotenv
+from meilisearch_python_sdk import Client as MeilisearchClient
 from openai import OpenAI
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as rest
@@ -23,6 +24,8 @@ VECTOR_SIZE = int(os.getenv("VECTOR_SIZE", "0"))
 DEFAULT_COLLECTION = os.getenv("QDRANT_COLLECTION", "knowledge_base")
 QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
+MEILISEARCH_HOST = os.getenv("MEILISEARCH_HOST", "http://localhost:7700")
+MEILISEARCH_API_KEY = os.getenv("MEILISEARCH_API_KEY")
 MAX_CHARS_PER_CHUNK = int(os.getenv("MAX_CHARS_PER_CHUNK", "1500"))
 
 
@@ -37,8 +40,10 @@ class KnowledgeIngestionAgent:
 
         self.collection = collection_name
         self.qdrant = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=60)
+        self.meilisearch = MeilisearchClient(MEILISEARCH_HOST, MEILISEARCH_API_KEY)
         self.openai = OpenAI()
         self._ensure_collection()
+        self._ensure_meilisearch_index()
 
     def _ensure_collection(self) -> None:
         if self.qdrant.collection_exists(self.collection):
@@ -51,6 +56,9 @@ class KnowledgeIngestionAgent:
     def _embed(self, text: str) -> list[float]:
         response = self.openai.embeddings.create(input=text, model=EMBEDDING_MODEL)
         return response.data[0].embedding
+
+    def _ensure_meilisearch_index(self) -> None:
+        self.meilisearch.get_or_create_index(uid=self.collection, primary_key="id")
 
     def _chunk_text(self, text: str, chunk_size: int = MAX_CHARS_PER_CHUNK) -> list[dict]:
         """Divide o texto em chunks, mantendo informações de metadados."""
@@ -84,6 +92,7 @@ class KnowledgeIngestionAgent:
         print(f"Dividindo documento '{source}' em {total} chunks")
 
         points: list[rest.PointStruct] = []
+        meilisearch_documents: list[dict] = []
         for idx, chunk_data in enumerate(chunks):
             chunk_text = chunk_data.get("text", chunk_data) if isinstance(chunk_data, dict) else chunk_data
             chunk_page = chunk_data.get("page") if isinstance(chunk_data, dict) else None
@@ -114,8 +123,15 @@ class KnowledgeIngestionAgent:
 
             points.append(rest.PointStruct(id=point_id, vector=vector, payload=payload))
             point_ids.append(point_id)
+            meilisearch_documents.append(
+                {
+                    "id": point_id,
+                    **payload,
+                }
+            )
 
         self.qdrant.upsert(collection_name=self.collection, points=points, wait=True)
+        self.meilisearch.index(self.collection).add_documents(meilisearch_documents)
         return point_ids
 
     def process_file(

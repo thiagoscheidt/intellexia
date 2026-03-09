@@ -21,6 +21,7 @@ dependencies = [
     "langchain-openai>=1.1.6",
     "langchain-text-splitters>=1.1.0",
     "markitdown>=0.0.2",
+    "meilisearch-python-sdk>=7.0.3",
     "openai>=2.14.0",
     "openpyxl>=3.1.5",
     "pdf2image>=1.17.0",
