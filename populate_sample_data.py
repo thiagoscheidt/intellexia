@@ -40,9 +40,19 @@ def import_models():
         db, LawFirm, User, Client, Court, Lawyer, Case, CaseLawyer, 
         CaseCompetence, CaseBenefit, Document, CaseActivity, CaseComment,
         CaseStatus,
-        KnowledgeCategory, KnowledgeTag, FapReason, CaseTemplate
+        KnowledgeCategory, KnowledgeTag, FapReason, CaseTemplate,
+        JudicialDefendant, JudicialPhase, JudicialDocumentType,
+        JudicialProcess, JudicialProcessNote, JudicialEvent,
+        JudicialMovement, JudicialDocument, JudicialProcessBenefit
     )
-    return app, db, LawFirm, User, Client, Court, Lawyer, Case, CaseLawyer, CaseCompetence, CaseBenefit, Document, CaseActivity, CaseComment, CaseStatus, KnowledgeCategory, KnowledgeTag, FapReason, CaseTemplate
+    return (
+        app, db, LawFirm, User, Client, Court, Lawyer, Case, CaseLawyer,
+        CaseCompetence, CaseBenefit, Document, CaseActivity, CaseComment,
+        CaseStatus, KnowledgeCategory, KnowledgeTag, FapReason, CaseTemplate,
+        JudicialDefendant, JudicialPhase, JudicialDocumentType,
+        JudicialProcess, JudicialProcessNote, JudicialEvent,
+        JudicialMovement, JudicialDocument, JudicialProcessBenefit
+    )
 
 def ensure_case_statuses(db, CaseStatus):
     """Garante que os status padrão de casos existam no banco"""
@@ -999,13 +1009,396 @@ def create_sample_comments(db, CaseComment, cases, users):
     
     return comments
 
+
+def create_sample_judicial_defendants(db, JudicialDefendant, law_firm):
+    """Cria réus (polos passivos) de exemplo para processos judiciais"""
+    defendants_data = [
+        "INSS - Instituto Nacional do Seguro Social",
+        "União Federal",
+        "Fazenda Nacional",
+        "Município de São Paulo",
+    ]
+
+    defendants = []
+    for name in defendants_data:
+        existing = JudicialDefendant.query.filter_by(
+            law_firm_id=law_firm.id,
+            name=name
+        ).first()
+
+        if not existing:
+            defendant = JudicialDefendant(
+                law_firm_id=law_firm.id,
+                name=name,
+                is_active=True
+            )
+            db.session.add(defendant)
+            defendants.append(defendant)
+            print(f"✓ Réu judicial criado: {name}")
+        else:
+            defendants.append(existing)
+            print(f"→ Réu judicial já existe: {name}")
+
+    return defendants
+
+
+def create_sample_judicial_phases_and_types(db, JudicialPhase, JudicialDocumentType, law_firm):
+    """Cria fases e tipos documentais padrão do painel judicial"""
+    phases_data = [
+        {
+            "key": "inicio_processo",
+            "name": "Início do Processo",
+            "display_order": 1,
+            "types": [
+                ("peticao_inicial", "Petição Inicial"),
+                ("documentos_iniciais", "Documentos Iniciais"),
+            ]
+        },
+        {
+            "key": "defesa_reu",
+            "name": "Defesa do Réu",
+            "display_order": 2,
+            "types": [
+                ("contestacao", "Contestação"),
+                ("impugnacao", "Impugnação"),
+            ]
+        },
+        {
+            "key": "julgamento",
+            "name": "Julgamento",
+            "display_order": 3,
+            "types": [
+                ("sentenca", "Sentença"),
+                ("acordao", "Acórdão"),
+            ]
+        },
+        {
+            "key": "recursos",
+            "name": "Recursos",
+            "display_order": 4,
+            "types": [
+                ("apelacao", "Apelação"),
+                ("embargos_declaracao", "Embargos de Declaração"),
+            ]
+        },
+    ]
+
+    phases = []
+    document_types = []
+
+    for phase_data in phases_data:
+        phase = JudicialPhase.query.filter_by(
+            law_firm_id=law_firm.id,
+            key=phase_data["key"]
+        ).first()
+
+        if not phase:
+            phase = JudicialPhase(
+                law_firm_id=law_firm.id,
+                key=phase_data["key"],
+                name=phase_data["name"],
+                display_order=phase_data["display_order"],
+                is_active=True,
+            )
+            db.session.add(phase)
+            db.session.flush()
+            print(f"✓ Fase judicial criada: {phase_data['name']}")
+        else:
+            print(f"→ Fase judicial já existe: {phase_data['name']}")
+
+        phases.append(phase)
+
+        for display_order, (type_key, type_name) in enumerate(phase_data["types"], start=1):
+            existing_type = JudicialDocumentType.query.filter_by(
+                law_firm_id=law_firm.id,
+                key=type_key
+            ).first()
+
+            if not existing_type:
+                existing_type = JudicialDocumentType(
+                    law_firm_id=law_firm.id,
+                    phase_id=phase.id,
+                    key=type_key,
+                    name=type_name,
+                    display_order=display_order,
+                    is_active=True,
+                )
+                db.session.add(existing_type)
+                print(f"✓ Tipo documental criado: {type_name}")
+            else:
+                if existing_type.phase_id != phase.id:
+                    existing_type.phase_id = phase.id
+                print(f"→ Tipo documental já existe: {type_name}")
+
+            document_types.append(existing_type)
+
+    return phases, document_types
+
+
+def create_sample_judicial_processes(db, JudicialProcess, law_firm, users, cases, clients, defendants):
+    """Cria processos judiciais de exemplo no painel"""
+    process_data = [
+        {
+            "process_number": "5001234-56.2024.4.04.7205",
+            "title": "Ação de Revisão de FAP - Acidente de Trajeto",
+            "description": "Discussão sobre inclusão indevida de acidente de trajeto no cálculo do FAP.",
+            "status": "ativo",
+            "tribunal": "TRF4",
+            "section": "Seção Judiciária de Santa Catarina",
+            "origin_unit": "1ª Vara Federal de Blumenau",
+            "judge_name": "Juiz Federal Substituto",
+            "case_value": Decimal("250000.00"),
+            "filing_date": date(2024, 2, 18),
+            "case_index": 0,
+            "client_index": 0,
+            "defendant_index": 0,
+        },
+        {
+            "process_number": "5002345-67.2024.4.04.7201",
+            "title": "Ação Declaratória - Nexo Causal Contestado",
+            "description": "Pedido de exclusão de benefício sem nexo causal para fins de FAP.",
+            "status": "ativo",
+            "tribunal": "TRF4",
+            "section": "Seção Judiciária de Santa Catarina",
+            "origin_unit": "2ª Vara Federal de Joinville",
+            "judge_name": "Juíza Federal Titular",
+            "case_value": Decimal("180000.00"),
+            "filing_date": date(2024, 4, 3),
+            "case_index": 1,
+            "client_index": 1,
+            "defendant_index": 0,
+        },
+        {
+            "process_number": "1009876-12.2025.8.26.0100",
+            "title": "Anulação de Auto de Infração NR-12",
+            "description": "Discussão administrativa e judicial sobre auto de infração sem fundamentação técnica.",
+            "status": "aguardando",
+            "tribunal": "TJSP",
+            "section": "Comarca de São Paulo",
+            "origin_unit": "3ª Vara da Fazenda Pública",
+            "judge_name": "Juiz de Direito",
+            "case_value": Decimal("75000.00"),
+            "filing_date": date(2025, 1, 20),
+            "case_index": 2,
+            "client_index": 0,
+            "defendant_index": 1,
+        },
+    ]
+
+    processes = []
+    fallback_user_id = users[0].id if users else None
+
+    for item in process_data:
+        existing = JudicialProcess.query.filter_by(process_number=item["process_number"]).first()
+
+        case_obj = cases[item["case_index"]] if item["case_index"] < len(cases) else None
+        client_obj = clients[item["client_index"]] if item["client_index"] < len(clients) else None
+        defendant_obj = defendants[item["defendant_index"]] if item["defendant_index"] < len(defendants) else None
+
+        if not existing:
+            process = JudicialProcess(
+                law_firm_id=law_firm.id,
+                user_id=fallback_user_id,
+                case_id=case_obj.id if case_obj else None,
+                plaintiff_client_id=client_obj.id if client_obj else None,
+                defendant_id=defendant_obj.id if defendant_obj else None,
+                process_number=item["process_number"],
+                title=item["title"],
+                description=item["description"],
+                status=item["status"],
+                tribunal=item["tribunal"],
+                section=item["section"],
+                origin_unit=item["origin_unit"],
+                judge_name=item["judge_name"],
+                case_value=item["case_value"],
+                filing_date=item["filing_date"],
+                last_update=datetime.utcnow(),
+            )
+            db.session.add(process)
+            processes.append(process)
+            print(f"✓ Processo judicial criado: {item['process_number']}")
+        else:
+            processes.append(existing)
+            print(f"→ Processo judicial já existe: {item['process_number']}")
+
+    return processes
+
+
+def create_sample_judicial_notes(db, JudicialProcessNote, processes, users, law_firm):
+    """Cria notas internas de exemplo para processos judiciais"""
+    notes = []
+    if not users:
+        return notes
+
+    for idx, process in enumerate(processes):
+        existing = JudicialProcessNote.query.filter_by(
+            process_id=process.id,
+            content=f"Nota interna inicial para processo {process.process_number}."
+        ).first()
+
+        if not existing:
+            user = users[idx % len(users)]
+            note = JudicialProcessNote(
+                law_firm_id=law_firm.id,
+                process_id=process.id,
+                user_id=user.id,
+                content=f"Nota interna inicial para processo {process.process_number}."
+            )
+            db.session.add(note)
+            notes.append(note)
+            print(f"✓ Nota judicial criada para: {process.process_number}")
+        else:
+            notes.append(existing)
+            print(f"→ Nota judicial já existe para: {process.process_number}")
+
+    return notes
+
+
+def create_sample_judicial_events_and_movements(db, JudicialEvent, JudicialMovement, processes):
+    """Cria eventos e movimentações de exemplo para a timeline judicial"""
+    events = []
+    movements = []
+
+    for process in processes:
+        event_title = f"Protocolo inicial do processo {process.process_number}"
+        existing_event = JudicialEvent.query.filter_by(
+            process_id=process.id,
+            type="peticao_inicial",
+            phase="inicio_processo"
+        ).first()
+
+        if not existing_event:
+            existing_event = JudicialEvent(
+                process_id=process.id,
+                type="peticao_inicial",
+                phase="inicio_processo",
+                description=event_title,
+                event_date=datetime.utcnow() - timedelta(days=7),
+            )
+            db.session.add(existing_event)
+            db.session.flush()
+            print(f"✓ Evento judicial criado para: {process.process_number}")
+        else:
+            print(f"→ Evento judicial já existe para: {process.process_number}")
+
+        events.append(existing_event)
+
+        movement_existing = JudicialMovement.query.filter_by(
+            process_id=process.id,
+            event_id=existing_event.id,
+            title="Distribuição"
+        ).first()
+
+        if not movement_existing:
+            movement_existing = JudicialMovement(
+                process_id=process.id,
+                event_id=existing_event.id,
+                title="Distribuição",
+                movement_date=datetime.utcnow() - timedelta(days=6),
+            )
+            db.session.add(movement_existing)
+            print(f"✓ Movimentação judicial criada para: {process.process_number}")
+        else:
+            print(f"→ Movimentação judicial já existe para: {process.process_number}")
+
+        movements.append(movement_existing)
+
+    return events, movements
+
+
+def create_sample_judicial_documents(db, JudicialDocument, processes, users):
+    """Cria documentos vinculados a processos/eventos judiciais"""
+    documents = []
+    if not users:
+        return documents
+
+    for idx, process in enumerate(processes):
+        first_event = process.events[0] if process.events else None
+        if not first_event:
+            continue
+
+        filename = f"peticao_inicial_{process.process_number}.pdf"
+        existing = JudicialDocument.query.filter_by(
+            process_id=process.id,
+            event_id=first_event.id,
+            file_name=filename
+        ).first()
+
+        if not existing:
+            doc = JudicialDocument(
+                process_id=process.id,
+                event_id=first_event.id,
+                knowledge_base_id=None,
+                type="peticao_inicial",
+                file_name=filename,
+                file_path=f"uploads/judicial/{process.id}/{filename}",
+                uploaded_by=users[idx % len(users)].id,
+            )
+            db.session.add(doc)
+            documents.append(doc)
+            print(f"✓ Documento judicial criado para: {process.process_number}")
+        else:
+            documents.append(existing)
+            print(f"→ Documento judicial já existe para: {process.process_number}")
+
+    return documents
+
+
+def create_sample_judicial_process_benefits(db, JudicialProcessBenefit, processes, case_benefits):
+    """Cria vínculos de benefícios no painel judicial"""
+    judicial_benefits = []
+
+    benefits_by_case_id = {}
+    for benefit in case_benefits:
+        benefits_by_case_id.setdefault(benefit.case_id, []).append(benefit)
+
+    for process in processes:
+        if not process.case_id:
+            continue
+
+        for benefit in benefits_by_case_id.get(process.case_id, [])[:2]:
+            existing = JudicialProcessBenefit.query.filter_by(
+                process_id=process.id,
+                benefit_number=benefit.benefit_number
+            ).first()
+
+            if not existing:
+                existing = JudicialProcessBenefit(
+                    process_id=process.id,
+                    benefit_number=benefit.benefit_number,
+                    nit_number=benefit.insured_nit,
+                    insured_name=benefit.insured_name,
+                    benefit_type=benefit.benefit_type,
+                    fap_vigencia_year=str(process.filing_date.year) if process.filing_date else None,
+                    legal_thesis="Revisão de enquadramento e nexo causal para exclusão do FAP.",
+                    pfn_technical_note="Conferir documentação técnica e histórico CNIS.",
+                    first_instance_decision="Pendente de sentença.",
+                    second_instance_decision="Não aplicável no momento.",
+                    third_instance_decision="Não aplicável no momento.",
+                )
+                db.session.add(existing)
+                print(f"✓ Benefício judicial criado: {benefit.benefit_number}")
+            else:
+                print(f"→ Benefício judicial já existe: {benefit.benefit_number}")
+
+            judicial_benefits.append(existing)
+
+    return judicial_benefits
+
 def main():
     """Função principal para executar a população de dados"""
     print("Iniciando populacao de dados de exemplo...")
     print("=" * 50)
     
     # Importar modelos no contexto correto
-    app, db, LawFirm, User, Client, Court, Lawyer, Case, CaseLawyer, CaseCompetence, CaseBenefit, Document, CaseActivity, CaseComment, CaseStatus, KnowledgeCategory, KnowledgeTag, FapReason, CaseTemplate = import_models()
+    (
+        app, db, LawFirm, User, Client, Court, Lawyer, Case, CaseLawyer,
+        CaseCompetence, CaseBenefit, Document, CaseActivity, CaseComment,
+        CaseStatus, KnowledgeCategory, KnowledgeTag, FapReason, CaseTemplate,
+        JudicialDefendant, JudicialPhase, JudicialDocumentType,
+        JudicialProcess, JudicialProcessNote, JudicialEvent,
+        JudicialMovement, JudicialDocument, JudicialProcessBenefit
+    ) = import_models()
     
     # Garantir que o app seja configurado corretamente
     app.config.update({
@@ -1082,6 +1475,63 @@ def main():
             
             print("\n[COMENTARIOS] Criando comentarios e discussoes...")
             comments = create_sample_comments(db, CaseComment, cases, users)
+
+            print("\n[JUDICIAL] Criando réus (polos passivos)...")
+            defendants = create_sample_judicial_defendants(db, JudicialDefendant, law_firm)
+
+            print("\n[JUDICIAL] Criando fases e tipos documentais...")
+            phases, doc_types = create_sample_judicial_phases_and_types(
+                db,
+                JudicialPhase,
+                JudicialDocumentType,
+                law_firm
+            )
+
+            print("\n[JUDICIAL] Criando processos judiciais...")
+            judicial_processes = create_sample_judicial_processes(
+                db,
+                JudicialProcess,
+                law_firm,
+                users,
+                cases,
+                clients,
+                defendants
+            )
+
+            print("\n[JUDICIAL] Criando notas processuais...")
+            judicial_notes = create_sample_judicial_notes(
+                db,
+                JudicialProcessNote,
+                judicial_processes,
+                users,
+                law_firm
+            )
+
+            print("\n[JUDICIAL] Criando eventos e movimentacoes...")
+            judicial_events, judicial_movements = create_sample_judicial_events_and_movements(
+                db,
+                JudicialEvent,
+                JudicialMovement,
+                judicial_processes
+            )
+
+            db.session.flush()
+
+            print("\n[JUDICIAL] Criando documentos processuais...")
+            judicial_documents = create_sample_judicial_documents(
+                db,
+                JudicialDocument,
+                judicial_processes,
+                users
+            )
+
+            print("\n[JUDICIAL] Criando beneficios vinculados ao processo...")
+            judicial_process_benefits = create_sample_judicial_process_benefits(
+                db,
+                JudicialProcessBenefit,
+                judicial_processes,
+                benefits
+            )
             
             # Commit final
             db.session.commit()
@@ -1104,6 +1554,15 @@ def main():
             print(f"   - {len(competences)} competencias")
             print(f"   - {len(activities)} atividades")
             print(f"   - {len(comments)} comentarios")
+            print(f"   - {len(defendants)} reus judiciais")
+            print(f"   - {len(phases)} fases judiciais")
+            print(f"   - {len(doc_types)} tipos documentais judiciais")
+            print(f"   - {len(judicial_processes)} processos judiciais")
+            print(f"   - {len(judicial_notes)} notas judiciais")
+            print(f"   - {len(judicial_events)} eventos judiciais")
+            print(f"   - {len(judicial_movements)} movimentacoes judiciais")
+            print(f"   - {len(judicial_documents)} documentos judiciais")
+            print(f"   - {len(judicial_process_benefits)} beneficios judiciais")
             print("=" * 50)
             
     except Exception as e:

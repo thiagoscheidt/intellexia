@@ -1463,7 +1463,7 @@ def intelligent_search():
                                     adjusted_score += 0.05
 
                         adjusted_score = min(adjusted_score, 1.0)
-                        if adjusted_score <= 0.30 and search_mode == 'semantic':
+                        if (adjusted_score <= 0.30 and search_mode == 'semantic') or (adjusted_score < 0.40 and search_mode == 'full_text'):
                             continue
                         
                         result_item = {
