@@ -1036,6 +1036,7 @@ def detail(process_id):
 
     configured_phases = JudicialPhase.query.filter_by(law_firm_id=law_firm_id).all()
     phase_labels_by_key = {phase.key: phase.name for phase in configured_phases}
+    phase_order_by_key = {phase.key: (phase.display_order or 0) for phase in configured_phases}
 
     configured_document_types = JudicialDocumentType.query.filter_by(law_firm_id=law_firm_id).all()
     document_type_labels_by_key = {doc_type.key: doc_type.name for doc_type in configured_document_types}
@@ -1077,6 +1078,7 @@ def detail(process_id):
             'phase_label': phase_label,
             'doc_type_label': doc_type_label,
             'knowledge_base_id': kb_doc.id,
+            'phase_order': phase_order_by_key.get(phase_key, 9999),
         })
 
     for judicial_doc in judicial_documents:
@@ -1104,7 +1106,15 @@ def detail(process_id):
             'phase_label': phase_label,
             'doc_type_label': doc_type_label,
             'knowledge_base_id': None,
+            'phase_order': phase_order_by_key.get(phase_key, 9999),
         })
+
+    documents_list.sort(
+        key=lambda item: (
+            item.get('phase_order', 9999),
+            (item.get('filename') or '').lower(),
+        )
+    )
     
     # Filtrar analyses e appeals por process_number
     related_analyses = [a for a in sentence_analyses if hasattr(a, 'process_number') and a.process_number == process.process_number]

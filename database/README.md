@@ -16,6 +16,7 @@ database/
 ├── add_judicial_phases_and_document_types_tables.py # Cria tabelas de fases e tipos documentais judiciais
 ├── add_judicial_process_notes_table.py # Cria tabela de notas/comentários dos processos
 ├── add_judicial_process_benefits_table.py # Cria tabela de benefícios vinculados ao processo judicial
+├── remove_unique_process_number_from_judicial_processes.py # Remove unicidade global de process_number em judicial_processes
 ├── add_judicial_parties_to_processes.py # Cria tabela de polos passivos e colunas de partes em judicial_processes
 └── [futuros scripts de migração]
 ```

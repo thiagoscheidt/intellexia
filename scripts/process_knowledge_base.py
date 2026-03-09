@@ -12,7 +12,6 @@ import argparse
 import os
 import re
 import sys
-from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
@@ -36,6 +35,9 @@ from app.models import (
 )
 from app.agents.knowledge_base.knowledge_ingestion_agent import KnowledgeIngestionAgent
 from app.agents.document_processing.agent_document_extractor import AgentDocumentExtractor
+
+
+MAX_FILES_PER_EXECUTION = 5
 
 
 def _build_query(file_id: int | None = None, include_errors: bool = False):
@@ -426,10 +428,9 @@ def _process_single_knowledge_file(item_id: int) -> bool:
 
 
 def process_pending_knowledge_files(
-    batch_size: int = 10,
+    batch_size: int = MAX_FILES_PER_EXECUTION,
     file_id: int | None = None,
     include_errors: bool = False,
-    max_workers: int = 3,
 ) -> int:
     """Processa arquivos pendentes da base de conhecimento."""
     query = _build_query(file_id=file_id, include_errors=include_errors)
@@ -437,7 +438,8 @@ def process_pending_knowledge_files(
     if file_id:
         items = query.all()
     else:
-        items = query.limit(batch_size).all()
+        effective_batch_size = max(1, min(batch_size, MAX_FILES_PER_EXECUTION))
+        items = query.limit(effective_batch_size).all()
 
     print(f"Itens elegíveis para processamento: {len(items)}")
 
@@ -449,27 +451,19 @@ def process_pending_knowledge_files(
         return 0
 
     item_ids = [item.id for item in items]
-    workers = max(1, min(max_workers, len(item_ids)))
-    print(f"Processando em paralelo com {workers} thread(s)...")
-
-    if workers == 1:
-        return sum(1 for item_id in item_ids if _process_single_knowledge_file(item_id))
-
-    processed = 0
-    with ThreadPoolExecutor(max_workers=workers) as executor:
-        futures = [executor.submit(_process_single_knowledge_file, item_id) for item_id in item_ids]
-        for future in as_completed(futures):
-            if future.result():
-                processed += 1
-
-    return processed
+    print("Processando em modo sequencial...")
+    return sum(1 for item_id in item_ids if _process_single_knowledge_file(item_id))
 
 
 def parse_args():
     parser = argparse.ArgumentParser(description='Processa arquivos pendentes da base de conhecimento')
-    parser.add_argument('--batch-size', type=int, default=10, help='Quantidade máxima de itens por execução')
+    parser.add_argument(
+        '--batch-size',
+        type=int,
+        default=MAX_FILES_PER_EXECUTION,
+        help=f'Quantidade máxima de itens por execução (máximo {MAX_FILES_PER_EXECUTION})',
+    )
     parser.add_argument('--file-id', type=int, help='Processa apenas o arquivo com esse ID')
-    parser.add_argument('--max-workers', type=int, default=3, help='Quantidade de threads paralelas para processamento')
     parser.add_argument(
         '--include-errors',
         action='store_true',
@@ -486,6 +480,5 @@ if __name__ == '__main__':
             batch_size=args.batch_size,
             file_id=args.file_id,
             include_errors=args.include_errors,
-            max_workers=args.max_workers,
         )
         print(f"Total processado: {total}")

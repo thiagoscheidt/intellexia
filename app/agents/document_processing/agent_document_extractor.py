@@ -3,6 +3,7 @@ import os
 import time
 from pathlib import Path
 from typing import Any, Optional, List
+from rich import print
 
 from dotenv import load_dotenv
 from markitdown import MarkItDown

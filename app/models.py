@@ -946,7 +946,7 @@ class JudicialProcess(db.Model):
     defendant_id = db.Column(db.Integer, db.ForeignKey('judicial_defendants.id'), index=True)
     
     # Identificação do processo (CNJ format: NNNNNNN-DD.AAAA.J.TR.OOOO)
-    process_number = db.Column(db.String(25), nullable=False, unique=True, index=True)
+    process_number = db.Column(db.String(25), nullable=False, index=True)
     
     # Informações do processo
     title = db.Column(db.String(255))
