@@ -65,6 +65,26 @@
         background: #1a2234;
     }
 
+    .search-mode-toggle.is-semantic {
+        border-color: #c9b8ff;
+        background: #f2ecff;
+    }
+
+    .search-mode-toggle.is-fulltext {
+        border-color: #a8d0ff;
+        background: #eaf4ff;
+    }
+
+    [data-bs-theme="dark"] .search-mode-toggle.is-semantic {
+        border-color: #6d54b8;
+        background: #2b2149;
+    }
+
+    [data-bs-theme="dark"] .search-mode-toggle.is-fulltext {
+        border-color: #2f5d9a;
+        background: #132844;
+    }
+
     .search-mode-switch-input {
         position: absolute;
         opacity: 0;
@@ -118,6 +138,28 @@
         color: #4b5a76;
         user-select: none;
         font-weight: 600;
+    }
+
+    .search-mode-text.semantic-text {
+        display: inline-flex;
+        align-items: center;
+        gap: .28rem;
+    }
+
+    .search-mode-toggle.is-semantic .search-mode-text.semantic-text {
+        color: #6f42c1;
+    }
+
+    .search-mode-toggle.is-fulltext .search-mode-text.fulltext-text {
+        color: #0d6efd;
+    }
+
+    [data-bs-theme="dark"] .search-mode-toggle.is-semantic .search-mode-text.semantic-text {
+        color: #c5a8ff;
+    }
+
+    [data-bs-theme="dark"] .search-mode-toggle.is-fulltext .search-mode-text.fulltext-text {
+        color: #8fc1ff;
     }
 
     [data-bs-theme="dark"] .search-mode-text {
@@ -764,13 +806,13 @@
                         <div class="search-mode-row">
                             <input type="hidden" id="searchModeInput" name="search_mode"
                                 value="{{ search_mode or 'semantic' }}">
-                            <div class="search-mode-toggle">
-                                <span class="search-mode-text">Semântica</span>
+                            <div class="search-mode-toggle" id="searchModeToggle">
+                                <span class="search-mode-text semantic-text"><i class="bi bi-stars" aria-hidden="true"></i>Semântica</span>
                                 <label for="searchModeSwitch" class="mb-0 d-inline-flex">
                                     <input class="search-mode-switch-input" type="checkbox" id="searchModeSwitch" {% if search_mode == 'full_text' %}checked{% endif %}>
                                     <span class="search-mode-switch" aria-hidden="true"></span>
                                 </label>
-                                <span class="search-mode-text">Texto</span>
+                                <span class="search-mode-text fulltext-text"><i class="bi bi-fonts" aria-hidden="true"></i>Textual</span>
                             </div>
                             <div class="search-mode-state" id="searchModeLabel">
                                 {% if search_mode == 'full_text' %}
@@ -1166,6 +1208,7 @@
         const searchModeSwitch = document.getElementById('searchModeSwitch');
         const searchModeInput = document.getElementById('searchModeInput');
         const searchModeLabel = document.getElementById('searchModeLabel');
+        const searchModeToggle = document.getElementById('searchModeToggle');
 
         if (!searchForm || !searchInput || !submitButton || !overlay || !loadingMessage) {
             return;
@@ -1193,6 +1236,10 @@
 
             const isFullText = searchModeSwitch.checked;
             searchModeInput.value = isFullText ? 'full_text' : 'semantic';
+            if (searchModeToggle) {
+                searchModeToggle.classList.toggle('is-semantic', !isFullText);
+                searchModeToggle.classList.toggle('is-fulltext', isFullText);
+            }
             searchModeLabel.textContent = isFullText
                 ? 'Modo atual: busca textual (full text)'
                 : 'Modo atual: busca semântica';
