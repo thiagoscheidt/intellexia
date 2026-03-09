@@ -46,10 +46,31 @@ services:
       interval: 10s
     restart: unless-stopped
 
+  # Meilisearch Search Engine
+  meilisearch:
+    image: getmeili/meilisearch:latest
+    container_name: intellexia-meilisearch
+    ports:
+      - "7700:7700"
+    volumes:
+      - meili_data:/meili_data
+    networks:
+      - intellexia-network
+    environment:
+      MEILI_MASTER_KEY: meilisearch_master_key_123
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7700/health"]
+      timeout: 5s
+      retries: 5
+      interval: 10s
+    restart: unless-stopped
+
 volumes:
   mysql_data:
     driver: local
   qdrant_data:
+    driver: local
+  meili_data:
     driver: local
 
 networks:
