@@ -14,7 +14,6 @@ from meilisearch_python_sdk import Client as MeilisearchClient
 from openai import OpenAI
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ToolStrategy
-from langchain.chat_models import init_chat_model
 from pydantic import BaseModel, Field
 from qdrant_client import QdrantClient
 from langchain_openai import ChatOpenAI
@@ -22,6 +21,11 @@ from app.models import db, KnowledgeChatHistory, KnowledgeChatSession
 
 
 from app.agents.knowledge_base.query_enhancer_agent import QueryEnhancerAgent
+from app.agents.knowledge_base.context_retrieval_routing_agent import (
+    ContextRetrievalRoutingAgent,
+    ContextRetrievalDecisionSchema,
+)
+from app.agents.knowledge_base.keyword_extraction_agent import KeywordExtractionAgent
 from app.agents.knowledge_base.tools import KnowledgeQueryTools
 
 
@@ -65,26 +69,6 @@ class RetrievalDecisionSchema(BaseModel):
     )
 
 
-class ContextRetrievalDecisionSchema(BaseModel):
-    should_retrieve_context: bool = Field(
-        description="True se deve consultar base vetorial antes de responder; False se pode responder sem consulta"
-    )
-    search_mode: str = Field(
-        default="semantic",
-        description="Tipo de busca a realizar: 'semantic' para busca por contexto/IA ou 'full_text' para busca por palavras-chave"
-    )
-
-
-class KeywordExtractionSchema(BaseModel):
-    search_keywords: list[str] = Field(
-        description="Lista de termos-chave extraídos da pergunta (CPF, CNPJ, números de processo, benefício, etc.)"
-    )
-    extracted_type: str = Field(
-        default="mixed",
-        description="Tipo de busca identificado: 'cpf', 'cnpj', 'process_number', 'benefit_number', 'name', 'date', 'mixed' ou 'generic'"
-    )
-
-
 class KnowledgeQueryAgent:
     """Consulta a base vetorial e responde perguntas com LLM."""
 
@@ -99,6 +83,8 @@ class KnowledgeQueryAgent:
         self.meilisearch = MeilisearchClient(MEILISEARCH_HOST, MEILISEARCH_API_KEY)
         self.openai = OpenAI()
         self.query_enhancer = QueryEnhancerAgent()
+        self.context_retrieval_routing = ContextRetrievalRoutingAgent()
+        self.keyword_extraction = KeywordExtractionAgent()
         self._last_context_data = None
         self._last_context_text = ""
         self._context_search_calls = 0
@@ -187,7 +173,7 @@ class KnowledgeQueryAgent:
             print("pergunta original:", question)
             
             # Extrair termos-chave para melhorar a busca full_text
-            keywords = self._extract_fulltext_keywords(question)
+            keywords = self.keyword_extraction.extract_keywords(question)
             search_query = " ".join(keywords) if keywords else question
             
             print(f"termos-chave extraídos: {keywords}")
@@ -221,7 +207,7 @@ class KnowledgeQueryAgent:
             return self._cached_should_use_context.get('should_retrieve', False), self._cached_should_use_context.get('search_mode', 'semantic')
 
         history = [{"role": "user", "content": history_preview}] if history_preview else None
-        decision = self._retrieve_context_with_search_mode(question, history=history)
+        decision = self.context_retrieval_routing.decide_retrieval_and_mode(question, history=history)
         self._cached_should_use_context = {
             'should_retrieve': bool(decision.should_retrieve_context),
             'search_mode': decision.search_mode
@@ -263,90 +249,6 @@ class KnowledgeQueryAgent:
 
         self._last_context_text = "\n\n---\n\n".join(context_with_sources)
         return self._last_context_text
-
-    def _retrieve_context_with_search_mode(self, question: str, history=None) -> ContextRetrievalDecisionSchema:
-        """Decide se busca contexto (True/False) e qual tipo de busca usar (semantic ou full_text)."""
-        history_preview = ""
-        if history:
-            limited_history = history[-6:] if len(history) > 6 else history
-            history_preview = "\n".join(
-                [f"{item.get('role', 'user')}: {item.get('content', '')}" for item in limited_history]
-            )
-
-        messages = [
-            {
-                "role": "system",
-                "content": (
-                    "Você é um roteador inteligente de busca jurídica. Sua tarefa é decidir:\n"
-                    "1. SE precisa buscar contexto na base de conhecimento (True/False)\n"
-                    "2. QUAL tipo de busca é mais apropriado:\n"
-                    "   - 'semantic': para buscas conceituais, jurisprudência, entendimentos legais, análises complexas\n"
-                    "   - 'full_text': para buscas por palavras-chave específicas, número de processos, datas exatas, nomes\n\n"
-                    "Retorne should_retrieve_context=True quando a pergunta depender de documentos internos, políticas, "
-                    "normas, fatos processuais ou quando houver qualquer dúvida.\n"
-                    "Retorne should_retrieve_context=False apenas para cumprimentos, conversa social ou perguntas genéricas.\n"
-                    "Escolha 'semantic' para análises e 'full_text' para buscas diretas por termos específicos."
-                ),
-            },
-            {
-                "role": "user",
-                "content": (
-                    f"Pergunta atual: {question}\n\n"
-                    f"Histórico recente (se houver):\n{history_preview or 'sem histórico'}"
-                ),
-            },
-        ]
-        router_llm = ChatOpenAI(model=ROUTER_MODEL, temperature=0).with_structured_output(ContextRetrievalDecisionSchema)
-        try:
-            return router_llm.invoke(messages)
-        except Exception:
-            return ContextRetrievalDecisionSchema(should_retrieve_context=True, search_mode="semantic")
-
-    def _should_retrieve_context(self, question: str, history=None) -> RetrievalDecisionSchema:
-        """[DEPRECATED] Use _retrieve_context_with_search_mode instead. Mantém compatibilidade."""
-        decision = self._retrieve_context_with_search_mode(question, history)
-        return RetrievalDecisionSchema(should_retrieve_context=decision.should_retrieve_context)
-
-    def _extract_fulltext_keywords(self, question: str) -> list[str]:
-        """Extrai termos-chave da pergunta para busca full_text (CPF, CNPJ, números, etc)."""
-        messages = [
-            {
-                "role": "system",
-                "content": (
-                    "Você é um extrator de termos-chave para busca em base de conhecimento jurídica.\n"
-                    "Sua tarefa é identificar e extrair os termos mais importantes da pergunta do usuário:\n"
-                    "- CPF ou CNPJ (RETORNE AMBOS: com formatação original E normalizado sem pontos/hífens)\n"
-                    "- Números de processo judicial (CNJ format ou variações)\n"
-                    "- Números de benefício (B91, B94, B31, etc.)\n"
-                    "- Datas (no formato que aparecem)\n"
-                    "- Nomes de pessoas ou empresas\n"
-                    "- Qualquer número ou código específico\n\n"
-                    "Retorne uma lista com os termos extraídos em ordem de relevância.\n"
-                    "Se a pergunta for muito genérica e não tiver termos específicos, retorne lista vazia.\n"
-                    "IMPORTANTE: Para CPF/CNPJ, inclua AMBAS as formas:\n"
-                    "  - Exemplo: se encontrar '88.611.835/0008-03', retorne: ['88.611.835/0008-03', '88611835000803']\n"
-                    "  - Exemplo: se encontrar '098.545.439.-35', retorne: ['098.545.439.-35', '09854543935']"
-                ),
-            },
-            {
-                "role": "user",
-                "content": f"Extrai os termos-chave desta pergunta:\n\n{question}",
-            },
-        ]
-        
-        keyword_llm = init_chat_model(ROUTER_MODEL, temperature=0).with_structured_output(KeywordExtractionSchema)
-        try:
-            result = keyword_llm.invoke(messages)
-            self._debug_log(
-                "Extração de termos-chave concluída",
-                extracted_type=result.extracted_type,
-                keywords_count=len(result.search_keywords),
-                keywords=result.search_keywords
-            )
-            return result.search_keywords
-        except Exception as e:
-            self._debug_log(f"Erro ao extrair termos-chave: {str(e)}")
-            return []
 
     def _generate_fallback_response(
         self,
@@ -418,7 +320,7 @@ class KnowledgeQueryAgent:
             search_mode = "semantic"
             context_text = ""
         else:
-            retrieval_decision = self._retrieve_context_with_search_mode(question, history=normalized_history)
+            retrieval_decision = self.context_retrieval_routing.decide_retrieval_and_mode(question, history=normalized_history)
             should_use_context = bool(retrieval_decision.should_retrieve_context)
             search_mode = retrieval_decision.search_mode
 
