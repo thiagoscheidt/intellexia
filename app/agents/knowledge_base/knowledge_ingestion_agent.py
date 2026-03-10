@@ -127,6 +127,60 @@ class KnowledgeIngestionAgent:
             if not self._is_missing_backend_resource_error(error):
                 raise
 
+    def update_lawsuit_number_by_file_id(self, file_id: int, lawsuit_number: str) -> None:
+        """Atualiza o campo lawsuit_number nos registros do arquivo no Qdrant e no Meilisearch."""
+        if file_id is None:
+            return
+
+        normalized_lawsuit_number = str(lawsuit_number or "").strip()
+
+        qdrant_filter = rest.Filter(
+            must=[
+                rest.FieldCondition(
+                    key="file_id",
+                    match=rest.MatchValue(value=file_id),
+                )
+            ]
+        )
+
+        try:
+            self.qdrant.set_payload(
+                collection_name=self.collection,
+                payload={"lawsuit_number": normalized_lawsuit_number},
+                points=qdrant_filter,
+                wait=True,
+            )
+        except Exception as error:
+            if not self._is_missing_backend_resource_error(error):
+                raise
+
+        try:
+            self._ensure_meilisearch_filterable_attributes()
+
+            points, _ = self.qdrant.scroll(
+                collection_name=self.collection,
+                scroll_filter=qdrant_filter,
+                with_payload=True,
+                with_vectors=False,
+                limit=10000,
+            )
+
+            meili_documents = []
+            for point in points or []:
+                payload = dict(point.payload or {})
+                payload["lawsuit_number"] = normalized_lawsuit_number
+                meili_documents.append({"id": str(point.id), **payload})
+
+            delete_task = self.meilisearch.index(self.collection).delete_documents_by_filter(f"file_id = {file_id}")
+            self._wait_for_meilisearch_task(delete_task)
+
+            if meili_documents:
+                add_task = self.meilisearch.index(self.collection).add_documents(meili_documents)
+                self._wait_for_meilisearch_task(add_task)
+        except Exception as error:
+            if not self._is_missing_backend_resource_error(error):
+                raise
+
         try:
             self._ensure_meilisearch_filterable_attributes()
             task = self.meilisearch.index(self.collection).delete_documents_by_filter(f"file_id = {file_id}")

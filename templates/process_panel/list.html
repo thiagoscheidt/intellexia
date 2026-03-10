@@ -4,348 +4,353 @@
 
 {% block content %}
 
-<!-- Cabeçalho da página -->
-<div class="row mb-4">
-  <div class="col-12">
-    <div class="card border-0 shadow-sm" style="border-radius: 16px; overflow: hidden;">
-      <div class="card-body page-hero">
-        <div
-          class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
-          <div class="d-flex align-items-center gap-3">
-            <div class="rounded-circle d-flex align-items-center justify-content-center page-hero-icon">
-              <i class="bi bi-diagram-3 page-hero-icon__glyph"></i>
+<div class="process-panel-list-page">
+
+  <!-- Cabeçalho da página -->
+  <div class="row mb-4">
+    <div class="col-12">
+      <div class="card border-0 shadow-sm" style="border-radius: 16px; overflow: hidden;">
+        <div class="card-body page-hero">
+          <div
+            class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-3">
+            <div class="d-flex align-items-center gap-3">
+              <div class="rounded-circle d-flex align-items-center justify-content-center page-hero-icon">
+                <i class="bi bi-diagram-3 page-hero-icon__glyph"></i>
+              </div>
+              <div>
+                <h1 class="h4 mb-1" style="font-weight: 700; letter-spacing: .2px;">Painel de Processos</h1>
+                <small class="text-muted">Centralize todos os dados dos processos judiciais em um único painel</small>
+              </div>
             </div>
             <div>
-              <h1 class="h4 mb-1" style="font-weight: 700; letter-spacing: .2px;">Painel de Processos</h1>
-              <small class="text-muted">Centralize todos os dados dos processos judiciais em um único painel</small>
+              <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-0 bg-transparent small">
+                  <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i>
+                      Home</a></li>
+                  <li class="breadcrumb-item active" aria-current="page">Painel de Processos</li>
+                </ol>
+              </nav>
             </div>
-          </div>
-          <div>
-            <nav aria-label="breadcrumb">
-              <ol class="breadcrumb mb-0 bg-transparent small">
-                <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i>
-                    Home</a></li>
-                <li class="breadcrumb-item active" aria-current="page">Painel de Processos</li>
-              </ol>
-            </nav>
           </div>
         </div>
       </div>
     </div>
   </div>
-</div>
 
-<div class="app-content">
-  <div class="container-fluid">
-    <div class="row">
-      <div class="col-12">
-        <!-- Estatísticas -->
-        <div class="row mb-4">
-          <div class="col-lg-3 col-md-6">
-            <div class="info-box shadow-sm">
-              <span class="info-box-icon bg-primary bg-opacity-10">
-                <i class="bi bi-folder2-open text-primary"></i>
-              </span>
-              <div class="info-box-content">
-                <span class="info-box-text">Total de Processos</span>
-                <span class="info-box-number">{{ stats.total }}</span>
-              </div>
-            </div>
-          </div>
-          <div class="col-lg-3 col-md-6">
-            <div class="info-box shadow-sm">
-              <span class="info-box-icon bg-success bg-opacity-10">
-                <i class="bi bi-check-circle text-success"></i>
-              </span>
-              <div class="info-box-content">
-                <span class="info-box-text">Ativos</span>
-                <span class="info-box-number">{{ stats.ativo }}</span>
-              </div>
-            </div>
-          </div>
-          <div class="col-lg-3 col-md-6">
-            <div class="info-box shadow-sm">
-              <span class="info-box-icon bg-warning bg-opacity-10">
-                <i class="bi bi-pause-circle text-warning"></i>
-              </span>
-              <div class="info-box-content">
-                <span class="info-box-text">Suspensos</span>
-                <span class="info-box-number">{{ stats.suspenso }}</span>
-              </div>
-            </div>
-          </div>
-          <div class="col-lg-3 col-md-6">
-            <div class="info-box shadow-sm">
-              <span class="info-box-icon bg-danger bg-opacity-10">
-                <i class="bi bi-x-circle text-danger"></i>
-              </span>
-              <div class="info-box-content">
-                <span class="info-box-text">Encerrados</span>
-                <span class="info-box-number">{{ stats.encerrado }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Card Principal -->
-        <div class="card card-primary card-outline shadow-sm">
-          <div class="card-header">
-            <h3 class="card-title mb-0"><i class="bi bi-list-ul"></i> Lista de Processos</h3>
-            <div class="card-tools">
-              <a href="{{ url_for('process_panel.list_processes', view='kanban', q=search_query, status=status_filter) }}"
-                class="btn btn-outline-dark btn-sm me-1">
-                <i class="bi bi-kanban"></i> Kanban
-              </a>
-              <a href="{{ url_for('process_panel.manage_judicial_phases') }}"
-                class="btn btn-outline-secondary btn-sm me-1">
-                <i class="bi bi-kanban"></i> Fases Judiciais
-              </a>
-              <a href="{{ url_for('process_panel.new_process') }}" class="btn btn-primary btn-sm">
-                <i class="bi bi-plus-circle"></i> Novo Processo
-              </a>
-            </div>
-          </div>
-          <div class="card-body">
-            {% with messages = get_flashed_messages(with_categories=true) %}
-            {% if messages %}
-            {% for category, message in messages %}
-            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-              <i class="bi bi-info-circle"></i> {{ message }}
-              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-            {% endfor %}
-            {% endif %}
-            {% endwith %}
-
-            <!-- Filtros -->
-            <div class="card card-light mb-4">
-              <div class="card-header">
-                <h5 class="card-title mb-0">
-                  <i class="bi bi-funnel"></i> Filtros
-                  <button class="btn btn-sm btn-outline-secondary ms-2" type="button" data-bs-toggle="collapse"
-                    data-bs-target="#filtersCollapse" aria-expanded="false">
-                    <i class="bi bi-chevron-down"></i>
-                  </button>
-                </h5>
-              </div>
-              <div class="collapse" id="filtersCollapse">
-                <div class="card-body">
-                  <form method="get" class="row g-3">
-                    <input type="hidden" name="view" value="{{ current_view or 'table' }}">
-                    <div class="col-md-6">
-                      <label for="search_query" class="form-label">
-                        <i class="bi bi-search"></i> Buscar
-                      </label>
-                      <input type="text" id="search_query" name="q" class="form-control"
-                        placeholder="Número, título ou tribunal..." value="{{ search_query }}">
-                    </div>
-                    <div class="col-md-3">
-                      <label for="status_filter" class="form-label">
-                        <i class="bi bi-flag"></i> Status
-                      </label>
-                      <select name="status" id="status_filter" class="form-select">
-                        <option value="">Todos os Status</option>
-                        <option value="ativo" {% if status_filter=='ativo' %}selected{% endif %}>Ativo</option>
-                        <option value="suspenso" {% if status_filter=='suspenso' %}selected{% endif %}>Suspenso</option>
-                        <option value="encerrado" {% if status_filter=='encerrado' %}selected{% endif %}>Encerrado
-                        </option>
-                        <option value="aguardando" {% if status_filter=='aguardando' %}selected{% endif %}>Aguardando
-                        </option>
-                      </select>
-                    </div>
-                    <div class="col-md-3 d-flex align-items-end">
-                      <button type="submit" class="btn btn-primary w-100">
-                        <i class="bi bi-search"></i> Filtrar
-                      </button>
-                    </div>
-                  </form>
+  <div class="app-content">
+    <div class="container-fluid">
+      <div class="row">
+        <div class="col-12">
+          <!-- Estatísticas -->
+          <div class="row mb-4">
+            <div class="col-lg-3 col-md-6">
+              <div class="info-box shadow-sm">
+                <span class="info-box-icon bg-primary bg-opacity-10">
+                  <i class="bi bi-folder2-open text-primary"></i>
+                </span>
+                <div class="info-box-content">
+                  <span class="info-box-text">Total de Processos</span>
+                  <span class="info-box-number">{{ stats.total }}</span>
                 </div>
               </div>
             </div>
+            <div class="col-lg-3 col-md-6">
+              <div class="info-box shadow-sm">
+                <span class="info-box-icon bg-success bg-opacity-10">
+                  <i class="bi bi-check-circle text-success"></i>
+                </span>
+                <div class="info-box-content">
+                  <span class="info-box-text">Ativos</span>
+                  <span class="info-box-number">{{ stats.ativo }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+              <div class="info-box shadow-sm">
+                <span class="info-box-icon bg-warning bg-opacity-10">
+                  <i class="bi bi-pause-circle text-warning"></i>
+                </span>
+                <div class="info-box-content">
+                  <span class="info-box-text">Suspensos</span>
+                  <span class="info-box-number">{{ stats.suspenso }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="col-lg-3 col-md-6">
+              <div class="info-box shadow-sm">
+                <span class="info-box-icon bg-danger bg-opacity-10">
+                  <i class="bi bi-x-circle text-danger"></i>
+                </span>
+                <div class="info-box-content">
+                  <span class="info-box-text">Encerrados</span>
+                  <span class="info-box-number">{{ stats.encerrado }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
 
-            <!-- Tabela de Processos -->
-            {% if processes.items %}
-            <div class="table-responsive">
-              <table class="table table-hover table-striped align-middle">
-                <thead class="table-light">
-                  <tr>
-                    <th><i class="bi bi-hash"></i> Número</th>
-                    <th><i class="bi bi-card-text"></i> Título</th>
-                    <th><i class="bi bi-building"></i> Tribunal</th>
-                    <th><i class="bi bi-flag"></i> Status</th>
-                    <th><i class="bi bi-signpost"></i> Fase</th>
-                    <th><i class="bi bi-calendar"></i> Criado em</th>
-                    <th class="text-end">Ações</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {% for process in processes.items %}
-                  <tr>
-                    <td>
-                      {% if process.process_number and not process.process_number.startswith('TEMP-') %}
-                      <code class="text-primary fw-bold">{{ process.process_number }}</code>
-                      {% elif process.process_number %}
-                      <span class="badge bg-warning text-dark"
-                        title="Número provisório — edite o processo para informar o número real"><i
-                          class="bi bi-clock me-1"></i>{{ process.process_number }}</span>
-                      {% else %}
-                      <span class="text-muted fst-italic">Não informado</span>
-                      {% endif %}
-                    </td>
-                    <td>
-                      <div>
-                        <strong>{{ process.title or process.process_number or 'Sem título' }}</strong>
-                        {% if process.description %}
-                        <br><small class="text-muted">{{ process.description[:60] }}...</small>
-                        {% endif %}
-                        {% if process.plaintiff_client or process.defendant %}
-                        <br>
-                        <small class="text-muted">
-                          {% if process.plaintiff_client %}<span class="me-2">Ativo: {{ process.plaintiff_client.name
-                            }}</span>{% endif %}
-                          {% if process.defendant %}<span>Passivo: {{ process.defendant.name }}</span>{% endif %}
-                        </small>
-                        {% endif %}
+          <!-- Card Principal -->
+          <div class="card card-primary card-outline shadow-sm">
+            <div class="card-header">
+              <h3 class="card-title mb-0"><i class="bi bi-list-ul"></i> Lista de Processos</h3>
+              <div class="card-tools">
+                <a href="{{ url_for('process_panel.list_processes', view='kanban', q=search_query, status=status_filter) }}"
+                  class="btn btn-outline-dark btn-sm me-1">
+                  <i class="bi bi-kanban"></i> Kanban
+                </a>
+                <a href="{{ url_for('process_panel.manage_judicial_phases') }}"
+                  class="btn btn-outline-secondary btn-sm me-1">
+                  <i class="bi bi-kanban"></i> Fases Judiciais
+                </a>
+                <a href="{{ url_for('process_panel.new_process') }}" class="btn btn-primary btn-sm">
+                  <i class="bi bi-plus-circle"></i> Novo Processo
+                </a>
+              </div>
+            </div>
+            <div class="card-body">
+              {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+              {% for category, message in messages %}
+              <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                <i class="bi bi-info-circle"></i> {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+              </div>
+              {% endfor %}
+              {% endif %}
+              {% endwith %}
+
+              <!-- Filtros -->
+              <div class="card card-light mb-4">
+                <div class="card-header">
+                  <h5 class="card-title mb-0">
+                    <i class="bi bi-funnel"></i> Filtros
+                    <button class="btn btn-sm btn-outline-secondary ms-2" type="button" data-bs-toggle="collapse"
+                      data-bs-target="#filtersCollapse" aria-expanded="false">
+                      <i class="bi bi-chevron-down"></i>
+                    </button>
+                  </h5>
+                </div>
+                <div class="collapse" id="filtersCollapse">
+                  <div class="card-body">
+                    <form method="get" class="row g-3">
+                      <input type="hidden" name="view" value="{{ current_view or 'table' }}">
+                      <div class="col-md-6">
+                        <label for="search_query" class="form-label">
+                          <i class="bi bi-search"></i> Buscar
+                        </label>
+                        <input type="text" id="search_query" name="q" class="form-control"
+                          placeholder="Número, título ou tribunal..." value="{{ search_query }}">
                       </div>
-                    </td>
-                    <td>
-                      {% if process.tribunal %}
-                      <span class="badge bg-light text-dark">{{ process.tribunal }}</span>
-                      {% else %}
-                      <span class="text-muted">-</span>
-                      {% endif %}
-                    </td>
-                    <td>
-                      {% if process.status == 'ativo' %}
-                      <span class="badge bg-success"><i class="bi bi-check-circle"></i> Ativo</span>
-                      {% elif process.status == 'suspenso' %}
-                      <span class="badge bg-warning"><i class="bi bi-pause-circle"></i> Suspenso</span>
-                      {% elif process.status == 'encerrado' %}
-                      <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Encerrado</span>
-                      {% else %}
-                      <span class="badge bg-secondary">{{ process.status }}</span>
-                      {% endif %}
-                    </td>
-                    <td>
-                      {% set phase_key = process_phases.get(process.id) %}
-                      {% if phase_key %}
-                      <span class="badge bg-light text-dark">
-                        {{ judicial_phases_labels.get(phase_key, phase_key|replace('_', ' ')|title) }}
-                      </span>
-                      {% else %}
-                      <span class="text-muted">-</span>
-                      {% endif %}
-                    </td>
-                    <td>
-                      <small class="text-muted"><i class="bi bi-calendar-event"></i> {{
-                        process.created_at.strftime('%d/%m/%Y') }}</small>
-                    </td>
-                    <td class="text-end">
-                      <div class="btn-group btn-group-sm" role="group">
-                        <a href="{{ url_for('process_panel.detail', process_id=process.id) }}"
-                          class="btn btn-outline-primary" title="Ver detalhes">
-                          <i class="bi bi-eye"></i>
-                        </a>
-                        <a href="{{ url_for('process_panel.edit', process_id=process.id) }}"
-                          class="btn btn-outline-secondary" title="Editar">
-                          <i class="bi bi-pencil"></i>
-                        </a>
-                        <button type="button" class="btn btn-outline-danger" title="Deletar"
-                          onclick="if(confirm('Tem certeza que deseja deletar este processo?')) { document.getElementById('delete-form-{{ process.id }}').submit(); }">
-                          <i class="bi bi-trash"></i>
+                      <div class="col-md-3">
+                        <label for="status_filter" class="form-label">
+                          <i class="bi bi-flag"></i> Status
+                        </label>
+                        <select name="status" id="status_filter" class="form-select">
+                          <option value="">Todos os Status</option>
+                          <option value="ativo" {% if status_filter=='ativo' %}selected{% endif %}>Ativo</option>
+                          <option value="suspenso" {% if status_filter=='suspenso' %}selected{% endif %}>Suspenso
+                          </option>
+                          <option value="encerrado" {% if status_filter=='encerrado' %}selected{% endif %}>Encerrado
+                          </option>
+                          <option value="aguardando" {% if status_filter=='aguardando' %}selected{% endif %}>Aguardando
+                          </option>
+                        </select>
+                      </div>
+                      <div class="col-md-3 d-flex align-items-end">
+                        <button type="submit" class="btn btn-primary w-100">
+                          <i class="bi bi-search"></i> Filtrar
                         </button>
                       </div>
-                      <form id="delete-form-{{ process.id }}" method="POST"
-                        action="{{ url_for('process_panel.delete', process_id=process.id) }}" style="display: none;">
-                      </form>
-                    </td>
-                  </tr>
-                  {% endfor %}
-                </tbody>
-              </table>
-            </div>
-
-            <!-- Paginação -->
-            {% if processes.pages > 1 %}
-            <nav class="p-3" aria-label="Paginação">
-              <ul class="pagination mb-0 justify-content-center">
-                {% if processes.has_prev %}
-                <li class="page-item">
-                  <a class="page-link"
-                    href="{{ url_for('process_panel.list_processes', page=1, q=search_query, status=status_filter) }}">
-                    <i class="bi bi-chevron-bar-left"></i>
-                  </a>
-                </li>
-                <li class="page-item">
-                  <a class="page-link"
-                    href="{{ url_for('process_panel.list_processes', page=processes.prev_num, q=search_query, status=status_filter) }}">
-                    Anterior
-                  </a>
-                </li>
-                {% endif %}
-
-                {% for page_num in processes.iter_pages() %}
-                {% if page_num %}
-                {% if page_num == processes.page %}
-                <li class="page-item active">
-                  <span class="page-link">{{ page_num }}</span>
-                </li>
-                {% else %}
-                <li class="page-item">
-                  <a class="page-link"
-                    href="{{ url_for('process_panel.list_processes', page=page_num, q=search_query, status=status_filter) }}">
-                    {{ page_num }}
-                  </a>
-                </li>
-                {% endif %}
-                {% else %}
-                <li class="page-item disabled">
-                  <span class="page-link">...</span>
-                </li>
-                {% endif %}
-                {% endfor %}
-
-                {% if processes.has_next %}
-                <li class="page-item">
-                  <a class="page-link"
-                    href="{{ url_for('process_panel.list_processes', page=processes.next_num, q=search_query, status=status_filter) }}">
-                    Próx ima
-                  </a>
-                </li>
-                <li class="page-item">
-                  <a class="page-link"
-                    href="{{ url_for('process_panel.list_processes', page=processes.pages, q=search_query, status=status_filter) }}">
-                    <i class="bi bi-chevron-bar-right"></i>
-                  </a>
-                </li>
-                {% endif %}
-              </ul>
-            </nav>
-            {% endif %}
-
-            {% else %}
-            <div class="text-center py-5">
-              <div class="mb-3">
-                <i class="bi bi-inbox" style="font-size: 4rem; color: #ccc;"></i>
+                    </form>
+                  </div>
+                </div>
               </div>
-              <h5 class="text-muted">Nenhum processo encontrado</h5>
-              <p class="text-muted mb-4">
-                {% if search_query or status_filter %}
-                Tente ajustar seus filtros de busca
-                {% else %}
-                Comece criando um novo processo para centralizar informações judiciais
-                {% endif %}
-              </p>
-              <a href="{{ url_for('process_panel.new_process') }}" class="btn btn-primary">
-                <i class="bi bi-plus-circle"></i> Criar Primeiro Processo
-              </a>
+
+              <!-- Tabela de Processos -->
+              {% if processes.items %}
+              <div class="table-responsive">
+                <table class="table table-hover table-striped align-middle">
+                  <thead class="table-light">
+                    <tr>
+                      <th><i class="bi bi-hash"></i> Número</th>
+                      <th><i class="bi bi-card-text"></i> Título</th>
+                      <th><i class="bi bi-building"></i> Tribunal</th>
+                      <th><i class="bi bi-flag"></i> Status</th>
+                      <th><i class="bi bi-signpost"></i> Fase</th>
+                      <th><i class="bi bi-calendar"></i> Criado em</th>
+                      <th class="text-end">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {% for process in processes.items %}
+                    <tr>
+                      <td>
+                        {% if process.process_number and not process.process_number.startswith('TEMP-') %}
+                        <code class="text-primary fw-bold">{{ process.process_number }}</code>
+                        {% elif process.process_number %}
+                        <span class="badge bg-warning text-dark"
+                          title="Número provisório — edite o processo para informar o número real"><i
+                            class="bi bi-clock me-1"></i>{{ process.process_number }}</span>
+                        {% else %}
+                        <span class="text-muted fst-italic">Não informado</span>
+                        {% endif %}
+                      </td>
+                      <td>
+                        <div>
+                          <strong>{{ process.title or process.process_number or 'Sem título' }}</strong>
+                          {% if process.description %}
+                          <br><small class="text-muted">{{ process.description[:60] }}...</small>
+                          {% endif %}
+                          {% if process.plaintiff_client or process.defendant %}
+                          <br>
+                          <small class="text-muted">
+                            {% if process.plaintiff_client %}<span class="me-2">Ativo: {{ process.plaintiff_client.name
+                              }}</span>{% endif %}
+                            {% if process.defendant %}<span>Passivo: {{ process.defendant.name }}</span>{% endif %}
+                          </small>
+                          {% endif %}
+                        </div>
+                      </td>
+                      <td>
+                        {% if process.tribunal %}
+                        <span class="badge bg-light text-dark">{{ process.tribunal }}</span>
+                        {% else %}
+                        <span class="text-muted">-</span>
+                        {% endif %}
+                      </td>
+                      <td>
+                        {% if process.status == 'ativo' %}
+                        <span class="badge bg-success"><i class="bi bi-check-circle"></i> Ativo</span>
+                        {% elif process.status == 'suspenso' %}
+                        <span class="badge bg-warning"><i class="bi bi-pause-circle"></i> Suspenso</span>
+                        {% elif process.status == 'encerrado' %}
+                        <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Encerrado</span>
+                        {% else %}
+                        <span class="badge bg-secondary">{{ process.status }}</span>
+                        {% endif %}
+                      </td>
+                      <td>
+                        {% set phase_key = process_phases.get(process.id) %}
+                        {% if phase_key %}
+                        <span class="badge bg-light text-dark">
+                          {{ judicial_phases_labels.get(phase_key, phase_key|replace('_', ' ')|title) }}
+                        </span>
+                        {% else %}
+                        <span class="text-muted">-</span>
+                        {% endif %}
+                      </td>
+                      <td>
+                        <small class="text-muted"><i class="bi bi-calendar-event"></i> {{
+                          process.created_at.strftime('%d/%m/%Y') }}</small>
+                      </td>
+                      <td class="text-end">
+                        <div class="btn-group btn-group-sm" role="group">
+                          <a href="{{ url_for('process_panel.detail', process_id=process.id) }}"
+                            class="btn btn-outline-primary" title="Ver detalhes">
+                            <i class="bi bi-eye"></i>
+                          </a>
+                          <a href="{{ url_for('process_panel.edit', process_id=process.id) }}"
+                            class="btn btn-outline-secondary" title="Editar">
+                            <i class="bi bi-pencil"></i>
+                          </a>
+                          <button type="button" class="btn btn-outline-danger" title="Deletar"
+                            onclick="if(confirm('Tem certeza que deseja deletar este processo?')) { document.getElementById('delete-form-{{ process.id }}').submit(); }">
+                            <i class="bi bi-trash"></i>
+                          </button>
+                        </div>
+                        <form id="delete-form-{{ process.id }}" method="POST"
+                          action="{{ url_for('process_panel.delete', process_id=process.id) }}" style="display: none;">
+                        </form>
+                      </td>
+                    </tr>
+                    {% endfor %}
+                  </tbody>
+                </table>
+              </div>
+
+              <!-- Paginação -->
+              {% if processes.pages > 1 %}
+              <nav class="p-3" aria-label="Paginação">
+                <ul class="pagination mb-0 justify-content-center">
+                  {% if processes.has_prev %}
+                  <li class="page-item">
+                    <a class="page-link"
+                      href="{{ url_for('process_panel.list_processes', page=1, q=search_query, status=status_filter) }}">
+                      <i class="bi bi-chevron-bar-left"></i>
+                    </a>
+                  </li>
+                  <li class="page-item">
+                    <a class="page-link"
+                      href="{{ url_for('process_panel.list_processes', page=processes.prev_num, q=search_query, status=status_filter) }}">
+                      Anterior
+                    </a>
+                  </li>
+                  {% endif %}
+
+                  {% for page_num in processes.iter_pages() %}
+                  {% if page_num %}
+                  {% if page_num == processes.page %}
+                  <li class="page-item active">
+                    <span class="page-link">{{ page_num }}</span>
+                  </li>
+                  {% else %}
+                  <li class="page-item">
+                    <a class="page-link"
+                      href="{{ url_for('process_panel.list_processes', page=page_num, q=search_query, status=status_filter) }}">
+                      {{ page_num }}
+                    </a>
+                  </li>
+                  {% endif %}
+                  {% else %}
+                  <li class="page-item disabled">
+                    <span class="page-link">...</span>
+                  </li>
+                  {% endif %}
+                  {% endfor %}
+
+                  {% if processes.has_next %}
+                  <li class="page-item">
+                    <a class="page-link"
+                      href="{{ url_for('process_panel.list_processes', page=processes.next_num, q=search_query, status=status_filter) }}">
+                      Próx ima
+                    </a>
+                  </li>
+                  <li class="page-item">
+                    <a class="page-link"
+                      href="{{ url_for('process_panel.list_processes', page=processes.pages, q=search_query, status=status_filter) }}">
+                      <i class="bi bi-chevron-bar-right"></i>
+                    </a>
+                  </li>
+                  {% endif %}
+                </ul>
+              </nav>
+              {% endif %}
+
+              {% else %}
+              <div class="text-center py-5">
+                <div class="mb-3">
+                  <i class="bi bi-inbox" style="font-size: 4rem; color: #ccc;"></i>
+                </div>
+                <h5 class="text-muted">Nenhum processo encontrado</h5>
+                <p class="text-muted mb-4">
+                  {% if search_query or status_filter %}
+                  Tente ajustar seus filtros de busca
+                  {% else %}
+                  Comece criando um novo processo para centralizar informações judiciais
+                  {% endif %}
+                </p>
+                <a href="{{ url_for('process_panel.new_process') }}" class="btn btn-primary">
+                  <i class="bi bi-plus-circle"></i> Criar Primeiro Processo
+                </a>
+              </div>
+              {% endif %}
             </div>
-            {% endif %}
           </div>
         </div>
       </div>
     </div>
   </div>
+
 </div>
 
 {% endblock %}

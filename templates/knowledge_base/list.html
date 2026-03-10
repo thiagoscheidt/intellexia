@@ -308,7 +308,6 @@
                                             <th>Status de Processamento</th>
                                             <th>Categoria</th>
                                             <th>Número do Processo</th>
-                                            <th>Descrição</th>
                                             <th>Tamanho</th>
                                             <th>Data de Upload</th>
                                             <th width="140" class="text-end">Ações</th>
@@ -361,14 +360,6 @@
                                                 <span class="badge bg-success">
                                                     <i class="bi bi-briefcase"></i> {{ file.lawsuit_number }}
                                                 </span>
-                                                {% else %}
-                                                <span class="text-muted">-</span>
-                                                {% endif %}
-                                            </td>
-                                            <td>
-                                                {% if file.description %}
-                                                {{ file.description[:100] }}{% if file.description|length > 100 %}...{%
-                                                endif %}
                                                 {% else %}
                                                 <span class="text-muted">-</span>
                                                 {% endif %}

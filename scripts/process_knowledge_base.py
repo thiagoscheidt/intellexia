@@ -111,6 +111,7 @@ def _propagate_process_number_update(
     process_id: int,
     old_number: str,
     new_number: str,
+    ingestion_agent: KnowledgeIngestionAgent | None = None,
 ) -> None:
     """Propaga a troca de número de processo para registros relacionados."""
     old_number = str(old_number or '').strip()
@@ -119,6 +120,7 @@ def _propagate_process_number_update(
         return
 
     now = datetime.utcnow()
+    updated_kb_ids: set[int] = set()
 
     kb_updated = 0
     kb_same_temp = KnowledgeBase.query.filter_by(
@@ -129,6 +131,7 @@ def _propagate_process_number_update(
     for kb_item in kb_same_temp:
         kb_item.lawsuit_number = new_number
         kb_item.updated_at = now
+        updated_kb_ids.add(kb_item.id)
         kb_updated += 1
 
     # Garante atualização também para KB vinculada aos documentos do processo.
@@ -146,6 +149,7 @@ def _propagate_process_number_update(
         if str(kb_item.lawsuit_number or '').strip() != new_number:
             kb_item.lawsuit_number = new_number
             kb_item.updated_at = now
+            updated_kb_ids.add(kb_item.id)
             kb_updated += 1
 
     sentence_updated = 0
@@ -157,6 +161,18 @@ def _propagate_process_number_update(
         sentence.process_number = new_number
         sentence.updated_at = now
         sentence_updated += 1
+
+    if ingestion_agent:
+        for kb_id in sorted(updated_kb_ids):
+            try:
+                ingestion_agent.update_lawsuit_number_by_file_id(
+                    file_id=kb_id,
+                    lawsuit_number=new_number,
+                )
+            except Exception as error:
+                print(
+                    f"Falha ao sincronizar arquivo {kb_id} no Qdrant/Meilisearch: {error}"
+                )
 
     print(
         f"Propagação do número do processo: KB atualizados={kb_updated}, "
@@ -376,7 +392,6 @@ def _process_single_knowledge_file(item_id: int) -> bool:
                 raise FileNotFoundError(f"Arquivo não encontrado no caminho: {item.file_path}")
 
             ingestion_agent = KnowledgeIngestionAgent()
-            # summary_agent = AgentDocumentSummary()
             extractor_agent = AgentDocumentExtractor()
 
             markdown_content = ingestion_agent.process_file(
@@ -443,6 +458,7 @@ def _process_single_knowledge_file(item_id: int) -> bool:
                                         process_id=linked_process.id,
                                         old_number=old_temp_number,
                                         new_number=real_number,
+                                        ingestion_agent=ingestion_agent,
                                     )
                                 else:
                                     print(
