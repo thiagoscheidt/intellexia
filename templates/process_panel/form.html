@@ -56,18 +56,25 @@ subtitle=hero_subtitle|default(''), icon='bi bi-file-earmark-plus') %}
                                 <form method="POST" class="needs-validation">
 
                                     <!-- Número do Processo -->
+                                    {% set is_temp = action == 'editar' and process and process.process_number and
+                                    process.process_number.startswith('TEMP-') %}
                                     <div class="mb-3">
                                         <label for="process_number" class="form-label">
-                                            Número do Processo <span class="text-danger">*</span>
+                                            Número do Processo {% if not is_temp %}<span class="text-danger">*</span>{%
+                                            endif %}
                                         </label>
                                         <input type="text" class="form-control" id="process_number"
                                             name="process_number" placeholder="NNNNNNN-DD.AAAA.J.TR.OOOO"
-                                            value="{{ process.process_number if process else '' }}" {% if
-                                            action=='editar' %}readonly{% endif %} maxlength="25" inputmode="numeric"
-                                            required>
+                                            value="{{ '' if is_temp else (process.process_number if process else '') }}"
+                                            {% if action=='editar' and not is_temp %}readonly{% endif %} maxlength="25"
+                                            inputmode="numeric" {% if not is_temp %}required{% endif %}>
                                         <small class="text-muted d-block mt-1">
+                                            {% if is_temp %}
+                                            Este processo ainda não tem número real. Informe agora ou deixe em branco.
+                                            {% else %}
                                             Formato CNJ: 7 dígitos - 2 verificadores . 4 ano . 1 segmento . 2 tribunal .
                                             4 origem
+                                            {% endif %}
                                         </small>
                                     </div>
 

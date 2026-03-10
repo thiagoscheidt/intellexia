@@ -182,11 +182,19 @@
                   {% for process in processes.items %}
                   <tr>
                     <td>
+                      {% if process.process_number and not process.process_number.startswith('TEMP-') %}
                       <code class="text-primary fw-bold">{{ process.process_number }}</code>
+                      {% elif process.process_number %}
+                      <span class="badge bg-warning text-dark"
+                        title="Número provisório — edite o processo para informar o número real"><i
+                          class="bi bi-clock me-1"></i>{{ process.process_number }}</span>
+                      {% else %}
+                      <span class="text-muted fst-italic">Não informado</span>
+                      {% endif %}
                     </td>
                     <td>
                       <div>
-                        <strong>{{ process.title or process.process_number }}</strong>
+                        <strong>{{ process.title or process.process_number or 'Sem título' }}</strong>
                         {% if process.description %}
                         <br><small class="text-muted">{{ process.description[:60] }}...</small>
                         {% endif %}

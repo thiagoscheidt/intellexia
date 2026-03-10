@@ -267,10 +267,17 @@
                             data-update-url="{{ url_for('process_panel.update_process_phase_kanban', process_id=process.id) }}">
                             <div class="card-body p-3">
                                 <div class="mb-1">
+                                    {% if process.process_number and not process.process_number.startswith('TEMP-') %}
                                     <code class="text-primary fw-bold">{{ process.process_number }}</code>
+                                    {% elif process.process_number %}
+                                    <span class="badge bg-warning text-dark small" title="Número provisório"><i
+                                            class="bi bi-clock me-1"></i>{{ process.process_number }}</span>
+                                    {% else %}
+                                    <span class="text-muted fst-italic small">Não informado</span>
+                                    {% endif %}
                                 </div>
                                 <div class="mb-2">
-                                    <strong>{{ process.title or process.process_number }}</strong>
+                                    <strong>{{ process.title or process.process_number or 'Sem título' }}</strong>
                                 </div>
                                 {% if process.description %}
                                 <div class="text-muted small mb-2">{{ process.description[:90] }}{% if

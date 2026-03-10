@@ -12,6 +12,7 @@ from werkzeug.utils import secure_filename
 import hashlib
 import os
 import re
+import uuid
 
 process_panel_bp = Blueprint('process_panel', __name__, url_prefix='/process-panel')
 
@@ -862,7 +863,9 @@ def new_process():
     user_id = session.get('user_id')
     
     if request.method == 'POST':
-        process_number = request.form.get('process_number', '').strip().upper()
+        process_number = request.form.get('process_number', '').strip().upper() or None
+        if not process_number:
+            process_number = f'TEMP-{uuid.uuid4().hex[:8].upper()}'
         plaintiff_client_id = request.form.get('plaintiff_client_id', type=int)
         defendant_id = request.form.get('defendant_id', type=int)
         uploaded_files = [
@@ -889,28 +892,25 @@ def new_process():
             if not defendant:
                 flash('Polo passivo (réu) inválido.', 'danger')
                 return redirect(url_for('process_panel.new_process'))
-        
-        # Validações
-        if not process_number:
-            flash('Número do processo é obrigatório', 'danger')
-            return redirect(url_for('process_panel.new_process'))
 
         if not uploaded_files:
             flash('Envie ao menos um documento para a base de conhecimento.', 'danger')
             return redirect(url_for('process_panel.new_process'))
-        
-        # Verificar se processo já existe
-        existing = JudicialProcess.query.filter_by(
-            law_firm_id=law_firm_id,
-            process_number=process_number
-        ).first()
-        
-        if existing:
-            flash(f'Processo {process_number} já existe', 'danger')
-            return redirect(url_for('process_panel.new_process'))
+
+        # Verificar duplicata apenas se o número foi informado
+        if process_number:
+            existing = JudicialProcess.query.filter_by(
+                law_firm_id=law_firm_id,
+                process_number=process_number
+            ).first()
+
+            if existing:
+                flash(f'Processo {process_number} já existe', 'danger')
+                return redirect(url_for('process_panel.new_process'))
         
         # Criar novo processo
         try:
+            process_label = process_number or '(sem número)'
             new_proc = JudicialProcess(
                 law_firm_id=law_firm_id,
                 user_id=user_id,
@@ -933,7 +933,8 @@ def new_process():
 
                 duplicate = KnowledgeBase.query.filter_by(
                     law_firm_id=law_firm_id,
-                    file_hash=file_hash
+                    file_hash=file_hash,
+                    is_active=True
                 ).first()
 
                 if duplicate:
@@ -978,12 +979,12 @@ def new_process():
 
             if duplicates_count > 0:
                 flash(
-                    f'Processo {process_number} criado. {uploaded_count} documento(s) enviado(s) e {duplicates_count} duplicado(s) ignorado(s).',
+                    f'Processo {process_label} criado. {uploaded_count} documento(s) enviado(s) e {duplicates_count} duplicado(s) ignorado(s).',
                     'success'
                 )
             else:
                 flash(
-                    f'Processo {process_number} criado com sucesso! {uploaded_count} documento(s) enviado(s) para a base de conhecimento.',
+                    f'Processo {process_label} criado com sucesso! {uploaded_count} documento(s) enviado(s) para a base de conhecimento.',
                     'success'
                 )
 
@@ -1062,17 +1063,20 @@ def detail(process_id):
     
     # Buscar documentos da knowledge base com o mesmo process_number
     # Pesquisar com e sem pontuação
-    process_number_clean = ''.join(c for c in process.process_number if c.isdigit())
-    kb_documents = KnowledgeBase.query.filter(
-        KnowledgeBase.law_firm_id == law_firm_id,
-        or_(
-            KnowledgeBase.lawsuit_number == process.process_number,
-            KnowledgeBase.lawsuit_number == process_number_clean,
-            db.func.replace(db.func.replace(db.func.replace(
-                KnowledgeBase.lawsuit_number, '-', ''), '.', ''), ' ', ''
-            ) == process_number_clean
-        )
-    ).all()
+    if process.process_number:
+        process_number_clean = ''.join(c for c in process.process_number if c.isdigit())
+        kb_documents = KnowledgeBase.query.filter(
+            KnowledgeBase.law_firm_id == law_firm_id,
+            or_(
+                KnowledgeBase.lawsuit_number == process.process_number,
+                KnowledgeBase.lawsuit_number == process_number_clean,
+                db.func.replace(db.func.replace(db.func.replace(
+                    KnowledgeBase.lawsuit_number, '-', ''), '.', ''), ' ', ''
+                ) == process_number_clean
+            )
+        ).all()
+    else:
+        kb_documents = []
 
     configured_phases = JudicialPhase.query.filter_by(law_firm_id=law_firm_id).all()
     phase_labels_by_key = {phase.key: phase.name for phase in configured_phases}
@@ -1491,6 +1495,20 @@ def edit(process_id):
             if not defendant:
                 flash('Polo passivo (réu) inválido.', 'danger')
                 return redirect(url_for('process_panel.edit', process_id=process.id))
+
+        # Permitir substituição de identificador temporário pelo número real
+        if process.process_number and process.process_number.startswith('TEMP-'):
+            new_number = request.form.get('process_number', '').strip().upper()
+            if new_number and not new_number.startswith('TEMP-'):
+                existing = JudicialProcess.query.filter(
+                    JudicialProcess.id != process.id,
+                    JudicialProcess.law_firm_id == law_firm_id,
+                    JudicialProcess.process_number == new_number
+                ).first()
+                if existing:
+                    flash(f'Processo {new_number} já existe.', 'danger')
+                    return redirect(url_for('process_panel.edit', process_id=process.id))
+                process.process_number = new_number
 
         # Atualizar campos
         process.title = request.form.get('title', '').strip() or process.title

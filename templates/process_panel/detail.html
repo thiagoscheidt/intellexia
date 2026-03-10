@@ -2,17 +2,19 @@
 
 {% from "partials/page_hero.html" import page_hero %}
 
-{% block title %}Processo {{ process.process_number }}{% endblock %}
+{% set process_number_display = (process.process_number if (process.process_number and not
+process.process_number.startswith('TEMP-')) else 'Não informado') %}
+{% block title %}Processo {{ process_number_display }}{% endblock %}
 
 {% block content %}
-{% call page_hero(title=process.process_number, subtitle=hero_subtitle|default(''), icon='bi bi-diagram-3') %}
+{% call page_hero(title=process_number_display, subtitle=hero_subtitle|default(''), icon='bi bi-diagram-3') %}
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb mb-4 bg-transparent small">
     <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house-fill"></i> Home</a>
     </li>
     <li class="breadcrumb-item"><a href="{{ url_for('process_panel.list_processes') }}"><i
           class="bi bi-diagram-3-fill"></i> Processos</a></li>
-    <li class="breadcrumb-item active">{{ process.process_number }}</li>
+    <li class="breadcrumb-item active">{{ process_number_display }}</li>
   </ol>
 </nav>
 {% endcall %}
@@ -132,7 +134,15 @@
                 <div class="d-flex align-items-center justify-content-between p-3 rounded border bg-light mb-3">
                   <div>
                     <small class="text-muted d-block">Número do Processo</small>
+                    {% if process.process_number and not process.process_number.startswith('TEMP-') %}
                     <strong class="fs-6">{{ process.process_number }}</strong>
+                    {% elif process.process_number %}
+                    <span class="badge bg-warning text-dark"
+                      title="Número provisório — edite o processo para informar o número real"><i
+                        class="bi bi-clock me-1"></i>{{ process.process_number }}</span>
+                    {% else %}
+                    <span class="text-muted fst-italic">Não informado</span>
+                    {% endif %}
                   </div>
                   <div>
                     {% if process.status == 'ativo' %}
