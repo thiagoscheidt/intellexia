@@ -233,9 +233,19 @@
                                                         class="btn btn-primary btn-sm" title="Download">
                                                         <i class="bi bi-download"></i>
                                                     </a>
-                                                    <button type="button" class="btn btn-danger btn-sm"
-                                                        onclick='deleteFile({{ file.id }}, {{ file.original_filename|tojson }})'
-                                                        title="Excluir">
+                                                    {% if not file.lawsuit_number %}
+                                                    <button type="button"
+                                                        class="btn btn-warning btn-sm js-link-process-btn"
+                                                        data-file-id="{{ file.id }}"
+                                                        data-filename="{{ file.original_filename }}"
+                                                        title="Vincular a um processo">
+                                                        <i class="bi bi-link-45deg"></i>
+                                                    </button>
+                                                    {% endif %}
+                                                    <button type="button"
+                                                        class="btn btn-danger btn-sm js-delete-file-btn"
+                                                        data-file-id="{{ file.id }}"
+                                                        data-filename="{{ file.original_filename }}" title="Excluir">
                                                         <i class="bi bi-trash"></i>
                                                     </button>
                                                 </div>
@@ -261,6 +271,72 @@
     </div>
 
     <script>
+        let selectedKbFileId = null;
+
+        function openLinkProcessModal(fileId, filename) {
+            selectedKbFileId = fileId;
+            document.getElementById('linkFileName').textContent = filename || 'Arquivo';
+            document.getElementById('linkProcessForm').reset();
+
+            const modalEl = document.getElementById('linkProcessModal');
+            const modal = new bootstrap.Modal(modalEl);
+            modal.show();
+        }
+
+        function submitLinkProcess() {
+            const processId = document.getElementById('link_process_id').value;
+            const documentTypeId = document.getElementById('link_document_type_id').value;
+
+            if (!selectedKbFileId) {
+                alert('Arquivo inválido para vínculo.');
+                return;
+            }
+
+            if (!processId || !documentTypeId) {
+                alert('Selecione o processo e o tipo de arquivo.');
+                return;
+            }
+
+            fetch(`/knowledge-base/${selectedKbFileId}/link-process`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    process_id: processId,
+                    document_type_id: documentTypeId,
+                }),
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.success) {
+                        location.reload();
+                    } else {
+                        alert('Erro ao vincular arquivo: ' + (data.message || 'Erro desconhecido'));
+                    }
+                })
+                .catch(error => {
+                    alert('Erro ao vincular arquivo: ' + error);
+                });
+        }
+
+        document.addEventListener('click', function (event) {
+            const linkBtn = event.target.closest('.js-link-process-btn');
+            if (linkBtn) {
+                const fileId = Number(linkBtn.dataset.fileId);
+                const filename = linkBtn.dataset.filename || '';
+                openLinkProcessModal(fileId, filename);
+                return;
+            }
+
+            const deleteBtn = event.target.closest('.js-delete-file-btn');
+            if (deleteBtn) {
+                const fileId = Number(deleteBtn.dataset.fileId);
+                const filename = deleteBtn.dataset.filename || '';
+                deleteFile(fileId, filename);
+            }
+        });
+
         function deleteFile(fileId, filename) {
             if (confirm('Tem certeza que deseja remover o arquivo "' + filename + '" da base de conhecimento?')) {
                 fetch(`/knowledge-base/${fileId}/delete`, {
@@ -283,6 +359,52 @@
             }
         }
     </script>
+
+    <div class="modal fade" id="linkProcessModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title"><i class="bi bi-link-45deg me-2"></i>Vincular a um processo</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-3">
+                        <strong>Arquivo:</strong> <span id="linkFileName" class="text-primary"></span>
+                    </p>
+
+                    <form id="linkProcessForm">
+                        <div class="mb-3">
+                            <label for="link_process_id" class="form-label">Processo</label>
+                            <select class="form-select" id="link_process_id" required>
+                                <option value="">Selecione um processo</option>
+                                {% for process in processes %}
+                                <option value="{{ process.id }}">
+                                    {{ process.process_number or 'Sem número' }} - {{ process.title or 'Sem título' }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="mb-0">
+                            <label for="link_document_type_id" class="form-label">Tipo de arquivo</label>
+                            <select class="form-select" id="link_document_type_id" required>
+                                <option value="">Selecione o tipo de arquivo</option>
+                                {% for doc_type in document_types %}
+                                <option value="{{ doc_type.id }}">{{ doc_type.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </form>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="button" class="btn btn-warning" onclick="submitLinkProcess()">
+                        <i class="bi bi-check2-circle me-1"></i>Vincular
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
 
 </div>
 

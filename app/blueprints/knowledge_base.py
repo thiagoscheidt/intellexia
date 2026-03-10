@@ -1,5 +1,18 @@
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file
-from app.models import db, KnowledgeBase, KnowledgeCategory, KnowledgeTag, KnowledgeSummary, KnowledgeChatHistory, KnowledgeChatSession
+from app.models import (
+    db,
+    KnowledgeBase,
+    KnowledgeCategory,
+    KnowledgeTag,
+    KnowledgeSummary,
+    KnowledgeChatHistory,
+    KnowledgeChatSession,
+    JudicialProcess,
+    JudicialDocument,
+    JudicialDocumentType,
+    JudicialEvent,
+    JudicialPhase,
+)
 from app.agents.knowledge_base.knowledge_query_agent import KnowledgeQueryAgent
 from datetime import datetime
 import builtins
@@ -76,13 +89,121 @@ def list():
     ).distinct().all()
     categories = [c[0] for c in categories if c[0]]
     
+    processes = JudicialProcess.query.filter_by(
+        law_firm_id=law_firm_id
+    ).order_by(JudicialProcess.created_at.desc()).all()
+
+    document_types = JudicialDocumentType.query.filter_by(
+        law_firm_id=law_firm_id,
+        is_active=True,
+    ).order_by(JudicialDocumentType.display_order.asc(), JudicialDocumentType.name.asc()).all()
+
     return render_template(
-        'knowledge_base/list.html', 
-        files=files, 
+        'knowledge_base/list.html',
+        files=files,
         categories=categories,
         current_category=category,
-        current_search=search
+        current_search=search,
+        processes=processes,
+        document_types=document_types,
     )
+
+
+@knowledge_base_bp.route('/<int:file_id>/link-process', methods=['POST'])
+def link_to_process(file_id):
+    """Vincula arquivo da KnowledgeBase a um processo e cria registro em JudicialDocument."""
+    law_firm_id = get_current_law_firm_id()
+    user_id = get_current_user_id()
+
+    if not law_firm_id or not user_id:
+        return jsonify({'success': False, 'message': 'Não autorizado'}), 401
+
+    payload = request.get_json(silent=True) or {}
+    process_id = payload.get('process_id')
+    document_type_id = payload.get('document_type_id')
+
+    try:
+        process_id = int(process_id)
+        document_type_id = int(document_type_id)
+    except (TypeError, ValueError):
+        return jsonify({'success': False, 'message': 'Processo e tipo de arquivo são obrigatórios.'}), 400
+
+    file = KnowledgeBase.query.filter_by(
+        id=file_id,
+        law_firm_id=law_firm_id,
+        is_active=True,
+    ).first()
+    if not file:
+        return jsonify({'success': False, 'message': 'Arquivo não encontrado.'}), 404
+
+    if file.lawsuit_number and str(file.lawsuit_number).strip():
+        return jsonify({'success': False, 'message': 'Este arquivo já possui número de processo vinculado.'}), 400
+
+    process = JudicialProcess.query.filter_by(
+        id=process_id,
+        law_firm_id=law_firm_id,
+    ).first()
+    if not process:
+        return jsonify({'success': False, 'message': 'Processo não encontrado.'}), 404
+
+    if not process.process_number or not str(process.process_number).strip():
+        return jsonify({'success': False, 'message': 'O processo selecionado não possui número válido.'}), 400
+
+    document_type = JudicialDocumentType.query.filter_by(
+        id=document_type_id,
+        law_firm_id=law_firm_id,
+        is_active=True,
+    ).first()
+    if not document_type:
+        return jsonify({'success': False, 'message': 'Tipo de arquivo inválido.'}), 404
+
+    existing_link = JudicialDocument.query.filter_by(knowledge_base_id=file.id).first()
+    if existing_link:
+        return jsonify({'success': False, 'message': 'Este arquivo já está vinculado a um processo.'}), 400
+
+    phase_key = document_type.phase.key if document_type.phase else None
+    if not phase_key:
+        fallback_phase = JudicialPhase.query.filter_by(
+            law_firm_id=law_firm_id,
+            is_active=True,
+        ).order_by(JudicialPhase.display_order.asc(), JudicialPhase.name.asc()).first()
+        phase_key = fallback_phase.key if fallback_phase else 'inicio_processo'
+
+    try:
+        file.lawsuit_number = str(process.process_number).strip()
+        file.updated_at = datetime.utcnow()
+
+        event = JudicialEvent(
+            process_id=process.id,
+            type=document_type.key,
+            phase=phase_key,
+            description=(
+                f'Arquivo da KnowledgeBase vinculado manualmente '
+                f'({file.original_filename} - {document_type.name}).'
+            ),
+            event_date=datetime.utcnow(),
+        )
+        db.session.add(event)
+        db.session.flush()
+
+        db.session.add(
+            JudicialDocument(
+                process_id=process.id,
+                event_id=event.id,
+                knowledge_base_id=file.id,
+                type=document_type.key,
+                file_name=file.original_filename,
+                file_path=file.file_path,
+                uploaded_by=user_id,
+            )
+        )
+
+        process.updated_at = datetime.utcnow()
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Arquivo vinculado ao processo com sucesso.'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'message': str(e)}), 500
 
 
 @knowledge_base_bp.route('/folders')
@@ -236,7 +357,8 @@ def upload():
 
             duplicate = KnowledgeBase.query.filter_by(
                 law_firm_id=law_firm_id,
-                file_hash=file_hash
+                file_hash=file_hash,
+                is_active=True,
             ).first()
 
             if duplicate:
@@ -360,7 +482,8 @@ def upload_multiple():
             # Duplicado já existente no banco
             existing_duplicate = KnowledgeBase.query.filter_by(
                 law_firm_id=law_firm_id,
-                file_hash=file_hash
+                file_hash=file_hash,
+                is_active=True,
             ).first()
             if existing_duplicate:
                 duplicate_files.append(file.filename)
