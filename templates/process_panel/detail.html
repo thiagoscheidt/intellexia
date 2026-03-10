@@ -17,6 +17,52 @@
 </nav>
 {% endcall %}
 
+<style>
+  .phase-timeline {
+    position: relative;
+    margin-left: .25rem;
+    padding-left: 2.25rem;
+  }
+
+  .phase-timeline::before {
+    content: "";
+    position: absolute;
+    left: .72rem;
+    top: .35rem;
+    bottom: .35rem;
+    width: 2px;
+    background: var(--bs-border-color);
+  }
+
+  .phase-timeline-item {
+    position: relative;
+    margin-bottom: 1rem;
+  }
+
+  .phase-timeline-item:last-child {
+    margin-bottom: 0;
+  }
+
+  .phase-timeline-dot {
+    position: absolute;
+    left: -1.92rem;
+    top: .8rem;
+    width: .95rem;
+    height: .95rem;
+    border-radius: 50%;
+    background: var(--bs-primary);
+    border: 2px solid var(--bs-body-bg);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--bs-primary) 25%, transparent);
+  }
+
+  .phase-timeline-card {
+    border: 1px solid var(--bs-border-color-translucent);
+    border-radius: .65rem;
+    padding: .85rem .95rem;
+    background: var(--bs-body-bg);
+  }
+</style>
+
 <div class="app-content">
   <div class="container-fluid">
     <div class="row">
@@ -83,78 +129,77 @@
                 </div>
               </div>
               <div class="card-body">
-                <div class="mb-3">
-                  <label class="form-label text-muted small">Status</label>
+                <div class="d-flex align-items-center justify-content-between p-3 rounded border bg-light mb-3">
+                  <div>
+                    <small class="text-muted d-block">Número do Processo</small>
+                    <strong class="fs-6">{{ process.process_number }}</strong>
+                  </div>
                   <div>
                     {% if process.status == 'ativo' %}
-                    <span class="badge bg-success"><i class="bi bi-check-circle"></i> Ativo</span>
+                    <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Ativo</span>
                     {% elif process.status == 'suspenso' %}
-                    <span class="badge bg-warning"><i class="bi bi-pause-circle"></i> Suspenso</span>
+                    <span class="badge bg-warning text-dark"><i class="bi bi-pause-circle me-1"></i>Suspenso</span>
                     {% elif process.status == 'encerrado' %}
-                    <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Encerrado</span>
+                    <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Encerrado</span>
                     {% else %}
                     <span class="badge bg-secondary">{{ process.status }}</span>
                     {% endif %}
                   </div>
                 </div>
 
-                {% if current_phase_label %}
-                <div class="mb-3">
-                  <label class="form-label text-muted small">Fase Atual</label>
-                  <div>
-                    <span class="badge bg-light text-dark"><i class="bi bi-signpost-2 me-1"></i>{{ current_phase_label
-                      }}</span>
+                <div class="vstack gap-3">
+                  {% if current_phase_label %}
+                  <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+                    <small class="text-muted"><i class="bi bi-signpost-2 me-2"></i>Fase Atual</small>
+                    <span class="badge bg-light text-dark">{{ current_phase_label }}</span>
                   </div>
-                </div>
-                {% endif %}
+                  {% endif %}
 
-                {% if process.tribunal %}
-                <div class="mb-3">
-                  <label class="form-label text-muted small">Tribunal</label>
-                  <p class="mb-0"><strong>{{ process.tribunal }}</strong></p>
-                </div>
-                {% endif %}
+                  {% if process.tribunal %}
+                  <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+                    <small class="text-muted"><i class="bi bi-building me-2"></i>Tribunal</small>
+                    <strong class="text-end ms-3">{{ process.tribunal }}</strong>
+                  </div>
+                  {% endif %}
 
-                {% if process.section %}
-                <div class="mb-3">
-                  <label class="form-label text-muted small">Seção</label>
-                  <p class="mb-0"><strong>{{ process.section }}</strong></p>
-                </div>
-                {% endif %}
+                  {% if process.section %}
+                  <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+                    <small class="text-muted"><i class="bi bi-diagram-2 me-2"></i>Seção</small>
+                    <strong class="text-end ms-3">{{ process.section }}</strong>
+                  </div>
+                  {% endif %}
 
-                {% if process.judge_name %}
-                <div class="mb-3">
-                  <label class="form-label text-muted small">Juiz</label>
-                  <p class="mb-0"><strong>{{ process.judge_name }}</strong></p>
-                </div>
-                {% endif %}
+                  {% if process.judge_name %}
+                  <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+                    <small class="text-muted"><i class="bi bi-person-badge me-2"></i>Juiz</small>
+                    <strong class="text-end ms-3">{{ process.judge_name }}</strong>
+                  </div>
+                  {% endif %}
 
-                {% if process.origin_unit %}
-                <div class="mb-3">
-                  <label class="form-label text-muted small">Unidade de Origem</label>
-                  <p class="mb-0"><strong>{{ process.origin_unit }}</strong></p>
-                </div>
-                {% endif %}
+                  {% if process.origin_unit %}
+                  <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+                    <small class="text-muted"><i class="bi bi-geo-alt me-2"></i>Unidade de Origem</small>
+                    <strong class="text-end ms-3">{{ process.origin_unit }}</strong>
+                  </div>
+                  {% endif %}
 
-                <div class="mb-3">
-                  <label class="form-label text-muted small">Polo Ativo</label>
-                  <p class="mb-0">
-                    <strong>{{ process.plaintiff_client.name if process.plaintiff_client else 'Não informado'
+                  <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+                    <small class="text-muted"><i class="bi bi-person-check me-2"></i>Polo Ativo</small>
+                    <strong class="text-end ms-3">{{ process.plaintiff_client.name if process.plaintiff_client else 'Não
+                      informado'
                       }}</strong>
-                  </p>
-                </div>
+                  </div>
 
-                <div class="mb-3">
-                  <label class="form-label text-muted small">Polo Passivo</label>
-                  <p class="mb-0">
-                    <strong>{{ process.defendant.name if process.defendant else 'Não informado' }}</strong>
-                  </p>
-                </div>
+                  <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+                    <small class="text-muted"><i class="bi bi-person-x me-2"></i>Polo Passivo</small>
+                    <strong class="text-end ms-3">{{ process.defendant.name if process.defendant else 'Não informado'
+                      }}</strong>
+                  </div>
 
-                <div class="mb-0">
-                  <label class="form-label text-muted small">Criado em</label>
-                  <p class="mb-0"><i class="bi bi-calendar-event"></i> {{ process.created_at.strftime('%d/%m/%Y às
-                    %H:%M') }}</p>
+                  <div class="d-flex justify-content-between align-items-start">
+                    <small class="text-muted"><i class="bi bi-calendar-event me-2"></i>Criado em</small>
+                    <strong class="text-end ms-3">{{ process.created_at.strftime('%d/%m/%Y às %H:%M') }}</strong>
+                  </div>
                 </div>
               </div>
             </div>
@@ -205,6 +250,12 @@
                   <li class="nav-item" role="presentation">
                     <a class="nav-link" id="notes-tab" data-bs-toggle="tab" href="#notes" role="tab">
                       <i class="bi bi-journal-text me-2"></i>Notas
+                    </a>
+                  </li>
+                  <li class="nav-item" role="presentation">
+                    <a class="nav-link" id="phase-history-tab" data-bs-toggle="tab" href="#phase-history" role="tab">
+                      <i class="bi bi-clock-history me-2"></i>Histórico de Fases
+                      <span class="badge bg-secondary ms-1">{{ phase_history|length }}</span>
                     </a>
                   </li>
                 </ul>
@@ -485,6 +536,108 @@
                       </div>
                     </div>
                   </div>
+
+                  <div class="tab-pane fade" id="phase-history" role="tabpanel">
+                    <div class="row g-3">
+                      <div class="col-12">
+                        <div class="d-flex justify-content-end">
+                          <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal"
+                            data-bs-target="#newPhaseHistoryModal">
+                            <i class="bi bi-plus-circle me-2"></i>Registrar fase
+                          </button>
+                        </div>
+                      </div>
+
+                      <div class="col-12">
+                        {% if phase_history %}
+                        <div class="card card-light shadow-sm mb-3">
+                          <div class="card-header">
+                            <h3 class="card-title mb-0"><i class="bi bi-diagram-3 me-2"></i>Linha do Tempo</h3>
+                          </div>
+                          <div class="card-body">
+                            <div class="phase-timeline">
+                              {% for entry in phase_history %}
+                              <div class="phase-timeline-item">
+                                <span class="phase-timeline-dot">
+                                  <span class="visually-hidden">Marco</span>
+                                </span>
+                                <div class="phase-timeline-card">
+                                  <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+                                    <div>
+                                      <span class="badge bg-primary-subtle text-primary-emphasis">{{ entry.phase.name if
+                                        entry.phase else '-' }}</span>
+                                      <div class="small text-muted mt-1">
+                                        <i class="bi bi-calendar-event me-1"></i>
+                                        {{ entry.occurred_at.strftime('%d/%m/%Y às %H:%M') if entry.occurred_at else '-'
+                                        }}
+                                      </div>
+                                    </div>
+                                    <small class="text-muted">
+                                      <i class="bi bi-person me-1"></i>{{ entry.entered_by_user.name if
+                                      entry.entered_by_user else 'Sistema' }}
+                                    </small>
+                                  </div>
+
+                                  {% if entry.location_text %}
+                                  <div class="mt-2 small text-muted">
+                                    <i class="bi bi-geo-alt me-1"></i>{{ entry.location_text }}
+                                  </div>
+                                  {% endif %}
+
+                                  {% if entry.notes %}
+                                  <p class="mb-0 mt-2">{{ entry.notes }}</p>
+                                  {% endif %}
+                                </div>
+                              </div>
+                              {% endfor %}
+                            </div>
+                          </div>
+                        </div>
+
+                        <div class="table-responsive">
+                          <table class="table table-hover table-striped align-middle">
+                            <thead class="table-light">
+                              <tr>
+                                <th>Fase</th>
+                                <th>Ocorrência</th>
+                                <th>Local</th>
+                                <th>Registrado por</th>
+                                <th>Observações</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {% for entry in phase_history %}
+                              <tr>
+                                <td>
+                                  <span class="badge bg-light text-dark">{{ entry.phase.name if entry.phase else '-'
+                                    }}</span>
+                                </td>
+                                <td>
+                                  <small class="text-muted">
+                                    {{ entry.occurred_at.strftime('%d/%m/%Y às %H:%M') if entry.occurred_at else '-' }}
+                                  </small>
+                                </td>
+                                <td>{{ entry.location_text or '-' }}</td>
+                                <td>
+                                  {{ entry.entered_by_user.name if entry.entered_by_user else 'Sistema' }}
+                                </td>
+                                <td>
+                                  <span class="text-muted small">{{ entry.notes or '-' }}</span>
+                                </td>
+                              </tr>
+                              {% endfor %}
+                            </tbody>
+                          </table>
+                        </div>
+                        {% else %}
+                        <div class="text-center py-4">
+                          <i class="bi bi-clock-history text-muted" style="font-size: 2.5rem;"></i>
+                          <p class="text-muted mt-3 mb-0">Nenhum histórico de fase registrado para este processo.</p>
+                        </div>
+                        {% endif %}
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -537,6 +690,54 @@
           </div>
         </div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Novo Histórico de Fase -->
+<div class="modal fade" id="newPhaseHistoryModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-clock-history me-2"></i>Registrar fase do processo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <form method="post" action="{{ url_for('process_panel.create_process_phase_history', process_id=process.id) }}">
+        <div class="modal-body">
+          <div class="mb-3">
+            <label class="form-label">Fase</label>
+            <select class="form-select" name="phase_id" required>
+              <option value="">Selecione...</option>
+              {% for phase in phase_options %}
+              <option value="{{ phase.id }}">{{ phase.name }}</option>
+              {% endfor %}
+            </select>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Data/Hora de ocorrência</label>
+            <input type="datetime-local" class="form-control" name="occurred_at" required>
+          </div>
+
+          <div class="mb-3">
+            <label class="form-label">Local (vara/sessão/local)</label>
+            <input type="text" class="form-control" name="location_text" maxlength="255"
+              placeholder="Ex.: 2ª Vara Cível de Porto Alegre">
+          </div>
+
+          <div class="mb-0">
+            <label class="form-label">Observações</label>
+            <textarea class="form-control" name="notes" rows="3"
+              placeholder="Detalhes adicionais sobre a mudança de fase"></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary">
+            <i class="bi bi-save me-2"></i>Salvar histórico
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 </div>

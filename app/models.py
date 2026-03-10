@@ -903,6 +903,10 @@ class JudicialPhase(db.Model):
         back_populates='phase',
         cascade='all, delete-orphan'
     )
+    process_phase_history = db.relationship(
+        'JudicialProcessPhaseHistory',
+        back_populates='phase'
+    )
 
     def __repr__(self):
         return f'<JudicialPhase {self.key}>'
@@ -980,6 +984,12 @@ class JudicialProcess(db.Model):
     notes = db.relationship('JudicialProcessNote', back_populates='process', cascade='all, delete-orphan')
     events = db.relationship('JudicialEvent', back_populates='process', cascade='all, delete-orphan')
     benefits = db.relationship('JudicialProcessBenefit', back_populates='process', cascade='all, delete-orphan')
+    phase_history = db.relationship(
+        'JudicialProcessPhaseHistory',
+        back_populates='process',
+        cascade='all, delete-orphan',
+        order_by='JudicialProcessPhaseHistory.occurred_at.desc()'
+    )
     sentence_analyses = db.relationship('JudicialSentenceAnalysis', 
                                        primaryjoin='JudicialProcess.process_number==foreign(JudicialSentenceAnalysis.process_number)',
                                        foreign_keys='[JudicialSentenceAnalysis.process_number]',
@@ -1041,9 +1051,49 @@ class JudicialEvent(db.Model):
     process = db.relationship('JudicialProcess', back_populates='events')
     movements = db.relationship('JudicialMovement', back_populates='event', cascade='all, delete-orphan')
     documents = db.relationship('JudicialDocument', back_populates='event', cascade='all, delete-orphan')
+    phase_history_entries = db.relationship('JudicialProcessPhaseHistory', back_populates='source_event')
 
     def __repr__(self):
         return f'<JudicialEvent {self.type} - Process {self.process_id}>'
+
+
+class JudicialProcessPhaseHistory(db.Model):
+    """Tabela judicial_process_phase_history - Histórico de fases do processo judicial."""
+    __tablename__ = 'judicial_process_phase_history'
+    __table_args__ = (
+        db.Index('ix_jpph_process_occurred_at', 'process_id', 'occurred_at'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    process_id = db.Column(db.Integer, db.ForeignKey('judicial_processes.id'), nullable=False, index=True)
+    phase_id = db.Column(db.Integer, db.ForeignKey('judicial_phases.id'), nullable=False, index=True)
+    source_event_id = db.Column(db.Integer, db.ForeignKey('judicial_events.id'), index=True)
+    entered_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
+
+    occurred_at = db.Column(db.DateTime, nullable=False, index=True)
+    recorded_at = db.Column(db.DateTime)
+
+    judge_name_snapshot = db.Column(db.String(255))
+    tribunal_snapshot = db.Column(db.String(255))
+    section_snapshot = db.Column(db.String(100))
+    origin_unit_snapshot = db.Column(db.String(255))
+    location_text = db.Column(db.String(255))
+
+    notes = db.Column(db.Text)
+    metadata_payload = db.Column(db.JSON)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    law_firm = db.relationship('LawFirm')
+    process = db.relationship('JudicialProcess', back_populates='phase_history')
+    phase = db.relationship('JudicialPhase', back_populates='process_phase_history')
+    source_event = db.relationship('JudicialEvent', back_populates='phase_history_entries')
+    entered_by_user = db.relationship('User', foreign_keys=[entered_by_user_id])
+
+    def __repr__(self):
+        return f'<JudicialProcessPhaseHistory Process {self.process_id} Phase {self.phase_id}>'
 
 
 class JudicialMovement(db.Model):

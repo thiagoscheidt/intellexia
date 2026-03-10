@@ -2,7 +2,8 @@ from flask import Blueprint, render_template, request, session, jsonify, redirec
 from app.models import (
     db, JudicialProcess, JudicialSentenceAnalysis, JudicialAppeal, 
     KnowledgeBase, Case, User, JudicialPhase, JudicialDocumentType, JudicialEvent,
-    JudicialProcessNote, Client, JudicialDefendant, JudicialDocument, JudicialProcessBenefit
+    JudicialProcessNote, Client, JudicialDefendant, JudicialDocument, JudicialProcessBenefit,
+    JudicialProcessPhaseHistory
 )
 from datetime import datetime
 from functools import wraps
@@ -136,6 +137,37 @@ def _normalize_slug(value):
     value = (value or '').strip().lower()
     value = re.sub(r'[^a-z0-9]+', '_', value)
     return value.strip('_')
+
+
+def _register_phase_history(
+    process,
+    phase,
+    occurred_at,
+    entered_by_user_id,
+    source_event_id=None,
+    notes=None,
+    location_text=None,
+    metadata_payload=None,
+):
+    """Registra um item no histórico de fases com snapshot dos dados do processo."""
+    db.session.add(
+        JudicialProcessPhaseHistory(
+            law_firm_id=process.law_firm_id,
+            process_id=process.id,
+            phase_id=phase.id,
+            occurred_at=occurred_at,
+            recorded_at=datetime.utcnow(),
+            source_event_id=source_event_id,
+            judge_name_snapshot=process.judge_name,
+            tribunal_snapshot=process.tribunal,
+            section_snapshot=process.section,
+            origin_unit_snapshot=process.origin_unit,
+            location_text=(location_text or '').strip() or None,
+            notes=(notes or '').strip() or None,
+            entered_by_user_id=entered_by_user_id,
+            metadata_payload=metadata_payload,
+        )
+    )
 
 
 def _ensure_judicial_config_defaults(law_firm_id):
@@ -1016,6 +1048,14 @@ def detail(process_id):
         law_firm_id=law_firm_id
     ).order_by(JudicialProcessNote.created_at.desc(), JudicialProcessNote.id.desc()).all()
 
+    phase_history = JudicialProcessPhaseHistory.query.filter_by(
+        process_id=process.id,
+        law_firm_id=law_firm_id
+    ).order_by(
+        JudicialProcessPhaseHistory.occurred_at.desc(),
+        JudicialProcessPhaseHistory.id.desc()
+    ).all()
+
     process_benefits = JudicialProcessBenefit.query.filter_by(
         process_id=process.id
     ).order_by(JudicialProcessBenefit.created_at.desc(), JudicialProcessBenefit.id.desc()).all()
@@ -1128,6 +1168,11 @@ def detail(process_id):
         'sentence_analyses': related_analyses,
         'appeals': related_appeals,
         'notes': notes,
+        'phase_history': phase_history,
+        'phase_options': sorted(
+            configured_phases,
+            key=lambda item: ((item.display_order or 0), (item.name or '').lower())
+        ),
         'process_benefits': process_benefits,
         'kb_documents': kb_documents,
         'documents_list': documents_list,
@@ -1240,6 +1285,20 @@ def new_process_document(process_id):
             db.session.add(event)
             db.session.flush()
 
+            if document_type.phase:
+                _register_phase_history(
+                    process=process,
+                    phase=document_type.phase,
+                    occurred_at=event.event_date,
+                    entered_by_user_id=user_id,
+                    source_event_id=event.id,
+                    notes=f'Fase registrada automaticamente ao adicionar documento: {document_type.name}.',
+                    metadata_payload={
+                        'origin': 'new_process_document',
+                        'document_type_key': document_type.key,
+                    },
+                )
+
             db.session.add(
                 JudicialDocument(
                     process_id=process.id,
@@ -1343,15 +1402,31 @@ def update_process_phase_kanban(process_id):
         return jsonify({'success': True, 'message': 'Fase já está atualizada'})
 
     try:
-        db.session.add(
-            JudicialEvent(
-                process_id=process.id,
-                type='atualizacao_fase_kanban',
-                phase=new_phase_key,
-                description='Fase atualizada por arrastar e soltar no Kanban.',
-                event_date=datetime.utcnow(),
-            )
+        event = JudicialEvent(
+            process_id=process.id,
+            type='atualizacao_fase_kanban',
+            phase=new_phase_key,
+            description='Fase atualizada por arrastar e soltar no Kanban.',
+            event_date=datetime.utcnow(),
         )
+        db.session.add(event)
+        db.session.flush()
+
+        _register_phase_history(
+            process=process,
+            phase=phase,
+            occurred_at=event.event_date,
+            entered_by_user_id=session.get('user_id'),
+            source_event_id=event.id,
+            notes='Fase atualizada via Kanban (arrastar e soltar).',
+            location_text='Kanban',
+            metadata_payload={
+                'origin': 'kanban',
+                'previous_phase_key': current_phase_key,
+                'new_phase_key': new_phase_key,
+            },
+        )
+
         process.updated_at = datetime.utcnow()
         db.session.commit()
 
@@ -1359,6 +1434,8 @@ def update_process_phase_kanban(process_id):
             'success': True,
             'phase_key': new_phase_key,
             'phase_label': phase.name,
+            'history_recorded': True,
+            'message': 'Fase atualizada e registrada no histórico.',
         })
     except Exception as e:
         db.session.rollback()
@@ -1431,15 +1508,32 @@ def edit(process_id):
         
         try:
             if should_create_phase_event:
-                db.session.add(
-                    JudicialEvent(
-                        process_id=process.id,
-                        type='atualizacao_fase_manual',
-                        phase=selected_phase_key,
-                        description='Fase atualizada manualmente na edição do processo.',
-                        event_date=datetime.utcnow(),
-                    )
+                selected_phase = JudicialPhase.query.filter_by(
+                    law_firm_id=law_firm_id,
+                    key=selected_phase_key,
+                    is_active=True
+                ).first()
+
+                event = JudicialEvent(
+                    process_id=process.id,
+                    type='atualizacao_fase_manual',
+                    phase=selected_phase_key,
+                    description='Fase atualizada manualmente na edição do processo.',
+                    event_date=datetime.utcnow(),
                 )
+                db.session.add(event)
+                db.session.flush()
+
+                if selected_phase:
+                    _register_phase_history(
+                        process=process,
+                        phase=selected_phase,
+                        occurred_at=event.event_date,
+                        entered_by_user_id=session.get('user_id'),
+                        source_event_id=event.id,
+                        notes='Fase atualizada manualmente na edição do processo.',
+                        metadata_payload={'origin': 'edit_form'},
+                    )
 
             process.updated_at = datetime.utcnow()
             db.session.commit()
@@ -1466,6 +1560,68 @@ def edit(process_id):
         current_phase_key=current_phase_key,
         phase_labels=JUDICIAL_PHASES,
     )
+
+
+@process_panel_bp.route('/<int:process_id>/phase-history', methods=['POST'])
+@require_law_firm
+def create_process_phase_history(process_id):
+    """Registra manualmente um item no histórico de fase do processo."""
+    law_firm_id = get_current_law_firm_id()
+    user_id = session.get('user_id')
+
+    process = JudicialProcess.query.filter_by(
+        id=process_id,
+        law_firm_id=law_firm_id
+    ).first_or_404()
+
+    phase_id = request.form.get('phase_id', type=int)
+    occurred_at_raw = (request.form.get('occurred_at') or '').strip()
+    location_text = (request.form.get('location_text') or '').strip()
+    notes = (request.form.get('notes') or '').strip()
+
+    if not phase_id:
+        flash('Selecione uma fase para registrar no histórico.', 'warning')
+        return redirect(url_for('process_panel.detail', process_id=process.id) + '#phase-history')
+
+    phase = JudicialPhase.query.filter_by(
+        id=phase_id,
+        law_firm_id=law_firm_id,
+        is_active=True
+    ).first()
+
+    if not phase:
+        flash('Fase selecionada é inválida.', 'danger')
+        return redirect(url_for('process_panel.detail', process_id=process.id) + '#phase-history')
+
+    if not occurred_at_raw:
+        flash('Informe a data/hora de ocorrência da fase.', 'warning')
+        return redirect(url_for('process_panel.detail', process_id=process.id) + '#phase-history')
+
+    try:
+        occurred_at = datetime.strptime(occurred_at_raw, '%Y-%m-%dT%H:%M')
+    except ValueError:
+        flash('Data/hora inválida para o histórico de fase.', 'danger')
+        return redirect(url_for('process_panel.detail', process_id=process.id) + '#phase-history')
+
+    try:
+        _register_phase_history(
+            process=process,
+            phase=phase,
+            occurred_at=occurred_at,
+            entered_by_user_id=user_id,
+            notes=notes,
+            location_text=location_text,
+            metadata_payload={'origin': 'manual_form'},
+        )
+
+        process.updated_at = datetime.utcnow()
+        db.session.commit()
+        flash('Histórico de fase registrado com sucesso.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao registrar histórico de fase: {str(e)}', 'danger')
+
+    return redirect(url_for('process_panel.detail', process_id=process.id) + '#phase-history')
 
 
 @process_panel_bp.route('/<int:process_id>/deletar', methods=['POST'])
