@@ -1067,6 +1067,7 @@ def detail(process_id):
         process_number_clean = ''.join(c for c in process.process_number if c.isdigit())
         kb_documents = KnowledgeBase.query.filter(
             KnowledgeBase.law_firm_id == law_firm_id,
+            KnowledgeBase.is_active.is_(True),
             or_(
                 KnowledgeBase.lawsuit_number == process.process_number,
                 KnowledgeBase.lawsuit_number == process_number_clean,

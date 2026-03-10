@@ -27,6 +27,7 @@ from app.models import (
     KnowledgeBase,
     KnowledgeSummary,
     JudicialProcess,
+    JudicialSentenceAnalysis,
     JudicialProcessBenefit,
     JudicialEvent,
     JudicialDocument,
@@ -103,6 +104,64 @@ def _find_process_by_number(law_firm_id: int, process_number: str) -> JudicialPr
             return candidate
 
     return None
+
+
+def _propagate_process_number_update(
+    law_firm_id: int,
+    process_id: int,
+    old_number: str,
+    new_number: str,
+) -> None:
+    """Propaga a troca de número de processo para registros relacionados."""
+    old_number = str(old_number or '').strip()
+    new_number = str(new_number or '').strip()
+    if not old_number or not new_number or old_number == new_number:
+        return
+
+    now = datetime.utcnow()
+
+    kb_updated = 0
+    kb_same_temp = KnowledgeBase.query.filter_by(
+        law_firm_id=law_firm_id,
+        lawsuit_number=old_number,
+        is_active=True,
+    ).all()
+    for kb_item in kb_same_temp:
+        kb_item.lawsuit_number = new_number
+        kb_item.updated_at = now
+        kb_updated += 1
+
+    # Garante atualização também para KB vinculada aos documentos do processo.
+    doc_links = JudicialDocument.query.filter_by(process_id=process_id).all()
+    for doc_link in doc_links:
+        if not doc_link.knowledge_base_id:
+            continue
+        kb_item = KnowledgeBase.query.filter_by(
+            id=doc_link.knowledge_base_id,
+            law_firm_id=law_firm_id,
+            is_active=True,
+        ).first()
+        if not kb_item:
+            continue
+        if str(kb_item.lawsuit_number or '').strip() != new_number:
+            kb_item.lawsuit_number = new_number
+            kb_item.updated_at = now
+            kb_updated += 1
+
+    sentence_updated = 0
+    sentence_items = JudicialSentenceAnalysis.query.filter_by(
+        law_firm_id=law_firm_id,
+        process_number=old_number,
+    ).all()
+    for sentence in sentence_items:
+        sentence.process_number = new_number
+        sentence.updated_at = now
+        sentence_updated += 1
+
+    print(
+        f"Propagação do número do processo: KB atualizados={kb_updated}, "
+        f"análises atualizadas={sentence_updated}."
+    )
 
 
 def _resolve_type_and_phase(
@@ -357,6 +416,39 @@ def _process_single_knowledge_file(item_id: int) -> bool:
                     item.tags = extracted_doc_type_name or extracted_doc_type_key
 
                 _link_knowledge_to_process_if_needed(item, extraction_payload)
+
+                # Se o processo vinculado tem número temporário e a extração trouxe o número real, atualiza ambos
+                if extracted_process_number:
+                    linked_doc = JudicialDocument.query.filter_by(knowledge_base_id=item.id).first()
+                    if linked_doc:
+                        linked_process = JudicialProcess.query.filter_by(id=linked_doc.process_id).first()
+                        if linked_process and str(linked_process.process_number or '').startswith('TEMP-'):
+                            real_number = _extract_primary_process_number(extracted_process_number)
+                            if real_number:
+                                duplicate = JudicialProcess.query.filter(
+                                    JudicialProcess.id != linked_process.id,
+                                    JudicialProcess.law_firm_id == linked_process.law_firm_id,
+                                    JudicialProcess.process_number == real_number,
+                                ).first()
+                                if not duplicate:
+                                    old_temp_number = str(linked_process.process_number or '').strip()
+                                    print(
+                                        f"Atualizando número temporário {linked_process.process_number} → {real_number}"
+                                    )
+                                    linked_process.process_number = real_number
+                                    linked_process.updated_at = datetime.utcnow()
+                                    item.lawsuit_number = real_number
+                                    _propagate_process_number_update(
+                                        law_firm_id=linked_process.law_firm_id,
+                                        process_id=linked_process.id,
+                                        old_number=old_temp_number,
+                                        new_number=real_number,
+                                    )
+                                else:
+                                    print(
+                                        f"Número {real_number} já pertence a outro processo (ID {duplicate.id}). "
+                                        f"Número temporário mantido."
+                                    )
 
                 if _is_initial_petition_document(extraction_payload):
                     target_process = _resolve_target_process(item, extraction_payload)
