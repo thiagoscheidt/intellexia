@@ -4,6 +4,159 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/knowledge-base.css') }}" />
+<style>
+    .kb-toolbar .btn {
+        border-radius: 10px;
+        border: 1px solid rgba(255, 255, 255, 0.35);
+        backdrop-filter: blur(8px);
+        font-weight: 600;
+    }
+
+    .kb-files-table {
+        border-collapse: separate;
+        border-spacing: 0 8px;
+    }
+
+    .kb-files-table thead th {
+        border: 0;
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #6b7280;
+        white-space: nowrap;
+    }
+
+    .kb-files-table tbody tr {
+        background: #ffffff;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+    }
+
+    .kb-files-table tbody td {
+        border-top: 1px solid #eef2f7;
+        border-bottom: 1px solid #eef2f7;
+        vertical-align: middle;
+    }
+
+    .kb-files-table tbody td:first-child {
+        border-left: 1px solid #eef2f7;
+        border-top-left-radius: 10px;
+        border-bottom-left-radius: 10px;
+    }
+
+    .kb-files-table tbody td:last-child {
+        border-right: 1px solid #eef2f7;
+        border-top-right-radius: 10px;
+        border-bottom-right-radius: 10px;
+    }
+
+    .kb-action-group {
+        display: flex;
+        gap: 0.4rem;
+        align-items: center;
+        justify-content: flex-end;
+    }
+
+    .kb-action-btn {
+        width: 34px;
+        height: 34px;
+        border: 0;
+        border-radius: 10px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+    }
+
+    .kb-action-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 8px 16px rgba(0, 0, 0, 0.14);
+        filter: saturate(1.08);
+    }
+
+    .kb-action-btn.action-view {
+        background: #e6f4ff;
+        color: #0a58ca;
+    }
+
+    .kb-action-btn.action-download {
+        background: #e8f7ef;
+        color: #0f5132;
+    }
+
+    .kb-action-btn.action-link {
+        background: #fff4d6;
+        color: #8a6d00;
+    }
+
+    .kb-action-btn.action-delete {
+        background: #ffe7ea;
+        color: #a52834;
+    }
+
+    /* Dark mode para esta tela, respeitando o tema ativo da aplicação */
+    [data-bs-theme="dark"] .kb-compact .card {
+        background: #111827;
+        color: #e5e7eb;
+    }
+
+    [data-bs-theme="dark"] .kb-compact .card-body {
+        background: #111827;
+    }
+
+    [data-bs-theme="dark"] .kb-compact .form-control,
+    [data-bs-theme="dark"] .kb-compact .form-select {
+        background: #0f172a;
+        border-color: #334155;
+        color: #e5e7eb;
+    }
+
+    [data-bs-theme="dark"] .kb-files-table thead th {
+        color: #94a3b8;
+    }
+
+    [data-bs-theme="dark"] .kb-files-table tbody tr {
+        background: #0b1220;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.35);
+    }
+
+    [data-bs-theme="dark"] .kb-files-table tbody td {
+        border-top: 1px solid #1f2937;
+        border-bottom: 1px solid #1f2937;
+        color: #e5e7eb;
+    }
+
+    [data-bs-theme="dark"] .kb-files-table tbody td:first-child {
+        border-left: 1px solid #1f2937;
+    }
+
+    [data-bs-theme="dark"] .kb-files-table tbody td:last-child {
+        border-right: 1px solid #1f2937;
+    }
+
+    [data-bs-theme="dark"] .kb-action-btn.action-view {
+        background: #1e3a5f;
+        color: #93c5fd;
+    }
+
+    [data-bs-theme="dark"] .kb-action-btn.action-download {
+        background: #143628;
+        color: #86efac;
+    }
+
+    [data-bs-theme="dark"] .kb-action-btn.action-link {
+        background: #3f3414;
+        color: #fde68a;
+    }
+
+    [data-bs-theme="dark"] .kb-action-btn.action-delete {
+        background: #4b1d26;
+        color: #fca5a5;
+    }
+
+    [data-bs-theme="dark"] .kb-compact .text-muted {
+        color: #94a3b8 !important;
+    }
+</style>
 {% endblock %}
 
 {% block content %}
@@ -62,33 +215,39 @@
                                         <small class="opacity-75">Gerencie e organize seus documentos</small>
                                     </div>
                                 </div>
-                                <div class="card-tools d-flex gap-2">
+                                <div class="card-tools d-flex gap-2 kb-toolbar flex-wrap justify-content-end">
                                     <a href="{{ url_for('knowledge_base.folders_view') }}"
-                                        class="btn btn-light shadow-sm"
+                                        class="btn btn-light shadow-sm" data-bs-toggle="tooltip"
+                                        data-bs-title="Visualização em pastas"
                                         style="border-radius: 8px; padding: 0.5rem 1rem;">
                                         <i class="bi bi-folder2-open"></i> Visualização em Pastas
                                     </a>
                                     <a href="{{ url_for('knowledge_base.intelligent_search') }}"
-                                        class="btn btn-light shadow-sm"
+                                        class="btn btn-light shadow-sm" data-bs-toggle="tooltip"
+                                        data-bs-title="Pesquisa semântica e textual"
                                         style="border-radius: 8px; padding: 0.5rem 1rem;">
                                         <i class="bi bi-lightbulb-fill"></i> Pesquisa Inteligente
                                     </a>
                                     <a href="{{ url_for('knowledge_base.categories_list') }}"
-                                        class="btn btn-light shadow-sm"
+                                        class="btn btn-light shadow-sm" data-bs-toggle="tooltip"
+                                        data-bs-title="Gerenciar categorias"
                                         style="border-radius: 8px; padding: 0.5rem 1rem;">
                                         <i class="bi bi-folder-fill"></i> Categorias
                                     </a>
                                     <a href="{{ url_for('knowledge_base.search_chat') }}"
-                                        class="btn btn-light shadow-sm"
+                                        class="btn btn-light shadow-sm" data-bs-toggle="tooltip"
+                                        data-bs-title="Pergunte para a base com IA"
                                         style="border-radius: 8px; padding: 0.5rem 1rem;">
                                         <i class="bi bi-search"></i> Pesquisar com IA
                                     </a>
                                     <a href="{{ url_for('knowledge_base.upload') }}" class="btn btn-light shadow-sm"
+                                        data-bs-toggle="tooltip" data-bs-title="Enviar um arquivo"
                                         style="border-radius: 8px; padding: 0.5rem 1rem;">
                                         <i class="bi bi-plus-circle-fill"></i> Adicionar Arquivo
                                     </a>
                                     <a href="{{ url_for('knowledge_base.upload_multiple') }}"
-                                        class="btn btn-light shadow-sm"
+                                        class="btn btn-light shadow-sm" data-bs-toggle="tooltip"
+                                        data-bs-title="Enviar vários arquivos"
                                         style="border-radius: 8px; padding: 0.5rem 1rem;">
                                         <i class="bi bi-files"></i> Upload Múltiplo
                                     </a>
@@ -141,7 +300,7 @@
                             {% else %}
                             <!-- Tabela de arquivos -->
                             <div class="table-responsive">
-                                <table class="table table-hover">
+                                <table class="table table-hover kb-files-table align-middle">
                                     <thead>
                                         <tr>
                                             <th>Arquivo</th>
@@ -152,7 +311,7 @@
                                             <th>Descrição</th>
                                             <th>Tamanho</th>
                                             <th>Data de Upload</th>
-                                            <th width="100">Ações</th>
+                                            <th width="140" class="text-end">Ações</th>
                                         </tr>
                                     </thead>
                                     <tbody>
@@ -223,29 +382,32 @@
                                             <td>
                                                 <small>{{ file.uploaded_at.strftime('%d/%m/%Y %H:%M') }}</small>
                                             </td>
-                                            <td>
-                                                <div class="btn-group btn-group-sm" role="group">
+                                            <td class="text-end">
+                                                <div class="kb-action-group" role="group" aria-label="Ações do arquivo">
                                                     <a href="{{ url_for('knowledge_base.details', file_id=file.id) }}"
-                                                        class="btn btn-info btn-sm" title="Ver detalhes">
+                                                        class="kb-action-btn action-view" data-bs-toggle="tooltip"
+                                                        data-bs-title="Ver detalhes">
                                                         <i class="bi bi-eye"></i>
                                                     </a>
                                                     <a href="{{ url_for('knowledge_base.download', file_id=file.id) }}"
-                                                        class="btn btn-primary btn-sm" title="Download">
+                                                        class="kb-action-btn action-download" data-bs-toggle="tooltip"
+                                                        data-bs-title="Baixar arquivo">
                                                         <i class="bi bi-download"></i>
                                                     </a>
                                                     {% if not file.lawsuit_number %}
                                                     <button type="button"
-                                                        class="btn btn-warning btn-sm js-link-process-btn"
+                                                        class="kb-action-btn action-link js-link-process-btn"
                                                         data-file-id="{{ file.id }}"
                                                         data-filename="{{ file.original_filename }}"
-                                                        title="Vincular a um processo">
+                                                        data-bs-toggle="tooltip" data-bs-title="Vincular a um processo">
                                                         <i class="bi bi-link-45deg"></i>
                                                     </button>
                                                     {% endif %}
                                                     <button type="button"
-                                                        class="btn btn-danger btn-sm js-delete-file-btn"
+                                                        class="kb-action-btn action-delete js-delete-file-btn"
                                                         data-file-id="{{ file.id }}"
-                                                        data-filename="{{ file.original_filename }}" title="Excluir">
+                                                        data-filename="{{ file.original_filename }}"
+                                                        data-bs-toggle="tooltip" data-bs-title="Excluir arquivo">
                                                         <i class="bi bi-trash"></i>
                                                     </button>
                                                 </div>
@@ -272,6 +434,13 @@
 
     <script>
         let selectedKbFileId = null;
+
+        document.addEventListener('DOMContentLoaded', function () {
+            const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+            tooltipTriggerList.forEach((el) => new bootstrap.Tooltip(el, {
+                trigger: 'hover focus'
+            }));
+        });
 
         function openLinkProcessModal(fileId, filename) {
             selectedKbFileId = fileId;
