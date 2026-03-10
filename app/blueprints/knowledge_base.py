@@ -5,6 +5,7 @@ from datetime import datetime
 import builtins
 from werkzeug.utils import secure_filename
 from app.agents.document_processing.agent_document_summary import AgentDocumentSummary
+from app.agents.knowledge_base.knowledge_ingestion_agent import KnowledgeIngestionAgent
 from app.services.knowledge_base.chat_context import build_attachments_context
 from app.services.knowledge_base.search_helpers import (
     highlight_search_terms,
@@ -715,6 +716,11 @@ def delete(file_id):
         return jsonify({'success': False, 'message': 'Arquivo não encontrado'}), 404
     
     try:
+        KnowledgeIngestionAgent(
+            require_embeddings=False,
+            create_missing_indexes=False,
+        ).delete_document_by_file_id(file.id)
+
         file.is_active = False
         file.updated_at = datetime.utcnow()
         db.session.commit()

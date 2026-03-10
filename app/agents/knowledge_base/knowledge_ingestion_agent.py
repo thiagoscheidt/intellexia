@@ -32,18 +32,26 @@ MAX_CHARS_PER_CHUNK = int(os.getenv("MAX_CHARS_PER_CHUNK", "1500"))
 class KnowledgeIngestionAgent:
     """Recebe e processa arquivos para ingestão na base vetorial."""
 
-    def __init__(self, collection_name: str = DEFAULT_COLLECTION):
-        if not EMBEDDING_MODEL:
+    def __init__(
+        self,
+        collection_name: str = DEFAULT_COLLECTION,
+        require_embeddings: bool = True,
+        create_missing_indexes: bool = True,
+    ):
+        if require_embeddings and not EMBEDDING_MODEL:
             raise RuntimeError("EMBEDDING_MODEL não definido no .env")
-        if VECTOR_SIZE <= 0:
+        if require_embeddings and VECTOR_SIZE <= 0:
             raise RuntimeError("VECTOR_SIZE inválido ou não definido no .env")
 
         self.collection = collection_name
+        self.require_embeddings = require_embeddings
+        self.create_missing_indexes = create_missing_indexes
         self.qdrant = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=60)
         self.meilisearch = MeilisearchClient(MEILISEARCH_HOST, MEILISEARCH_API_KEY)
-        self.openai = OpenAI()
-        self._ensure_collection()
-        self._ensure_meilisearch_index()
+        self.openai = OpenAI() if self.require_embeddings else None
+        if self.create_missing_indexes:
+            self._ensure_collection()
+            self._ensure_meilisearch_index()
 
     def _ensure_collection(self) -> None:
         if self.qdrant.collection_exists(self.collection):
@@ -54,11 +62,78 @@ class KnowledgeIngestionAgent:
         )
 
     def _embed(self, text: str) -> list[float]:
+        if not EMBEDDING_MODEL:
+            raise RuntimeError("EMBEDDING_MODEL não definido no .env")
+        if self.openai is None:
+            self.openai = OpenAI()
         response = self.openai.embeddings.create(input=text, model=EMBEDDING_MODEL)
         return response.data[0].embedding
 
     def _ensure_meilisearch_index(self) -> None:
         self.meilisearch.get_or_create_index(uid=self.collection, primary_key="id")
+        self._ensure_meilisearch_filterable_attributes()
+
+    def _wait_for_meilisearch_task(self, task_info, timeout_in_ms: int | None = 10000) -> None:
+        task_uid = getattr(task_info, "task_uid", None)
+        if task_uid is None:
+            return
+        self.meilisearch.wait_for_task(task_uid, timeout_in_ms=timeout_in_ms)
+
+    def _ensure_meilisearch_filterable_attributes(self) -> None:
+        index = self.meilisearch.index(self.collection)
+        filterable_attributes = index.get_filterable_attributes() or []
+
+        if any(attribute == "file_id" for attribute in filterable_attributes if isinstance(attribute, str)):
+            return
+
+        updated_filterable_attributes = list(filterable_attributes)
+        updated_filterable_attributes.append("file_id")
+        task = index.update_filterable_attributes(updated_filterable_attributes)
+        self._wait_for_meilisearch_task(task)
+
+    @staticmethod
+    def _is_missing_backend_resource_error(error: Exception) -> bool:
+        error_message = str(error).lower()
+        missing_markers = (
+            "not found",
+            "does not exist",
+            "doesn't exist",
+            "index_not_found",
+            "collection not found",
+            "404",
+        )
+        return any(marker in error_message for marker in missing_markers)
+
+    def delete_document_by_file_id(self, file_id: int) -> None:
+        if file_id is None:
+            return
+
+        qdrant_filter = rest.Filter(
+            must=[
+                rest.FieldCondition(
+                    key="file_id",
+                    match=rest.MatchValue(value=file_id),
+                )
+            ]
+        )
+
+        try:
+            self.qdrant.delete(
+                collection_name=self.collection,
+                points_selector=qdrant_filter,
+                wait=True,
+            )
+        except Exception as error:
+            if not self._is_missing_backend_resource_error(error):
+                raise
+
+        try:
+            self._ensure_meilisearch_filterable_attributes()
+            task = self.meilisearch.index(self.collection).delete_documents_by_filter(f"file_id = {file_id}")
+            self._wait_for_meilisearch_task(task)
+        except Exception as error:
+            if not self._is_missing_backend_resource_error(error):
+                raise
 
     def _chunk_text(self, text: str, chunk_size: int = MAX_CHARS_PER_CHUNK) -> list[dict]:
         """Divide o texto em chunks, mantendo informações de metadados."""
