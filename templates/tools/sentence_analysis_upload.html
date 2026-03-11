@@ -64,56 +64,41 @@
                 <i class="bi bi-lightbulb"></i>
                 <strong>Como funciona:</strong>
                 <ul class="mb-0 mt-2">
-                  <li>Envie a sentença judicial em PDF, DOCX ou TXT</li>
-                  <li><strong>Opcional:</strong> Envie também a petição inicial para análise comparativa</li>
-                  <li>A IA irá processar e analisar automaticamente</li>
+                  <li>Selecione um processo do Painel de Processos</li>
+                  <li>O sistema buscará automaticamente os documentos do tipo sentença desse processo</li>
+                  <li>Se houver petição inicial vinculada ao processo, ela será usada como contexto</li>
+                  <li>A IA irá processar e analisar automaticamente cada sentença encontrada</li>
                   <li>Você receberá uma análise detalhada com:</li>
                   <ul>
                     <li>Dispositivo da sentença</li>
                     <li>Fundamentos jurídicos utilizados</li>
-                    <li>Análise de procedência/improcedência</li>
-                    <li>Comparação entre pedidos e decisão (se petição fornecida)</li>
+                    <li>Análise de procedência/improcedência por sentença</li>
+                    <li>Comparação entre pedidos e decisão (quando houver petição inicial)</li>
                     <li>Pontos relevantes para recursos</li>
                   </ul>
-                  <li>Tamanho máximo: 16 MB por arquivo</li>
                 </ul>
               </div>
 
               <div class="mb-3">
-                {{ form.file.label(class="form-label") }}
+                {{ form.process_id.label(class="form-label") }}
                 <span class="text-danger">*</span>
-                {{ form.file(class="form-control", accept=".pdf,.docx,.doc,.txt") }}
-                {% if form.file.errors %}
+                {{ form.process_id(class="form-select") }}
+                {% if form.process_id.errors %}
                 <div class="text-danger mt-1">
-                  {% for error in form.file.errors %}
+                  {% for error in form.process_id.errors %}
                   <small>{{ error }}</small><br>
                   {% endfor %}
                 </div>
                 {% endif %}
                 <small class="form-text text-muted">
-                  Formatos aceitos: PDF, DOCX, TXT
-                </small>
-              </div>
-
-              <div class="mb-3">
-                {{ form.petition_file.label(class="form-label") }}
-                {{ form.petition_file(class="form-control", accept=".pdf,.docx,.doc,.txt") }}
-                {% if form.petition_file.errors %}
-                <div class="text-danger mt-1">
-                  {% for error in form.petition_file.errors %}
-                  <small>{{ error }}</small><br>
-                  {% endfor %}
-                </div>
-                {% endif %}
-                <small class="form-text text-muted">
-                  Formatos aceitos: PDF, DOCX, TXT
+                  Apenas processos com documentos de sentença poderão ser processados.
                 </small>
               </div>
 
               <div class="alert alert-warning">
                 <i class="bi bi-exclamation-triangle"></i>
-                <strong>Atenção:</strong> A análise será gerada automaticamente após o upload.
-                Este processo pode levar alguns minutos dependendo do tamanho do documento.
+                <strong>Atenção:</strong> As sentenças do processo serão enfileiradas para análise automática.
+                Este processo pode levar alguns minutos dependendo da quantidade de documentos.
               </div>
             </div>
 
@@ -124,11 +109,11 @@
                 </a>
                 <button type="submit" class="btn btn-primary" id="submitBtn">
                   <span id="btnText">
-                    <i class="bi bi-cloud-upload"></i> {{ form.submit.label.text }}
+                    <i class="bi bi-play-circle"></i> {{ form.submit.label.text }}
                   </span>
                   <span id="btnLoading" style="display: none;">
                     <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                    Enviando e processando...
+                    Enfileirando análises...
                   </span>
                 </button>
               </div>
@@ -145,12 +130,12 @@
     const submitBtn = document.getElementById('submitBtn');
     const btnText = document.getElementById('btnText');
     const btnLoading = document.getElementById('btnLoading');
-    const fileInput = document.querySelector('input[type="file"]');
+    const processSelect = document.getElementById('process_id');
 
-    // Validar se arquivo foi selecionado
-    if (!fileInput.files || fileInput.files.length === 0) {
+    // Validar se processo foi selecionado
+    if (!processSelect || !processSelect.value) {
       e.preventDefault();
-      alert('Por favor, selecione um arquivo antes de enviar.');
+      alert('Por favor, selecione um processo antes de enviar.');
       return false;
     }
 

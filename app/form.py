@@ -372,17 +372,10 @@ class JudicialAppealForm(FlaskForm):
 # FORMULÁRIO: Análise de Sentença Judicial
 # ========================
 class JudicialSentenceAnalysisForm(FlaskForm):
-    file = FileField(
-        'Sentença Judicial',
-        validators=[
-            DataRequired(),
-            FileAllowed(['pdf', 'docx', 'txt', 'doc'], 'Somente arquivos PDF, DOCX ou TXT são permitidos!')
-        ]
+    process_id = SelectField(
+        'Processo',
+        coerce=int,
+        validators=[DataRequired(message='Selecione um processo')],
+        choices=[],
     )
-    petition_file = FileField(
-        'Petição Inicial (Opcional)',
-        validators=[
-            FileAllowed(['pdf', 'docx', 'txt', 'doc'], 'Somente arquivos PDF, DOCX ou TXT são permitidos!')
-        ]
-    )
-    submit = SubmitField('Enviar para Análise')
+    submit = SubmitField('Enviar Processo para Análise')

@@ -1,12 +1,16 @@
 import os
+import time
 from datetime import datetime
 from typing import Optional, List
 
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from markitdown import MarkItDown
+from langchain.agents import create_agent
+from langchain.agents.structured_output import ToolStrategy
 from langchain_openai import ChatOpenAI
 from app.agents.core.file_agent import FileAgent
+from app.services.token_usage_service import TokenUsageService
 from rich import print
 
 load_dotenv()
@@ -46,7 +50,7 @@ class FapBenefitAnalysis(BaseModel):
     benefit_number: str = Field(default="", description="Número do benefício (NB)")
     insured_name: str = Field(default="", description="Nome do segurado")
     accident_type: str = Field(default="", description="Tipo/natureza do acidente")
-    result: str = Field(default="", description="Resultado da análise (Aceito, Rejeitado, Parcialmente Aceito, Não mencionado na sentença)")
+    result: str = Field(default="", description="Resultado da análise (Aceito, Rejeitado, Não mencionado na sentença)")
     reasoning: str = Field(default="", description="Fundamentação breve da decisão sobre o benefício")
 
 
@@ -111,7 +115,33 @@ class AgentSentenceSummary:
     def __init__(self, model_name: str = "gpt-5-mini"):
         self.model_name = model_name
 
-    def summarizeSentence(self, file_path: Optional[str] = None, text_content: Optional[str] = None, petition_requests: Optional[List[str]] = None, petition_benefits: Optional[str | dict] = None) -> dict:
+        self.model_provider = os.getenv("SENTENCE_SUMMARY_MODEL_PROVIDER", "openai")
+        self.chat_model = ChatOpenAI(
+            model=self.model_name,
+            temperature=0.2,
+        )
+        self.token_usage_service = TokenUsageService()
+
+    def _build_summary_agent(self):
+        return create_agent(
+            model=self.chat_model,
+            tools=[],
+            system_prompt=(
+                "Você é um assistente jurídico especializado em análise de sentenças. "
+                "Gere um resumo técnico, objetivo e estruturado."
+            ),
+            response_format=ToolStrategy(SentenceSummary),
+        )
+
+    def summarizeSentence(
+        self,
+        file_path: Optional[str] = None,
+        text_content: Optional[str] = None,
+        petition_requests: Optional[List[str]] = None,
+        petition_benefits: Optional[str | dict] = None,
+        user_id: Optional[int] = None,
+        law_firm_id: Optional[int] = None,
+    ) -> dict:
         """
         Gera um resumo estruturado em JSON para uma sentença judicial.
 
@@ -120,6 +150,8 @@ class AgentSentenceSummary:
             text_content: Texto já extraído do documento.
             petition_requests: Lista de pedidos da petição inicial para usar como contexto.
             petition_benefits: Dicionário com benefícios extraídos da petição (para processos FAP).
+            user_id: ID do usuário responsável pela execução.
+            law_firm_id: ID do escritório responsável pela execução.
 
         Returns:
             dict: Payload JSON pronto para persistência.
@@ -171,7 +203,8 @@ class AgentSentenceSummary:
                     "\n\n=== BENEFÍCIOS MENCIONADOS NA PETIÇÃO INICIAL (use como contexto) ===\n"
                     f"{petition_benefits}\n"
                     "\nIMPORTANTE: Para CADA benefício listado acima, procure na sentença:\n"
-                    "- SE encontrar análise/decisão → preencha 'result' com: Aceito, Rejeitado ou Parcialmente Aceito\n"
+                    "- SE encontrar análise/decisão favorável → preencha 'result' com: Aceito\n"
+                    "- SE encontrar análise/decisão desfavorável → preencha 'result' com: Rejeitado\n"
                     "- SE NÃO encontrar menção → preencha 'result' com: Não mencionado na sentença\n"
                     "\nNo campo 'fap_benefits_analysis', inclua TODOS os benefícios (tanto mencionados quanto não mencionados).\n"
                 )
@@ -192,14 +225,15 @@ class AgentSentenceSummary:
                     benefits_context += f"   - Motivo da revisão: {benefit.get('revision_reason', '')}\n"
                 benefits_context += (
                     "\nIMPORTANTE: Para CADA benefício listado acima, procure na sentença:\n"
-                    "- SE encontrar análise/decisão → preencha 'result' com: Aceito, Rejeitado ou Parcialmente Aceito\n"
+                    "- SE encontrar análise/decisão favorável → preencha 'result' com: Aceito\n"
+                    "- SE encontrar análise/decisão desfavorável → preencha 'result' com: Rejeitado\n"
                     "- SE NÃO encontrar menção → preencha 'result' com: Não mencionado na sentença\n"
                     "\nNo campo 'fap_benefits_analysis', inclua TODOS os benefícios da petição (tanto mencionados quanto não mencionados).\n"
                     "\nPara cada benefício, extraia:\n"
                     "- benefit_number: número do benefício (NB)\n"
                     "- insured_name: nome do segurado\n"
                     "- accident_type: tipo/natureza do acidente\n"
-                    "- result: Aceito | Rejeitado | Parcialmente Aceito | Não mencionado na sentença\n"
+                    "- result: Aceito | Rejeitado | Não mencionado na sentença\n"
                     "- reasoning: fundamentação da decisão (ou explicação do porquê não foi mencionado)\n\n"
                 )
 
@@ -248,7 +282,7 @@ class AgentSentenceSummary:
             "  - benefit_number: número do benefício (NB)\n"
             "  - insured_name: nome do segurado\n"
             "  - accident_type: tipo/natureza do acidente\n"
-            "  - result: resultado (Aceito, Rejeitado, Parcialmente Aceito, Não mencionado na sentença)\n"
+            "  - result: resultado (Aceito, Rejeitado, Não mencionado na sentença)\n"
             "  - reasoning: fundamentação breve da decisão sobre o benefício\n"
             "  (Se NÃO for processo FAP, deixe este campo como array vazio)\n"
             "- legal_grounds: lista de legislações, artigos e fundamentos utilizados\n"
@@ -265,14 +299,10 @@ class AgentSentenceSummary:
         
         print("Enviado para IA")
         print(user_prompt)
-        llm = ChatOpenAI(
-            model=self.model_name,
-            temperature=0.2
-        ).with_structured_output(SentenceSummary)
 
+        summary_agent = self._build_summary_agent()
         if use_file and file_id:
-            response = llm.invoke([
-                {"role": "system", "content": "Você é um assistente jurídico especializado em análise de sentenças. Gere um resumo técnico, objetivo e estruturado."},
+            messages = [
                 {
                     "role": "user",
                     "content": [
@@ -280,11 +310,37 @@ class AgentSentenceSummary:
                         {"type": "file", "file_id": file_id},
                     ],
                 },
-            ])
+            ]
         else:
-            response = llm.invoke([
-                {"role": "system", "content": "Você é um assistente jurídico especializado em análise de sentenças. Gere um resumo técnico, objetivo e estruturado."},
+            messages = [
                 {"role": "user", "content": user_prompt}
-            ])
+            ]
 
-        return response.to_dict()
+        call_started_at = time.time()
+        response_payload = summary_agent.invoke({"messages": messages})
+        latency_ms = int((time.time() - call_started_at) * 1000)
+
+        self.token_usage_service.capture_and_store(
+            response_payload,
+            agent_name="AgentSentenceSummary",
+            action_name="summarize_sentence.create_agent",
+            print_prefix="[AgentSentenceSummary][summarize_sentence][tokens]",
+            model_name=self.model_name,
+            model_provider=self.model_provider,
+            user_id=user_id,
+            law_firm_id=law_firm_id,
+            latency_ms=latency_ms,
+            status="success",
+            metadata_payload={
+                "source_file": str(file_path or ""),
+                "used_uploaded_file": use_file,
+                "petition_requests_count": len(petition_requests or []),
+                "has_petition_benefits": bool(petition_benefits),
+            },
+        )
+
+        structured_response = response_payload.get("structured_response")
+        if not structured_response:
+            raise RuntimeError("Resposta estruturada não retornada pelo create_agent")
+
+        return structured_response.to_dict()

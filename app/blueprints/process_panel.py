@@ -1123,6 +1123,7 @@ def detail(process_id):
             'phase_label': phase_label,
             'doc_type_label': doc_type_label,
             'knowledge_base_id': kb_doc.id,
+            'judicial_document_id': judicial_doc.id if judicial_doc else None,
             'phase_order': phase_order_by_key.get(phase_key, 9999),
         })
 
@@ -1151,6 +1152,7 @@ def detail(process_id):
             'phase_label': phase_label,
             'doc_type_label': doc_type_label,
             'knowledge_base_id': None,
+            'judicial_document_id': judicial_doc.id,
             'phase_order': phase_order_by_key.get(phase_key, 9999),
         })
 
@@ -1641,6 +1643,45 @@ def create_process_phase_history(process_id):
         flash(f'Erro ao registrar histórico de fase: {str(e)}', 'danger')
 
     return redirect(url_for('process_panel.detail', process_id=process.id) + '#phase-history')
+
+
+@process_panel_bp.route('/<int:process_id>/documentos/<int:doc_id>/deletar', methods=['POST'])
+@require_law_firm
+def delete_process_document(process_id, doc_id):
+    """Deletar um documento vinculado ao processo"""
+    from app.agents.knowledge_base.knowledge_ingestion_agent import KnowledgeIngestionAgent
+    
+    law_firm_id = get_current_law_firm_id()
+    
+    process = JudicialProcess.query.filter_by(
+        id=process_id,
+        law_firm_id=law_firm_id
+    ).first_or_404()
+    
+    judicial_doc = JudicialDocument.query.filter_by(
+        id=doc_id,
+        process_id=process_id
+    ).first_or_404()
+    
+    try:
+        # Se o documento está vinculado a um arquivo da base de conhecimento,
+        # remover também dos índices (Qdrant e Meilisearch)
+        if judicial_doc.knowledge_base_id:
+            KnowledgeIngestionAgent(
+                require_embeddings=False,
+                create_missing_indexes=False,
+            ).delete_document_by_file_id(judicial_doc.knowledge_base_id)
+        
+        # Deletar o registro do documento judicial
+        db.session.delete(judicial_doc)
+        db.session.commit()
+        
+        flash('Documento removido do processo com sucesso.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao remover documento: {str(e)}', 'danger')
+    
+    return redirect(url_for('process_panel.detail', process_id=process.id) + '#documents')
 
 
 @process_panel_bp.route('/<int:process_id>/deletar', methods=['POST'])

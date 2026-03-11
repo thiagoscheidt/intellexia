@@ -12,6 +12,8 @@ Observação:
 import os
 import sys
 import json
+import argparse
+import unicodedata
 from datetime import datetime
 from rich import print
 
@@ -20,12 +22,166 @@ if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
 from main import app
-from app.models import db, JudicialSentenceAnalysis
+from app.models import db, JudicialSentenceAnalysis, JudicialProcess, JudicialDocument, JudicialProcessBenefit
 from app.agents.document_processing.agent_sentence_summary import AgentSentenceSummary
 from app.agents.document_processing.agent_initial_petition_analysis import AgentInitialPetitionAnalysis
 
 
-def analyze_sentence_with_ai(sentence_path: str, petition_path: str | None = None) -> str | None:
+def _normalize_doc_type(value: str | None) -> str:
+    normalized = unicodedata.normalize('NFKD', str(value or '').strip().lower())
+    return ''.join(ch for ch in normalized if not unicodedata.combining(ch))
+
+
+def _is_sentence_document(doc_type: str | None) -> bool:
+    normalized = _normalize_doc_type(doc_type)
+    return 'sentenca' in normalized
+
+
+def _is_initial_petition_document(doc_type: str | None) -> bool:
+    normalized = _normalize_doc_type(doc_type)
+    return 'peticao' in normalized and 'inicial' in normalized
+
+
+def _resolve_existing_file_path(doc: JudicialDocument) -> str | None:
+    """Retorna um caminho de arquivo válido para o documento, se existir."""
+    current_path = str(doc.file_path or '').strip()
+    if current_path and os.path.exists(current_path):
+        return current_path
+
+    if doc.knowledge_base and doc.knowledge_base.file_path:
+        kb_path = str(doc.knowledge_base.file_path).strip()
+        if kb_path and os.path.exists(kb_path):
+            doc.file_path = kb_path
+            return kb_path
+
+    return None
+
+
+def _queue_process_sentences(process: JudicialProcess) -> int:
+    """Cria registros pendentes de análise para as sentenças vinculadas ao processo."""
+    process_documents = JudicialDocument.query.filter_by(process_id=process.id).order_by(
+        JudicialDocument.created_at.desc()
+    ).all()
+
+    sentence_docs = [doc for doc in process_documents if _is_sentence_document(doc.type)]
+    petition_doc = next((doc for doc in process_documents if _is_initial_petition_document(doc.type)), None)
+
+    queued = 0
+    for sentence_doc in sentence_docs:
+        sentence_path = _resolve_existing_file_path(sentence_doc)
+        if not sentence_path:
+            continue
+
+        existing = JudicialSentenceAnalysis.query.filter_by(
+            law_firm_id=process.law_firm_id,
+            file_path=sentence_path,
+        ).first()
+        if existing:
+            continue
+
+        ext = os.path.splitext(sentence_doc.file_name or '')[1].lower().replace('.', '')
+        analysis = JudicialSentenceAnalysis(
+            user_id=process.user_id,
+            law_firm_id=process.law_firm_id,
+            original_filename=sentence_doc.file_name,
+            file_path=sentence_path,
+            file_size=os.path.getsize(sentence_path),
+            file_type=ext.upper() if ext else '',
+            process_number=process.process_number,
+            status='pending',
+        )
+
+        if petition_doc and petition_doc.file_path and os.path.exists(petition_doc.file_path):
+            petition_ext = os.path.splitext(petition_doc.file_name or '')[1].lower().replace('.', '')
+            analysis.petition_filename = petition_doc.file_name
+            analysis.petition_file_path = petition_doc.file_path
+            analysis.petition_file_size = os.path.getsize(petition_doc.file_path)
+            analysis.petition_file_type = petition_ext.upper() if petition_ext else ''
+
+        db.session.add(analysis)
+        queued += 1
+
+    if queued > 0:
+        db.session.commit()
+
+    return queued
+
+
+def _normalize_benefit_number(value: str | None) -> str:
+    if not value:
+        return ''
+    return ''.join(ch for ch in str(value) if ch.isdigit())
+
+
+def _normalize_benefit_decision(value: str | None) -> str:
+    normalized = _normalize_doc_type(value)
+    if not normalized:
+        return 'Não mencionado na sentença'
+
+    if 'nao mencionado' in normalized:
+        return 'Não mencionado na sentença'
+    if 'aceito' in normalized or 'defer' in normalized or 'procedente' in normalized:
+        return 'Aceito'
+    if 'rejeitado' in normalized or 'indefer' in normalized or 'improcedente' in normalized:
+        return 'Rejeitado'
+
+    return 'Não mencionado na sentença'
+
+
+def _sync_benefit_decisions_from_analysis(item: JudicialSentenceAnalysis, analysis: dict) -> int:
+    process_number = str(item.process_number or '').strip()
+    if not process_number:
+        return 0
+
+    process = JudicialProcess.query.filter_by(
+        law_firm_id=item.law_firm_id,
+        process_number=process_number,
+    ).first()
+    if not process:
+        return 0
+
+    sentence_info = analysis.get('sentence_info', {}) if isinstance(analysis, dict) else {}
+    benefits_analysis = sentence_info.get('fap_benefits_analysis', []) if isinstance(sentence_info, dict) else []
+    if not isinstance(benefits_analysis, list) or not benefits_analysis:
+        return 0
+
+    updated = 0
+    process_benefits = JudicialProcessBenefit.query.filter_by(process_id=process.id).all()
+
+    benefits_by_number = {
+        _normalize_benefit_number(benefit.benefit_number): benefit
+        for benefit in process_benefits
+        if _normalize_benefit_number(benefit.benefit_number)
+    }
+
+    for benefit_item in benefits_analysis:
+        if not isinstance(benefit_item, dict):
+            continue
+
+        raw_number = benefit_item.get('benefit_number', '')
+        normalized_number = _normalize_benefit_number(raw_number)
+        if not normalized_number:
+            continue
+
+        target_benefit = benefits_by_number.get(normalized_number)
+        if not target_benefit:
+            continue
+
+        decision = _normalize_benefit_decision(benefit_item.get('result', ''))
+        if target_benefit.first_instance_decision != decision:
+            target_benefit.first_instance_decision = decision
+            target_benefit.updated_at = datetime.utcnow()
+            updated += 1
+
+    return updated
+
+
+def analyze_sentence_with_ai(
+    sentence_path: str,
+    petition_path: str | None = None,
+    user_id: int | None = None,
+    law_firm_id: int | None = None,
+) -> str | None:
     """
     Analisa a sentença judicial usando IA e, se disponível, extrai os pedidos da petição inicial.
 
@@ -82,7 +238,9 @@ def analyze_sentence_with_ai(sentence_path: str, petition_path: str | None = Non
         sentence_analysis = sentence_agent.summarizeSentence(
             file_path=sentence_path,
             petition_requests=petition_requests_list,
-            petition_benefits=petition_benefits_data
+            petition_benefits=petition_benefits_data,
+            user_id=user_id,
+            law_firm_id=law_firm_id,
         )
 
         # PASSO 3: Montar resultado final
@@ -109,15 +267,27 @@ def analyze_sentence_with_ai(sentence_path: str, petition_path: str | None = Non
         return None
 
 
-def process_pending_sentences(batch_size: int = 10) -> int:
-    """Processa um lote de análises pendentes. Retorna quantidade processada."""
-    pending_items = (
-        JudicialSentenceAnalysis.query
-        .filter(JudicialSentenceAnalysis.status == 'pending')
-        .order_by(JudicialSentenceAnalysis.uploaded_at.asc())
-        .limit(batch_size)
-        .all()
-    )
+def process_pending_sentences(batch_size: int = 10, process_id: int | None = None) -> int:
+    """Processa análises pendentes, com opção de enfileirar e filtrar por processo."""
+    if process_id:
+        process = JudicialProcess.query.filter_by(id=process_id).first()
+        if not process:
+            print(f"Processo {process_id} não encontrado.")
+            return 0
+
+        queued = _queue_process_sentences(process)
+        print(f"Sentenças enfileiradas para o processo {process_id}: {queued}")
+
+    query = JudicialSentenceAnalysis.query.filter(JudicialSentenceAnalysis.status == 'pending')
+
+    if process_id:
+        process = JudicialProcess.query.filter_by(id=process_id).first()
+        if process and process.process_number:
+            query = query.filter(JudicialSentenceAnalysis.process_number == process.process_number)
+        else:
+            query = query.filter(JudicialSentenceAnalysis.id == -1)
+
+    pending_items = query.order_by(JudicialSentenceAnalysis.uploaded_at.asc()).limit(batch_size).all()
 
     if not pending_items:
         print("Nenhuma análise pendente encontrada.")
@@ -135,13 +305,23 @@ def process_pending_sentences(batch_size: int = 10) -> int:
 
             analysis = analyze_sentence_with_ai(
                 sentence_path=item.file_path,
-                petition_path=item.petition_file_path
+                petition_path=item.petition_file_path,
+                user_id=item.user_id,
+                law_firm_id=item.law_firm_id,
             )
 
             if not analysis:
                 raise Exception("Falha ao gerar análise pela IA")
 
+            analysis_dict = json.loads(analysis)
             item.analysis_result = analysis
+
+            updated_benefits = _sync_benefit_decisions_from_analysis(item, analysis_dict)
+            if updated_benefits > 0:
+                print(
+                    f"Benefícios atualizados com decisão de julgamento (1ª instância): {updated_benefits}"
+                )
+
             item.processed_at = datetime.utcnow()
             item.status = 'completed'
             db.session.commit()
@@ -160,7 +340,15 @@ def process_pending_sentences(batch_size: int = 10) -> int:
     return processed
 
 
+def parse_args():
+    parser = argparse.ArgumentParser(description='Processa análises pendentes de sentença judicial')
+    parser.add_argument('--batch-size', type=int, default=10, help='Quantidade máxima por execução')
+    parser.add_argument('--process-id', type=int, help='ID do processo para enfileirar e processar suas sentenças')
+    return parser.parse_args()
+
+
 if __name__ == '__main__':
+    args = parse_args()
     with app.app_context():
-        total = process_pending_sentences(batch_size=10)
+        total = process_pending_sentences(batch_size=args.batch_size, process_id=args.process_id)
         print(f"Total processado: {total}")

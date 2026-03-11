@@ -1,5 +1,13 @@
 from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify, send_file
-from app.models import db, AiDocumentSummary, JudicialSentenceAnalysis, JudicialAppeal
+from rich import print
+from app.models import (
+    db,
+    AiDocumentSummary,
+    JudicialSentenceAnalysis,
+    JudicialAppeal,
+    JudicialProcess,
+    JudicialDocument,
+)
 from app.agents.core.file_agent import FileAgent
 from app.agents.document_processing.agent_document_reader import AgentDocumentReader
 from app.utils.document_utils import extract_text_from_docx, is_docx_file
@@ -7,6 +15,7 @@ from datetime import datetime
 from functools import wraps
 from werkzeug.utils import secure_filename
 import os
+import unicodedata
 
 tools_bp = Blueprint('tools', __name__, url_prefix='/tools')
 
@@ -388,70 +397,143 @@ def judicial_sentence_analysis_list():
 @tools_bp.route('/sentence-analysis/upload', methods=['GET', 'POST'])
 @require_law_firm
 def judicial_sentence_analysis_upload():
-    """Upload de sentença judicial para análise por IA"""
+    """Seleciona um processo e enfileira suas sentenças para análise por IA."""
     from app.form import JudicialSentenceAnalysisForm
-    
+
+    def _normalize_doc_type(value: str) -> str:
+        normalized = unicodedata.normalize('NFKD', str(value or '').strip().lower())
+        return ''.join(ch for ch in normalized if not unicodedata.combining(ch))
+
+    def _is_sentence_document(doc_type: str) -> bool:
+        normalized = _normalize_doc_type(doc_type)
+        return 'sentenca' in normalized or 'sentença' in normalized
+
+    def _is_initial_petition_document(doc_type: str) -> bool:
+        normalized = _normalize_doc_type(doc_type)
+        return 'peticao' in normalized and 'inicial' in normalized
+
+    def _resolve_existing_file_path(doc: JudicialDocument) -> str | None:
+        """Tenta recuperar um caminho válido para o arquivo do documento."""
+        current_path = str(doc.file_path or '').strip()
+        if current_path and os.path.exists(current_path):
+            return current_path
+
+        if doc.knowledge_base and doc.knowledge_base.file_path:
+            kb_path = str(doc.knowledge_base.file_path).strip()
+            if kb_path and os.path.exists(kb_path):
+                doc.file_path = kb_path
+                return kb_path
+
+        return None
+
+    law_firm_id = get_current_law_firm_id()
     form = JudicialSentenceAnalysisForm()
-    
+    available_processes = JudicialProcess.query.filter_by(
+        law_firm_id=law_firm_id
+    ).order_by(JudicialProcess.created_at.desc()).all()
+
+    form.process_id.choices = [
+        (process.id, f"{process.process_number or 'Sem número'} - {process.title or 'Sem título'}")
+        for process in available_processes
+    ]
+
     if form.validate_on_submit():
-        file = form.file.data
-        petition_file = form.petition_file.data
-        
-        if file:
-            try:
-                # Processar arquivo da sentença
-                filename = secure_filename(file.filename)
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-                unique_filename = f"{timestamp}_{filename}"
-                
-                upload_dir = os.path.join('uploads', 'sentence_analysis')
-                os.makedirs(upload_dir, exist_ok=True)
-                file_path = os.path.join(upload_dir, unique_filename)
-                
-                file.save(file_path)
-                
-                file_size = os.path.getsize(file_path)
-                file_extension = os.path.splitext(filename)[1].lower().replace('.', '')
-                
+        process = JudicialProcess.query.filter_by(
+            id=form.process_id.data,
+            law_firm_id=law_firm_id,
+        ).first()
+
+        if not process:
+            flash('Processo não encontrado.', 'danger')
+            return render_template('tools/sentence_analysis_upload.html', form=form)
+
+        try:
+            process_documents = JudicialDocument.query.filter_by(process_id=process.id).order_by(
+                JudicialDocument.created_at.desc()
+            ).all()
+
+            sentence_docs = [doc for doc in process_documents if _is_sentence_document(doc.type)]
+            petition_doc = next((doc for doc in process_documents if _is_initial_petition_document(doc.type)), None)
+
+            if not sentence_docs:
+                flash('Este processo não possui documentos do tipo sentença para análise.', 'warning')
+                return render_template('tools/sentence_analysis_upload.html', form=form)
+
+            queued = 0
+            skipped = 0
+            skipped_missing = 0
+            skipped_existing = 0
+            first_created_id = None
+
+            for sentence_doc in sentence_docs:
+                sentence_path = _resolve_existing_file_path(sentence_doc)
+                print(f"Processando documento ID {sentence_doc.id} - Tipo: {sentence_doc.type} - Caminho: {sentence_path}")
+                if not sentence_path:
+                    skipped += 1
+                    skipped_missing += 1
+                    continue
+
+                existing = JudicialSentenceAnalysis.query.filter_by(
+                    law_firm_id=law_firm_id,
+                    file_path=sentence_path,
+                ).first()
+                if existing:
+                    skipped += 1
+                    skipped_existing += 1
+                    continue
+
+                file_size = os.path.getsize(sentence_path)
+                extension = os.path.splitext(sentence_doc.file_name or '')[1].lower().replace('.', '')
                 sentence = JudicialSentenceAnalysis(
                     user_id=session.get('user_id'),
-                    law_firm_id=get_current_law_firm_id(),
-                    original_filename=filename,
-                    file_path=file_path,
+                    law_firm_id=law_firm_id,
+                    original_filename=sentence_doc.file_name,
+                    file_path=sentence_path,
                     file_size=file_size,
-                    file_type=file_extension.upper(),
-                    status='pending'
+                    file_type=extension.upper() if extension else '',
+                    process_number=process.process_number,
+                    status='pending',
                 )
-                
-                # Processar petição inicial se fornecida
-                if petition_file:
-                    petition_filename = secure_filename(petition_file.filename)
-                    unique_petition_filename = f"{timestamp}_petition_{petition_filename}"
-                    petition_file_path = os.path.join(upload_dir, unique_petition_filename)
-                    
-                    petition_file.save(petition_file_path)
-                    
-                    petition_file_size = os.path.getsize(petition_file_path)
-                    petition_extension = os.path.splitext(petition_filename)[1].lower().replace('.', '')
-                    
-                    sentence.petition_filename = petition_filename
-                    sentence.petition_file_path = petition_file_path
-                    sentence.petition_file_size = petition_file_size
-                    sentence.petition_file_type = petition_extension.upper()
-                
+
+                if petition_doc and petition_doc.file_path and os.path.exists(petition_doc.file_path):
+                    petition_ext = os.path.splitext(petition_doc.file_name or '')[1].lower().replace('.', '')
+                    sentence.petition_filename = petition_doc.file_name
+                    sentence.petition_file_path = petition_doc.file_path
+                    sentence.petition_file_size = os.path.getsize(petition_doc.file_path)
+                    sentence.petition_file_type = petition_ext.upper() if petition_ext else ''
+
                 db.session.add(sentence)
-                db.session.commit()
-                
-                # TODO: Processar com agente de IA
-                # A implementação do agente será feita posteriormente
-                # Por enquanto, apenas marca como pendente
-                
-                flash('Sentença enviada com sucesso! A análise será processada em breve.', 'success')
-                return redirect(url_for('tools.judicial_sentence_analysis_detail', sentence_id=sentence.id))
-                
-            except Exception as e:
+                db.session.flush()
+
+                if first_created_id is None:
+                    first_created_id = sentence.id
+
+                queued += 1
+
+            if queued == 0:
                 db.session.rollback()
-                flash(f'Erro ao enviar sentença: {str(e)}', 'danger')
+                flash(
+                    'Nenhuma nova sentença foi enfileirada. '
+                    f'Ignoradas por arquivo ausente: {skipped_missing}. '
+                    f'Ignoradas por já cadastradas: {skipped_existing}.',
+                    'info'
+                )
+                return render_template('tools/sentence_analysis_upload.html', form=form)
+
+            db.session.commit()
+            flash(
+                f'Processo enviado para análise! {queued} sentença(s) enfileirada(s) '
+                f'e {skipped} arquivo(s) ignorado(s).',
+                'success'
+            )
+
+            if first_created_id:
+                return redirect(url_for('tools.judicial_sentence_analysis_detail', sentence_id=first_created_id))
+            return redirect(url_for('tools.judicial_sentence_analysis_list'))
+
+        except Exception as e:
+            db.session.rollback()
+            flash(f'Erro ao enfileirar análises do processo: {str(e)}', 'danger')
     
     return render_template('tools/sentence_analysis_upload.html', form=form)
 
@@ -480,13 +562,6 @@ def judicial_sentence_analysis_delete(sentence_id):
         return redirect(url_for('tools.judicial_sentence_analysis_list'))
     
     try:
-        # Deletar arquivos físicos
-        if os.path.exists(sentence.file_path):
-            os.remove(sentence.file_path)
-        
-        if sentence.petition_file_path and os.path.exists(sentence.petition_file_path):
-            os.remove(sentence.petition_file_path)
-        
         db.session.delete(sentence)
         db.session.commit()
         
