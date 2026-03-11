@@ -2,11 +2,16 @@
 
 {% from "partials/page_hero.html" import page_hero %}
 
-{% block title %}Lista de Varas - IntellexIA{% endblock %}
+{% block title %}Tribunais e Varas - IntellexIA{% endblock %}
 
 {% block content %}
-{% call page_hero(title='Varas Judiciais', subtitle=hero_subtitle|default(''), icon='bi bi-bank') %}
-<nav aria-label="breadcrumb"><ol class="breadcrumb mb-0 bg-transparent small"><li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li><li class="breadcrumb-item active" aria-current="page">Varas Judiciais</li></ol></nav>
+{% call page_hero(title='Tribunais e Varas Judiciais', subtitle=hero_subtitle|default(''), icon='bi bi-bank') %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb mb-0 bg-transparent small">
+    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Tribunais e Varas</li>
+  </ol>
+</nav>
 {% endcall %}
 
 <div class="app-content">
@@ -15,7 +20,7 @@
       <div class="col-12">
         <div class="card card-warning card-outline">
           <div class="card-header">
-            <h3 class="card-title"><i class="bi bi-list-ul"></i> Lista de Varas Judiciais</h3>
+            <h3 class="card-title"><i class="bi bi-list-ul"></i> Lista de Tribunais e Varas</h3>
             <div class="card-tools">
               <a href="{{ url_for('courts.court_new') }}" class="btn btn-warning btn-sm">
                 <i class="bi bi-plus-circle"></i> Nova Vara
@@ -24,14 +29,14 @@
           </div>
           <div class="card-body">
             {% with messages = get_flashed_messages(with_categories=true) %}
-              {% if messages %}
-                {% for category, message in messages %}
-                  <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                    <i class="bi bi-info-circle"></i> {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                  </div>
-                {% endfor %}
-              {% endif %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+              <i class="bi bi-info-circle"></i> {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
+            {% endif %}
             {% endwith %}
 
             {% if courts %}
@@ -40,8 +45,8 @@
                 <thead class="table-light">
                   <tr>
                     <th style="width: 60px;">ID</th>
-                    <th style="width: 250px;">Seção Judiciária</th>
-                    <th>Nome da Vara</th>
+                    <th style="width: 200px;">Tribunal/Seção</th>
+                    <th>Órgão Julgador</th>
                     <th style="width: 180px;">Cidade/UF</th>
                     <th style="width: 100px;" class="text-center">Ações</th>
                   </tr>
@@ -52,20 +57,24 @@
                     <td><strong>{{ court.id }}</strong></td>
                     <td>
                       {% if court.section %}
-                        <i class="bi bi-diagram-3"></i> {{ court.section }}
+                      <i class="bi bi-diagram-3"></i> {{ court.section }}
                       {% else %}
-                        <span class="text-muted">-</span>
+                      <span class="text-muted">-</span>
                       {% endif %}
                     </td>
                     <td>
                       {% if court.vara_name %}
-                        <i class="bi bi-bank text-warning"></i> <strong>{{ court.vara_name }}</strong>
+                      <i class="bi bi-bank text-warning"></i> <strong>{{ court.vara_name }}</strong>
                       {% else %}
-                        <span class="text-muted">-</span>
+                      <span class="text-muted">-</span>
                       {% endif %}
                     </td>
                     <td>
-                      <i class="bi bi-geo-alt"></i> {{ court.city }}/{{ court.state }}
+                      {% if court.city or court.state %}
+                      <i class="bi bi-geo-alt"></i> {{ court.city or '-' }}/{{ court.state or '-' }}
+                      {% else %}
+                      <span class="text-muted">-</span>
+                      {% endif %}
                     </td>
                     <td class="text-center">
                       <div class="btn-group" role="group">
@@ -81,15 +90,16 @@
             </div>
             {% else %}
             <div class="alert alert-info mb-0">
-              <h5><i class="bi bi-info-circle"></i> Nenhuma vara cadastrada</h5>
-              <p class="mb-0">Você ainda não possui varas cadastradas. <a href="{{ url_for('courts.court_new') }}" class="alert-link">Clique aqui para cadastrar a primeira vara</a>.</p>
+              <h5><i class="bi bi-info-circle"></i> Nenhum tribunal/vara cadastrado</h5>
+              <p class="mb-0">Você ainda não possui registros. <a href="{{ url_for('courts.court_new') }}"
+                  class="alert-link">Clique aqui para cadastrar o primeiro</a>.</p>
             </div>
             {% endif %}
           </div>
           {% if courts %}
           <div class="card-footer clearfix">
             <div class="float-end">
-              <span class="badge bg-warning text-dark">Total: {{ courts|length }} vara(s)</span>
+              <span class="badge bg-warning text-dark">Total: {{ courts|length }} registro(s)</span>
             </div>
           </div>
           {% endif %}
@@ -106,18 +116,18 @@
 <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
 <script>
-$(document).ready(function() {
-  $('#courtsTable').DataTable({
-    "language": {
-      "url": "//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json"
-    },
-    "pageLength": 25,
-    "order": [[0, "desc"]],
-    "columnDefs": [
-      { "orderable": false, "targets": 4 }
-    ]
+  $(document).ready(function () {
+    $('#courtsTable').DataTable({
+      "language": {
+        "url": "//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json"
+      },
+      "pageLength": 25,
+      "order": [[0, "desc"]],
+      "columnDefs": [
+        { "orderable": false, "targets": 4 }
+      ]
+    });
   });
-});
 </script>
 {% endif %}
 {% endblock %}

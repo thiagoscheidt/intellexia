@@ -23,7 +23,12 @@ def require_law_firm(f):
 @require_law_firm
 def courts_list():
     law_firm_id = get_current_law_firm_id()
-    courts = Court.query.filter_by(law_firm_id=law_firm_id).order_by(Court.vara_name).all()
+    courts = (
+        Court.query
+        .filter_by(law_firm_id=law_firm_id)
+        .order_by(Court.section.asc(), Court.vara_name.asc())
+        .all()
+    )
     return render_template('courts/list.html', courts=courts)
 
 @courts_bp.route('/new', methods=['GET', 'POST'])

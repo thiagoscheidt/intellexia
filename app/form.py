@@ -63,8 +63,8 @@ class ClientForm(FlaskForm):
 # Formulário: Courts (Varas Judiciais)
 # ========================
 class CourtForm(FlaskForm):
-    section = StringField('Seção Judiciária', validators=[Optional(), Length(max=255)])
-    vara_name = StringField('Nome da Vara', validators=[Optional(), Length(max=255)])
+    section = StringField('Tribunal/Seção', validators=[Optional(), Length(max=255)])
+    vara_name = StringField('Órgão Julgador', validators=[Optional(), Length(max=255)])
     city = StringField('Cidade', validators=[Optional(), Length(max=150)])
     state = StringField('Estado (UF)', validators=[Optional(), Length(max=50)])
     submit = SubmitField('Salvar Vara')

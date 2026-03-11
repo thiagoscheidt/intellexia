@@ -6,7 +6,12 @@
 
 {% block content %}
 {% call page_hero(title=title, subtitle=hero_subtitle|default(''), icon='bi bi-diagram-3') %}
-<nav aria-label="breadcrumb"><ol class="breadcrumb mb-0 bg-transparent small"><li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li><li class="breadcrumb-item active" aria-current="page">{{ title }}</li></ol></nav>
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb mb-0 bg-transparent small">
+    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ title }}</li>
+  </ol>
+</nav>
 {% endcall %}
 
 <div class="app-content">
@@ -24,7 +29,7 @@
                 <div class="col-md-12">
                   <div class="mb-3">
                     {{ form.section.label(class="form-label") }}
-                    {{ form.section(class="form-control", placeholder="Ex: Seção Judiciária de Santa Catarina") }}
+                    {{ form.section(class="form-control", placeholder="Ex: TRF-4") }}
                   </div>
                 </div>
               </div>
@@ -33,7 +38,7 @@
                 <div class="col-md-12">
                   <div class="mb-3">
                     {{ form.vara_name.label(class="form-label") }}
-                    {{ form.vara_name(class="form-control", placeholder="Ex: 1ª Vara Federal de Blumenau") }}
+                    {{ form.vara_name(class="form-control", placeholder="Ex: 1ª Vara Federal de Blumenau/SC") }}
                   </div>
                 </div>
               </div>
