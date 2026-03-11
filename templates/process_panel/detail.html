@@ -785,6 +785,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                           <th>Decisão (1ª Instância)</th>
                           <th>Decisão (2ª Instância)</th>
                           <th>Decisão (3ª Instância)</th>
+                          <th class="text-end">Ações</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -795,29 +796,35 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                           <td>{{ benefit.insured_name or '-' }}</td>
                           <td>{{ benefit.benefit_type or '-' }}</td>
                           <td>
-                            <form method="post"
-                              action="{{ url_for('process_panel.update_process_benefit_legal_thesis', process_id=process.id, benefit_id=benefit.id) }}"
-                              class="d-flex gap-2 align-items-center">
-                              <select name="legal_thesis_id" class="form-select form-select-sm"
-                                style="min-width: 220px;">
-                                <option value="">Sem tese</option>
-                                {% for thesis in legal_theses %}
-                                <option value="{{ thesis.id }}" {% if benefit.legal_thesis_id==thesis.id %}selected{%
-                                  endif %}>
+                            <div class="d-flex flex-column gap-2 align-items-start">
+                              {% if benefit.legal_theses %}
+                              <div class="d-flex flex-wrap gap-1">
+                                {% for thesis in benefit.legal_theses %}
+                                <span
+                                  class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle">
                                   {{ thesis.name }}
-                                </option>
+                                </span>
                                 {% endfor %}
-                              </select>
-                              <button type="submit" class="btn btn-outline-primary btn-sm"
-                                title="Salvar tese do benefício">
-                                <i class="bi bi-save"></i>
-                              </button>
-                            </form>
+                              </div>
+                              {% else %}
+                              <span class="text-muted small">Sem tese vinculada.</span>
+                              {% endif %}
+                            </div>
                           </td>
                           <td>{{ benefit.fap_vigencia_year or '-' }}</td>
                           <td>{{ decision_badge(benefit.first_instance_decision) }}</td>
                           <td>{{ decision_badge(benefit.second_instance_decision) }}</td>
                           <td>{{ decision_badge(benefit.third_instance_decision) }}</td>
+                          <td class="text-end">
+                            <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal"
+                              data-bs-target="#editBenefitLegalThesesModal" data-benefit-id="{{ benefit.id }}"
+                              data-benefit-number="{{ benefit.benefit_number or '-' }}"
+                              data-benefit-insured="{{ benefit.insured_name or '-' }}"
+                              data-selected-theses="{% for thesis in benefit.legal_theses %}{{ thesis.id }}{% if not loop.last %},{% endif %}{% endfor %}"
+                              title="Editar teses do benefício">
+                              <i class="bi bi-pencil"></i>
+                            </button>
+                          </td>
                         </tr>
                         {% endfor %}
                       </tbody>
@@ -834,6 +841,40 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Editar Teses do Benefício -->
+  <div class="modal fade" id="editBenefitLegalThesesModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div>
+            <h5 class="modal-title"><i class="bi bi-pencil-square me-2"></i>Editar teses do benefício</h5>
+            <small class="text-muted d-block mt-1" id="editBenefitLegalThesesSummary"></small>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <form method="post" id="editBenefitLegalThesesForm">
+          <div class="modal-body">
+            <div class="mb-3">
+              <label for="editBenefitLegalThesesSelect" class="form-label">Teses jurídicas</label>
+              <select id="editBenefitLegalThesesSelect" name="legal_thesis_ids" class="form-select" multiple size="8">
+                {% for thesis in legal_theses %}
+                <option value="{{ thesis.id }}">{{ thesis.name }}</option>
+                {% endfor %}
+              </select>
+              <div class="form-text">Use Cmd/Ctrl para selecionar várias teses ou remover seleções existentes.</div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-save me-2"></i>Salvar teses
+            </button>
+          </div>
+        </form>
       </div>
     </div>
   </div>
@@ -913,46 +954,81 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
 
   <script>
     document.addEventListener('DOMContentLoaded', function () {
+      const thesesModalElement = document.getElementById('editBenefitLegalThesesModal');
+      const thesesForm = document.getElementById('editBenefitLegalThesesForm');
+      const thesesSelect = document.getElementById('editBenefitLegalThesesSelect');
+      const thesesSummary = document.getElementById('editBenefitLegalThesesSummary');
+
+      if (thesesModalElement && thesesForm && thesesSelect && thesesSummary) {
+        thesesModalElement.addEventListener('show.bs.modal', function (event) {
+          const triggerButton = event.relatedTarget;
+          if (!triggerButton) {
+            return;
+          }
+
+          const benefitId = triggerButton.getAttribute('data-benefit-id');
+          const benefitNumber = triggerButton.getAttribute('data-benefit-number') || '-';
+          const insuredName = triggerButton.getAttribute('data-benefit-insured') || '-';
+          const selectedValues = (triggerButton.getAttribute('data-selected-theses') || '')
+            .split(',')
+            .map(function (value) { return value.trim(); })
+            .filter(Boolean);
+
+          thesesForm.action = "{{ url_for('process_panel.update_process_benefit_legal_thesis', process_id=process.id, benefit_id=0) }}".replace('/0/tese', '/' + benefitId + '/tese');
+          thesesSummary.textContent = 'NB ' + benefitNumber + ' • Segurado: ' + insuredName;
+
+          Array.from(thesesSelect.options).forEach(function (option) {
+            option.selected = selectedValues.includes(option.value);
+          });
+        });
+
+        thesesModalElement.addEventListener('hidden.bs.modal', function () {
+          thesesForm.action = '';
+          thesesSummary.textContent = '';
+          Array.from(thesesSelect.options).forEach(function (option) {
+            option.selected = false;
+          });
+        });
+      }
+
       const editorElement = document.getElementById('processNoteEditor');
       const hiddenInput = document.getElementById('note_content');
       const form = document.getElementById('processNoteForm');
       const modalElement = document.getElementById('newProcessNoteModal');
 
-      if (!editorElement || !hiddenInput || !form || !modalElement) {
-        return;
+      if (editorElement && hiddenInput && form && modalElement) {
+        const toolbarOptions = [
+          ['bold', 'italic', 'underline', 'strike'],
+          ['blockquote', 'code-block'],
+          [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+          ['clean']
+        ];
+
+        const quill = new Quill('#processNoteEditor', {
+          theme: 'snow',
+          modules: { toolbar: toolbarOptions },
+          placeholder: 'Escreva uma anotação ou comentário...'
+        });
+
+        modalElement.addEventListener('shown.bs.modal', function () {
+          quill.focus();
+        });
+
+        modalElement.addEventListener('hidden.bs.modal', function () {
+          quill.setText('');
+          hiddenInput.value = '';
+        });
+
+        form.addEventListener('submit', function (event) {
+          hiddenInput.value = quill.root.innerHTML;
+          const plainText = quill.getText().trim();
+
+          if (!plainText) {
+            event.preventDefault();
+            alert('Escreva uma anotação antes de salvar.');
+          }
+        });
       }
-
-      const toolbarOptions = [
-        ['bold', 'italic', 'underline', 'strike'],
-        ['blockquote', 'code-block'],
-        [{ 'list': 'ordered' }, { 'list': 'bullet' }],
-        ['clean']
-      ];
-
-      const quill = new Quill('#processNoteEditor', {
-        theme: 'snow',
-        modules: { toolbar: toolbarOptions },
-        placeholder: 'Escreva uma anotação ou comentário...'
-      });
-
-      modalElement.addEventListener('shown.bs.modal', function () {
-        quill.focus();
-      });
-
-      modalElement.addEventListener('hidden.bs.modal', function () {
-        quill.setText('');
-        hiddenInput.value = '';
-      });
-
-      form.addEventListener('submit', function (event) {
-        hiddenInput.value = quill.root.innerHTML;
-        const plainText = quill.getText().trim();
-
-        if (!plainText) {
-          event.preventDefault();
-          alert('Escreva uma anotação antes de salvar.');
-        }
-      });
     });
 
     function confirmDeleteDocument(deleteUrl) {

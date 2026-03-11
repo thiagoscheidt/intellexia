@@ -6,6 +6,20 @@ from werkzeug.security import generate_password_hash, check_password_hash
 db = SQLAlchemy()
 
 
+judicial_process_benefit_legal_theses = db.Table(
+    'judicial_process_benefit_legal_theses',
+    db.Column('id', db.Integer, primary_key=True),
+    db.Column('benefit_id', db.Integer, db.ForeignKey('judicial_process_benefits.id'), nullable=False, index=True),
+    db.Column('legal_thesis_id', db.Integer, db.ForeignKey('judicial_legal_theses.id'), nullable=False, index=True),
+    db.Column('created_at', db.DateTime, default=datetime.utcnow, nullable=False),
+    db.UniqueConstraint(
+        'benefit_id',
+        'legal_thesis_id',
+        name='uq_judicial_process_benefit_legal_theses'
+    ),
+)
+
+
 class LawFirm(db.Model):
     """Tabela law_firms - Escritórios de advocacia que usam o sistema"""
     __tablename__ = 'law_firms'
@@ -957,7 +971,11 @@ class JudicialLegalThesis(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     law_firm = db.relationship('LawFirm')
-    benefits = db.relationship('JudicialProcessBenefit', back_populates='legal_thesis_obj')
+    benefits = db.relationship(
+        'JudicialProcessBenefit',
+        secondary=judicial_process_benefit_legal_theses,
+        back_populates='legal_theses'
+    )
 
     def __repr__(self):
         return f'<JudicialLegalThesis {self.key}>'
@@ -1196,7 +1214,12 @@ class JudicialProcessBenefit(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     process = db.relationship('JudicialProcess', back_populates='benefits')
-    legal_thesis_obj = db.relationship('JudicialLegalThesis', back_populates='benefits')
+    legal_theses = db.relationship(
+        'JudicialLegalThesis',
+        secondary=judicial_process_benefit_legal_theses,
+        back_populates='benefits',
+        order_by='JudicialLegalThesis.name.asc()'
+    )
 
     def __repr__(self):
         return f'<JudicialProcessBenefit {self.benefit_number} - Process {self.process_id}>'

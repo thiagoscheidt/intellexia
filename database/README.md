@@ -16,6 +16,7 @@ database/
 ├── add_judicial_phases_and_document_types_tables.py # Cria tabelas de fases e tipos documentais judiciais
 ├── add_judicial_process_notes_table.py # Cria tabela de notas/comentários dos processos
 ├── add_judicial_process_benefits_table.py # Cria tabela de benefícios vinculados ao processo judicial
+├── add_judicial_process_benefit_legal_theses_table.py # Cria tabela relacional entre benefícios judiciais e teses jurídicas
 ├── remove_unique_process_number_from_judicial_processes.py # Remove unicidade global de process_number em judicial_processes
 ├── add_judicial_parties_to_processes.py # Cria tabela de polos passivos e colunas de partes em judicial_processes
 └── [futuros scripts de migração]
@@ -62,6 +63,11 @@ python database/add_fap_reason_column.py
 ### Adicionar Nova Tabela
 ```bash
 python database/add_ai_document_summaries_table.py
+```
+
+### Adicionar Relação Benefício x Tese Jurídica
+```bash
+python database/add_judicial_process_benefit_legal_theses_table.py
 ```
 
 ### Recriar Banco (⚠️ CUIDADO)

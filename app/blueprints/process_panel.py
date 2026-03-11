@@ -8,6 +8,7 @@ from app.models import (
 from datetime import datetime
 from functools import wraps
 from sqlalchemy import or_, and_
+from sqlalchemy.orm import selectinload
 from werkzeug.utils import secure_filename
 import hashlib
 import os
@@ -1183,7 +1184,9 @@ def detail(process_id):
         JudicialProcessPhaseHistory.id.desc()
     ).all()
 
-    process_benefits = JudicialProcessBenefit.query.filter_by(
+    process_benefits = JudicialProcessBenefit.query.options(
+        selectinload(JudicialProcessBenefit.legal_theses)
+    ).filter_by(
         process_id=process.id
     ).order_by(JudicialProcessBenefit.created_at.desc(), JudicialProcessBenefit.id.desc()).all()
 
@@ -1472,7 +1475,7 @@ def new_process_document(process_id):
 @process_panel_bp.route('/<int:process_id>/beneficios/<int:benefit_id>/tese', methods=['POST'])
 @require_law_firm
 def update_process_benefit_legal_thesis(process_id, benefit_id):
-    """Vincula (ou remove) tese jurídica de um benefício do processo."""
+    """Atualiza as teses jurídicas vinculadas a um benefício do processo."""
     law_firm_id = get_current_law_firm_id()
 
     process = JudicialProcess.query.filter_by(
@@ -1485,29 +1488,35 @@ def update_process_benefit_legal_thesis(process_id, benefit_id):
         process_id=process.id,
     ).first_or_404()
 
-    thesis_id = request.form.get('legal_thesis_id', type=int)
+    thesis_ids = sorted({
+        thesis_id
+        for thesis_id in request.form.getlist('legal_thesis_ids', type=int)
+        if thesis_id
+    })
 
-    if thesis_id:
-        thesis = JudicialLegalThesis.query.filter_by(
-            id=thesis_id,
-            law_firm_id=law_firm_id,
-            is_active=True,
-        ).first()
-        if not thesis:
-            flash('Tese jurídica inválida para este escritório.', 'danger')
+    theses = []
+    if thesis_ids:
+        theses = JudicialLegalThesis.query.filter(
+            JudicialLegalThesis.id.in_(thesis_ids),
+            JudicialLegalThesis.law_firm_id == law_firm_id,
+            JudicialLegalThesis.is_active.is_(True),
+        ).order_by(JudicialLegalThesis.name.asc()).all()
+
+        if len(theses) != len(thesis_ids):
+            flash('Uma ou mais teses jurídicas selecionadas são inválidas para este escritório.', 'danger')
             return redirect(url_for('process_panel.detail', process_id=process.id) + '#benefits')
-        benefit.legal_thesis_id = thesis.id
-    else:
-        benefit.legal_thesis_id = None
+
+    benefit.legal_theses = theses
+    benefit.legal_thesis_id = theses[0].id if theses else None
 
     try:
         benefit.updated_at = datetime.utcnow()
         process.updated_at = datetime.utcnow()
         db.session.commit()
-        flash('Tese jurídica do benefício atualizada com sucesso.', 'success')
+        flash('Teses jurídicas do benefício atualizadas com sucesso.', 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f'Erro ao atualizar tese jurídica do benefício: {str(e)}', 'danger')
+        flash(f'Erro ao atualizar teses jurídicas do benefício: {str(e)}', 'danger')
 
     return redirect(url_for('process_panel.detail', process_id=process.id) + '#benefits')
 
