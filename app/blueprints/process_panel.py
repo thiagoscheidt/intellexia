@@ -3,7 +3,7 @@ from app.models import (
     db, JudicialProcess, JudicialSentenceAnalysis, JudicialAppeal, 
     KnowledgeBase, Case, User, JudicialPhase, JudicialDocumentType, JudicialEvent,
     JudicialProcessNote, Client, JudicialDefendant, JudicialDocument, JudicialProcessBenefit,
-    JudicialProcessPhaseHistory
+    JudicialProcessPhaseHistory, JudicialLegalThesis
 )
 from datetime import datetime
 from functools import wraps
@@ -729,6 +729,132 @@ def toggle_defendant_status(defendant_id):
     return redirect(url_for('process_panel.manage_defendants'))
 
 
+@process_panel_bp.route('/config/teses-juridicas')
+@require_law_firm
+def manage_legal_theses():
+    """Tela para gerenciamento de teses jurídicas."""
+    law_firm_id = get_current_law_firm_id()
+
+    try:
+        JudicialLegalThesis.__table__.create(bind=db.engine, checkfirst=True)
+    except Exception:
+        db.session.rollback()
+
+    legal_theses = JudicialLegalThesis.query.filter_by(
+        law_firm_id=law_firm_id
+    ).order_by(JudicialLegalThesis.name.asc()).all()
+
+    return render_template(
+        'process_panel/legal_theses_management.html',
+        legal_theses=legal_theses,
+    )
+
+
+@process_panel_bp.route('/config/teses-juridicas/criar', methods=['POST'])
+@require_law_firm
+def create_legal_thesis():
+    """Cria nova tese jurídica."""
+    law_firm_id = get_current_law_firm_id()
+
+    name = request.form.get('name', '').strip()
+    key = _normalize_slug(request.form.get('key', '').strip() or name)
+    description = request.form.get('description', '').strip()
+
+    if not name or not key:
+        flash('Nome e chave (slug) da tese são obrigatórios.', 'danger')
+        return redirect(url_for('process_panel.manage_legal_theses'))
+
+    exists = JudicialLegalThesis.query.filter_by(
+        law_firm_id=law_firm_id,
+        key=key,
+    ).first()
+    if exists:
+        flash(f'Já existe uma tese jurídica com a chave "{key}".', 'warning')
+        return redirect(url_for('process_panel.manage_legal_theses'))
+
+    try:
+        db.session.add(
+            JudicialLegalThesis(
+                law_firm_id=law_firm_id,
+                name=name,
+                key=key,
+                description=description or None,
+                is_active=True,
+            )
+        )
+        db.session.commit()
+        flash('Tese jurídica cadastrada com sucesso.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao cadastrar tese jurídica: {str(e)}', 'danger')
+
+    return redirect(url_for('process_panel.manage_legal_theses'))
+
+
+@process_panel_bp.route('/config/teses-juridicas/<int:thesis_id>/atualizar', methods=['POST'])
+@require_law_firm
+def update_legal_thesis(thesis_id):
+    """Atualiza tese jurídica."""
+    law_firm_id = get_current_law_firm_id()
+    thesis = JudicialLegalThesis.query.filter_by(
+        id=thesis_id,
+        law_firm_id=law_firm_id,
+    ).first_or_404()
+
+    name = request.form.get('name', '').strip()
+    key = _normalize_slug(request.form.get('key', '').strip())
+    description = request.form.get('description', '').strip()
+
+    if not name or not key:
+        flash('Nome e chave (slug) da tese são obrigatórios.', 'danger')
+        return redirect(url_for('process_panel.manage_legal_theses'))
+
+    duplicated = JudicialLegalThesis.query.filter(
+        JudicialLegalThesis.law_firm_id == law_firm_id,
+        JudicialLegalThesis.key == key,
+        JudicialLegalThesis.id != thesis.id,
+    ).first()
+
+    if duplicated:
+        flash(f'Já existe outra tese jurídica com a chave "{key}".', 'warning')
+        return redirect(url_for('process_panel.manage_legal_theses'))
+
+    try:
+        thesis.name = name
+        thesis.key = key
+        thesis.description = description or None
+        thesis.updated_at = datetime.utcnow()
+        db.session.commit()
+        flash('Tese jurídica atualizada com sucesso.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao atualizar tese jurídica: {str(e)}', 'danger')
+
+    return redirect(url_for('process_panel.manage_legal_theses'))
+
+
+@process_panel_bp.route('/config/teses-juridicas/<int:thesis_id>/status', methods=['POST'])
+@require_law_firm
+def toggle_legal_thesis_status(thesis_id):
+    """Ativa/desativa tese jurídica."""
+    law_firm_id = get_current_law_firm_id()
+    thesis = JudicialLegalThesis.query.filter_by(
+        id=thesis_id,
+        law_firm_id=law_firm_id,
+    ).first_or_404()
+
+    try:
+        thesis.is_active = not thesis.is_active
+        thesis.updated_at = datetime.utcnow()
+        db.session.commit()
+        flash('Status da tese jurídica atualizado.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao alterar status da tese jurídica: {str(e)}', 'danger')
+
+    return redirect(url_for('process_panel.manage_legal_theses'))
+
+
 @process_panel_bp.route('/')
 @require_law_firm
 def list_processes():
@@ -1060,6 +1186,11 @@ def detail(process_id):
     process_benefits = JudicialProcessBenefit.query.filter_by(
         process_id=process.id
     ).order_by(JudicialProcessBenefit.created_at.desc(), JudicialProcessBenefit.id.desc()).all()
+
+    legal_theses = JudicialLegalThesis.query.filter_by(
+        law_firm_id=law_firm_id,
+        is_active=True,
+    ).order_by(JudicialLegalThesis.name.asc()).all()
     
     # Buscar documentos da knowledge base com o mesmo process_number
     # Pesquisar com e sem pontuação
@@ -1181,6 +1312,7 @@ def detail(process_id):
             key=lambda item: ((item.display_order or 0), (item.name or '').lower())
         ),
         'process_benefits': process_benefits,
+        'legal_theses': legal_theses,
         'kb_documents': kb_documents,
         'documents_list': documents_list,
         'case': process.case if process.case_id else None,
@@ -1335,6 +1467,49 @@ def new_process_document(process_id):
         process=process,
         document_types=document_types,
     )
+
+
+@process_panel_bp.route('/<int:process_id>/beneficios/<int:benefit_id>/tese', methods=['POST'])
+@require_law_firm
+def update_process_benefit_legal_thesis(process_id, benefit_id):
+    """Vincula (ou remove) tese jurídica de um benefício do processo."""
+    law_firm_id = get_current_law_firm_id()
+
+    process = JudicialProcess.query.filter_by(
+        id=process_id,
+        law_firm_id=law_firm_id,
+    ).first_or_404()
+
+    benefit = JudicialProcessBenefit.query.filter_by(
+        id=benefit_id,
+        process_id=process.id,
+    ).first_or_404()
+
+    thesis_id = request.form.get('legal_thesis_id', type=int)
+
+    if thesis_id:
+        thesis = JudicialLegalThesis.query.filter_by(
+            id=thesis_id,
+            law_firm_id=law_firm_id,
+            is_active=True,
+        ).first()
+        if not thesis:
+            flash('Tese jurídica inválida para este escritório.', 'danger')
+            return redirect(url_for('process_panel.detail', process_id=process.id) + '#benefits')
+        benefit.legal_thesis_id = thesis.id
+    else:
+        benefit.legal_thesis_id = None
+
+    try:
+        benefit.updated_at = datetime.utcnow()
+        process.updated_at = datetime.utcnow()
+        db.session.commit()
+        flash('Tese jurídica do benefício atualizada com sucesso.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao atualizar tese jurídica do benefício: {str(e)}', 'danger')
+
+    return redirect(url_for('process_panel.detail', process_id=process.id) + '#benefits')
 
 
 @process_panel_bp.route('/<int:process_id>/notes', methods=['POST'])

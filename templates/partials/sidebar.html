@@ -319,9 +319,9 @@
         </li>
 
         <li
-          class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint == 'process_panel.manage_judicial_phases' or request.endpoint == 'process_panel.manage_document_types' or request.endpoint == 'process_panel.manage_defendants' or request.endpoint.startswith('knowledge_base.categories') or request.endpoint.startswith('knowledge_base.tags') or request.endpoint == 'settings.law_firm_settings') else '' }}">
+          class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint == 'process_panel.manage_judicial_phases' or request.endpoint == 'process_panel.manage_document_types' or request.endpoint == 'process_panel.manage_defendants' or request.endpoint == 'process_panel.manage_legal_theses' or request.endpoint.startswith('knowledge_base.categories') or request.endpoint.startswith('knowledge_base.tags') or request.endpoint == 'settings.law_firm_settings') else '' }}">
           <a href="#"
-            class="nav-link {{ 'active' if request.endpoint and (request.endpoint == 'process_panel.manage_judicial_phases' or request.endpoint == 'process_panel.manage_document_types' or request.endpoint == 'process_panel.manage_defendants' or request.endpoint.startswith('knowledge_base.categories') or request.endpoint.startswith('knowledge_base.tags') or request.endpoint == 'settings.law_firm_settings') else '' }}">
+            class="nav-link {{ 'active' if request.endpoint and (request.endpoint == 'process_panel.manage_judicial_phases' or request.endpoint == 'process_panel.manage_document_types' or request.endpoint == 'process_panel.manage_defendants' or request.endpoint == 'process_panel.manage_legal_theses' or request.endpoint.startswith('knowledge_base.categories') or request.endpoint.startswith('knowledge_base.tags') or request.endpoint == 'settings.law_firm_settings') else '' }}">
             <i class="nav-icon bi bi-gear"></i>
             <p>
               Configurações
@@ -348,6 +348,13 @@
                 class="nav-link {{ 'active' if request.endpoint == 'process_panel.manage_defendants' else '' }}">
                 <i class="nav-icon bi bi-shield-exclamation"></i>
                 <p>Polos Passivos (Réus)</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('process_panel.manage_legal_theses') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'process_panel.manage_legal_theses' else '' }}">
+                <i class="nav-icon bi bi-journal-richtext"></i>
+                <p>Teses Jurídicas</p>
               </a>
             </li>
             <li class="nav-item">

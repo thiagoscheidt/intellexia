@@ -938,6 +938,31 @@ class JudicialDocumentType(db.Model):
         return f'<JudicialDocumentType {self.key}>'
 
 
+class JudicialLegalThesis(db.Model):
+    """Tabela judicial_legal_theses - Teses jurídicas configuráveis por escritório."""
+    __tablename__ = 'judicial_legal_theses'
+    __table_args__ = (
+        db.UniqueConstraint('law_firm_id', 'key', name='uq_judicial_legal_theses_law_firm_key'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+
+    key = db.Column(db.String(120), nullable=False, index=True)
+    name = db.Column(db.String(255), nullable=False)
+    description = db.Column(db.Text)
+    is_active = db.Column(db.Boolean, default=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    law_firm = db.relationship('LawFirm')
+    benefits = db.relationship('JudicialProcessBenefit', back_populates='legal_thesis_obj')
+
+    def __repr__(self):
+        return f'<JudicialLegalThesis {self.key}>'
+
+
 class JudicialProcess(db.Model):
     """Tabela judicial_processes - Painel centralizado de processos judiciais"""
     __tablename__ = 'judicial_processes'
@@ -1159,6 +1184,7 @@ class JudicialProcessBenefit(db.Model):
     insured_name = db.Column(db.String(255))
     benefit_type = db.Column(db.String(20), index=True)
     fap_vigencia_year = db.Column(db.String(10), index=True)
+    legal_thesis_id = db.Column(db.Integer, db.ForeignKey('judicial_legal_theses.id'), index=True)
 
     legal_thesis = db.Column(db.Text)
     pfn_technical_note = db.Column(db.Text)
@@ -1170,6 +1196,7 @@ class JudicialProcessBenefit(db.Model):
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     process = db.relationship('JudicialProcess', back_populates='benefits')
+    legal_thesis_obj = db.relationship('JudicialLegalThesis', back_populates='benefits')
 
     def __repr__(self):
         return f'<JudicialProcessBenefit {self.benefit_number} - Process {self.process_id}>'

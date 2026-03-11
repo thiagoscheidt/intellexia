@@ -9,13 +9,13 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
 {% macro decision_badge(decision) %}
 {% set decision_value = (decision or '').strip() %}
 {% set decision_key = decision_value|lower %}
-{% if decision_key == 'aceito' %}
+{% if decision_key == 'procedente' or decision_key == 'aceito' %}
 <span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2">
-  <i class="bi bi-check-circle me-1"></i>{{ decision_value }}
+  <i class="bi bi-check-circle me-1"></i>Procedente
 </span>
-{% elif decision_key == 'rejeitado' %}
+{% elif decision_key == 'improcedente' or decision_key == 'rejeitado' %}
 <span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2">
-  <i class="bi bi-x-circle me-1"></i>{{ decision_value }}
+  <i class="bi bi-x-circle me-1"></i>Improcedente
 </span>
 {% elif decision_key == 'não mencionado na sentença' or decision_key == 'nao mencionado na sentenca' %}
 <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3 py-2">
@@ -28,6 +28,33 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
 
 {% block content %}
 <div class="process-panel-detail-page">
+  {% set benefit_stats = namespace(total=0, procedente=0, improcedente=0, nao_analisado=0) %}
+  {% for benefit in process_benefits or [] %}
+  {% set decision_value = (benefit.first_instance_decision or '')|trim|lower %}
+  {% set decision_key = decision_value
+  |replace('á', 'a')
+  |replace('à', 'a')
+  |replace('â', 'a')
+  |replace('ã', 'a')
+  |replace('é', 'e')
+  |replace('ê', 'e')
+  |replace('í', 'i')
+  |replace('ó', 'o')
+  |replace('ô', 'o')
+  |replace('õ', 'o')
+  |replace('ú', 'u')
+  |replace('ç', 'c')
+  %}
+  {% set benefit_stats.total = benefit_stats.total + 1 %}
+  {% if decision_key in ['procedente', 'aceito'] %}
+  {% set benefit_stats.procedente = benefit_stats.procedente + 1 %}
+  {% elif decision_key in ['improcedente', 'rejeitado'] %}
+  {% set benefit_stats.improcedente = benefit_stats.improcedente + 1 %}
+  {% else %}
+  {% set benefit_stats.nao_analisado = benefit_stats.nao_analisado + 1 %}
+  {% endif %}
+  {% endfor %}
+
   {% call page_hero(title=process_number_display, subtitle=hero_subtitle|default(''), icon='bi bi-diagram-3') %}
   <nav aria-label="breadcrumb">
     <ol class="breadcrumb mb-4 bg-transparent small">
@@ -134,6 +161,53 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                 <div class="info-box-content">
                   <span class="info-box-text">Casos</span>
                   <span class="info-box-number">{% if case %}1{% else %}0{% endif %}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="row mb-4">
+            <div class="col-lg-3 col-6">
+              <div class="info-box shadow-sm">
+                <span class="info-box-icon bg-info bg-opacity-10">
+                  <i class="bi bi-clipboard2-pulse text-info" style="font-size: 2rem;"></i>
+                </span>
+                <div class="info-box-content">
+                  <span class="info-box-text">Total de Benefícios</span>
+                  <span class="info-box-number">{{ benefit_stats.total }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="col-lg-3 col-6">
+              <div class="info-box shadow-sm">
+                <span class="info-box-icon bg-success bg-opacity-10">
+                  <i class="bi bi-check-circle text-success" style="font-size: 2rem;"></i>
+                </span>
+                <div class="info-box-content">
+                  <span class="info-box-text">Benefícios Procedentes</span>
+                  <span class="info-box-number">{{ benefit_stats.procedente }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="col-lg-3 col-6">
+              <div class="info-box shadow-sm">
+                <span class="info-box-icon bg-danger bg-opacity-10">
+                  <i class="bi bi-x-circle text-danger" style="font-size: 2rem;"></i>
+                </span>
+                <div class="info-box-content">
+                  <span class="info-box-text">Benefícios Improcedentes</span>
+                  <span class="info-box-number">{{ benefit_stats.improcedente }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="col-lg-3 col-6">
+              <div class="info-box shadow-sm">
+                <span class="info-box-icon bg-secondary bg-opacity-10">
+                  <i class="bi bi-hourglass-split text-secondary" style="font-size: 2rem;"></i>
+                </span>
+                <div class="info-box-content">
+                  <span class="info-box-text">Não Analisados</span>
+                  <span class="info-box-number">{{ benefit_stats.nao_analisado }}</span>
                 </div>
               </div>
             </div>
@@ -687,7 +761,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
             </div>
           </div>
 
-          <div class="row mb-4">
+          <div class="row mb-4" id="benefits">
             <div class="col-12">
               <div class="card card-primary card-outline shadow-sm">
                 <div class="card-header">
@@ -706,6 +780,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                           <th>NIT</th>
                           <th>Segurado</th>
                           <th>Tipo</th>
+                          <th>Tese Jurídica</th>
                           <th>Vigência FAP</th>
                           <th>Decisão (1ª Instância)</th>
                           <th>Decisão (2ª Instância)</th>
@@ -719,6 +794,26 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                           <td>{{ benefit.nit_number or '-' }}</td>
                           <td>{{ benefit.insured_name or '-' }}</td>
                           <td>{{ benefit.benefit_type or '-' }}</td>
+                          <td>
+                            <form method="post"
+                              action="{{ url_for('process_panel.update_process_benefit_legal_thesis', process_id=process.id, benefit_id=benefit.id) }}"
+                              class="d-flex gap-2 align-items-center">
+                              <select name="legal_thesis_id" class="form-select form-select-sm"
+                                style="min-width: 220px;">
+                                <option value="">Sem tese</option>
+                                {% for thesis in legal_theses %}
+                                <option value="{{ thesis.id }}" {% if benefit.legal_thesis_id==thesis.id %}selected{%
+                                  endif %}>
+                                  {{ thesis.name }}
+                                </option>
+                                {% endfor %}
+                              </select>
+                              <button type="submit" class="btn btn-outline-primary btn-sm"
+                                title="Salvar tese do benefício">
+                                <i class="bi bi-save"></i>
+                              </button>
+                            </form>
+                          </td>
                           <td>{{ benefit.fap_vigencia_year or '-' }}</td>
                           <td>{{ decision_badge(benefit.first_instance_decision) }}</td>
                           <td>{{ decision_badge(benefit.second_instance_decision) }}</td>

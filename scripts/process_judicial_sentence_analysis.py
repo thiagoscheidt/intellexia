@@ -121,9 +121,9 @@ def _normalize_benefit_decision(value: str | None) -> str:
     if 'nao mencionado' in normalized:
         return 'Não mencionado na sentença'
     if 'aceito' in normalized or 'defer' in normalized or 'procedente' in normalized:
-        return 'Aceito'
+        return 'Procedente'
     if 'rejeitado' in normalized or 'indefer' in normalized or 'improcedente' in normalized:
-        return 'Rejeitado'
+        return 'Improcedente'
 
     return 'Não mencionado na sentença'
 
