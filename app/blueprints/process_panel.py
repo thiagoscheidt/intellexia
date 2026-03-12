@@ -1194,6 +1194,29 @@ def detail(process_id):
         law_firm_id=law_firm_id,
         is_active=True,
     ).order_by(JudicialLegalThesis.name.asc()).all()
+
+    benefits_grouped_by_thesis = []
+    for thesis in legal_theses:
+        thesis_benefits = [
+            benefit for benefit in process_benefits
+            if any(linked_thesis.id == thesis.id for linked_thesis in benefit.legal_theses)
+        ]
+        if thesis_benefits:
+            benefits_grouped_by_thesis.append({
+                'id': thesis.id,
+                'name': thesis.name,
+                'benefits': thesis_benefits,
+                'is_unassigned': False,
+            })
+
+    unassigned_benefits = [benefit for benefit in process_benefits if not benefit.legal_theses]
+    if unassigned_benefits:
+        benefits_grouped_by_thesis.append({
+            'id': 'unassigned',
+            'name': 'Sem tese vinculada',
+            'benefits': unassigned_benefits,
+            'is_unassigned': True,
+        })
     
     # Buscar documentos da knowledge base com o mesmo process_number
     # Pesquisar com e sem pontuação
@@ -1315,6 +1338,7 @@ def detail(process_id):
             key=lambda item: ((item.display_order or 0), (item.name or '').lower())
         ),
         'process_benefits': process_benefits,
+        'benefits_grouped_by_thesis': benefits_grouped_by_thesis,
         'legal_theses': legal_theses,
         'kb_documents': kb_documents,
         'documents_list': documents_list,
