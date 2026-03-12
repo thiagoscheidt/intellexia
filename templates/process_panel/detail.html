@@ -783,9 +783,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                       {% for thesis_group in benefits_grouped_by_thesis %}
                       <div class="accordion-item">
                         <h2 class="accordion-header" id="benefitThesisHeading{{ loop.index }}">
-                          <button class="accordion-button {% if not loop.first %}collapsed{% endif %}" type="button"
-                            data-bs-toggle="collapse" data-bs-target="#benefitThesisCollapse{{ loop.index }}"
-                            aria-expanded="{{ 'true' if loop.first else 'false' }}"
+                          <button class="accordion-button" type="button" data-bs-toggle="collapse"
+                            data-bs-target="#benefitThesisCollapse{{ loop.index }}" aria-expanded="true"
                             aria-controls="benefitThesisCollapse{{ loop.index }}">
                             <span class="d-flex align-items-center gap-2 flex-wrap">
                               <span
@@ -797,26 +796,50 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                             </span>
                           </button>
                         </h2>
-                        <div id="benefitThesisCollapse{{ loop.index }}"
-                          class="accordion-collapse collapse {% if loop.first %}show{% endif %}"
-                          aria-labelledby="benefitThesisHeading{{ loop.index }}"
-                          data-bs-parent="#benefitsByThesisAccordion">
+                        <div id="benefitThesisCollapse{{ loop.index }}" class="accordion-collapse collapse show"
+                          aria-labelledby="benefitThesisHeading{{ loop.index }}">
                           <div class="accordion-body">
-                            <div class="row g-3">
-                              {% for benefit in thesis_group.benefits %}
-                              <div class="col-xl-4 col-md-6">
-                                <div class="border rounded p-3 h-100 bg-light-subtle">
-                                  <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
-                                    <strong>{{ benefit.benefit_number or '-' }}</strong>
-                                    <span class="badge bg-light text-dark">{{ benefit.benefit_type or '-' }}</span>
-                                  </div>
-                                  <div class="small text-muted mb-1">Segurado</div>
-                                  <div class="mb-2">{{ benefit.insured_name or '-' }}</div>
-                                  <div class="small text-muted mb-1">NIT</div>
-                                  <div class="mb-0">{{ benefit.nit_number or '-' }}</div>
-                                </div>
-                              </div>
-                              {% endfor %}
+                            <div class="table-responsive">
+                              <table class="table table-hover table-striped align-middle mb-0">
+                                <thead class="table-light">
+                                  <tr>
+                                    <th>NB</th>
+                                    <th>NIT</th>
+                                    <th>Segurado</th>
+                                    <th>Tipo</th>
+                                    <th>Vigência FAP</th>
+                                    <th>Decisão (1ª Instância)</th>
+                                    <th>Decisão (2ª Instância)</th>
+                                    <th>Decisão (3ª Instância)</th>
+                                    <th class="text-end">Ações</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {% for benefit in thesis_group.benefits %}
+                                  <tr>
+                                    <td><strong>{{ benefit.benefit_number or '-' }}</strong></td>
+                                    <td>{{ benefit.nit_number or '-' }}</td>
+                                    <td>{{ benefit.insured_name or '-' }}</td>
+                                    <td>{{ benefit.benefit_type or '-' }}</td>
+                                    <td>{{ benefit.fap_vigencia_year or '-' }}</td>
+                                    <td>{{ decision_badge(benefit.first_instance_decision) }}</td>
+                                    <td>{{ decision_badge(benefit.second_instance_decision) }}</td>
+                                    <td>{{ decision_badge(benefit.third_instance_decision) }}</td>
+                                    <td class="text-end">
+                                      <button type="button" class="btn btn-outline-primary btn-sm"
+                                        data-bs-toggle="modal" data-bs-target="#editBenefitLegalThesesModal"
+                                        data-benefit-id="{{ benefit.id }}"
+                                        data-benefit-number="{{ benefit.benefit_number or '-' }}"
+                                        data-benefit-insured="{{ benefit.insured_name or '-' }}"
+                                        data-selected-theses="{% for thesis in benefit.legal_theses %}{{ thesis.id }}{% if not loop.last %},{% endif %}{% endfor %}"
+                                        title="Editar teses do benefício">
+                                        <i class="bi bi-pencil"></i>
+                                      </button>
+                                    </td>
+                                  </tr>
+                                  {% endfor %}
+                                </tbody>
+                              </table>
                             </div>
                           </div>
                         </div>
@@ -825,65 +848,6 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                     </div>
                   </div>
                   {% endif %}
-
-                  <div class="table-responsive">
-                    <table class="table table-hover table-striped align-middle">
-                      <thead class="table-light">
-                        <tr>
-                          <th>NB</th>
-                          <th>NIT</th>
-                          <th>Segurado</th>
-                          <th>Tipo</th>
-                          <th>Tese Jurídica</th>
-                          <th>Vigência FAP</th>
-                          <th>Decisão (1ª Instância)</th>
-                          <th>Decisão (2ª Instância)</th>
-                          <th>Decisão (3ª Instância)</th>
-                          <th class="text-end">Ações</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {% for benefit in process_benefits %}
-                        <tr>
-                          <td><strong>{{ benefit.benefit_number or '-' }}</strong></td>
-                          <td>{{ benefit.nit_number or '-' }}</td>
-                          <td>{{ benefit.insured_name or '-' }}</td>
-                          <td>{{ benefit.benefit_type or '-' }}</td>
-                          <td>
-                            <div class="d-flex flex-column gap-2 align-items-start">
-                              {% if benefit.legal_theses %}
-                              <div class="d-flex flex-wrap gap-1">
-                                {% for thesis in benefit.legal_theses %}
-                                <span
-                                  class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle">
-                                  {{ thesis.name }}
-                                </span>
-                                {% endfor %}
-                              </div>
-                              {% else %}
-                              <span class="text-muted small">Sem tese vinculada.</span>
-                              {% endif %}
-                            </div>
-                          </td>
-                          <td>{{ benefit.fap_vigencia_year or '-' }}</td>
-                          <td>{{ decision_badge(benefit.first_instance_decision) }}</td>
-                          <td>{{ decision_badge(benefit.second_instance_decision) }}</td>
-                          <td>{{ decision_badge(benefit.third_instance_decision) }}</td>
-                          <td class="text-end">
-                            <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal"
-                              data-bs-target="#editBenefitLegalThesesModal" data-benefit-id="{{ benefit.id }}"
-                              data-benefit-number="{{ benefit.benefit_number or '-' }}"
-                              data-benefit-insured="{{ benefit.insured_name or '-' }}"
-                              data-selected-theses="{% for thesis in benefit.legal_theses %}{{ thesis.id }}{% if not loop.last %},{% endif %}{% endfor %}"
-                              title="Editar teses do benefício">
-                              <i class="bi bi-pencil"></i>
-                            </button>
-                          </td>
-                        </tr>
-                        {% endfor %}
-                      </tbody>
-                    </table>
-                  </div>
                   {% else %}
                   <div class="text-center py-4">
                     <i class="bi bi-inbox text-muted" style="font-size: 2.5rem;"></i>
