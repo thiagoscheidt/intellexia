@@ -405,6 +405,8 @@ class AgentDocumentExtractor:
         if file_path and os.path.splitext(file_path)[1].lower() == ".pdf":
             print("Extraindo tabelas com pdfplumber...")
             table_rows = self._extract_benefits_table_rows_pdfplumber(file_path)
+            print(table_rows)
+            exit()
 
             if table_rows:
                 formatted_text = "\n".join(table_rows)
@@ -515,33 +517,161 @@ class AgentDocumentExtractor:
     @staticmethod
     def _extract_benefits_table_rows_pdfplumber(file_path: str) -> List[str]:
         """
-        Extrai tabelas procurando por padrões nas linhas de dados.
-        Normaliza quebras de linha e formata consistentemente.
+        Extrai tabelas de beneficios com PyMuPDF (principal) e pdfplumber (fallback por pagina),
+        associando cada tabela a secao detectada na pagina.
         """
         nit_re = re.compile(r"\b\d{11}\b")
         benefit_type_re = re.compile(r"\bB\d{2}\b", re.IGNORECASE)
         benefit_number_re = re.compile(r"\b\d{9,11}\b")
         year_re = re.compile(r"\b(20\d{2})\b")
+        section_re = re.compile(r"^\d+(?:\.\d+)*\b")
 
-        rows_with_headers: List[tuple] = []
+        rows_with_sections: List[tuple[str, str, List[str]]] = []
+        current_section = "NAO IDENTIFICADA"
+
+        def _clean_cell(cell: Any) -> str:
+            return str(cell).strip() if cell is not None else ""
+
+        def _format_row(row: Any, drop_empty: bool = False) -> str:
+            if not isinstance(row, (list, tuple)):
+                return ""
+            cells = [_clean_cell(cell) for cell in row]
+            if drop_empty:
+                cells = [cell for cell in cells if cell]
+            return " | ".join(cells).strip()
+
+        def _extract_tables_pymupdf(page) -> List[List[List[str]]]:
+            try:
+                finder = page.find_tables()
+                if not finder:
+                    return []
+                tables = getattr(finder, "tables", None) or list(finder)
+                extracted = []
+                for tbl in tables:
+                    try:
+                        data = tbl.extract()
+                    except Exception:
+                        data = []
+                    if data:
+                        extracted.append(data)
+                return extracted
+            except Exception:
+                return []
+
+        plumber_pdf = None
+        fitz_doc = None
+        fitz_module = None
 
         try:
-            with pdfplumber.open(file_path) as pdf:
-                for page in pdf.pages:
-                    tables = page.extract_tables() or []
-                    for table in tables:
+            try:
+                import fitz as fitz_module  # type: ignore
+            except Exception:
+                fitz_module = None
+
+            if fitz_module is not None:
+                fitz_doc = fitz_module.open(file_path)
+
+            pages_iter = enumerate(fitz_doc) if fitz_doc is not None else []
+            for page_index, page in pages_iter:
+                text_dict = {}
+                if fitz_doc is not None:
+                    try:
+                        text_dict = page.get_text("dict") or {}
+                    except Exception:
+                        text_dict = {}
+
+                line_candidates: List[tuple[str, float]] = []
+                span_sizes: List[float] = []
+
+                for block in text_dict.get("blocks", []):
+                    for line in block.get("lines", []):
+                        spans = line.get("spans", []) or []
+                        if not spans:
+                            continue
+
+                        texts: List[str] = []
+                        max_size = 0.0
+
+                        for span in spans:
+                            txt = str(span.get("text", "") or "").strip()
+                            if txt:
+                                texts.append(txt)
+
+                            size = float(span.get("size", 0) or 0)
+                            if size > 0:
+                                span_sizes.append(size)
+                            if size > max_size:
+                                max_size = size
+
+                        line_text = " ".join(texts).strip()
+                        if line_text:
+                            line_candidates.append((line_text, max_size))
+
+                default_font_size = 0.0
+                if span_sizes:
+                    ordered = sorted(span_sizes)
+                    default_font_size = ordered[len(ordered) // 2]
+
+                for line_text, line_size in line_candidates:
+                    normalized = re.sub(r"\s+", " ", line_text).strip()
+                    is_numbered_section = bool(section_re.match(normalized))
+                    is_font_section = default_font_size > 0 and line_size > (default_font_size + 0.5)
+
+                    if (is_numbered_section or is_font_section) and len(normalized) >= 4:
+                        current_section = normalized
+
+                page_tables = _extract_tables_pymupdf(page) if fitz_doc is not None else []
+
+                if not page_tables:
+                    if plumber_pdf is None:
+                        plumber_pdf = pdfplumber.open(file_path)
+                    try:
+                        page_tables = plumber_pdf.pages[page_index].extract_tables() or []
+                    except Exception:
+                        page_tables = []
+
+                for table in page_tables:
+                    if not table or len(table) < 2:
+                        continue
+
+                    header_text = _format_row(table[0], drop_empty=False)
+                    data_rows: List[str] = []
+                    seen_rows = set()
+
+                    for row in table[1:]:
+                        row_text = _format_row(row, drop_empty=True)
+                        if not row_text:
+                            continue
+
+                        has_nit = nit_re.search(row_text)
+                        has_benefit_type = benefit_type_re.search(row_text)
+                        has_benefit_number = benefit_number_re.search(row_text)
+                        has_year = year_re.search(row_text)
+
+                        if has_nit and has_benefit_type and has_benefit_number and has_year:
+                            if row_text not in seen_rows:
+                                seen_rows.add(row_text)
+                                data_rows.append(row_text)
+
+                    if data_rows:
+                        rows_with_sections.append((current_section, header_text, data_rows))
+
+            if fitz_doc is None:
+                current_section = "NAO IDENTIFICADA"
+                if plumber_pdf is None:
+                    plumber_pdf = pdfplumber.open(file_path)
+                for page in plumber_pdf.pages:
+                    page_tables = page.extract_tables() or []
+                    for table in page_tables:
                         if not table or len(table) < 2:
                             continue
 
-                        header_row = table[0]
-                        header_text = " | ".join([str(cell).strip() if cell else "" for cell in header_row])
+                        header_text = _format_row(table[0], drop_empty=False)
+                        data_rows: List[str] = []
+                        seen_rows = set()
 
-                        data_rows = []
                         for row in table[1:]:
-                            if not row:
-                                continue
-
-                            row_text = " | ".join([str(cell).strip() if cell else "" for cell in row if cell])
+                            row_text = _format_row(row, drop_empty=True)
                             if not row_text:
                                 continue
 
@@ -551,16 +681,27 @@ class AgentDocumentExtractor:
                             has_year = year_re.search(row_text)
 
                             if has_nit and has_benefit_type and has_benefit_number and has_year:
-                                if row_text not in data_rows:
+                                if row_text not in seen_rows:
+                                    seen_rows.add(row_text)
                                     data_rows.append(row_text)
 
                         if data_rows:
-                            rows_with_headers.append((header_text, data_rows))
+                            rows_with_sections.append((current_section, header_text, data_rows))
         except Exception as exc:
-            print(f"Falha ao extrair tabelas com pdfplumber: {exc}")
+            print(f"Falha ao extrair tabelas com PyMuPDF/pdfplumber: {exc}")
+        finally:
+            if fitz_doc is not None:
+                fitz_doc.close()
+            if plumber_pdf is not None:
+                plumber_pdf.close()
 
         result = []
-        for header, data_rows in rows_with_headers:
+        for section, header, data_rows in rows_with_sections:
+            safe_section = section.strip() if section else "NAO IDENTIFICADA"
+            if safe_section.upper().startswith("SECAO:") or safe_section.upper().startswith("SEÇÃO:"):
+                result.append(safe_section)
+            else:
+                result.append(f"SEÇÃO: {safe_section}")
             result.append(header)
             result.extend(data_rows)
             result.append("")

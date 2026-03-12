@@ -8,10 +8,17 @@ Uso:
 """
 
 import argparse
+import logging
 import os
 import sys
 from pathlib import Path
 from rich import print
+
+# Configurar logging para ver mensagens de debug
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
 
 PROJECT_ROOT = str(Path(__file__).resolve().parents[2])
 if PROJECT_ROOT not in sys.path:
@@ -20,6 +27,7 @@ if PROJECT_ROOT not in sys.path:
 from main import app
 from app.models import KnowledgeBase
 from app.agents.document_processing.agent_document_extractor import AgentDocumentExtractor
+from app.agents.document_processing.agent_benefit_thesis_classifier import AgentBenefitThesisClassifier
 
 
 def _build_query(knowledge_id: int | None = None, law_firm_id: int | None = None):
@@ -98,6 +106,26 @@ def main() -> int:
         print('\nResultado da extração de benefícios:')
         for key, value in benefits_result.items():
             print(f'- {key}: {value}')
+
+        # Classificação de benefícios por tese jurídica
+        # classifier = AgentBenefitThesisClassifier(
+        #     model_name=args.model_name,
+        #     model_provider=args.model_provider,
+        # )
+
+        # try:
+        #     classification_result = classifier.classify_benefits(
+        #         file_path=kb_item.file_path,
+        #         benefits=benefits_result.get('benefits', []),
+        #         law_firm_id=kb_item.law_firm_id,
+        #     )
+        # except Exception as error:
+        #     print(f'Erro ao executar AgentBenefitThesisClassifier: {error}')
+        #     return 1
+
+        # print('\nResultado da classificação de benefícios por tese jurídica:')
+        # for key, value in classification_result.items():
+        #     print(f'- {key}: {value}')
 
     return 0
 

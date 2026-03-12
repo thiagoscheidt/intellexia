@@ -36,6 +36,7 @@ from app.models import (
 )
 from app.agents.knowledge_base.knowledge_ingestion_agent import KnowledgeIngestionAgent
 from app.agents.document_processing.agent_document_extractor import AgentDocumentExtractor
+from app.agents.document_processing.agent_benefit_thesis_classifier import AgentBenefitThesisClassifier
 
 
 MAX_FILES_PER_EXECUTION = 5
@@ -304,6 +305,55 @@ def _resolve_target_process(item: KnowledgeBase, extraction_payload: dict) -> Ju
     return _find_process_by_number(item.law_firm_id, candidate_process_number)
 
 
+def _merge_benefit_classifications_into_payload(
+    benefits_payload: dict,
+    classifications_payload: dict,
+) -> dict:
+    if not isinstance(benefits_payload, dict):
+        return benefits_payload
+
+    benefits = benefits_payload.get('benefits', [])
+    if not isinstance(benefits, list):
+        return benefits_payload
+
+    classifications = []
+    if isinstance(classifications_payload, dict):
+        classifications = classifications_payload.get('classifications', [])
+
+    normalized_map: dict[str, dict] = {}
+    for item in classifications if isinstance(classifications, list) else []:
+        if not isinstance(item, dict):
+            continue
+        benefit_number = ''.join(ch for ch in str(item.get('benefit_number', '') or '') if ch.isdigit())
+        if benefit_number:
+            normalized_map[benefit_number] = item
+
+    for benefit in benefits:
+        if not isinstance(benefit, dict):
+            continue
+
+        benefit_number = ''.join(ch for ch in str(benefit.get('benefit_number', '') or '') if ch.isdigit())
+        if not benefit_number:
+            continue
+
+        cls_item = normalized_map.get(benefit_number)
+        if not cls_item:
+            continue
+
+        if cls_item.get('legal_thesis_id') not in (None, ''):
+            benefit['legal_thesis_id'] = cls_item.get('legal_thesis_id')
+
+        legal_thesis_name = str(cls_item.get('legal_thesis_name', '') or '').strip()
+        if legal_thesis_name:
+            benefit['legal_thesis_name'] = legal_thesis_name
+
+        source_sections = cls_item.get('source_sections', [])
+        if isinstance(source_sections, list) and source_sections:
+            benefit['source_sections'] = [str(s).strip() for s in source_sections if str(s).strip()]
+
+    return benefits_payload
+
+
 def _upsert_process_benefits(
     process: JudicialProcess,
     benefits_payload: dict,
@@ -330,6 +380,15 @@ def _upsert_process_benefits(
         insured_name = str(benefit.get('insured_name', '') or '').strip()
         benefit_type = str(benefit.get('benefit_type', '') or '').strip()
         fap_vigencia_year = str(benefit.get('fap_vigencia_year', '') or '').strip()
+        legal_thesis_name = str(benefit.get('legal_thesis_name', '') or '').strip()
+        legal_thesis_id = benefit.get('legal_thesis_id')
+        if legal_thesis_id not in (None, ''):
+            try:
+                legal_thesis_id = int(legal_thesis_id)
+            except (TypeError, ValueError):
+                legal_thesis_id = None
+        else:
+            legal_thesis_id = None
 
         existing_benefit = JudicialProcessBenefit.query.filter_by(
             process_id=process.id,
@@ -345,7 +404,11 @@ def _upsert_process_benefits(
                 existing_benefit.benefit_type = benefit_type
             if fap_vigencia_year and not str(existing_benefit.fap_vigencia_year or '').strip():
                 existing_benefit.fap_vigencia_year = fap_vigencia_year
-            if general_context and not str(existing_benefit.legal_thesis or '').strip():
+            if legal_thesis_id and not existing_benefit.legal_thesis_id:
+                existing_benefit.legal_thesis_id = legal_thesis_id
+            if legal_thesis_name and not str(existing_benefit.legal_thesis or '').strip():
+                existing_benefit.legal_thesis = legal_thesis_name
+            elif general_context and not str(existing_benefit.legal_thesis or '').strip():
                 existing_benefit.legal_thesis = general_context
             existing_benefit.updated_at = datetime.utcnow()
             upserted += 1
@@ -359,7 +422,8 @@ def _upsert_process_benefits(
                 insured_name=insured_name,
                 benefit_type=benefit_type,
                 fap_vigencia_year=fap_vigencia_year,
-                legal_thesis=general_context,
+                legal_thesis_id=legal_thesis_id,
+                legal_thesis=legal_thesis_name or general_context,
                 pfn_technical_note='',
                 first_instance_decision='',
                 second_instance_decision='',
@@ -472,6 +536,18 @@ def _process_single_knowledge_file(item_id: int) -> bool:
                         benefits_payload = extractor_agent.extract_benefits_from_petition(
                             file_path=item.file_path,
                         )
+
+                        classifier_agent = AgentBenefitThesisClassifier()
+                        classifications_payload = classifier_agent.classify_benefits(
+                            file_path=item.file_path,
+                            benefits=benefits_payload.get('benefits', []) if isinstance(benefits_payload, dict) else [],
+                            law_firm_id=item.law_firm_id,
+                        )
+                        benefits_payload = _merge_benefit_classifications_into_payload(
+                            benefits_payload,
+                            classifications_payload,
+                        )
+
                         inserted_or_updated = _upsert_process_benefits(target_process, benefits_payload)
                         if inserted_or_updated > 0:
                             print(
