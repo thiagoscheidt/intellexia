@@ -1,19 +1,26 @@
 #!/usr/bin/env python3
-"""Importa tribunais/varas de arquivo TXT para a tabela courts.
+"""Importa tribunais/órgãos de arquivo JSON para a tabela courts.
 
-Formato esperado (TSV):
-TRIBUNAL\tÓRGÃO JULGADOR
-TRF-4\t1ª Vara Federal de Blumenau/SC
-...
+Formato esperado (JSON):
+[
+    {
+        "tribunal": "TRF-3",
+        "secao_judiciaria": "Seção Judiciária de São Paulo",
+        "subsecao": "Mogi das Cruzes",
+        "orgao_julgador": "2ª Vara Federal"
+    }
+]
 
 Uso:
-  uv run scripts/import_courts_from_txt.py scripts/varas_unificado.txt --law-firm-id 1
-  uv run scripts/import_courts_from_txt.py scripts/varas_unificado.txt --all-law-firms
+    uv run scripts/import_courts_from_txt.py --all-law-firms
+    uv run scripts/import_courts_from_txt.py scripts/varas_unificado.json --law-firm-id 1
+    uv run scripts/import_courts_from_txt.py scripts/varas_unificado.json --all-law-firms
 """
 
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 import unicodedata
@@ -22,7 +29,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from main import app  # noqa: E402
-from app.models import Court, LawFirm, db  # noqa: E402
+from app.models import Case, Court, JudicialProcess, LawFirm, db  # noqa: E402
 
 
 def _strip_accents(value: str) -> str:
@@ -46,50 +53,26 @@ def _normalize_key(value: str) -> str:
     return value.strip()
 
 
-def _extract_city_state(orgao_julgador: str) -> tuple[str | None, str | None]:
-    texto = _clean_text(orgao_julgador)
-
-    # Ex.: "... de Blumenau/SC" ou "... de Belo Horizonte /MG"
-    match_slash = re.search(r"de\s+([A-Za-zÀ-ÿ'\-\s]+?)\s*/\s*([A-Za-z]{2})\s*$", texto, re.IGNORECASE)
-    if match_slash:
-        city = _clean_text(match_slash.group(1))
-        state = match_slash.group(2).upper()
-        return city, state
-
-    # Ex.: "... - SC" ou "... - PR"
-    match_dash = re.search(r"-\s*([A-Za-z]{2})\s*$", texto, re.IGNORECASE)
-    if match_dash:
-        state = match_dash.group(1).upper()
-        # tenta extrair cidade após o último "de"
-        match_city = re.search(r"de\s+([A-Za-zÀ-ÿ'\-\s]+?)\s*(?:-|$)", texto, re.IGNORECASE)
-        city = _clean_text(match_city.group(1)) if match_city else None
-        return city or None, state
-
-    return None, None
-
-
 def _iter_records(file_path: Path):
     with file_path.open("r", encoding="utf-8") as f:
-        header_skipped = False
-        for raw_line in f:
-            line = _clean_text(raw_line)
-            if not line:
-                continue
+        data = json.load(f)
 
-            if not header_skipped:
-                header_skipped = True
-                upper_line = _normalize_key(line)
-                if "tribunal" in upper_line and ("orgao julgador" in upper_line or "órgao julgador" in upper_line):
-                    continue
+    if not isinstance(data, list):
+        raise ValueError("JSON inválido: esperado um array de objetos.")
 
-            parts = [p.strip() for p in raw_line.replace("\u00a0", " ").strip().split("\t") if p.strip()]
-            if len(parts) < 2:
-                continue
+    for item in data:
+        if not isinstance(item, dict):
+            continue
 
-            tribunal = _clean_text(parts[0])
-            orgao = _clean_text(parts[1])
-            if tribunal and orgao:
-                yield tribunal, orgao
+        tribunal = _clean_text(str(item.get("tribunal") or ""))
+        secao_judiciaria = _clean_text(str(item.get("secao_judiciaria") or ""))
+        subsecao_judiciaria = _clean_text(
+            str(item.get("subsecao_judiciaria") or item.get("subsecao") or "")
+        )
+        orgao_julgador = _clean_text(str(item.get("orgao_julgador") or ""))
+
+        if tribunal and orgao_julgador:
+            yield tribunal, secao_judiciaria, subsecao_judiciaria, orgao_julgador
 
 
 def import_courts(file_path: Path, law_firm_ids: list[int]) -> dict[str, int]:
@@ -101,44 +84,33 @@ def import_courts(file_path: Path, law_firm_ids: list[int]) -> dict[str, int]:
     updated = 0
     skipped = 0
 
+    unlinked_cases = 0
+    unlinked_judicial_processes = 0
+
     for law_firm_id in law_firm_ids:
-        existing_courts = Court.query.filter_by(law_firm_id=law_firm_id).all()
-        existing_map: dict[tuple[str, str], Court] = {}
+        unlinked_cases += Case.query.filter_by(law_firm_id=law_firm_id).filter(Case.court_id.isnot(None)).update(
+            {Case.court_id: None},
+            synchronize_session=False,
+        )
+        unlinked_judicial_processes += (
+            JudicialProcess.query.filter_by(law_firm_id=law_firm_id)
+            .filter(JudicialProcess.court_id.isnot(None))
+            .update({JudicialProcess.court_id: None}, synchronize_session=False)
+        )
 
-        for court in existing_courts:
-            key = (_normalize_key(court.section or ""), _normalize_key(court.vara_name or ""))
-            existing_map[key] = court
+        Court.query.filter_by(law_firm_id=law_firm_id).delete(synchronize_session=False)
 
-        for tribunal, orgao in rows:
-            key = (_normalize_key(tribunal), _normalize_key(orgao))
-            city, state = _extract_city_state(orgao)
-
-            court = existing_map.get(key)
-            if court is None:
-                db.session.add(
-                    Court(
-                        law_firm_id=law_firm_id,
-                        section=tribunal,
-                        vara_name=orgao,
-                        city=city,
-                        state=state,
-                    )
+        for tribunal, secao_judiciaria, subsecao_judiciaria, orgao_julgador in rows:
+            db.session.add(
+                Court(
+                    law_firm_id=law_firm_id,
+                    tribunal=tribunal,
+                    secao_judiciaria=secao_judiciaria,
+                    subsecao_judiciaria=subsecao_judiciaria,
+                    orgao_julgador=orgao_julgador,
                 )
-                created += 1
-                continue
-
-            changed = False
-            if city and not court.city:
-                court.city = city
-                changed = True
-            if state and not court.state:
-                court.state = state
-                changed = True
-
-            if changed:
-                updated += 1
-            else:
-                skipped += 1
+            )
+            created += 1
 
     db.session.commit()
     return {
@@ -147,12 +119,20 @@ def import_courts(file_path: Path, law_firm_ids: list[int]) -> dict[str, int]:
         "skipped": skipped,
         "input_rows": len(rows),
         "law_firms": len(law_firm_ids),
+        "unlinked_cases": unlinked_cases,
+        "unlinked_judicial_processes": unlinked_judicial_processes,
     }
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Importa tribunais/varas para courts.")
-    parser.add_argument("file", type=Path, help="Caminho do arquivo TXT/TSV")
+    parser.add_argument(
+        "file",
+        nargs="?",
+        type=Path,
+        default=Path("scripts/varas_unificado.json"),
+        help="Caminho do arquivo JSON (padrão: scripts/varas_unificado.json)",
+    )
     parser.add_argument("--law-firm-id", type=int, help="Importar para um escritório específico")
     parser.add_argument(
         "--all-law-firms",
@@ -196,6 +176,8 @@ def main() -> int:
     print("Importação concluída com sucesso")
     print(f"- Linhas de entrada: {summary['input_rows']}")
     print(f"- Escritórios processados: {summary['law_firms']}")
+    print(f"- Casos desvinculados de vara: {summary['unlinked_cases']}")
+    print(f"- Processos judiciais desvinculados de vara: {summary['unlinked_judicial_processes']}")
     print(f"- Registros criados: {summary['created']}")
     print(f"- Registros atualizados: {summary['updated']}")
     print(f"- Registros já existentes (sem alteração): {summary['skipped']}")

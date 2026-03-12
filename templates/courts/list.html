@@ -45,9 +45,10 @@
                 <thead class="table-light">
                   <tr>
                     <th style="width: 60px;">ID</th>
-                    <th style="width: 200px;">Tribunal/Seção</th>
+                    <th style="width: 140px;">Tribunal</th>
+                    <th style="width: 220px;">Seção Judiciária</th>
+                    <th style="width: 180px;">Subseção</th>
                     <th>Órgão Julgador</th>
-                    <th style="width: 180px;">Cidade/UF</th>
                     <th style="width: 100px;" class="text-center">Ações</th>
                   </tr>
                 </thead>
@@ -56,22 +57,29 @@
                   <tr>
                     <td><strong>{{ court.id }}</strong></td>
                     <td>
-                      {% if court.section %}
-                      <i class="bi bi-diagram-3"></i> {{ court.section }}
+                      {% if court.tribunal %}
+                      <span class="badge bg-light text-dark">{{ court.tribunal }}</span>
                       {% else %}
                       <span class="text-muted">-</span>
                       {% endif %}
                     </td>
                     <td>
-                      {% if court.vara_name %}
-                      <i class="bi bi-bank text-warning"></i> <strong>{{ court.vara_name }}</strong>
+                      {% if court.secao_judiciaria %}
+                      <i class="bi bi-diagram-3 me-1"></i>{{ court.secao_judiciaria }}
                       {% else %}
                       <span class="text-muted">-</span>
                       {% endif %}
                     </td>
                     <td>
-                      {% if court.city or court.state %}
-                      <i class="bi bi-geo-alt"></i> {{ court.city or '-' }}/{{ court.state or '-' }}
+                      {% if court.subsecao_judiciaria %}
+                      {{ court.subsecao_judiciaria }}
+                      {% else %}
+                      <span class="text-muted">-</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if court.orgao_julgador %}
+                      <i class="bi bi-bank text-warning me-1"></i><strong>{{ court.orgao_julgador }}</strong>
                       {% else %}
                       <span class="text-muted">-</span>
                       {% endif %}
@@ -124,7 +132,7 @@
       "pageLength": 25,
       "order": [[0, "desc"]],
       "columnDefs": [
-        { "orderable": false, "targets": 4 }
+        { "orderable": false, "targets": 5 }
       ]
     });
   });

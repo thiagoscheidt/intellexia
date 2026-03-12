@@ -1,0 +1,176 @@
+[
+  {
+    "tribunal": "TRF-2",
+    "secao_judiciaria": "Seção Judiciária do Rio de Janeiro",
+    "subsecao": "Rio de Janeiro",
+    "orgao_julgador": "29ª Vara Federal"
+  },
+  {
+    "tribunal": "TRF-3",
+    "secao_judiciaria": "Seção Judiciária de São Paulo",
+    "subsecao": "São Paulo",
+    "orgao_julgador": "5ª Vara Cível Federal"
+  },
+  {
+    "tribunal": "TRF-4",
+    "secao_judiciaria": "Seção Judiciária de Santa Catarina",
+    "subsecao": "Blumenau",
+    "orgao_julgador": "1ª Vara Federal"
+  },
+  {
+    "tribunal": "TRF-3",
+    "secao_judiciaria": "Seção Judiciária de São Paulo",
+    "subsecao": "São Paulo",
+    "orgao_julgador": "12ª Vara Federal"
+  },
+  {
+    "tribunal": "TRF-4",
+    "secao_judiciaria": "Seção Judiciária de Santa Catarina",
+    "subsecao": "Lages",
+    "orgao_julgador": "1ª Vara Federal"
+  },
+  {
+    "tribunal": "TRF-3",
+    "secao_judiciaria": "Seção Judiciária de São Paulo",
+    "subsecao": "Campinas",
+    "orgao_julgador": "8ª Vara Federal"
+  },
+  {
+    "tribunal": "TRF-4",
+    "secao_judiciaria": "Seção Judiciária do Rio Grande do Sul",
+    "subsecao": "Santo Ângelo",
+    "orgao_julgador": "1ª Vara Federal"
+  },
+  {
+    "tribunal": "TRF-4",
+    "secao_judiciaria": "Seção Judiciária do Rio Grande do Sul",
+    "subsecao": "Caxias do Sul",
+    "orgao_julgador": "3ª Vara Federal"
+  },
+  {
+    "tribunal": "TRF-4",
+    "secao_judiciaria": "Seção Judiciária de Santa Catarina",
+    "subsecao": "Blumenau",
+    "orgao_julgador": "2ª Vara Federal"
+  },
+  {
+    "tribunal": "TRF-2",
+    "secao_judiciaria": "Seção Judiciária do Rio de Janeiro",
+    "subsecao": "Rio de Janeiro",
+    "orgao_julgador": "8ª Vara Federal"
+  },
+  {
+    "tribunal": "TRF-4",
+    "secao_judiciaria": "Seção Judiciária de Santa Catarina",
+    "subsecao": "Florianópolis",
+    "orgao_julgador": "2ª Vara Federal"
+  },
+  {
+    "tribunal": "TRF-3",
+    "secao_judiciaria": "Seção Judiciária de São Paulo",
+    "subsecao": "São Paulo",
+    "orgao_julgador": "6ª Vara Federal"
+  },
+  {
+    "tribunal": "TRF-4",
+    "secao_judiciaria": "Seção Judiciária de Santa Catarina",
+    "subsecao": "Itajaí",
+    "orgao_julgador": "2ª Vara Federal"
+  },
+  {
+    "tribunal": "TRF-4",
+    "secao_judiciaria": "Seção Judiciária do Paraná",
+    "subsecao": "Foz do Iguaçu",
+    "orgao_julgador": "2ª Vara Federal"
+  },
+  {
+    "tribunal": "TRF-4",
+    "secao_judiciaria": "Seção Judiciária de Santa Catarina",
+    "subsecao": "Florianópolis",
+    "orgao_julgador": "3ª Vara Federal"
+  },
+  {
+    "tribunal": "TRF-4",
+    "secao_judiciaria": "Seção Judiciária do Paraná",
+    "subsecao": "Curitiba",
+    "orgao_julgador": "4ª Vara Federal"
+  },
+  {
+    "tribunal": "TRF-3",
+    "secao_judiciaria": null,
+    "subsecao": "Brasília",
+    "orgao_julgador": "Supremo Tribunal Federal"
+  },
+  {
+    "tribunal": "TRF-4",
+    "secao_judiciaria": "Seção Judiciária de Santa Catarina",
+    "subsecao": "Criciúma",
+    "orgao_julgador": "1ª Vara Federal"
+  },
+  {
+    "tribunal": "TRF-4",
+    "secao_judiciaria": "Seção Judiciária de Santa Catarina",
+    "subsecao": "Florianópolis",
+    "orgao_julgador": "9ª Vara Federal"
+  },
+  {
+    "tribunal": "TRF-3",
+    "secao_judiciaria": "Seção Judiciária de São Paulo",
+    "subsecao": "São Paulo",
+    "orgao_julgador": "7ª Vara Federal"
+  },
+  {
+    "tribunal": "TRF-1",
+    "secao_judiciaria": "Seção Judiciária da Bahia",
+    "subsecao": "Salvador",
+    "orgao_julgador": "16ª Vara Federal"
+  },
+  {
+    "tribunal": "TRF-4",
+    "secao_judiciaria": "Seção Judiciária de Santa Catarina",
+    "subsecao": "Florianópolis",
+    "orgao_julgador": "4ª Vara Federal"
+  },
+  {
+    "tribunal": "TRF-4",
+    "secao_judiciaria": "Seção Judiciária de Santa Catarina",
+    "subsecao": "Jaraguá do Sul",
+    "orgao_julgador": "1ª Vara Federal"
+  },
+  {
+    "tribunal": "TRF-1",
+    "secao_judiciaria": "Seção Judiciária do Ceará",
+    "subsecao": "Fortaleza",
+    "orgao_julgador": "3ª Vara Federal"
+  },
+  {
+    "tribunal": "TRF-1",
+    "secao_judiciaria": "Seção Judiciária de Rondônia",
+    "subsecao": "Porto Velho",
+    "orgao_julgador": "2ª Vara Federal"
+  },
+  {
+    "tribunal": "TRF-2",
+    "secao_judiciaria": "Seção Judiciária do Rio de Janeiro",
+    "subsecao": "Rio de Janeiro",
+    "orgao_julgador": "30ª Vara Federal"
+  },
+  {
+    "tribunal": "TRF-4",
+    "secao_judiciaria": "Seção Judiciária do Rio Grande do Sul",
+    "subsecao": "Porto Alegre",
+    "orgao_julgador": "13ª Vara Federal"
+  },
+  {
+    "tribunal": "STJ",
+    "secao_judiciaria": null,
+    "subsecao": "Brasília",
+    "orgao_julgador": "Superior Tribunal de Justiça"
+  },
+  {
+    "tribunal": "STF",
+    "secao_judiciaria": null,
+    "subsecao": "Brasília",
+    "orgao_julgador": "Supremo Tribunal Federal"
+  }
+]

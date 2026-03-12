@@ -98,10 +98,20 @@ subtitle=hero_subtitle|default(''), icon='bi bi-file-earmark-plus') %}
                                     <div class="row">
                                         <div class="col-md-6">
                                             <div class="mb-3">
-                                                <label for="tribunal" class="form-label">Tribunal</label>
-                                                <input type="text" class="form-control" id="tribunal" name="tribunal"
-                                                    placeholder="Ex: TRT 2ª Região"
-                                                    value="{{ process.tribunal if process else '' }}">
+                                                <label for="court_id" class="form-label">Tribunal</label>
+                                                <select class="form-select" id="court_id" name="court_id">
+                                                    <option value="">-- Não informado --</option>
+                                                    {% for court in courts %}
+                                                    <option value="{{ court.id }}" {% if process and
+                                                        (process.court_id==court.id or (not process.court_id and
+                                                        process.tribunal==court.orgao_julgador)) %}selected{% endif %}>
+                                                        {{ court.tribunal or '-' }} | {{ court.secao_judiciaria or '-'
+                                                        }}
+                                                        | {{ court.subsecao_judiciaria or '-' }} | {{
+                                                        court.orgao_julgador or '-' }}
+                                                    </option>
+                                                    {% endfor %}
+                                                </select>
                                             </div>
                                         </div>
                                         <div class="col-md-6">

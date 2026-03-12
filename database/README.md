@@ -17,6 +17,8 @@ database/
 ├── add_judicial_process_notes_table.py # Cria tabela de notas/comentários dos processos
 ├── add_judicial_process_benefits_table.py # Cria tabela de benefícios vinculados ao processo judicial
 ├── add_judicial_process_benefit_legal_theses_table.py # Cria tabela relacional entre benefícios judiciais e teses jurídicas
+├── add_court_id_to_judicial_processes.py # Adiciona court_id em judicial_processes e migra tribunal para tabela courts
+├── refactor_courts_structure_fields.py # Refatora estrutura da tabela courts para tribunal/secao/subsecao/orgao_julgador
 ├── remove_unique_process_number_from_judicial_processes.py # Remove unicidade global de process_number em judicial_processes
 ├── add_judicial_parties_to_processes.py # Cria tabela de polos passivos e colunas de partes em judicial_processes
 └── [futuros scripts de migração]
@@ -68,6 +70,16 @@ python database/add_ai_document_summaries_table.py
 ### Adicionar Relação Benefício x Tese Jurídica
 ```bash
 python database/add_judicial_process_benefit_legal_theses_table.py
+```
+
+### Vincular Tribunal ao Cadastro de Court
+```bash
+python database/add_court_id_to_judicial_processes.py
+```
+
+### Refatorar Estrutura da Tabela Courts
+```bash
+python database/refactor_courts_structure_fields.py
 ```
 
 ### Recriar Banco (⚠️ CUIDADO)

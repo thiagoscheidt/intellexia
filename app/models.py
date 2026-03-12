@@ -189,8 +189,10 @@ class Court(db.Model):
     
     id = db.Column(db.Integer, primary_key=True)
     law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
-    section = db.Column(db.String(255))  # Seção judiciária
-    vara_name = db.Column(db.String(255))  # Nome da vara
+    tribunal = db.Column(db.String(255))
+    secao_judiciaria = db.Column(db.String(255))
+    subsecao_judiciaria = db.Column(db.String(255))
+    orgao_julgador = db.Column(db.String(255))
     city = db.Column(db.String(150))
     state = db.Column(db.String(50))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
@@ -199,9 +201,13 @@ class Court(db.Model):
     # Relacionamentos
     law_firm = db.relationship('LawFirm')
     cases = db.relationship('Case', back_populates='court')
+
+    # Compatibilidade legada com código que ainda usa os nomes antigos.
+    section = db.synonym('secao_judiciaria')
+    vara_name = db.synonym('orgao_julgador')
     
     def __repr__(self):
-        return f'<Court {self.vara_name}>'
+        return f'<Court {self.orgao_julgador}>'
 
 
 class Lawyer(db.Model):
@@ -989,6 +995,7 @@ class JudicialProcess(db.Model):
     law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
     case_id = db.Column(db.Integer, db.ForeignKey('cases.id'), index=True)  # Opcional - pode não ter caso criado
+    court_id = db.Column(db.Integer, db.ForeignKey('courts.id'), index=True)
     plaintiff_client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), index=True)
     defendant_id = db.Column(db.Integer, db.ForeignKey('judicial_defendants.id'), index=True)
     
@@ -1022,6 +1029,7 @@ class JudicialProcess(db.Model):
     law_firm = db.relationship('LawFirm')
     user = db.relationship('User')
     case = db.relationship('Case', backref='judicial_processes')
+    court = db.relationship('Court')
     plaintiff_client = db.relationship('Client', back_populates='judicial_processes_as_plaintiff')
     defendant = db.relationship('JudicialDefendant', back_populates='judicial_processes')
     notes = db.relationship('JudicialProcessNote', back_populates='process', cascade='all, delete-orphan')
@@ -1037,6 +1045,12 @@ class JudicialProcess(db.Model):
                                        primaryjoin='JudicialProcess.process_number==foreign(JudicialSentenceAnalysis.process_number)',
                                        foreign_keys='[JudicialSentenceAnalysis.process_number]',
                                        viewonly=True)
+
+    @property
+    def tribunal_name(self):
+        if self.court and self.court.orgao_julgador:
+            return self.court.orgao_julgador
+        return self.tribunal
     
     def __repr__(self):
         return f'<JudicialProcess {self.process_number}>'

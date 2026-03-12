@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, session, jsonify, redirect, url_for, flash
 from app.models import (
     db, JudicialProcess, JudicialSentenceAnalysis, JudicialAppeal, 
-    KnowledgeBase, Case, User, JudicialPhase, JudicialDocumentType, JudicialEvent,
+    KnowledgeBase, Case, User, Court, JudicialPhase, JudicialDocumentType, JudicialEvent,
     JudicialProcessNote, Client, JudicialDefendant, JudicialDocument, JudicialProcessBenefit,
     JudicialProcessPhaseHistory, JudicialLegalThesis
 )
@@ -161,7 +161,7 @@ def _register_phase_history(
             recorded_at=datetime.utcnow(),
             source_event_id=source_event_id,
             judge_name_snapshot=process.judge_name,
-            tribunal_snapshot=process.tribunal,
+            tribunal_snapshot=process.tribunal_name,
             section_snapshot=process.section,
             origin_unit_snapshot=process.origin_unit,
             location_text=(location_text or '').strip() or None,
@@ -866,6 +866,7 @@ def list_processes():
     search_query = request.args.get('q', '').strip()
     status_filter = request.args.get('status', '')
     client_filter = request.args.get('client_id', type=int)
+    legal_thesis_filter = request.args.get('legal_thesis_id', type=int)
     view_mode = request.args.get('view', 'table').strip().lower()
     if view_mode not in {'table', 'kanban'}:
         view_mode = 'table'
@@ -875,11 +876,16 @@ def list_processes():
     
     # Filtro por busca
     if search_query:
+        query = query.outerjoin(Court, JudicialProcess.court_id == Court.id)
         query = query.filter(
             or_(
                 JudicialProcess.process_number.ilike(f'%{search_query}%'),
                 JudicialProcess.title.ilike(f'%{search_query}%'),
-                JudicialProcess.tribunal.ilike(f'%{search_query}%')
+                JudicialProcess.tribunal.ilike(f'%{search_query}%'),
+                Court.orgao_julgador.ilike(f'%{search_query}%'),
+                Court.tribunal.ilike(f'%{search_query}%'),
+                Court.secao_judiciaria.ilike(f'%{search_query}%'),
+                Court.subsecao_judiciaria.ilike(f'%{search_query}%')
             )
         )
     
@@ -890,6 +896,16 @@ def list_processes():
     # Filtro por cliente (polo ativo)
     if client_filter:
         query = query.filter(JudicialProcess.plaintiff_client_id == client_filter)
+
+    # Filtro por tese jurídica vinculada a benefícios do processo
+    if legal_thesis_filter:
+        query = query.filter(
+            JudicialProcess.benefits.any(
+                JudicialProcessBenefit.legal_theses.any(
+                    JudicialLegalThesis.id == legal_thesis_filter
+                )
+            )
+        )
     
     ordered_query = query.order_by(JudicialProcess.created_at.desc())
 
@@ -908,6 +924,7 @@ def list_processes():
     }
 
     process_phases = {}
+    process_legal_theses = {}
     process_ids = [process.id for process in processes_list]
     if process_ids:
         latest_events = JudicialEvent.query.filter(
@@ -922,8 +939,31 @@ def list_processes():
             if event.process_id not in process_phases:
                 process_phases[event.process_id] = event.phase
 
+        benefits_with_theses = JudicialProcessBenefit.query.options(
+            selectinload(JudicialProcessBenefit.legal_theses)
+        ).filter(
+            JudicialProcessBenefit.process_id.in_(process_ids)
+        ).all()
+
+        thesis_names_by_process = {process_id: set() for process_id in process_ids}
+        for benefit in benefits_with_theses:
+            if not benefit.legal_theses:
+                continue
+            for thesis in benefit.legal_theses:
+                thesis_names_by_process.setdefault(benefit.process_id, set()).add(thesis.name)
+
+        process_legal_theses = {
+            process_id: sorted(thesis_names)
+            for process_id, thesis_names in thesis_names_by_process.items()
+            if thesis_names
+        }
+
     if view_mode == 'kanban':
         clients = Client.query.filter_by(law_firm_id=law_firm_id).order_by(Client.name.asc()).all()
+        legal_theses = JudicialLegalThesis.query.filter_by(
+            law_firm_id=law_firm_id,
+            is_active=True,
+        ).order_by(JudicialLegalThesis.name.asc()).all()
 
         configured_phases = JudicialPhase.query.filter_by(
             law_firm_id=law_firm_id
@@ -962,12 +1002,20 @@ def list_processes():
             search_query=search_query,
             status_filter=status_filter,
             client_filter=client_filter,
+            legal_thesis_filter=legal_thesis_filter,
             clients=clients,
+            legal_theses=legal_theses,
             stats=stats,
             kanban_columns=kanban_columns,
             process_phases=process_phases,
+            process_legal_theses=process_legal_theses,
             current_view=view_mode,
         )
+
+    legal_theses = JudicialLegalThesis.query.filter_by(
+        law_firm_id=law_firm_id,
+        is_active=True,
+    ).order_by(JudicialLegalThesis.name.asc()).all()
 
     return render_template(
         'process_panel/list.html',
@@ -975,8 +1023,11 @@ def list_processes():
         search_query=search_query,
         status_filter=status_filter,
         client_filter=client_filter,
+        legal_thesis_filter=legal_thesis_filter,
+        legal_theses=legal_theses,
         stats=stats,
         process_phases=process_phases,
+        process_legal_theses=process_legal_theses,
         judicial_phases_labels=JUDICIAL_PHASES,
         current_view=view_mode,
     )
@@ -1684,6 +1735,7 @@ def edit(process_id):
         selected_phase_key = request.form.get('current_phase', '').strip()
         plaintiff_client_id = request.form.get('plaintiff_client_id', type=int)
         defendant_id = request.form.get('defendant_id', type=int)
+        court_id = request.form.get('court_id', type=int)
 
         if selected_phase_key and selected_phase_key not in valid_phase_keys:
             flash('Fase selecionada é inválida.', 'danger')
@@ -1707,6 +1759,16 @@ def edit(process_id):
                 flash('Polo passivo (réu) inválido.', 'danger')
                 return redirect(url_for('process_panel.edit', process_id=process.id))
 
+        selected_court = None
+        if court_id:
+            selected_court = Court.query.filter_by(
+                id=court_id,
+                law_firm_id=law_firm_id,
+            ).first()
+            if not selected_court:
+                flash('Tribunal inválido.', 'danger')
+                return redirect(url_for('process_panel.edit', process_id=process.id))
+
         # Permitir substituição de identificador temporário pelo número real
         if process.process_number and process.process_number.startswith('TEMP-'):
             new_number = request.form.get('process_number', '').strip().upper()
@@ -1725,7 +1787,8 @@ def edit(process_id):
         process.title = request.form.get('title', '').strip() or process.title
         process.description = request.form.get('description', '').strip()
         process.judge_name = request.form.get('judge_name', '').strip()
-        process.tribunal = request.form.get('tribunal', '').strip()
+        process.court_id = court_id or None
+        process.tribunal = selected_court.orgao_julgador if selected_court else None
         process.section = request.form.get('section', '').strip()
         process.origin_unit = request.form.get('origin_unit', '').strip()
         process.status = request.form.get('status', process.status)
@@ -1773,6 +1836,7 @@ def edit(process_id):
             flash(f'Erro ao atualizar: {str(e)}', 'danger')
     
     cases = Case.query.filter_by(law_firm_id=law_firm_id).order_by(Case.title).all()
+    courts = Court.query.filter_by(law_firm_id=law_firm_id).order_by(Court.orgao_julgador.asc()).all()
     clients = Client.query.filter_by(law_firm_id=law_firm_id).order_by(Client.name.asc()).all()
     defendants = JudicialDefendant.query.filter_by(
         law_firm_id=law_firm_id
@@ -1782,6 +1846,7 @@ def edit(process_id):
         'process_panel/form.html',
         process=process,
         cases=cases,
+        courts=courts,
         clients=clients,
         defendants=defendants,
         action='editar',

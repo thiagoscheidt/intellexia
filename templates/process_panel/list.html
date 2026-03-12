@@ -94,7 +94,7 @@
             <div class="card-header">
               <h3 class="card-title mb-0"><i class="bi bi-list-ul"></i> Lista de Processos</h3>
               <div class="card-tools">
-                <a href="{{ url_for('process_panel.list_processes', view='kanban', q=search_query, status=status_filter) }}"
+                <a href="{{ url_for('process_panel.list_processes', view='kanban', q=search_query, status=status_filter, legal_thesis_id=legal_thesis_filter) }}"
                   class="btn btn-outline-dark btn-sm me-1">
                   <i class="bi bi-kanban"></i> Kanban
                 </a>
@@ -120,50 +120,57 @@
               {% endwith %}
 
               <!-- Filtros -->
-              <div class="card card-light mb-4">
-                <div class="card-header">
-                  <h5 class="card-title mb-0">
-                    <i class="bi bi-funnel"></i> Filtros
-                    <button class="btn btn-sm btn-outline-secondary ms-2" type="button" data-bs-toggle="collapse"
-                      data-bs-target="#filtersCollapse" aria-expanded="false">
-                      <i class="bi bi-chevron-down"></i>
-                    </button>
-                  </h5>
+              <div class="border rounded-4 p-3 p-md-4 mb-4 bg-light-subtle">
+                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                  <h5 class="mb-0"><i class="bi bi-funnel me-2"></i>Filtros</h5>
+                  <small class="text-muted">Refine a busca por status e tese jurídica</small>
                 </div>
-                <div class="collapse" id="filtersCollapse">
-                  <div class="card-body">
-                    <form method="get" class="row g-3">
-                      <input type="hidden" name="view" value="{{ current_view or 'table' }}">
-                      <div class="col-md-6">
-                        <label for="search_query" class="form-label">
-                          <i class="bi bi-search"></i> Buscar
-                        </label>
-                        <input type="text" id="search_query" name="q" class="form-control"
-                          placeholder="Número, título ou tribunal..." value="{{ search_query }}">
-                      </div>
-                      <div class="col-md-3">
-                        <label for="status_filter" class="form-label">
-                          <i class="bi bi-flag"></i> Status
-                        </label>
-                        <select name="status" id="status_filter" class="form-select">
-                          <option value="">Todos os Status</option>
-                          <option value="ativo" {% if status_filter=='ativo' %}selected{% endif %}>Ativo</option>
-                          <option value="suspenso" {% if status_filter=='suspenso' %}selected{% endif %}>Suspenso
-                          </option>
-                          <option value="encerrado" {% if status_filter=='encerrado' %}selected{% endif %}>Encerrado
-                          </option>
-                          <option value="aguardando" {% if status_filter=='aguardando' %}selected{% endif %}>Aguardando
-                          </option>
-                        </select>
-                      </div>
-                      <div class="col-md-3 d-flex align-items-end">
-                        <button type="submit" class="btn btn-primary w-100">
-                          <i class="bi bi-search"></i> Filtrar
-                        </button>
-                      </div>
-                    </form>
+                <form method="get" class="row g-3 align-items-end">
+                  <input type="hidden" name="view" value="{{ current_view or 'table' }}">
+                  <div class="col-lg-5">
+                    <label for="search_query" class="form-label mb-1">
+                      <i class="bi bi-search"></i> Buscar
+                    </label>
+                    <input type="text" id="search_query" name="q" class="form-control"
+                      placeholder="Número, título ou tribunal..." value="{{ search_query }}">
                   </div>
-                </div>
+                  <div class="col-lg-2 col-md-4">
+                    <label for="status_filter" class="form-label mb-1">
+                      <i class="bi bi-flag"></i> Status
+                    </label>
+                    <select name="status" id="status_filter" class="form-select">
+                      <option value="">Todos</option>
+                      <option value="ativo" {% if status_filter=='ativo' %}selected{% endif %}>Ativo</option>
+                      <option value="suspenso" {% if status_filter=='suspenso' %}selected{% endif %}>Suspenso</option>
+                      <option value="encerrado" {% if status_filter=='encerrado' %}selected{% endif %}>Encerrado
+                      </option>
+                      <option value="aguardando" {% if status_filter=='aguardando' %}selected{% endif %}>Aguardando
+                      </option>
+                    </select>
+                  </div>
+                  <div class="col-lg-3 col-md-4">
+                    <label for="legal_thesis_filter" class="form-label mb-1">
+                      <i class="bi bi-bookmark-star"></i> Tese Jurídica
+                    </label>
+                    <select name="legal_thesis_id" id="legal_thesis_filter" class="form-select">
+                      <option value="">Todas</option>
+                      {% for thesis in legal_theses %}
+                      <option value="{{ thesis.id }}" {% if legal_thesis_filter==thesis.id %}selected{% endif %}>
+                        {{ thesis.name }}
+                      </option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                  <div class="col-lg-2 col-md-4 d-flex gap-2">
+                    <button type="submit" class="btn btn-primary flex-grow-1">
+                      <i class="bi bi-search"></i>
+                    </button>
+                    <a href="{{ url_for('process_panel.list_processes', view=current_view or 'table') }}"
+                      class="btn btn-outline-secondary" title="Limpar filtros">
+                      <i class="bi bi-x-circle"></i>
+                    </a>
+                  </div>
+                </form>
               </div>
 
               <!-- Tabela de Processos -->
@@ -175,6 +182,7 @@
                       <th><i class="bi bi-hash"></i> Número</th>
                       <th><i class="bi bi-card-text"></i> Título</th>
                       <th><i class="bi bi-building"></i> Tribunal</th>
+                      <th><i class="bi bi-bookmark-star"></i> Teses Jurídicas</th>
                       <th><i class="bi bi-flag"></i> Status</th>
                       <th><i class="bi bi-signpost"></i> Fase</th>
                       <th><i class="bi bi-calendar"></i> Criado em</th>
@@ -212,8 +220,22 @@
                         </div>
                       </td>
                       <td>
-                        {% if process.tribunal %}
-                        <span class="badge bg-light text-dark">{{ process.tribunal }}</span>
+                        {% if process.tribunal_name %}
+                        <span class="badge bg-light text-dark">{{ process.tribunal_name }}</span>
+                        {% else %}
+                        <span class="text-muted">-</span>
+                        {% endif %}
+                      </td>
+                      <td>
+                        {% set theses = process_legal_theses.get(process.id, []) %}
+                        {% if theses %}
+                        <div class="d-flex flex-wrap gap-1">
+                          {% for thesis_name in theses %}
+                          <span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle">
+                            {{ thesis_name }}
+                          </span>
+                          {% endfor %}
+                        </div>
                         {% else %}
                         <span class="text-muted">-</span>
                         {% endif %}
@@ -275,13 +297,13 @@
                   {% if processes.has_prev %}
                   <li class="page-item">
                     <a class="page-link"
-                      href="{{ url_for('process_panel.list_processes', page=1, q=search_query, status=status_filter) }}">
+                      href="{{ url_for('process_panel.list_processes', page=1, q=search_query, status=status_filter, legal_thesis_id=legal_thesis_filter) }}">
                       <i class="bi bi-chevron-bar-left"></i>
                     </a>
                   </li>
                   <li class="page-item">
                     <a class="page-link"
-                      href="{{ url_for('process_panel.list_processes', page=processes.prev_num, q=search_query, status=status_filter) }}">
+                      href="{{ url_for('process_panel.list_processes', page=processes.prev_num, q=search_query, status=status_filter, legal_thesis_id=legal_thesis_filter) }}">
                       Anterior
                     </a>
                   </li>
@@ -296,7 +318,7 @@
                   {% else %}
                   <li class="page-item">
                     <a class="page-link"
-                      href="{{ url_for('process_panel.list_processes', page=page_num, q=search_query, status=status_filter) }}">
+                      href="{{ url_for('process_panel.list_processes', page=page_num, q=search_query, status=status_filter, legal_thesis_id=legal_thesis_filter) }}">
                       {{ page_num }}
                     </a>
                   </li>
@@ -311,13 +333,13 @@
                   {% if processes.has_next %}
                   <li class="page-item">
                     <a class="page-link"
-                      href="{{ url_for('process_panel.list_processes', page=processes.next_num, q=search_query, status=status_filter) }}">
+                      href="{{ url_for('process_panel.list_processes', page=processes.next_num, q=search_query, status=status_filter, legal_thesis_id=legal_thesis_filter) }}">
                       Próx ima
                     </a>
                   </li>
                   <li class="page-item">
                     <a class="page-link"
-                      href="{{ url_for('process_panel.list_processes', page=processes.pages, q=search_query, status=status_filter) }}">
+                      href="{{ url_for('process_panel.list_processes', page=processes.pages, q=search_query, status=status_filter, legal_thesis_id=legal_thesis_filter) }}">
                       <i class="bi bi-chevron-bar-right"></i>
                     </a>
                   </li>

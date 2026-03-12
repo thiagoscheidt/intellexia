@@ -181,7 +181,7 @@
             <div class="card-header">
                 <h3 class="card-title mb-0"><i class="bi bi-kanban"></i> Kanban por Fase</h3>
                 <div class="card-tools">
-                    <a href="{{ url_for('process_panel.list_processes', view='table', q=search_query, status=status_filter, client_id=client_filter) }}"
+                    <a href="{{ url_for('process_panel.list_processes', view='table', q=search_query, status=status_filter, client_id=client_filter, legal_thesis_id=legal_thesis_filter) }}"
                         class="btn btn-outline-dark btn-sm me-1">
                         <i class="bi bi-table"></i> Tabela
                     </a>
@@ -195,41 +195,66 @@
                 </div>
             </div>
             <div class="card-body">
-                <form method="get" class="row g-3">
-                    <input type="hidden" name="view" value="kanban">
-                    <div class="col-md-5">
-                        <label for="search_query" class="form-label"><i class="bi bi-search"></i> Buscar</label>
-                        <input type="text" id="search_query" name="q" class="form-control"
-                            placeholder="Número, título ou tribunal..." value="{{ search_query }}">
+                <div class="border rounded-4 p-3 p-md-4 bg-light-subtle">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                        <h5 class="mb-0"><i class="bi bi-funnel me-2"></i>Filtros</h5>
+                        <small class="text-muted">Refine o Kanban por busca, status, cliente e tese</small>
                     </div>
-                    <div class="col-md-3">
-                        <label for="status_filter" class="form-label"><i class="bi bi-flag"></i> Status</label>
-                        <select name="status" id="status_filter" class="form-select">
-                            <option value="">Todos os Status</option>
-                            <option value="ativo" {% if status_filter=='ativo' %}selected{% endif %}>Ativo</option>
-                            <option value="suspenso" {% if status_filter=='suspenso' %}selected{% endif %}>Suspenso
-                            </option>
-                            <option value="encerrado" {% if status_filter=='encerrado' %}selected{% endif %}>Encerrado
-                            </option>
-                            <option value="aguardando" {% if status_filter=='aguardando' %}selected{% endif %}>
-                                Aguardando</option>
-                        </select>
-                    </div>
-                    <div class="col-md-2">
-                        <label for="client_filter" class="form-label"><i class="bi bi-people"></i> Cliente</label>
-                        <select name="client_id" id="client_filter" class="form-select">
-                            <option value="">Todos</option>
-                            {% for client in clients %}
-                            <option value="{{ client.id }}" {% if client_filter==client.id %}selected{% endif %}>{{
-                                client.name }}</option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-md-2 d-flex align-items-end">
-                        <button type="submit" class="btn btn-primary btn-sm w-100"><i class="bi bi-search"></i>
-                            Filtrar</button>
-                    </div>
-                </form>
+                    <form method="get" class="row g-3 align-items-end">
+                        <input type="hidden" name="view" value="kanban">
+                        <div class="col-lg-4">
+                            <label for="search_query" class="form-label mb-1"><i class="bi bi-search"></i>
+                                Buscar</label>
+                            <input type="text" id="search_query" name="q" class="form-control"
+                                placeholder="Número, título ou tribunal..." value="{{ search_query }}">
+                        </div>
+                        <div class="col-lg-2 col-md-3">
+                            <label for="status_filter" class="form-label mb-1"><i class="bi bi-flag"></i> Status</label>
+                            <select name="status" id="status_filter" class="form-select">
+                                <option value="">Todos</option>
+                                <option value="ativo" {% if status_filter=='ativo' %}selected{% endif %}>Ativo</option>
+                                <option value="suspenso" {% if status_filter=='suspenso' %}selected{% endif %}>Suspenso
+                                </option>
+                                <option value="encerrado" {% if status_filter=='encerrado' %}selected{% endif %}>
+                                    Encerrado</option>
+                                <option value="aguardando" {% if status_filter=='aguardando' %}selected{% endif %}>
+                                    Aguardando</option>
+                            </select>
+                        </div>
+                        <div class="col-lg-2 col-md-3">
+                            <label for="client_filter" class="form-label mb-1"><i class="bi bi-people"></i>
+                                Cliente</label>
+                            <select name="client_id" id="client_filter" class="form-select">
+                                <option value="">Todos</option>
+                                {% for client in clients %}
+                                <option value="{{ client.id }}" {% if client_filter==client.id %}selected{% endif %}>{{
+                                    client.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-lg-2 col-md-3">
+                            <label for="legal_thesis_filter" class="form-label mb-1"><i class="bi bi-bookmark-star"></i>
+                                Tese</label>
+                            <select name="legal_thesis_id" id="legal_thesis_filter" class="form-select">
+                                <option value="">Todas</option>
+                                {% for thesis in legal_theses %}
+                                <option value="{{ thesis.id }}" {% if legal_thesis_filter==thesis.id %}selected{% endif
+                                    %}>{{
+                                    thesis.name }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-lg-2 col-md-3 d-flex gap-2">
+                            <button type="submit" class="btn btn-primary flex-grow-1" title="Filtrar">
+                                <i class="bi bi-search"></i>
+                            </button>
+                            <a href="{{ url_for('process_panel.list_processes', view='kanban') }}"
+                                class="btn btn-outline-secondary" title="Limpar filtros">
+                                <i class="bi bi-x-circle"></i>
+                            </a>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
 
@@ -289,8 +314,9 @@
                                     <div>Passivo: {{ process.defendant.name if process.defendant else 'Não informado' }}
                                     </div>
                                 </div>
-                                {% if process.tribunal %}
-                                <div class="mb-2"><span class="badge bg-light text-dark">{{ process.tribunal }}</span>
+                                {% if process.tribunal_name %}
+                                <div class="mb-2"><span class="badge bg-light text-dark">{{ process.tribunal_name
+                                        }}</span>
                                 </div>
                                 {% endif %}
                                 <div class="d-flex justify-content-between align-items-center mb-2 kanban-process-meta">
