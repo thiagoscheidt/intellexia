@@ -4,7 +4,7 @@ import io
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List
+from typing import Any, List
 
 from markitdown import MarkItDown
 from docling.document_converter import DocumentConverter, PdfFormatOption
@@ -41,6 +41,7 @@ class DocumentProcessResult:
     full_text: str
     pages: list[PageContent] = field(default_factory=list)
     chunks_with_pages: list[dict] = field(default_factory=list)
+    tables: list[dict] = field(default_factory=list)
 
 
 class DocumentProcessorService:
@@ -89,6 +90,104 @@ class DocumentProcessorService:
             return match.group(1).strip()
         return None
 
+    @staticmethod
+    def _extract_item_page(item: Any) -> int | None:
+        if not hasattr(item, "prov") or not item.prov:
+            return None
+
+        prov_list = item.prov if isinstance(item.prov, list) else [item.prov]
+        for prov in prov_list:
+            if prov and hasattr(prov, "page_no"):
+                return prov.page_no
+            if prov and hasattr(prov, "bbox") and hasattr(prov.bbox, "page"):
+                return prov.bbox.page
+
+        return None
+
+    def _extract_tables_from_doc(self, doc: Any) -> list[dict]:
+        """Extrai tabelas do Docling com texto serializado e página de origem."""
+        tables: list[dict] = []
+        seen: set[tuple[int | None, str]] = set()
+
+        # Fonte principal: itens iteráveis (permite associar página com mais consistência)
+        try:
+            for entry in doc.iterate_items():
+                item = entry[0] if isinstance(entry, tuple) else entry
+                class_name = item.__class__.__name__.lower()
+                if "table" not in class_name:
+                    continue
+
+                page = self._extract_item_page(item)
+                table_text = ""
+
+                to_markdown = getattr(item, "export_to_markdown", None)
+                if callable(to_markdown):
+                    try:
+                        table_text = str(to_markdown() or "").strip()
+                    except Exception:
+                        table_text = ""
+
+                if not table_text and hasattr(item, "text"):
+                    table_text = str(getattr(item, "text", "") or "").strip()
+
+                if not table_text:
+                    table_text = str(item).strip()
+
+                if not table_text:
+                    continue
+
+                dedupe_key = (page, table_text)
+                if dedupe_key in seen:
+                    continue
+                seen.add(dedupe_key)
+
+                tables.append(
+                    {
+                        "page": page,
+                        "text": table_text,
+                    }
+                )
+        except Exception as exc:
+            print(f"[DocumentProcessorService][docling] Falha ao extrair tabelas por iterate_items: {exc}")
+
+        # Fallback: coleção doc.tables quando disponível
+        if not tables and hasattr(doc, "tables") and doc.tables:
+            try:
+                for table in doc.tables:
+                    table_text = ""
+                    to_markdown = getattr(table, "export_to_markdown", None)
+                    if callable(to_markdown):
+                        try:
+                            table_text = str(to_markdown() or "").strip()
+                        except Exception:
+                            table_text = ""
+
+                    if not table_text and hasattr(table, "text"):
+                        table_text = str(getattr(table, "text", "") or "").strip()
+
+                    if not table_text:
+                        table_text = str(table).strip()
+
+                    if not table_text:
+                        continue
+
+                    page = self._extract_item_page(table)
+                    dedupe_key = (page, table_text)
+                    if dedupe_key in seen:
+                        continue
+                    seen.add(dedupe_key)
+
+                    tables.append(
+                        {
+                            "page": page,
+                            "text": table_text,
+                        }
+                    )
+            except Exception as exc:
+                print(f"[DocumentProcessorService][docling] Falha ao extrair tabelas por doc.tables: {exc}")
+
+        return tables
+
     # ------------------------------------------------------------------
     # Conversão
     # ------------------------------------------------------------------
@@ -130,6 +229,7 @@ class DocumentProcessorService:
         file_path = Path(file_path)
         chunks_with_pages: list[dict] = []
         pages: list[PageContent] = []
+        tables: list[dict] = []
 
         try:
             pipeline_options = PdfPipelineOptions(
@@ -158,18 +258,7 @@ class DocumentProcessorService:
                         if not hasattr(item, "text") or not item.text:
                             continue
 
-                        item_page = None
-                        if hasattr(item, "prov") and item.prov:
-                            prov_list = item.prov if isinstance(item.prov, list) else [item.prov]
-                            for prov in prov_list:
-                                if prov and hasattr(prov, "page_no"):
-                                    item_page = prov.page_no
-                                    break
-                                if prov and hasattr(prov, "bbox"):
-                                    bbox = prov.bbox
-                                    if hasattr(bbox, "page"):
-                                        item_page = bbox.page
-                                        break
+                        item_page = self._extract_item_page(item)
 
                         if item_page == page_no:
                             page_items.append(item.text)
@@ -187,12 +276,10 @@ class DocumentProcessorService:
                         chunks_with_pages.append({"text": page_text, "page": page_no, "section": current_section})
 
             full_text = doc.export_to_markdown()
-            tables = doc.tables
-
-            for table in doc.tables:
-                for row in table.rows:
-                    print([cell.text for cell in row.cells])
+            tables = self._extract_tables_from_doc(doc)
+            print(tables)
             exit()
+            print(f"[DocumentProcessorService][docling] Tabelas detectadas: {len(tables)}")
 
         except Exception as exc:
             print(f"[DocumentProcessorService][docling] Falha: {exc}. Tentando MarkItDown.")
@@ -208,6 +295,7 @@ class DocumentProcessorService:
             full_text=full_text,
             pages=pages,
             chunks_with_pages=chunks_with_pages,
+            tables=tables,
         )
 
     # ------------------------------------------------------------------
