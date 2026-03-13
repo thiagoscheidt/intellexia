@@ -36,6 +36,7 @@ from app.models import (
 )
 from app.agents.knowledge_base.knowledge_ingestion_agent import KnowledgeIngestionAgent
 from app.agents.document_processing.agent_document_extractor import AgentDocumentExtractor
+from app.services.document_processor_service import DocumentProcessorService
 
 
 MAX_FILES_PER_EXECUTION = 5
@@ -391,8 +392,10 @@ def _process_single_knowledge_file(item_id: int) -> bool:
             if not file_path.exists():
                 raise FileNotFoundError(f"Arquivo não encontrado no caminho: {item.file_path}")
 
+            document_processor = DocumentProcessorService()
             ingestion_agent = KnowledgeIngestionAgent()
             extractor_agent = AgentDocumentExtractor()
+            document_data =  document_processor.process_document(file_path=str(file_path))
 
             markdown_content = ingestion_agent.process_file(
                 file_path=file_path,
