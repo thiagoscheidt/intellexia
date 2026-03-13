@@ -523,7 +523,7 @@ class AgentDocumentExtractor:
         benefit_number_re = re.compile(r"\b\d{9,11}\b")
         year_re = re.compile(r"\b(20\d{2})\b")
 
-        rows_with_headers: List[tuple] = []
+        rows_with_headers: List[tuple[str, list[str]]] = []
 
         try:
             with pdfplumber.open(file_path) as pdf:
