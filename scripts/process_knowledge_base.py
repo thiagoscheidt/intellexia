@@ -225,18 +225,13 @@ def _link_knowledge_to_process_if_needed(item: KnowledgeBase, extraction_payload
     if existing_link:
         return
 
-    current_lawsuit = str(item.lawsuit_number or '').strip()
-    extracted_lawsuit = str(extraction_payload.get('process_number', '') or '').strip()
-    candidate_process_number = current_lawsuit or extracted_lawsuit
-    if not candidate_process_number:
-        return
+    user_provided_number = str(item.lawsuit_number or '').strip()
+    extracted_number = str(extraction_payload.get('process_number', '') or '').strip()
+    is_petition = _is_initial_petition_document(extraction_payload)
 
-    process = _find_process_by_number(item.law_firm_id, candidate_process_number)
-    if not process:
-        process_number_for_create = _extract_primary_process_number(candidate_process_number)
-        if not process_number_for_create:
-            return
-
+    if is_petition and not user_provided_number:
+        # Petição inicial sem número fornecido pelo usuário → cria processo temporário diretamente
+        process_number_for_create = f'TEMP-{item.id}'
         process = JudicialProcess(
             law_firm_id=item.law_firm_id,
             user_id=item.user_id,
@@ -251,9 +246,35 @@ def _link_knowledge_to_process_if_needed(item: KnowledgeBase, extraction_payload
         )
         db.session.add(process)
         db.session.flush()
+        item.lawsuit_number = process_number_for_create
+    else:
+        candidate_process_number = user_provided_number or extracted_number
+        if not candidate_process_number:
+            return
 
-        if not item.lawsuit_number or not item.lawsuit_number.strip():
-            item.lawsuit_number = process_number_for_create
+        process = _find_process_by_number(item.law_firm_id, candidate_process_number)
+        if not process:
+            process_number_for_create = _extract_primary_process_number(candidate_process_number)
+            if not process_number_for_create:
+                return
+
+            process = JudicialProcess(
+                law_firm_id=item.law_firm_id,
+                user_id=item.user_id,
+                process_number=process_number_for_create,
+                title=f'Processo {process_number_for_create}',
+                description=(
+                    f'Processo criado automaticamente a partir do arquivo da KnowledgeBase '
+                    f'ID {item.id} ({item.original_filename}).'
+                ),
+                status='ativo',
+                origin_unit=str(extraction_payload.get('judicial_court', '') or '').strip() or None,
+            )
+            db.session.add(process)
+            db.session.flush()
+
+            if not item.lawsuit_number or not item.lawsuit_number.strip():
+                item.lawsuit_number = process_number_for_create
 
     event_type, event_phase, event_type_name = _resolve_type_and_phase(item.law_firm_id, extraction_payload)
 
@@ -394,9 +415,22 @@ def _process_single_knowledge_file(item_id: int) -> bool:
 
             document_processor = DocumentProcessorService()
             ingestion_agent = KnowledgeIngestionAgent()
-            extractor_agent = AgentDocumentExtractor()
             document_data =  document_processor.process_document(file_path=str(file_path))
-            document_memory_vector = document_processor.build_faiss_index(document_data.get('full_text', ''))
+            if isinstance(document_data, dict):
+                document_full_text = str(document_data.get('full_text', '') or '')
+            else:
+                document_full_text = str(getattr(document_data, 'full_text', '') or '')
+
+            document_faiss_vector = document_processor.build_faiss_index(document_full_text)
+
+            extractor_agent = AgentDocumentExtractor(
+                file_id=item.id,
+                file_path=item.file_path,
+                law_firm_id=item.law_firm_id,
+                document_data=document_data,
+                document_faiss_vector=document_faiss_vector,
+            )
+
 
             markdown_content = ingestion_agent.process_file(
                 processed_document=document_data,
@@ -412,10 +446,7 @@ def _process_single_knowledge_file(item_id: int) -> bool:
                 raise RuntimeError("Processamento não retornou conteúdo.")
 
             # summary_payload = summary_agent.summarizeDocument(file_path=item.file_path)
-            extraction_payload = extractor_agent.extract_document_data(
-                file_path=item.file_path,
-                law_firm_id=item.law_firm_id,
-            )
+            extraction_payload = extractor_agent.extract_document_data()
             if not extraction_payload:
                 raise RuntimeError("Extração estruturada não retornou conteúdo.")
 

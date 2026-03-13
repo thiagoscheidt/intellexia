@@ -13,8 +13,6 @@ from langchain.agents import create_agent
 from langchain.agents.structured_output import ToolStrategy
 from langchain_openai import ChatOpenAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from langchain_huggingface import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
 from app.services.token_usage_service import TokenUsageService
 
 
@@ -53,21 +51,29 @@ class BenefitsRequestsExtractionResult(BaseModel):
 
 
 class AgentDocumentExtractor:
-    """Extrai dados de documentos jurídicos usando chunks + busca semântica com FAISS."""
+    """Extrai dados de documentos jurídicos reutilizando texto e vetor já processados."""
 
     def __init__(
         self,
         model_name: str = "gpt-5-mini",
         model_provider: str | None = None,
-        embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2",
         chunk_size: int = 1800,
         chunk_overlap: int = 150,
+        file_id: int | None = None,
+        file_path: str | Path | None = None,
+        law_firm_id: int | None = None,
+        document_data: Any | None = None,
+        document_faiss_vector: Any | None = None,
     ):
         self.model_name = model_name
         self.model_provider = model_provider or os.getenv("DOCUMENT_EXTRACTOR_MODEL_PROVIDER", "openai")
-        self.embedding_model = embedding_model
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
+        self.file_id = file_id
+        self.file_path = file_path
+        self.law_firm_id = law_firm_id
+        self.document_data = document_data
+        self.document_faiss_vector = document_faiss_vector
         self.chat_model = ChatOpenAI(
             model=self.model_name,
             temperature=0,
@@ -94,19 +100,45 @@ class AgentDocumentExtractor:
             response_format=ToolStrategy(BenefitsRequestsExtractionResult),
         )
 
-    def _extract_text(self, file_path: str | Path) -> str:
+    def _extract_text(self, file_path: str | Path | None = None) -> str:
+        text_from_document_data = self._get_document_data_full_text()
+        if text_from_document_data:
+            return text_from_document_data
+
+        if not file_path:
+            return ""
+
         markdown = MarkItDown()
         result = markdown.convert(str(file_path))
         return (result.text_content or "").strip()
 
-    def _build_faiss(self, text: str):
-        splitter = RecursiveCharacterTextSplitter(
-            chunk_size=self.chunk_size,
-            chunk_overlap=self.chunk_overlap,
-        )
-        documents = splitter.create_documents([text])
-        embeddings = HuggingFaceEmbeddings(model_name=self.embedding_model)
-        return FAISS.from_documents(documents, embeddings), len(documents)
+    def _get_document_data_full_text(self) -> str:
+        if self.document_data is None:
+            return ""
+
+        if isinstance(self.document_data, dict):
+            return str(self.document_data.get("full_text", "") or "").strip()
+
+        return str(getattr(self.document_data, "full_text", "") or "").strip()
+
+    @staticmethod
+    def _estimate_vector_chunks_count(vectorstore: Any) -> int:
+        if vectorstore is None:
+            return 0
+
+        try:
+            if hasattr(vectorstore, "index") and hasattr(vectorstore.index, "ntotal"):
+                return int(vectorstore.index.ntotal)
+        except Exception:
+            pass
+
+        try:
+            if hasattr(vectorstore, "docstore") and hasattr(vectorstore.docstore, "_dict"):
+                return int(len(vectorstore.docstore._dict))
+        except Exception:
+            pass
+
+        return 0
 
     def _initial_chunks_context(
         self,
@@ -128,6 +160,9 @@ class AgentDocumentExtractor:
         return initial_text[:max_chars]
 
     def _semantic_search(self, vectorstore, query: str, k: int = 6) -> str:
+        if vectorstore is None:
+            return ""
+
         try:
             results = vectorstore.similarity_search(query, k=k)
             if not results:
@@ -245,24 +280,31 @@ class AgentDocumentExtractor:
 
     def extract_document_data(
         self,
-        file_path: str | Path,
+        file_path: str | Path | None = None,
         judicial_document_types: list[Any] | None = None,
         knowledge_categories: list[Any] | None = None,
         law_firm_id: int | None = None,
     ) -> dict:
-        text = self._extract_text(file_path)
+        effective_file_path = file_path or self.file_path
+        effective_law_firm_id = law_firm_id if law_firm_id is not None else self.law_firm_id
+
+        if not effective_file_path:
+            raise ValueError("É necessário fornecer file_path no init ou em extract_document_data")
+
+        text = self._extract_text(effective_file_path)
         if not text:
             return DocumentExtractionResult().model_dump()
 
-        vectorstore, chunks_count = self._build_faiss(text)
+        vectorstore = self.document_faiss_vector
+        chunks_count = self._estimate_vector_chunks_count(vectorstore)
 
         normalized_types = self._normalize_document_types(judicial_document_types)
         if not normalized_types:
-            normalized_types = self._load_document_types_from_db(law_firm_id=law_firm_id)
+            normalized_types = self._load_document_types_from_db(law_firm_id=effective_law_firm_id)
 
         normalized_categories = self._normalize_categories(knowledge_categories)
         if not normalized_categories:
-            normalized_categories = self._load_categories_from_db(law_firm_id=law_firm_id)
+            normalized_categories = self._load_categories_from_db(law_firm_id=effective_law_firm_id)
 
         types_prompt = "\n".join(
             f"- key: {item['key']} | nome: {item['name']} | fase: {item['phase']}"
@@ -379,7 +421,8 @@ class AgentDocumentExtractor:
                 latency_ms=latency_ms,
                 status="success",
                 metadata_payload={
-                    "source_file": str(file_path),
+                    "source_file": str(effective_file_path),
+                    "file_id": self.file_id,
                     "chunks_count": chunks_count,
                 },
             )
@@ -391,7 +434,7 @@ class AgentDocumentExtractor:
             payload = self._fallback_from_regex(text).model_dump()
 
         payload["chunks_count"] = chunks_count
-        payload["source_file"] = str(file_path)
+        payload["source_file"] = str(effective_file_path)
         return payload
 
     def extract_table_text_from_petition(self, file_path: Optional[str] = None, text_content: Optional[str] = None) -> str:
@@ -423,37 +466,22 @@ class AgentDocumentExtractor:
         text_content: Optional[str] = None,
     ) -> dict:
         """
-        Extrai benefícios priorizando tabelas do PDF e, como fallback, usa busca semântica.
+        Extrai benefícios a partir das tabelas do PDF via pdfplumber.
+        Se não houver tabelas, retorna resultado vazio sem busca no vetor.
         """
-        if not file_path and not text_content:
-            raise ValueError("É necessário fornecer file_path ou text_content")
-
-        extracted_text = ""
-        if text_content:
-            extracted_text = text_content if isinstance(text_content, str) else str(text_content)
-        elif file_path:
-            extracted_text = self._extract_text(file_path)
+        effective_file_path = file_path or (str(self.file_path) if self.file_path else None)
 
         table_rows: List[str] = []
-        if file_path and os.path.splitext(file_path)[1].lower() == ".pdf":
+        if effective_file_path and os.path.splitext(effective_file_path)[1].lower() == ".pdf":
             print("Extraindo tabelas com pdfplumber...")
-            table_rows = self._extract_benefits_table_rows_pdfplumber(file_path)
+            table_rows = self._extract_benefits_table_rows_pdfplumber(effective_file_path)
 
-        if table_rows:
-            print(f"Tabelas detectadas: {len(table_rows)} linhas")
-            relevant_text = "\n".join(table_rows)
-        else:
-            if not extracted_text.strip():
-                raise ValueError("Não foi possível extrair texto do documento")
+        if not table_rows:
+            print("⚠ Nenhuma tabela de benefícios encontrada.")
+            return BenefitsRequestsExtractionResult().model_dump()
 
-            vectorstore, _ = self._build_faiss(extracted_text)
-            query = (
-                "Trechos que contem tabelas ou listas com beneficios e segurados, incluindo: "
-                "Vigencias do FAP, CNPJ, Empregado/Segurado, NIT, Tipo do beneficio (B91, B92, B93, B94), "
-                "numero do beneficio, acidentes de trabalho, CAT, revisao de FAP."
-            )
-            results = vectorstore.similarity_search(query, k=8)
-            relevant_text = "\n\n---TRECHO---\n\n".join([r.page_content for r in results])
+        print(f"Tabelas detectadas: {len(table_rows)} linhas")
+        relevant_text = "\n".join(table_rows)
 
         user_prompt = (
             "Extraia os benefícios previdenciários/acidentários das tabelas abaixo.\n\n"
@@ -501,7 +529,8 @@ class AgentDocumentExtractor:
                 latency_ms=latency_ms,
                 status="success",
                 metadata_payload={
-                    "source_file": str(file_path) if file_path else None,
+                    "source_file": effective_file_path,
+                    "file_id": self.file_id,
                     "table_rows_count": len(table_rows),
                 },
             )

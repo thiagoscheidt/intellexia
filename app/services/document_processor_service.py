@@ -187,6 +187,12 @@ class DocumentProcessorService:
                         chunks_with_pages.append({"text": page_text, "page": page_no, "section": current_section})
 
             full_text = doc.export_to_markdown()
+            tables = doc.tables
+
+            for table in doc.tables:
+                for row in table.rows:
+                    print([cell.text for cell in row.cells])
+            exit()
 
         except Exception as exc:
             print(f"[DocumentProcessorService][docling] Falha: {exc}. Tentando MarkItDown.")
