@@ -279,12 +279,12 @@ class KnowledgeIngestionAgent:
             generate_page_images=False,
             do_table_structure=False,
             enable_parallel_processing=True,
+            ocr_engine=None,
         )
-
         converter = DocumentConverter(
             format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
         )
-        converter = DocumentConverter()
+
 
         try:
             result = converter.convert(str(file_path))

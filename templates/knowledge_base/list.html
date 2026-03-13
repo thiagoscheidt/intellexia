@@ -334,13 +334,22 @@
                                             <td>
                                                 {% set status = file.processing_status or 'pending' %}
                                                 {% if status == 'completed' %}
-                                                <span class="badge bg-success">Processado</span>
+                                                <span class="badge bg-success">
+                                                    <i class="bi bi-check-circle-fill me-1"></i>Processado
+                                                </span>
                                                 {% elif status == 'processing' %}
-                                                <span class="badge bg-warning text-dark">Em processamento</span>
+                                                <span class="badge bg-warning text-dark">
+                                                    <span class="spinner-border spinner-border-sm me-1" role="status"
+                                                        aria-hidden="true"></span>Em processamento
+                                                </span>
                                                 {% elif status == 'error' %}
-                                                <span class="badge bg-danger">Erro no processamento</span>
+                                                <span class="badge bg-danger">
+                                                    <i class="bi bi-exclamation-triangle-fill me-1"></i>Erro no processamento
+                                                </span>
                                                 {% else %}
-                                                <span class="badge bg-secondary">Aguardando processamento</span>
+                                                <span class="badge bg-secondary">
+                                                    <i class="bi bi-clock-history me-1"></i>Aguardando processamento
+                                                </span>
                                                 {% endif %}
                                                 {% if status == 'error' and file.processing_error_message %}
                                                 <br>
