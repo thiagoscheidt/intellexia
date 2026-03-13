@@ -3,7 +3,6 @@ from __future__ import annotations
 import os
 import uuid
 from datetime import datetime
-from pathlib import Path
 from typing import Optional
 
 from dotenv import load_dotenv
@@ -12,9 +11,8 @@ from openai import OpenAI
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as rest
 from langchain_text_splitters import RecursiveCharacterTextSplitter
-from docling.document_converter import DocumentConverter, PdfFormatOption
-from docling.datamodel.pipeline_options import PdfPipelineOptions
-from docling.datamodel.base_models import InputFormat
+
+from app.services.document_processor_service import DocumentProcessResult
 
 
 load_dotenv()
@@ -127,6 +125,14 @@ class KnowledgeIngestionAgent:
             if not self._is_missing_backend_resource_error(error):
                 raise
 
+        try:
+            self._ensure_meilisearch_filterable_attributes()
+            task = self.meilisearch.index(self.collection).delete_documents_by_filter(f"file_id = {file_id}")
+            self._wait_for_meilisearch_task(task)
+        except Exception as error:
+            if not self._is_missing_backend_resource_error(error):
+                raise
+
     def update_lawsuit_number_by_file_id(self, file_id: int, lawsuit_number: str) -> None:
         """Atualiza o campo lawsuit_number nos registros do arquivo no Qdrant e no Meilisearch."""
         if file_id is None:
@@ -225,6 +231,7 @@ class KnowledgeIngestionAgent:
         for idx, chunk_data in enumerate(chunks):
             chunk_text = chunk_data.get("text", chunk_data) if isinstance(chunk_data, dict) else chunk_data
             chunk_page = chunk_data.get("page") if isinstance(chunk_data, dict) else None
+            chunk_section = chunk_data.get("section") if isinstance(chunk_data, dict) else None
 
             print(
                 f"Processando chunk {idx + 1}/{total} ({len(chunk_text)} chars)"
@@ -250,6 +257,9 @@ class KnowledgeIngestionAgent:
             if chunk_page is not None:
                 payload["page"] = chunk_page
 
+            if chunk_section is not None:
+                payload["section"] = str(chunk_section).strip()
+
             points.append(rest.PointStruct(id=point_id, vector=vector, payload=payload))
             point_ids.append(point_id)
             meilisearch_documents.append(
@@ -265,7 +275,7 @@ class KnowledgeIngestionAgent:
 
     def process_file(
         self,
-        file_path: Path,
+        processed_document: DocumentProcessResult,
         source_name: str,
         category: str = None,
         description: str = None,
@@ -273,60 +283,35 @@ class KnowledgeIngestionAgent:
         lawsuit_number: str = None,
         file_id: int = None,
     ):
-        """Processa um arquivo e insere na base de conhecimento com informação de páginas."""
-        pipeline_options = PdfPipelineOptions(
-            do_ocr=False,
-            generate_page_images=False,
-            do_table_structure=False,
-            enable_parallel_processing=True,
-            ocr_engine=None,
-        )
-        converter = DocumentConverter(
-            format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
-        )
-
+        """Ingere conteúdo já processado e preserva metadados de paginação quando disponíveis."""
+        if processed_document is None:
+            raise ValueError("processed_document é obrigatório")
 
         try:
-            result = converter.convert(str(file_path))
-            doc = result.document
+            chunks_with_pages: list[dict] = []
+            processed_chunks = processed_document.chunks_with_pages or []
 
-            chunks_with_pages = []
+            if processed_chunks:
+                page_numbers = {chunk.get("page") for chunk in processed_chunks if isinstance(chunk, dict)}
+                print(f"Documento já processado com {len([p for p in page_numbers if p is not None])} páginas mapeadas")
 
-            if hasattr(doc, "pages") and doc.pages:
-                print(f"Documento tem {len(doc.pages)} páginas")
+                for chunk_data in processed_chunks:
+                    chunk_text = chunk_data.get("text", "") if isinstance(chunk_data, dict) else str(chunk_data)
+                    if not chunk_text or not chunk_text.strip():
+                        continue
 
-                for page_no in sorted(doc.pages.keys()):
-                    page_items = []
+                    page_no = chunk_data.get("page") if isinstance(chunk_data, dict) else None
+                    section = chunk_data.get("section") if isinstance(chunk_data, dict) else None
 
-                    for item in doc.iterate_items():
-                        if not hasattr(item, "text") or not item.text:
-                            continue
+                    page_chunks = self._chunk_text(chunk_text)
+                    for page_chunk in page_chunks:
+                        page_chunk["page"] = page_no
+                        if section:
+                            page_chunk["section"] = section
+                        chunks_with_pages.append(page_chunk)
 
-                        item_page = None
-                        if hasattr(item, "prov") and item.prov:
-                            prov_list = item.prov if isinstance(item.prov, list) else [item.prov]
-                            for prov in prov_list:
-                                if prov and hasattr(prov, "bbox"):
-                                    bbox = prov.bbox
-                                    if hasattr(bbox, "page"):
-                                        item_page = bbox.page
-                                        break
-
-                        if item_page == page_no:
-                            page_items.append(item.text)
-
-                    if page_items:
-                        page_text = "\\n".join(page_items)
-                        page_chunks = self._chunk_text(page_text)
-
-                        for chunk_data in page_chunks:
-                            chunk_data["page"] = page_no
-                            chunks_with_pages.append(chunk_data)
-
-                        print(f"Página {page_no}: {len(page_chunks)} chunks")
-
-            if chunks_with_pages:
                 print(f"✓ Total: {len(chunks_with_pages)} chunks COM informação de página")
+
                 self.ingest_document(
                     text="",
                     source=source_name,
@@ -338,36 +323,8 @@ class KnowledgeIngestionAgent:
                     file_id=file_id,
                 )
             else:
-                print("⚠ Tentando abordagem alternativa: mapeamento por caracteres")
-
-                full_text = doc.export_to_markdown()
-                total_chars = len(full_text)
-
-                if hasattr(doc, "pages") and len(doc.pages) > 0:
-                    chars_per_page = total_chars // len(doc.pages)
-
-                    chunks = self._chunk_text(full_text)
-                    current_char_pos = 0
-
-                    for chunk_data in chunks:
-                        chunk_text = chunk_data["text"]
-                        estimated_page = min((current_char_pos // chars_per_page) + 1, len(doc.pages))
-                        chunk_data["page"] = estimated_page
-                        chunks_with_pages.append(chunk_data)
-                        current_char_pos += len(chunk_text)
-
-                    print(f"✓ Total: {len(chunks_with_pages)} chunks com página ESTIMADA")
-                    self.ingest_document(
-                        text="",
-                        source=source_name,
-                        category=category,
-                        description=description,
-                        tags=tags,
-                        lawsuit_number=lawsuit_number,
-                        chunks_with_pages=chunks_with_pages,
-                        file_id=file_id,
-                    )
-                else:
+                full_text = str(processed_document.full_text or "")
+                if full_text.strip():
                     print("✗ Processando SEM informação de páginas")
                     self.ingest_document(
                         text=full_text,
@@ -378,8 +335,11 @@ class KnowledgeIngestionAgent:
                         lawsuit_number=lawsuit_number,
                         file_id=file_id,
                     )
+                else:
+                    print("⚠ Documento processado sem conteúdo textual para ingestão")
+                    return None
 
-            return doc.export_to_markdown()
+            return str(processed_document.full_text or "")
 
         except Exception as e:
             print(f"Erro ao processar arquivo: {str(e)}")

@@ -51,7 +51,7 @@ class DocumentProcessorService:
     Métodos principais:
     - convert_with_markitdown  → converte o arquivo inteiro com MarkItDown
     - convert_with_docling     → converte o arquivo com Docling (markdown)
-    - process_file             → extração completa com páginas e chunks
+    - process_document             → extração completa com páginas e chunks
     - build_faiss_index        → indexa texto ou arquivo no FAISS em memória
     - search                   → busca semântica nos chunks indexados
     """
@@ -117,7 +117,7 @@ class DocumentProcessorService:
         result = converter.convert(str(file_path))
         return result.document.export_to_markdown()
 
-    def process_file(self, file_path: str | Path) -> DocumentProcessResult:
+    def process_document(self, file_path: str | Path) -> DocumentProcessResult:
         """
         Extrai o conteúdo completo do arquivo com informações de página.
 
@@ -214,13 +214,13 @@ class DocumentProcessorService:
 
         - Se `text` for fornecido, indexa diretamente.
         - Se `file_path` for fornecido, converte com MarkItDown e indexa.
-        - Preserva metadado `page` quando construído via `process_file`.
+        - Preserva metadado `page` quando construído via `process_document`.
         """
         if text is None and file_path is None:
             raise ValueError("Forneça `text` ou `file_path`")
 
         if text is None:
-            result = self.process_file(file_path)
+            result = self.process_document(file_path)
             documents_with_meta = []
             splitter = RecursiveCharacterTextSplitter(
                 chunk_size=self.chunk_size,

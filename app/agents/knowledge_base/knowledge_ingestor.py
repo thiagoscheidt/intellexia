@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from pathlib import Path
-
 from app.agents.knowledge_base.knowledge_ingestion_agent import KnowledgeIngestionAgent
 from app.agents.knowledge_base.knowledge_query_agent import KnowledgeQueryAgent
 
@@ -25,8 +23,8 @@ class KnowledgeIngestor:
     def ingest_document(self, *args, **kwargs):
         return self.ingestion_agent.ingest_document(*args, **kwargs)
 
-    def process_file(self, file_path: Path, *args, **kwargs):
-        return self.ingestion_agent.process_file(file_path, *args, **kwargs)
+    def process_file(self, *args, **kwargs):
+        return self.ingestion_agent.process_file(*args, **kwargs)
 
     def create_embedding_vector(self, text: str):
         return self.query_agent.create_embedding_vector(text)

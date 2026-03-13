@@ -396,9 +396,10 @@ def _process_single_knowledge_file(item_id: int) -> bool:
             ingestion_agent = KnowledgeIngestionAgent()
             extractor_agent = AgentDocumentExtractor()
             document_data =  document_processor.process_document(file_path=str(file_path))
+            document_memory_vector = document_processor.build_faiss_index(document_data.get('full_text', ''))
 
             markdown_content = ingestion_agent.process_file(
-                file_path=file_path,
+                processed_document=document_data,
                 source_name=item.original_filename,
                 category=item.category,
                 description=item.description,
