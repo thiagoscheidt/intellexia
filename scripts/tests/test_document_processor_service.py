@@ -66,7 +66,7 @@ def test_process_file(service: DocumentProcessorService, file_path: Path) -> Non
     print(f"Páginas      : [bold]{len(result.pages)}[/bold]")
     print(f"Chunks       : [bold]{len(result.chunks_with_pages)}[/bold]")
     print()
-    print(result.full_text)
+    print(result.pages)
     exit()
 
     for page in result.pages[:5]:

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import List
@@ -18,6 +19,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 class PageContent:
     page: int
     text: str
+    section: str | None = None
 
 
 DEFAULT_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
@@ -63,6 +65,29 @@ class DocumentProcessorService:
         self.embedding_model = embedding_model
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
+
+    # ------------------------------------------------------------------
+    # Detecção de seção
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _detect_section(text: str) -> str | None:
+        """
+        Retorna o título da seção encontrada no texto da página, ou None.
+        Reconhece padrões como:
+          ## 10. ACIDENTE OCORRIDO ANTES DE ABRIL DE 2007
+          9. HISTÓRICO DO BENEFÍCIO
+        A linha deve começar por um heading markdown opcional (## / ###)
+        seguido de um número, ponto e texto.
+        """
+        match = re.search(
+            r'^(?:#{1,3}\s+)?(\d+\.\s+[^\n]+)$',
+            text,
+            re.MULTILINE,
+        )
+        if match:
+            return match.group(1).strip()
+        return None
 
     # ------------------------------------------------------------------
     # Conversão
@@ -123,10 +148,13 @@ class DocumentProcessorService:
             print(f"[DocumentProcessorService][docling] {total_pages} páginas detectadas")
 
             if total_pages > 0:
+                current_section: str | None = None
                 for page_no in sorted(doc.pages.keys()):
                     page_items: list[str] = []
 
-                    for item in doc.iterate_items():
+                    for entry in doc.iterate_items():
+                        item = entry[0] if isinstance(entry, tuple) else entry
+
                         if not hasattr(item, "text") or not item.text:
                             continue
 
@@ -134,6 +162,9 @@ class DocumentProcessorService:
                         if hasattr(item, "prov") and item.prov:
                             prov_list = item.prov if isinstance(item.prov, list) else [item.prov]
                             for prov in prov_list:
+                                if prov and hasattr(prov, "page_no"):
+                                    item_page = prov.page_no
+                                    break
                                 if prov and hasattr(prov, "bbox"):
                                     bbox = prov.bbox
                                     if hasattr(bbox, "page"):
@@ -144,9 +175,16 @@ class DocumentProcessorService:
                             page_items.append(item.text)
 
                     page_text = "\n".join(page_items)
-                    pages.append(PageContent(page=page_no, text=page_text))
+
+                    # Verifica se esta página abre uma nova seção numerada
+                    detected = self._detect_section(page_text)
+                    if detected:
+                        current_section = detected
+                        print(f"[DocumentProcessorService] Seção detectada na pág {page_no}: {current_section}")
+
+                    pages.append(PageContent(page=page_no, text=page_text, section=current_section))
                     if page_text.strip():
-                        chunks_with_pages.append({"text": page_text, "page": page_no})
+                        chunks_with_pages.append({"text": page_text, "page": page_no, "section": current_section})
 
             full_text = doc.export_to_markdown()
 
