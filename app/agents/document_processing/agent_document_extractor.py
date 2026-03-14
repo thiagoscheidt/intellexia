@@ -4,6 +4,7 @@ import time
 from pathlib import Path
 from typing import Any, Optional, List
 from rich import print
+from gliner2 import GLiNER2 as Gliner2
 
 from dotenv import load_dotenv
 from markitdown import MarkItDown
@@ -459,7 +460,28 @@ class AgentDocumentExtractor:
 
         print("⚠ Arquivo não é PDF ou não fornecido")
         return ""
+    def extract_benefits_from_tables(
+            self
+    ):
+        tables = self.document_data.get('tables', [])
+        extractor = Gliner2.from_pretrained("fastino/gliner2-base-v1")
 
+        text = "iPhone 15 Pro Max with 256GB storage, A17 Pro chip, priced at $1199. Available in titanium and black colors."
+        result = extractor.extract_json(
+            text,
+            {
+                "product": [
+                    "name::str::Full product name and model",
+                    "storage::str::Storage capacity like 256GB or 1TB", 
+                    "processor::str::Chip or processor information",
+                    "price::str::Product price with currency",
+                    "colors::list::Available color options"
+                ]
+            }
+        )
+
+        pass
+    
     def extract_benefits_from_petition(
         self,
         file_path: Optional[str] = None,

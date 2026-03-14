@@ -6,6 +6,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, List
 
+import pdfplumber
 from markitdown import MarkItDown
 from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.pipeline_options import PdfPipelineOptions
@@ -104,87 +105,64 @@ class DocumentProcessorService:
 
         return None
 
-    def _extract_tables_from_doc(self, doc: Any) -> list[dict]:
-        """Extrai tabelas do Docling com texto serializado e página de origem."""
+    def _extract_tables_from_pdf(self, file_path: str | Path) -> list[dict]:
+        """Extrai tabelas com pdfplumber preservando o header e o mapeamento por coluna."""
         tables: list[dict] = []
-        seen: set[tuple[int | None, str]] = set()
+        seen: set[tuple[int, str]] = set()
 
-        # Fonte principal: itens iteráveis (permite associar página com mais consistência)
         try:
-            for entry in doc.iterate_items():
-                item = entry[0] if isinstance(entry, tuple) else entry
-                class_name = item.__class__.__name__.lower()
-                if "table" not in class_name:
-                    continue
+            with pdfplumber.open(str(file_path)) as pdf:
+                for idx, page in enumerate(pdf.pages, start=1):
+                    page_tables = page.extract_tables() or []
+                    for table in page_tables:
+                        if not table or len(table) < 2:
+                            continue
 
-                page = self._extract_item_page(item)
-                table_text = ""
+                        header_row = table[0] or []
+                        header_cells = [str(cell).strip() if cell else "" for cell in header_row]
+                        non_empty_header_count = sum(1 for cell in header_cells if cell)
+                        if non_empty_header_count < 2:
+                            continue
 
-                to_markdown = getattr(item, "export_to_markdown", None)
-                if callable(to_markdown):
-                    try:
-                        table_text = str(to_markdown() or "").strip()
-                    except Exception:
-                        table_text = ""
+                        rendered_rows: list[str] = [" | ".join(header_cells)]
+                        data_rows_with_multiple_values = 0
 
-                if not table_text and hasattr(item, "text"):
-                    table_text = str(getattr(item, "text", "") or "").strip()
+                        for row in table[1:]:
+                            if not row:
+                                continue
 
-                if not table_text:
-                    table_text = str(item).strip()
+                            row_cells: list[str] = []
+                            for col_idx, header_name in enumerate(header_cells):
+                                if not header_name:
+                                    continue
+                                value = ""
+                                if col_idx < len(row):
+                                    value = str(row[col_idx]).strip() if row[col_idx] else ""
+                                row_cells.append(value)
 
-                if not table_text:
-                    continue
+                            if any(row_cells):
+                                if sum(1 for value in row_cells if value) >= 2:
+                                    data_rows_with_multiple_values += 1
+                                rendered_rows.append(" | ".join(row_cells))
 
-                dedupe_key = (page, table_text)
-                if dedupe_key in seen:
-                    continue
-                seen.add(dedupe_key)
+                        # Evita capturar citações/blocos textuais que o pdfplumber interpreta como tabela.
+                        if len(rendered_rows) <= 1 or data_rows_with_multiple_values == 0:
+                            continue
 
-                tables.append(
-                    {
-                        "page": page,
-                        "text": table_text,
-                    }
-                )
+                        table_text = "\n".join(rendered_rows).strip()
+                        dedupe_key = (idx, table_text)
+                        if dedupe_key in seen:
+                            continue
+                        seen.add(dedupe_key)
+
+                        tables.append(
+                            {
+                                "page": idx,
+                                "text": table_text,
+                            }
+                        )
         except Exception as exc:
-            print(f"[DocumentProcessorService][docling] Falha ao extrair tabelas por iterate_items: {exc}")
-
-        # Fallback: coleção doc.tables quando disponível
-        if not tables and hasattr(doc, "tables") and doc.tables:
-            try:
-                for table in doc.tables:
-                    table_text = ""
-                    to_markdown = getattr(table, "export_to_markdown", None)
-                    if callable(to_markdown):
-                        try:
-                            table_text = str(to_markdown() or "").strip()
-                        except Exception:
-                            table_text = ""
-
-                    if not table_text and hasattr(table, "text"):
-                        table_text = str(getattr(table, "text", "") or "").strip()
-
-                    if not table_text:
-                        table_text = str(table).strip()
-
-                    if not table_text:
-                        continue
-
-                    page = self._extract_item_page(table)
-                    dedupe_key = (page, table_text)
-                    if dedupe_key in seen:
-                        continue
-                    seen.add(dedupe_key)
-
-                    tables.append(
-                        {
-                            "page": page,
-                            "text": table_text,
-                        }
-                    )
-            except Exception as exc:
-                print(f"[DocumentProcessorService][docling] Falha ao extrair tabelas por doc.tables: {exc}")
+            print(f"[DocumentProcessorService][pdfplumber] Falha ao extrair tabelas: {exc}")
 
         return tables
 
@@ -276,10 +254,10 @@ class DocumentProcessorService:
                         chunks_with_pages.append({"text": page_text, "page": page_no, "section": current_section})
 
             full_text = doc.export_to_markdown()
-            tables = self._extract_tables_from_doc(doc)
+            tables = self._extract_tables_from_pdf(file_path)
             print(tables)
             exit()
-            print(f"[DocumentProcessorService][docling] Tabelas detectadas: {len(tables)}")
+            print(f"[DocumentProcessorService][pdfplumber] Tabelas detectadas: {len(tables)}")
 
         except Exception as exc:
             print(f"[DocumentProcessorService][docling] Falha: {exc}. Tentando MarkItDown.")
