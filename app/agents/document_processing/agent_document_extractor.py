@@ -4,11 +4,9 @@ import time
 from pathlib import Path
 from typing import Any, Optional, List
 from rich import print
-from gliner2 import GLiNER2 as Gliner2
 
 from dotenv import load_dotenv
 from markitdown import MarkItDown
-import pdfplumber
 from pydantic import BaseModel, Field
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ToolStrategy
@@ -42,7 +40,6 @@ class BenefitRequestItem(BaseModel):
 class BenefitsRequestsExtractionResult(BaseModel):
     """Modelo para resultado da extração de benefícios nas tabelas/pedidos."""
     benefits: List[BenefitRequestItem] = Field(default_factory=list, description="Lista de benefícios identificados")
-    general_revision_context: str = Field(default="", description="Contexto geral da revisão de todos os benefícios")
 
     def to_dict(self) -> dict:
         return self.model_dump(by_alias=True)
@@ -56,7 +53,7 @@ class AgentDocumentExtractor:
 
     def __init__(
         self,
-        model_name: str = "gpt-5-mini",
+        model_name: str = "gpt-5-nano",
         model_provider: str | None = None,
         chunk_size: int = 1800,
         chunk_overlap: int = 150,
@@ -279,6 +276,67 @@ class AgentDocumentExtractor:
             suggested_document_type_name="",
         )
 
+    def _get_document_data_tables(self) -> list[dict]:
+        if self.document_data is None:
+            return []
+
+        raw_tables: Any = []
+        if isinstance(self.document_data, dict):
+            raw_tables = self.document_data.get("tables", []) or []
+        else:
+            raw_tables = getattr(self.document_data, "tables", []) or []
+
+        if not isinstance(raw_tables, list):
+            return []
+
+        normalized_tables: list[dict] = []
+        for item in raw_tables:
+            if not isinstance(item, dict):
+                continue
+            page = item.get("page")
+            text_value = item.get("text")
+
+            if isinstance(text_value, list):
+                rows = [str(row).strip() for row in text_value if str(row).strip()]
+            elif isinstance(text_value, str):
+                rows = [line.strip() for line in text_value.splitlines() if line.strip()]
+            else:
+                rows = []
+
+            if not rows:
+                continue
+
+            normalized_tables.append(
+                {
+                    "page": page,
+                    "rows": rows,
+                }
+            )
+
+        return normalized_tables
+
+    def _tables_to_prompt_text(self, tables: list[dict]) -> str:
+        blocks: list[str] = []
+        for table in tables:
+            page = table.get("page")
+            section = table.get("section")
+            rows = table.get("rows", [])
+            if not rows:
+                continue
+
+            header_parts = []
+            if page is not None:
+                header_parts.append(f"Página {page}")
+            if section:
+                header_parts.append(f"Seção: {section}")
+            if header_parts:
+                blocks.append(f"[{' | '.join(header_parts)}]")
+
+            blocks.extend(rows)
+            blocks.append("")
+
+        return "\n".join(blocks).strip()
+
     def extract_document_data(
         self,
         file_path: str | Path | None = None,
@@ -438,72 +496,25 @@ class AgentDocumentExtractor:
         payload["source_file"] = str(effective_file_path)
         return payload
 
-    def extract_table_text_from_petition(self, file_path: Optional[str] = None, text_content: Optional[str] = None) -> str:
-        """
-        Extrai tabelas de benefícios do PDF e retorna como texto formatado.
-        Sem análise de IA - apenas extração de tabelas.
-        """
-        if not file_path and not text_content:
-            raise ValueError("É necessário fornecer file_path ou text_content")
-
-        if file_path and os.path.splitext(file_path)[1].lower() == ".pdf":
-            print("Extraindo tabelas com pdfplumber...")
-            table_rows = self._extract_benefits_table_rows_pdfplumber(file_path)
-
-            if table_rows:
-                formatted_text = "\n".join(table_rows)
-                print(f"✓ Tabelas extraídas: {len(table_rows)} linhas")
-                return formatted_text
-
-            print("⚠ Nenhuma tabela de benefícios encontrada no PDF")
-            return ""
-
-        print("⚠ Arquivo não é PDF ou não fornecido")
-        return ""
-    def extract_benefits_from_tables(
-            self
-    ):
-        tables = self.document_data.get('tables', [])
-        extractor = Gliner2.from_pretrained("fastino/gliner2-base-v1")
-
-        text = "iPhone 15 Pro Max with 256GB storage, A17 Pro chip, priced at $1199. Available in titanium and black colors."
-        result = extractor.extract_json(
-            text,
-            {
-                "product": [
-                    "name::str::Full product name and model",
-                    "storage::str::Storage capacity like 256GB or 1TB", 
-                    "processor::str::Chip or processor information",
-                    "price::str::Product price with currency",
-                    "colors::list::Available color options"
-                ]
-            }
-        )
-
-        pass
-    
     def extract_benefits_from_petition(
         self,
         file_path: Optional[str] = None,
         text_content: Optional[str] = None,
     ) -> dict:
         """
-        Extrai benefícios a partir das tabelas do PDF via pdfplumber.
+        Extrai benefícios usando as tabelas já presentes em document_data.
         Se não houver tabelas, retorna resultado vazio sem busca no vetor.
         """
         effective_file_path = file_path or (str(self.file_path) if self.file_path else None)
 
-        table_rows: List[str] = []
-        if effective_file_path and os.path.splitext(effective_file_path)[1].lower() == ".pdf":
-            print("Extraindo tabelas com pdfplumber...")
-            table_rows = self._extract_benefits_table_rows_pdfplumber(effective_file_path)
-
-        if not table_rows:
-            print("⚠ Nenhuma tabela de benefícios encontrada.")
+        tables = self._get_document_data_tables()
+        if not tables:
+            print("⚠ Nenhuma tabela encontrada em document_data.")
             return BenefitsRequestsExtractionResult().model_dump()
 
-        print(f"Tabelas detectadas: {len(table_rows)} linhas")
-        relevant_text = "\n".join(table_rows)
+        relevant_text = self._tables_to_prompt_text(tables)
+        total_rows = sum(len(table.get("rows", [])) for table in tables)
+        print(f"Tabelas detectadas em document_data: {len(tables)} tabelas / {total_rows} linhas")
 
         user_prompt = (
             "Extraia os benefícios previdenciários/acidentários das tabelas abaixo.\n\n"
@@ -520,16 +531,16 @@ class AgentDocumentExtractor:
             "PROCESSAMENTO:\n"
             "Para cada linha de dados da tabela, extraia os 5 campos acima conforme seus nomes reais:\n"
             "- benefit_number: número do benefício\n"
-            "- nit_number: número do NIT (11 dígitos)\n"
+            "- nit_number: número do NIT (11 dígitos)\n" 
             "- insured_name: nome completo do segurado/beneficiário\n"
             "- benefit_type: tipo do benefício (B91, B92, B93, B94, B31, B42, B46, etc)\n"
             "- fap_vigencia_year: ano da vigência (2022, 2023, etc)\n\n"
-            "No campo 'general_revision_context', descreva o contexto geral dos benefícios listados nas tabelas.\n\n"
             "Se não houver benefícios ou tabelas, retorne lista vazia em 'benefits'.\n"
             "Se algum campo não estiver disponível na tabela, deixe em branco (\"\").\n\n"
             f"TABELAS DA PETIÇÃO:\n\n{relevant_text}"
         )
 
+        print(relevant_text)  # Log do texto relevante para debug
         try:
             benefits_agent = self._build_benefits_extraction_agent()
             call_started_at = time.time()
@@ -553,7 +564,8 @@ class AgentDocumentExtractor:
                 metadata_payload={
                     "source_file": effective_file_path,
                     "file_id": self.file_id,
-                    "table_rows_count": len(table_rows),
+                    "tables_count": len(tables),
+                    "table_rows_count": total_rows,
                 },
             )
             structured_response = response_payload.get("structured_response")
@@ -562,58 +574,3 @@ class AgentDocumentExtractor:
             return structured_response.model_dump()
         except Exception:
             return BenefitsRequestsExtractionResult().model_dump()
-
-    @staticmethod
-    def _extract_benefits_table_rows_pdfplumber(file_path: str) -> List[str]:
-        """
-        Extrai tabelas procurando por padrões nas linhas de dados.
-        Normaliza quebras de linha e formata consistentemente.
-        """
-        nit_re = re.compile(r"\b\d{11}\b")
-        benefit_type_re = re.compile(r"\bB\d{2}\b", re.IGNORECASE)
-        benefit_number_re = re.compile(r"\b\d{9,11}\b")
-        year_re = re.compile(r"\b(20\d{2})\b")
-
-        rows_with_headers: List[tuple[str, list[str]]] = []
-
-        try:
-            with pdfplumber.open(file_path) as pdf:
-                for page in pdf.pages:
-                    tables = page.extract_tables() or []
-                    for table in tables:
-                        if not table or len(table) < 2:
-                            continue
-
-                        header_row = table[0]
-                        header_text = " | ".join([str(cell).strip() if cell else "" for cell in header_row])
-
-                        data_rows = []
-                        for row in table[1:]:
-                            if not row:
-                                continue
-
-                            row_text = " | ".join([str(cell).strip() if cell else "" for cell in row if cell])
-                            if not row_text:
-                                continue
-
-                            has_nit = nit_re.search(row_text)
-                            has_benefit_type = benefit_type_re.search(row_text)
-                            has_benefit_number = benefit_number_re.search(row_text)
-                            has_year = year_re.search(row_text)
-
-                            if has_nit and has_benefit_type and has_benefit_number and has_year:
-                                if row_text not in data_rows:
-                                    data_rows.append(row_text)
-
-                        if data_rows:
-                            rows_with_headers.append((header_text, data_rows))
-        except Exception as exc:
-            print(f"Falha ao extrair tabelas com pdfplumber: {exc}")
-
-        result = []
-        for header, data_rows in rows_with_headers:
-            result.append(header)
-            result.extend(data_rows)
-            result.append("")
-
-        return result

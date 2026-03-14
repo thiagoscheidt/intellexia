@@ -479,7 +479,6 @@ class KnowledgeBaseProcessingService:
                     if self._is_initial_petition_document(extraction_payload):
                         target_process = self._resolve_target_process(item, extraction_payload)
                         if target_process:
-                            extractor_agent.extract_benefits_from_tables()
                             benefits_payload = extractor_agent.extract_benefits_from_petition(
                                 file_path=item.file_path,
                             )

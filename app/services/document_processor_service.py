@@ -105,14 +105,40 @@ class DocumentProcessorService:
 
         return None
 
-    def _extract_tables_from_pdf(self, file_path: str | Path) -> list[dict]:
+    def _extract_tables_from_pdf(self, file_path: str | Path, pages: list[PageContent] | None = None) -> list[dict]:
         """Extrai tabelas com pdfplumber preservando o header e o mapeamento por coluna."""
         tables: list[dict] = []
-        seen: set[tuple[int, str]] = set()
+        seen: set[tuple[int, tuple[str, ...]]] = set()
+        page_section_map = {p.page: p.section for p in (pages or [])}
+
+        cnpj_re = re.compile(r"\b\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\b")
+        nit_re = re.compile(r"\b\d{11}\b")
+        benefit_type_re = re.compile(r"\bB\d{2}\b", re.IGNORECASE)
+        benefit_number_re = re.compile(r"\b\d{9,11}\b")
+        date_re = re.compile(r"\b\d{2}/\d{2}/\d{4}\b")
+
+        def _looks_like_data_row(cells: list[str]) -> bool:
+            non_empty = [cell for cell in cells if cell]
+            if not non_empty:
+                return False
+
+            first_value = non_empty[0]
+            if re.match(r"^\d{1,4}$", first_value):
+                return True
+
+            joined = " | ".join(non_empty)
+            return bool(
+                cnpj_re.search(joined)
+                or nit_re.search(joined)
+                or benefit_type_re.search(joined)
+                or benefit_number_re.search(joined)
+                or date_re.search(joined)
+            )
 
         try:
             with pdfplumber.open(str(file_path)) as pdf:
                 for idx, page in enumerate(pdf.pages, start=1):
+                    section = page_section_map.get(idx)
                     page_tables = page.extract_tables() or []
                     for table in page_tables:
                         if not table or len(table) < 2:
@@ -120,6 +146,44 @@ class DocumentProcessorService:
 
                         header_row = table[0] or []
                         header_cells = [str(cell).strip() if cell else "" for cell in header_row]
+
+                        # Alguns PDFs quebram o header em 2+ linhas (ex.: "Vigência do" + "FAP").
+                        # Aqui mesclamos linhas textuais de continuação antes de processar os dados.
+                        data_start_idx = 1
+                        while data_start_idx < len(table):
+                            candidate_row = table[data_start_idx] or []
+                            candidate_cells = [str(cell).strip() if cell else "" for cell in candidate_row]
+                            non_empty_cells = [
+                                (col_idx, value)
+                                for col_idx, value in enumerate(candidate_cells)
+                                if value
+                            ]
+
+                            if not non_empty_cells:
+                                data_start_idx += 1
+                                continue
+
+                            looks_like_data_row = _looks_like_data_row(candidate_cells)
+                            sparse_textual_row = len(non_empty_cells) <= max(3, len(header_cells) // 2)
+
+                            is_header_continuation = (
+                                not looks_like_data_row
+                                and sparse_textual_row
+                            )
+
+                            if not is_header_continuation:
+                                break
+
+                            for col_idx, value in non_empty_cells:
+                                if col_idx >= len(header_cells):
+                                    continue
+                                if header_cells[col_idx]:
+                                    header_cells[col_idx] = f"{header_cells[col_idx]} {value}".strip()
+                                else:
+                                    header_cells[col_idx] = value
+
+                            data_start_idx += 1
+
                         non_empty_header_count = sum(1 for cell in header_cells if cell)
                         if non_empty_header_count < 2:
                             continue
@@ -127,7 +191,7 @@ class DocumentProcessorService:
                         rendered_rows: list[str] = [" | ".join(header_cells)]
                         data_rows_with_multiple_values = 0
 
-                        for row in table[1:]:
+                        for row in table[data_start_idx:]:
                             if not row:
                                 continue
 
@@ -149,8 +213,8 @@ class DocumentProcessorService:
                         if len(rendered_rows) <= 1 or data_rows_with_multiple_values == 0:
                             continue
 
-                        table_text = "\n".join(rendered_rows).strip()
-                        dedupe_key = (idx, table_text)
+                        normalized_rows = [row.strip() for row in rendered_rows if row.strip()]
+                        dedupe_key = (idx, tuple(normalized_rows))
                         if dedupe_key in seen:
                             continue
                         seen.add(dedupe_key)
@@ -158,7 +222,8 @@ class DocumentProcessorService:
                         tables.append(
                             {
                                 "page": idx,
-                                "text": table_text,
+                                "section": section,
+                                "text": normalized_rows,
                             }
                         )
         except Exception as exc:
@@ -254,7 +319,7 @@ class DocumentProcessorService:
                         chunks_with_pages.append({"text": page_text, "page": page_no, "section": current_section})
 
             full_text = doc.export_to_markdown()
-            tables = self._extract_tables_from_pdf(file_path)
+            tables = self._extract_tables_from_pdf(file_path, pages)
             print(tables)
             exit()
             print(f"[DocumentProcessorService][pdfplumber] Tabelas detectadas: {len(tables)}")
