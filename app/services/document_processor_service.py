@@ -188,21 +188,27 @@ class DocumentProcessorService:
                         if non_empty_header_count < 2:
                             continue
 
-                        rendered_rows: list[str] = [" | ".join(header_cells)]
+                        compact_header = [h for h in header_cells if h.strip()]
+                        rendered_rows: list[str] = [" | ".join(compact_header)]
                         data_rows_with_multiple_values = 0
 
                         for row in table[data_start_idx:]:
                             if not row:
                                 continue
 
-                            row_cells: list[str] = []
-                            for col_idx, header_name in enumerate(header_cells):
-                                if not header_name:
-                                    continue
-                                value = ""
-                                if col_idx < len(row):
-                                    value = str(row[col_idx]).strip() if row[col_idx] else ""
-                                row_cells.append(value)
+                            # Monta dados compactos: remove células None/vazias para alinhar
+                            # posicionalmente com o header compacto, corrigindo PDFs com
+                            # células mergeadas que criam colunas fantasma vazias no header.
+                            compact_values = [
+                                str(cell).strip()
+                                for cell in row
+                                if cell and str(cell).strip()
+                            ]
+
+                            row_cells = [
+                                compact_values[i] if i < len(compact_values) else ""
+                                for i in range(len(compact_header))
+                            ]
 
                             if any(row_cells):
                                 if sum(1 for value in row_cells if value) >= 2:

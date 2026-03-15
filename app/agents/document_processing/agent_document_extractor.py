@@ -34,7 +34,7 @@ class BenefitRequestItem(BaseModel):
     nit_number: str = Field(default="", description="Número do NIT")
     insured_name: str = Field(default="", description="Nome do segurado")
     benefit_type: str = Field(default="", description="Tipo do benefício (B91, B92, B93, B94, etc)")
-    fap_vigencia_year: str = Field(default="", description="Ano da vigência do FAP")
+    fap_vigencia_year: str = Field(default="", description="Ano(s) da vigência do FAP em CSV (ex: 2018,2019,2020)")
     legal_thesis_id: int | None = Field(default=None, description="ID da tese jurídica associada à seção da tabela")
 
 
@@ -341,8 +341,7 @@ class AgentDocumentExtractor:
 
     def _filter_out_pedidos_section(self, tables: list[dict]) -> list[dict]:
         """Remove seções de pedidos que não pareçam conter tabelas reais de benefícios."""
-        filtered_tables: list[dict] = []
-        benefit_keywords = (
+        benefit_text_keywords = (
             "vigência",
             "vigencia",
             "fap",
@@ -350,18 +349,11 @@ class AgentDocumentExtractor:
             "segurado",
             "beneficiário",
             "beneficiario",
-            "benefício",
-            "beneficio",
             "nb",
-            "b91",
-            "b92",
-            "b93",
-            "b94",
-            "b31",
-            "b42",
-            "b46",
         )
+        benefit_type_re = re.compile(r"\bb\d{2}\b", re.IGNORECASE)
 
+        filtered_tables: list[dict] = []
         for table in tables:
             section = str(table.get("section") or "").strip().lower()
             rows = table.get("rows", [])
@@ -370,7 +362,7 @@ class AgentDocumentExtractor:
                 continue
 
             table_text = "\n".join(str(row) for row in rows).lower()
-            if any(keyword in table_text for keyword in benefit_keywords):
+            if any(keyword in table_text for keyword in benefit_text_keywords) or benefit_type_re.search(table_text):
                 filtered_tables.append(table)
 
         return filtered_tables
@@ -381,7 +373,6 @@ class AgentDocumentExtractor:
             page = table.get("page")
             section = table.get("section")
             rows = table.get("rows", [])
-            print(rows)
             if not rows:
                 continue
 
@@ -395,8 +386,6 @@ class AgentDocumentExtractor:
 
             blocks.extend(rows)
             blocks.append("")
-        exit()
-
         return "\n".join(blocks).strip()
 
     def extract_document_data(
@@ -519,8 +508,6 @@ class AgentDocumentExtractor:
             "}"
         )
 
-        print(user_prompt)  # Log do prompt para debug
-
         try:
             extraction_agent = self._build_extraction_agent()
             call_started_at = time.time()
@@ -597,8 +584,16 @@ class AgentDocumentExtractor:
             "   - VIGÊNCIA FAP, Vigência, Year, Ano, FAP, Período → para fap_vigencia_year\n"
             "   - NIT, NIT do Segurado → para nit_number\n"
             "   - SEGURADO, Empregado, Nome, Beneficiário, Titular → para insured_name\n"
-            "   - TIPO, Tipo de Benefício, Código, B-type → para benefit_type (B91, B92, B93, B94, etc)\n"
+            "   - TIPO, Tipo de Benefício, Código, B-type → para benefit_type (B01 a B99, ex: B31, B42, B91, B94)\n"
             "   - BENEFÍCIO, Nº Benefício, Número Benefício, NB → para benefit_number\n\n"
+            "ATENÇÃO - VIGÊNCIA FAP: priorize SEMPRE a coluna da própria tabela para extrair fap_vigencia_year.\n"
+            "A vigência pode vir como ano único, intervalo ou lista de anos.\n"
+            "Formato obrigatório de saída para fap_vigencia_year: anos em CSV, separados por vírgula, sem espaços.\n"
+            "Regras de normalização:\n"
+            "  a) Ano único (ex: 2018) -> 2018\n"
+            "  b) Intervalo (ex: 2018-2020, 2018 a 2020) -> 2018,2019,2020\n"
+            "  c) Lista/sequência (ex: 2018/2019/2020 ou 2018, 2019 e 2020) -> 2018,2019,2020\n"
+            "  d) Se não houver ano na tabela, deixe em branco\n\n"
             "TESES JURÍDICAS CADASTRADAS (use o id para preencher legal_thesis_id):\n"
             f"{legal_theses_prompt}\n\n"
             "PROCESSAMENTO:\n"
@@ -607,7 +602,7 @@ class AgentDocumentExtractor:
             "- nit_number: número do NIT (11 dígitos)\n" 
             "- insured_name: nome completo do segurado/beneficiário\n"
             "- benefit_type: tipo do benefício (B91, B92, B93, B94, B31, B42, B46, etc)\n"
-            "- fap_vigencia_year: ano da vigência (2022, 2023, etc)\n\n"
+            "- fap_vigencia_year: ano(s) da vigência em CSV (ex: 2022,2023,2024)\n\n"
             "Mapeamento de tese:\n"
             "- legal_thesis_id: escolha APENAS um id da lista de teses cadastradas, de acordo com a seção da tabela.\n"
             "- Se não houver confiança suficiente para mapear, retorne null.\n\n"

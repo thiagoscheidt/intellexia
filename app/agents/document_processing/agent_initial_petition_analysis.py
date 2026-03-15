@@ -95,7 +95,7 @@ class BenefitRevisionRequest(BaseModel):
     nit_number: str = Field(default="", description="Número do NIT")
     insured_name: str = Field(default="", description="Nome do segurado")
     benefit_type: str = Field(default="", description="Tipo do benefício (B91, B92, B93, B94, etc)")
-    fap_vigencia_year: str = Field(default="", description="Ano da vigência do FAP")
+    fap_vigencia_year: str = Field(default="", description="Ano(s) da vigência do FAP em CSV (ex: 2018,2019,2020)")
 
 
 class BenefitsExtractionResult(BaseModel):
@@ -116,7 +116,7 @@ class BenefitRequestItem(BaseModel):
     nit_number: str = Field(default="", description="Número do NIT")
     insured_name: str = Field(default="", description="Nome do segurado")
     benefit_type: str = Field(default="", description="Tipo do benefício (B91, B92, B93, B94, etc)")
-    fap_vigencia_year: str = Field(default="", description="Ano da vigência do FAP")
+    fap_vigencia_year: str = Field(default="", description="Ano(s) da vigência do FAP em CSV (ex: 2018,2019,2020)")
 
 
 class BenefitsRequestsExtractionResult(BaseModel):
@@ -389,13 +389,21 @@ class AgentInitialPetitionAnalysis:
             "   - SEGURADO, Empregado, Nome, Beneficiário, Titular → para insured_name\n"
             "   - TIPO, Tipo de Benefício, Código, B-type → para benefit_type (B91, B92, B93, B94, etc)\n"
             "   - BENEFÍCIO, Nº Benefício, Número Benefício, NB → para benefit_number\n\n"
+            "ATENÇÃO - VIGÊNCIA FAP: priorize SEMPRE a coluna da própria tabela para extrair fap_vigencia_year.\n"
+            "A vigência pode vir como ano único, intervalo ou lista de anos.\n"
+            "Formato obrigatório de saída para fap_vigencia_year: anos em CSV, separados por vírgula, sem espaços.\n"
+            "Regras de normalização:\n"
+            "  a) Ano único (ex: 2018) -> 2018\n"
+            "  b) Intervalo (ex: 2018-2020, 2018 a 2020) -> 2018,2019,2020\n"
+            "  c) Lista/sequência (ex: 2018/2019/2020 ou 2018, 2019 e 2020) -> 2018,2019,2020\n"
+            "  d) Se não houver ano na tabela, deixe em branco\n\n"
             "PROCESSAMENTO:\n"
             "Para cada linha de dados da tabela, extraia os 5 campos acima conforme seus nomes reais:\n"
             "- benefit_number: número do benefício\n"
             "- nit_number: número do NIT (11 dígitos)\n"
             "- insured_name: nome completo do segurado/beneficiário\n"
             "- benefit_type: tipo do benefício (B91, B92, B93, B94, B31, B42, B46, etc)\n"
-            "- fap_vigencia_year: ano da vigência (2022, 2023, etc)\n\n"
+            "- fap_vigencia_year: ano(s) da vigência em CSV (ex: 2022,2023,2024)\n\n"
             "No campo 'general_revision_context', descreva o contexto geral dos benefícios listados nas tabelas.\n\n"
             "Se não houver benefícios ou tabelas, retorne lista vazia em 'benefits'.\n"
             "Se algum campo não estiver disponível na tabela, deixe em branco (\"\").\n\n"
