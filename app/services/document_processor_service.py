@@ -320,8 +320,6 @@ class DocumentProcessorService:
 
             full_text = doc.export_to_markdown()
             tables = self._extract_tables_from_pdf(file_path, pages)
-            print(tables)
-            exit()
             print(f"[DocumentProcessorService][pdfplumber] Tabelas detectadas: {len(tables)}")
 
         except Exception as exc:

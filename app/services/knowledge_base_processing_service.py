@@ -11,6 +11,7 @@ from app.models import (
     JudicialDocument,
     JudicialDocumentType,
     JudicialEvent,
+    JudicialLegalThesis,
     JudicialPhase,
     JudicialProcess,
     JudicialProcessBenefit,
@@ -302,6 +303,24 @@ class KnowledgeBaseProcessingService:
 
         return self._find_process_by_number(item.law_firm_id, candidate_process_number)
 
+    def _load_valid_legal_theses_for_process(
+        self,
+        process: JudicialProcess,
+        legal_thesis_ids: list[int],
+    ) -> list[JudicialLegalThesis]:
+        if not legal_thesis_ids:
+            return []
+
+        unique_ids = sorted({thesis_id for thesis_id in legal_thesis_ids if thesis_id})
+        if not unique_ids:
+            return []
+
+        return JudicialLegalThesis.query.filter(
+            JudicialLegalThesis.id.in_(unique_ids),
+            JudicialLegalThesis.law_firm_id == process.law_firm_id,
+            JudicialLegalThesis.is_active.is_(True),
+        ).order_by(JudicialLegalThesis.name.asc()).all()
+
     def _upsert_process_benefits(self, process: JudicialProcess, benefits_payload: dict) -> int:
         if not isinstance(benefits_payload, dict):
             return 0
@@ -310,7 +329,6 @@ class KnowledgeBaseProcessingService:
         if not isinstance(extracted_benefits, list):
             return 0
 
-        general_context = str(benefits_payload.get("general_revision_context", "") or "").strip()
         upserted = 0
 
         for benefit in extracted_benefits:
@@ -325,6 +343,19 @@ class KnowledgeBaseProcessingService:
             insured_name = str(benefit.get("insured_name", "") or "").strip()
             benefit_type = str(benefit.get("benefit_type", "") or "").strip()
             fap_vigencia_year = str(benefit.get("fap_vigencia_year", "") or "").strip()
+            legal_thesis_id_raw = benefit.get("legal_thesis_id")
+            legal_thesis_id = None
+            try:
+                if legal_thesis_id_raw not in (None, ""):
+                    legal_thesis_id = int(legal_thesis_id_raw)
+            except (TypeError, ValueError):
+                legal_thesis_id = None
+
+            theses = self._load_valid_legal_theses_for_process(
+                process,
+                [legal_thesis_id] if legal_thesis_id else [],
+            )
+            resolved_legal_thesis_id = theses[0].id if theses else None
 
             existing_benefit = JudicialProcessBenefit.query.filter_by(
                 process_id=process.id,
@@ -340,27 +371,32 @@ class KnowledgeBaseProcessingService:
                     existing_benefit.benefit_type = benefit_type
                 if fap_vigencia_year and not str(existing_benefit.fap_vigencia_year or "").strip():
                     existing_benefit.fap_vigencia_year = fap_vigencia_year
-                if general_context and not str(existing_benefit.legal_thesis or "").strip():
-                    existing_benefit.legal_thesis = general_context
+                if theses:
+                    existing_benefit.legal_theses = theses
+                    existing_benefit.legal_thesis_id = resolved_legal_thesis_id
+                elif resolved_legal_thesis_id is None and not existing_benefit.legal_theses:
+                    existing_benefit.legal_thesis_id = None
                 existing_benefit.updated_at = datetime.utcnow()
                 upserted += 1
                 continue
 
-            db.session.add(
-                JudicialProcessBenefit(
-                    process_id=process.id,
-                    benefit_number=benefit_number,
-                    nit_number=nit_number,
-                    insured_name=insured_name,
-                    benefit_type=benefit_type,
-                    fap_vigencia_year=fap_vigencia_year,
-                    legal_thesis=general_context,
-                    pfn_technical_note="",
-                    first_instance_decision="",
-                    second_instance_decision="",
-                    third_instance_decision="",
-                )
+            new_benefit = JudicialProcessBenefit(
+                process_id=process.id,
+                benefit_number=benefit_number,
+                nit_number=nit_number,
+                insured_name=insured_name,
+                benefit_type=benefit_type,
+                fap_vigencia_year=fap_vigencia_year,
+                legal_thesis_id=resolved_legal_thesis_id,
+                legal_thesis="",
+                pfn_technical_note="",
+                first_instance_decision="",
+                second_instance_decision="",
+                third_instance_decision="",
             )
+            if theses:
+                new_benefit.legal_theses = theses
+            db.session.add(new_benefit)
             upserted += 1
 
         return upserted

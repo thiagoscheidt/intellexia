@@ -35,6 +35,7 @@ class BenefitRequestItem(BaseModel):
     insured_name: str = Field(default="", description="Nome do segurado")
     benefit_type: str = Field(default="", description="Tipo do benefício (B91, B92, B93, B94, etc)")
     fap_vigencia_year: str = Field(default="", description="Ano da vigência do FAP")
+    legal_thesis_id: int | None = Field(default=None, description="ID da tese jurídica associada à seção da tabela")
 
 
 class BenefitsRequestsExtractionResult(BaseModel):
@@ -53,7 +54,7 @@ class AgentDocumentExtractor:
 
     def __init__(
         self,
-        model_name: str = "gpt-5-nano",
+        model_name: str = "gpt-5-mini",
         model_provider: str | None = None,
         chunk_size: int = 1800,
         chunk_overlap: int = 150,
@@ -250,6 +251,27 @@ class AgentDocumentExtractor:
         except Exception:
             return []
 
+    def _load_legal_theses_from_db(self, law_firm_id: int | None = None) -> list[dict[str, str | int]]:
+        try:
+            from app.models import JudicialLegalThesis
+
+            query = JudicialLegalThesis.query.filter_by(is_active=True)
+            if law_firm_id is not None:
+                query = query.filter_by(law_firm_id=law_firm_id)
+
+            items = query.order_by(JudicialLegalThesis.name.asc()).all()
+            return [
+                {
+                    "id": int(item.id),
+                    "key": str(item.key or "").strip(),
+                    "name": str(item.name or "").strip(),
+                    "description": str(item.description or "").strip(),
+                }
+                for item in items
+            ]
+        except Exception:
+            return []
+
     def _fallback_from_regex(self, text: str) -> DocumentExtractionResult:
         process_number_pattern = re.compile(r"\b\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}\b")
         process_number = ""
@@ -294,6 +316,7 @@ class AgentDocumentExtractor:
             if not isinstance(item, dict):
                 continue
             page = item.get("page")
+            section = item.get("section")
             text_value = item.get("text")
 
             if isinstance(text_value, list):
@@ -309,11 +332,48 @@ class AgentDocumentExtractor:
             normalized_tables.append(
                 {
                     "page": page,
+                    "section": str(section).strip() if section else "",
                     "rows": rows,
                 }
             )
 
         return normalized_tables
+
+    def _filter_out_pedidos_section(self, tables: list[dict]) -> list[dict]:
+        """Remove seções de pedidos que não pareçam conter tabelas reais de benefícios."""
+        filtered_tables: list[dict] = []
+        benefit_keywords = (
+            "vigência",
+            "vigencia",
+            "fap",
+            "nit",
+            "segurado",
+            "beneficiário",
+            "beneficiario",
+            "benefício",
+            "beneficio",
+            "nb",
+            "b91",
+            "b92",
+            "b93",
+            "b94",
+            "b31",
+            "b42",
+            "b46",
+        )
+
+        for table in tables:
+            section = str(table.get("section") or "").strip().lower()
+            rows = table.get("rows", [])
+            if "pedidos" not in section:
+                filtered_tables.append(table)
+                continue
+
+            table_text = "\n".join(str(row) for row in rows).lower()
+            if any(keyword in table_text for keyword in benefit_keywords):
+                filtered_tables.append(table)
+
+        return filtered_tables
 
     def _tables_to_prompt_text(self, tables: list[dict]) -> str:
         blocks: list[str] = []
@@ -321,6 +381,7 @@ class AgentDocumentExtractor:
             page = table.get("page")
             section = table.get("section")
             rows = table.get("rows", [])
+            print(rows)
             if not rows:
                 continue
 
@@ -334,6 +395,7 @@ class AgentDocumentExtractor:
 
             blocks.extend(rows)
             blocks.append("")
+        exit()
 
         return "\n".join(blocks).strip()
 
@@ -506,11 +568,19 @@ class AgentDocumentExtractor:
         Se não houver tabelas, retorna resultado vazio sem busca no vetor.
         """
         effective_file_path = file_path or (str(self.file_path) if self.file_path else None)
+        effective_law_firm_id = self.law_firm_id
 
         tables = self._get_document_data_tables()
+        tables = self._filter_out_pedidos_section(tables)
         if not tables:
             print("⚠ Nenhuma tabela encontrada em document_data.")
             return BenefitsRequestsExtractionResult().model_dump()
+
+        legal_theses = self._load_legal_theses_from_db(law_firm_id=effective_law_firm_id)
+        legal_theses_prompt = "\n".join(
+            f"- id: {item['id']} | key: {item['key']} | nome: {item['name']} | descrição: {item['description']}"
+            for item in legal_theses
+        ) or "(lista não informada)"
 
         relevant_text = self._tables_to_prompt_text(tables)
         total_rows = sum(len(table.get("rows", [])) for table in tables)
@@ -522,25 +592,30 @@ class AgentDocumentExtractor:
             "As tabelas podem ter estruturas diferentes. Você deve:\n"
             "1. Observar o header (primeira linha) de cada tabela para entender quais são as colunas\n"
             "2. Identificar as colunas relevantes por seu significado e nome, não por posição fixa\n"
-            "3. Buscar pelas seguintes colunas (os nomes podem variar):\n"
+            "3. Observar a seção informada no cabeçalho [Página X | Seção: ...] para mapear a tese jurídica\n"
+            "4. Buscar pelas seguintes colunas (os nomes podem variar):\n"
             "   - VIGÊNCIA FAP, Vigência, Year, Ano, FAP, Período → para fap_vigencia_year\n"
             "   - NIT, NIT do Segurado → para nit_number\n"
             "   - SEGURADO, Empregado, Nome, Beneficiário, Titular → para insured_name\n"
             "   - TIPO, Tipo de Benefício, Código, B-type → para benefit_type (B91, B92, B93, B94, etc)\n"
             "   - BENEFÍCIO, Nº Benefício, Número Benefício, NB → para benefit_number\n\n"
+            "TESES JURÍDICAS CADASTRADAS (use o id para preencher legal_thesis_id):\n"
+            f"{legal_theses_prompt}\n\n"
             "PROCESSAMENTO:\n"
-            "Para cada linha de dados da tabela, extraia os 5 campos acima conforme seus nomes reais:\n"
+            "Para cada linha de dados da tabela, extraia os campos abaixo conforme seus nomes reais:\n"
             "- benefit_number: número do benefício\n"
             "- nit_number: número do NIT (11 dígitos)\n" 
             "- insured_name: nome completo do segurado/beneficiário\n"
             "- benefit_type: tipo do benefício (B91, B92, B93, B94, B31, B42, B46, etc)\n"
             "- fap_vigencia_year: ano da vigência (2022, 2023, etc)\n\n"
+            "Mapeamento de tese:\n"
+            "- legal_thesis_id: escolha APENAS um id da lista de teses cadastradas, de acordo com a seção da tabela.\n"
+            "- Se não houver confiança suficiente para mapear, retorne null.\n\n"
             "Se não houver benefícios ou tabelas, retorne lista vazia em 'benefits'.\n"
             "Se algum campo não estiver disponível na tabela, deixe em branco (\"\").\n\n"
             f"TABELAS DA PETIÇÃO:\n\n{relevant_text}"
         )
 
-        print(relevant_text)  # Log do texto relevante para debug
         try:
             benefits_agent = self._build_benefits_extraction_agent()
             call_started_at = time.time()
