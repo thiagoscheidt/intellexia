@@ -512,17 +512,22 @@ class AgentDocumentExtractor:
                 cnpj_value = cells[cnpj_idx]
                 if self._looks_like_year(vig_value) and self._looks_like_year(cnpj_value):
                     cells[vig_idx] = f"{vig_value},{cnpj_value}"
+                    cells[cnpj_idx] = ""
 
             if tipo_idx is not None and (not cells[tipo_idx]):
-                for probe in cells:
+                for probe_idx, probe in enumerate(cells):
                     if self._looks_like_benefit_type(probe):
                         cells[tipo_idx] = probe
+                        if probe_idx != tipo_idx:
+                            cells[probe_idx] = ""
                         break
 
             if ben_idx is not None and (not cells[ben_idx]):
-                for probe in cells:
+                for probe_idx, probe in enumerate(cells):
                     if self._looks_like_benefit_number(probe):
                         cells[ben_idx] = probe
+                        if probe_idx != ben_idx:
+                            cells[probe_idx] = ""
                         break
 
             if cnpj_idx is not None:

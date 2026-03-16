@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import io
 import re
+import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, List
@@ -92,6 +92,23 @@ class DocumentProcessorService:
         return None
 
     @staticmethod
+    def _detect_sections(text: str) -> list[str]:
+        """Retorna todas as seções numeradas detectadas em uma página (sem duplicar)."""
+        matches = re.findall(
+            r'^(?:#{1,3}\s+)?(\d+\.\s+[^\n]+)$',
+            text,
+            re.MULTILINE,
+        )
+        unique_sections: list[str] = []
+        seen: set[str] = set()
+        for item in matches:
+            section_name = str(item).strip()
+            if section_name and section_name not in seen:
+                seen.add(section_name)
+                unique_sections.append(section_name)
+        return unique_sections
+
+    @staticmethod
     def _extract_item_page(item: Any) -> int | None:
         if not hasattr(item, "prov") or not item.prov:
             return None
@@ -134,6 +151,19 @@ class DocumentProcessorService:
                 or benefit_number_re.search(joined)
                 or date_re.search(joined)
             )
+
+        def _normalize_header_token(value: str) -> str:
+            normalized = unicodedata.normalize('NFKD', str(value or '').strip().lower())
+            return ''.join(ch for ch in normalized if not unicodedata.combining(ch))
+
+        def _is_year_token(value: str) -> bool:
+            return bool(re.fullmatch(r'\d{4}', str(value or '').strip()))
+
+        def _is_benefit_type_token(value: str) -> bool:
+            return bool(re.fullmatch(r'B\d{2}', str(value or '').strip().upper()))
+
+        def _is_benefit_number_token(value: str) -> bool:
+            return bool(re.fullmatch(r'\d{9,11}', str(value or '').strip()))
 
         try:
             with pdfplumber.open(str(file_path)) as pdf:
@@ -189,6 +219,42 @@ class DocumentProcessorService:
                             continue
 
                         compact_header = [h for h in header_cells if h.strip()]
+                        compact_header_norm = [_normalize_header_token(h) for h in compact_header]
+                        vigencia_idx = next(
+                            (
+                                idx for idx, token in enumerate(compact_header_norm)
+                                if 'vigencia' in token or ('fap' in token and 'vig' in token)
+                            ),
+                            None,
+                        )
+                        tipo_idx = next((idx for idx, token in enumerate(compact_header_norm) if 'tipo' in token), None)
+                        beneficio_idx = next(
+                            (idx for idx, token in enumerate(compact_header_norm) if 'beneficio' in token or token == 'nb'),
+                            None,
+                        )
+                        item_idx = next((idx for idx, token in enumerate(compact_header_norm) if token.startswith('item')), None)
+                        diferenca_idx = next(
+                            (
+                                idx for idx, token in enumerate(compact_header_norm)
+                                if 'diferenca' in token or ('dcb' in token and 'dib' in token)
+                            ),
+                            None,
+                        )
+                        cnpj_idx = next((idx for idx, token in enumerate(compact_header_norm) if 'cnpj' in token), None)
+                        empregado_idx = next(
+                            (
+                                idx for idx, token in enumerate(compact_header_norm)
+                                if 'empregado' in token or 'segurado' in token or 'beneficiario' in token
+                            ),
+                            None,
+                        )
+                        nit_idx = next((idx for idx, token in enumerate(compact_header_norm) if 'nit' in token), None)
+
+                        carry_values = {
+                            'cnpj': '',
+                            'empregado': '',
+                            'nit': '',
+                        }
                         rendered_rows: list[str] = [" | ".join(compact_header)]
                         data_rows_with_multiple_values = 0
 
@@ -205,10 +271,105 @@ class DocumentProcessorService:
                                 if cell and str(cell).strip()
                             ]
 
+                            # Alguns PDFs quebram "Vigência FAP" em duas células (ex.: 2019 | 2020).
+                            # Mescla o par antes do mapeamento posicional.
+                            while (
+                                vigencia_idx is not None
+                                and vigencia_idx + 1 < len(compact_values)
+                                and _is_year_token(compact_values[vigencia_idx])
+                                and _is_year_token(compact_values[vigencia_idx + 1])
+                            ):
+                                compact_values[vigencia_idx] = (
+                                    f"{compact_values[vigencia_idx]}-{compact_values[vigencia_idx + 1]}"
+                                )
+                                del compact_values[vigencia_idx + 1]
+
+                            # Realinha linhas com colspan/rowspan onde CNPJ/Empregado/NIT ficam vazios
+                            # e o tipo/benefício deslocam para a esquerda.
+                            if tipo_idx is not None and tipo_idx < len(compact_header):
+                                type_positions = [
+                                    i for i, val in enumerate(compact_values)
+                                    if _is_benefit_type_token(val)
+                                ]
+                                if type_positions:
+                                    first_type_pos = type_positions[0]
+                                    if first_type_pos < tipo_idx:
+                                        compact_values = (
+                                            compact_values[:first_type_pos]
+                                            + [""] * (tipo_idx - first_type_pos)
+                                            + compact_values[first_type_pos:]
+                                        )
+
+                            if beneficio_idx is not None and beneficio_idx < len(compact_header):
+                                if beneficio_idx < len(compact_values):
+                                    if not _is_benefit_number_token(compact_values[beneficio_idx]):
+                                        for probe_idx in range(beneficio_idx + 1, len(compact_values)):
+                                            if _is_benefit_number_token(compact_values[probe_idx]):
+                                                compact_values.insert(
+                                                    beneficio_idx,
+                                                    compact_values.pop(probe_idx),
+                                                )
+                                                break
+
+                            # Se o número do benefício caiu em coluna anterior (ex.: CNPJ),
+                            # move para a coluna correta quando Benefício estiver vazio.
+                            if (
+                                beneficio_idx is not None
+                                and beneficio_idx < len(compact_values)
+                                and not str(compact_values[beneficio_idx] or '').strip()
+                            ):
+                                for probe_idx in range(0, beneficio_idx):
+                                    probe_val = str(compact_values[probe_idx] or '').strip()
+                                    if _is_benefit_number_token(probe_val) and not cnpj_re.search(probe_val):
+                                        compact_values[beneficio_idx] = probe_val
+                                        compact_values[probe_idx] = ''
+                                        break
+
                             row_cells = [
                                 compact_values[i] if i < len(compact_values) else ""
                                 for i in range(len(compact_header))
                             ]
+
+                            # Carry-over seletivo para colunas que costumam vir com rowspan.
+                            # Mantém último valor não vazio de CNPJ/Empregado/NIT e replica
+                            # apenas nessas colunas quando a célula atual vier vazia.
+                            for field_name, field_idx in (
+                                ('cnpj', cnpj_idx),
+                                ('empregado', empregado_idx),
+                                ('nit', nit_idx),
+                            ):
+                                if field_idx is None or field_idx >= len(row_cells):
+                                    continue
+
+                                current_value = str(row_cells[field_idx] or '').strip()
+                                if current_value:
+                                    is_valid_for_field = (
+                                        (field_name == 'cnpj' and bool(cnpj_re.search(current_value)))
+                                        or (field_name == 'empregado' and bool(re.search(r'[A-Za-zÀ-ÿ]', current_value)))
+                                        or (field_name == 'nit' and bool(nit_re.search(current_value)))
+                                    )
+                                    if is_valid_for_field:
+                                        carry_values[field_name] = current_value
+                                elif carry_values[field_name]:
+                                    row_cells[field_idx] = carry_values[field_name]
+
+                            # Linhas de continuação como "48 dias" devem ser mescladas
+                            # na linha anterior, preenchendo a coluna de diferença.
+                            is_continuation_days_row = False
+                            if item_idx is not None and item_idx < len(row_cells):
+                                item_value = str(row_cells[item_idx] or '').strip().lower()
+                                is_continuation_days_row = bool(re.fullmatch(r'\d+\s*dias?', item_value))
+
+                            if (
+                                is_continuation_days_row
+                                and diferenca_idx is not None
+                                and len(rendered_rows) > 1
+                            ):
+                                prev_cells = [part.strip() for part in rendered_rows[-1].split(' | ')]
+                                if len(prev_cells) == len(compact_header):
+                                    prev_cells[diferenca_idx] = str(row_cells[item_idx] or '').strip()
+                                    rendered_rows[-1] = ' | '.join(prev_cells)
+                                    continue
 
                             if any(row_cells):
                                 if sum(1 for value in row_cells if value) >= 2:
@@ -314,18 +475,23 @@ class DocumentProcessorService:
 
                     page_text = "\n".join(page_items)
 
-                    # Verifica se esta página abre uma nova seção numerada
-                    detected = self._detect_section(page_text)
-                    if detected:
-                        current_section = detected
-                        print(f"[DocumentProcessorService] Seção detectada na pág {page_no}: {current_section}")
+                    # Verifica se esta página contém uma ou mais seções numeradas.
+                    detected_sections = self._detect_sections(page_text)
+                    if detected_sections:
+                        current_section = detected_sections[-1]
+                        page_section = ", ".join(detected_sections)
+                        print(f"[DocumentProcessorService] Seções detectadas na pág {page_no}: {page_section}")
+                    else:
+                        page_section = current_section
 
-                    pages.append(PageContent(page=page_no, text=page_text, section=current_section))
+                    pages.append(PageContent(page=page_no, text=page_text, section=page_section))
                     if page_text.strip():
-                        chunks_with_pages.append({"text": page_text, "page": page_no, "section": current_section})
+                        chunks_with_pages.append({"text": page_text, "page": page_no, "section": page_section})
 
             full_text = doc.export_to_markdown()
             tables = self._extract_tables_from_pdf(file_path, pages)
+            print(tables)
+            exit()
             print(f"[DocumentProcessorService][pdfplumber] Tabelas detectadas: {len(tables)}")
 
         except Exception as exc:

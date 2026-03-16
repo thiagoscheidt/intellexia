@@ -540,6 +540,44 @@
         </div>
         {% endif %}
         {% endif %}
+
+        {% if sentence.status == 'completed' and sentence.analysis_result %}
+        {% set benefits_payload = analysis_parsed.get('petition_benefits', {}) %}
+        {% set benefits_items = benefits_payload.get('benefits', []) if benefits_payload else [] %}
+        {% set theses_list = benefits_items|map(attribute='revision_reason')|select|list %}
+
+        <div class="card card-primary card-outline shadow-sm mt-3">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-clipboard2-data"></i> Benefícios e Teses</h3>
+          </div>
+          <div class="card-body">
+            <div class="d-flex align-items-center justify-content-between border rounded p-3 mb-3 bg-light">
+              <div>
+                <small class="text-muted d-block">Quantidade de benefícios</small>
+                <h4 class="mb-0">{{ benefits_items|length }}</h4>
+              </div>
+              <i class="bi bi-123 text-primary" style="font-size: 1.6rem;"></i>
+            </div>
+
+            <small class="text-muted d-block mb-2">Teses identificadas</small>
+            {% if theses_list %}
+            <div class="d-flex flex-wrap gap-2">
+              {% for thesis in theses_list|unique %}
+              {% set thesis_count = theses_list|select('equalto', thesis)|list|length %}
+              <span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle">
+                {{ thesis }}
+                <span class="badge rounded-pill bg-primary text-white ms-1">{{ thesis_count }}</span>
+              </span>
+              {% endfor %}
+            </div>
+            {% else %}
+            <div class="alert alert-light border mb-0 py-2">
+              <small class="text-muted">Nenhuma tese informada nos benefícios desta análise.</small>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
       </div>
     </div>
   </div>
