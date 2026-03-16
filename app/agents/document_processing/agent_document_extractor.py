@@ -355,17 +355,23 @@ class AgentDocumentExtractor:
             "nb",
         )
         benefit_type_re = re.compile(r"\bb\d{2}\b", re.IGNORECASE)
+        normalized_keywords = tuple(self._normalize_text_token(k) for k in benefit_text_keywords)
 
         filtered_tables: list[dict] = []
         for table in tables:
-            section = str(table.get("section") or "").strip().lower()
+            section_raw = str(table.get("section") or "").strip()
+            section = self._normalize_text_token(section_raw)
             rows = table.get("rows", [])
-            if "pedidos" not in section:
+
+            # Aceita apenas variações contendo "pedidos" (plural).
+            is_pedidos_section = bool(re.search(r"\bpedidos\b", section))
+
+            if not is_pedidos_section:
                 filtered_tables.append(table)
                 continue
 
-            table_text = "\n".join(str(row) for row in rows).lower()
-            if any(keyword in table_text for keyword in benefit_text_keywords) or benefit_type_re.search(table_text):
+            table_text = self._normalize_text_token("\n".join(str(row) for row in rows))
+            if any(keyword in table_text for keyword in normalized_keywords) or benefit_type_re.search(table_text):
                 filtered_tables.append(table)
 
         return filtered_tables
