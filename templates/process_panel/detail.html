@@ -512,10 +512,13 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                       <div class="text-center py-5">
                         <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
                         <p class="text-muted mt-3 mb-3">Nenhuma análise de sentença encontrada</p>
-                        <a href="{{ url_for('tools.judicial_sentence_analysis_upload') }}"
-                          class="btn btn-primary btn-sm" target="_blank" rel="noopener noreferrer">
-                          <i class="bi bi-plus-circle me-2"></i>Enviar Análise
-                        </a>
+                        <form method="post"
+                          action="{{ url_for('process_panel.queue_sentence_analyses_for_process', process_id=process.id) }}"
+                          class="d-inline">
+                          <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="bi bi-cpu me-2"></i>Criar e enfileirar análises
+                          </button>
+                        </form>
                       </div>
                       {% endif %}
                     </div>

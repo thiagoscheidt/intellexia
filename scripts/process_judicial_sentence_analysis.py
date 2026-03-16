@@ -14,6 +14,7 @@ import sys
 import json
 import argparse
 import unicodedata
+import re
 from datetime import datetime
 from rich import print
 
@@ -128,6 +129,160 @@ def _normalize_benefit_decision(value: str | None) -> str:
     return 'Não mencionado na sentença'
 
 
+def _normalize_for_match(value: str | None) -> str:
+    normalized = _normalize_doc_type(value)
+    return re.sub(r'\s+', ' ', normalized).strip()
+
+
+def _extract_thesis_terms(value: str | None) -> list[str]:
+    text = _normalize_for_match(value)
+    if not text:
+        return []
+
+    terms: list[str] = []
+    stopwords = {
+        'beneficio', 'beneficios', 'revisao', 'fap', 'motivo', 'legal', 'tese', 'teses',
+        'de', 'da', 'do', 'dos', 'das', 'e', 'em', 'para', 'por', 'com', 'sem'
+    }
+    for token in re.split(r'[^a-z0-9]+', text):
+        if not token or token in stopwords:
+            continue
+        if len(token) >= 3 or re.fullmatch(r'b\d{2}', token):
+            terms.append(token)
+
+    seen = set()
+    unique_terms = []
+    for term in terms:
+        if term in seen:
+            continue
+        seen.add(term)
+        unique_terms.append(term)
+    return unique_terms
+
+
+def _build_analysis_text_blob(analysis: dict) -> str:
+    if not isinstance(analysis, dict):
+        return ''
+
+    sentence_info = analysis.get('sentence_info', {}) if isinstance(analysis.get('sentence_info', {}), dict) else {}
+    parts: list[str] = []
+
+    for key in ('summary', 'summary_short', 'summary_long', 'notes'):
+        value = analysis.get(key)
+        if isinstance(value, str) and value.strip():
+            parts.append(value)
+
+    for key in ('operative_part', 'overall_result'):
+        value = sentence_info.get(key)
+        if isinstance(value, str) and value.strip():
+            parts.append(value)
+
+    for item in sentence_info.get('key_points', []) if isinstance(sentence_info.get('key_points'), list) else []:
+        if isinstance(item, str) and item.strip():
+            parts.append(item)
+
+    for decision in sentence_info.get('decisions', []) if isinstance(sentence_info.get('decisions'), list) else []:
+        if not isinstance(decision, dict):
+            continue
+        for key in ('subject', 'result', 'reasoning'):
+            value = decision.get(key)
+            if isinstance(value, str) and value.strip():
+                parts.append(value)
+
+    for benefit_item in sentence_info.get('fap_benefits_analysis', []) if isinstance(sentence_info.get('fap_benefits_analysis'), list) else []:
+        if not isinstance(benefit_item, dict):
+            continue
+        for key in ('benefit_number', 'insured_name', 'accident_type', 'result', 'reasoning'):
+            value = benefit_item.get(key)
+            if isinstance(value, str) and value.strip():
+                parts.append(value)
+
+    return _normalize_for_match(' '.join(parts))
+
+
+def _load_process_benefits_payload(process_number: str | None, law_firm_id: int | None) -> dict | None:
+    """Carrega benefícios já cadastrados no processo para usar como contexto da análise de sentença."""
+    process_number_clean = str(process_number or '').strip()
+    if not process_number_clean or not law_firm_id:
+        return None
+
+    process = JudicialProcess.query.filter_by(
+        law_firm_id=law_firm_id,
+        process_number=process_number_clean,
+    ).first()
+    if not process:
+        return None
+
+    process_benefits = JudicialProcessBenefit.query.filter_by(process_id=process.id).all()
+    if not process_benefits:
+        return None
+
+    benefits_list = []
+    for benefit in process_benefits:
+        revision_reason = ''
+        if getattr(benefit, 'legal_theses', None):
+            thesis_names = [thesis.name for thesis in benefit.legal_theses if thesis and thesis.name]
+            revision_reason = ', '.join(thesis_names)
+        elif getattr(benefit, 'legal_thesis', None):
+            revision_reason = str(benefit.legal_thesis)
+
+        benefits_list.append({
+            'benefit_number': str(benefit.benefit_number or '').strip(),
+            'nit_number': str(benefit.nit_number or '').strip(),
+            'insured_name': str(benefit.insured_name or '').strip(),
+            'benefit_type': str(benefit.benefit_type or '').strip(),
+            'fap_vigencia_year': str(benefit.fap_vigencia_year or '').strip(),
+            'accident_date': '',
+            'revision_reason': revision_reason.strip(),
+        })
+
+    return {
+        'general_revision_context': 'Benefícios carregados da base do processo judicial',
+        'benefits': benefits_list,
+    }
+
+
+def _build_benefits_markdown_context(petition_benefits_data: dict | None) -> str | None:
+    """Converte benefícios estruturados em texto tabular para contexto forte no prompt."""
+    if not petition_benefits_data or not isinstance(petition_benefits_data, dict):
+        return None
+
+    benefits = petition_benefits_data.get('benefits', [])
+    if not isinstance(benefits, list) or not benefits:
+        return None
+
+    header = [
+        'INSTRUCOES DE VINCULACAO:',
+        '- Considere TODOS os beneficios da tabela para preencher fap_benefits_analysis.',
+        '- Se a sentenca decidir em BLOCO por grupo (ex.: "14 B91 de trajeto"), propague a mesma decisao para todos os beneficios desse grupo (mesmo tipo/tese).',
+        '- Marque "Nao mencionado na sentenca" apenas quando realmente nao houver criterio para vincular o beneficio.',
+        '',
+        '| NB | NIT | Segurado | Tipo | Vigência FAP | Motivo/Tese |',
+        '|---|---|---|---|---|---|',
+    ]
+
+    rows = []
+    for benefit in benefits:
+        if not isinstance(benefit, dict):
+            continue
+
+        benefit_number = str(benefit.get('benefit_number') or '').strip() or '-'
+        nit_number = str(benefit.get('nit_number') or '').strip() or '-'
+        insured_name = str(benefit.get('insured_name') or '').strip() or '-'
+        benefit_type = str(benefit.get('benefit_type') or '').strip() or '-'
+        fap_vigencia = str(benefit.get('fap_vigencia_year') or '').strip() or '-'
+        revision_reason = str(benefit.get('revision_reason') or '').strip() or '-'
+
+        rows.append(
+            f"| {benefit_number} | {nit_number} | {insured_name} | {benefit_type} | {fap_vigencia} | {revision_reason} |"
+        )
+
+    if not rows:
+        return None
+
+    return '\n'.join(header + rows)
+
+
 def _sync_benefit_decisions_from_analysis(item: JudicialSentenceAnalysis, analysis: dict) -> int:
     process_number = str(item.process_number or '').strip()
     if not process_number:
@@ -147,6 +302,10 @@ def _sync_benefit_decisions_from_analysis(item: JudicialSentenceAnalysis, analys
 
     updated = 0
     process_benefits = JudicialProcessBenefit.query.filter_by(process_id=process.id).all()
+    analysis_text_blob = _build_analysis_text_blob(analysis)
+
+    positive_markers = ('aceito', 'aceitos', 'procedente', 'procedentes', 'defer', 'reconhecid')
+    negative_markers = ('rejeitado', 'rejeitados', 'improcedente', 'indefer')
 
     benefits_by_number = {
         _normalize_benefit_number(benefit.benefit_number): benefit
@@ -173,12 +332,48 @@ def _sync_benefit_decisions_from_analysis(item: JudicialSentenceAnalysis, analys
             target_benefit.updated_at = datetime.utcnow()
             updated += 1
 
+    # Fallback: quando a sentença decide por grupo (tipo/tese) e não por NB individual.
+    for benefit in process_benefits:
+        if benefit.first_instance_decision and benefit.first_instance_decision != 'Não mencionado na sentença':
+            continue
+
+        benefit_type_norm = _normalize_for_match(benefit.benefit_type)
+        if not benefit_type_norm or benefit_type_norm not in analysis_text_blob:
+            continue
+
+        thesis_text = ''
+        if getattr(benefit, 'legal_theses', None):
+            thesis_text = ' '.join([th.name for th in benefit.legal_theses if th and th.name])
+        elif getattr(benefit, 'legal_thesis', None):
+            thesis_text = str(benefit.legal_thesis)
+
+        thesis_terms = _extract_thesis_terms(thesis_text)
+        if not thesis_terms:
+            continue
+        if not any(term in analysis_text_blob for term in thesis_terms):
+            continue
+
+        has_positive = any(marker in analysis_text_blob for marker in positive_markers)
+        has_negative = any(marker in analysis_text_blob for marker in negative_markers)
+
+        inferred_decision = None
+        if has_positive and not has_negative:
+            inferred_decision = 'Procedente'
+        elif has_negative and not has_positive:
+            inferred_decision = 'Improcedente'
+
+        if inferred_decision and benefit.first_instance_decision != inferred_decision:
+            benefit.first_instance_decision = inferred_decision
+            benefit.updated_at = datetime.utcnow()
+            updated += 1
+
     return updated
 
 
 def analyze_sentence_with_ai(
     sentence_path: str,
     petition_path: str | None = None,
+    process_number: str | None = None,
     user_id: int | None = None,
     law_firm_id: int | None = None,
 ) -> str | None:
@@ -196,7 +391,16 @@ def analyze_sentence_with_ai(
         # PASSO 1: Extrair pedidos e benefícios da petição ANTES de analisar a sentença (se houver)
         petition_requests_list = None
         petition_requests_data = None
-        petition_benefits_data = None
+        petition_benefits_data = _load_process_benefits_payload(
+            process_number=process_number,
+            law_firm_id=law_firm_id,
+        )
+        petition_benefits_context = _build_benefits_markdown_context(petition_benefits_data)
+
+        if petition_benefits_data and petition_benefits_data.get('benefits'):
+            print(f"✓ {len(petition_benefits_data.get('benefits', []))} benefícios carregados da tabela do processo")
+        else:
+            print("⚠ Nenhum benefício encontrado na tabela do processo")
         
         if petition_path and os.path.exists(petition_path):
             petition_agent = AgentInitialPetitionAnalysis(model_name="gpt-5-nano")
@@ -213,21 +417,7 @@ def analyze_sentence_with_ai(
             #     import traceback
             #     traceback.print_exc()
             
-            # 1.2 Extrair benefícios (especialmente importante para processos FAP)
-            print(f"Extraindo benefícios da petição inicial: {petition_path}")
-            try:
-                #petition_benefits_data = petition_agent.extract_benefits_and_reasons(file_path=petition_path)
-                petition_benefits_data = petition_agent.extract_table_text_from_petition(file_path=petition_path)
-
-                print("Benefícios extraídos da petição:")
-                if petition_benefits_data:
-                    print(f"✓ Tabelas de benefícios extraídas")
-                else:
-                    print(f"⚠ Nenhuma tabela de benefícios encontrada")
-            except Exception as benefits_error:
-                print(f"Erro ao extrair benefícios da petição inicial: {benefits_error}")
-                import traceback
-                traceback.print_exc()
+            # 1.2 Benefícios agora vêm da base do processo (JudicialProcessBenefit), não da petição.
         elif petition_path:
             print(f"Petição inicial informada, mas arquivo não encontrado: {petition_path}")
         
@@ -238,7 +428,7 @@ def analyze_sentence_with_ai(
         sentence_analysis = sentence_agent.summarizeSentence(
             file_path=sentence_path,
             petition_requests=petition_requests_list,
-            petition_benefits=petition_benefits_data,
+            petition_benefits=petition_benefits_context or petition_benefits_data,
             user_id=user_id,
             law_firm_id=law_firm_id,
         )
@@ -306,6 +496,7 @@ def process_pending_sentences(batch_size: int = 10, process_id: int | None = Non
             analysis = analyze_sentence_with_ai(
                 sentence_path=item.file_path,
                 petition_path=item.petition_file_path,
+                process_number=item.process_number,
                 user_id=item.user_id,
                 law_firm_id=item.law_firm_id,
             )
