@@ -73,6 +73,40 @@ class DocumentProcessorService:
     # ------------------------------------------------------------------
 
     @staticmethod
+    def _is_valid_section_title(candidate: str) -> bool:
+        """Filtra falsos positivos de seção (ex.: citação longa iniciada por número)."""
+        title = " ".join(str(candidate or "").strip().split())
+        if not title:
+            return False
+
+        # Ignora entradas típicas de sumário com pontilhado e número de página.
+        if re.search(r'\.{3,}\s*\d+\s*$', title):
+            return False
+
+        # Títulos reais de seção costumam ser curtos; citações tendem a ser longas.
+        if len(title) > 140:
+            return False
+
+        # Padrões comuns de citação/jurisprudência textual em linha corrida.
+        if re.search(r'["“”]|\(p\.\s*\d+|RE\s*n[ºo]', title, re.IGNORECASE):
+            return False
+
+        letters = [ch for ch in title if ch.isalpha()]
+        if letters:
+            upper_count = sum(1 for ch in letters if ch.isupper())
+            lower_count = sum(1 for ch in letters if ch.islower())
+
+            # Se predomina minusculo em texto longo, tende a ser frase/citacao.
+            if len(letters) >= 20 and lower_count > upper_count:
+                return False
+
+        # Muitas virgulas em linha longa geralmente indicam paragrafo corrido.
+        if len(title) > 80 and title.count(",") >= 2:
+            return False
+
+        return True
+
+    @staticmethod
     def _detect_section(text: str) -> str | None:
         """
         Retorna o título da seção encontrada no texto da página, ou None.
@@ -83,19 +117,21 @@ class DocumentProcessorService:
         seguido de um número, ponto e texto.
         """
         match = re.search(
-            r'^(?:#{1,3}\s+)?(\d+\.\s+[^\n]+)$',
+            r'^(?:#{1,3}[ \t]+)?(\d+\.[ \t]+[^\n]+)$',
             text,
             re.MULTILINE,
         )
         if match:
-            return match.group(1).strip()
+            section_name = match.group(1).strip()
+            if DocumentProcessorService._is_valid_section_title(section_name):
+                return section_name
         return None
 
     @staticmethod
     def _detect_sections(text: str) -> list[str]:
         """Retorna todas as seções numeradas detectadas em uma página (sem duplicar)."""
         matches = re.findall(
-            r'^(?:#{1,3}\s+)?(\d+\.\s+[^\n]+)$',
+            r'^(?:#{1,3}[ \t]+)?(\d+\.[ \t]+[^\n]+)$',
             text,
             re.MULTILINE,
         )
@@ -103,10 +139,26 @@ class DocumentProcessorService:
         seen: set[str] = set()
         for item in matches:
             section_name = str(item).strip()
-            if section_name and section_name not in seen:
+            if (
+                section_name
+                and section_name not in seen
+                and DocumentProcessorService._is_valid_section_title(section_name)
+            ):
                 seen.add(section_name)
                 unique_sections.append(section_name)
         return unique_sections
+
+    @staticmethod
+    def _extract_section_number(section_title: str | None) -> int | None:
+        if not section_title:
+            return None
+        match = re.match(r'^\s*(\d+)\.', str(section_title).strip())
+        if not match:
+            return None
+        try:
+            return int(match.group(1))
+        except ValueError:
+            return None
 
     @staticmethod
     def _extract_item_page(item: Any) -> int | None:
@@ -478,9 +530,29 @@ class DocumentProcessorService:
                     # Verifica se esta página contém uma ou mais seções numeradas.
                     detected_sections = self._detect_sections(page_text)
                     if detected_sections:
-                        current_section = detected_sections[-1]
-                        page_section = ", ".join(detected_sections)
-                        print(f"[DocumentProcessorService] Seções detectadas na pág {page_no}: {page_section}")
+                        current_section_number = self._extract_section_number(current_section)
+                        filtered_sections: list[str] = []
+                        for candidate_section in detected_sections:
+                            candidate_number = self._extract_section_number(candidate_section)
+
+                            # Ignora regressões numéricas fortes, comuns em citações transcritas
+                            # (ex.: documento está na seção 8 e aparece "4. ..." dentro de citação).
+                            if (
+                                current_section_number is not None
+                                and candidate_number is not None
+                                and candidate_number + 1 < current_section_number
+                            ):
+                                continue
+
+                            filtered_sections.append(candidate_section)
+                            current_section_number = candidate_number if candidate_number is not None else current_section_number
+
+                        if filtered_sections:
+                            current_section = filtered_sections[-1]
+                            page_section = ", ".join(filtered_sections)
+                            print(f"[DocumentProcessorService] Seções detectadas na pág {page_no}: {page_section}")
+                        else:
+                            page_section = current_section
                     else:
                         page_section = current_section
 
@@ -490,8 +562,6 @@ class DocumentProcessorService:
 
             full_text = doc.export_to_markdown()
             tables = self._extract_tables_from_pdf(file_path, pages)
-            print(tables)
-            exit()
             print(f"[DocumentProcessorService][pdfplumber] Tabelas detectadas: {len(tables)}")
 
         except Exception as exc:
