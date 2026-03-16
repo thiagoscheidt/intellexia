@@ -1,6 +1,7 @@
 import re
 import os
 import time
+import unicodedata
 from pathlib import Path
 from typing import Any, Optional, List
 from rich import print
@@ -329,6 +330,8 @@ class AgentDocumentExtractor:
             if not rows:
                 continue
 
+            rows = self._normalize_table_rows_with_carryover(rows)
+
             normalized_tables.append(
                 {
                     "page": page,
@@ -387,6 +390,198 @@ class AgentDocumentExtractor:
             blocks.extend(rows)
             blocks.append("")
         return "\n".join(blocks).strip()
+
+    @staticmethod
+    def _normalize_text_token(value: str) -> str:
+        text = str(value or "").strip().lower()
+        text = unicodedata.normalize("NFKD", text)
+        text = "".join(ch for ch in text if not unicodedata.combining(ch))
+        return text
+
+    @staticmethod
+    def _split_pipe_row(row: str) -> list[str]:
+        return [cell.strip() for cell in str(row).split("|")]
+
+    @staticmethod
+    def _looks_like_cnpj(value: str) -> bool:
+        digits = re.sub(r"\D", "", str(value or ""))
+        return len(digits) == 14
+
+    @staticmethod
+    def _looks_like_nit(value: str) -> bool:
+        digits = re.sub(r"\D", "", str(value or ""))
+        return len(digits) == 11
+
+    @staticmethod
+    def _looks_like_benefit_type(value: str) -> bool:
+        return bool(re.fullmatch(r"B\d{2}", str(value or "").strip().upper()))
+
+    @staticmethod
+    def _looks_like_benefit_number(value: str) -> bool:
+        digits = re.sub(r"\D", "", str(value or ""))
+        return len(digits) >= 9
+
+    @staticmethod
+    def _looks_like_year(value: str) -> bool:
+        return bool(re.fullmatch(r"\d{4}", str(value or "").strip()))
+
+    @staticmethod
+    def _looks_like_date(value: str) -> bool:
+        return bool(re.fullmatch(r"\d{2}/\d{2}/\d{4}", str(value or "").strip()))
+
+    @staticmethod
+    def _looks_like_name_or_company(value: str) -> bool:
+        text = str(value or "").strip()
+        if not text:
+            return False
+        if AgentDocumentExtractor._looks_like_benefit_type(text):
+            return False
+        if re.fullmatch(r"\d+", re.sub(r"\D", "", text) or ""):
+            return False
+        return bool(re.search(r"[A-Za-zÀ-ÿ]", text))
+
+    def _guess_header_indexes(self, header_cells: list[str]) -> dict[str, int]:
+        indexes: dict[str, int] = {}
+        for idx, raw_cell in enumerate(header_cells):
+            cell = self._normalize_text_token(raw_cell)
+            if not cell:
+                continue
+
+            if "item" in cell and "item" not in indexes:
+                indexes["item"] = idx
+            elif "vig" in cell and "vigencia" not in indexes:
+                indexes["vigencia"] = idx
+            elif "cnpj" in cell and "cnpj" not in indexes:
+                indexes["cnpj"] = idx
+            elif ("empregado" in cell or "segurado" in cell or "beneficiario" in cell) and "empregado" not in indexes:
+                indexes["empregado"] = idx
+            elif cell == "nit" and "nit" not in indexes:
+                indexes["nit"] = idx
+            elif "tipo" in cell and "tipo" not in indexes:
+                indexes["tipo"] = idx
+            elif ("beneficio" in cell or cell == "nb") and "beneficio" not in indexes:
+                indexes["beneficio"] = idx
+            elif ("acidente" in cell and "data" in cell) and "data_acidente" not in indexes:
+                indexes["data_acidente"] = idx
+
+        return indexes
+
+    def _normalize_table_rows_with_carryover(self, rows: list[str]) -> list[str]:
+        """Normaliza linhas pipe-delimited aplicando carry-over para colunas mescladas."""
+        if not rows or "|" not in rows[0]:
+            return rows
+
+        header_cells = self._split_pipe_row(rows[0])
+        if len(header_cells) < 5:
+            return rows
+
+        indexes = self._guess_header_indexes(header_cells)
+        if not indexes:
+            return rows
+
+        row_len = len(header_cells)
+        carryover = {
+            "cnpj": "",
+            "empregado": "",
+            "nit": "",
+            "data_acidente": "",
+        }
+
+        normalized_rows: list[str] = [" | ".join(header_cells)]
+        for raw_row in rows[1:]:
+            if "|" not in raw_row:
+                normalized_rows.append(raw_row)
+                continue
+
+            cells = self._split_pipe_row(raw_row)
+            if len(cells) < row_len:
+                cells.extend([""] * (row_len - len(cells)))
+            elif len(cells) > row_len:
+                cells = cells[:row_len]
+
+            vig_idx = indexes.get("vigencia")
+            cnpj_idx = indexes.get("cnpj")
+            emp_idx = indexes.get("empregado")
+            nit_idx = indexes.get("nit")
+            tipo_idx = indexes.get("tipo")
+            ben_idx = indexes.get("beneficio")
+            date_idx = indexes.get("data_acidente")
+
+            if vig_idx is not None and cnpj_idx is not None:
+                vig_value = cells[vig_idx]
+                cnpj_value = cells[cnpj_idx]
+                if self._looks_like_year(vig_value) and self._looks_like_year(cnpj_value):
+                    cells[vig_idx] = f"{vig_value},{cnpj_value}"
+
+            if tipo_idx is not None and (not cells[tipo_idx]):
+                for probe in cells:
+                    if self._looks_like_benefit_type(probe):
+                        cells[tipo_idx] = probe
+                        break
+
+            if ben_idx is not None and (not cells[ben_idx]):
+                for probe in cells:
+                    if self._looks_like_benefit_number(probe):
+                        cells[ben_idx] = probe
+                        break
+
+            if cnpj_idx is not None:
+                if cells[cnpj_idx] and self._looks_like_cnpj(cells[cnpj_idx]):
+                    carryover["cnpj"] = cells[cnpj_idx]
+                elif (not cells[cnpj_idx]) and carryover["cnpj"]:
+                    cells[cnpj_idx] = carryover["cnpj"]
+
+            if emp_idx is not None:
+                if cells[emp_idx] and self._looks_like_name_or_company(cells[emp_idx]):
+                    carryover["empregado"] = cells[emp_idx]
+                elif (not cells[emp_idx]) and carryover["empregado"]:
+                    cells[emp_idx] = carryover["empregado"]
+
+            if nit_idx is not None:
+                if cells[nit_idx] and self._looks_like_nit(cells[nit_idx]):
+                    carryover["nit"] = cells[nit_idx]
+                elif (not cells[nit_idx]) and carryover["nit"]:
+                    cells[nit_idx] = carryover["nit"]
+
+            if date_idx is not None:
+                if cells[date_idx] and self._looks_like_date(cells[date_idx]):
+                    carryover["data_acidente"] = cells[date_idx]
+                elif (not cells[date_idx]) and carryover["data_acidente"]:
+                    cells[date_idx] = carryover["data_acidente"]
+
+            normalized_rows.append(" | ".join(cells))
+
+        return normalized_rows
+
+    def _postprocess_benefits_with_carryover(self, benefits: list[dict[str, Any]]) -> list[dict[str, Any]]:
+        """Preenche campos vazios no resultado extraído sem sobrescrever valores já informados."""
+        if not benefits:
+            return benefits
+
+        last_values_by_thesis: dict[Any, dict[str, str]] = {}
+        normalized: list[dict[str, Any]] = []
+
+        for item in benefits:
+            benefit = dict(item or {})
+            thesis_key = benefit.get("legal_thesis_id")
+            state = last_values_by_thesis.setdefault(thesis_key, {"nit": "", "insured_name": ""})
+
+            current_nit = str(benefit.get("nit_number") or "").strip()
+            current_name = str(benefit.get("insured_name") or "").strip()
+
+            if not current_nit and state["nit"]:
+                benefit["nit_number"] = state["nit"]
+            elif self._looks_like_nit(current_nit):
+                state["nit"] = current_nit
+
+            if not current_name and state["insured_name"]:
+                benefit["insured_name"] = state["insured_name"]
+            elif self._looks_like_name_or_company(current_name):
+                state["insured_name"] = current_name
+
+            normalized.append(benefit)
+
+        return normalized
 
     def extract_document_data(
         self,
@@ -641,6 +836,8 @@ class AgentDocumentExtractor:
             structured_response = response_payload.get("structured_response")
             if not structured_response:
                 raise RuntimeError("Resposta estruturada de benefícios não retornada pelo agente")
-            return structured_response.model_dump()
+            result = structured_response.model_dump()
+            result["benefits"] = self._postprocess_benefits_with_carryover(result.get("benefits", []))
+            return result
         except Exception:
             return BenefitsRequestsExtractionResult().model_dump()
