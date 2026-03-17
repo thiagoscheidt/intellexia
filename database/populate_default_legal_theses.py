@@ -38,6 +38,11 @@ DEFAULT_LEGAL_THESES = [
         "description": "Evento acidentario ocorrido em estabelecimento diferente daquele considerado no calculo.",
     },
     {
+        "name": "ACIDENTE OCORRIDO ANTES DE ABRIL DE 2007",
+        "slug": "acidente_ocorrido_antes_de_abril_de_2007",
+        "description": "Evento acidentario ocorrido antes de abril de 2007, com reflexos na analise e no calculo previdenciario.",
+    },
+    {
         "name": "APURACAO DO INDICE DE CUSTO",
         "slug": "apuracao_do_indice_de_custo",
         "description": "Questionamento sobre a forma de apuracao do indice de custo utilizado no calculo do FAP.",
