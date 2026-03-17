@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import re
+from difflib import SequenceMatcher
 from datetime import datetime
 from pathlib import Path
 
 from rich import print
 
 from app.models import (
+    Client,
     db,
     JudicialDocument,
+    JudicialDefendant,
     JudicialDocumentType,
     JudicialEvent,
     JudicialLegalThesis,
@@ -209,9 +212,152 @@ class KnowledgeBaseProcessingService:
         )
         return key_match or name_match
 
+    @staticmethod
+    def _normalize_party_name(value: str | None) -> str:
+        if not value:
+            return ""
+
+        text = str(value).strip().lower()
+        text = re.sub(r"\s+", " ", text)
+        text = re.sub(
+            r"^(autor(?:a)?|requerente|impetrante|exequente|reclamante|réu|reu|demandado|requerido|impetrado|executado|reclamado)\s*[:\-]\s*",
+            "",
+            text,
+            flags=re.IGNORECASE,
+        )
+        return text.strip()
+
+    @staticmethod
+    def _similarity(left: str, right: str) -> float:
+        if not left or not right:
+            return 0.0
+        return SequenceMatcher(None, left, right).ratio()
+
+    def _find_similar_client(self, law_firm_id: int, party_name: str) -> Client | None:
+        if not party_name:
+            return None
+
+        normalized_target = self._normalize_party_name(party_name)
+        if not normalized_target:
+            return None
+
+        clients = Client.query.filter_by(law_firm_id=law_firm_id).all()
+        if not clients:
+            return None
+
+        best_client: Client | None = None
+        best_score = 0.0
+
+        for client in clients:
+            normalized_name = self._normalize_party_name(client.name)
+            if normalized_name == normalized_target:
+                return client
+
+            score = self._similarity(normalized_target, normalized_name)
+            if score > best_score:
+                best_score = score
+                best_client = client
+
+        return best_client if best_score >= 0.86 else None
+
+    def _find_similar_defendant(self, law_firm_id: int, party_name: str) -> JudicialDefendant | None:
+        if not party_name:
+            return None
+
+        normalized_target = self._normalize_party_name(party_name)
+        if not normalized_target:
+            return None
+
+        defendants = JudicialDefendant.query.filter_by(
+            law_firm_id=law_firm_id,
+            is_active=True,
+        ).all()
+        if not defendants:
+            return None
+
+        best_defendant: JudicialDefendant | None = None
+        best_score = 0.0
+
+        for defendant in defendants:
+            normalized_name = self._normalize_party_name(defendant.name)
+            if normalized_name == normalized_target:
+                return defendant
+
+            score = self._similarity(normalized_target, normalized_name)
+            if score > best_score:
+                best_score = score
+                best_defendant = defendant
+
+        return best_defendant if best_score >= 0.86 else None
+
+    def _resolve_or_create_client(self, law_firm_id: int, party_name: str) -> Client | None:
+        clean_name = str(party_name or "").strip()
+        if not clean_name:
+            return None
+
+        client = self._find_similar_client(law_firm_id, clean_name)
+        if client:
+            return client
+
+        client = Client(
+            law_firm_id=law_firm_id,
+            name=clean_name,
+            cnpj="00000000000000",
+        )
+        db.session.add(client)
+        db.session.flush()
+        return client
+
+    def _resolve_or_create_defendant(self, law_firm_id: int, party_name: str) -> JudicialDefendant | None:
+        clean_name = str(party_name or "").strip()
+        if not clean_name:
+            return None
+
+        defendant = self._find_similar_defendant(law_firm_id, clean_name)
+        if defendant:
+            return defendant
+
+        defendant = JudicialDefendant(
+            law_firm_id=law_firm_id,
+            name=clean_name,
+            is_active=True,
+        )
+        db.session.add(defendant)
+        db.session.flush()
+        return defendant
+
+    def _apply_parties_from_extraction(
+        self,
+        process: JudicialProcess,
+        law_firm_id: int,
+        extraction_payload: dict,
+        force_update: bool = False,
+    ) -> None:
+        active_pole = str(extraction_payload.get("active_pole", "") or "").strip()
+        passive_pole = str(extraction_payload.get("passive_pole", "") or "").strip()
+
+        if (force_update or not process.plaintiff_client_id) and active_pole:
+            client = self._resolve_or_create_client(law_firm_id=law_firm_id, party_name=active_pole)
+            if client:
+                process.plaintiff_client_id = client.id
+
+        if (force_update or not process.defendant_id) and passive_pole:
+            defendant = self._resolve_or_create_defendant(law_firm_id=law_firm_id, party_name=passive_pole)
+            if defendant:
+                process.defendant_id = defendant.id
+
     def _link_knowledge_to_process_if_needed(self, item: KnowledgeBase, extraction_payload: dict) -> None:
         existing_link = JudicialDocument.query.filter_by(knowledge_base_id=item.id).first()
         if existing_link:
+            process = JudicialProcess.query.filter_by(id=existing_link.process_id).first()
+            if process:
+                self._apply_parties_from_extraction(
+                    process=process,
+                    law_firm_id=item.law_firm_id,
+                    extraction_payload=extraction_payload,
+                    force_update=False,
+                )
+                process.updated_at = datetime.utcnow()
             return
 
         user_provided_number = str(item.lawsuit_number or "").strip()
@@ -234,6 +380,12 @@ class KnowledgeBaseProcessingService:
             )
             db.session.add(process)
             db.session.flush()
+            self._apply_parties_from_extraction(
+                process=process,
+                law_firm_id=item.law_firm_id,
+                extraction_payload=extraction_payload,
+                force_update=True,
+            )
             item.lawsuit_number = process_number_for_create
         else:
             candidate_process_number = user_provided_number or extracted_number
@@ -260,9 +412,22 @@ class KnowledgeBaseProcessingService:
                 )
                 db.session.add(process)
                 db.session.flush()
+                self._apply_parties_from_extraction(
+                    process=process,
+                    law_firm_id=item.law_firm_id,
+                    extraction_payload=extraction_payload,
+                    force_update=True,
+                )
 
                 if not item.lawsuit_number or not item.lawsuit_number.strip():
                     item.lawsuit_number = process_number_for_create
+            else:
+                self._apply_parties_from_extraction(
+                    process=process,
+                    law_firm_id=item.law_firm_id,
+                    extraction_payload=extraction_payload,
+                    force_update=False,
+                )
 
         event_type, event_phase, event_type_name = self._resolve_type_and_phase(item.law_firm_id, extraction_payload)
 
