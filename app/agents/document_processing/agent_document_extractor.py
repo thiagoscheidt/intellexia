@@ -343,7 +343,7 @@ class AgentDocumentExtractor:
         return normalized_tables
 
     def _filter_out_pedidos_section(self, tables: list[dict]) -> list[dict]:
-        """Remove seções de pedidos que não pareçam conter tabelas reais de benefícios."""
+        """Remove tabelas de pedidos e filtra benefícios de outras seções por NB presente em pedidos."""
         benefit_text_keywords = (
             "vigência",
             "vigencia",
@@ -356,23 +356,62 @@ class AgentDocumentExtractor:
         )
         benefit_type_re = re.compile(r"\bb\d{2}\b", re.IGNORECASE)
         normalized_keywords = tuple(self._normalize_text_token(k) for k in benefit_text_keywords)
+        benefit_number_re = re.compile(r"\b\d{9,11}\b")
 
-        filtered_tables: list[dict] = []
+        def _extract_row_benefit_numbers(row: str) -> set[str]:
+            numbers: set[str] = set()
+            for raw_number in benefit_number_re.findall(str(row or "")):
+                digits = re.sub(r"\D", "", raw_number)
+                if len(digits) >= 9:
+                    numbers.add(digits)
+            return numbers
+
+        pedidos_benefit_numbers: set[str] = set()
+        non_pedidos_tables: list[dict] = []
+
         for table in tables:
             section_raw = str(table.get("section") or "").strip()
             section = self._normalize_text_token(section_raw)
             rows = table.get("rows", [])
 
-            # Aceita apenas variações contendo "pedidos" (plural).
             is_pedidos_section = bool(re.search(r"\bpedidos\b", section))
+            if is_pedidos_section:
+                table_text = self._normalize_text_token("\n".join(str(row) for row in rows))
+                has_benefit_content = (
+                    any(keyword in table_text for keyword in normalized_keywords)
+                    or bool(benefit_type_re.search(table_text))
+                )
+                if has_benefit_content:
+                    for row in rows[1:]:
+                        pedidos_benefit_numbers.update(_extract_row_benefit_numbers(str(row)))
+                continue
 
-            if not is_pedidos_section:
+            non_pedidos_tables.append(table)
+
+        filtered_tables: list[dict] = []
+        for table in non_pedidos_tables:
+            rows = table.get("rows", [])
+            if not rows:
+                continue
+
+            # Se não houver seção de pedidos identificada, mantém comportamento atual.
+            if not pedidos_benefit_numbers:
                 filtered_tables.append(table)
                 continue
 
-            table_text = self._normalize_text_token("\n".join(str(row) for row in rows))
-            if any(keyword in table_text for keyword in normalized_keywords) or benefit_type_re.search(table_text):
-                filtered_tables.append(table)
+            header = str(rows[0])
+            kept_rows = [header]
+            for row in rows[1:]:
+                row_numbers = _extract_row_benefit_numbers(str(row))
+                if not row_numbers:
+                    continue
+                if row_numbers.intersection(pedidos_benefit_numbers):
+                    kept_rows.append(str(row))
+
+            if len(kept_rows) > 1:
+                filtered_table = dict(table)
+                filtered_table["rows"] = kept_rows
+                filtered_tables.append(filtered_table)
 
         return filtered_tables
 
