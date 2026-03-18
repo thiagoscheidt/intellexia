@@ -393,7 +393,7 @@ class AgentDocumentExtractor:
 
         return normalized_tables
 
-    def _filter_out_pedidos_section(self, tables: list[dict]) -> list[dict]:
+    def _filter_out_pedidos_section(self, tables: list[dict]) -> tuple[list[dict], list[dict]]:
         """Remove tabelas de pedidos e filtra benefícios de outras seções por NB presente em pedidos."""
         benefit_text_keywords = (
             "vigência",
@@ -440,6 +440,8 @@ class AgentDocumentExtractor:
             non_pedidos_tables.append(table)
 
         filtered_tables: list[dict] = []
+        cited_tables: list[dict] = []
+
         for table in non_pedidos_tables:
             rows = table.get("rows", [])
             if not rows:
@@ -452,19 +454,27 @@ class AgentDocumentExtractor:
 
             header = str(rows[0])
             kept_rows = [header]
+            cited_rows = [header]
             for row in rows[1:]:
                 row_numbers = _extract_row_benefit_numbers(str(row))
                 if not row_numbers:
                     continue
                 if row_numbers.intersection(pedidos_benefit_numbers):
                     kept_rows.append(str(row))
+                else:
+                    cited_rows.append(str(row))
 
             if len(kept_rows) > 1:
                 filtered_table = dict(table)
                 filtered_table["rows"] = kept_rows
                 filtered_tables.append(filtered_table)
 
-        return filtered_tables
+            if len(cited_rows) > 1:
+                cited_table = dict(table)
+                cited_table["rows"] = cited_rows
+                cited_tables.append(cited_table)
+
+        return filtered_tables, cited_tables
 
     def _tables_to_prompt_text(self, tables: list[dict]) -> str:
         blocks: list[str] = []
@@ -879,7 +889,7 @@ class AgentDocumentExtractor:
         effective_law_firm_id = self.law_firm_id
 
         tables = self._get_document_data_tables()
-        tables = self._filter_out_pedidos_section(tables)
+        tables, _cited = self._filter_out_pedidos_section(tables)
         if not tables:
             print("⚠ Nenhuma tabela encontrada em document_data.")
             return BenefitsRequestsExtractionResult().model_dump()
@@ -1001,6 +1011,50 @@ class AgentDocumentExtractor:
             parts.append(self._tables_to_prompt_text(pedidos_tables))
 
         return "\n\n---\n\n".join(parts)[:10000]
+
+    def extract_cited_benefits(self) -> list[dict]:
+        """
+        Extrai os benefícios citados no processo mas que não fazem parte da ação.
+
+        São as linhas descartadas por _filter_out_pedidos_section: benefícios presentes
+        em seções fora de 'pedidos' que não foram solicitados na petição inicial.
+
+        Usa structured output direto (sem agent loop) por ser uma extração simples.
+        """
+        tables = self._get_document_data_tables()
+        _filtered, cited_tables = self._filter_out_pedidos_section(tables)
+
+        if not cited_tables:
+            return []
+
+        table_text = self._tables_to_prompt_text(cited_tables)
+        if not table_text.strip():
+            return []
+
+        model_name = os.getenv("QUERY_MODEL", "gpt-4o-mini")
+        llm = ChatOpenAI(model=model_name, temperature=0).with_structured_output(BenefitsRequestsExtractionResult)
+
+        system_prompt = (
+            "Você extrai dados de benefícios previdenciários/acidentários de tabelas. "
+            "Retorne apenas os campos disponíveis; deixe em branco o que não encontrar."
+        )
+        user_prompt = (
+            "Extraia os benefícios das tabelas abaixo. "
+            "Mapeie as colunas pelo significado (NIT, SEGURADO, TIPO, BENEFÍCIO/NB, VIGÊNCIA FAP).\n\n"
+            "Para fap_vigencia_year, converta intervalos para CSV (ex: 2018-2020 → 2018,2019,2020).\n"
+            "Ignore a coluna legal_thesis_id — retorne null para todos.\n\n"
+            f"{table_text}"
+        )
+
+        try:
+            result: BenefitsRequestsExtractionResult = llm.invoke([
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": user_prompt},
+            ])
+            return [b.model_dump() for b in result.benefits if b.benefit_number.strip()]
+        except Exception as e:
+            print(f"[extract_cited_benefits] Erro: {e}")
+            return []
 
     def classify_benefit_request_types(self, benefits: List[dict]) -> dict:
         """

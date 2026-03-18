@@ -18,6 +18,7 @@ from app.models import (
     JudicialPhase,
     JudicialProcess,
     JudicialProcessBenefit,
+    JudicialProcessCitedBenefit,
     JudicialSentenceAnalysis,
     KnowledgeBase,
     KnowledgeSummary,
@@ -622,6 +623,45 @@ class KnowledgeBaseProcessingService:
 
         return upserted
 
+    def _upsert_cited_benefits(self, process: JudicialProcess, cited: list[dict]) -> int:
+        """Insere ou atualiza benefícios citados (não parte da ação) no processo."""
+        if not cited:
+            return 0
+
+        upserted = 0
+        for item in cited:
+            if not isinstance(item, dict):
+                continue
+            benefit_number = str(item.get("benefit_number", "") or "").strip()
+            if not benefit_number:
+                continue
+
+            existing = JudicialProcessCitedBenefit.query.filter_by(
+                process_id=process.id,
+                benefit_number=benefit_number,
+            ).first()
+
+            if existing:
+                existing.nit_number = str(item.get("nit_number", "") or "").strip() or existing.nit_number
+                existing.insured_name = str(item.get("insured_name", "") or "").strip() or existing.insured_name
+                existing.benefit_type = str(item.get("benefit_type", "") or "").strip() or existing.benefit_type
+                existing.fap_vigencia_year = str(item.get("fap_vigencia_year", "") or "").strip() or existing.fap_vigencia_year
+            else:
+                db.session.add(JudicialProcessCitedBenefit(
+                    process_id=process.id,
+                    benefit_number=benefit_number,
+                    nit_number=str(item.get("nit_number", "") or "").strip() or None,
+                    insured_name=str(item.get("insured_name", "") or "").strip() or None,
+                    benefit_type=str(item.get("benefit_type", "") or "").strip() or None,
+                    fap_vigencia_year=str(item.get("fap_vigencia_year", "") or "").strip() or None,
+                ))
+                upserted += 1
+
+        if upserted > 0:
+            db.session.commit()
+
+        return upserted
+
     def _apply_benefit_request_types(
         self,
         process: JudicialProcess,
@@ -788,6 +828,14 @@ class KnowledgeBaseProcessingService:
                                         f"Tipos de pedido classificados no processo {target_process.process_number}: "
                                         f"{classified_count} benefício(s)."
                                     )
+
+                            cited = extractor_agent.extract_cited_benefits()
+                            if cited:
+                                cited_count = self._upsert_cited_benefits(target_process, cited)
+                                print(
+                                    f"Benefícios citados vinculados ao processo {target_process.process_number}: "
+                                    f"{cited_count} novo(s) / {len(cited)} extraído(s)."
+                                )
 
                 summary_payload = extraction_payload if isinstance(extraction_payload, dict) else {}
 
