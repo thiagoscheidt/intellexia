@@ -560,6 +560,7 @@ class KnowledgeBaseProcessingService:
             insured_name = str(benefit.get("insured_name", "") or "").strip()
             benefit_type = str(benefit.get("benefit_type", "") or "").strip()
             fap_vigencia_year = str(benefit.get("fap_vigencia_year", "") or "").strip()
+            request_type = str(benefit.get("request_type", "") or "").strip() or None
             legal_thesis_id_raw = benefit.get("legal_thesis_id")
             legal_thesis_id = None
             try:
@@ -588,6 +589,8 @@ class KnowledgeBaseProcessingService:
                     existing_benefit.benefit_type = benefit_type
                 if fap_vigencia_year and not str(existing_benefit.fap_vigencia_year or "").strip():
                     existing_benefit.fap_vigencia_year = fap_vigencia_year
+                if request_type and not str(existing_benefit.request_type or "").strip():
+                    existing_benefit.request_type = request_type
                 if theses:
                     existing_benefit.legal_theses = theses
                     existing_benefit.legal_thesis_id = resolved_legal_thesis_id
@@ -604,6 +607,7 @@ class KnowledgeBaseProcessingService:
                 insured_name=insured_name,
                 benefit_type=benefit_type,
                 fap_vigencia_year=fap_vigencia_year,
+                request_type=request_type,
                 legal_thesis_id=resolved_legal_thesis_id,
                 legal_thesis="",
                 pfn_technical_note="",
@@ -617,6 +621,37 @@ class KnowledgeBaseProcessingService:
             upserted += 1
 
         return upserted
+
+    def _apply_benefit_request_types(
+        self,
+        process: JudicialProcess,
+        classification_payload: dict,
+    ) -> int:
+        """Aplica o request_type classificado a cada benefício do processo."""
+        classified = classification_payload.get("benefits", [])
+        if not isinstance(classified, list):
+            return 0
+
+        updated = 0
+        for item in classified:
+            if not isinstance(item, dict):
+                continue
+
+            benefit_number = str(item.get("benefit_number", "") or "").strip()
+            request_type = str(item.get("request_type", "") or "").strip()
+            if not benefit_number or not request_type:
+                continue
+
+            benefit = JudicialProcessBenefit.query.filter_by(
+                process_id=process.id,
+                benefit_number=benefit_number,
+            ).first()
+            if benefit:
+                benefit.request_type = request_type
+                benefit.updated_at = datetime.utcnow()
+                updated += 1
+
+        return updated
 
     def process_single_knowledge_file(self, item_id: int) -> bool:
         """Processa um único arquivo da base de conhecimento."""
@@ -741,6 +776,18 @@ class KnowledgeBaseProcessingService:
                                     f"Benefícios vinculados ao processo {target_process.process_number}: "
                                     f"{inserted_or_updated} registro(s)."
                                 )
+
+                            extracted_benefits = benefits_payload.get("benefits", [])
+                            if extracted_benefits:
+                                classification = extractor_agent.classify_benefit_request_types(
+                                    extracted_benefits,
+                                )
+                                classified_count = self._apply_benefit_request_types(target_process, classification)
+                                if classified_count > 0:
+                                    print(
+                                        f"Tipos de pedido classificados no processo {target_process.process_number}: "
+                                        f"{classified_count} benefício(s)."
+                                    )
 
                 summary_payload = extraction_payload if isinstance(extraction_payload, dict) else {}
 

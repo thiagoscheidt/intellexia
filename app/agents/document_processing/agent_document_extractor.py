@@ -56,6 +56,29 @@ class BenefitsRequestsExtractionResult(BaseModel):
         return self.model_dump_json(by_alias=True)
 
 
+class BenefitRequestTypeItem(BaseModel):
+    """Classificação do tipo de pedido para um benefício."""
+    benefit_number: str = Field(default="", description="Número do benefício (NB)")
+    request_type: str = Field(
+        default="",
+        description="Tipo de pedido: 'exclusao', 'inclusao' ou 'revisao'",
+    )
+
+
+class BenefitRequestTypeClassificationResult(BaseModel):
+    """Resultado da classificação de tipos de pedido dos benefícios."""
+    benefits: List[BenefitRequestTypeItem] = Field(
+        default_factory=list,
+        description="Lista de benefícios com seu tipo de pedido classificado",
+    )
+
+    def to_dict(self) -> dict:
+        return self.model_dump(by_alias=True)
+
+    def to_json(self) -> str:
+        return self.model_dump_json(by_alias=True)
+
+
 class AgentDocumentExtractor:
     """Extrai dados de documentos jurídicos reutilizando texto e vetor já processados."""
 
@@ -104,6 +127,22 @@ class AgentDocumentExtractor:
                 "as colunas com base em seus nomes e significados."
             ),
             response_format=ToolStrategy(BenefitsRequestsExtractionResult),
+        )
+
+    def _build_benefit_request_type_agent(self):
+        return create_agent(
+            model=self.chat_model,
+            tools=[],
+            system_prompt=(
+                "Você é um assistente jurídico especializado em processos previdenciários e FAP. "
+                "Sua tarefa é classificar o tipo de pedido feito em relação a cada benefício "
+                "mencionado na petição. Os tipos possíveis são:\n"
+                "- 'exclusao': o autor pede para excluir o benefício do cálculo do FAP\n"
+                "- 'inclusao': o autor pede para incluir o benefício no cálculo do FAP\n"
+                "- 'revisao': o autor pede revisão/recálculo do benefício sem indicar exclusão ou inclusão\n"
+                "Retorne apenas os campos solicitados."
+            ),
+            response_format=ToolStrategy(BenefitRequestTypeClassificationResult),
         )
 
     def _extract_text(self, file_path: str | Path | None = None) -> str:
@@ -928,3 +967,123 @@ class AgentDocumentExtractor:
             return result
         except Exception:
             return BenefitsRequestsExtractionResult().model_dump()
+
+    def _get_document_data_chunks(self) -> list[dict]:
+        if self.document_data is None:
+            return []
+        if isinstance(self.document_data, dict):
+            return list(self.document_data.get("chunks_with_pages", []) or [])
+        return list(getattr(self.document_data, "chunks_with_pages", []) or [])
+
+    def _extract_pedidos_section_text(self) -> str:
+        """
+        Extrai o texto da seção de pedidos usando os dados já processados em document_data.
+
+        Usa chunks_with_pages (filtrados por section='pedidos') e as tabelas da mesma seção,
+        ambos já segmentados pelo DocumentProcessorService — sem regex no full_text.
+        """
+        parts: list[str] = []
+
+        # Chunks de texto da seção de pedidos
+        pedidos_chunks = [
+            chunk for chunk in self._get_document_data_chunks()
+            if re.search(r"\bpedidos\b", self._normalize_text_token(str(chunk.get("section") or "")))
+        ]
+        if pedidos_chunks:
+            parts.append("\n\n".join(str(chunk.get("text", "")) for chunk in pedidos_chunks))
+
+        # Tabelas da seção de pedidos
+        pedidos_tables = [
+            t for t in self._get_document_data_tables()
+            if re.search(r"\bpedidos\b", self._normalize_text_token(str(t.get("section") or "")))
+        ]
+        if pedidos_tables:
+            parts.append(self._tables_to_prompt_text(pedidos_tables))
+
+        return "\n\n---\n\n".join(parts)[:10000]
+
+    def classify_benefit_request_types(self, benefits: List[dict]) -> dict:
+        """
+        Classifica o tipo de pedido (exclusão, inclusão ou revisão) para cada benefício.
+
+        O contexto é extraído diretamente da seção de pedidos já segmentada em
+        document_data.chunks_with_pages e document_data.tables, sem releitura de arquivo
+        ou busca semântica genérica.
+
+        Args:
+            benefits: Lista de dicts com pelo menos 'benefit_number'.
+
+        Returns:
+            Dict com estrutura de BenefitRequestTypeClassificationResult.
+        """
+        if not benefits:
+            return BenefitRequestTypeClassificationResult().model_dump()
+
+        pedidos_context = self._extract_pedidos_section_text()
+
+        # Fallback: usa os últimos chunks do documento (pedidos aparecem no final da petição)
+        if not pedidos_context:
+            chunks = self._get_document_data_chunks()
+            if chunks:
+                last_chunks = chunks[-4:]
+                pedidos_context = "\n\n".join(str(c.get("text", "")) for c in last_chunks)[:6000]
+
+        benefits_list_text = "\n".join(
+            f"- NB: {b.get('benefit_number', '')} | Tipo: {b.get('benefit_type', '')} | Segurado: {b.get('insured_name', '')}"
+            for b in benefits
+        )
+
+        user_prompt = (
+            "Com base no texto da seção de pedidos da petição abaixo, classifique o tipo de pedido feito para cada benefício.\n\n"
+            "TIPOS DE PEDIDO POSSÍVEIS:\n"
+            "- 'exclusao': o autor pede para EXCLUIR o benefício do cálculo do FAP\n"
+            "- 'inclusao': o autor pede para INCLUIR o benefício no cálculo do FAP\n"
+            "- 'revisao': revisão/recálculo sem indicar exclusão ou inclusão clara\n\n"
+            "INSTRUÇÕES:\n"
+            "- Analise o texto da seção de pedidos para identificar o que o autor pede para cada NB.\n"
+            "- Retorne um item para CADA benefício da lista, mesmo que o tipo seja incerto (use 'revisao' como padrão).\n"
+            "- O campo 'benefit_number' deve corresponder exatamente ao NB fornecido.\n\n"
+            "BENEFÍCIOS A CLASSIFICAR:\n"
+            f"{benefits_list_text}\n\n"
+            "SEÇÃO DE PEDIDOS DA PETIÇÃO:\n"
+            f"{pedidos_context}"
+        )
+
+        print(user_prompt)
+
+        try:
+            classification_agent = self._build_benefit_request_type_agent()
+            call_started_at = time.time()
+            response_payload = classification_agent.invoke(
+                {
+                    "messages": [
+                        {"role": "user", "content": user_prompt},
+                    ]
+                }
+            )
+            latency_ms = int((time.time() - call_started_at) * 1000)
+            self.token_usage_service.capture_and_store(
+                response_payload,
+                agent_name="AgentDocumentExtractor",
+                action_name="classify_benefit_request_types.create_agent",
+                print_prefix="[AgentDocumentExtractor][classify_benefit_request_types][tokens]",
+                model_name=self.model_name,
+                model_provider=self.model_provider,
+                latency_ms=latency_ms,
+                status="success",
+                metadata_payload={
+                    "file_id": self.file_id,
+                    "benefits_count": len(benefits),
+                },
+            )
+            structured_response = response_payload.get("structured_response")
+            print(structured_response)
+            if not structured_response:
+                raise RuntimeError("Resposta estruturada não retornada pelo agente")
+            return structured_response.model_dump()
+        except Exception:
+            fallback = [
+                BenefitRequestTypeItem(benefit_number=str(b.get("benefit_number", "")), request_type="revisao")
+                for b in benefits
+            ]
+            return BenefitRequestTypeClassificationResult(benefits=fallback).model_dump()

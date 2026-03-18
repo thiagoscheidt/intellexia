@@ -1224,6 +1224,7 @@ class JudicialProcessBenefit(db.Model):
     insured_name = db.Column(db.String(255))
     benefit_type = db.Column(db.String(20), index=True)
     fap_vigencia_year = db.Column(db.String(10), index=True)
+    request_type = db.Column(db.String(20), index=True)  # exclusao, inclusao, revisao
     legal_thesis_id = db.Column(db.Integer, db.ForeignKey('judicial_legal_theses.id'), index=True)
 
     legal_thesis = db.Column(db.Text)
