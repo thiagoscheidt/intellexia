@@ -1043,6 +1043,7 @@ class JudicialProcess(db.Model):
     notes = db.relationship('JudicialProcessNote', back_populates='process', cascade='all, delete-orphan')
     events = db.relationship('JudicialEvent', back_populates='process', cascade='all, delete-orphan')
     benefits = db.relationship('JudicialProcessBenefit', back_populates='process', cascade='all, delete-orphan')
+    cited_benefits = db.relationship('JudicialProcessCitedBenefit', back_populates='process', cascade='all, delete-orphan')
     phase_history = db.relationship(
         'JudicialProcessPhaseHistory',
         back_populates='process',
@@ -1246,3 +1247,28 @@ class JudicialProcessBenefit(db.Model):
 
     def __repr__(self):
         return f'<JudicialProcessBenefit {self.benefit_number} - Process {self.process_id}>'
+
+
+class JudicialProcessCitedBenefit(db.Model):
+    """Tabela judicial_process_cited_benefits - Benefits mentioned in the process but not part of the action."""
+    __tablename__ = 'judicial_process_cited_benefits'
+    __table_args__ = (
+        db.UniqueConstraint('process_id', 'benefit_number', name='uq_jpcb_process_benefit_number'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    process_id = db.Column(db.Integer, db.ForeignKey('judicial_processes.id'), nullable=False, index=True)
+
+    benefit_number = db.Column(db.String(50), nullable=False, index=True)
+    nit_number = db.Column(db.String(50), index=True)
+    insured_name = db.Column(db.String(255))
+    benefit_type = db.Column(db.String(20), index=True)
+    fap_vigencia_year = db.Column(db.String(10), index=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    process = db.relationship('JudicialProcess', back_populates='cited_benefits')
+
+    def __repr__(self):
+        return f'<JudicialProcessCitedBenefit {self.benefit_number} - Process {self.process_id}>'

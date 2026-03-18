@@ -1,9 +1,10 @@
 from flask import Blueprint, render_template, request, session, jsonify, redirect, url_for, flash
+from meilisearch_python_sdk import Client as MeilisearchClient
 from app.models import (
     db, JudicialProcess, JudicialSentenceAnalysis, JudicialAppeal, 
     KnowledgeBase, Case, User, Court, JudicialPhase, JudicialDocumentType, JudicialEvent,
     JudicialProcessNote, Client, JudicialDefendant, JudicialDocument, JudicialProcessBenefit,
-    JudicialProcessPhaseHistory, JudicialLegalThesis
+    JudicialProcessPhaseHistory, JudicialLegalThesis, JudicialProcessCitedBenefit
 )
 from datetime import datetime
 from functools import wraps
@@ -1243,6 +1244,10 @@ def detail(process_id):
         process_id=process.id
     ).order_by(JudicialProcessBenefit.created_at.desc(), JudicialProcessBenefit.id.desc()).all()
 
+    cited_benefits = JudicialProcessCitedBenefit.query.filter_by(
+        process_id=process.id
+    ).order_by(JudicialProcessCitedBenefit.insured_name.asc(), JudicialProcessCitedBenefit.id.asc()).all()
+
     legal_theses = JudicialLegalThesis.query.filter_by(
         law_firm_id=law_firm_id,
         is_active=True,
@@ -1392,6 +1397,7 @@ def detail(process_id):
         ),
         'process_benefits': process_benefits,
         'benefits_grouped_by_thesis': benefits_grouped_by_thesis,
+        'cited_benefits': cited_benefits,
         'legal_theses': legal_theses,
         'kb_documents': kb_documents,
         'documents_list': documents_list,
@@ -2107,6 +2113,93 @@ def delete(process_id):
         flash(f'Erro ao deletar: {str(e)}', 'danger')
     
     return redirect(url_for('process_panel.list_processes'))
+
+
+@process_panel_bp.route('/api/benefit-documents')
+@require_law_firm
+def api_benefit_documents():
+    """Busca documentos pelo NB no Meilisearch (full-text) e no Qdrant (semântico)."""
+    benefit_number = request.args.get('benefit_number', '').strip()
+    if not benefit_number:
+        return jsonify({'results': [], 'error': 'Número do benefício não informado'}), 400
+
+    meilisearch_host = os.getenv('MEILISEARCH_HOST', 'http://localhost:7700')
+    meilisearch_key  = os.getenv('MEILISEARCH_API_KEY')
+    collection       = os.getenv('QDRANT_COLLECTION', 'knowledge_base')
+    qdrant_host      = os.getenv('QDRANT_HOST', 'localhost')
+    qdrant_port      = int(os.getenv('QDRANT_PORT', '6333'))
+    embedding_model  = os.getenv('EMBEDDING_MODEL')
+    vector_size      = int(os.getenv('VECTOR_SIZE', '0'))
+
+    # key → result dict; preserva o melhor score entre as duas fontes
+    merged: dict[str, dict] = {}
+
+    def _upsert(key, entry):
+        existing = merged.get(key)
+        if not existing or (entry.get('score') or 0) > (existing.get('score') or 0):
+            merged[key] = entry
+
+    # ── 1. Meilisearch (full-text) ────────────────────────────────────────
+    try:
+        from meilisearch_python_sdk.models.search import SearchParams
+        meili = MeilisearchClient(meilisearch_host, meilisearch_key)
+        search_result = meili.index(collection).search(benefit_number, limit=15, show_ranking_score=True)
+        hits = search_result.hits or []
+        print(f'[api_benefit_documents] Meilisearch hits: {len(hits)}, raw sample: {hits[:1]}')
+        for hit in hits:
+            fid  = hit.get('file_id')
+            page = hit.get('page')
+            key  = f"{fid}|{page}"
+            # _rankingScore pode vir como float ou estar ausente dependendo da versão do SDK
+            ranking_score = hit.get('_rankingScore') or hit.get('_ranking_score')
+            _upsert(key, {
+                'file_id': fid,
+                'source':  hit.get('source', ''),
+                'page':    page,
+                'score':   float(ranking_score) if ranking_score is not None else None,
+                'excerpt': (hit.get('content') or hit.get('text') or '').strip(),
+                'origin':  'full_text',
+            })
+    except Exception as meili_err:
+        print(f'[api_benefit_documents] Meilisearch error: {meili_err}')
+
+    # ── 2. Qdrant (semântico) ─────────────────────────────────────────────
+    if embedding_model and vector_size > 0:
+        try:
+            from openai import OpenAI
+            from qdrant_client import QdrantClient
+
+            openai_client = OpenAI()
+            embedding_resp = openai_client.embeddings.create(model=embedding_model, input=benefit_number)
+            vector = embedding_resp.data[0].embedding
+
+            qdrant = QdrantClient(host=qdrant_host, port=qdrant_port, timeout=30)
+            points = qdrant.query_points(collection_name=collection, query=vector, limit=15).points
+            for point in points:
+                payload = point.payload or {}
+                fid  = payload.get('file_id')
+                page = payload.get('page')
+                key  = f"{fid}|{page}"
+                _upsert(key, {
+                    'file_id': fid,
+                    'source':  payload.get('source', ''),
+                    'page':    page,
+                    'score':   float(point.score) if hasattr(point, 'score') else None,
+                    'excerpt': (payload.get('text') or '').strip(),
+                    'origin':  'semantic',
+                })
+        except Exception as qdrant_err:
+            print(f'[api_benefit_documents] Qdrant error: {qdrant_err}')
+
+    all_scores = [(r.get('origin'), r.get('score')) for r in merged.values()]
+    print(f'[api_benefit_documents] All scores before filter: {all_scores}')
+    results = sorted(
+        (r for r in merged.values() if (r.get('score') or 0) >= 0.60),
+        key=lambda r: r.get('score') or 0,
+        reverse=True,
+    )
+    print(f'[api_benefit_documents] Results after filter >= 0.60: {len(results)}')
+    return jsonify({'results': results, 'query': benefit_number})
 
 
 @process_panel_bp.route('/api/search')

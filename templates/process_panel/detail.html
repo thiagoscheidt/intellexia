@@ -1,4 +1,16 @@
 {% extends "layout/base.html" %}
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" />
+<style>
+  .benefit-doc-excerpt h1,.benefit-doc-excerpt h2,.benefit-doc-excerpt h3 { font-size: .9rem; font-weight: 600; margin-top: .5rem; }
+  .benefit-doc-excerpt p  { margin-bottom: .35rem; }
+  .benefit-doc-excerpt ul,.benefit-doc-excerpt ol { padding-left: 1.25rem; margin-bottom: .35rem; }
+  .benefit-doc-excerpt code { font-size: .8rem; background: var(--bs-secondary-bg); padding: .1em .3em; border-radius: 3px; }
+  .benefit-doc-excerpt pre  { background: var(--bs-secondary-bg); padding: .5rem; border-radius: 6px; font-size: .8rem; overflow-x: auto; }
+  .benefit-doc-excerpt blockquote { border-left: 3px solid var(--bs-border-color); padding-left: .75rem; color: var(--bs-secondary-color); margin: .25rem 0; }
+  .benefit-doc-excerpt strong { color: var(--bs-emphasis-color); }
+</style>
+{% endblock %}
 
 {% from "partials/page_hero.html" import page_hero %}
 
@@ -850,6 +862,14 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                         <i class="bi bi-table me-1"></i>Demonstrativo
                       </button>
                     </li>
+                    <li class="nav-item" role="presentation">
+                      <button class="nav-link" id="benefits-cited-tab" data-bs-toggle="tab"
+                        data-bs-target="#benefits-cited-pane" type="button" role="tab"
+                        aria-controls="benefits-cited-pane" aria-selected="false">
+                        <i class="bi bi-clipboard2 me-1"></i>Benefícios Citados
+                        {% if cited_benefits %}<span class="badge bg-secondary ms-1">{{ cited_benefits|length }}</span>{% endif %}
+                      </button>
+                    </li>
                   </ul>
 
                   <div class="tab-content" id="benefitsDetailTabsContent">
@@ -953,7 +973,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                       <th>Segurado</th>
                                       <th>Tipo</th>
                                       <th>Vigência FAP</th>
-                                      <th>Pedido</th>
+                                      <th>Tipo de Pedido</th>
                                       <th>Decisão (1ª Instância)</th>
                                       <th>Decisão (2ª Instância)</th>
                                       <th>Decisão (3ª Instância)</th>
@@ -971,15 +991,18 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                       <td>
                                         {% set rt = (benefit.request_type or '')|lower %}
                                         {% if rt == 'exclusao' %}
-                                        <span class="badge bg-danger-subtle text-danger-emphasis border border-danger-subtle">
+                                        <span
+                                          class="badge bg-danger-subtle text-danger-emphasis border border-danger-subtle">
                                           <i class="bi bi-dash-circle me-1"></i>Exclusão
                                         </span>
                                         {% elif rt == 'inclusao' %}
-                                        <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">
+                                        <span
+                                          class="badge bg-success-subtle text-success-emphasis border border-success-subtle">
                                           <i class="bi bi-plus-circle me-1"></i>Inclusão
                                         </span>
                                         {% elif rt == 'revisao' %}
-                                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">
+                                        <span
+                                          class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">
                                           <i class="bi bi-arrow-repeat me-1"></i>Revisão
                                         </span>
                                         {% else %}
@@ -990,15 +1013,25 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                       <td>{{ decision_badge(benefit.second_instance_decision) }}</td>
                                       <td>{{ decision_badge(benefit.third_instance_decision) }}</td>
                                       <td class="text-end">
-                                        <button type="button" class="btn btn-outline-primary btn-sm"
-                                          data-bs-toggle="modal" data-bs-target="#editBenefitLegalThesesModal"
-                                          data-benefit-id="{{ benefit.id }}"
-                                          data-benefit-number="{{ benefit.benefit_number or '-' }}"
-                                          data-benefit-insured="{{ benefit.insured_name or '-' }}"
-                                          data-selected-theses="{% for thesis in benefit.legal_theses %}{{ thesis.id }}{% if not loop.last %},{% endif %}{% endfor %}"
-                                          title="Editar teses do benefício">
-                                          <i class="bi bi-pencil"></i>
-                                        </button>
+                                        <div class="btn-group btn-group-sm">
+                                          <button type="button" class="btn btn-outline-secondary js-tooltip"
+                                            data-bs-toggle="modal" data-bs-target="#benefitDocumentsModal"
+                                            data-benefit-number="{{ benefit.benefit_number or '' }}"
+                                            data-benefit-insured="{{ benefit.insured_name or '' }}"
+                                            data-bs-placement="top"
+                                            title="Buscar nos documentos da base de conhecimento">
+                                            <i class="fa-solid fa-file-lines"></i>
+                                          </button>
+                                          <button type="button" class="btn btn-outline-primary"
+                                            data-bs-toggle="modal" data-bs-target="#editBenefitLegalThesesModal"
+                                            data-benefit-id="{{ benefit.id }}"
+                                            data-benefit-number="{{ benefit.benefit_number or '-' }}"
+                                            data-benefit-insured="{{ benefit.insured_name or '-' }}"
+                                            data-selected-theses="{% for thesis in benefit.legal_theses %}{{ thesis.id }}{% if not loop.last %},{% endif %}{% endfor %}"
+                                            title="Editar teses do benefício">
+                                            <i class="bi bi-pencil"></i>
+                                          </button>
+                                        </div>
                                       </td>
                                     </tr>
                                     {% endfor %}
@@ -1011,6 +1044,54 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                         {% endfor %}
                       </div>
                     </div>
+
+                    <!-- Tab: Benefícios Citados -->
+                    <div class="tab-pane fade" id="benefits-cited-pane" role="tabpanel"
+                      aria-labelledby="benefits-cited-tab" tabindex="0">
+                      {% if cited_benefits %}
+                      <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                          <thead class="table-light">
+                            <tr>
+                              <th>NB</th>
+                              <th>NIT</th>
+                              <th>Segurado</th>
+                              <th>Tipo</th>
+                              <th>Vigência FAP</th>
+                              <th class="text-end">Ações</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {% for cb in cited_benefits %}
+                            <tr>
+                              <td><strong>{{ cb.benefit_number or '-' }}</strong></td>
+                              <td>{{ cb.nit_number or '-' }}</td>
+                              <td>{{ cb.insured_name or '-' }}</td>
+                              <td>{{ cb.benefit_type or '-' }}</td>
+                              <td>{{ cb.fap_vigencia_year or '-' }}</td>
+                              <td class="text-end">
+                                <button type="button" class="btn btn-sm btn-outline-secondary js-tooltip"
+                                  data-bs-toggle="modal" data-bs-target="#benefitDocumentsModal"
+                                  data-benefit-number="{{ cb.benefit_number or '' }}"
+                                  data-benefit-insured="{{ cb.insured_name or '' }}"
+                                  data-bs-placement="top"
+                                  title="Buscar nos documentos da base de conhecimento">
+                                  <i class="fa-solid fa-file-lines"></i>
+                                </button>
+                              </td>
+                            </tr>
+                            {% endfor %}
+                          </tbody>
+                        </table>
+                      </div>
+                      {% else %}
+                      <div class="text-center py-4">
+                        <i class="bi bi-clipboard2 text-muted" style="font-size: 2.5rem;"></i>
+                        <p class="text-muted mt-3 mb-0">Nenhum benefício citado registrado para este processo.</p>
+                      </div>
+                      {% endif %}
+                    </div>
+
                   </div>
                   {% endif %}
                   {% else %}
@@ -1023,6 +1104,49 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Documentos do Benefício -->
+  <div class="modal fade" id="benefitDocumentsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header border-bottom">
+          <div>
+            <h5 class="modal-title fw-semibold">
+              <i class="fa-solid fa-file-lines me-2 text-primary"></i>Trechos sobre o benefício nos documentos
+            </h5>
+            <small class="text-muted d-block mt-1" id="benefitDocumentsSubtitle"></small>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+
+        <div class="modal-body p-3">
+          <!-- Loading -->
+          <div id="benefitDocumentsLoading" class="text-center py-5">
+            <div class="spinner-border text-primary" style="width:2.5rem;height:2.5rem;" role="status"></div>
+            <p class="text-muted mt-3 mb-0">Buscando nos documentos...</p>
+            <small class="text-muted">Consultando Meilisearch e Qdrant</small>
+          </div>
+          <!-- Empty -->
+          <div id="benefitDocumentsEmpty" class="text-center py-5 d-none">
+            <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
+            <p class="text-muted mt-3 mb-0 fw-semibold">Nenhum documento encontrado</p>
+            <small class="text-muted">O número do benefício não foi localizado na base de conhecimento.</small>
+          </div>
+          <!-- Error -->
+          <div id="benefitDocumentsError" class="alert alert-danger d-none">
+            <i class="bi bi-exclamation-triangle me-2"></i><span id="benefitDocumentsErrorMsg"></span>
+          </div>
+          <!-- Results -->
+          <div id="benefitDocumentsList" class="d-none vstack gap-3"></div>
+        </div>
+
+        <div class="modal-footer border-top">
+          <small class="text-muted me-auto" id="benefitDocumentsCount"></small>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
         </div>
       </div>
     </div>
@@ -1135,7 +1259,17 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
     </div>
   </div>
 
+{% endblock %}
+
+{% block extra_js %}
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      document.querySelectorAll('.js-tooltip').forEach(function (el) {
+        new bootstrap.Tooltip(el);
+      });
+    });
+
     document.addEventListener('DOMContentLoaded', function () {
       const thesesModalElement = document.getElementById('editBenefitLegalThesesModal');
       const thesesForm = document.getElementById('editBenefitLegalThesesForm');
@@ -1234,6 +1368,178 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
       }
     });
 
+    // Modal: busca de documentos por NB (Meilisearch + Qdrant)
+    (function () {
+      const modal    = document.getElementById('benefitDocumentsModal');
+      if (!modal) return;
+
+      const subtitle  = document.getElementById('benefitDocumentsSubtitle');
+      const loading   = document.getElementById('benefitDocumentsLoading');
+      const empty     = document.getElementById('benefitDocumentsEmpty');
+      const errorBox  = document.getElementById('benefitDocumentsError');
+      const errorMsg  = document.getElementById('benefitDocumentsErrorMsg');
+      const listWrap  = document.getElementById('benefitDocumentsList');
+      const countEl   = document.getElementById('benefitDocumentsCount');
+      const API_URL  = "{{ url_for('process_panel.api_benefit_documents') }}";
+      const KB_BASE  = "{{ url_for('knowledge_base.list') }}".replace(/\/$/, '');
+
+      function setState(state) {
+        loading.classList.add('d-none');
+        empty.classList.add('d-none');
+        errorBox.classList.add('d-none');
+        listWrap.classList.add('d-none');
+        if (state === 'loading') loading.classList.remove('d-none');
+        else if (state === 'empty') empty.classList.remove('d-none');
+        else if (state === 'error') errorBox.classList.remove('d-none');
+        else if (state === 'list') listWrap.classList.remove('d-none');
+      }
+
+      function originBadge(origin) {
+        if (origin === 'semantic')
+          return '<span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle ms-1"><i class="bi bi-stars me-1"></i>Semântico</span>';
+        return '<span class="badge bg-info-subtle text-info-emphasis border border-info-subtle ms-1"><i class="bi bi-search me-1"></i>Full-text</span>';
+      }
+
+      function scoreBar(score) {
+        if (score == null) return '';
+        const pct   = Math.round(score * 100);
+        const color = pct >= 70 ? 'bg-success' : pct >= 40 ? 'bg-warning' : 'bg-secondary';
+        return `<div class="d-flex align-items-center gap-2 mt-1" style="max-width:200px;">
+          <div class="progress flex-grow-1" style="height:5px;" title="Relevância ${pct}%">
+            <div class="progress-bar ${color}" style="width:${pct}%"></div>
+          </div>
+          <small class="text-muted text-nowrap">${pct}%</small>
+        </div>`;
+      }
+
+      function highlightTerms(html, terms) {
+        if (!html || !terms.length) return html;
+        // Aplica highlight no HTML renderizado usando um DOM temporário
+        const tmp = document.createElement('div');
+        tmp.innerHTML = html;
+        function walkText(node) {
+          if (node.nodeType === Node.TEXT_NODE) {
+            let text = node.textContent;
+            let changed = false;
+            const parts = [text];
+            terms.forEach(function (term) {
+              if (!term) return;
+              const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const re = new RegExp('(' + escaped + ')', 'gi');
+              for (let i = parts.length - 1; i >= 0; i--) {
+                if (typeof parts[i] !== 'string') continue;
+                const segs = parts[i].split(re);
+                if (segs.length > 1) {
+                  changed = true;
+                  const replacement = segs.map(function (s, idx) {
+                    return (idx % 2 === 1) ? '\x00' + s + '\x01' : s;
+                  });
+                  parts.splice(i, 1, ...replacement);
+                }
+              }
+            });
+            if (changed) {
+              const span = document.createElement('span');
+              span.innerHTML = parts.map(function (p) {
+                if (typeof p === 'string' && p.startsWith('\x00') && p.endsWith('\x01')) {
+                  return '<mark class="bg-warning-subtle text-warning-emphasis px-0 rounded-1">' +
+                    p.slice(1, -1).replace(/</g, '&lt;') + '</mark>';
+                }
+                return (p || '').replace(/</g, '&lt;');
+              }).join('');
+              node.replaceWith(span);
+            }
+          } else if (node.nodeType === Node.ELEMENT_NODE && node.tagName !== 'MARK') {
+            Array.from(node.childNodes).forEach(walkText);
+          }
+        }
+        Array.from(tmp.childNodes).forEach(walkText);
+        return tmp.innerHTML;
+      }
+
+      function renderCard(hit, mdParser, highlightWords) {
+        const detailUrl = hit.file_id ? KB_BASE + '/' + hit.file_id + '/details' : null;
+        const viewUrl   = hit.file_id ? KB_BASE + '/' + hit.file_id + '/view'    : null;
+
+        let excerpt = hit.excerpt
+          ? (mdParser ? mdParser.parse(hit.excerpt) : hit.excerpt.replace(/</g, '&lt;').replace(/\n/g, '<br>'))
+          : '<span class="text-muted fst-italic">Sem trecho disponível.</span>';
+        if (hit.excerpt && highlightWords && highlightWords.length) {
+          excerpt = highlightTerms(excerpt, highlightWords);
+        }
+
+        const actions = detailUrl ? `
+          <div class="d-flex gap-2 flex-shrink-0">
+            ${viewUrl ? `<a href="${viewUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-secondary" title="Visualizar"><i class="bi bi-eye"></i></a>` : ''}
+            <a href="${detailUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary" title="Ver detalhes">
+              <i class="bi bi-box-arrow-up-right me-1"></i>Detalhes
+            </a>
+          </div>` : '';
+
+        return `
+          <div class="card border shadow-sm">
+            <div class="card-header bg-light py-2 px-3 d-flex align-items-start justify-content-between gap-2 flex-wrap">
+              <div class="d-flex align-items-center gap-2 flex-wrap">
+                <i class="bi bi-file-earmark-text text-primary"></i>
+                <span class="fw-semibold small">${(hit.source || 'Documento').replace(/</g,'&lt;')}</span>
+                ${hit.page != null ? `<span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">pág. ${hit.page}</span>` : ''}
+                ${originBadge(hit.origin)}
+              </div>
+              <div class="d-flex align-items-center gap-3">
+                ${scoreBar(hit.score)}
+                ${actions}
+              </div>
+            </div>
+            <div class="card-body py-2 px-3">
+              <div class="benefit-doc-excerpt small lh-lg text-body-secondary">${excerpt}</div>
+            </div>
+          </div>`;
+      }
+
+      modal.addEventListener('show.bs.modal', function (event) {
+        const btn     = event.relatedTarget;
+        const nb      = (btn.getAttribute('data-benefit-number') || '').trim();
+        const insured = (btn.getAttribute('data-benefit-insured') || '').trim();
+
+        subtitle.textContent = 'NB ' + nb + (insured ? ' • ' + insured : '');
+        listWrap.innerHTML   = '';
+        countEl.textContent  = '';
+        setState('loading');
+
+        const mdParser = window.marked ? window.marked : null;
+
+        fetch(API_URL + '?benefit_number=' + encodeURIComponent(nb))
+          .then(r => r.json())
+          .then(data => {
+            if (data.error && !(data.results || []).length) {
+              errorMsg.textContent = data.error;
+              setState('error');
+              return;
+            }
+            const results = data.results || [];
+            if (!results.length) { setState('empty'); return; }
+
+            const highlightWords = [nb, insured].filter(Boolean);
+            results.forEach(hit => {
+              listWrap.insertAdjacentHTML('beforeend', renderCard(hit, mdParser, highlightWords));
+            });
+            countEl.textContent = results.length + ' resultado' + (results.length !== 1 ? 's' : '') + ' encontrado' + (results.length !== 1 ? 's' : '');
+            setState('list');
+          })
+          .catch(err => {
+            errorMsg.textContent = 'Falha na requisição: ' + err.message;
+            setState('error');
+          });
+      });
+
+      modal.addEventListener('hidden.bs.modal', function () {
+        listWrap.innerHTML  = '';
+        subtitle.textContent = '';
+        countEl.textContent  = '';
+        setState('loading');
+      });
+    })();
+
     function confirmDeleteDocument(deleteUrl) {
       if (confirm('Tem certeza que deseja remover este documento do processo?')) {
         const form = document.createElement('form');
@@ -1244,6 +1550,4 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
       }
     }
   </script>
-
-</div>
 {% endblock %}
