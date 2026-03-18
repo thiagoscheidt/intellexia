@@ -1017,7 +1017,15 @@ class JudicialProcess(db.Model):
     case_value = db.Column(db.Numeric(15, 2))
     filing_date = db.Column(db.Date)
     last_update = db.Column(db.DateTime)  # Última atualização de dados do processo
-    
+
+    # Dados extraídos automaticamente pela IA
+    process_class = db.Column(db.String(255))  # Classe processual
+    valor_causa_texto = db.Column(db.String(100))  # Valor da causa (texto original)
+    assuntos = db.Column(db.JSON)  # Lista de assuntos
+    segredo_justica = db.Column(db.Boolean)  # Segredo de justiça
+    justica_gratuita = db.Column(db.Boolean)  # Justiça gratuita requerida/deferida
+    liminar_tutela = db.Column(db.Boolean)  # Pedido de liminar ou tutela antecipada
+
     # Notas internas
     internal_notes = db.Column(db.Text)
     

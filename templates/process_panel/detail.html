@@ -289,6 +289,60 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                     </div>
                     {% endif %}
 
+                    {% if process.process_class %}
+                    <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+                      <small class="text-muted"><i class="bi bi-tag me-2"></i>Classe</small>
+                      <strong class="text-end ms-3">{{ process.process_class }}</strong>
+                    </div>
+                    {% endif %}
+
+                    {% if process.valor_causa_texto %}
+                    <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+                      <small class="text-muted"><i class="bi bi-cash-coin me-2"></i>Valor da Causa</small>
+                      <strong class="text-end ms-3" id="display-valor-causa"
+                        data-raw="{{ process.valor_causa_texto }}">{{ process.valor_causa_texto }}</strong>
+                    </div>
+                    {% endif %}
+
+                    {% if process.assuntos %}
+                    <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+                      <small class="text-muted"><i class="bi bi-tags me-2"></i>Assuntos</small>
+                      <div class="text-end ms-3">
+                        {% for assunto in process.assuntos %}
+                        <span class="badge bg-secondary me-1 mb-1">{{ assunto }}</span>
+                        {% endfor %}
+                      </div>
+                    </div>
+                    {% endif %}
+
+                    {% if process.segredo_justica is not none %}
+                    <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+                      <small class="text-muted"><i class="bi bi-shield-lock me-2"></i>Segredo de Justiça</small>
+                      <span class="badge {{ 'bg-danger' if process.segredo_justica else 'bg-success' }}">
+                        {{ 'Sim' if process.segredo_justica else 'Não' }}
+                      </span>
+                    </div>
+                    {% endif %}
+
+                    {% if process.justica_gratuita is not none %}
+                    <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+                      <small class="text-muted"><i class="bi bi-hand-thumbs-up me-2"></i>Justiça Gratuita</small>
+                      <span class="badge {{ 'bg-success' if process.justica_gratuita else 'bg-secondary' }}">
+                        {{ 'Sim' if process.justica_gratuita else 'Não' }}
+                      </span>
+                    </div>
+                    {% endif %}
+
+                    {% if process.liminar_tutela is not none %}
+                    <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+                      <small class="text-muted"><i class="bi bi-exclamation-circle me-2"></i>Liminar / Tutela
+                        Antecipada</small>
+                      <span class="badge {{ 'bg-warning text-dark' if process.liminar_tutela else 'bg-secondary' }}">
+                        {{ 'Sim' if process.liminar_tutela else 'Não' }}
+                      </span>
+                    </div>
+                    {% endif %}
+
                     <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
                       <small class="text-muted"><i class="bi bi-person-check me-2"></i>Polo Ativo</small>
                       <strong class="text-end ms-3">{{ process.plaintiff_client.name if process.plaintiff_client else
@@ -803,7 +857,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                       aria-labelledby="benefits-summary-tab" tabindex="0">
                       <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
                         <h4 class="h6 mb-0 text-muted text-uppercase">Demonstrativo de Teses</h4>
-                        <small class="text-muted">Participação calculada sobre {{ thesis_refs.total }} vínculos de tese.</small>
+                        <small class="text-muted">Participação calculada sobre {{ thesis_refs.total }} vínculos de
+                          tese.</small>
                       </div>
 
                       <div class="table-responsive">
@@ -828,7 +883,9 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                 <div class="d-flex align-items-center gap-2 flex-wrap">
                                   <span>{{ thesis_group.name }}</span>
                                   {% if thesis_group.is_unassigned %}
-                                  <span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">Sem vínculo</span>
+                                  <span
+                                    class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">Sem
+                                    vínculo</span>
                                   {% endif %}
                                 </div>
                               </td>
@@ -836,12 +893,14 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                               <td>
                                 <div class="d-flex align-items-center gap-2">
                                   <div class="progress flex-grow-1" role="progressbar" aria-label="Participação da tese"
-                                    aria-valuenow="{{ group_pct|round(0, 'common')|int }}" aria-valuemin="0" aria-valuemax="100"
-                                    style="height: 9px;">
-                                    <div class="progress-bar {% if thesis_group.is_unassigned %}bg-secondary{% else %}bg-primary{% endif %}"
+                                    aria-valuenow="{{ group_pct|round(0, 'common')|int }}" aria-valuemin="0"
+                                    aria-valuemax="100" style="height: 9px;">
+                                    <div
+                                      class="progress-bar {% if thesis_group.is_unassigned %}bg-secondary{% else %}bg-primary{% endif %}"
                                       data-width="{{ group_pct|round(2, 'common') }}"></div>
                                   </div>
-                                  <span class="small text-muted" style="min-width: 52px;">{{ '%.1f'|format(group_pct) }}%</span>
+                                  <span class="small text-muted" style="min-width: 52px;">{{ '%.1f'|format(group_pct)
+                                    }}%</span>
                                 </div>
                               </td>
                             </tr>
@@ -1106,6 +1165,20 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
         const safeWidth = Number.isFinite(widthValue) ? Math.max(0, Math.min(100, widthValue)) : 0;
         bar.style.width = safeWidth + '%';
       });
+
+      // Formata valor da causa na exibição
+      const valorCausaEl = document.getElementById('display-valor-causa');
+      if (valorCausaEl) {
+        const raw = valorCausaEl.getAttribute('data-raw') || '';
+        const digits = raw.replace(/\D/g, '');
+        if (digits) {
+          const cents = parseInt(digits, 10);
+          valorCausaEl.textContent = 'R$ ' + (cents / 100).toLocaleString('pt-BR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          });
+        }
+      }
 
       if (editorElement && hiddenInput && form && modalElement) {
         const toolbarOptions = [

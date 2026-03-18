@@ -27,6 +27,12 @@ class DocumentExtractionResult(BaseModel):
     suggested_category: str = Field(default="", description="Categoria sugerida para o documento")
     suggested_document_type_key: str = Field(default="", description="Chave do tipo sugerido")
     suggested_document_type_name: str = Field(default="", description="Nome do tipo sugerido")
+    classe: str | None = Field(default=None, description="Classe processual (ex: PROCEDIMENTO COMUM CÍVEL). Null se não encontrado com certeza.")
+    valor_causa: str | None = Field(default=None, description="Valor da causa conforme consta no documento (ex: R$ 100.000,00). Null se não encontrado com certeza.")
+    assuntos: list[str] | None = Field(default=None, description="Lista de assuntos do processo (ex: ['Seguro Acidentes do Trabalho']). Null se não encontrado com certeza.")
+    segredo_justica: bool | None = Field(default=None, description="Segredo de justiça: true=SIM, false=NÃO. Null se não encontrado com certeza.")
+    justica_gratuita: bool | None = Field(default=None, description="Justiça gratuita concedida/requerida: true=SIM, false=NÃO. Null se não encontrado com certeza.")
+    liminar_tutela: bool | None = Field(default=None, description="Pedido de liminar ou antecipação de tutela: true=SIM, false=NÃO. Null se não encontrado com certeza.")
 
 
 class BenefitRequestItem(BaseModel):
@@ -297,6 +303,12 @@ class AgentDocumentExtractor:
             suggested_category="",
             suggested_document_type_key="",
             suggested_document_type_name="",
+            classe=None,
+            valor_causa=None,
+            assuntos=None,
+            segredo_justica=None,
+            justica_gratuita=None,
+            liminar_tutela=None,
         )
 
     def _get_document_data_tables(self) -> list[dict]:
@@ -725,6 +737,25 @@ class AgentDocumentExtractor:
             "0000000-00.0000.0.00.0000\n\n"
             "VARA / JUÍZO:\n"
             "- Pode aparecer como Vara, Juízo, Tribunal ou Seção Judiciária.\n\n"
+            "CLASSE PROCESSUAL (classe):\n"
+            "- Ex: PROCEDIMENTO COMUM CÍVEL, MANDADO DE SEGURANÇA, AÇÃO CIVIL PÚBLICA.\n"
+            "- Retorne null se não encontrar com certeza.\n\n"
+            "VALOR DA CAUSA (valor_causa):\n"
+            "- Mantenha o formato original do documento (ex: R$ 100.000,00).\n"
+            "- Retorne null se não encontrar com certeza.\n\n"
+            "ASSUNTOS (assuntos):\n"
+            "- Lista de assuntos/temas processuais presentes no cabeçalho do documento.\n"
+            "- Ex: ['Seguro Acidentes do Trabalho', 'Acidente de Trabalho'].\n"
+            "- Retorne null se não encontrar com certeza.\n\n"
+            "SEGREDO DE JUSTIÇA (segredo_justica):\n"
+            "- true = sim/sigiloso, false = não/público.\n"
+            "- Retorne null se não encontrar com certeza.\n\n"
+            "JUSTIÇA GRATUITA (justica_gratuita):\n"
+            "- true = sim/requerida/deferida, false = não.\n"
+            "- Retorne null se não encontrar com certeza.\n\n"
+            "LIMINAR / TUTELA ANTECIPADA (liminar_tutela):\n"
+            "- true = há pedido de liminar ou antecipação de tutela, false = não há.\n"
+            "- Retorne null se não encontrar com certeza.\n\n"
             "TIPO DO DOCUMENTO:\n"
             "- Identifique o tipo do documento (ex: Petição Inicial, Contestação, Sentença).\n"
             "- Escolha apenas entre os tipos cadastrados abaixo.\n"
@@ -749,7 +780,13 @@ class AgentDocumentExtractor:
             '  "passive_pole": "",\n'
             '  "suggested_category": "",\n'
             '  "suggested_document_type_key": "",\n'
-            '  "suggested_document_type_name": ""\n'
+            '  "suggested_document_type_name": "",\n'
+            '  "classe": null,\n'
+            '  "valor_causa": null,\n'
+            '  "assuntos": null,\n'
+            '  "segredo_justica": null,\n'
+            '  "justica_gratuita": null,\n'
+            '  "liminar_tutela": null\n'
             "}"
         )
 

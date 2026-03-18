@@ -1913,6 +1913,18 @@ def edit(process_id):
         process.plaintiff_client_id = plaintiff_client_id or None
         process.defendant_id = defendant_id or None
 
+        # Campos extras
+        process.process_class = request.form.get('process_class', '').strip() or None
+        process.valor_causa_texto = request.form.get('valor_causa_texto', '').strip() or None
+        assuntos_raw = request.form.get('assuntos_texto', '').strip()
+        process.assuntos = [a.strip() for a in assuntos_raw.split(',') if a.strip()] if assuntos_raw else None
+        segredo_raw = request.form.get('segredo_justica', '')
+        process.segredo_justica = (segredo_raw == '1') if segredo_raw in ('0', '1') else None
+        gratuita_raw = request.form.get('justica_gratuita', '')
+        process.justica_gratuita = (gratuita_raw == '1') if gratuita_raw in ('0', '1') else None
+        liminar_raw = request.form.get('liminar_tutela', '')
+        process.liminar_tutela = (liminar_raw == '1') if liminar_raw in ('0', '1') else None
+
         should_create_phase_event = bool(selected_phase_key) and selected_phase_key != current_phase_key
         
         try:

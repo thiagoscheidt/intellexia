@@ -346,6 +346,38 @@ class KnowledgeBaseProcessingService:
             if defendant:
                 process.defendant_id = defendant.id
 
+    def _apply_extra_info_from_extraction(
+        self,
+        process: JudicialProcess,
+        extraction_payload: dict,
+        force_update: bool = False,
+    ) -> None:
+        """Salva classe, valor da causa, assuntos e flags booleanas extraídos pela IA."""
+        classe = extraction_payload.get("classe")
+        valor_causa = extraction_payload.get("valor_causa")
+        assuntos = extraction_payload.get("assuntos")
+        segredo_justica = extraction_payload.get("segredo_justica")
+        justica_gratuita = extraction_payload.get("justica_gratuita")
+        liminar_tutela = extraction_payload.get("liminar_tutela")
+
+        if (force_update or not process.process_class) and classe:
+            process.process_class = str(classe).strip()
+
+        if (force_update or not process.valor_causa_texto) and valor_causa:
+            process.valor_causa_texto = str(valor_causa).strip()
+
+        if (force_update or not process.assuntos) and isinstance(assuntos, list) and assuntos:
+            process.assuntos = assuntos
+
+        if (force_update or process.segredo_justica is None) and segredo_justica is not None:
+            process.segredo_justica = bool(segredo_justica)
+
+        if (force_update or process.justica_gratuita is None) and justica_gratuita is not None:
+            process.justica_gratuita = bool(justica_gratuita)
+
+        if (force_update or process.liminar_tutela is None) and liminar_tutela is not None:
+            process.liminar_tutela = bool(liminar_tutela)
+
     def _link_knowledge_to_process_if_needed(self, item: KnowledgeBase, extraction_payload: dict) -> None:
         existing_link = JudicialDocument.query.filter_by(knowledge_base_id=item.id).first()
         if existing_link:
@@ -354,6 +386,11 @@ class KnowledgeBaseProcessingService:
                 self._apply_parties_from_extraction(
                     process=process,
                     law_firm_id=item.law_firm_id,
+                    extraction_payload=extraction_payload,
+                    force_update=False,
+                )
+                self._apply_extra_info_from_extraction(
+                    process=process,
                     extraction_payload=extraction_payload,
                     force_update=False,
                 )
@@ -383,6 +420,11 @@ class KnowledgeBaseProcessingService:
             self._apply_parties_from_extraction(
                 process=process,
                 law_firm_id=item.law_firm_id,
+                extraction_payload=extraction_payload,
+                force_update=True,
+            )
+            self._apply_extra_info_from_extraction(
+                process=process,
                 extraction_payload=extraction_payload,
                 force_update=True,
             )
@@ -418,6 +460,11 @@ class KnowledgeBaseProcessingService:
                     extraction_payload=extraction_payload,
                     force_update=True,
                 )
+                self._apply_extra_info_from_extraction(
+                    process=process,
+                    extraction_payload=extraction_payload,
+                    force_update=True,
+                )
 
                 if not item.lawsuit_number or not item.lawsuit_number.strip():
                     item.lawsuit_number = process_number_for_create
@@ -425,6 +472,11 @@ class KnowledgeBaseProcessingService:
                 self._apply_parties_from_extraction(
                     process=process,
                     law_firm_id=item.law_firm_id,
+                    extraction_payload=extraction_payload,
+                    force_update=False,
+                )
+                self._apply_extra_info_from_extraction(
+                    process=process,
                     extraction_payload=extraction_payload,
                     force_update=False,
                 )

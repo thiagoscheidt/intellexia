@@ -216,6 +216,81 @@ subtitle=hero_subtitle|default(''), icon='bi bi-file-earmark-plus') %}
                                         </select>
                                     </div>
 
+                                    <!-- Dados Extras (IA) -->
+                                    <hr class="my-4">
+                                    <h6 class="text-muted mb-3"><i class="bi bi-robot me-2"></i>Dados Extras do Processo
+                                    </h6>
+
+                                    <div class="row">
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="process_class" class="form-label">Classe Processual</label>
+                                                <input type="text" class="form-control" id="process_class"
+                                                    name="process_class" placeholder="Ex: PROCEDIMENTO COMUM CÍVEL"
+                                                    value="{{ process.process_class if process else '' }}">
+                                            </div>
+                                        </div>
+                                        <div class="col-md-6">
+                                            <div class="mb-3">
+                                                <label for="valor_causa_texto" class="form-label">Valor da Causa</label>
+                                                <input type="text" class="form-control" id="valor_causa_texto"
+                                                    name="valor_causa_texto" placeholder="R$ 0,00" inputmode="numeric"
+                                                    value="{{ process.valor_causa_texto if process else '' }}">
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div class="mb-3">
+                                        <label for="assuntos_texto" class="form-label">Assuntos</label>
+                                        <input type="text" class="form-control" id="assuntos_texto"
+                                            name="assuntos_texto"
+                                            placeholder="Ex: Seguro Acidentes do Trabalho, Acidente de Trabalho"
+                                            value="{{ (process.assuntos or [])|join(', ') if process else '' }}">
+                                        <small class="text-muted">Separe múltiplos assuntos por vírgula.</small>
+                                    </div>
+
+                                    <div class="row">
+                                        <div class="col-md-4">
+                                            <div class="mb-3">
+                                                <label class="form-label">Segredo de Justiça</label>
+                                                <select class="form-select" name="segredo_justica">
+                                                    <option value="" {% if process and process.segredo_justica is none
+                                                        %}selected{% endif %}>-- Não informado --</option>
+                                                    <option value="1" {% if process and process.segredo_justica==true
+                                                        %}selected{% endif %}>Sim</option>
+                                                    <option value="0" {% if process and process.segredo_justica==false
+                                                        %}selected{% endif %}>Não</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="mb-3">
+                                                <label class="form-label">Justiça Gratuita</label>
+                                                <select class="form-select" name="justica_gratuita">
+                                                    <option value="" {% if process and process.justica_gratuita is none
+                                                        %}selected{% endif %}>-- Não informado --</option>
+                                                    <option value="1" {% if process and process.justica_gratuita==true
+                                                        %}selected{% endif %}>Sim</option>
+                                                    <option value="0" {% if process and process.justica_gratuita==false
+                                                        %}selected{% endif %}>Não</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        <div class="col-md-4">
+                                            <div class="mb-3">
+                                                <label class="form-label">Liminar / Tutela Antecipada</label>
+                                                <select class="form-select" name="liminar_tutela">
+                                                    <option value="" {% if process and process.liminar_tutela is none
+                                                        %}selected{% endif %}>-- Não informado --</option>
+                                                    <option value="1" {% if process and process.liminar_tutela==true
+                                                        %}selected{% endif %}>Sim</option>
+                                                    <option value="0" {% if process and process.liminar_tutela==false
+                                                        %}selected{% endif %}>Não</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+
                                     {% if action == 'editar' %}
                                     <div class="mb-3">
                                         <label for="current_phase" class="form-label">Fase do Processo</label>
@@ -255,8 +330,39 @@ subtitle=hero_subtitle|default(''), icon='bi bi-file-earmark-plus') %}
     </div>
 </div>
 
-<!-- Script para aplicar máscara CNJ -->
+<!-- Scripts de máscara -->
 <script>
+    // Máscara monetária brasileira: R$ 1.234.567,89
+    function formatBRL(value) {
+        let digits = value.replace(/\D/g, '');
+        if (!digits) return '';
+        let cents = parseInt(digits, 10);
+        let formatted = (cents / 100).toLocaleString('pt-BR', {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+        });
+        return 'R$ ' + formatted;
+    }
+
+    const valorCausaInput = document.getElementById('valor_causa_texto');
+    if (valorCausaInput) {
+        // Formata o valor já existente ao carregar
+        if (valorCausaInput.value) {
+            valorCausaInput.value = formatBRL(valorCausaInput.value);
+        }
+        valorCausaInput.addEventListener('input', function () {
+            const pos = this.selectionStart;
+            const before = this.value.length;
+            this.value = formatBRL(this.value);
+            // Mantém cursor no final
+            const after = this.value.length;
+            this.setSelectionRange(pos + (after - before), pos + (after - before));
+        });
+        valorCausaInput.addEventListener('blur', function () {
+            this.value = formatBRL(this.value);
+        });
+    }
+
     function formatCnj(value) {
         // Remove tudo que não é dígito
         let digits = value.replace(/\D/g, '');
