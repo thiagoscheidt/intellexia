@@ -74,6 +74,7 @@ DOCUMENT_TYPES = {
     "memoriais": {"name": "Memoriais / Alegações Finais", "phase": "alegacoes_finais"},
     "sentenca": {"name": "Sentença", "phase": "julgamento"},
     "embargos_declaracao": {"name": "Embargos de Declaração", "phase": "recursos"},
+    "decisao_ed": {"name": "Decisão de ED", "phase": "recursos"},
     "apelacao": {"name": "Apelação", "phase": "recursos"},
     "contrarrazoes_apelacao": {"name": "Contrarrazões de Apelação", "phase": "recursos"},
     "agravo_instrumento": {"name": "Agravo de Instrumento", "phase": "recursos"},
