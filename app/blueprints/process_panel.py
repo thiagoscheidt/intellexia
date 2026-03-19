@@ -1338,6 +1338,7 @@ def detail(process_id):
             'phase_label': phase_label,
             'doc_type_label': doc_type_label,
             'knowledge_base_id': kb_doc.id,
+            'kb_processing_status': (kb_doc.processing_status or '').strip().lower(),
             'judicial_document_id': judicial_doc.id if judicial_doc else None,
             'phase_order': phase_order_by_key.get(phase_key, 9999),
         })
@@ -1367,6 +1368,7 @@ def detail(process_id):
             'phase_label': phase_label,
             'doc_type_label': doc_type_label,
             'knowledge_base_id': None,
+            'kb_processing_status': None,
             'judicial_document_id': judicial_doc.id,
             'phase_order': phase_order_by_key.get(phase_key, 9999),
         })
@@ -1381,6 +1383,22 @@ def detail(process_id):
     # Filtrar analyses e appeals por process_number
     related_analyses = [a for a in sentence_analyses if hasattr(a, 'process_number') and a.process_number == process.process_number]
     related_appeals = [a for a in appeals if a.sentence_analysis and (hasattr(a.sentence_analysis, 'process_number') and a.sentence_analysis.process_number == process.process_number)]
+
+    analysis_status_summary = {
+        'pending': 0,
+        'processing': 0,
+        'in_progress': 0,
+    }
+    for analysis in related_analyses:
+        status = str(getattr(analysis, 'status', '') or '').strip().lower()
+        if status == 'pending':
+            analysis_status_summary['pending'] += 1
+        elif status == 'processing':
+            analysis_status_summary['processing'] += 1
+
+    analysis_status_summary['in_progress'] = (
+        analysis_status_summary['pending'] + analysis_status_summary['processing']
+    )
     
     # Dados para a dashboard
     data = {
@@ -1407,7 +1425,8 @@ def detail(process_id):
             'appeals_count': len(related_appeals),
             'documents_count': len(documents_list),
             'benefits_count': len(process_benefits),
-        }
+        },
+        'analysis_status_summary': analysis_status_summary,
     }
     
     return render_template('process_panel/detail.html', **data)

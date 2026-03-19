@@ -140,6 +140,12 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                 <div class="info-box-content">
                   <span class="info-box-text">Análises</span>
                   <span class="info-box-number">{{ stats.analyses_count }}</span>
+                  {% if analysis_status_summary.in_progress > 0 %}
+                  <small class="text-warning d-block mt-1">
+                    <i class="bi bi-hourglass-split me-1"></i>
+                    {{ analysis_status_summary.in_progress }} em andamento
+                  </small>
+                  {% endif %}
                 </div>
               </div>
             </div>
@@ -224,6 +230,22 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
               </div>
             </div>
           </div>
+
+          {% if analysis_status_summary.in_progress > 0 %}
+          <div class="alert alert-warning py-2 px-3 mb-4" role="status">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+              <i class="bi bi-hourglass-split"></i>
+              <span class="fw-semibold">Análises em andamento:</span>
+              {% if analysis_status_summary.processing > 0 %}
+              <span class="badge bg-info">{{ analysis_status_summary.processing }} processando</span>
+              {% endif %}
+              {% if analysis_status_summary.pending > 0 %}
+              <span class="badge bg-secondary">{{ analysis_status_summary.pending }} aguardando fila</span>
+              {% endif %}
+              <small class="text-muted">Acompanhe na aba Análises.</small>
+            </div>
+          </div>
+          {% endif %}
 
           <div class="row">
             <!-- Informações Principais -->
@@ -405,6 +427,11 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                       <a class="nav-link" id="analyses-tab" data-bs-toggle="tab" href="#analyses" role="tab">
                         <i class="bi bi-file-earmark-text me-2"></i>Análises
                         <span class="badge bg-primary ms-1">{{ stats.analyses_count }}</span>
+                        {% if analysis_status_summary.in_progress > 0 %}
+                        <span class="badge bg-warning text-dark ms-1">
+                          <i class="bi bi-hourglass-split me-1"></i>{{ analysis_status_summary.in_progress }}
+                        </span>
+                        {% endif %}
                       </a>
                     </li>
                     <li class="nav-item" role="presentation">
@@ -462,6 +489,17 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                               <td>
                                 <i class="bi bi-file-earmark me-2"></i>
                                 {{ doc.filename }}
+                                {% if doc.knowledge_base_id and doc.kb_processing_status == 'pending' %}
+                                <div class="small text-muted mt-1">
+                                  <i class="bi bi-clock-history me-1"></i>
+                                  Aguardando processamento na base de conhecimento
+                                </div>
+                                {% elif doc.knowledge_base_id and doc.kb_processing_status == 'processing' %}
+                                <div class="small text-muted mt-1">
+                                  <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                  Processando na base de conhecimento
+                                </div>
+                                {% endif %}
                               </td>
                               <td>
                                 {% if doc.phase_label %}
@@ -556,6 +594,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                 <span class="badge bg-success"><i class="bi bi-check-circle"></i> Concluído</span>
                                 {% elif analysis.status == 'processing' %}
                                 <span class="badge bg-info"><i class="bi bi-hourglass-split"></i> Processando</span>
+                                {% elif analysis.status == 'pending' %}
+                                <span class="badge bg-warning text-dark"><i class="bi bi-clock"></i> Aguardando fila</span>
                                 {% elif analysis.status == 'error' %}
                                 <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Erro</span>
                                 {% else %}
