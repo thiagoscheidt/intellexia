@@ -116,6 +116,13 @@
                 <p>Templates</p>
               </a>
             </li>
+            <li class="nav-item">
+              <a href="{{ url_for('benefits.benefits_list') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'benefits.benefits_list' else '' }}">
+                <i class="nav-icon bi bi-card-list"></i>
+                <p>Benefícios dos Casos</p>
+              </a>
+            </li>
           </ul>
         </li>
 
@@ -298,25 +305,6 @@
           </ul>
         </li>
 
-        <li class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('benefits.') else '' }}">
-          <a href="#"
-            class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('benefits.') else '' }}">
-            <i class="nav-icon bi bi-card-list"></i>
-            <p>
-              Benefícios
-              <i class="nav-arrow bi bi-chevron-right"></i>
-            </p>
-          </a>
-          <ul class="nav nav-treeview">
-            <li class="nav-item">
-              <a href="{{ url_for('benefits.benefits_list') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'benefits.benefits_list' else '' }}">
-                <i class="nav-icon bi bi-list"></i>
-                <p>Todos os Benefícios</p>
-              </a>
-            </li>
-          </ul>
-        </li>
 
         <li
           class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint == 'process_panel.manage_judicial_phases' or request.endpoint == 'process_panel.manage_document_types' or request.endpoint == 'process_panel.manage_defendants' or request.endpoint == 'process_panel.manage_legal_theses' or request.endpoint.startswith('knowledge_base.categories') or request.endpoint.startswith('knowledge_base.tags') or request.endpoint == 'settings.law_firm_settings') else '' }}">
