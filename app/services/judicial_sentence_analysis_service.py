@@ -9,7 +9,7 @@ from datetime import datetime
 from rich import print
 
 from app.models import db, JudicialDocument, JudicialProcess, JudicialProcessBenefit, JudicialSentenceAnalysis
-from app.agents.document_processing.agent_sentence_summary import AgentSentenceSummary
+from app.agents.document_processing.agent_sentence_summary import AgentSentenceSummary, AgentSentenceErrorsAnalysis
 from app.services.document_processor_service import DocumentProcessorService
 
 
@@ -346,7 +346,8 @@ class JudicialSentenceAnalysisService:
         process_number: str | None = None,
         user_id: int | None = None,
         law_firm_id: int | None = None,
-    ) -> str | None:
+    ) -> tuple[str | None, str | None]:
+        """Retorna (analysis_json, errors_analysis_json)."""
         try:
             benefits_data = self._load_benefits_payload(process_number, law_firm_id)
             benefits_ctx = self._build_benefits_markdown(benefits_data)
@@ -359,9 +360,9 @@ class JudicialSentenceAnalysisService:
             print(f"Convertendo sentença: {sentence_path}")
             sentence_text = self.doc_processor.convert_with_markitdown(sentence_path)
 
-            print(f"Analisando sentença com IA...")
-            agent = AgentSentenceSummary()
-            analysis = agent.summarizeSentence(
+            print("Analisando sentença com IA...")
+            summary_agent = AgentSentenceSummary()
+            analysis = summary_agent.summarizeSentence(
                 text_content=sentence_text,
                 petition_benefits=benefits_ctx or benefits_data,
                 user_id=user_id,
@@ -371,14 +372,26 @@ class JudicialSentenceAnalysisService:
             if benefits_data:
                 analysis['petition_benefits'] = benefits_data
 
+            print("Analisando erros materiais e omissões...")
+            errors_agent = AgentSentenceErrorsAnalysis()
+            errors_analysis = errors_agent.analyze(
+                text_content=sentence_text,
+                benefits=benefits_ctx or benefits_data,
+                user_id=user_id,
+                law_firm_id=law_firm_id,
+            )
+
             print("Análise concluída com sucesso!")
-            return json.dumps(analysis, ensure_ascii=False, indent=2)
+            return (
+                json.dumps(analysis, ensure_ascii=False, indent=2),
+                json.dumps(errors_analysis, ensure_ascii=False, indent=2),
+            )
 
         except Exception as e:
             import traceback
             print(f"Erro ao analisar sentença: {e}")
             traceback.print_exc()
-            return None
+            return None, None
 
     # ------------------------------------------------------------------
     # Processamento em lote
@@ -428,7 +441,7 @@ class JudicialSentenceAnalysisService:
                     item.error_message = None
                     db.session.commit()
 
-                    result_json = self.analyze_sentence(
+                    result_json, errors_json = self.analyze_sentence(
                         sentence_path=item.file_path,
                         process_number=item.process_number,
                         user_id=item.user_id,
@@ -440,6 +453,7 @@ class JudicialSentenceAnalysisService:
 
                     analysis_dict = json.loads(result_json)
                     item.analysis_result = result_json
+                    item.errors_analysis_result = errors_json
 
                     updated_benefits = self._sync_benefit_decisions(item, analysis_dict)
                     if updated_benefits > 0:

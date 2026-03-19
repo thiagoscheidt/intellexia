@@ -497,6 +497,7 @@ class JudicialSentenceAnalysis(db.Model):
     # Status e análise
     status = db.Column(db.String(20), default='pending')  # pending, processing, completed, error
     analysis_result = db.Column(db.Text)  # Resultado da análise pela IA
+    errors_analysis_result = db.Column(db.Text)  # Resultado da análise de erros materiais e omissões
     error_message = db.Column(db.Text)  # Mensagem de erro caso falhe
     
     # Metadados
