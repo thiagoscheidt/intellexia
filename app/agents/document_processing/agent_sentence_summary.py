@@ -1,15 +1,12 @@
 import os
 import time
-from datetime import datetime
 from typing import Optional, List
 
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
-from markitdown import MarkItDown
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ToolStrategy
 from langchain_openai import ChatOpenAI
-from app.agents.core.file_agent import FileAgent
 from app.services.token_usage_service import TokenUsageService
 from rich import print
 
@@ -19,34 +16,29 @@ load_dotenv()
 # ==================== Modelos Pydantic ====================
 
 class Entities(BaseModel):
-    """Modelo para entidades extraídas do documento"""
     people: List[str] = Field(default_factory=list, description="Pessoas mencionadas")
     organizations: List[str] = Field(default_factory=list, description="Organizações mencionadas")
     locations: List[str] = Field(default_factory=list, description="Localizações mencionadas")
 
 
 class Party(BaseModel):
-    """Modelo para uma parte do processo"""
     name: str = Field(default="", description="Nome da parte")
     role: str = Field(default="", description="Papel da parte (Autor, Réu, etc)")
     lawyers: List[str] = Field(default_factory=list, description="Lista de advogados")
 
 
 class Parties(BaseModel):
-    """Modelo para as partes envolvidas no processo"""
     active_pole: List[Party] = Field(default_factory=list, description="Polo ativo")
     passive_pole: List[Party] = Field(default_factory=list, description="Polo passivo")
 
 
 class Decision(BaseModel):
-    """Modelo para uma decisão específica"""
     subject: str = Field(default="", description="Assunto da decisão")
     result: str = Field(default="", description="Resultado (Procedente, Improcedente, Parcialmente Procedente, Não mencionado na sentença)")
     reasoning: str = Field(default="", description="Fundamentação breve da decisão")
 
 
 class FapBenefitAnalysis(BaseModel):
-    """Modelo para análise de benefício em processo FAP"""
     benefit_number: str = Field(default="", description="Número do benefício (NB)")
     insured_name: str = Field(default="", description="Nome do segurado")
     accident_type: str = Field(default="", description="Tipo/natureza do acidente")
@@ -55,15 +47,13 @@ class FapBenefitAnalysis(BaseModel):
 
 
 class PetitionRequestCoverage(BaseModel):
-    """Modelo para análise de cobertura dos pedidos da petição"""
     request: str = Field(default="", description="Pedido da petição inicial")
     was_analyzed: bool = Field(default=False, description="Se o pedido foi analisado na sentença")
-    decision_result: str = Field(default="", description="Resultado da decisão sobre este pedido (incluindo 'Não mencionado na sentença')")
+    decision_result: str = Field(default="", description="Resultado da decisão sobre este pedido")
     comments: str = Field(default="", description="Observações sobre o pedido")
 
 
 class SentenceInfo(BaseModel):
-    """Modelo para informações específicas da sentença judicial"""
     process_number: str = Field(default="", description="Número do processo")
     case_value: str = Field(default="", description="Valor da causa")
     subjects: List[str] = Field(default_factory=list, description="Assuntos jurídicos")
@@ -75,7 +65,7 @@ class SentenceInfo(BaseModel):
     judge: str = Field(default="", description="Nome do juiz/magistrado")
     court_tag: str = Field(default="", description="Tag do tribunal (ex: TJSP, TRF1)")
     parties: Parties = Field(default_factory=Parties, description="Partes envolvidas")
-    operative_part: str = Field(default="", description="Dispositivo da sentença (o que foi decidido)")
+    operative_part: str = Field(default="", description="Dispositivo da sentença")
     overall_result: str = Field(default="", description="Resultado geral (Procedente, Improcedente, Parcialmente Procedente)")
     decisions: List[Decision] = Field(default_factory=list, description="Decisões específicas sobre cada pedido")
     fap_benefits_analysis: List[FapBenefitAnalysis] = Field(default_factory=list, description="Análise individual de benefícios (apenas para processos FAP)")
@@ -86,7 +76,6 @@ class SentenceInfo(BaseModel):
 
 
 class SentenceSummary(BaseModel):
-    """Modelo para o resumo completo da sentença judicial"""
     summary: str = Field(description="Resumo geral da sentença")
     summary_short: str = Field(default="", description="Resumo curto (2-4 frases)")
     summary_long: str = Field(default="", description="Resumo longo (2-4 parágrafos)")
@@ -98,226 +87,180 @@ class SentenceSummary(BaseModel):
     sentence_info: SentenceInfo = Field(default_factory=SentenceInfo, description="Informações da sentença")
 
     def to_dict(self) -> dict:
-        """Converte o modelo para dicionário"""
         return self.model_dump(by_alias=True)
 
     def to_json(self) -> str:
-        """Converte o modelo para JSON"""
         return self.model_dump_json(by_alias=True)
+
+
+# ==================== Schemas: Erros Materiais e Omissões ====================
+
+class MaterialError(BaseModel):
+    description: str = Field(default="", description="Descrição do erro material identificado")
+    location: str = Field(default="", description="Trecho ou parte da sentença onde o erro ocorre")
+    correction_suggestion: str = Field(default="", description="Sugestão de correção para o erro")
+
+
+class Omission(BaseModel):
+    benefit_number: str = Field(default="", description="Número do benefício (NB) omitido, se aplicável")
+    insured_name: str = Field(default="", description="Nome do segurado omitido, se aplicável")
+    description: str = Field(default="", description="Descrição do ponto omitido (pedido, benefício ou questão não analisada)")
+    legal_basis: str = Field(default="", description="Fundamento legal que exige análise do ponto omitido")
+
+
+class JudgmentErrorsAnalysis(BaseModel):
+    has_material_errors: bool = Field(default=False, description="Se foram identificados erros materiais na sentença")
+    has_omissions: bool = Field(default=False, description="Se foram identificadas omissões na sentença")
+    material_errors: List[MaterialError] = Field(default_factory=list, description="Lista de erros materiais identificados")
+    omissions: List[Omission] = Field(default_factory=list, description="Lista de omissões identificadas")
+    summary: str = Field(default="", description="Resumo geral dos vícios encontrados ou confirmação de que a sentença está completa")
+    ed_recommendation: str = Field(
+        default="",
+        description="Recomendação sobre interpor Embargos de Declaração: 'Recomendado', 'Não recomendado' ou 'Verificar com advogado'",
+    )
+    ed_arguments: List[str] = Field(default_factory=list, description="Argumentos para os Embargos de Declaração, se recomendado")
+
+    def to_dict(self) -> dict:
+        return self.model_dump(by_alias=True)
 
 
 # ==================== Classe Principal ====================
 
+_COURT_TAGS = (
+    "STF, STJ, TST, TSE, STM, TRF1, TRF2, TRF3, TRF4, TRF5, TRF6, "
+    "TJAC, TJAL, TJAM, TJAP, TJBA, TJCE, TJDFT, TJES, TJGO, TJMA, TJMG, TJMS, "
+    "TJMT, TJPA, TJPB, TJPE, TJPI, TJPR, TJRJ, TJRN, TJRO, TJRR, TJRS, TJSC, TJSE, TJSP, TJTO"
+)
+
+_SYSTEM_PROMPT = (
+    "Você é um assistente jurídico especializado em análise de sentenças. "
+    "Gere um resumo técnico, objetivo e estruturado."
+)
+
 
 class AgentSentenceSummary:
-    model_name = None
 
     def __init__(self, model_name: str = "gpt-5-mini"):
         self.model_name = model_name
-
         self.model_provider = os.getenv("SENTENCE_SUMMARY_MODEL_PROVIDER", "openai")
-        self.chat_model = ChatOpenAI(
-            model=self.model_name,
-            temperature=0.2,
-        )
+        self.chat_model = ChatOpenAI(model=model_name, temperature=0.2)
         self.token_usage_service = TokenUsageService()
 
-    def _build_summary_agent(self):
-        return create_agent(
-            model=self.chat_model,
-            tools=[],
-            system_prompt=(
-                "Você é um assistente jurídico especializado em análise de sentenças. "
-                "Gere um resumo técnico, objetivo e estruturado."
-            ),
-            response_format=ToolStrategy(SentenceSummary),
+    # ------------------------------------------------------------------
+    # Helpers de contexto
+    # ------------------------------------------------------------------
+
+    def _build_petition_context(self, requests: List[str]) -> str:
+        if not requests:
+            return ""
+        lines = "\n".join(f"{i}. {r}" for i, r in enumerate(requests, 1))
+        return (
+            "\n\n=== PEDIDOS DA PETIÇÃO INICIAL (use como contexto) ===\n"
+            f"Os seguintes pedidos foram formulados na petição inicial:\n{lines}\n\n"
+            "IMPORTANTE: No campo 'petition_requests_coverage', analise SE e COMO cada um desses pedidos "
+            "foi tratado na sentença. Para cada pedido, indique:\n"
+            "- was_analyzed: true se o pedido foi mencionado/analisado na sentença, false caso contrário\n"
+            "- decision_result: o resultado da decisão sobre este pedido específico\n"
+            "- comments: observações relevantes sobre o pedido\n\n"
         )
+
+    def _build_benefits_context(self, benefits: str | dict | None) -> str:
+        if not benefits:
+            return ""
+
+        closing = (
+            "\nIMPORTANTE: Para CADA benefício listado acima, procure na sentença:\n"
+            "- SE encontrar análise/decisão favorável → preencha 'result' com: Aceito\n"
+            "- SE encontrar análise/decisão desfavorável → preencha 'result' com: Rejeitado\n"
+            "- SE NÃO encontrar menção → preencha 'result' com: Não mencionado na sentença\n"
+            "\nNo campo 'fap_benefits_analysis', inclua TODOS os benefícios (tanto mencionados quanto não mencionados).\n"
+        )
+
+        if isinstance(benefits, str):
+            return (
+                "\n\n=== BENEFÍCIOS MENCIONADOS NA PETIÇÃO INICIAL (use como contexto) ===\n"
+                f"{benefits}\n{closing}"
+            )
+
+        benefits_list = benefits.get("benefits", []) if isinstance(benefits, dict) else []
+        if not benefits_list:
+            return ""
+
+        lines = ""
+        for i, b in enumerate(benefits_list, 1):
+            lines += f"\n{i}. Benefício NB {b.get('benefit_number', 'não informado')}:\n"
+            lines += f"   - Segurado: {b.get('insured_name', '')}\n"
+            lines += f"   - Tipo: {b.get('benefit_type', '')}\n"
+            if b.get("accident_date"):
+                lines += f"   - Data do acidente: {b.get('accident_date')}\n"
+            lines += f"   - Motivo da revisão: {b.get('revision_reason', '')}\n"
+
+        return (
+            "\n\n=== BENEFÍCIOS MENCIONADOS NA PETIÇÃO INICIAL (use como contexto) ===\n"
+            f"Contexto geral: {benefits.get('general_revision_context', 'Revisão de benefícios')}\n\n"
+            f"Os seguintes benefícios foram identificados na petição inicial:{lines}"
+            f"{closing}"
+            "\nPara cada benefício, extraia:\n"
+            "- benefit_number: número do benefício (NB)\n"
+            "- insured_name: nome do segurado\n"
+            "- accident_type: tipo/natureza do acidente\n"
+            "- result: Aceito | Rejeitado | Não mencionado na sentença\n"
+            "- reasoning: fundamentação da decisão (ou explicação do porquê não foi mencionado)\n\n"
+        )
+
+    def _build_user_prompt(self, text_or_placeholder: str, petition_ctx: str, benefits_ctx: str) -> str:
+        return (
+            "Resuma a sentença judicial abaixo. Preserve informações jurídicas relevantes. "
+            "Regras de tamanho: summary_short com 2-4 frases objetivas; summary_long com 2-4 parágrafos, "
+            "mais completo e detalhado que o resumo curto. "
+            "Se não houver dado para algum campo, use lista vazia ou string vazia.\n\n"
+            f"{petition_ctx}"
+            f"{benefits_ctx}"
+            "IMPORTANTE: Extraia as seguintes informações estruturadas no campo 'sentence_info':\n"
+            "- process_number, case_value, subjects, origin_court, judgment_date, start_year\n"
+            "- nature, judicial_power, judge\n"
+            f"- court_tag: tag do tribunal (use a CHAVE). Opções: {_COURT_TAGS}\n"
+            "- parties: active_pole e passive_pole com nome, papel e advogados\n"
+            "- operative_part: dispositivo da sentença (preferencialmente literal)\n"
+            "- overall_result: Procedente | Improcedente | Parcialmente Procedente\n"
+            "  Regra: TODOS procedentes → Procedente; TODOS improcedentes → Improcedente; mix → Parcialmente Procedente\n"
+            "- decisions: array com subject, result e reasoning para cada pedido\n"
+            "- fap_benefits_analysis: SE for processo FAP, array com análise por benefício; senão, array vazio\n"
+            "- legal_grounds, jurisprudence_cited, possible_appeals\n"
+            "- petition_requests_coverage: SE houver pedidos da petição acima, analise cada um\n\n"
+            f"SENTENÇA:\n{text_or_placeholder}"
+        )
+
+    # ------------------------------------------------------------------
+    # Método principal
+    # ------------------------------------------------------------------
 
     def summarizeSentence(
         self,
-        file_path: Optional[str] = None,
-        text_content: Optional[str] = None,
+        text_content: str,
         petition_requests: Optional[List[str]] = None,
         petition_benefits: Optional[str | dict] = None,
         user_id: Optional[int] = None,
         law_firm_id: Optional[int] = None,
     ) -> dict:
-        """
-        Gera um resumo estruturado em JSON para uma sentença judicial.
+        if not text_content:
+            raise ValueError("É necessário fornecer text_content")
 
-        Args:
-            file_path: Caminho do arquivo a ser convertido (PDF/DOCX/etc).
-            text_content: Texto já extraído do documento.
-            petition_requests: Lista de pedidos da petição inicial para usar como contexto.
-            petition_benefits: Dicionário com benefícios extraídos da petição (para processos FAP).
-            user_id: ID do usuário responsável pela execução.
-            law_firm_id: ID do escritório responsável pela execução.
+        petition_ctx = self._build_petition_context(petition_requests or [])
+        benefits_ctx = self._build_benefits_context(petition_benefits)
 
-        Returns:
-            dict: Payload JSON pronto para persistência.
-        """
-        if not file_path and not text_content:
-            raise ValueError("É necessário fornecer file_path ou text_content")
+        user_prompt = self._build_user_prompt(text_content, petition_ctx, benefits_ctx)
+        messages = [{"role": "user", "content": user_prompt}]
 
-        extracted_text = ""
-        if text_content:
-            extracted_text = text_content if isinstance(text_content, str) else str(text_content)
-        else:
-            md = MarkItDown()
-            print("Iniciando conversão da sentença para texto...")
-            result = md.convert(file_path)
-            extracted_text = result.text_content or ""
-
-        max_chars = int(os.getenv("SUMMARY_MAX_CHARS", "50000"))
-        use_file = False
-        file_id = None
-        if len(extracted_text) > max_chars:
-            print("Texto extraído excede o limite máximo, utilizando upload de arquivo para LLM...")
-            file_agent = FileAgent()
-            file_id = file_agent.upload_file(file_path)
-            use_file = True
-
-        # Preparar contexto dos pedidos da petição, se disponível
-        petition_context = ""
-        if petition_requests and len(petition_requests) > 0:
-            petition_context = (
-                "\n\n=== PEDIDOS DA PETIÇÃO INICIAL (use como contexto) ===\n"
-                "Os seguintes pedidos foram formulados na petição inicial:\n"
-            )
-            for idx, req in enumerate(petition_requests, 1):
-                petition_context += f"{idx}. {req}\n"
-            petition_context += (
-                "\nIMPORTANTE: No campo 'petition_requests_coverage', analise SE e COMO cada um desses pedidos "
-                "foi tratado na sentença. Para cada pedido, indique:\n"
-                "- was_analyzed: true se o pedido foi mencionado/analisado na sentença, false caso contrário\n"
-                "- decision_result: o resultado da decisão sobre este pedido específico\n"
-                "- comments: observações relevantes sobre o pedido\n\n"
-            )
-        
-        # Preparar contexto dos benefícios da petição, se disponível
-        benefits_context = ""
-        if petition_benefits:
-            if isinstance(petition_benefits, str):
-                # Se for texto (string), usar diretamente como contexto
-                benefits_context = (
-                    "\n\n=== BENEFÍCIOS MENCIONADOS NA PETIÇÃO INICIAL (use como contexto) ===\n"
-                    f"{petition_benefits}\n"
-                    "\nIMPORTANTE: Para CADA benefício listado acima, procure na sentença:\n"
-                    "- SE encontrar análise/decisão favorável → preencha 'result' com: Aceito\n"
-                    "- SE encontrar análise/decisão desfavorável → preencha 'result' com: Rejeitado\n"
-                    "- SE NÃO encontrar menção → preencha 'result' com: Não mencionado na sentença\n"
-                    "\nNo campo 'fap_benefits_analysis', inclua TODOS os benefícios (tanto mencionados quanto não mencionados).\n"
-                )
-            elif isinstance(petition_benefits, dict) and petition_benefits.get('benefits'):
-                # Se for dicion (dict com estrutura), processar como antes
-                benefits_list = petition_benefits.get('benefits', [])
-                benefits_context = (
-                    "\n\n=== BENEFÍCIOS MENCIONADOS NA PETIÇÃO INICIAL (use como contexto) ===\n"
-                    f"Contexto geral: {petition_benefits.get('general_revision_context', 'Revisão de benefícios')}\n\n"
-                    "Os seguintes benefícios foram identificados na petição inicial:\n"
-                )
-                for idx, benefit in enumerate(benefits_list, 1):
-                    benefits_context += f"\n{idx}. Benefício NB {benefit.get('benefit_number', 'não informado')}:\n"
-                    benefits_context += f"   - Segurado: {benefit.get('insured_name', '')}\n"
-                    benefits_context += f"   - Tipo: {benefit.get('benefit_type', '')}\n"
-                    if benefit.get('accident_date'):
-                        benefits_context += f"   - Data do acidente: {benefit.get('accident_date')}\n"
-                    benefits_context += f"   - Motivo da revisão: {benefit.get('revision_reason', '')}\n"
-                benefits_context += (
-                    "\nIMPORTANTE: Para CADA benefício listado acima, procure na sentença:\n"
-                    "- SE encontrar análise/decisão favorável → preencha 'result' com: Aceito\n"
-                    "- SE encontrar análise/decisão desfavorável → preencha 'result' com: Rejeitado\n"
-                    "- SE NÃO encontrar menção → preencha 'result' com: Não mencionado na sentença\n"
-                    "\nNo campo 'fap_benefits_analysis', inclua TODOS os benefícios da petição (tanto mencionados quanto não mencionados).\n"
-                    "\nPara cada benefício, extraia:\n"
-                    "- benefit_number: número do benefício (NB)\n"
-                    "- insured_name: nome do segurado\n"
-                    "- accident_type: tipo/natureza do acidente\n"
-                    "- result: Aceito | Rejeitado | Não mencionado na sentença\n"
-                    "- reasoning: fundamentação da decisão (ou explicação do porquê não foi mencionado)\n\n"
-                )
-
-        user_prompt = (
-            "Resuma a sentença judicial abaixo. Preserve informações jurídicas relevantes. "
-            "Regras de tamanho: summary_short com 2-4 frases objetivas; summary_long com 2-4 parágrafos, "
-            "mais completo e detalhado que o resumo curto. "
-            "Se não houver dado para algum campo, use lista vazia ou string vazia.\n\n"
-            f"{petition_context}"
-            f"{benefits_context}"
-            "IMPORTANTE: Extraia as seguintes informações estruturadas no campo 'sentence_info':\n"
-            "- process_number: número do processo\n"
-            "- case_value: valor da causa (com formatação monetária)\n"
-            "- subjects: lista de assuntos jurídicos\n"
-            "- origin_court: tribunal de origem com cidade/estado\n"
-            "- judgment_date: data da sentença (formato DD/MM/YYYY)\n"
-            "- start_year: ano de início do processo\n"
-            "- nature: natureza da ação (ex: Procedimento Comum)\n"
-            "- judicial_power: poder judiciário (ex: Justiça Federal)\n"
-            "- judge: nome do juiz/magistrado\n"
-            "- court_tag: tag do tribunal conforme a lista (use a CHAVE, ex: TRF1, TJSP). Se não identificar, deixe vazio:\n"
-            "  STF, STJ, TST, TSE, STM, TRF1, TRF2, TRF3, TRF4, TRF5, TRF6, "
-            "TJAC, TJAL, TJAM, TJAP, TJBA, TJCE, TJDFT, TJES, TJGO, TJMA, TJMG, TJMS, "
-            "TJMT, TJPA, TJPB, TJPE, TJPI, TJPR, TJRJ, TJRN, TJRO, TJRR, TJRS, TJSC, TJSE, TJSP, TJTO\n"
-            "- parties: objeto contendo:\n"
-            "  - active_pole: array de partes do polo ativo com nome, papel e advogados\n"
-            "  - passive_pole: array de partes do polo passivo com nome, papel e advogados\n"
-            "- operative_part: dispositivo da sentença (o que foi decidido, preferencialmente copiado literalmente)\n"
-            "- overall_result: resultado geral (Procedente, Improcedente, Parcialmente Procedente)\n"
-            "  IMPORTANTE: seja consistente com as decisões individuais:\n"
-            "  - Se TODOS os pedidos forem Procedentes → overall_result = 'Procedente'\n"
-            "  - Se TODOS os pedidos forem Improcedentes → overall_result = 'Improcedente'\n"
-            "  - Se houver MIX de resultados → overall_result = 'Parcialmente Procedente'\n"
-            "  Identifique menções explícitas do julgador a deferimento, indeferimento e parcial procedência.\n"
-            "  Reconheça expressões decisórias como (incluindo variações):\n"
-            "  - 'INDEFIRO'\n"
-            "  - 'JULGO IMPROCEDENTE'\n"
-            "  - 'DEFIRO PARCIALMENTE'\n"
-            "- decisions: array de decisões específicas sobre cada pedido com:\n"
-            "  - subject: o pedido/questão\n"
-            "  - result: resultado (Procedente/Improcedente/Parcialmente Procedente/Não mencionado na sentença)\n"
-            "  - reasoning: fundamentação breve\n"
-            "  IMPORTANTE: ao preencher 'result', priorize o verbo decisório explícito do texto (deferido, indeferido, deferido parcialmente).\n"
-            "  Se o pedido não constar no decisum, use exatamente: 'Não mencionado na sentença'.\n"
-            "- fap_benefits_analysis: SE FOR PROCESSO FAP (Revisão de FAP), array com análise de cada benefício:\n"
-            "  - benefit_number: número do benefício (NB)\n"
-            "  - insured_name: nome do segurado\n"
-            "  - accident_type: tipo/natureza do acidente\n"
-            "  - result: resultado (Aceito, Rejeitado, Não mencionado na sentença)\n"
-            "  - reasoning: fundamentação breve da decisão sobre o benefício\n"
-            "  (Se NÃO for processo FAP, deixe este campo como array vazio)\n"
-            "- legal_grounds: lista de legislações, artigos e fundamentos utilizados\n"
-            "- jurisprudence_cited: lista de jurisprudências citadas (ex: Súmula 123 STF)\n"
-            "- possible_appeals: lista de recursos possíveis (Apelação, Agravo, Embargos, etc)\n"
-            "- petition_requests_coverage: SE HOUVER PEDIDOS DA PETIÇÃO INICIAL (listados acima), "
-            "analise cada um deles com:\n"
-            "  - request: texto do pedido da petição\n"
-            "  - was_analyzed: true/false se foi analisado na sentença\n"
-            "  - decision_result: resultado (Procedente/Improcedente/Parcialmente Procedente/Não mencionado na sentença)\n"
-            "  - comments: observações sobre o tratamento dado ao pedido na sentença\n\n"
-            f"SENTENÇA:\n{extracted_text}"
+        agent = create_agent(
+            model=self.chat_model,
+            tools=[],
+            system_prompt=_SYSTEM_PROMPT,
+            response_format=ToolStrategy(SentenceSummary),
         )
-        
-        print("Enviado para IA")
-        print(user_prompt)
-
-        summary_agent = self._build_summary_agent()
-        if use_file and file_id:
-            messages = [
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": user_prompt.replace(f"SENTENÇA:\n{extracted_text}", "SENTENÇA: (arquivo anexado)")},
-                        {"type": "file", "file_id": file_id},
-                    ],
-                },
-            ]
-        else:
-            messages = [
-                {"role": "user", "content": user_prompt}
-            ]
 
         call_started_at = time.time()
-        response_payload = summary_agent.invoke({"messages": messages})
+        response_payload = agent.invoke({"messages": messages})
         latency_ms = int((time.time() - call_started_at) * 1000)
 
         self.token_usage_service.capture_and_store(
@@ -332,11 +275,112 @@ class AgentSentenceSummary:
             latency_ms=latency_ms,
             status="success",
             metadata_payload={
-                "source_file": str(file_path or ""),
-                "used_uploaded_file": use_file,
                 "petition_requests_count": len(petition_requests or []),
                 "has_petition_benefits": bool(petition_benefits),
             },
+        )
+
+        structured_response = response_payload.get("structured_response")
+        if not structured_response:
+            raise RuntimeError("Resposta estruturada não retornada pelo create_agent")
+
+        return structured_response.to_dict()
+
+
+# ==================== Agente: Erros Materiais e Omissões ====================
+
+_ERRORS_SYSTEM_PROMPT = (
+    "Você é um assistente jurídico especializado em análise crítica de sentenças judiciais. "
+    "Sua tarefa é identificar erros materiais (erros de cálculo, de fato, ou de referência) e omissões "
+    "(pedidos, benefícios ou questões não analisadas) que possam fundamentar Embargos de Declaração. "
+    "Seja preciso e objetivo. Só aponte vícios concretos, não suposições genéricas."
+)
+
+
+class AgentSentenceErrorsAnalysis:
+
+    def __init__(self, model_name: str = "gpt-5-mini"):
+        self.model_name = model_name
+        self.model_provider = os.getenv("SENTENCE_SUMMARY_MODEL_PROVIDER", "openai")
+        self.chat_model = ChatOpenAI(model=model_name, temperature=0.1)
+        self.token_usage_service = TokenUsageService()
+
+    def _build_benefits_context(self, benefits: str | dict | None) -> str:
+        if not benefits:
+            return ""
+
+        if isinstance(benefits, str):
+            return (
+                "\n\n=== BENEFÍCIOS DO PROCESSO (use para verificar omissões) ===\n"
+                f"{benefits}\n"
+            )
+
+        benefits_list = benefits.get("benefits", []) if isinstance(benefits, dict) else []
+        if not benefits_list:
+            return ""
+
+        rows = ["| NB | Segurado | Tipo | Motivo/Tese |", "|---|---|---|---|"]
+        for b in benefits_list:
+            if not isinstance(b, dict):
+                continue
+            rows.append(
+                f"| {b.get('benefit_number', '-')} "
+                f"| {b.get('insured_name', '-')} "
+                f"| {b.get('benefit_type', '-')} "
+                f"| {b.get('revision_reason', '-')} |"
+            )
+
+        return (
+            "\n\n=== BENEFÍCIOS DO PROCESSO (use para verificar omissões) ===\n"
+            + "\n".join(rows)
+            + "\n"
+        )
+
+    def analyze(
+        self,
+        text_content: str,
+        benefits: str | dict | None = None,
+        user_id: int | None = None,
+        law_firm_id: int | None = None,
+    ) -> dict:
+        if not text_content:
+            raise ValueError("É necessário fornecer text_content")
+
+        benefits_ctx = self._build_benefits_context(benefits)
+
+        user_prompt = (
+            "Analise a sentença judicial abaixo em busca de:\n"
+            "1. **Erros materiais**: erros de cálculo, de fato, de referência a partes/benefícios/datas erradas.\n"
+            "2. **Omissões**: pedidos, benefícios ou questões suscitadas pelas partes que não foram analisados.\n\n"
+            "Para cada omissão de benefício, informe o número do benefício (NB) e o nome do segurado se identificável.\n"
+            "Ao final, indique se é recomendável interpor Embargos de Declaração e liste os argumentos.\n"
+            f"{benefits_ctx}\n"
+            f"SENTENÇA:\n{text_content}"
+        )
+
+        agent = create_agent(
+            model=self.chat_model,
+            tools=[],
+            system_prompt=_ERRORS_SYSTEM_PROMPT,
+            response_format=ToolStrategy(JudgmentErrorsAnalysis),
+        )
+
+        call_started_at = time.time()
+        response_payload = agent.invoke({"messages": [{"role": "user", "content": user_prompt}]})
+        latency_ms = int((time.time() - call_started_at) * 1000)
+
+        self.token_usage_service.capture_and_store(
+            response_payload,
+            agent_name="AgentSentenceErrorsAnalysis",
+            action_name="analyze_errors.create_agent",
+            print_prefix="[AgentSentenceErrorsAnalysis][analyze_errors][tokens]",
+            model_name=self.model_name,
+            model_provider=self.model_provider,
+            user_id=user_id,
+            law_firm_id=law_firm_id,
+            latency_ms=latency_ms,
+            status="success",
+            metadata_payload={"has_benefits": bool(benefits)},
         )
 
         structured_response = response_payload.get("structured_response")
