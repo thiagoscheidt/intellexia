@@ -128,6 +128,7 @@
         <!-- Análise da IA -->
         {% if sentence.status == 'completed' and sentence.analysis_result %}
         {% set analysis = sentence.analysis_result|from_json %}
+        {% set errors_analysis = sentence.errors_analysis_result|from_json if sentence.errors_analysis_result else None %}
         
         <!-- Resumo -->
         <div class="card card-success card-outline shadow-sm mb-4">
@@ -162,6 +163,103 @@
             {% endif %}
           </div>
         </div>
+
+        <!-- Erros Materiais e Omissões -->
+        {% if errors_analysis %}
+        <div class="card card-warning card-outline shadow-sm mb-4">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-exclamation-triangle"></i> Erros Materiais e Omissões</h3>
+          </div>
+          <div class="card-body">
+            <div class="d-flex flex-wrap gap-2 mb-3">
+              <span class="badge {{ 'bg-danger' if errors_analysis.has_material_errors else 'bg-success' }}">
+                <i class="bi {{ 'bi-x-circle' if errors_analysis.has_material_errors else 'bi-check-circle' }} me-1"></i>
+                {{ 'Com erros materiais' if errors_analysis.has_material_errors else 'Sem erros materiais identificados' }}
+              </span>
+              <span class="badge {{ 'bg-danger' if errors_analysis.has_omissions else 'bg-success' }}">
+                <i class="bi {{ 'bi-x-circle' if errors_analysis.has_omissions else 'bi-check-circle' }} me-1"></i>
+                {{ 'Com omissões' if errors_analysis.has_omissions else 'Sem omissões identificadas' }}
+              </span>
+            </div>
+
+            {% if errors_analysis.summary %}
+            <div class="alert alert-light border mb-3">
+              <strong>Resumo da análise crítica:</strong><br>
+              {{ errors_analysis.summary }}
+            </div>
+            {% endif %}
+
+            {% if errors_analysis.ed_recommendation %}
+            <div class="mb-3">
+              <small class="text-muted d-block mb-1"><i class="bi bi-chat-square-text"></i> Recomendação sobre Embargos de Declaração</small>
+              {% set rec = (errors_analysis.ed_recommendation or '')|lower %}
+              <span class="badge {% if 'nao recomendado' in rec %}bg-success{% elif 'recomendado' in rec %}bg-warning text-dark{% else %}bg-secondary{% endif %}">
+                {{ errors_analysis.ed_recommendation }}
+              </span>
+            </div>
+            {% endif %}
+
+            {% if errors_analysis.material_errors %}
+            <h6 class="text-muted mb-2"><i class="bi bi-bug"></i> Erros materiais identificados</h6>
+            <div class="table-responsive mb-3">
+              <table class="table table-sm table-hover align-middle">
+                <thead class="table-light">
+                  <tr>
+                    <th>Descrição</th>
+                    <th>Local</th>
+                    <th>Sugestão de correção</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in errors_analysis.material_errors %}
+                  <tr>
+                    <td>{{ item.description or '-' }}</td>
+                    <td>{{ item.location or '-' }}</td>
+                    <td>{{ item.correction_suggestion or '-' }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% endif %}
+
+            {% if errors_analysis.omissions %}
+            <h6 class="text-muted mb-2"><i class="bi bi-eye-slash"></i> Omissões identificadas</h6>
+            <div class="table-responsive mb-3">
+              <table class="table table-sm table-hover align-middle">
+                <thead class="table-light">
+                  <tr>
+                    <th>NB</th>
+                    <th>Segurado</th>
+                    <th>Descrição</th>
+                    <th>Fundamento legal</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for item in errors_analysis.omissions %}
+                  <tr>
+                    <td><strong>{{ item.benefit_number or '-' }}</strong></td>
+                    <td>{{ item.insured_name or '-' }}</td>
+                    <td>{{ item.description or '-' }}</td>
+                    <td>{{ item.legal_basis or '-' }}</td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% endif %}
+
+            {% if errors_analysis.ed_arguments %}
+            <h6 class="text-muted mb-2"><i class="bi bi-list-ul"></i> Argumentos sugeridos para ED</h6>
+            <ul class="mb-0">
+              {% for argument in errors_analysis.ed_arguments %}
+              <li>{{ argument }}</li>
+              {% endfor %}
+            </ul>
+            {% endif %}
+          </div>
+        </div>
+        {% endif %}
 
         <!-- Informações do Processo -->
         {% if analysis.sentence_info %}
@@ -352,13 +450,35 @@
                 </thead>
                 <tbody>
                   {% for benefit in info.fap_benefits_analysis %}
+                  {% set result_value = (benefit.result or '')|trim %}
+                  {% set result_key = result_value|lower
+                    |replace('á', 'a')
+                    |replace('à', 'a')
+                    |replace('â', 'a')
+                    |replace('ã', 'a')
+                    |replace('é', 'e')
+                    |replace('ê', 'e')
+                    |replace('í', 'i')
+                    |replace('ó', 'o')
+                    |replace('ô', 'o')
+                    |replace('õ', 'o')
+                    |replace('ú', 'u')
+                    |replace('ç', 'c') %}
                   <tr>
                     <td><strong>{{ benefit.benefit_number }}</strong></td>
                     <td>{{ benefit.insured_name }}</td>
                     <td>{{ benefit.accident_type }}</td>
                     <td>
-                      <span class="badge {% if benefit.result == 'Aceito' %}bg-success{% elif benefit.result == 'Rejeitado' %}bg-danger{% else %}bg-warning{% endif %}">
-                        {{ benefit.result }}
+                      <span class="badge {% if result_key == 'aceito' %}bg-success{% elif result_key == 'rejeitado' %}bg-danger{% elif result_key == 'nao mencionado na sentenca' %}bg-secondary{% else %}bg-warning text-dark{% endif %}">
+                        {% if result_key == 'aceito' %}
+                        Procedente
+                        {% elif result_key == 'rejeitado' %}
+                        Improcedente
+                        {% elif result_key == 'nao mencionado na sentenca' %}
+                        Não mencionado na sentença
+                        {% else %}
+                        {{ result_value if result_value else '-' }}
+                        {% endif %}
                       </span>
                     </td>
                     <td class="small">{{ benefit.reasoning }}</td>
