@@ -31,19 +31,19 @@
               <i class="nav-arrow bi bi-chevron-right"></i>
             </p>
           </a>
-          <ul class="nav nav-treeview">
+          <ul class="nav nav-treeview" style="background-color: rgba(0,0,0,0.1);">
             <li class="nav-item">
               <a href="{{ url_for('dashboard.dashboard') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'dashboard.dashboard' else '' }}">
-                <i class="nav-icon bi bi-graph-up"></i>
-                <p>Dashboard Principal</p>
+                class="nav-link {{ 'active' if request.endpoint == 'dashboard.dashboard' else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-graph-up" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Dashboard Principal</p>
               </a>
             </li>
             <li class="nav-item">
               <a href="{{ url_for('dashboard.dashboard_tokens') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'dashboard.dashboard_tokens' else '' }}">
-                <i class="nav-icon bi bi-cpu"></i>
-                <p>Dashboard de Tokens</p>
+                class="nav-link {{ 'active' if request.endpoint == 'dashboard.dashboard_tokens' else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-cpu" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Dashboard de Tokens</p>
               </a>
             </li>
           </ul>
@@ -59,19 +59,26 @@
               <i class="nav-arrow bi bi-chevron-right"></i>
             </p>
           </a>
-          <ul class="nav nav-treeview">
+          <ul class="nav nav-treeview" style="background-color: rgba(0,0,0,0.1);">
             <li class="nav-item">
               <a href="{{ url_for('process_panel.list_processes') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'process_panel.list_processes' else '' }}">
-                <i class="nav-icon bi bi-list"></i>
-                <p>Meus Processos</p>
+                class="nav-link {{ 'active' if request.endpoint == 'process_panel.list_processes' else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-list" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Meus Processos</p>
               </a>
             </li>
             <li class="nav-item">
               <a href="{{ url_for('process_panel.new_process') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'process_panel.new_process' else '' }}">
-                <i class="nav-icon bi bi-plus-square"></i>
-                <p>Novo Processo</p>
+                class="nav-link {{ 'active' if request.endpoint == 'process_panel.new_process' else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-plus-square" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Novo Processo</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('process_panel.list_all_benefits') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'process_panel.list_all_benefits' else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-card-list" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Benefícios dos Processos</p>
               </a>
             </li>
           </ul>
@@ -87,40 +94,40 @@
               <i class="nav-arrow bi bi-chevron-right"></i>
             </p>
           </a>
-          <ul class="nav nav-treeview">
+          <ul class="nav nav-treeview" style="background-color: rgba(0,0,0,0.1);">
             <li class="nav-item">
               <a href="{{ url_for('cases.cases_list') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'cases.cases_list' else '' }}">
-                <i class="nav-icon bi bi-list"></i>
-                <p>Lista de Casos</p>
+                class="nav-link {{ 'active' if request.endpoint == 'cases.cases_list' else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-list" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Lista de Casos</p>
               </a>
             </li>
             <li class="nav-item">
               <a href="{{ url_for('cases.case_new') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'cases.case_new' else '' }}">
-                <i class="nav-icon bi bi-plus-square"></i>
-                <p>Novo Caso</p>
+                class="nav-link {{ 'active' if request.endpoint == 'cases.case_new' else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-plus-square" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Novo Caso</p>
               </a>
             </li>
             <li class="nav-item">
               <a href="{{ url_for('fap_reasons.list') }}"
-                class="nav-link {{ 'active' if request.endpoint in ['fap_reasons.list', 'fap_reasons.new', 'fap_reasons.edit'] else '' }}">
-                <i class="nav-icon bi bi-tags"></i>
-                <p>Motivos FAP</p>
+                class="nav-link {{ 'active' if request.endpoint in ['fap_reasons.list', 'fap_reasons.new', 'fap_reasons.edit'] else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-tags" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Motivos FAP</p>
               </a>
             </li>
             <li class="nav-item">
               <a href="{{ url_for('cases.templates_list') }}"
-                class="nav-link {{ 'active' if request.endpoint in ['cases.templates_list', 'cases.templates_upload'] else '' }}">
-                <i class="nav-icon bi bi-file-earmark-text"></i>
-                <p>Templates</p>
+                class="nav-link {{ 'active' if request.endpoint in ['cases.templates_list', 'cases.templates_upload'] else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-file-earmark-text" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Templates</p>
               </a>
             </li>
             <li class="nav-item">
               <a href="{{ url_for('benefits.benefits_list') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'benefits.benefits_list' else '' }}">
-                <i class="nav-icon bi bi-card-list"></i>
-                <p>Benefícios dos Casos</p>
+                class="nav-link {{ 'active' if request.endpoint == 'benefits.benefits_list' else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-card-list" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Benefícios dos Casos</p>
               </a>
             </li>
           </ul>
@@ -136,47 +143,47 @@
               <i class="nav-arrow bi bi-chevron-right"></i>
             </p>
           </a>
-          <ul class="nav nav-treeview">
+          <ul class="nav nav-treeview" style="background-color: rgba(0,0,0,0.1);">
             <li class="nav-item">
               <a href="{{ url_for('knowledge_base.intelligent_search') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.intelligent_search' else '' }}">
-                <i class="nav-icon bi bi-lightbulb-fill"></i>
-                <p>Pesquisa Inteligente</p>
+                class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.intelligent_search' else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-lightbulb-fill" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Pesquisa Inteligente</p>
               </a>
             </li>
             <li class="nav-item">
               <a href="{{ url_for('knowledge_base.search_chat') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.search_chat' else '' }}">
-                <i class="nav-icon bi bi-robot"></i>
-                <p>Assistente Jurídico</p>
+                class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.search_chat' else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-robot" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Assistente Jurídico</p>
               </a>
             </li>
             <li class="nav-item">
               <a href="{{ url_for('knowledge_base.list') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.list' else '' }}">
-                <i class="nav-icon bi bi-list"></i>
-                <p>Listar Arquivos</p>
+                class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.list' else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-list" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Listar Arquivos</p>
               </a>
             </li>
             <li class="nav-item">
               <a href="{{ url_for('knowledge_base.folders_view') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.folders_view' else '' }}">
-                <i class="nav-icon bi bi-folder2-open"></i>
-                <p>Visualização em Pastas</p>
+                class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.folders_view' else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-folder2-open" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Visualização em Pastas</p>
               </a>
             </li>
             <li class="nav-item">
               <a href="{{ url_for('knowledge_base.upload') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.upload' else '' }}">
-                <i class="nav-icon bi bi-cloud-upload"></i>
-                <p>Adicionar Arquivo</p>
+                class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.upload' else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-cloud-upload" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Adicionar Arquivo</p>
               </a>
             </li>
             <li class="nav-item">
               <a href="{{ url_for('knowledge_base.upload_multiple') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.upload_multiple' else '' }}">
-                <i class="nav-icon bi bi-files"></i>
-                <p>Adicionar Vários Arquivos</p>
+                class="nav-link {{ 'active' if request.endpoint == 'knowledge_base.upload_multiple' else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-files" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Adicionar Vários Arquivos</p>
               </a>
             </li>
           </ul>
@@ -192,7 +199,7 @@
               <i class="nav-arrow bi bi-chevron-right"></i>
             </p>
           </a>
-          <ul class="nav nav-treeview">
+          <ul class="nav nav-treeview" style="background-color: rgba(0,0,0,0.1);">
             <li class="nav-item">
               <!-- <a href="{{ url_for('assistant.legal_assistant') }}"
                 class="nav-link {{ 'active' if request.endpoint == 'assistant.legal_assistant' else '' }}">
@@ -202,23 +209,23 @@
             </li>
             <li class="nav-item">
               <a href="{{ url_for('tools.tools_document_summary_list') }}"
-                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('tools.tools_document_summary') else '' }}">
-                <i class="nav-icon bi bi-robot"></i>
-                <p>Análise de Documento</p>
+                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('tools.tools_document_summary') else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-robot" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Análise de Documento</p>
               </a>
             </li>
             <li class="nav-item">
               <a href="{{ url_for('tools.judicial_sentence_analysis_list') }}"
-                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('tools.judicial_sentence_analysis') else '' }}">
-                <i class="nav-icon bi bi-file-earmark-text"></i>
-                <p>Análise de Sentença</p>
+                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('tools.judicial_sentence_analysis') else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-file-earmark-text" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Análise de Sentença</p>
               </a>
             </li>
             <li class="nav-item">
               <a href="{{ url_for('tools.datajud_search') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'tools.datajud_search' else '' }}">
-                <i class="nav-icon bi bi-search"></i>
-                <p>Pesquisa DataJud (CNJ)</p>
+                class="nav-link {{ 'active' if request.endpoint == 'tools.datajud_search' else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-search" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Pesquisa DataJud (CNJ)</p>
               </a>
             </li>
           </ul>
@@ -233,19 +240,19 @@
               <i class="nav-arrow bi bi-chevron-right"></i>
             </p>
           </a>
-          <ul class="nav nav-treeview">
+          <ul class="nav nav-treeview" style="background-color: rgba(0,0,0,0.1);">
             <li class="nav-item">
               <a href="{{ url_for('clients.clients_list') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'clients.clients_list' else '' }}">
-                <i class="nav-icon bi bi-list"></i>
-                <p>Lista de Clientes</p>
+                class="nav-link {{ 'active' if request.endpoint == 'clients.clients_list' else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-list" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Lista de Clientes</p>
               </a>
             </li>
             <li class="nav-item">
               <a href="{{ url_for('clients.client_new') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'clients.client_new' else '' }}">
-                <i class="nav-icon bi bi-building-add"></i>
-                <p>Novo Cliente</p>
+                class="nav-link {{ 'active' if request.endpoint == 'clients.client_new' else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-building-add" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Novo Cliente</p>
               </a>
             </li>
           </ul>
@@ -260,19 +267,19 @@
               <i class="nav-arrow bi bi-chevron-right"></i>
             </p>
           </a>
-          <ul class="nav nav-treeview">
+          <ul class="nav nav-treeview" style="background-color: rgba(0,0,0,0.1);">
             <li class="nav-item">
               <a href="{{ url_for('lawyers.lawyers_list') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'lawyers.lawyers_list' else '' }}">
-                <i class="nav-icon bi bi-list"></i>
-                <p>Lista de Advogados</p>
+                class="nav-link {{ 'active' if request.endpoint == 'lawyers.lawyers_list' else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-list" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Lista de Advogados</p>
               </a>
             </li>
             <li class="nav-item">
               <a href="{{ url_for('lawyers.lawyer_new') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'lawyers.lawyer_new' else '' }}">
-                <i class="nav-icon bi bi-plus-square"></i>
-                <p>Novo Advogado</p>
+                class="nav-link {{ 'active' if request.endpoint == 'lawyers.lawyer_new' else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-plus-square" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Novo Advogado</p>
               </a>
             </li>
           </ul>
@@ -287,19 +294,19 @@
               <i class="nav-arrow bi bi-chevron-right"></i>
             </p>
           </a>
-          <ul class="nav nav-treeview">
+          <ul class="nav nav-treeview" style="background-color: rgba(0,0,0,0.1);">
             <li class="nav-item">
               <a href="{{ url_for('courts.courts_list') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'courts.courts_list' else '' }}">
-                <i class="nav-icon bi bi-list"></i>
-                <p>Lista de Varas</p>
+                class="nav-link {{ 'active' if request.endpoint == 'courts.courts_list' else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-list" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Lista de Varas</p>
               </a>
             </li>
             <li class="nav-item">
               <a href="{{ url_for('courts.court_new') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'courts.court_new' else '' }}">
-                <i class="nav-icon bi bi-plus-square"></i>
-                <p>Nova Vara</p>
+                class="nav-link {{ 'active' if request.endpoint == 'courts.court_new' else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-plus-square" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Nova Vara</p>
               </a>
             </li>
           </ul>
@@ -316,55 +323,55 @@
               <i class="nav-arrow bi bi-chevron-right"></i>
             </p>
           </a>
-          <ul class="nav nav-treeview">
+          <ul class="nav nav-treeview" style="background-color: rgba(0,0,0,0.1);">
             <li class="nav-item">
               <a href="{{ url_for('process_panel.manage_judicial_phases') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'process_panel.manage_judicial_phases' else '' }}">
-                <i class="nav-icon bi bi-kanban"></i>
-                <p>Fases Judiciais</p>
+                class="nav-link {{ 'active' if request.endpoint == 'process_panel.manage_judicial_phases' else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-kanban" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Fases Judiciais</p>
               </a>
             </li>
             <li class="nav-item">
               <a href="{{ url_for('process_panel.manage_document_types') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'process_panel.manage_document_types' else '' }}">
-                <i class="nav-icon bi bi-file-earmark-text"></i>
-                <p>Tipos de Documento</p>
+                class="nav-link {{ 'active' if request.endpoint == 'process_panel.manage_document_types' else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-file-earmark-text" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Tipos de Documento</p>
               </a>
             </li>
             <li class="nav-item">
               <a href="{{ url_for('process_panel.manage_defendants') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'process_panel.manage_defendants' else '' }}">
-                <i class="nav-icon bi bi-shield-exclamation"></i>
-                <p>Polos Passivos (Réus)</p>
+                class="nav-link {{ 'active' if request.endpoint == 'process_panel.manage_defendants' else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-shield-exclamation" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Polos Passivos (Réus)</p>
               </a>
             </li>
             <li class="nav-item">
               <a href="{{ url_for('process_panel.manage_legal_theses') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'process_panel.manage_legal_theses' else '' }}">
-                <i class="nav-icon bi bi-journal-richtext"></i>
-                <p>Teses Jurídicas</p>
+                class="nav-link {{ 'active' if request.endpoint == 'process_panel.manage_legal_theses' else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-journal-richtext" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Teses Jurídicas</p>
               </a>
             </li>
             <li class="nav-item">
               <a href="{{ url_for('knowledge_base.categories_list') }}"
-                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('knowledge_base.categories') else '' }}">
-                <i class="nav-icon bi bi-folder"></i>
-                <p>Categorias</p>
+                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('knowledge_base.categories') else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-folder" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Categorias</p>
               </a>
             </li>
             <li class="nav-item">
               <a href="{{ url_for('knowledge_base.tags_list') }}"
-                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('knowledge_base.tags') else '' }}">
-                <i class="nav-icon bi bi-tags"></i>
-                <p>Tags</p>
+                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('knowledge_base.tags') else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-tags" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Tags</p>
               </a>
             </li>
             {% if session.get('user_role') == 'admin' %}
             <li class="nav-item">
               <a href="{{ url_for('settings.law_firm_settings') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'settings.law_firm_settings' else '' }}">
-                <i class="nav-icon bi bi-building-gear"></i>
-                <p>Configurações do Escritório</p>
+                class="nav-link {{ 'active' if request.endpoint == 'settings.law_firm_settings' else '' }}" style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-building-gear" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Configurações do Escritório</p>
               </a>
             </li>
             {% endif %}

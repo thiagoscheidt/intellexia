@@ -11,6 +11,8 @@ from functools import wraps
 from sqlalchemy import or_, and_
 from sqlalchemy.orm import selectinload
 from werkzeug.utils import secure_filename
+from types import SimpleNamespace
+from collections import defaultdict
 import hashlib
 import os
 import re
@@ -1034,6 +1036,170 @@ def list_processes():
         judicial_phases_labels=JUDICIAL_PHASES,
         current_view=view_mode,
     )
+
+
+@process_panel_bp.route('/beneficios')
+@require_law_firm
+def list_all_benefits():
+    """Lista todos os benefícios de processos judiciais do escritório."""
+    law_firm_id = get_current_law_firm_id()
+    
+    # Filtros
+    search_query = request.args.get('q', '').strip()
+    client_filter = request.args.get('client_id', type=int)
+    page = request.args.get('page', 1, type=int)
+    
+    # Busca todos os benefícios do escritório com preload dos relacionamentos necessários
+    benefits_query = (
+        JudicialProcessBenefit.query
+        .join(JudicialProcess)
+        .filter(JudicialProcess.law_firm_id == law_firm_id)
+        .filter(JudicialProcessBenefit.benefit_number.isnot(None))  # Apenas benefícios com número
+        .filter(JudicialProcessBenefit.benefit_number != '')
+        .options(
+            selectinload(JudicialProcessBenefit.process).selectinload(JudicialProcess.plaintiff_client),
+            selectinload(JudicialProcessBenefit.legal_theses)
+        )
+    )
+    
+    # Filtro por busca no nome do beneficiário
+    if search_query:
+        benefits_query = benefits_query.filter(
+            JudicialProcessBenefit.insured_name.ilike(f'%{search_query}%')
+        )
+    
+    # Filtro por cliente (polo ativo do processo)
+    if client_filter:
+        benefits_query = benefits_query.filter(
+            JudicialProcess.plaintiff_client_id == client_filter
+        )
+    
+    # Buscar todos os benefícios (sem paginação inicial para agrupamento)
+    all_benefits = benefits_query.order_by(JudicialProcessBenefit.benefit_number.asc()).all()
+    
+    # Agrupar por número do benefício
+    grouped_benefits = defaultdict(list)
+    for benefit in all_benefits:
+        grouped_benefits[benefit.benefit_number].append(benefit)
+    
+    # Criar lista de grupos ordenada
+    benefit_groups = []
+    for benefit_number, benefits_list in grouped_benefits.items():
+        # Pegar informações do primeiro benefício para dados principais
+        main_benefit = benefits_list[0]
+        thesis_names = sorted({thesis.name for benefit in benefits_list for thesis in benefit.legal_theses})
+        
+        # Calcular estatísticas do grupo
+        group_stats = {
+            'total_processes': len(benefits_list),
+            'procedentes': len([b for b in benefits_list if (b.first_instance_decision or '').lower().find('procedente') != -1]),
+            'improcedentes': len([b for b in benefits_list if (b.first_instance_decision or '').lower().find('improcedente') != -1]),
+        }
+        
+        benefit_groups.append({
+            'benefit_number': benefit_number,
+            'main_benefit': main_benefit,
+            'benefits_count': len(benefits_list),
+            'group_stats': group_stats,
+            'thesis_names': thesis_names,
+            'benefits': benefits_list
+        })
+    
+    # Paginação dos grupos
+    per_page = 20  # 20 grupos de benefícios por página
+    total_groups = len(benefit_groups)
+    start_idx = (page - 1) * per_page
+    end_idx = start_idx + per_page
+    paginated_groups = benefit_groups[start_idx:end_idx]
+    
+    # Simular objeto de paginação
+    pagination = SimpleNamespace(
+        page=page,
+        per_page=per_page,
+        total=total_groups,
+        pages=(total_groups + per_page - 1) // per_page,
+        has_prev=page > 1,
+        has_next=page < ((total_groups + per_page - 1) // per_page),
+        prev_num=page - 1 if page > 1 else None,
+        next_num=page + 1 if page < ((total_groups + per_page - 1) // per_page) else None,
+        items=paginated_groups
+    )
+    pagination.iter_pages = lambda **kwargs: range(1, pagination.pages + 1)
+    
+    # Estatísticas globais
+    stats = {
+        'total': len(benefit_groups),
+        'total_processes': sum(g['benefits_count'] for g in benefit_groups),
+        'procedentes': sum(g['group_stats']['procedentes'] for g in benefit_groups),
+        'improcedentes': sum(g['group_stats']['improcedentes'] for g in benefit_groups),
+    }
+    
+    # Lista de clientes para o filtro
+    clients = Client.query.filter_by(law_firm_id=law_firm_id).order_by(Client.name.asc()).all()
+    
+    return render_template(
+        'process_panel/benefits_list.html',
+        benefit_groups=paginated_groups,
+        pagination=pagination,
+        stats=stats,
+        clients=clients,
+        search_query=search_query,
+        client_filter=client_filter
+    )
+
+
+@process_panel_bp.route('/api/beneficio/<benefit_number>/processos')
+@require_law_firm
+def api_benefit_processes(benefit_number):
+    """API para buscar processos relacionados a um benefício específico."""
+    law_firm_id = get_current_law_firm_id()
+    
+    try:
+        # Buscar todos os benefícios com esse número
+        benefits = (
+            JudicialProcessBenefit.query
+            .join(JudicialProcess)
+            .filter(JudicialProcess.law_firm_id == law_firm_id)
+            .filter(JudicialProcessBenefit.benefit_number == benefit_number)
+            .options(
+                selectinload(JudicialProcessBenefit.process).selectinload(JudicialProcess.plaintiff_client),
+                selectinload(JudicialProcessBenefit.legal_theses)
+            )
+            .all()
+        )
+        
+        if not benefits:
+            return jsonify({'error': 'Benefício não encontrado'}), 404
+        
+        # Estruturar dados dos processos
+        processes_data = []
+        for benefit in benefits:
+            process = benefit.process
+            processes_data.append({
+                'process_id': process.id,
+                'process_number': process.process_number,
+                'process_title': process.title or '',
+                'client_name': process.plaintiff_client.name if process.plaintiff_client else '',
+                'nit_number': benefit.nit_number or '',
+                'insured_name': benefit.insured_name or '',
+                'benefit_type': benefit.benefit_type or '',
+                'fap_vigencia_year': benefit.fap_vigencia_year,
+                'request_type': benefit.request_type or '',
+                'first_instance_decision': benefit.first_instance_decision or '',
+                'second_instance_decision': benefit.second_instance_decision or '',
+                'third_instance_decision': benefit.third_instance_decision or '',
+                'legal_theses': [{'id': thesis.id, 'name': thesis.name} for thesis in benefit.legal_theses],
+                'created_at': benefit.created_at.strftime('%d/%m/%Y %H:%M') if benefit.created_at else ''
+            })
+        
+        return jsonify({
+            'benefit_number': benefit_number,
+            'processes_count': len(processes_data),
+            'processes': processes_data
+        })
+        
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @process_panel_bp.route('/novo', methods=['GET', 'POST'])
