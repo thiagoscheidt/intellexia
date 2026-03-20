@@ -455,7 +455,7 @@ class JudicialSentenceAnalysisService:
                     item.analysis_result = result_json
                     item.errors_analysis_result = errors_json
 
-                    updated_benefits = self._sync_benefit_decisions(item, analysis_dict)
+                    updated_πbenefits = self._sync_benefit_decisions(item, analysis_dict)
                     if updated_benefits > 0:
                         print(f"Benefícios atualizados (1ª instância): {updated_benefits}")
 

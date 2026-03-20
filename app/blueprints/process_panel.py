@@ -1047,6 +1047,7 @@ def list_all_benefits():
     # Filtros
     search_query = request.args.get('q', '').strip()
     client_filter = request.args.get('client_id', type=int)
+    decision_filter = request.args.get('decision', '').strip()
     page = request.args.get('page', 1, type=int)
     
     # Busca todos os benefícios do escritório com preload dos relacionamentos necessários
@@ -1062,10 +1063,14 @@ def list_all_benefits():
         )
     )
     
-    # Filtro por busca no nome do beneficiário
+    # Filtro por busca no nome do beneficiário, NIT ou número do benefício
     if search_query:
         benefits_query = benefits_query.filter(
-            JudicialProcessBenefit.insured_name.ilike(f'%{search_query}%')
+            or_(
+                JudicialProcessBenefit.insured_name.ilike(f'%{search_query}%'),
+                JudicialProcessBenefit.nit_number.ilike(f'%{search_query}%'),
+                JudicialProcessBenefit.benefit_number.ilike(f'%{search_query}%'),
+            )
         )
     
     # Filtro por cliente (polo ativo do processo)
@@ -1105,6 +1110,28 @@ def list_all_benefits():
             'benefits': benefits_list
         })
     
+    # Filtro por resultado de decisão (qualquer instância)
+    if decision_filter:
+        def _decision_matches(val):
+            v = (val or '').lower().strip()
+            if decision_filter == 'procedente':
+                return v in ('procedente', 'aceito') or (v.startswith('procedente') and 'improcedente' not in v)
+            elif decision_filter == 'improcedente':
+                return 'improcedente' in v
+            elif decision_filter == 'nao_mencionado':
+                return 'mencionado' in v
+            return False
+
+        def _group_matches_decision(group):
+            return any(
+                _decision_matches(b.first_instance_decision)
+                or _decision_matches(b.second_instance_decision)
+                or _decision_matches(b.third_instance_decision)
+                for b in group['benefits']
+            )
+
+        benefit_groups = [g for g in benefit_groups if _group_matches_decision(g)]
+
     # Paginação dos grupos
     per_page = 20  # 20 grupos de benefícios por página
     total_groups = len(benefit_groups)
@@ -1144,7 +1171,8 @@ def list_all_benefits():
         stats=stats,
         clients=clients,
         search_query=search_query,
-        client_filter=client_filter
+        client_filter=client_filter,
+        decision_filter=decision_filter
     )
 
 
