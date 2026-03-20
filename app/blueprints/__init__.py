@@ -16,6 +16,7 @@ from app.blueprints.settings import settings_bp
 from app.blueprints.knowledge_base import knowledge_base_bp
 from app.blueprints.admin_users import admin_users_bp
 from app.blueprints.process_panel import process_panel_bp
+from app.blueprints.central_benefits import central_benefits_bp
 
 __all__ = [
     'auth_bp',
@@ -32,5 +33,6 @@ __all__ = [
     'settings_bp',
     'knowledge_base_bp',
     'admin_users_bp',
-    'process_panel_bp'
+    'process_panel_bp',
+    'central_benefits_bp'
 ]

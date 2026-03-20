@@ -1,0 +1,142 @@
+{% extends "layout/base.html" %}
+
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}Beneficios Centralizados - IntellexIA{% endblock %}
+
+{% block content %}
+{% call page_hero(title='Beneficios Centralizados', subtitle=hero_subtitle|default(''), icon='bi bi-collection') %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb mb-0 bg-transparent small"><li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li><li class="breadcrumb-item active" aria-current="page">Beneficios Centralizados</li></ol></nav>
+{% endcall %}
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-12">
+        <div class="card card-success card-outline">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-list-ul"></i> Registro Central de Beneficios</h3>
+            <div class="card-tools">
+              <a href="{{ url_for('central_benefits.new_central_benefit') }}" class="btn btn-success btn-sm">
+                <i class="bi bi-plus-circle"></i> Novo Beneficio
+              </a>
+            </div>
+          </div>
+          <div class="card-body">
+            {% with messages = get_flashed_messages(with_categories=true) %}
+              {% if messages %}
+                {% for category, message in messages %}
+                  <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    <i class="bi bi-info-circle"></i> {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                  </div>
+                {% endfor %}
+              {% endif %}
+            {% endwith %}
+
+            {% if benefits %}
+            <div class="table-responsive">
+              <table id="centralBenefitsTable" class="table table-bordered table-striped table-hover">
+                <thead class="table-light">
+                  <tr>
+                    <th style="width: 60px;">ID</th>
+                    <th style="width: 170px;">Numero</th>
+                    <th style="width: 100px;" class="text-center">Tipo</th>
+                    <th>Segurado</th>
+                    <th style="width: 150px;">CPF</th>
+                    <th style="width: 180px;">CNPJ Empregador</th>
+                    <th style="width: 120px;" class="text-center">Status</th>
+                    <th style="width: 130px;" class="text-center">DIB</th>
+                    <th style="width: 130px;" class="text-center">DCB</th>
+                    <th style="width: 150px;" class="text-center">Acoes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for benefit in benefits %}
+                  <tr>
+                    <td><strong>{{ benefit.id }}</strong></td>
+                    <td><code>{{ benefit.benefit_number }}</code></td>
+                    <td class="text-center"><span class="badge bg-primary">{{ benefit.benefit_type or '-' }}</span></td>
+                    <td>{{ benefit.insured_name or '-' }}</td>
+                    <td>{% if benefit.insured_cpf %}<code>{{ benefit.insured_cpf }}</code>{% else %}<span class="text-muted">-</span>{% endif %}</td>
+                    <td>{% if benefit.employer_cnpj %}<code>{{ benefit.employer_cnpj }}</code>{% else %}<span class="text-muted">-</span>{% endif %}</td>
+                    <td class="text-center">
+                      {% if benefit.status == 'approved' %}
+                        <span class="badge bg-success">Deferido c/ exclusão do registro</span>
+                      {% elif benefit.status == 'rejected' %}
+                        <span class="badge bg-danger">Indeferido</span>
+                      {% elif benefit.status == 'in_review' %}
+                        <span class="badge bg-warning text-dark">Em análise</span>
+                      {% else %}
+                        <span class="badge bg-secondary">Pendente</span>
+                      {% endif %}
+                    </td>
+                    <td class="text-center">{% if benefit.benefit_start_date %}{{ benefit.benefit_start_date.strftime('%d/%m/%Y') }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
+                    <td class="text-center">{% if benefit.benefit_end_date %}{{ benefit.benefit_end_date.strftime('%d/%m/%Y') }}{% else %}<span class="text-muted">-</span>{% endif %}</td>
+                    <td class="text-center">
+                      <div class="btn-group" role="group">
+                        <a href="{{ url_for('central_benefits.edit_central_benefit', benefit_id=benefit.id) }}" class="btn btn-sm btn-warning" title="Editar">
+                          <i class="bi bi-pencil"></i>
+                        </a>
+                        <button type="button" class="btn btn-sm btn-danger" title="Excluir" data-delete-url="{{ url_for('central_benefits.delete_central_benefit', benefit_id=benefit.id) }}" onclick="confirmDelete(this.dataset.deleteUrl)">
+                          <i class="bi bi-trash"></i>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info mb-0">
+              <h5><i class="bi bi-info-circle"></i> Nenhum beneficio centralizado cadastrado</h5>
+              <p class="mb-0">Cadastre o primeiro beneficio para consolidar dados vindos de todas as fontes.</p>
+            </div>
+            {% endif %}
+          </div>
+          {% if benefits %}
+          <div class="card-footer clearfix">
+            <div class="float-end">
+              <span class="badge bg-success">Total: {{ benefits|length }} beneficio(s)</span>
+            </div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if benefits %}
+<script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
+<script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+<link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+<script>
+$(document).ready(function() {
+  $('#centralBenefitsTable').DataTable({
+    "language": {
+      "url": "//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json"
+    },
+    "pageLength": 25,
+    "order": [[0, "desc"]],
+    "columnDefs": [
+      { "orderable": false, "targets": 9 }
+    ]
+  });
+});
+
+function confirmDelete(url) {
+  if (confirm('Tem certeza que deseja excluir este beneficio? Esta acao nao pode ser desfeita.')) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = url;
+    document.body.appendChild(form);
+    form.submit();
+  }
+}
+</script>
+{% endif %}
+{% endblock %}

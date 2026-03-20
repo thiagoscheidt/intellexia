@@ -272,6 +272,85 @@ class CaseBenefitContextForm(FlaskForm):
 
 
 # ========================
+# Formulário: Central Benefits (Registro Centralizado)
+# ========================
+class CentralBenefitForm(FlaskForm):
+    client_id = SelectField('Cliente (Opcional)', coerce=safe_int_coerce, validators=[Optional()])
+    benefit_number = StringField('Número do Benefício', validators=[DataRequired(), Length(max=50)])
+    benefit_type = SelectField(
+        'Tipo de Benefício',
+        choices=[
+            ('B91', 'B91 - Auxílio-doença acidentário'),
+            ('B92', 'B92 - Aposentadoria por invalidez acidentária'),
+            ('B93', 'B93 - Pensão por morte acidentária'),
+            ('B94', 'B94 - Auxílio-acidente'),
+            ('outros', 'Outros')
+        ],
+        validators=[DataRequired()]
+    )
+
+    insured_name = StringField('Nome do Segurado', validators=[Optional(), Length(max=255)])
+    insured_nit = StringField('NIT do Segurado', validators=[Optional(), Length(max=50)])
+    insured_cpf = StringField('CPF do Segurado', validators=[Optional(), Length(max=20)])
+    insured_date_of_birth = DateField('Data de Nascimento do Segurado', format='%Y-%m-%d', validators=[Optional()])
+
+    employer_name = StringField('Nome do Empregador', validators=[Optional(), Length(max=255)])
+    employer_cnpj = StringField('CNPJ do Empregador', validators=[Optional(), Length(max=20)])
+
+    benefit_start_date = DateField('Data Início Benefício (DIB)', format='%Y-%m-%d', validators=[Optional()])
+    benefit_end_date = DateField('Data Cessação Benefício (DCB)', format='%Y-%m-%d', validators=[Optional()])
+
+    initial_monthly_benefit = DecimalField(
+        'Renda Mensal Inicial (RMI)',
+        places=2,
+        validators=[Optional(), NumberRange(min=0)]
+    )
+    total_paid = DecimalField(
+        'Total Pago',
+        places=2,
+        validators=[Optional(), NumberRange(min=0)]
+    )
+
+    cat_number = StringField('Número da CAT', validators=[Optional(), Length(max=100)])
+    bo_number = StringField('Número do BO', validators=[Optional(), Length(max=100)])
+    accident_date = DateField('Data do Acidente', format='%Y-%m-%d', validators=[Optional()])
+    accident_company_name = StringField('Empresa do Acidente', validators=[Optional(), Length(max=255)])
+    accident_summary = TextAreaField('Resumo do Acidente', validators=[Optional()])
+
+    fap_vigencia_years = StringField(
+        'Vigências FAP (anos separados por vírgula)',
+        validators=[Optional(), Length(max=500)]
+    )
+    request_type = SelectField(
+        'Tipo de Pedido',
+        choices=[
+            ('', 'Selecione (opcional)'),
+            ('exclusao', 'Exclusão'),
+            ('inclusao', 'Inclusão'),
+            ('revisao', 'Revisão')
+        ],
+        validators=[Optional()]
+    )
+
+    status = SelectField(
+        'Status',
+        choices=[
+            ('pending', 'Pendente'),
+            ('in_review', 'Em análise'),
+            ('approved', 'Deferido c/ exclusão do registro'),
+            ('rejected', 'Indeferido')
+        ],
+        default='pending',
+        validators=[DataRequired()]
+    )
+    justification = TextAreaField('Justificativa', validators=[Optional()])
+    opinion = TextAreaField('Parecer', validators=[Optional()])
+
+    notes = TextAreaField('Observações', validators=[Optional()])
+    submit = SubmitField('Salvar Benefício')
+
+
+# ========================
 # Formulário: Documents (Documentos do Caso)
 # ========================
 class DocumentForm(FlaskForm):

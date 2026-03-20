@@ -84,6 +84,14 @@
           </ul>
         </li>
 
+        <li class="nav-item">
+          <a href="{{ url_for('central_benefits.list_central_benefits') }}"
+            class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('central_benefits.') else '' }}">
+            <i class="nav-icon bi bi-collection"></i>
+            <p>Painel de Beneficios</p>
+          </a>
+        </li>
+
         <li
           class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint.startswith('cases.') or request.endpoint.startswith('benefits.') or request.endpoint.startswith('documents.') or request.endpoint.startswith('petitions.') or request.endpoint.startswith('fap_reasons.')) else '' }}">
           <a href="#"

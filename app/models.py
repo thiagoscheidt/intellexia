@@ -1250,6 +1250,77 @@ class JudicialProcessBenefit(db.Model):
         return f'<JudicialProcessBenefit {self.benefit_number} - Process {self.process_id}>'
 
 
+class Benefit(db.Model):
+    """Tabela benefits - Centralized benefit registry from all sources.
+
+    This is the single source of truth for benefit and insured-person data,
+    independent of the originating workflow (FAP cases, judicial processes, etc.).
+    No relationships to other benefit tables.
+    """
+    __tablename__ = 'benefits'
+    __table_args__ = (
+        db.Index('ix_benefits_law_firm_benefit_number', 'law_firm_id', 'benefit_number'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+
+    # Optional link to the firm's client (employer that is contesting the benefit)
+    client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), index=True)
+
+    # Benefit identification
+    benefit_number = db.Column(db.String(50), nullable=False, index=True)
+    benefit_type = db.Column(db.String(20), index=True)  # B91, B94, etc.
+
+    # Insured person data
+    insured_name = db.Column(db.String(255))
+    insured_nit = db.Column(db.String(50), index=True)
+    insured_cpf = db.Column(db.String(20), index=True)
+    insured_date_of_birth = db.Column(db.Date)
+
+    # Employer / company data
+    employer_cnpj = db.Column(db.String(20), index=True)
+    employer_name = db.Column(db.String(255))
+
+    # Benefit period
+    benefit_start_date = db.Column(db.Date)   # DIB
+    benefit_end_date = db.Column(db.Date)     # DCB
+
+    # Financial
+    initial_monthly_benefit = db.Column(db.Numeric(15, 2))  # RMI - Renda Mensal Inicial
+    total_paid = db.Column(db.Numeric(15, 2))               # Total Pago pelo INSS
+
+    # Accident data
+    accident_date = db.Column(db.Date)
+    accident_company_name = db.Column(db.String(255))
+    accident_summary = db.Column(db.Text)
+
+    # Official report numbers
+    cat_number = db.Column(db.String(100))   # Comunicação de Acidente de Trabalho
+    bo_number = db.Column(db.String(100))    # Boletim de Ocorrência
+
+    # FAP-specific data
+    fap_vigencia_years = db.Column(db.String(500))  # comma-separated, e.g. "2019,2020,2021"
+    request_type = db.Column(db.String(20), index=True)  # exclusao, inclusao, revisao
+
+    # General notes
+    notes = db.Column(db.Text)
+    justification = db.Column(db.Text)
+    status = db.Column(db.String(30), default='pending', index=True)
+    opinion = db.Column(db.Text)
+
+    # Audit
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    law_firm = db.relationship('LawFirm')
+    client = db.relationship('Client')
+
+    def __repr__(self):
+        return f'<Benefit {self.benefit_number}>'
+
+
 class JudicialProcessCitedBenefit(db.Model):
     """Tabela judicial_process_cited_benefits - Benefits mentioned in the process but not part of the action."""
     __tablename__ = 'judicial_process_cited_benefits'
