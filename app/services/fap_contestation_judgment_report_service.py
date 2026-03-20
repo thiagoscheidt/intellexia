@@ -117,6 +117,25 @@ class FapContestationJudgmentReportService:
 
         return segment.strip() or None
 
+    @staticmethod
+    def extract_field_value(block: str, label: str, next_labels: list[str] | None = None) -> str | None:
+        """Extrai o valor de um campo identificado por label no bloco."""
+        next_labels = next_labels or []
+        label_match = re.search(re.escape(label), block, flags=re.IGNORECASE)
+        if not label_match:
+            return None
+
+        segment = block[label_match.end():]
+        end_indexes: list[int] = []
+        for next_label in next_labels:
+            next_match = re.search(re.escape(next_label), segment, flags=re.IGNORECASE)
+            if next_match:
+                end_indexes.append(next_match.start())
+
+        value = segment[:min(end_indexes)] if end_indexes else segment
+        value = re.sub(r'\s+', ' ', value).strip(' :-\n\t')
+        return value or None
+
     def parse_block(self, block: str) -> dict | None:
         """Faz parsing de um bloco de benefício."""
         if not block or not block.strip():
@@ -124,17 +143,24 @@ class FapContestationJudgmentReportService:
 
         result: dict[str, str | None] = {}
 
-        # número + espécie do benefício
-        match = re.search(
-            r'^\s*[:\-]?\s*(\d{8,}).{0,120}?Esp[ée]cie do Benef[ií]cio\s+([A-Za-z0-9]+)',
-            block,
-            flags=re.IGNORECASE | re.DOTALL,
-        )
+        # número do benefício
+        match = re.search(r'^\s*[:\-]?\s*(\d{8,})', block, flags=re.IGNORECASE)
         if not match:
             return None
 
         result['benefit_number'] = match.group(1).strip()
-        result['benefit_type'] = match.group(2).strip().upper()
+
+        # espécie do benefício: prioriza padrões reais como B91/B94 para evitar capturar o próximo rótulo (ex.: DATA)
+        benefit_type_match = re.search(
+            r'Esp[ée]cie do Benef[ií]cio\s+(B\d{2}|[A-Z]\d{2})\b',
+            block,
+            flags=re.IGNORECASE,
+        )
+        result['benefit_type'] = benefit_type_match.group(1).strip().upper() if benefit_type_match else None
+
+        # NIT do empregado
+        nit_match = re.search(r'NIT do Empregado\s+(\d{8,20})', block, flags=re.IGNORECASE)
+        result['insured_nit'] = nit_match.group(1).strip() if nit_match else None
 
         # status
         status_match = re.search(r'Status\s+(Deferido|Indeferido)', block, flags=re.IGNORECASE)
@@ -155,7 +181,6 @@ class FapContestationJudgmentReportService:
         """Função principal para extrair benefícios do markdown."""
         text = self.normalize_markdown(markdown_content)
         blocks = self.split_blocks(text)
-        print(blocks[0][:200] if blocks else 'Nenhum bloco encontrado para parsing.')
 
         results: list[dict] = []
         for block in blocks:
@@ -206,6 +231,7 @@ class FapContestationJudgmentReportService:
                 db.session.add(benefit)
 
             benefit.benefit_type = item.get('benefit_type') or benefit.benefit_type
+            benefit.insured_nit = item.get('insured_nit') or benefit.insured_nit
             benefit.status = self._map_status(item.get('raw_status'))
             benefit.justification = item.get('justification')
             benefit.opinion = item.get('opinion')
