@@ -1250,6 +1250,34 @@ class JudicialProcessBenefit(db.Model):
         return f'<JudicialProcessBenefit {self.benefit_number} - Process {self.process_id}>'
 
 
+class FapContestationJudgmentReport(db.Model):
+    """Tabela fap_contestation_judgment_reports - Uploads do relatório de julgamento de contestação do FAP."""
+    __tablename__ = 'fap_contestation_judgment_reports'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+
+    original_filename = db.Column(db.String(255), nullable=False)
+    file_path = db.Column(db.String(500), nullable=False)
+    file_size = db.Column(db.Integer)
+    file_type = db.Column(db.String(50))
+
+    status = db.Column(db.String(20), default='pending', index=True)  # pending, processing, completed, error
+    error_message = db.Column(db.Text)
+    processed_at = db.Column(db.DateTime)
+    imported_benefits_count = db.Column(db.Integer, default=0)
+
+    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = db.relationship('User')
+    law_firm = db.relationship('LawFirm')
+
+    def __repr__(self):
+        return f'<FapContestationJudgmentReport {self.original_filename}>'
+
+
 class Benefit(db.Model):
     """Tabela benefits - Centralized benefit registry from all sources.
 

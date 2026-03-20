@@ -1,0 +1,134 @@
+{% extends "layout/base.html" %}
+
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}Importar Relatorio FAP - IntellexIA{% endblock %}
+
+{% block content %}
+{% call page_hero(title='Importar Beneficios do Relatorio FAP', subtitle=hero_subtitle|default(''), icon='bi bi-file-earmark-arrow-up') %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb mb-0 bg-transparent small"><li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li><li class="breadcrumb-item"><a href="{{ url_for('central_benefits.list_central_benefits') }}">Painel de Beneficios</a></li><li class="breadcrumb-item active" aria-current="page">Importar Relatorio FAP</li></ol></nav>
+{% endcall %}
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-lg-5">
+        <div class="card card-primary card-outline">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-upload"></i> Enviar Documento</h3>
+          </div>
+          <form method="POST" enctype="multipart/form-data">
+            {{ form.hidden_tag() }}
+            <div class="card-body">
+              {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}
+                  {% for category, message in messages %}
+                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                      <i class="bi bi-info-circle"></i> {{ message }}
+                      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    </div>
+                  {% endfor %}
+                {% endif %}
+              {% endwith %}
+
+              <div class="mb-3">
+                {{ form.file.label(class="form-label") }}
+                {{ form.file(class="form-control" + (" is-invalid" if form.file.errors else "")) }}
+                {% if form.file.errors %}
+                  <div class="invalid-feedback">
+                    {% for error in form.file.errors %}{{ error }}{% endfor %}
+                  </div>
+                {% endif %}
+                <small class="text-muted">O arquivo sera salvo em tabela propria e processado apenas por script dedicado.</small>
+              </div>
+            </div>
+            <div class="card-footer">
+              {{ form.submit(class="btn btn-primary") }}
+              <a href="{{ url_for('central_benefits.list_central_benefits') }}" class="btn btn-secondary">Voltar</a>
+            </div>
+          </form>
+        </div>
+      </div>
+
+      <div class="col-lg-7">
+        <div class="card card-success card-outline">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-list-task"></i> Historico de Relatorios</h3>
+          </div>
+          <div class="card-body">
+            {% if reports %}
+            <div class="table-responsive">
+              <table class="table table-bordered table-striped table-hover">
+                <thead class="table-light">
+                  <tr>
+                    <th style="width: 70px;">ID</th>
+                    <th>Arquivo</th>
+                    <th style="width: 120px;" class="text-center">Status</th>
+                    <th style="width: 130px;" class="text-center">Upload</th>
+                    <th style="width: 90px;" class="text-center">Acoes</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for report in reports %}
+                  <tr>
+                    <td><strong>{{ report.id }}</strong></td>
+                    <td>
+                      <div><strong>{{ report.original_filename }}</strong></div>
+                      <small class="text-muted">{{ report.file_type or '-' }}{% if report.file_size %} | {{ report.file_size }} bytes{% endif %}</small>
+                      {% if report.error_message %}
+                      <div class="small text-danger mt-1">{{ report.error_message }}</div>
+                      {% endif %}
+                    </td>
+                    <td class="text-center">
+                      {% if report.status == 'completed' %}
+                        <span class="badge bg-success">completed</span>
+                      {% elif report.status == 'processing' %}
+                        <span class="badge bg-warning text-dark">processing</span>
+                      {% elif report.status == 'error' %}
+                        <span class="badge bg-danger">error</span>
+                      {% else %}
+                        <span class="badge bg-secondary">pending</span>
+                      {% endif %}
+                    </td>
+                    <td class="text-center">{{ report.uploaded_at.strftime('%d/%m/%Y %H:%M') if report.uploaded_at else '-' }}</td>
+                    <td class="text-center">
+                      <button type="button" class="btn btn-sm btn-danger" data-delete-url="{{ url_for('central_benefits.delete_fap_contestation_report', report_id=report.id) }}" onclick="confirmDelete(this.dataset.deleteUrl)">
+                        <i class="bi bi-trash"></i>
+                      </button>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info mb-0">
+              <i class="bi bi-info-circle"></i> Nenhum relatorio enviado ainda.
+            </div>
+            {% endif %}
+          </div>
+          <div class="card-footer">
+            <small class="text-muted">
+              Processamento via script: <code>uv run python scripts/process_fap_contestation_judgment_reports.py</code>
+            </small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function confirmDelete(url) {
+  if (confirm('Tem certeza que deseja excluir este relatorio?')) {
+    const form = document.createElement('form');
+    form.method = 'POST';
+    form.action = url;
+    document.body.appendChild(form);
+    form.submit();
+  }
+}
+</script>
+{% endblock %}

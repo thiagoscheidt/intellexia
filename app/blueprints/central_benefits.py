@@ -1,9 +1,11 @@
 from datetime import datetime
 from functools import wraps
+import os
 
 from flask import Blueprint, flash, jsonify, redirect, render_template, request, session, url_for
+from werkzeug.utils import secure_filename
 
-from app.models import Benefit, Client, db
+from app.models import Benefit, Client, FapContestationJudgmentReport, db
 
 
 central_benefits_bp = Blueprint('central_benefits', __name__, url_prefix='/central-benefits')
@@ -35,6 +37,76 @@ def list_central_benefits():
         .all()
     )
     return render_template('central_benefits/list.html', benefits=benefits)
+
+
+@central_benefits_bp.route('/fap-contestation-reports', methods=['GET', 'POST'])
+@require_law_firm
+def fap_contestation_reports():
+    from app.form import FapContestationJudgmentReportForm
+
+    law_firm_id = get_current_law_firm_id()
+    form = FapContestationJudgmentReportForm()
+
+    if form.validate_on_submit():
+        file = form.file.data
+        if file:
+            try:
+                filename = secure_filename(file.filename)
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                unique_filename = f'{timestamp}_{filename}'
+
+                upload_dir = os.path.join('uploads', 'fap_contestation_reports')
+                os.makedirs(upload_dir, exist_ok=True)
+                file_path = os.path.join(upload_dir, unique_filename)
+                file.save(file_path)
+
+                file_size = os.path.getsize(file_path)
+                file_extension = os.path.splitext(filename)[1].lower().replace('.', '')
+
+                report = FapContestationJudgmentReport(
+                    user_id=session.get('user_id'),
+                    law_firm_id=law_firm_id,
+                    original_filename=filename,
+                    file_path=file_path,
+                    file_size=file_size,
+                    file_type=file_extension.upper(),
+                    status='pending',
+                )
+
+                db.session.add(report)
+                db.session.commit()
+                flash('Relatório enviado com sucesso! Ele ficará pendente até processamento via script.', 'success')
+                return redirect(url_for('central_benefits.fap_contestation_reports'))
+            except Exception as e:
+                db.session.rollback()
+                flash(f'Erro ao enviar relatório: {str(e)}', 'danger')
+
+    reports = (
+        FapContestationJudgmentReport.query.filter_by(law_firm_id=law_firm_id)
+        .order_by(FapContestationJudgmentReport.uploaded_at.desc())
+        .all()
+    )
+
+    return render_template('central_benefits/fap_contestation_reports.html', form=form, reports=reports)
+
+
+@central_benefits_bp.route('/fap-contestation-reports/<int:report_id>/delete', methods=['POST'])
+@require_law_firm
+def delete_fap_contestation_report(report_id):
+    law_firm_id = get_current_law_firm_id()
+    report = FapContestationJudgmentReport.query.filter_by(id=report_id, law_firm_id=law_firm_id).first_or_404()
+
+    try:
+        if report.file_path and os.path.exists(report.file_path):
+            os.remove(report.file_path)
+        db.session.delete(report)
+        db.session.commit()
+        flash('Relatório excluído com sucesso!', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao excluir relatório: {str(e)}', 'danger')
+
+    return redirect(url_for('central_benefits.fap_contestation_reports'))
 
 
 @central_benefits_bp.route('/new', methods=['GET', 'POST'])

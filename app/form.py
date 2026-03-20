@@ -350,6 +350,20 @@ class CentralBenefitForm(FlaskForm):
     submit = SubmitField('Salvar Benefício')
 
 
+class FapContestationJudgmentReportForm(FlaskForm):
+    file = FileField(
+        'Relatório de Julgamento de Contestação do FAP',
+        validators=[
+            DataRequired(),
+            FileAllowed(
+                ['pdf', 'doc', 'docx', 'txt', 'xlsx', 'xls'],
+                'Apenas arquivos PDF, DOC, DOCX, TXT, XLSX e XLS são permitidos!'
+            )
+        ]
+    )
+    submit = SubmitField('Enviar Relatório')
+
+
 # ========================
 # Formulário: Documents (Documentos do Caso)
 # ========================
