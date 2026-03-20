@@ -76,13 +76,25 @@ class FapContestationJudgmentReportService:
             return ''
 
         cleaned = text.replace('**', '')
-        cleaned = re.sub(r'\n+', '\n', cleaned)
-        cleaned = re.sub(
-            r'MINIST[ÉE]RIO DA PREVID[ÊE]NCIA SOCIAL.*?P[aá]gina\s+\d+\s+de\s+\d+',
-            '',
-            cleaned,
-            flags=re.DOTALL | re.IGNORECASE,
-        )
+        cleaned = cleaned.replace('\r\n', '\n').replace('\r', '\n')
+        cleaned = cleaned.replace('\x0c', '\n')
+
+        filtered_lines: list[str] = []
+        for raw_line in cleaned.split('\n'):
+            line = raw_line.strip()
+            if not line:
+                continue
+
+            # Remove apenas linhas isoladas de cabeçalho/rodapé, sem apagar o corpo da página.
+            if re.fullmatch(r'MINIST[ÉE]RIO DA PREVID[ÊE]NCIA SOCIAL', line, flags=re.IGNORECASE):
+                continue
+            if re.fullmatch(r'P[aá]gina\s+\d+\s+de\s+\d+', line, flags=re.IGNORECASE):
+                continue
+
+            filtered_lines.append(line)
+
+        cleaned = '\n'.join(filtered_lines)
+        cleaned = re.sub(r'\n{2,}', '\n', cleaned)
         return cleaned.strip()
 
     @staticmethod
@@ -113,7 +125,11 @@ class FapContestationJudgmentReportService:
         result: dict[str, str | None] = {}
 
         # número + espécie do benefício
-        match = re.search(r'(\d{8,})\s+Esp[ée]cie do Benef[ií]cio\s+([A-Za-z0-9]+)', block, flags=re.IGNORECASE)
+        match = re.search(
+            r'^\s*[:\-]?\s*(\d{8,}).{0,120}?Esp[ée]cie do Benef[ií]cio\s+([A-Za-z0-9]+)',
+            block,
+            flags=re.IGNORECASE | re.DOTALL,
+        )
         if not match:
             return None
 
@@ -139,6 +155,7 @@ class FapContestationJudgmentReportService:
         """Função principal para extrair benefícios do markdown."""
         text = self.normalize_markdown(markdown_content)
         blocks = self.split_blocks(text)
+        print(blocks[0][:200] if blocks else 'Nenhum bloco encontrado para parsing.')
 
         results: list[dict] = []
         for block in blocks:
@@ -167,6 +184,9 @@ class FapContestationJudgmentReportService:
         metadata,
     ) -> int:
         imported_count = 0
+
+        if not extracted_benefits:
+            return 0
 
         for item in extracted_benefits:
             benefit_number = str(item.get('benefit_number') or '').strip()
@@ -250,6 +270,10 @@ class FapContestationJudgmentReportService:
                     markdown_content = self.convert_report_to_markdown_with_markitdown(report.file_path)
                     metadata = self.metadata_agent.extract_from_first_page(markdown_content)
                     extracted_benefits = self.parse_beneficios_from_markdown(markdown_content)
+
+                    print(
+                        f'Relatório #{report.id}: {len(extracted_benefits)} benefício(s) identificado(s) no markdown.'
+                    )
 
                     imported_count = self._upsert_benefits_from_report(report, extracted_benefits, metadata)
 
