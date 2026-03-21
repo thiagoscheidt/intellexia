@@ -13,7 +13,8 @@ from docling.datamodel.base_models import InputFormat
 from app.agents.fap.fap_contestation_judgment_metadata_agent import (
     FapContestationJudgmentMetadataAgent,
 )
-from app.models import Benefit, FapContestationJudgmentReport, db
+from app.models import Benefit, Client, FapContestationJudgmentReport, db
+from app.services.open_cnpj_service import OpenCNPJService
 
 
 class FapContestationJudgmentReportService:
@@ -25,6 +26,65 @@ class FapContestationJudgmentReportService:
     def __init__(self, flask_app):
         self.app = flask_app
         self.metadata_agent = FapContestationJudgmentMetadataAgent()
+        self.open_cnpj_service = OpenCNPJService()
+
+    @staticmethod
+    def _normalize_cnpj(cnpj: str | None) -> str:
+        return ''.join(ch for ch in (cnpj or '') if ch.isdigit())
+
+    @staticmethod
+    def _format_cnpj(cnpj_digits: str) -> str:
+        if len(cnpj_digits) != 14:
+            return cnpj_digits
+        return f'{cnpj_digits[:2]}.{cnpj_digits[2:5]}.{cnpj_digits[5:8]}/{cnpj_digits[8:12]}-{cnpj_digits[12:14]}'
+
+    def _find_client_by_cnpj(self, law_firm_id: int, cnpj_digits: str) -> Client | None:
+        if not cnpj_digits:
+            return None
+
+        clients = Client.query.filter_by(law_firm_id=law_firm_id).all()
+        for client in clients:
+            if self._normalize_cnpj(client.cnpj) == cnpj_digits:
+                return client
+        return None
+
+    def _upsert_client_from_cnpj(self, law_firm_id: int, cnpj_raw: str | None) -> tuple[Client | None, dict | None, str | None]:
+        cnpj_digits = self._normalize_cnpj(cnpj_raw)
+        if len(cnpj_digits) != 14:
+            return None, None, None
+
+        cnpj_formatado = self._format_cnpj(cnpj_digits)
+        is_matriz = cnpj_digits[8:12] == '0001'
+        lookup_result = self.open_cnpj_service.lookup_company(cnpj_formatado)
+        company_data = lookup_result.get('data') if lookup_result.get('success') else None
+
+        if not company_data:
+            return None, None, cnpj_formatado
+
+        client = self._find_client_by_cnpj(law_firm_id, cnpj_digits)
+        if client is None:
+            client = Client(
+                law_firm_id=law_firm_id,
+                name=company_data.get('razao_social') or f'Empresa {cnpj_formatado}',
+                cnpj=cnpj_formatado,
+            )
+            db.session.add(client)
+        else:
+            client.name = company_data.get('razao_social') or client.name
+            client.cnpj = cnpj_formatado
+
+        # Sincroniza campos cadastrais principais quando disponíveis.
+        client.street = company_data.get('logradouro') or client.street
+        client.number = company_data.get('numero') or client.number
+        client.district = company_data.get('bairro') or client.district
+        client.city = company_data.get('municipio') or client.city
+        client.state = company_data.get('uf') or client.state
+        client.zip_code = company_data.get('cep') or client.zip_code
+        if is_matriz:
+            client.has_branches = True
+        client.updated_at = datetime.utcnow()
+
+        return client, company_data, cnpj_formatado
 
     def convert_report_to_markdown(self, file_path: str | Path) -> str:
         """Converte um relatório de julgamento do FAP para markdown usando Docling."""
@@ -213,6 +273,16 @@ class FapContestationJudgmentReportService:
         if not extracted_benefits:
             return 0
 
+        employer_client: Client | None = None
+        employer_company_data: dict | None = None
+        employer_cnpj_formatted: str | None = None
+
+        if metadata is not None and getattr(metadata, 'establishment_cnpj', None):
+            employer_client, employer_company_data, employer_cnpj_formatted = self._upsert_client_from_cnpj(
+                law_firm_id=report.law_firm_id,
+                cnpj_raw=metadata.establishment_cnpj,
+            )
+
         for item in extracted_benefits:
             benefit_number = str(item.get('benefit_number') or '').strip()
             if not benefit_number:
@@ -236,12 +306,20 @@ class FapContestationJudgmentReportService:
             benefit.justification = item.get('justification')
             benefit.opinion = item.get('opinion')
 
+            if employer_client is not None:
+                benefit.client = employer_client
+
             # Enriquecimento com metadados da primeira página
             if metadata is not None:
                 if getattr(metadata, 'establishment_cnpj', None):
-                    benefit.employer_cnpj = metadata.establishment_cnpj
+                    benefit.employer_cnpj = employer_cnpj_formatted or metadata.establishment_cnpj
                 if getattr(metadata, 'validity_year', None):
                     benefit.fap_vigencia_years = str(metadata.validity_year)
+
+            # Enriquecimento adicional com OpenCNPJ para campos existentes de empresa no benefício
+            if employer_company_data is not None:
+                benefit.employer_name = employer_company_data.get('razao_social') or benefit.employer_name
+                benefit.employer_cnpj = employer_cnpj_formatted or benefit.employer_cnpj
 
             # Rastreabilidade de origem
             source_note = f'Relatório FAP importado (id={report.id}, arquivo={report.original_filename})'
