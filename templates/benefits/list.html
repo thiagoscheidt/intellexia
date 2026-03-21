@@ -6,7 +6,12 @@
 
 {% block content %}
 {% call page_hero(title='Benefícios', subtitle=hero_subtitle|default(''), icon='bi bi-gift-fill') %}
-<nav aria-label="breadcrumb"><ol class="breadcrumb mb-0 bg-transparent small"><li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li><li class="breadcrumb-item active" aria-current="page">Benefícios</li></ol></nav>
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb mb-0 bg-transparent small">
+    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Benefícios</li>
+  </ol>
+</nav>
 {% endcall %}
 
 <div class="app-content">
@@ -34,6 +39,60 @@
             {% endwith %}
 
             {% if benefits %}
+            <div class="card border-success mb-3" id="benefitsFiltersCard">
+              <div class="card-header bg-light">
+                <strong><i class="bi bi-funnel-fill text-success"></i> Filtros Personalizados</strong>
+                <small class="text-muted ms-2">Combine quantos filtros quiser. Todos são aplicados em conjunto.</small>
+              </div>
+              <div class="card-body">
+                <div class="row g-2 align-items-end">
+                  <div class="col-md-3">
+                    <label for="filterField" class="form-label mb-1">Campo</label>
+                    <select id="filterField" class="form-select form-select-sm">
+                      <option value="id">ID</option>
+                      <option value="benefit_number">Número do benefício</option>
+                      <option value="benefit_type">Tipo</option>
+                      <option value="insured_name">Nome do segurado</option>
+                      <option value="insured_nit">NIT</option>
+                      <option value="accident_date">Data acidente</option>
+                      <option value="start_date">Início benefício</option>
+                      <option value="end_date">Fim benefício</option>
+                    </select>
+                  </div>
+                  <div class="col-md-3">
+                    <label for="filterOperator" class="form-label mb-1">Operador</label>
+                    <select id="filterOperator" class="form-select form-select-sm">
+                      <option value="contains">contém</option>
+                      <option value="equals">igual a</option>
+                      <option value="starts_with">começa com</option>
+                      <option value="ends_with">termina com</option>
+                      <option value="empty">está vazio</option>
+                      <option value="not_empty">não está vazio</option>
+                    </select>
+                  </div>
+                  <div class="col-md-4">
+                    <label for="filterValue" class="form-label mb-1">Valor</label>
+                    <input id="filterValue" type="text" class="form-control form-control-sm"
+                      placeholder="Digite o valor do filtro">
+                  </div>
+                  <div class="col-md-2 d-grid">
+                    <button id="addFilterBtn" type="button" class="btn btn-success btn-sm">
+                      <i class="bi bi-plus-circle"></i> Adicionar
+                    </button>
+                  </div>
+                </div>
+
+                <div class="mt-3">
+                  <div class="d-flex justify-content-between align-items-center mb-1">
+                    <small class="text-muted">Filtros ativos</small>
+                    <button id="clearFiltersBtn" type="button" class="btn btn-outline-secondary btn-sm">Limpar
+                      todos</button>
+                  </div>
+                  <div id="activeFilters" class="d-flex flex-wrap gap-2"></div>
+                </div>
+              </div>
+            </div>
+
             <div class="table-responsive">
               <table id="benefitsTable" class="table table-bordered table-striped table-hover">
                 <thead class="table-dark">
@@ -137,7 +196,7 @@
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
 <script>
   $(document).ready(function () {
-    $('#benefitsTable').DataTable({
+    const table = $('#benefitsTable').DataTable({
       "language": {
         "url": "//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json"
       },
@@ -147,6 +206,165 @@
         { "orderable": false, "targets": 8 }
       ]
     });
+
+    const columnMap = {
+      id: 0,
+      benefit_number: 1,
+      benefit_type: 2,
+      insured_name: 3,
+      insured_nit: 4,
+      accident_date: 5,
+      start_date: 6,
+      end_date: 7,
+    };
+
+    const fieldLabelMap = {
+      id: 'ID',
+      benefit_number: 'Número do benefício',
+      benefit_type: 'Tipo',
+      insured_name: 'Nome do segurado',
+      insured_nit: 'NIT',
+      accident_date: 'Data acidente',
+      start_date: 'Início benefício',
+      end_date: 'Fim benefício',
+    };
+
+    const operatorLabelMap = {
+      contains: 'contém',
+      equals: 'igual a',
+      starts_with: 'começa com',
+      ends_with: 'termina com',
+      empty: 'está vazio',
+      not_empty: 'não está vazio',
+    };
+
+    const filters = [];
+
+    function stripHtml(value) {
+      return String(value || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+    }
+
+    function normalize(value) {
+      return stripHtml(value)
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+    }
+
+    function needsValue(operator) {
+      return operator !== 'empty' && operator !== 'not_empty';
+    }
+
+    function evaluateFilter(cellValue, filter) {
+      const normalizedCell = normalize(cellValue);
+      const normalizedFilterValue = normalize(filter.value || '');
+
+      if (filter.operator === 'empty') {
+        return normalizedCell === '' || normalizedCell === '-';
+      }
+      if (filter.operator === 'not_empty') {
+        return normalizedCell !== '' && normalizedCell !== '-';
+      }
+      if (filter.operator === 'equals') {
+        return normalizedCell === normalizedFilterValue;
+      }
+      if (filter.operator === 'starts_with') {
+        return normalizedCell.startsWith(normalizedFilterValue);
+      }
+      if (filter.operator === 'ends_with') {
+        return normalizedCell.endsWith(normalizedFilterValue);
+      }
+      return normalizedCell.includes(normalizedFilterValue);
+    }
+
+    function renderActiveFilters() {
+      const container = $('#activeFilters');
+      container.empty();
+
+      if (!filters.length) {
+        container.append('<span class="text-muted small">Nenhum filtro ativo.</span>');
+        return;
+      }
+
+      filters.forEach((filter) => {
+        const tag = $(
+          `<span class="badge bg-success d-inline-flex align-items-center gap-1 px-2 py-2">
+            <span>${filter.label}</span>
+            <button type="button" class="btn-close btn-close-white btn-sm remove-filter" aria-label="Remover"></button>
+          </span>`
+        );
+
+        tag.find('.remove-filter').on('click', function () {
+          const idx = filters.findIndex((f) => f.id === filter.id);
+          if (idx >= 0) {
+            filters.splice(idx, 1);
+            renderActiveFilters();
+            table.draw();
+          }
+        });
+
+        container.append(tag);
+      });
+    }
+
+    $.fn.dataTable.ext.search.push(function (settings, data) {
+      if (settings.nTable.id !== 'benefitsTable') {
+        return true;
+      }
+
+      if (!filters.length) {
+        return true;
+      }
+
+      return filters.every((filter) => {
+        const columnIndex = columnMap[filter.field];
+        const cellValue = data[columnIndex] || '';
+        return evaluateFilter(cellValue, filter);
+      });
+    });
+
+    $('#filterOperator').on('change', function () {
+      const op = $(this).val();
+      const mustHaveValue = needsValue(op);
+      $('#filterValue').prop('disabled', !mustHaveValue);
+      if (!mustHaveValue) {
+        $('#filterValue').val('');
+      }
+    });
+
+    $('#addFilterBtn').on('click', function () {
+      const field = $('#filterField').val();
+      const operator = $('#filterOperator').val();
+      const value = $('#filterValue').val().trim();
+
+      if (needsValue(operator) && !value) {
+        $('#filterValue').focus();
+        return;
+      }
+
+      const displayValue = needsValue(operator) ? ` "${value}"` : '';
+      const label = `${fieldLabelMap[field]} ${operatorLabelMap[operator]}${displayValue}`;
+
+      filters.push({
+        id: Date.now() + Math.random(),
+        field,
+        operator,
+        value,
+        label,
+      });
+
+      $('#filterValue').val('');
+      renderActiveFilters();
+      table.draw();
+    });
+
+    $('#clearFiltersBtn').on('click', function () {
+      filters.splice(0, filters.length);
+      renderActiveFilters();
+      table.draw();
+    });
+
+    renderActiveFilters();
   });
 </script>
 {% endif %}

@@ -31,7 +31,8 @@
 {% block title %}{{ page_title }} - IntellexIA{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+  crossorigin="anonymous" />
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
 <style>
   .table td,
@@ -73,15 +74,42 @@
   .dataTables_wrapper .dataTables_paginate .paginate_button {
     padding: 0.15rem 0.65rem;
   }
+
+  .filters-card {
+    border: 1px solid var(--bs-border-color);
+    border-radius: 0.75rem;
+    background: var(--bs-body-bg);
+  }
+
+  .filter-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    border: 1px solid var(--bs-primary-border-subtle);
+    background: var(--bs-primary-bg-subtle);
+    color: var(--bs-primary-text-emphasis);
+    border-radius: 999px;
+    padding: 0.35rem 0.65rem;
+    font-size: 0.8rem;
+    line-height: 1;
+  }
+
+  .filter-chip .btn-close {
+    width: 0.6rem;
+    height: 0.6rem;
+    padding: 0.2rem;
+  }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="benefits-list-page">
-  {% call page_hero(title=page_title, subtitle='Visão centralizada dos benefícios cadastrados e seus documentos relacionados', icon='bi bi-collection') %}
+  {% call page_hero(title=page_title, subtitle='Visão centralizada dos benefícios cadastrados e seus documentos
+  relacionados', icon='bi bi-collection') %}
   <nav aria-label="breadcrumb">
     <ol class="breadcrumb mb-0 bg-transparent small">
-      <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a>
+      </li>
       <li class="breadcrumb-item active" aria-current="page">{{ page_title }}</li>
     </ol>
   </nav>
@@ -89,18 +117,18 @@
 
   <div class="container-fluid">
     {% with messages = get_flashed_messages(with_categories=true) %}
-      {% if messages %}
-        <div class="row mb-4">
-          <div class="col-12">
-            {% for category, message in messages %}
-            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-              <i class="bi bi-info-circle me-2"></i>{{ message }}
-              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-            </div>
-            {% endfor %}
-          </div>
+    {% if messages %}
+    <div class="row mb-4">
+      <div class="col-12">
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+          <i class="bi bi-info-circle me-2"></i>{{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
         </div>
-      {% endif %}
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
     {% endwith %}
 
     {% if benefits %}
@@ -176,10 +204,12 @@
                 <h3 class="card-title mb-1">
                   <i class="bi bi-card-list me-2"></i>{{ page_title }}
                 </h3>
-                <small class="text-muted">Registros centralizados com acesso rápido a edição, exclusão e pesquisa documental.</small>
+                <small class="text-muted">Registros centralizados com acesso rápido a edição, exclusão e pesquisa
+                  documental.</small>
               </div>
               <div class="d-flex flex-wrap gap-2">
-                <span class="badge bg-info align-self-center px-3 py-2">{{ benefits|length }} registro{{ 's' if benefits|length != 1 else '' }}</span>
+                <span class="badge bg-info align-self-center px-3 py-2">{{ benefits|length }} registro{{ 's' if
+                  benefits|length != 1 else '' }}</span>
                 <a href="{{ url_for('central_benefits.fap_contestation_reports') }}" class="btn btn-info btn-sm">
                   <i class="bi bi-upload me-1"></i>Importar relatório FAP
                 </a>
@@ -190,6 +220,99 @@
             </div>
           </div>
           <div class="card-body pt-0">
+            <div class="filters-card p-3 mb-3">
+              <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
+                <div class="fw-semibold">
+                  <i class="bi bi-funnel-fill text-primary me-1"></i>Filtros personalizados
+                </div>
+                <small class="text-muted">Adicione quantos filtros quiser. Eles serão combinados entre si.</small>
+              </div>
+
+              <div class="row g-2 align-items-end">
+                <div class="col-md-3">
+                  <label for="centralFilterField" class="form-label mb-1 small text-muted">Campo</label>
+                  <select id="centralFilterField" class="form-select form-select-sm">
+                    <option value="id">ID</option>
+                    <option value="benefit_number">Número</option>
+                    <option value="client_name">Cliente</option>
+                    <option value="insured_name">Segurado</option>
+                    <option value="benefit_type">Tipo</option>
+                    <option value="insured_cpf">CPF</option>
+                    <option value="insured_nit">NIT</option>
+                    <option value="insured_date_of_birth">Data nascimento</option>
+                    <option value="employer_cnpj">CNPJ Empregador</option>
+                    <option value="employer_name">Nome empregador</option>
+                    <option value="status">Status</option>
+                    <option value="fap_vigencia_years">Vigência</option>
+                    <option value="benefit_start_date">DIB</option>
+                    <option value="benefit_end_date">DCB</option>
+                    <option value="accident_date">Data acidente</option>
+                    <option value="accident_company_name">Empresa acidente</option>
+                    <option value="cat_number">CAT</option>
+                    <option value="bo_number">BO</option>
+                    <option value="request_type">Tipo solicitação</option>
+                    <option value="initial_monthly_benefit">RMI</option>
+                    <option value="total_paid">Total pago</option>
+                    <option value="justification">Justificativa</option>
+                    <option value="opinion">Parecer</option>
+                    <option value="notes">Observações</option>
+                  </select>
+                </div>
+                <div class="col-md-3">
+                  <label for="centralFilterOperator" class="form-label mb-1 small text-muted">Operador</label>
+                  <select id="centralFilterOperator" class="form-select form-select-sm">
+                    <option value="contains">contém</option>
+                    <option value="equals">igual a</option>
+                    <option value="starts_with">começa com</option>
+                    <option value="ends_with">termina com</option>
+                    <option value="empty">está vazio</option>
+                    <option value="not_empty">não está vazio</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <label for="centralFilterValue" class="form-label mb-1 small text-muted">Valor</label>
+                  <input id="centralFilterValue" type="text" class="form-control form-control-sm"
+                    placeholder="Digite um valor">
+                </div>
+                <div class="col-md-2 d-grid">
+                  <button id="addCentralFilterBtn" type="button" class="btn btn-primary btn-sm">
+                    <i class="bi bi-plus-circle me-1"></i>Adicionar
+                  </button>
+                </div>
+              </div>
+
+              <div class="row g-2 align-items-end mt-1 pt-2 border-top">
+                <div class="col-md-4">
+                  <label for="quickClientFilter" class="form-label mb-1 small text-muted">Filtro adicional:
+                    cliente</label>
+                  <select id="quickClientFilter" class="form-select form-select-sm">
+                    <option value="">Todos os clientes</option>
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <label for="quickRootCnpjFilter" class="form-label mb-1 small text-muted">Filtro adicional: CNPJ
+                    raiz</label>
+                  <select id="quickRootCnpjFilter" class="form-select form-select-sm">
+                    <option value="">Todos os CNPJ raiz</option>
+                    {% for item in cnpj_roots or [] %}
+                    <option value="{{ item.root }}">{{ item.root }}{% if item.company_name %} - {{ item.company_name
+                      }}{% endif %}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="col-md-4">
+                  <small class="text-muted d-block mb-1">Esses filtros funcionam fora dos chips.</small>
+                </div>
+              </div>
+
+              <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">
+                <small class="text-muted">Filtros ativos</small>
+                <button id="clearCentralFiltersBtn" type="button" class="btn btn-outline-secondary btn-sm">Limpar
+                  todos</button>
+              </div>
+              <div id="activeCentralFilters" class="d-flex flex-wrap gap-2 mt-2"></div>
+            </div>
+
             <div class="table-responsive">
               <table id="centralBenefitsTable" class="table table-hover align-middle mb-0">
                 <thead class="table-light">
@@ -207,13 +330,37 @@
                 </thead>
                 <tbody>
                   {% for benefit in benefits %}
-                  <tr class="central-benefit-row">
+                  <tr class="central-benefit-row" data-id="{{ benefit.id or '' }}"
+                    data-benefit-number="{{ (benefit.benefit_number or '')|e }}"
+                    data-client-name="{{ (benefit.client.name if benefit.client else '')|e }}"
+                    data-insured-name="{{ (benefit.insured_name or '')|e }}"
+                    data-benefit-type="{{ (benefit.benefit_type or '')|e }}"
+                    data-insured-cpf="{{ (benefit.insured_cpf or '')|e }}"
+                    data-insured-nit="{{ (benefit.insured_nit or '')|e }}"
+                    data-insured-date-of-birth="{{ benefit.insured_date_of_birth.strftime('%d/%m/%Y') if benefit.insured_date_of_birth else '' }}"
+                    data-employer-cnpj="{{ (benefit.employer_cnpj or '')|e }}"
+                    data-employer-name="{{ (benefit.employer_name or '')|e }}"
+                    data-status="{{ (benefit.status or '')|e }}"
+                    data-fap-vigencia-years="{{ (benefit.fap_vigencia_years or '')|e }}"
+                    data-benefit-start-date="{{ benefit.benefit_start_date.strftime('%d/%m/%Y') if benefit.benefit_start_date else '' }}"
+                    data-benefit-end-date="{{ benefit.benefit_end_date.strftime('%d/%m/%Y') if benefit.benefit_end_date else '' }}"
+                    data-accident-date="{{ benefit.accident_date.strftime('%d/%m/%Y') if benefit.accident_date else '' }}"
+                    data-accident-company-name="{{ (benefit.accident_company_name or '')|e }}"
+                    data-cat-number="{{ (benefit.cat_number or '')|e }}"
+                    data-bo-number="{{ (benefit.bo_number or '')|e }}"
+                    data-request-type="{{ (benefit.request_type or '')|e }}"
+                    data-initial-monthly-benefit="{{ benefit.initial_monthly_benefit or '' }}"
+                    data-total-paid="{{ benefit.total_paid or '' }}"
+                    data-justification="{{ (benefit.justification or '')|e }}"
+                    data-opinion="{{ (benefit.opinion or '')|e }}" data-notes="{{ (benefit.notes or '')|e }}">
                     <td><strong>{{ benefit.id }}</strong></td>
                     <td>
                       <div class="d-flex flex-column gap-1">
                         <span class="benefit-number-pill text-primary fw-semibold">{{ benefit.benefit_number }}</span>
                         {% if benefit.benefit_type %}
-                        <span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle align-self-start">{{ benefit.benefit_type }}</span>
+                        <span
+                          class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle align-self-start">{{
+                          benefit.benefit_type }}</span>
                         {% endif %}
                       </div>
                     </td>
@@ -221,24 +368,35 @@
                       <div class="fw-semibold">{{ benefit.insured_name or '-' }}</div>
                     </td>
                     <td>{{ benefit.benefit_type or '-' }}</td>
-                    <td>{% if benefit.insured_cpf %}<span class="font-monospace">{{ benefit.insured_cpf }}</span>{% else %}<span class="text-muted">-</span>{% endif %}</td>
-                    <td>{% if benefit.employer_cnpj %}<span class="font-monospace">{{ benefit.employer_cnpj }}</span>{% else %}<span class="text-muted">-</span>{% endif %}</td>
+                    <td>{% if benefit.insured_cpf %}<span class="font-monospace">{{ benefit.insured_cpf }}</span>{% else
+                      %}<span class="text-muted">-</span>{% endif %}</td>
+                    <td>{% if benefit.employer_cnpj %}<span class="font-monospace">{{ benefit.employer_cnpj }}</span>{%
+                      else %}<span class="text-muted">-</span>{% endif %}</td>
                     <td class="text-center">{{ status_badge(benefit.status) }}</td>
                     <td>
                       <div class="small">
-                        <div><strong>DIB:</strong> {% if benefit.benefit_start_date %}{{ benefit.benefit_start_date.strftime('%d/%m/%Y') }}{% else %}<span class="text-muted">-</span>{% endif %}</div>
-                        <div><strong>DCB:</strong> {% if benefit.benefit_end_date %}{{ benefit.benefit_end_date.strftime('%d/%m/%Y') }}{% else %}<span class="text-muted">-</span>{% endif %}</div>
+                        <div><strong>DIB:</strong> {% if benefit.benefit_start_date %}{{
+                          benefit.benefit_start_date.strftime('%d/%m/%Y') }}{% else %}<span
+                            class="text-muted">-</span>{% endif %}</div>
+                        <div><strong>DCB:</strong> {% if benefit.benefit_end_date %}{{
+                          benefit.benefit_end_date.strftime('%d/%m/%Y') }}{% else %}<span class="text-muted">-</span>{%
+                          endif %}</div>
                       </div>
                     </td>
                     <td class="text-center">
                       <div class="d-flex flex-wrap justify-content-center gap-2">
-                        <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#benefitDocumentsModal" data-benefit-number="{{ benefit.benefit_number }}" data-benefit-insured="{{ benefit.insured_name or '' }}" title="Pesquisar em documentos">
+                        <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal"
+                          data-bs-target="#benefitDocumentsModal" data-benefit-number="{{ benefit.benefit_number }}"
+                          data-benefit-insured="{{ benefit.insured_name or '' }}" title="Pesquisar em documentos">
                           <i class="bi bi-file-earmark-text me-1"></i>Pesquisar em documentos
                         </button>
-                        <a href="{{ url_for('central_benefits.edit_central_benefit', benefit_id=benefit.id) }}" class="btn btn-warning btn-sm" title="Editar">
+                        <a href="{{ url_for('central_benefits.edit_central_benefit', benefit_id=benefit.id) }}"
+                          class="btn btn-warning btn-sm" title="Editar">
                           <i class="bi bi-pencil me-1"></i>Editar
                         </a>
-                        <button type="button" class="btn btn-outline-danger btn-sm" title="Excluir" data-delete-url="{{ url_for('central_benefits.delete_central_benefit', benefit_id=benefit.id) }}" onclick="confirmDelete(this.dataset.deleteUrl)">
+                        <button type="button" class="btn btn-outline-danger btn-sm" title="Excluir"
+                          data-delete-url="{{ url_for('central_benefits.delete_central_benefit', benefit_id=benefit.id) }}"
+                          onclick="confirmDelete(this.dataset.deleteUrl)">
                           <i class="bi bi-trash me-1"></i>Excluir
                         </button>
                       </div>
@@ -259,7 +417,8 @@
           <div class="card-body text-center py-5">
             <i class="bi bi-inbox text-muted" style="font-size: 4rem;"></i>
             <h4 class="text-muted mt-3">Nenhum benefício centralizado cadastrado</h4>
-            <p class="text-muted mb-4">Cadastre o primeiro benefício para consolidar dados vindos de todas as fontes.</p>
+            <p class="text-muted mb-4">Cadastre o primeiro benefício para consolidar dados vindos de todas as fontes.
+            </p>
             <div class="d-flex flex-wrap justify-content-center gap-2">
               <a href="{{ url_for('central_benefits.new_central_benefit') }}" class="btn btn-success">
                 <i class="bi bi-plus-circle me-1"></i>Novo benefício
@@ -321,134 +480,393 @@
 <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script>
-$(document).ready(function() {
-  $('#centralBenefitsTable').DataTable({
-    "language": {
-      "url": "//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json"
-    },
-    "pageLength": 25,
-    "order": [[0, "desc"]],
-    "columnDefs": [
-      { "orderable": false, "targets": 8 }
-    ]
-  });
-});
+  $(document).ready(function () {
+    const table = $('#centralBenefitsTable').DataTable({
+      "language": {
+        "url": "//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json"
+      },
+      "pageLength": 25,
+      "order": [[0, "desc"]],
+      "columnDefs": [
+        { "orderable": false, "targets": 8 }
+      ]
+    });
 
-function confirmDelete(url) {
-  if (confirm('Tem certeza que deseja excluir este beneficio? Esta acao nao pode ser desfeita.')) {
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = url;
-    document.body.appendChild(form);
-    form.submit();
-  }
-}
+    const filters = [];
+    const fieldDatasetMap = {
+      id: 'id',
+      benefit_number: 'benefitNumber',
+      client_name: 'clientName',
+      insured_name: 'insuredName',
+      benefit_type: 'benefitType',
+      insured_cpf: 'insuredCpf',
+      insured_nit: 'insuredNit',
+      insured_date_of_birth: 'insuredDateOfBirth',
+      employer_cnpj: 'employerCnpj',
+      employer_name: 'employerName',
+      status: 'status',
+      fap_vigencia_years: 'fapVigenciaYears',
+      benefit_start_date: 'benefitStartDate',
+      benefit_end_date: 'benefitEndDate',
+      accident_date: 'accidentDate',
+      accident_company_name: 'accidentCompanyName',
+      cat_number: 'catNumber',
+      bo_number: 'boNumber',
+      request_type: 'requestType',
+      initial_monthly_benefit: 'initialMonthlyBenefit',
+      total_paid: 'totalPaid',
+      justification: 'justification',
+      opinion: 'opinion',
+      notes: 'notes',
+    };
 
-(function () {
-  const modal = document.getElementById('benefitDocumentsModal');
-  if (!modal) return;
+    const fieldLabelMap = {
+      id: 'ID',
+      benefit_number: 'Número',
+      client_name: 'Cliente',
+      insured_name: 'Segurado',
+      benefit_type: 'Tipo',
+      insured_cpf: 'CPF',
+      insured_nit: 'NIT',
+      insured_date_of_birth: 'Data nascimento',
+      employer_cnpj: 'CNPJ Empregador',
+      employer_name: 'Nome empregador',
+      status: 'Status',
+      fap_vigencia_years: 'Vigência',
+      benefit_start_date: 'DIB',
+      benefit_end_date: 'DCB',
+      accident_date: 'Data acidente',
+      accident_company_name: 'Empresa acidente',
+      cat_number: 'CAT',
+      bo_number: 'BO',
+      request_type: 'Tipo solicitação',
+      initial_monthly_benefit: 'RMI',
+      total_paid: 'Total pago',
+      justification: 'Justificativa',
+      opinion: 'Parecer',
+      notes: 'Observações',
+    };
 
-  const subtitle = document.getElementById('benefitDocumentsSubtitle');
-  const loading = document.getElementById('benefitDocumentsLoading');
-  const empty = document.getElementById('benefitDocumentsEmpty');
-  const errorBox = document.getElementById('benefitDocumentsError');
-  const errorMsg = document.getElementById('benefitDocumentsErrorMsg');
-  const listWrap = document.getElementById('benefitDocumentsList');
-  const countEl = document.getElementById('benefitDocumentsCount');
-  const apiUrl = "{{ url_for('process_panel.api_benefit_documents') }}";
-  const kbBase = "{{ url_for('knowledge_base.list') }}".replace(/\/$/, '');
+    const operatorLabelMap = {
+      contains: 'contém',
+      equals: 'igual a',
+      starts_with: 'começa com',
+      ends_with: 'termina com',
+      empty: 'está vazio',
+      not_empty: 'não está vazio',
+    };
 
-  function setState(state) {
-    loading.classList.add('d-none');
-    empty.classList.add('d-none');
-    errorBox.classList.add('d-none');
-    listWrap.classList.add('d-none');
-    if (state === 'loading') loading.classList.remove('d-none');
-    else if (state === 'empty') empty.classList.remove('d-none');
-    else if (state === 'error') errorBox.classList.remove('d-none');
-    else if (state === 'list') listWrap.classList.remove('d-none');
-  }
-
-  function originBadge(origin) {
-    if (origin === 'semantic') {
-      return '<span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle ms-1"><i class="bi bi-stars me-1"></i>Semântico</span>';
+    function stripHtml(value) {
+      return String(value || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
     }
-    return '<span class="badge bg-info-subtle text-info-emphasis border border-info-subtle ms-1"><i class="bi bi-search me-1"></i>Full-text</span>';
+
+    function normalize(value) {
+      return stripHtml(value)
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase();
+    }
+
+    function needsValue(operator) {
+      return operator !== 'empty' && operator !== 'not_empty';
+    }
+
+    function evaluateFilter(cellValue, filter) {
+      const normalizedCell = normalize(cellValue);
+      const normalizedFilterValue = normalize(filter.value || '');
+
+      if (filter.operator === 'empty') {
+        return normalizedCell === '' || normalizedCell === '-';
+      }
+      if (filter.operator === 'not_empty') {
+        return normalizedCell !== '' && normalizedCell !== '-';
+      }
+      if (filter.operator === 'equals') {
+        return normalizedCell === normalizedFilterValue;
+      }
+      if (filter.operator === 'starts_with') {
+        return normalizedCell.startsWith(normalizedFilterValue);
+      }
+      if (filter.operator === 'ends_with') {
+        return normalizedCell.endsWith(normalizedFilterValue);
+      }
+      return normalizedCell.includes(normalizedFilterValue);
+    }
+
+    function normalizeCnpjRoot(value) {
+      return String(value || '').replace(/\D/g, '').slice(0, 8);
+    }
+
+    function getRowFieldValue(dataIndex, field) {
+      const rowNode = table.row(dataIndex).node();
+      if (!rowNode) {
+        return '';
+      }
+      const datasetKey = fieldDatasetMap[field];
+      return datasetKey ? (rowNode.dataset[datasetKey] || '') : '';
+    }
+
+    function refreshClientOptions() {
+      const select = $('#quickClientFilter');
+      const current = select.val();
+      const names = new Set();
+
+      table.rows().every(function () {
+        const rowNode = this.node();
+        if (!rowNode) {
+          return;
+        }
+        const clientName = (rowNode.dataset.clientName || '').trim();
+        if (clientName) {
+          names.add(clientName);
+        }
+      });
+
+      const options = ['<option value="">Todos os clientes</option>'];
+      Array.from(names).sort((a, b) => a.localeCompare(b, 'pt-BR')).forEach((name) => {
+        options.push(`<option value="${name}">${name}</option>`);
+      });
+      select.html(options.join(''));
+
+      if (current && names.has(current)) {
+        select.val(current);
+      }
+    }
+
+    function renderActiveFilters() {
+      const container = $('#activeCentralFilters');
+      container.empty();
+
+      if (!filters.length) {
+        container.append('<span class="text-muted small">Nenhum filtro ativo.</span>');
+        return;
+      }
+
+      filters.forEach((filter) => {
+        const chip = $(
+          `<span class="filter-chip">
+          <span>${filter.label}</span>
+          <button type="button" class="btn-close btn-close-black remove-filter" aria-label="Remover"></button>
+        </span>`
+        );
+
+        chip.find('.remove-filter').on('click', function () {
+          const idx = filters.findIndex((f) => f.id === filter.id);
+          if (idx >= 0) {
+            filters.splice(idx, 1);
+            renderActiveFilters();
+            table.draw();
+          }
+        });
+
+        container.append(chip);
+      });
+    }
+
+    $.fn.dataTable.ext.search.push(function (settings, data, dataIndex) {
+      if (settings.nTable.id !== 'centralBenefitsTable') {
+        return true;
+      }
+
+      const rowNode = table.row(dataIndex).node();
+      const selectedClient = ($('#quickClientFilter').val() || '').trim();
+      const selectedRoot = normalizeCnpjRoot($('#quickRootCnpjFilter').val() || '');
+
+      if (selectedClient) {
+        const rowClient = rowNode ? (rowNode.dataset.clientName || '') : '';
+        if (normalize(rowClient) !== normalize(selectedClient)) {
+          return false;
+        }
+      }
+
+      if (selectedRoot) {
+        const rowCnpj = rowNode ? (rowNode.dataset.employerCnpj || '') : '';
+        if (normalizeCnpjRoot(rowCnpj) !== selectedRoot) {
+          return false;
+        }
+      }
+
+      if (!filters.length) {
+        return true;
+      }
+
+      return filters.every((filter) => {
+        const cellValue = getRowFieldValue(dataIndex, filter.field);
+        return evaluateFilter(cellValue, filter);
+      });
+    });
+
+    $('#centralFilterOperator').on('change', function () {
+      const op = $(this).val();
+      const mustHaveValue = needsValue(op);
+      $('#centralFilterValue').prop('disabled', !mustHaveValue);
+      if (!mustHaveValue) {
+        $('#centralFilterValue').val('');
+      }
+    });
+
+    $('#addCentralFilterBtn').on('click', function () {
+      const field = $('#centralFilterField').val();
+      const operator = $('#centralFilterOperator').val();
+      const value = $('#centralFilterValue').val().trim();
+
+      if (needsValue(operator) && !value) {
+        $('#centralFilterValue').focus();
+        return;
+      }
+
+      const displayValue = needsValue(operator) ? ` "${value}"` : '';
+      const label = `${fieldLabelMap[field]} ${operatorLabelMap[operator]}${displayValue}`;
+
+      filters.push({
+        id: Date.now() + Math.random(),
+        field,
+        operator,
+        value,
+        label,
+      });
+
+      $('#centralFilterValue').val('');
+      renderActiveFilters();
+      table.draw();
+    });
+
+    $('#clearCentralFiltersBtn').on('click', function () {
+      filters.splice(0, filters.length);
+      $('#quickClientFilter').val('');
+      $('#quickRootCnpjFilter').val('');
+      renderActiveFilters();
+      table.draw();
+    });
+
+    $('#quickClientFilter').on('change', function () {
+      table.draw();
+    });
+
+    $('#quickRootCnpjFilter').on('change', function () {
+      table.draw();
+    });
+
+    refreshClientOptions();
+
+    renderActiveFilters();
+  });
+
+  function confirmDelete(url) {
+    if (confirm('Tem certeza que deseja excluir este beneficio? Esta acao nao pode ser desfeita.')) {
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = url;
+      document.body.appendChild(form);
+      form.submit();
+    }
   }
 
-  function scoreBar(score) {
-    if (score == null) return '';
-    const pct = Math.round(score * 100);
-    const color = pct >= 70 ? 'bg-success' : pct >= 40 ? 'bg-warning' : 'bg-secondary';
-    return `<div class="d-flex align-items-center gap-2 mt-1" style="max-width:200px;">
+  (function () {
+    const modal = document.getElementById('benefitDocumentsModal');
+    if (!modal) return;
+
+    const subtitle = document.getElementById('benefitDocumentsSubtitle');
+    const loading = document.getElementById('benefitDocumentsLoading');
+    const empty = document.getElementById('benefitDocumentsEmpty');
+    const errorBox = document.getElementById('benefitDocumentsError');
+    const errorMsg = document.getElementById('benefitDocumentsErrorMsg');
+    const listWrap = document.getElementById('benefitDocumentsList');
+    const countEl = document.getElementById('benefitDocumentsCount');
+    const apiUrl = "{{ url_for('process_panel.api_benefit_documents') }}";
+    const kbBase = "{{ url_for('knowledge_base.list') }}".replace(/\/$/, '');
+
+    function setState(state) {
+      loading.classList.add('d-none');
+      empty.classList.add('d-none');
+      errorBox.classList.add('d-none');
+      listWrap.classList.add('d-none');
+      if (state === 'loading') loading.classList.remove('d-none');
+      else if (state === 'empty') empty.classList.remove('d-none');
+      else if (state === 'error') errorBox.classList.remove('d-none');
+      else if (state === 'list') listWrap.classList.remove('d-none');
+    }
+
+    function originBadge(origin) {
+      if (origin === 'semantic') {
+        return '<span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle ms-1"><i class="bi bi-stars me-1"></i>Semântico</span>';
+      }
+      return '<span class="badge bg-info-subtle text-info-emphasis border border-info-subtle ms-1"><i class="bi bi-search me-1"></i>Full-text</span>';
+    }
+
+    function scoreBar(score) {
+      if (score == null) return '';
+      const pct = Math.round(score * 100);
+      const color = pct >= 70 ? 'bg-success' : pct >= 40 ? 'bg-warning' : 'bg-secondary';
+      return `<div class="d-flex align-items-center gap-2 mt-1" style="max-width:200px;">
       <div class="progress flex-grow-1" style="height:5px;" title="Relevância ${pct}%">
         <div class="progress-bar ${color}" style="width:${pct}%"></div>
       </div>
       <small class="text-muted text-nowrap">${pct}%</small>
     </div>`;
-  }
+    }
 
-  function highlightTerms(html, terms) {
-    if (!html || !terms.length) return html;
-    const tmp = document.createElement('div');
-    tmp.innerHTML = html;
+    function highlightTerms(html, terms) {
+      if (!html || !terms.length) return html;
+      const tmp = document.createElement('div');
+      tmp.innerHTML = html;
 
-    function walkText(node) {
-      if (node.nodeType === Node.TEXT_NODE) {
-        const parts = [node.textContent];
-        let changed = false;
+      function walkText(node) {
+        if (node.nodeType === Node.TEXT_NODE) {
+          const parts = [node.textContent];
+          let changed = false;
 
-        terms.forEach(function (term) {
-          if (!term) return;
-          const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          const re = new RegExp('(' + escaped + ')', 'gi');
+          terms.forEach(function (term) {
+            if (!term) return;
+            const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            const re = new RegExp('(' + escaped + ')', 'gi');
 
-          for (let i = parts.length - 1; i >= 0; i--) {
-            if (typeof parts[i] !== 'string') continue;
-            const segments = parts[i].split(re);
-            if (segments.length > 1) {
-              changed = true;
-              const replacement = segments.map(function (segment, index) {
-                return (index % 2 === 1) ? '\x00' + segment + '\x01' : segment;
-              });
-              parts.splice(i, 1, ...replacement);
+            for (let i = parts.length - 1; i >= 0; i--) {
+              if (typeof parts[i] !== 'string') continue;
+              const segments = parts[i].split(re);
+              if (segments.length > 1) {
+                changed = true;
+                const replacement = segments.map(function (segment, index) {
+                  return (index % 2 === 1) ? '\x00' + segment + '\x01' : segment;
+                });
+                parts.splice(i, 1, ...replacement);
+              }
             }
+          });
+
+          if (changed) {
+            const span = document.createElement('span');
+            span.innerHTML = parts.map(function (part) {
+              if (typeof part === 'string' && part.startsWith('\x00') && part.endsWith('\x01')) {
+                return '<mark class="bg-warning-subtle text-warning-emphasis px-0 rounded-1">' +
+                  part.slice(1, -1).replace(/</g, '&lt;') + '</mark>';
+              }
+              return (part || '').replace(/</g, '&lt;');
+            }).join('');
+            node.replaceWith(span);
           }
-        });
-
-        if (changed) {
-          const span = document.createElement('span');
-          span.innerHTML = parts.map(function (part) {
-            if (typeof part === 'string' && part.startsWith('\x00') && part.endsWith('\x01')) {
-              return '<mark class="bg-warning-subtle text-warning-emphasis px-0 rounded-1">' +
-                part.slice(1, -1).replace(/</g, '&lt;') + '</mark>';
-            }
-            return (part || '').replace(/</g, '&lt;');
-          }).join('');
-          node.replaceWith(span);
+        } else if (node.nodeType === Node.ELEMENT_NODE && node.tagName !== 'MARK') {
+          Array.from(node.childNodes).forEach(walkText);
         }
-      } else if (node.nodeType === Node.ELEMENT_NODE && node.tagName !== 'MARK') {
-        Array.from(node.childNodes).forEach(walkText);
       }
+
+      Array.from(tmp.childNodes).forEach(walkText);
+      return tmp.innerHTML;
     }
 
-    Array.from(tmp.childNodes).forEach(walkText);
-    return tmp.innerHTML;
-  }
+    function renderCard(hit, mdParser, highlightWords) {
+      const detailUrl = hit.file_id ? kbBase + '/' + hit.file_id + '/details' : null;
+      const viewUrl = hit.file_id ? kbBase + '/' + hit.file_id + '/view' : null;
 
-  function renderCard(hit, mdParser, highlightWords) {
-    const detailUrl = hit.file_id ? kbBase + '/' + hit.file_id + '/details' : null;
-    const viewUrl = hit.file_id ? kbBase + '/' + hit.file_id + '/view' : null;
+      let excerpt = hit.excerpt
+        ? (mdParser ? mdParser.parse(hit.excerpt) : hit.excerpt.replace(/</g, '&lt;').replace(/\n/g, '<br>'))
+        : '<span class="text-muted fst-italic">Sem trecho disponível.</span>';
 
-    let excerpt = hit.excerpt
-      ? (mdParser ? mdParser.parse(hit.excerpt) : hit.excerpt.replace(/</g, '&lt;').replace(/\n/g, '<br>'))
-      : '<span class="text-muted fst-italic">Sem trecho disponível.</span>';
+      if (hit.excerpt && highlightWords && highlightWords.length) {
+        excerpt = highlightTerms(excerpt, highlightWords);
+      }
 
-    if (hit.excerpt && highlightWords && highlightWords.length) {
-      excerpt = highlightTerms(excerpt, highlightWords);
-    }
-
-    const actions = detailUrl ? `
+      const actions = detailUrl ? `
       <div class="d-flex gap-2 flex-shrink-0">
         ${viewUrl ? `<a href="${viewUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-secondary" title="Visualizar"><i class="bi bi-eye"></i></a>` : ''}
         <a href="${detailUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary" title="Ver detalhes">
@@ -456,7 +874,7 @@ function confirmDelete(url) {
         </a>
       </div>` : '';
 
-    return `
+      return `
       <div class="card border shadow-sm">
         <div class="card-header bg-light py-2 px-3 d-flex align-items-start justify-content-between gap-2 flex-wrap">
           <div class="d-flex align-items-center gap-2 flex-wrap">
@@ -474,56 +892,56 @@ function confirmDelete(url) {
           <div class="benefit-doc-excerpt small lh-lg text-body-secondary">${excerpt}</div>
         </div>
       </div>`;
-  }
+    }
 
-  modal.addEventListener('show.bs.modal', function (event) {
-    const btn = event.relatedTarget;
-    const nb = (btn.getAttribute('data-benefit-number') || '').trim();
-    const insured = (btn.getAttribute('data-benefit-insured') || '').trim();
+    modal.addEventListener('show.bs.modal', function (event) {
+      const btn = event.relatedTarget;
+      const nb = (btn.getAttribute('data-benefit-number') || '').trim();
+      const insured = (btn.getAttribute('data-benefit-insured') || '').trim();
 
-    subtitle.textContent = 'NB ' + nb + (insured ? ' • ' + insured : '');
-    listWrap.innerHTML = '';
-    countEl.textContent = '';
-    setState('loading');
+      subtitle.textContent = 'NB ' + nb + (insured ? ' • ' + insured : '');
+      listWrap.innerHTML = '';
+      countEl.textContent = '';
+      setState('loading');
 
-    const mdParser = window.marked ? window.marked : null;
+      const mdParser = window.marked ? window.marked : null;
 
-    fetch(apiUrl + '?benefit_number=' + encodeURIComponent(nb))
-      .then(r => r.json())
-      .then(data => {
-        if (data.error && !(data.results || []).length) {
-          errorMsg.textContent = data.error;
+      fetch(apiUrl + '?benefit_number=' + encodeURIComponent(nb))
+        .then(r => r.json())
+        .then(data => {
+          if (data.error && !(data.results || []).length) {
+            errorMsg.textContent = data.error;
+            setState('error');
+            return;
+          }
+
+          const results = data.results || [];
+          if (!results.length) {
+            setState('empty');
+            return;
+          }
+
+          const highlightWords = [nb, insured].filter(Boolean);
+          results.forEach(hit => {
+            listWrap.insertAdjacentHTML('beforeend', renderCard(hit, mdParser, highlightWords));
+          });
+
+          countEl.textContent = results.length + ' resultado' + (results.length !== 1 ? 's' : '') + ' encontrado' + (results.length !== 1 ? 's' : '');
+          setState('list');
+        })
+        .catch(err => {
+          errorMsg.textContent = 'Falha na requisição: ' + err.message;
           setState('error');
-          return;
-        }
-
-        const results = data.results || [];
-        if (!results.length) {
-          setState('empty');
-          return;
-        }
-
-        const highlightWords = [nb, insured].filter(Boolean);
-        results.forEach(hit => {
-          listWrap.insertAdjacentHTML('beforeend', renderCard(hit, mdParser, highlightWords));
         });
+    });
 
-        countEl.textContent = results.length + ' resultado' + (results.length !== 1 ? 's' : '') + ' encontrado' + (results.length !== 1 ? 's' : '');
-        setState('list');
-      })
-      .catch(err => {
-        errorMsg.textContent = 'Falha na requisição: ' + err.message;
-        setState('error');
-      });
-  });
-
-  modal.addEventListener('hidden.bs.modal', function () {
-    listWrap.innerHTML = '';
-    subtitle.textContent = '';
-    countEl.textContent = '';
-    setState('loading');
-  });
-})();
+    modal.addEventListener('hidden.bs.modal', function () {
+      listWrap.innerHTML = '';
+      subtitle.textContent = '';
+      countEl.textContent = '';
+      setState('loading');
+    });
+  })();
 </script>
 {% endif %}
 {% endblock %}

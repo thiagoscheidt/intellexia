@@ -36,7 +36,48 @@ def list_central_benefits():
         .order_by(Benefit.created_at.desc())
         .all()
     )
-    return render_template('central_benefits/list.html', benefits=benefits)
+
+    def extract_cnpj_root(cnpj):
+        digits = ''.join(ch for ch in (cnpj or '') if ch.isdigit())
+        return digits[:8] if len(digits) >= 8 else ''
+
+    def extract_cnpj_branch(cnpj):
+        digits = ''.join(ch for ch in (cnpj or '') if ch.isdigit())
+        return digits[8:12] if len(digits) >= 12 else ''
+
+    clients_data = (
+        Client.query.with_entities(Client.cnpj, Client.name)
+        .filter_by(law_firm_id=law_firm_id)
+        .all()
+    )
+
+    roots_map = {}
+    for cnpj, name in clients_data:
+        root = extract_cnpj_root(cnpj)
+        if not root:
+            continue
+
+        branch = extract_cnpj_branch(cnpj)
+        clean_name = (name or '').strip()
+
+        if root not in roots_map:
+            roots_map[root] = {'root': root, 'company_name': '', 'is_main': False}
+
+        current = roots_map[root]
+        if branch == '0001' and clean_name:
+            current['company_name'] = clean_name
+            current['is_main'] = True
+            continue
+
+        if not current['is_main'] and clean_name and not current['company_name']:
+            current['company_name'] = clean_name
+
+    cnpj_roots = [
+        {'root': item['root'], 'company_name': item['company_name']}
+        for _, item in sorted(roots_map.items(), key=lambda entry: entry[0])
+    ]
+
+    return render_template('central_benefits/list.html', benefits=benefits, cnpj_roots=cnpj_roots)
 
 
 @central_benefits_bp.route('/fap-contestation-reports', methods=['GET', 'POST'])
