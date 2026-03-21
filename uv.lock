@@ -1308,10 +1308,13 @@ dependencies = [
     { name = "markitdown" },
     { name = "meilisearch-python-sdk" },
     { name = "openai" },
+    { name = "opencnpj" },
     { name = "openpyxl" },
     { name = "pdf2image" },
     { name = "pdfplumber" },
     { name = "pillow" },
+    { name = "pip-system-certs" },
+    { name = "pydantic" },
     { name = "pymupdf" },
     { name = "pymysql" },
     { name = "pypandoc" },
@@ -1347,10 +1350,13 @@ requires-dist = [
     { name = "markitdown", specifier = ">=0.0.2" },
     { name = "meilisearch-python-sdk", specifier = ">=7.0.3" },
     { name = "openai", specifier = ">=2.14.0" },
+    { name = "opencnpj", specifier = ">=0.0.3" },
     { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "pdf2image", specifier = ">=1.17.0" },
     { name = "pdfplumber", specifier = ">=0.11.9" },
     { name = "pillow", specifier = ">=11.0.0" },
+    { name = "pip-system-certs", specifier = ">=5.3" },
+    { name = "pydantic", specifier = ">=2.12.5" },
     { name = "pymupdf", specifier = ">=1.27.2" },
     { name = "pymysql", specifier = ">=1.1.0" },
     { name = "pypandoc", specifier = ">=1.16.2" },
@@ -2483,6 +2489,20 @@ wheels = [
 ]
 
 [[package]]
+name = "opencnpj"
+version = "0.0.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pip-system-certs" },
+    { name = "pydantic" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7f/13/d152ed4b109cd83eaea011eb0ae7f0d8e6efdde754e3a0da0b9c692fe73b/opencnpj-0.0.3.tar.gz", hash = "sha256:5332f24b590c2d530401476e18308919ac486d97d93525413a15a6019fffe6d2", size = 5941, upload-time = "2025-10-10T01:46:54.777Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/ba/e3/297c631a46f83f25dc5d90420550ca591fe154cf96c3cb526e5bea98ef43/opencnpj-0.0.3-py3-none-any.whl", hash = "sha256:73cd1a183d50226869121a9eb06dbe4a10f3c1c951ea4e0a911658d900e8f3a9", size = 4870, upload-time = "2025-10-10T01:46:52.273Z" },
+]
+
+[[package]]
 name = "opencv-python"
 version = "4.13.0.90"
 source = { registry = "https://pypi.org/simple" }
@@ -2767,6 +2787,27 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/31/5e/03966aedfbfcbb4d5f8aa042452d3361f325b963ebbadddac05b122e47dd/pillow-11.3.0-pp311-pypy311_pp73-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:5418b53c0d59b3824d05e029669efa023bbef0f3e92e75ec8428f3799487f361", size = 4957170, upload-time = "2025-07-01T09:16:23.762Z" },
     { url = "https://files.pythonhosted.org/packages/cc/2d/e082982aacc927fc2cab48e1e731bdb1643a1406acace8bed0900a61464e/pillow-11.3.0-pp311-pypy311_pp73-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:504b6f59505f08ae014f724b6207ff6222662aab5cc9542577fb084ed0676ac7", size = 5581505, upload-time = "2025-07-01T09:16:25.593Z" },
     { url = "https://files.pythonhosted.org/packages/34/e7/ae39f538fd6844e982063c3a5e4598b8ced43b9633baa3a85ef33af8c05c/pillow-11.3.0-pp311-pypy311_pp73-win_amd64.whl", hash = "sha256:c84d689db21a1c397d001aa08241044aa2069e7587b398c8cc63020390b1c1b8", size = 6984598, upload-time = "2025-07-01T09:16:27.732Z" },
+]
+
+[[package]]
+name = "pip"
+version = "26.0.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/48/83/0d7d4e9efe3344b8e2fe25d93be44f64b65364d3c8d7bc6dc90198d5422e/pip-26.0.1.tar.gz", hash = "sha256:c4037d8a277c89b320abe636d59f91e6d0922d08a05b60e85e53b296613346d8", size = 1812747, upload-time = "2026-02-05T02:20:18.702Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/de/f0/c81e05b613866b76d2d1066490adf1a3dbc4ee9d9c839961c3fc8a6997af/pip-26.0.1-py3-none-any.whl", hash = "sha256:bdb1b08f4274833d62c1aa29e20907365a2ceb950410df15fc9521bad440122b", size = 1787723, upload-time = "2026-02-05T02:20:16.416Z" },
+]
+
+[[package]]
+name = "pip-system-certs"
+version = "5.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pip" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/7d/6a/563b05a4f6c9ddc205c98bb413e74221368efb98b8fb9cca96b578b8930c/pip_system_certs-5.3.tar.gz", hash = "sha256:19c8bf9957bcce7d69c4dbc2d0b2ef13de1984d53f50a59012e6dbbad0af67c6", size = 6395, upload-time = "2025-10-16T06:14:55.217Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9f/57/752b63c609affae8f26ae0f1d1103d6ea7e707ad45943f62f7422936071d/pip_system_certs-5.3-py3-none-any.whl", hash = "sha256:3fbb5de62e374a99b688b1ad06e64ee5c4aeb633ef23e3a677d32e3e84fd863c", size = 6896, upload-time = "2025-10-16T06:14:54.072Z" },
 ]
 
 [[package]]

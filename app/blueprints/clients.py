@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, session, redirect, url_for, flash, jsonify
 from app.models import db, Client
+from app.services.open_cnpj_service import OpenCNPJService
 from datetime import datetime
 from functools import wraps
 
@@ -143,3 +144,18 @@ def client_delete(client_id):
         flash(f'Erro ao excluir cliente: {str(e)}', 'danger')
     
     return redirect(url_for('clients.clients_list'))
+
+
+@clients_bp.route('/<int:client_id>/opencnpj', methods=['GET'])
+@require_law_firm
+def client_opencnpj_lookup(client_id):
+    law_firm_id = get_current_law_firm_id()
+    client = Client.query.filter_by(id=client_id, law_firm_id=law_firm_id).first_or_404()
+    service = OpenCNPJService()
+    result = service.lookup_company(client.cnpj)
+
+    return jsonify({
+        'success': result.get('success', False),
+        'message': result.get('message'),
+        'data': result.get('data'),
+    }), int(result.get('status_code', 500))

@@ -6,7 +6,12 @@
 
 {% block content %}
 {% call page_hero(title='Clientes', subtitle=hero_subtitle|default(''), icon='bi bi-building') %}
-<nav aria-label="breadcrumb"><ol class="breadcrumb mb-0 bg-transparent small"><li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li><li class="breadcrumb-item active" aria-current="page">Clientes</li></ol></nav>
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb mb-0 bg-transparent small">
+    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Clientes</li>
+  </ol>
+</nav>
 {% endcall %}
 
 <div class="app-content">
@@ -24,14 +29,14 @@
           </div>
           <div class="card-body">
             {% with messages = get_flashed_messages(with_categories=true) %}
-              {% if messages %}
-                {% for category, message in messages %}
-                  <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                    <i class="bi bi-info-circle"></i> {{ message }}
-                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                  </div>
-                {% endfor %}
-              {% endif %}
+            {% if messages %}
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+              <i class="bi bi-info-circle"></i> {{ message }}
+              <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
+            {% endif %}
             {% endwith %}
 
             {% if clients %}
@@ -44,7 +49,7 @@
                     <th style="width: 180px;">CNPJ</th>
                     <th style="width: 200px;">Cidade/UF</th>
                     <th style="width: 100px;" class="text-center">Filiais</th>
-                    <th style="width: 120px;" class="text-center">Ações</th>
+                    <th style="width: 190px;" class="text-center">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -60,17 +65,23 @@
                     </td>
                     <td class="text-center">
                       {% if client.has_branches %}
-                        <span class="badge bg-success"><i class="bi bi-check-circle"></i> Sim</span>
+                      <span class="badge bg-success"><i class="bi bi-check-circle"></i> Sim</span>
                       {% else %}
-                        <span class="badge bg-secondary"><i class="bi bi-x-circle"></i> Não</span>
+                      <span class="badge bg-secondary"><i class="bi bi-x-circle"></i> Não</span>
                       {% endif %}
                     </td>
                     <td class="text-center">
                       <div class="btn-group" role="group">
-                        <a href="{{ url_for('clients.client_edit', client_id=client.id) }}" class="btn btn-sm btn-warning" title="Editar">
+                        <button type="button" class="btn btn-sm btn-info open-cnpj-btn" title="Buscar dados na OpenCNPJ"
+                          data-client-id="{{ client.id }}" data-client-name="{{ client.name|e }}">
+                          <i class="bi bi-search"></i>
+                        </button>
+                        <a href="{{ url_for('clients.client_edit', client_id=client.id) }}"
+                          class="btn btn-sm btn-warning" title="Editar">
                           <i class="bi bi-pencil"></i>
                         </a>
-                        <button type="button" class="btn btn-sm btn-danger" title="Excluir" onclick="confirmDelete('{{ url_for('clients.client_delete', client_id=client.id) }}')">
+                        <button type="button" class="btn btn-sm btn-danger delete-client-btn" title="Excluir"
+                          data-delete-url="{{ url_for('clients.client_delete', client_id=client.id) }}">
                           <i class="bi bi-trash"></i>
                         </button>
                       </div>
@@ -83,7 +94,8 @@
             {% else %}
             <div class="alert alert-info mb-0">
               <h5><i class="bi bi-info-circle"></i> Nenhum cliente cadastrado</h5>
-              <p class="mb-0">Você ainda não possui clientes cadastrados. <a href="{{ url_for('clients.client_new') }}" class="alert-link">Clique aqui para cadastrar o primeiro cliente</a>.</p>
+              <p class="mb-0">Você ainda não possui clientes cadastrados. <a href="{{ url_for('clients.client_new') }}"
+                  class="alert-link">Clique aqui para cadastrar o primeiro cliente</a>.</p>
             </div>
             {% endif %}
           </div>
@@ -99,6 +111,25 @@
     </div>
   </div>
 </div>
+
+<div class="modal fade" id="openCnpjModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header bg-info text-white">
+        <h5 class="modal-title">
+          <i class="bi bi-building"></i> Dados da OpenCNPJ
+        </h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <div class="modal-body" id="openCnpjModalBody">
+        <div class="text-center py-4 text-muted">Selecione um cliente para consultar.</div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -107,28 +138,126 @@
 <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
 <script>
-$(document).ready(function() {
-  $('#clientsTable').DataTable({
-    "language": {
-      "url": "//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json"
-    },
-    "pageLength": 25,
-    "order": [[0, "desc"]],
-    "columnDefs": [
-      { "orderable": false, "targets": 5 }
-    ]
-  });
-});
+  $(document).ready(function () {
+    $('#clientsTable').DataTable({
+      "language": {
+        "url": "//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json"
+      },
+      "pageLength": 25,
+      "order": [[0, "desc"]],
+      "columnDefs": [
+        { "orderable": false, "targets": 5 }
+      ]
+    });
 
-function confirmDelete(url) {
-  if (confirm('Tem certeza que deseja excluir este cliente? Esta ação não pode ser desfeita.')) {
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = url;
-    document.body.appendChild(form);
-    form.submit();
+    document.querySelectorAll('.open-cnpj-btn').forEach((btn) => {
+      btn.addEventListener('click', function () {
+        fetchOpenCnpjInfo(this.dataset.clientId, this.dataset.clientName);
+      });
+    });
+
+    document.querySelectorAll('.delete-client-btn').forEach((btn) => {
+      btn.addEventListener('click', function () {
+        confirmDelete(this.dataset.deleteUrl);
+      });
+    });
+  });
+
+  function confirmDelete(url) {
+    if (confirm('Tem certeza que deseja excluir este cliente? Esta ação não pode ser desfeita.')) {
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = url;
+      document.body.appendChild(form);
+      form.submit();
+    }
   }
-}
+
+  function valueOrDash(value) {
+    return value === null || value === undefined || value === '' ? '-' : value;
+  }
+
+  function renderQsa(qsa) {
+    if (!Array.isArray(qsa) || qsa.length === 0) {
+      return '<div class="alert alert-light border mb-0"><strong>Quadro societário:</strong> não informado.</div>';
+    }
+
+    const rows = qsa.map((socio) => `
+      <tr>
+        <td>${valueOrDash(socio.nome_socio)}</td>
+        <td>${valueOrDash(socio.cnpj_cpf_socio)}</td>
+        <td>${valueOrDash(socio.qualificacao_socio)}</td>
+        <td>${valueOrDash(socio.identificador_socio)}</td>
+      </tr>
+    `).join('');
+
+    return `
+      <div class="mt-4">
+        <h6 class="mb-2"><i class="bi bi-people"></i> Quadro Societário</h6>
+        <div class="table-responsive">
+          <table class="table table-sm table-bordered align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th>Nome</th>
+                <th>CNPJ/CPF</th>
+                <th>Qualificação</th>
+                <th>Tipo</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${rows}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderOpenCnpjData(data) {
+    return `
+    <div class="row g-3">
+      <div class="col-md-6"><strong>Razão Social:</strong><br>${valueOrDash(data.razao_social)}</div>
+      <div class="col-md-6"><strong>Nome Fantasia:</strong><br>${valueOrDash(data.nome_fantasia)}</div>
+      <div class="col-md-4"><strong>CNPJ:</strong><br>${valueOrDash(data.cnpj)}</div>
+      <div class="col-md-4"><strong>Situação Cadastral:</strong><br>${valueOrDash(data.situacao_cadastral)}</div>
+      <div class="col-md-4"><strong>Início Atividade:</strong><br>${valueOrDash(data.data_inicio_atividade)}</div>
+      <div class="col-md-6"><strong>Porte:</strong><br>${valueOrDash(data.porte_empresa)}</div>
+      <div class="col-md-6"><strong>Natureza Jurídica:</strong><br>${valueOrDash(data.natureza_juridica)}</div>
+      <div class="col-12"><strong>Endereço:</strong><br>${valueOrDash(data.logradouro)} ${valueOrDash(data.numero)} ${valueOrDash(data.complemento)}</div>
+      <div class="col-md-4"><strong>Bairro:</strong><br>${valueOrDash(data.bairro)}</div>
+      <div class="col-md-4"><strong>Município:</strong><br>${valueOrDash(data.municipio)}</div>
+      <div class="col-md-4"><strong>UF:</strong><br>${valueOrDash(data.uf)}</div>
+      <div class="col-md-4"><strong>CEP:</strong><br>${valueOrDash(data.cep)}</div>
+      <div class="col-md-8"><strong>E-mail:</strong><br>${valueOrDash(data.email)}</div>
+      <div class="col-12">${renderQsa(data.qsa)}</div>
+    </div>
+  `;
+  }
+
+  async function fetchOpenCnpjInfo(clientId, clientName) {
+    const modalElement = document.getElementById('openCnpjModal');
+    const modalBody = document.getElementById('openCnpjModalBody');
+    const modalTitle = modalElement.querySelector('.modal-title');
+
+    modalTitle.innerHTML = `<i class="bi bi-building"></i> Dados da OpenCNPJ - ${clientName}`;
+    modalBody.innerHTML = '<div class="text-center py-4"><div class="spinner-border text-info" role="status"></div><p class="mt-3 mb-0">Consultando OpenCNPJ...</p></div>';
+
+    const bsModal = new bootstrap.Modal(modalElement);
+    bsModal.show();
+
+    try {
+      const response = await fetch(`/clients/${clientId}/opencnpj`);
+      const payload = await response.json();
+
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.message || 'Falha ao consultar OpenCNPJ.');
+      }
+
+      modalBody.innerHTML = renderOpenCnpjData(payload.data || {});
+    } catch (error) {
+      modalBody.innerHTML = `<div class="alert alert-danger mb-0"><i class="bi bi-exclamation-triangle"></i> ${error.message}</div>`;
+    }
+  }
 </script>
 {% endif %}
 {% endblock %}
