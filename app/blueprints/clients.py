@@ -152,7 +152,7 @@ def client_opencnpj_lookup(client_id):
     law_firm_id = get_current_law_firm_id()
     client = Client.query.filter_by(id=client_id, law_firm_id=law_firm_id).first_or_404()
     service = OpenCNPJService()
-    result = service.lookup_company(client.cnpj)
+    result = service.lookup_and_sync_client(client, db.session)
 
     return jsonify({
         'success': result.get('success', False),

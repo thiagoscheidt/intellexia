@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -111,6 +112,43 @@ class OpenCNPJService:
             "message": "CNPJ não encontrado na OpenCNPJ.",
             "data": None,
         }
+
+    def lookup_and_sync_client(self, client: Any, db_session: Any) -> Dict[str, Any]:
+        """Consulta CNPJ e sincroniza o cadastro local do cliente quando houver sucesso."""
+        result = self.lookup_company(getattr(client, "cnpj", ""))
+
+        if not result.get("success"):
+            return result
+
+        data = result.get("data") or {}
+        try:
+            self._apply_company_data_to_client(client, data)
+            db_session.commit()
+            return result
+        except Exception as sync_error:
+            db_session.rollback()
+            result["success"] = False
+            result["status_code"] = 500
+            result["message"] = f"Dados consultados, mas falha ao sincronizar cliente: {str(sync_error)}"
+            return result
+
+    @staticmethod
+    def _apply_company_data_to_client(client: Any, data: Dict[str, Any]) -> None:
+        # Mantém o CNPJ normalizado no padrão com máscara para consistência visual no sistema.
+        cnpj_raw = (data.get("cnpj") or "").strip()
+        cnpj_digits = "".join(ch for ch in cnpj_raw if ch.isdigit())
+
+        if cnpj_digits and len(cnpj_digits) == 14:
+            client.cnpj = f"{cnpj_digits[:2]}.{cnpj_digits[2:5]}.{cnpj_digits[5:8]}/{cnpj_digits[8:12]}-{cnpj_digits[12:14]}"
+
+        client.name = data.get("razao_social") or client.name
+        client.street = data.get("logradouro") or client.street
+        client.number = data.get("numero") or client.number
+        client.district = data.get("bairro") or client.district
+        client.city = data.get("municipio") or client.city
+        client.state = data.get("uf") or client.state
+        client.zip_code = data.get("cep") or client.zip_code
+        client.updated_at = datetime.utcnow()
 
     def _serialize_company(self, company: Any) -> Dict[str, Any]:
         """Exporta somente dados necessários para rota e UI."""
