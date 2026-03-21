@@ -30,13 +30,19 @@ def clients_list():
 @clients_bp.route('/<int:client_id>')
 @require_law_firm
 def client_detail(client_id):
-    from app.models import Case
+    from app.models import Case, JudicialProcess
     from decimal import Decimal
     
     law_firm_id = get_current_law_firm_id()
     client = Client.query.filter_by(id=client_id, law_firm_id=law_firm_id).first_or_404()
     
     client_cases = Case.query.filter_by(client_id=client_id, law_firm_id=law_firm_id).order_by(Case.created_at.desc()).all()
+    judicial_processes = (
+        JudicialProcess.query
+        .filter_by(plaintiff_client_id=client_id, law_firm_id=law_firm_id)
+        .order_by(JudicialProcess.created_at.desc())
+        .all()
+    )
     
     active_cases_count = len([case for case in client_cases if case.status == 'active'])
     
@@ -57,6 +63,7 @@ def client_detail(client_id):
     return render_template('clients/detail.html', 
                          client=client,
                          client_cases=client_cases,
+                         judicial_processes=judicial_processes,
                          active_cases_count=active_cases_count,
                          total_benefits_count=total_benefits_count,
                          total_case_value=total_case_value,
@@ -159,3 +166,20 @@ def client_opencnpj_lookup(client_id):
         'message': result.get('message'),
         'data': result.get('data'),
     }), int(result.get('status_code', 500))
+
+
+@clients_bp.route('/<int:client_id>/sync-opencnpj', methods=['POST'])
+@require_law_firm
+def client_sync_opencnpj(client_id):
+    law_firm_id = get_current_law_firm_id()
+    client = Client.query.filter_by(id=client_id, law_firm_id=law_firm_id).first_or_404()
+
+    service = OpenCNPJService()
+    result = service.lookup_and_sync_client(client, db.session)
+
+    if result.get('success'):
+        flash('Dados do cliente sincronizados com sucesso via OpenCNPJ.', 'success')
+    else:
+        flash(result.get('message') or 'Falha ao sincronizar dados do cliente via OpenCNPJ.', 'danger')
+
+    return redirect(url_for('clients.client_detail', client_id=client_id))

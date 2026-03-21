@@ -49,7 +49,7 @@
                     <th style="width: 180px;">CNPJ</th>
                     <th style="width: 200px;">Cidade/UF</th>
                     <th style="width: 100px;" class="text-center">Filiais</th>
-                    <th style="width: 190px;" class="text-center">Ações</th>
+                    <th style="width: 240px;" class="text-center">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -72,6 +72,10 @@
                     </td>
                     <td class="text-center">
                       <div class="btn-group" role="group">
+                        <a href="{{ url_for('clients.client_detail', client_id=client.id) }}"
+                          class="btn btn-sm btn-primary" title="Ver detalhes">
+                          <i class="bi bi-eye"></i>
+                        </a>
                         <button type="button" class="btn btn-sm btn-info open-cnpj-btn" title="Buscar dados na OpenCNPJ"
                           data-client-id="{{ client.id }}" data-client-name="{{ client.name|e }}">
                           <i class="bi bi-search"></i>

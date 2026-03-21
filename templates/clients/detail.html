@@ -6,17 +6,45 @@
 
 {% block content %}
 {% call page_hero(title='Detalhes do Cliente', subtitle=hero_subtitle|default(''), icon='bi bi-building') %}
-<nav aria-label="breadcrumb"><ol class="breadcrumb mb-0 bg-transparent small"><li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li><li class="breadcrumb-item active" aria-current="page">Detalhes do Cliente</li></ol></nav>
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb mb-0 bg-transparent small">
+    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Detalhes do Cliente</li>
+  </ol>
+</nav>
 {% endcall %}
 
 <div class="app-content">
   <div class="container-fluid">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="row">
+      <div class="col-12">
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+          <i class="bi bi-info-circle"></i> {{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    {% endwith %}
+
     <div class="row">
       <!-- Informações do Cliente -->
       <div class="col-md-6">
         <div class="card card-success card-outline">
           <div class="card-header">
             <h3 class="card-title"><i class="bi bi-info-circle"></i> Informações da Empresa</h3>
+            <div class="card-tools">
+              <form method="POST" action="{{ url_for('clients.client_sync_opencnpj', client_id=client.id) }}"
+                class="d-inline">
+                <button type="submit" class="btn btn-success btn-sm">
+                  <i class="bi bi-arrow-repeat"></i> Sincronizar OpenCNPJ
+                </button>
+              </form>
+            </div>
           </div>
           <div class="card-body">
             <table class="table table-borderless">
@@ -37,11 +65,11 @@
                   <td><strong>Endereço:</strong></td>
                   <td>
                     {% if client.street %}
-                      <i class="bi bi-geo-alt"></i> {{ client.street }}
-                      {% if client.number %}, {{ client.number }}{% endif %}
-                      {% if client.district %}<br><small class="text-muted">{{ client.district }}</small>{% endif %}
+                    <i class="bi bi-geo-alt"></i> {{ client.street }}
+                    {% if client.number %}, {{ client.number }}{% endif %}
+                    {% if client.district %}<br><small class="text-muted">{{ client.district }}</small>{% endif %}
                     {% else %}
-                      <span class="text-muted">Não informado</span>
+                    <span class="text-muted">Não informado</span>
                     {% endif %}
                   </td>
                 </tr>
@@ -49,10 +77,10 @@
                   <td><strong>Cidade/UF:</strong></td>
                   <td>
                     {% if client.city and client.state %}
-                      <i class="bi bi-pin-map"></i> {{ client.city }}/{{ client.state }}
-                      {% if client.zip_code %}<br><small class="text-muted">CEP: {{ client.zip_code }}</small>{% endif %}
+                    <i class="bi bi-pin-map"></i> {{ client.city }}/{{ client.state }}
+                    {% if client.zip_code %}<br><small class="text-muted">CEP: {{ client.zip_code }}</small>{% endif %}
                     {% else %}
-                      <span class="text-muted">Não informado</span>
+                    <span class="text-muted">Não informado</span>
                     {% endif %}
                   </td>
                 </tr>
@@ -60,9 +88,9 @@
                   <td><strong>Possui Filiais:</strong></td>
                   <td>
                     {% if client.has_branches %}
-                      <span class="badge bg-success"><i class="bi bi-check-circle"></i> Sim</span>
+                    <span class="badge bg-success"><i class="bi bi-check-circle"></i> Sim</span>
                     {% else %}
-                      <span class="badge bg-secondary"><i class="bi bi-x-circle"></i> Não</span>
+                    <span class="badge bg-secondary"><i class="bi bi-x-circle"></i> Não</span>
                     {% endif %}
                   </td>
                 </tr>
@@ -79,7 +107,8 @@
                 <tr>
                   <td><strong>Data de Cadastro:</strong></td>
                   <td>
-                    <i class="bi bi-calendar-plus"></i> {{ client.created_at.strftime('%d/%m/%Y às %H:%M') if client.created_at else 'N/A' }}
+                    <i class="bi bi-calendar-plus"></i> {{ client.created_at.strftime('%d/%m/%Y às %H:%M') if
+                    client.created_at else 'N/A' }}
                   </td>
                 </tr>
                 {% if client.updated_at and client.updated_at != client.created_at %}
@@ -130,7 +159,8 @@
               </div>
               <div class="col-6">
                 <div class="text-center">
-                  <h4 class="text-info">R$ {{ "%.2f"|format(total_case_value|float) if total_case_value else '0,00' }}</h4>
+                  <h4 class="text-info">R$ {{ "%.2f"|format(total_case_value|float) if total_case_value else '0,00' }}
+                  </h4>
                   <p class="text-sm text-muted mb-0">
                     <i class="bi bi-currency-dollar"></i> Valor Total
                   </p>
@@ -147,15 +177,15 @@
                 <div class="d-flex justify-content-between align-items-center">
                   <small>
                     {% if case_type == 'fap' %}
-                      <i class="bi bi-truck"></i> Revisão FAP - AÇÃO REVISIONAL DO FATOR ACIDENTÁRIO DE PREVENÇÃO
+                    <i class="bi bi-truck"></i> Revisão FAP - AÇÃO REVISIONAL DO FATOR ACIDENTÁRIO DE PREVENÇÃO
                     {% elif case_type == 'previdenciario' %}
-                      <i class="bi bi-shield-check"></i> Previdenciário
+                    <i class="bi bi-shield-check"></i> Previdenciário
                     {% elif case_type == 'trabalhista' %}
-                      <i class="bi bi-building"></i> Trabalhista
+                    <i class="bi bi-building"></i> Trabalhista
                     {% elif case_type == 'outros' %}
-                      <i class="bi bi-folder"></i> Outros
+                    <i class="bi bi-folder"></i> Outros
                     {% else %}
-                      <i class="bi bi-folder"></i> {{ case_type|title }}
+                    <i class="bi bi-folder"></i> {{ case_type|title }}
                     {% endif %}
                   </small>
                   <span class="badge bg-primary">{{ count }}</span>
@@ -184,83 +214,157 @@
           </div>
           <div class="card-body">
             {% if client_cases %}
-              <div class="table-responsive">
-                <table class="table table-bordered table-striped table-hover">
-                  <thead class="table-light">
-                    <tr>
-                      <th style="width: 60px;">ID</th>
-                      <th>Título</th>
-                      <th style="width: 140px;">Tipo</th>
-                      <th style="width: 120px;">Status</th>
-                      <th style="width: 130px;">Valor da Causa</th>
-                      <th style="width: 130px;">Data Ajuiz.</th>
-                      <th style="width: 150px;" class="text-center">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {% for case in client_cases %}
-                    <tr>
-                      <td><strong>{{ case.id }}</strong></td>
-                      <td>
-                        <a href="{{ url_for('cases.case_detail', case_id=case.id) }}" class="text-decoration-none">
-                          <strong>{{ case.title }}</strong>
+            <div class="table-responsive">
+              <table id="clientCasesTable" class="table table-bordered table-striped table-hover">
+                <thead class="table-light">
+                  <tr>
+                    <th style="width: 60px;">ID</th>
+                    <th>Título</th>
+                    <th style="width: 140px;">Tipo</th>
+                    <th style="width: 120px;">Status</th>
+                    <th style="width: 130px;">Valor da Causa</th>
+                    <th style="width: 130px;">Data Ajuiz.</th>
+                    <th style="width: 150px;" class="text-center">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for case in client_cases %}
+                  <tr>
+                    <td><strong>{{ case.id }}</strong></td>
+                    <td>
+                      <a href="{{ url_for('cases.case_detail', case_id=case.id) }}" class="text-decoration-none">
+                        <strong>{{ case.title }}</strong>
+                      </a>
+                    </td>
+                    <td>
+                      {% if case.case_type == 'fap' %}
+                      <span class="badge bg-info text-dark"><i class="bi bi-truck"></i> FAP</span>
+                      {% elif case.case_type == 'previdenciario' %}
+                      <span class="badge bg-primary"><i class="bi bi-shield-check"></i> Previdenciário</span>
+                      {% elif case.case_type == 'trabalhista' %}
+                      <span class="badge bg-warning text-dark"><i class="bi bi-building"></i> Trabalhista</span>
+                      {% elif case.case_type == 'outros' %}
+                      <span class="badge bg-secondary"><i class="bi bi-folder"></i> Outros</span>
+                      {% else %}
+                      <span class="badge bg-secondary">{{ case.case_type }}</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if case.status == 'draft' %}
+                      <span class="badge bg-secondary"><i class="bi bi-pencil-square"></i> Rascunho</span>
+                      {% elif case.status == 'active' %}
+                      <span class="badge bg-success"><i class="bi bi-check-circle"></i> Ativo</span>
+                      {% elif case.status == 'suspended' %}
+                      <span class="badge bg-warning text-dark"><i class="bi bi-pause-circle"></i> Suspenso</span>
+                      {% elif case.status == 'closed' %}
+                      <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Encerrado</span>
+                      {% elif case.status == 'archived' %}
+                      <span class="badge bg-dark"><i class="bi bi-archive"></i> Arquivado</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      <strong>R$ {{ "%.2f"|format(case.value_cause|float) if case.value_cause else '-' }}</strong>
+                    </td>
+                    <td>
+                      {{ case.filing_date.strftime('%d/%m/%Y') if case.filing_date else '-' }}
+                    </td>
+                    <td class="text-center">
+                      <div class="btn-group" role="group">
+                        <a href="{{ url_for('cases.case_detail', case_id=case.id) }}" class="btn btn-sm btn-info"
+                          title="Ver Caso">
+                          <i class="bi bi-eye"></i>
                         </a>
-                      </td>
-                      <td>
-                        {% if case.case_type == 'fap' %}
-                          <span class="badge bg-info text-dark"><i class="bi bi-truck"></i> FAP</span>
-                        {% elif case.case_type == 'previdenciario' %}
-                          <span class="badge bg-primary"><i class="bi bi-shield-check"></i> Previdenciário</span>
-                        {% elif case.case_type == 'trabalhista' %}
-                          <span class="badge bg-warning text-dark"><i class="bi bi-building"></i> Trabalhista</span>
-                        {% elif case.case_type == 'outros' %}
-                          <span class="badge bg-secondary"><i class="bi bi-folder"></i> Outros</span>
-                        {% else %}
-                          <span class="badge bg-secondary">{{ case.case_type }}</span>
-                        {% endif %}
-                      </td>
-                      <td>
-                        {% if case.status == 'draft' %}
-                          <span class="badge bg-secondary"><i class="bi bi-pencil-square"></i> Rascunho</span>
-                        {% elif case.status == 'active' %}
-                          <span class="badge bg-success"><i class="bi bi-check-circle"></i> Ativo</span>
-                        {% elif case.status == 'suspended' %}
-                          <span class="badge bg-warning text-dark"><i class="bi bi-pause-circle"></i> Suspenso</span>
-                        {% elif case.status == 'closed' %}
-                          <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Encerrado</span>
-                        {% elif case.status == 'archived' %}
-                          <span class="badge bg-dark"><i class="bi bi-archive"></i> Arquivado</span>
-                        {% endif %}
-                      </td>
-                      <td>
-                        <strong>R$ {{ "%.2f"|format(case.value_cause|float) if case.value_cause else '-' }}</strong>
-                      </td>
-                      <td>
-                        {{ case.filing_date.strftime('%d/%m/%Y') if case.filing_date else '-' }}
-                      </td>
-                      <td class="text-center">
-                        <div class="btn-group" role="group">
-                          <a href="{{ url_for('cases.case_detail', case_id=case.id) }}" class="btn btn-sm btn-info" title="Ver Caso">
-                            <i class="bi bi-eye"></i>
-                          </a>
-                          <a href="{{ url_for('documents.case_documents_list', case_id=case.id) }}" class="btn btn-sm btn-secondary" title="Documentos">
-                            <i class="bi bi-file-earmark-text"></i>
-                          </a>
-                        </div>
-                      </td>
-                    </tr>
-                    {% endfor %}
-                  </tbody>
-                </table>
-              </div>
+                        <a href="{{ url_for('documents.case_documents_list', case_id=case.id) }}"
+                          class="btn btn-sm btn-secondary" title="Documentos">
+                          <i class="bi bi-file-earmark-text"></i>
+                        </a>
+                      </div>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
             {% else %}
-              <div class="alert alert-info mb-0">
-                <h6><i class="bi bi-info-circle"></i> Nenhum caso cadastrado</h6>
-                <p class="mb-2">Este cliente ainda não possui casos jurídicos cadastrados.</p>
-                <a href="{{ url_for('cases.case_new') }}?client_id={{ client.id }}" class="btn btn-primary btn-sm">
-                  <i class="bi bi-plus-circle"></i> Criar Primeiro Caso
-                </a>
-              </div>
+            <div class="alert alert-info mb-0">
+              <h6><i class="bi bi-info-circle"></i> Nenhum caso cadastrado</h6>
+              <p class="mb-2">Este cliente ainda não possui casos jurídicos cadastrados.</p>
+              <a href="{{ url_for('cases.case_new') }}?client_id={{ client.id }}" class="btn btn-primary btn-sm">
+                <i class="bi bi-plus-circle"></i> Criar Primeiro Caso
+              </a>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Lista de Processos Judiciais -->
+    <div class="row mt-4">
+      <div class="col-12">
+        <div class="card card-warning card-outline">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-folder2-open"></i> Processos Judiciais do Cliente</h3>
+            <div class="card-tools">
+              <span class="badge bg-warning text-dark">{{ judicial_processes|length }} processo(s)</span>
+              <a href="{{ url_for('process_panel.new_process') }}?plaintiff_client_id={{ client.id }}"
+                class="btn btn-primary btn-sm ms-2">
+                <i class="bi bi-plus-circle"></i> Novo Processo
+              </a>
+            </div>
+          </div>
+          <div class="card-body">
+            {% if judicial_processes %}
+            <div class="table-responsive">
+              <table id="clientJudicialProcessesTable" class="table table-bordered table-striped table-hover">
+                <thead class="table-light">
+                  <tr>
+                    <th style="width: 70px;">ID</th>
+                    <th style="width: 210px;">Nº Processo</th>
+                    <th>Título</th>
+                    <th style="width: 130px;">Status</th>
+                    <th style="width: 130px;">Data Ajuiz.</th>
+                    <th style="width: 150px;" class="text-center">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for process in judicial_processes %}
+                  <tr>
+                    <td><strong>{{ process.id }}</strong></td>
+                    <td><code>{{ process.process_number or '-' }}</code></td>
+                    <td>{{ process.title or '-' }}</td>
+                    <td>
+                      {% if process.status == 'ativo' %}
+                      <span class="badge bg-success"><i class="bi bi-check-circle"></i> Ativo</span>
+                      {% elif process.status == 'suspenso' %}
+                      <span class="badge bg-warning text-dark"><i class="bi bi-pause-circle"></i> Suspenso</span>
+                      {% elif process.status == 'encerrado' %}
+                      <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Encerrado</span>
+                      {% else %}
+                      <span class="badge bg-secondary">{{ process.status or '-' }}</span>
+                      {% endif %}
+                    </td>
+                    <td>{{ process.filing_date.strftime('%d/%m/%Y') if process.filing_date else '-' }}</td>
+                    <td class="text-center">
+                      <a href="{{ url_for('process_panel.detail', process_id=process.id) }}" class="btn btn-sm btn-info"
+                        title="Ver Processo">
+                        <i class="bi bi-eye"></i>
+                      </a>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info mb-0">
+              <h6><i class="bi bi-info-circle"></i> Nenhum processo judicial vinculado</h6>
+              <p class="mb-2">Este cliente ainda não possui processos no painel de processos.</p>
+              <a href="{{ url_for('process_panel.new_process') }}?plaintiff_client_id={{ client.id }}"
+                class="btn btn-primary btn-sm">
+                <i class="bi bi-plus-circle"></i> Criar Primeiro Processo
+              </a>
+            </div>
             {% endif %}
           </div>
         </div>
@@ -274,6 +378,12 @@
           <a href="{{ url_for('clients.clients_list') }}" class="btn btn-secondary">
             <i class="bi bi-arrow-left"></i> Voltar à Lista
           </a>
+          <form method="POST" action="{{ url_for('clients.client_sync_opencnpj', client_id=client.id) }}"
+            class="d-inline">
+            <button type="submit" class="btn btn-success">
+              <i class="bi bi-arrow-repeat"></i> Atualizar dados (OpenCNPJ)
+            </button>
+          </form>
           <a href="{{ url_for('clients.client_edit', client_id=client.id) }}" class="btn btn-warning">
             <i class="bi bi-pencil"></i> Editar Cliente
           </a>
@@ -289,9 +399,9 @@
 
 {% block extra_css %}
 <style>
-.text-sm {
-  font-size: 0.875rem;
-}
+  .text-sm {
+    font-size: 0.875rem;
+  }
 </style>
 {% endblock %}
 
@@ -300,17 +410,34 @@
 <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
 <script>
-$(document).ready(function() {
-  $('table').DataTable({
-    "language": {
-      "url": "//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json"
-    },
-    "pageLength": 10,
-    "order": [[0, "desc"]],
-    "columnDefs": [
-      { "orderable": false, "targets": 6 }
-    ]
+  $(document).ready(function () {
+    const casesTable = $('#clientCasesTable');
+    if (casesTable.length) {
+      casesTable.DataTable({
+        "language": {
+          "url": "//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json"
+        },
+        "pageLength": 10,
+        "order": [[0, "desc"]],
+        "columnDefs": [
+          { "orderable": false, "targets": 6 }
+        ]
+      });
+    }
+
+    const judicialProcessesTable = $('#clientJudicialProcessesTable');
+    if (judicialProcessesTable.length) {
+      judicialProcessesTable.DataTable({
+        "language": {
+          "url": "//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json"
+        },
+        "pageLength": 10,
+        "order": [[0, "desc"]],
+        "columnDefs": [
+          { "orderable": false, "targets": 5 }
+        ]
+      });
+    }
   });
-});
 </script>
 {% endblock %}
