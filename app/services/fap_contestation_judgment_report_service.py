@@ -237,6 +237,71 @@ class FapContestationJudgmentReportService:
         return None
 
     @staticmethod
+    def _parse_br_date(value: str | None):
+        if not value:
+            return None
+        try:
+            return datetime.strptime(value, '%d/%m/%Y').date()
+        except ValueError:
+            return None
+
+    @staticmethod
+    def _extract_date_after_label(block: str, label_pattern: str, max_chars: int = 300):
+        label_match = re.search(label_pattern, block, flags=re.IGNORECASE)
+        if not label_match:
+            return None
+
+        snippet = block[label_match.end():label_match.end() + max_chars]
+        date_match = re.search(r'\b(\d{2}/\d{2}/\d{4})\b', snippet)
+        if not date_match:
+            return None
+
+        return FapContestationJudgmentReportService._parse_br_date(date_match.group(1))
+
+    def _extract_dib(self, block: str):
+        # Ex.: "Data Início Benefício (DIB) 22/11/2012"
+        value = self._extract_date_after_label(
+            block,
+            r'Data\s+In[ií]cio\s+Benef[ií]cio\s*\(?DIB\)?',
+        )
+        if value:
+            return value
+
+        # Ex.: "DIB: 22/11/2012"
+        match = re.search(r'\bDIB\s*:\s*(\d{2}/\d{2}/\d{4})\b', block, flags=re.IGNORECASE)
+        return self._parse_br_date(match.group(1)) if match else None
+
+    def _extract_dcb(self, block: str):
+        # Ex.: "Data Cessação Benefício (DCB) 24/01/2013"
+        value = self._extract_date_after_label(
+            block,
+            r'Data\s+Cessa[cç][aã]o\s+Benef[ií]cio\s*\(?DCB\)?',
+        )
+        if value:
+            return value
+
+        # Ex.: "DCB: 24/01/2013"
+        match = re.search(r'\bDCB\s*:\s*(\d{2}/\d{2}/\d{4})\b', block, flags=re.IGNORECASE)
+        return self._parse_br_date(match.group(1)) if match else None
+
+    def _extract_insured_birth_date(self, block: str):
+        # Ex.: "Data de Nascimento do Empregado 27/08/1964"
+        value = self._extract_date_after_label(
+            block,
+            r'Data\s+de\s+Nascimento\s+do\s+Empregado',
+        )
+        if value:
+            return value
+
+        # Fallback para formatos abreviados eventualmente extraídos do PDF.
+        match = re.search(
+            r'\bData\s+de\s+Nascimento\b\s*:?\s*(\d{2}/\d{2}/\d{4})\b',
+            block,
+            flags=re.IGNORECASE,
+        )
+        return self._parse_br_date(match.group(1)) if match else None
+
+    @staticmethod
     def _extract_benefit_situation(block: str) -> str | None:
         # Formato comum: "Situação: Ativo"
         match_inline = re.search(r'\bSitua[cç][aã]o\s*:\s*([^\n]+)', block, flags=re.IGNORECASE)
@@ -341,7 +406,7 @@ class FapContestationJudgmentReportService:
         if not block or not block.strip():
             return None
 
-        result: dict[str, str | None] = {}
+        result: dict[str, object | None] = {}
 
         # número do benefício
         match = re.search(r'^\s*[:\-]?\s*(\d{8,})', block, flags=re.IGNORECASE)
@@ -356,6 +421,11 @@ class FapContestationJudgmentReportService:
         # NIT do empregado
         nit_match = re.search(r'NIT do Empregado\s+(\d{8,20})', block, flags=re.IGNORECASE)
         result['insured_nit'] = nit_match.group(1).strip() if nit_match else None
+
+        # Datas principais do benefício
+        result['benefit_start_date'] = self._extract_dib(block)
+        result['benefit_end_date'] = self._extract_dcb(block)
+        result['insured_date_of_birth'] = self._extract_insured_birth_date(block)
 
         # situação do benefício (ex.: Ativo) extraída do trecho NB/CONREV
         result['benefit_situation'] = self._extract_benefit_situation(block)
@@ -405,7 +475,6 @@ class FapContestationJudgmentReportService:
         results: list[dict] = []
         for block in blocks:
             parsed = self.parse_block(block)
-            print(parsed)
             if parsed:
                 results.append(parsed)
         return results
@@ -462,6 +531,9 @@ class FapContestationJudgmentReportService:
 
             benefit.benefit_type = item.get('benefit_type') or benefit.benefit_type
             benefit.insured_nit = item.get('insured_nit') or benefit.insured_nit
+            benefit.benefit_start_date = item.get('benefit_start_date') or benefit.benefit_start_date
+            benefit.benefit_end_date = item.get('benefit_end_date') or benefit.benefit_end_date
+            benefit.insured_date_of_birth = item.get('insured_date_of_birth') or benefit.insured_date_of_birth
 
             benefit.first_instance_status = item.get('first_instance_status')
             benefit.first_instance_justification = item.get('first_instance_justification')

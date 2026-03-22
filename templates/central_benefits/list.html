@@ -28,6 +28,20 @@
 {% endif %}
 {% endmacro %}
 
+{% macro instance_status_badge(status) %}
+{% set s = (status or '')|lower %}
+{% if s == 'deferido' %}
+<span
+  class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2">Deferido</span>
+{% elif s == 'indeferido' %}
+<span
+  class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2">Indeferido</span>
+{% else %}
+<span
+  class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3 py-2">-</span>
+{% endif %}
+{% endmacro %}
+
 {% block title %}{{ page_title }} - IntellexIA{% endblock %}
 
 {% block extra_css %}
@@ -318,13 +332,11 @@
                 <thead class="table-light">
                   <tr>
                     <th style="width: 70px;">ID</th>
-                    <th style="width: 180px;">Número</th>
-                    <th style="width: 150px;">NIT</th>
+                    <th style="width: 220px;">Número / NIT / Tipo</th>
                     <th>Segurado</th>
-                    <th style="width: 120px;">Tipo</th>
-                    <th style="width: 150px;">CPF</th>
                     <th style="width: 180px;">CNPJ Empregador</th>
-                    <th style="width: 180px;" class="text-center">Status</th>
+                    <th style="width: 170px;" class="text-center">Status 1ª instância</th>
+                    <th style="width: 170px;" class="text-center">Status 2ª instância</th>
                     <th style="width: 150px;">Vigência</th>
                     <th style="width: 230px;" class="text-center">Ações</th>
                   </tr>
@@ -342,6 +354,12 @@
                     data-employer-cnpj="{{ (benefit.employer_cnpj or '')|e }}"
                     data-employer-name="{{ (benefit.employer_name or '')|e }}"
                     data-status="{{ (benefit.status or '')|e }}"
+                    data-first-instance-status="{{ (benefit.first_instance_status or '')|e }}"
+                    data-second-instance-status="{{ (benefit.second_instance_status or '')|e }}"
+                    data-first-instance-justification="{{ (benefit.first_instance_justification or '')|e }}"
+                    data-second-instance-justification="{{ (benefit.second_instance_justification or '')|e }}"
+                    data-first-instance-opinion="{{ (benefit.first_instance_opinion or '')|e }}"
+                    data-second-instance-opinion="{{ (benefit.second_instance_opinion or '')|e }}"
                     data-fap-vigencia-years="{{ (benefit.fap_vigencia_years or '')|e }}"
                     data-benefit-start-date="{{ benefit.benefit_start_date.strftime('%d/%m/%Y') if benefit.benefit_start_date else '' }}"
                     data-benefit-end-date="{{ benefit.benefit_end_date.strftime('%d/%m/%Y') if benefit.benefit_end_date else '' }}"
@@ -358,6 +376,9 @@
                     <td>
                       <div class="d-flex flex-column gap-1">
                         <span class="benefit-number-pill text-primary fw-semibold">{{ benefit.benefit_number }}</span>
+                        {% if benefit.insured_nit %}
+                        <small class="font-monospace text-muted">NIT: {{ benefit.insured_nit }}</small>
+                        {% endif %}
                         {% if benefit.benefit_type %}
                         <span
                           class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle align-self-start">{{
@@ -365,14 +386,18 @@
                         {% endif %}
                       </div>
                     </td>
-                    <td>{% if benefit.insured_nit %}<span class="font-monospace">{{ benefit.insured_nit }}</span>{% else
-                      %}<span class="text-muted">-</span>{% endif %}</td>
                     <td>
-                      <div class="fw-semibold">{{ benefit.insured_name or '-' }}</div>
+                      <div class="d-flex flex-column gap-1">
+                        <div class="fw-semibold">{{ benefit.insured_name or 'Não informado' }}</div>
+                        {% if benefit.insured_cpf %}
+                        <span class="font-monospace small">CPF: {{ benefit.insured_cpf }}</span>
+                        {% endif %}
+                        {% if benefit.insured_date_of_birth %}
+                        <small class="text-muted">Nasc.: {{ benefit.insured_date_of_birth.strftime('%d/%m/%Y')
+                          }}</small>
+                        {% endif %}
+                      </div>
                     </td>
-                    <td>{{ benefit.benefit_type or '-' }}</td>
-                    <td>{% if benefit.insured_cpf %}<span class="font-monospace">{{ benefit.insured_cpf }}</span>{% else
-                      %}<span class="text-muted">-</span>{% endif %}</td>
                     <td>
                       <div class="d-flex flex-column gap-1">
                         {% if benefit.employer_cnpj %}
@@ -382,10 +407,17 @@
                         {% endif %}
                         {% if benefit.employer_name %}
                         <small class="text-muted">{{ benefit.employer_name }}</small>
+                        {% else %}
+                        <small class="text-muted">Não informado</small>
                         {% endif %}
                       </div>
                     </td>
-                    <td class="text-center">{{ status_badge(benefit.status) }}</td>
+                    <td class="text-center">
+                      {{ instance_status_badge(benefit.first_instance_status) }}
+                    </td>
+                    <td class="text-center">
+                      {{ instance_status_badge(benefit.second_instance_status) }}
+                    </td>
                     <td>
                       <div class="small">
                         <div><strong>DIB:</strong> {% if benefit.benefit_start_date %}{{
@@ -398,19 +430,36 @@
                     </td>
                     <td class="text-center">
                       <div class="d-flex flex-wrap justify-content-center gap-2">
+                        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal"
+                          data-bs-target="#benefitDecisionModal" data-benefit-number="{{ benefit.benefit_number }}"
+                          data-benefit-insured="{{ (benefit.insured_name or '')|e }}"
+                          data-first-status="{{ (benefit.first_instance_status or '')|e }}"
+                          data-first-justification="{{ (benefit.first_instance_justification or '')|e }}"
+                          data-first-opinion="{{ (benefit.first_instance_opinion or '')|e }}"
+                          data-second-status="{{ (benefit.second_instance_status or '')|e }}"
+                          data-second-justification="{{ (benefit.second_instance_justification or '')|e }}"
+                          data-second-opinion="{{ (benefit.second_instance_opinion or '')|e }}"
+                          title="Ver resultado das instâncias" aria-label="Ver resultado das instâncias"
+                          data-tooltip="Abrir detalhes da 1ª e 2ª instância" data-bs-placement="top">
+                          <i class="bi bi-clipboard2-check"></i>
+                        </button>
                         <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal"
                           data-bs-target="#benefitDocumentsModal" data-benefit-number="{{ benefit.benefit_number }}"
-                          data-benefit-insured="{{ benefit.insured_name or '' }}" title="Pesquisar em documentos">
-                          <i class="bi bi-file-earmark-text me-1"></i>Pesquisar em documentos
+                          data-benefit-insured="{{ benefit.insured_name or '' }}" title="Pesquisar em documentos"
+                          aria-label="Pesquisar em documentos"
+                          data-tooltip="Pesquisar trechos deste benefício nos documentos" data-bs-placement="top">
+                          <i class="bi bi-file-earmark-text"></i>
                         </button>
                         <a href="{{ url_for('central_benefits.edit_central_benefit', benefit_id=benefit.id) }}"
-                          class="btn btn-warning btn-sm" title="Editar">
-                          <i class="bi bi-pencil me-1"></i>Editar
+                          class="btn btn-warning btn-sm" title="Editar" aria-label="Editar"
+                          data-tooltip="Editar informações do benefício" data-bs-placement="top">
+                          <i class="bi bi-pencil"></i>
                         </a>
-                        <button type="button" class="btn btn-outline-danger btn-sm" title="Excluir"
+                        <button type="button" class="btn btn-outline-danger btn-sm" title="Excluir" aria-label="Excluir"
                           data-delete-url="{{ url_for('central_benefits.delete_central_benefit', benefit_id=benefit.id) }}"
-                          onclick="confirmDelete(this.dataset.deleteUrl)">
-                          <i class="bi bi-trash me-1"></i>Excluir
+                          onclick="confirmDelete(this.dataset.deleteUrl)" data-tooltip="Excluir este benefício"
+                          data-bs-placement="top">
+                          <i class="bi bi-trash"></i>
                         </button>
                       </div>
                     </td>
@@ -484,6 +533,57 @@
       </div>
     </div>
   </div>
+
+  <div class="modal fade" id="benefitDecisionModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable" style="max-width: 90vw;">
+      <div class="modal-content">
+        <div class="modal-header border-bottom">
+          <div>
+            <h5 class="modal-title fw-semibold">
+              <i class="bi bi-clipboard2-check me-2 text-secondary"></i>Resultado das instâncias
+            </h5>
+            <small class="text-muted d-block mt-1" id="benefitDecisionSubtitle"></small>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="row g-3">
+            <div class="col-12 col-lg-6">
+              <div class="card h-100 border">
+                <div class="card-header bg-light d-flex align-items-center justify-content-between">
+                  <span class="fw-semibold">1ª instância</span>
+                  <span class="badge bg-secondary-subtle text-secondary-emphasis" id="decisionFirstStatus">-</span>
+                </div>
+                <div class="card-body">
+                  <p class="text-muted small mb-1">Justificativa</p>
+                  <div class="small mb-3" id="decisionFirstJustification">Não informado</div>
+                  <p class="text-muted small mb-1">Parecer</p>
+                  <div class="small" id="decisionFirstOpinion">Não informado</div>
+                </div>
+              </div>
+            </div>
+            <div class="col-12 col-lg-6">
+              <div class="card h-100 border">
+                <div class="card-header bg-light d-flex align-items-center justify-content-between">
+                  <span class="fw-semibold">2ª instância</span>
+                  <span class="badge bg-secondary-subtle text-secondary-emphasis" id="decisionSecondStatus">-</span>
+                </div>
+                <div class="card-body">
+                  <p class="text-muted small mb-1">Justificativa</p>
+                  <div class="small mb-3" id="decisionSecondJustification">Não informado</div>
+                  <p class="text-muted small mb-1">Parecer</p>
+                  <div class="small" id="decisionSecondOpinion">Não informado</div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-top">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
@@ -501,7 +601,7 @@
       "pageLength": 25,
       "order": [[0, "desc"]],
       "columnDefs": [
-        { "orderable": false, "targets": 9 }
+        { "orderable": false, "targets": 7 }
       ]
     });
 
@@ -518,6 +618,8 @@
       employer_cnpj: 'employerCnpj',
       employer_name: 'employerName',
       status: 'status',
+      first_instance_status: 'firstInstanceStatus',
+      second_instance_status: 'secondInstanceStatus',
       fap_vigencia_years: 'fapVigenciaYears',
       benefit_start_date: 'benefitStartDate',
       benefit_end_date: 'benefitEndDate',
@@ -545,6 +647,8 @@
       employer_cnpj: 'CNPJ Empregador',
       employer_name: 'Nome empregador',
       status: 'Status',
+      first_instance_status: 'Status 1a instancia',
+      second_instance_status: 'Status 2a instancia',
       fap_vigencia_years: 'Vigência',
       benefit_start_date: 'DIB',
       benefit_end_date: 'DCB',
@@ -763,6 +867,13 @@
     refreshClientOptions();
 
     renderActiveFilters();
+
+    document.querySelectorAll('[data-bs-toggle="tooltip"], [data-tooltip]').forEach((el) => {
+      if (el.hasAttribute('data-tooltip')) {
+        el.setAttribute('title', el.getAttribute('data-tooltip') || '');
+      }
+      new bootstrap.Tooltip(el);
+    });
   });
 
   function confirmDelete(url) {
@@ -953,6 +1064,63 @@
       subtitle.textContent = '';
       countEl.textContent = '';
       setState('loading');
+    });
+  })();
+
+  (function () {
+    const modal = document.getElementById('benefitDecisionModal');
+    if (!modal) return;
+
+    const subtitle = document.getElementById('benefitDecisionSubtitle');
+    const firstStatus = document.getElementById('decisionFirstStatus');
+    const firstJustification = document.getElementById('decisionFirstJustification');
+    const firstOpinion = document.getElementById('decisionFirstOpinion');
+    const secondStatus = document.getElementById('decisionSecondStatus');
+    const secondJustification = document.getElementById('decisionSecondJustification');
+    const secondOpinion = document.getElementById('decisionSecondOpinion');
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function formatLongText(value) {
+      const text = String(value || '').trim();
+      if (!text) return 'Não informado';
+      return escapeHtml(text).replace(/\n/g, '<br>');
+    }
+
+    function statusClass(status) {
+      const s = String(status || '').trim().toLowerCase();
+      if (s === 'deferido') return 'bg-success-subtle text-success-emphasis';
+      if (s === 'indeferido') return 'bg-danger-subtle text-danger-emphasis';
+      return 'bg-secondary-subtle text-secondary-emphasis';
+    }
+
+    modal.addEventListener('show.bs.modal', function (event) {
+      const btn = event.relatedTarget;
+      if (!btn) return;
+
+      const number = btn.getAttribute('data-benefit-number') || '';
+      const insured = btn.getAttribute('data-benefit-insured') || '';
+      subtitle.textContent = 'NB ' + number + (insured ? ' • ' + insured : '');
+
+      const firstStatusValue = btn.getAttribute('data-first-status') || '-';
+      const secondStatusValue = btn.getAttribute('data-second-status') || '-';
+
+      firstStatus.className = 'badge ' + statusClass(firstStatusValue);
+      secondStatus.className = 'badge ' + statusClass(secondStatusValue);
+      firstStatus.textContent = firstStatusValue || '-';
+      secondStatus.textContent = secondStatusValue || '-';
+
+      firstJustification.innerHTML = formatLongText(btn.getAttribute('data-first-justification'));
+      firstOpinion.innerHTML = formatLongText(btn.getAttribute('data-first-opinion'));
+      secondJustification.innerHTML = formatLongText(btn.getAttribute('data-second-justification'));
+      secondOpinion.innerHTML = formatLongText(btn.getAttribute('data-second-opinion'));
     });
   })();
 </script>
