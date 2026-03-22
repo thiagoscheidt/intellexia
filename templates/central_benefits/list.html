@@ -6,7 +6,12 @@
 {% set approved_count = benefits|selectattr('status', 'equalto', 'approved')|list|length %}
 {% set in_review_count = benefits|selectattr('status', 'equalto', 'in_review')|list|length %}
 {% set rejected_count = benefits|selectattr('status', 'equalto', 'rejected')|list|length %}
-{% set pending_count = benefits|length - approved_count - in_review_count - rejected_count %}
+{% set pending_count = benefits
+| rejectattr('status', 'equalto', 'approved')
+| rejectattr('status', 'equalto', 'in_review')
+| rejectattr('status', 'equalto', 'rejected')
+| list
+| length %}
 
 {% macro status_badge(status) %}
 {% if status == 'approved' %}
@@ -146,7 +151,7 @@
     {% endwith %}
 
     {% if benefits %}
-    <div class="row row-cols-1 row-cols-md-2 row-cols-xl-4 g-3 mb-4">
+    <div class="row row-cols-1 row-cols-md-2 row-cols-xl-5 g-3 mb-4">
       <div class="col">
         <div class="card stats-card h-100">
           <div class="card-body text-center">
@@ -172,6 +177,21 @@
               <div>
                 <h3 class="mb-0 text-success">{{ approved_count }}</h3>
                 <p class="text-muted mb-0">Deferidos</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card stats-card h-100" style="border-left-color: var(--bs-danger);">
+          <div class="card-body text-center">
+            <div class="d-flex align-items-center justify-content-center">
+              <div class="icon-wrapper me-3">
+                <i class="bi bi-x-circle text-danger" style="font-size: 2rem;"></i>
+              </div>
+              <div>
+                <h3 class="mb-0 text-danger">{{ rejected_count }}</h3>
+                <p class="text-muted mb-0">Indeferidos</p>
               </div>
             </div>
           </div>
