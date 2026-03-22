@@ -434,11 +434,11 @@
                           data-bs-target="#benefitDecisionModal" data-benefit-number="{{ benefit.benefit_number }}"
                           data-benefit-insured="{{ (benefit.insured_name or '')|e }}"
                           data-first-status="{{ (benefit.first_instance_status or '')|e }}"
-                          data-first-justification="{{ (benefit.first_instance_justification or '')|e }}"
-                          data-first-opinion="{{ (benefit.first_instance_opinion or '')|e }}"
+                          data-first-justification="{{ (benefit.first_instance_justification or '')|e|replace('\n', '&#10;') }}"
+                          data-first-opinion="{{ (benefit.first_instance_opinion or '')|e|replace('\n', '&#10;') }}"
                           data-second-status="{{ (benefit.second_instance_status or '')|e }}"
-                          data-second-justification="{{ (benefit.second_instance_justification or '')|e }}"
-                          data-second-opinion="{{ (benefit.second_instance_opinion or '')|e }}"
+                          data-second-justification="{{ (benefit.second_instance_justification or '')|e|replace('\n', '&#10;') }}"
+                          data-second-opinion="{{ (benefit.second_instance_opinion or '')|e|replace('\n', '&#10;') }}"
                           title="Ver resultado das instâncias" aria-label="Ver resultado das instâncias"
                           data-tooltip="Abrir detalhes da 1ª e 2ª instância" data-bs-placement="top">
                           <i class="bi bi-clipboard2-check"></i>
@@ -1091,7 +1091,9 @@
     function formatLongText(value) {
       const text = String(value || '').trim();
       if (!text) return 'Não informado';
-      return escapeHtml(text).replace(/\n/g, '<br>');
+      return escapeHtml(text)
+        .replace(/\n/g, '<br>')
+        .replace(/\. ([A-ZÁÉÍÓÚÀÃÕÂÊÎÔÜÇÑ])/g, '.<br>$1');
     }
 
     function statusClass(status) {
