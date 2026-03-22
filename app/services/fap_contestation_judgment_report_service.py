@@ -196,6 +196,146 @@ class FapContestationJudgmentReportService:
         value = re.sub(r'\s+', ' ', value).strip(' :-\n\t')
         return value or None
 
+    @staticmethod
+    def _extract_text_between_keywords(text: str, start_pattern: str, end_patterns: list[str] | None = None) -> str | None:
+        start_match = re.search(start_pattern, text, flags=re.IGNORECASE)
+        if not start_match:
+            return None
+
+        segment = text[start_match.end():]
+        end_indexes: list[int] = []
+        for end_pattern in end_patterns or []:
+            end_match = re.search(end_pattern, segment, flags=re.IGNORECASE)
+            if end_match:
+                end_indexes.append(end_match.start())
+
+        value = segment[:min(end_indexes)] if end_indexes else segment
+        value = re.sub(r'\s+', ' ', value).strip(' :-\n\t')
+        return value or None
+
+    @staticmethod
+    def _normalize_benefit_type(raw_value: str | None) -> str | None:
+        if not raw_value:
+            return None
+        match = re.search(r'(?:B)?(\d{2})', raw_value, flags=re.IGNORECASE)
+        if not match:
+            return None
+        return f"B{match.group(1)}"
+
+    def _extract_benefit_type(self, block: str) -> str | None:
+        patterns = [
+            r'Esp[ée]cie do Benef[ií]cio\s*[:\-]?\s*(B?\d{2})\b',
+            r'\bEsp[ée]cie\s*:\s*(B?\d{2})\b',
+            r'\bNB\s*:\s*(\d{2})\s*/',
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, block, flags=re.IGNORECASE)
+            if match:
+                normalized = self._normalize_benefit_type(match.group(1))
+                if normalized:
+                    return normalized
+        return None
+
+    @staticmethod
+    def _extract_benefit_situation(block: str) -> str | None:
+        # Formato comum: "Situação: Ativo"
+        match_inline = re.search(r'\bSitua[cç][aã]o\s*:\s*([^\n]+)', block, flags=re.IGNORECASE)
+        if match_inline:
+            value = re.sub(r'\s+', ' ', match_inline.group(1)).strip(' :-\n\t')
+            if value and not re.search(r'^(OL\s+|DIB|DCB|RMI|Esp[ée]cie)\b', value, flags=re.IGNORECASE):
+                return value
+
+        # Formato quebrado em linha: "Situação:" + próxima linha com valor
+        match_multiline = re.search(
+            r'\bSitua[cç][aã]o\s*:\s*\n\s*([^\n]+)',
+            block,
+            flags=re.IGNORECASE,
+        )
+        if match_multiline:
+            value = re.sub(r'\s+', ' ', match_multiline.group(1)).strip(' :-\n\t')
+            if value:
+                return value
+
+        return None
+
+    def _extract_instance_decision(self, section: str) -> dict[str, str | None]:
+        if not section:
+            return {'status': None, 'justification': None, 'opinion': None}
+
+        justification = self._extract_text_between_keywords(
+            section,
+            r'\bJustificativa\b',
+            [r'\bStatus\b', r'\bParecer\b'],
+        )
+
+        # O status pode aparecer isolado após os rótulos "Status"/"Parecer" por quebra de layout.
+        status_match = re.search(r'\b(Deferido|Indeferido)\b', section, flags=re.IGNORECASE)
+        status = status_match.group(1).capitalize() if status_match else None
+
+        opinion = self._extract_text_between_keywords(section, r'\bParecer\b', [])
+        if opinion:
+            opinion = re.sub(r'^(Status\s*)?(Deferido|Indeferido)\b\s*', '', opinion, flags=re.IGNORECASE).strip()
+            opinion = opinion or None
+
+        return {
+            'status': status,
+            'justification': justification,
+            'opinion': opinion,
+        }
+
+    def _extract_instance_sections(self, block: str) -> tuple[str | None, str | None]:
+        first_section = None
+        second_section = None
+
+        first_match = re.search(r'Administrativo\s*1\s*[ªa]\s*inst[âa]ncia', block, flags=re.IGNORECASE)
+        second_match = re.search(r'Administrativo\s*2\s*[ªa]\s*inst[âa]ncia', block, flags=re.IGNORECASE)
+        end_match = re.search(
+            r'\bNB\s*:|Informa[cç][oõ]es\s+de\s+Revis[aã]o\s+de\s+Benef[ií]cio|Dados\s+do\s+Benef[ií]cio',
+            block,
+            flags=re.IGNORECASE,
+        )
+
+        if first_match:
+            first_start = first_match.end()
+            first_end = second_match.start() if second_match else (end_match.start() if end_match else len(block))
+            first_section = block[first_start:first_end].strip() or None
+
+        if second_match:
+            second_start = second_match.end()
+            second_end = end_match.start() if end_match and end_match.start() > second_start else len(block)
+            second_section = block[second_start:second_end].strip() or None
+
+        return first_section, second_section
+
+    @staticmethod
+    def _build_decision_summary(parsed: dict) -> str | None:
+        chunks: list[str] = []
+
+        for label, prefix in [
+            ('first_instance', '1a instancia administrativa'),
+            ('second_instance', '2a instancia administrativa'),
+        ]:
+            status = parsed.get(f'{label}_status')
+            justification = parsed.get(f'{label}_justification')
+            opinion = parsed.get(f'{label}_opinion')
+
+            if not any([status, justification, opinion]):
+                continue
+
+            parts = [f'{prefix}:']
+            if status:
+                parts.append(f'status={status}')
+            if justification:
+                parts.append(f'justificativa={justification}')
+            if opinion:
+                parts.append(f'parecer={opinion}')
+            chunks.append(' | '.join(parts))
+
+        if not chunks:
+            return None
+
+        return '[DECISOES_ADMIN_FAP] ' + ' || '.join(chunks)
+
     def parse_block(self, block: str) -> dict | None:
         """Faz parsing de um bloco de benefício."""
         if not block or not block.strip():
@@ -210,30 +350,50 @@ class FapContestationJudgmentReportService:
 
         result['benefit_number'] = match.group(1).strip()
 
-        # espécie do benefício: prioriza padrões reais como B91/B94 para evitar capturar o próximo rótulo (ex.: DATA)
-        benefit_type_match = re.search(
-            r'Esp[ée]cie do Benef[ií]cio\s+(B\d{2}|[A-Z]\d{2})\b',
-            block,
-            flags=re.IGNORECASE,
-        )
-        result['benefit_type'] = benefit_type_match.group(1).strip().upper() if benefit_type_match else None
+        # espécie do benefício: aceita layout em linha e em seção "Dados do Benefício".
+        result['benefit_type'] = self._extract_benefit_type(block)
 
         # NIT do empregado
         nit_match = re.search(r'NIT do Empregado\s+(\d{8,20})', block, flags=re.IGNORECASE)
         result['insured_nit'] = nit_match.group(1).strip() if nit_match else None
 
-        # status
-        status_match = re.search(r'Status\s+(Deferido|Indeferido)', block, flags=re.IGNORECASE)
-        result['raw_status'] = status_match.group(1).strip() if status_match else None
+        # situação do benefício (ex.: Ativo) extraída do trecho NB/CONREV
+        result['benefit_situation'] = self._extract_benefit_situation(block)
 
-        # justificativa
-        result['justification'] = self.extract_between(block, 'Justificativa', 'Status')
+        # decisões administrativas por instância
+        first_section, second_section = self._extract_instance_sections(block)
+        first_decision = self._extract_instance_decision(first_section or '')
+        second_decision = self._extract_instance_decision(second_section or '')
 
-        # parecer
-        opinion = self.extract_between(block, 'Parecer')
-        if opinion:
-            opinion = re.split(r'\bN[uú]mero do Benef[ií]cio\b', opinion, flags=re.IGNORECASE)[0].strip()
-        result['opinion'] = opinion
+        result['first_instance_status'] = first_decision.get('status')
+        result['first_instance_justification'] = first_decision.get('justification')
+        result['first_instance_opinion'] = first_decision.get('opinion')
+
+        result['second_instance_status'] = second_decision.get('status')
+        result['second_instance_justification'] = second_decision.get('justification')
+        result['second_instance_opinion'] = second_decision.get('opinion')
+
+        # status consolidado prioriza 2a instância, depois 1a.
+        result['raw_status'] = (
+            result['second_instance_status']
+            or result['first_instance_status']
+            or None
+        )
+
+        # mantém compatibilidade com colunas atuais: prioriza 2a instância e fallback para 1a.
+        result['justification'] = (
+            result['second_instance_justification']
+            or result['first_instance_justification']
+            or self.extract_between(block, 'Justificativa', 'Status')
+        )
+        result['opinion'] = (
+            result['second_instance_opinion']
+            or result['first_instance_opinion']
+            or self.extract_between(block, 'Parecer')
+        )
+
+        # resumo textual para preservar decisões por instância nas colunas existentes.
+        result['decisions_summary'] = self._build_decision_summary(result)
 
         return result
 
@@ -245,9 +405,9 @@ class FapContestationJudgmentReportService:
         results: list[dict] = []
         for block in blocks:
             parsed = self.parse_block(block)
+            print(parsed)
             if parsed:
                 results.append(parsed)
-
         return results
 
     @staticmethod
@@ -302,6 +462,15 @@ class FapContestationJudgmentReportService:
 
             benefit.benefit_type = item.get('benefit_type') or benefit.benefit_type
             benefit.insured_nit = item.get('insured_nit') or benefit.insured_nit
+
+            benefit.first_instance_status = item.get('first_instance_status')
+            benefit.first_instance_justification = item.get('first_instance_justification')
+            benefit.first_instance_opinion = item.get('first_instance_opinion')
+
+            benefit.second_instance_status = item.get('second_instance_status')
+            benefit.second_instance_justification = item.get('second_instance_justification')
+            benefit.second_instance_opinion = item.get('second_instance_opinion')
+
             benefit.status = self._map_status(item.get('raw_status'))
             benefit.justification = item.get('justification')
             benefit.opinion = item.get('opinion')
@@ -323,11 +492,16 @@ class FapContestationJudgmentReportService:
 
             # Rastreabilidade de origem
             source_note = f'Relatório FAP importado (id={report.id}, arquivo={report.original_filename})'
+            decisions_summary = item.get('decisions_summary')
             if benefit.notes:
                 if source_note not in benefit.notes:
                     benefit.notes = f'{benefit.notes}\n{source_note}'
+                if decisions_summary and decisions_summary not in benefit.notes:
+                    benefit.notes = f'{benefit.notes}\n{decisions_summary}'
             else:
                 benefit.notes = source_note
+                if decisions_summary:
+                    benefit.notes = f'{benefit.notes}\n{decisions_summary}'
 
             benefit.updated_at = datetime.utcnow()
             imported_count += 1
@@ -366,7 +540,7 @@ class FapContestationJudgmentReportService:
 
             for report in reports:
                 try:
-                    report.status = 'processing'
+                    #report.status = 'processing'
                     report.error_message = None
                     report.updated_at = datetime.utcnow()
                     db.session.commit()
