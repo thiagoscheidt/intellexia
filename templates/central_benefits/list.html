@@ -319,6 +319,7 @@
                   <tr>
                     <th style="width: 70px;">ID</th>
                     <th style="width: 180px;">Número</th>
+                    <th style="width: 150px;">NIT</th>
                     <th>Segurado</th>
                     <th style="width: 120px;">Tipo</th>
                     <th style="width: 150px;">CPF</th>
@@ -364,14 +365,26 @@
                         {% endif %}
                       </div>
                     </td>
+                    <td>{% if benefit.insured_nit %}<span class="font-monospace">{{ benefit.insured_nit }}</span>{% else
+                      %}<span class="text-muted">-</span>{% endif %}</td>
                     <td>
                       <div class="fw-semibold">{{ benefit.insured_name or '-' }}</div>
                     </td>
                     <td>{{ benefit.benefit_type or '-' }}</td>
                     <td>{% if benefit.insured_cpf %}<span class="font-monospace">{{ benefit.insured_cpf }}</span>{% else
                       %}<span class="text-muted">-</span>{% endif %}</td>
-                    <td>{% if benefit.employer_cnpj %}<span class="font-monospace">{{ benefit.employer_cnpj }}</span>{%
-                      else %}<span class="text-muted">-</span>{% endif %}</td>
+                    <td>
+                      <div class="d-flex flex-column gap-1">
+                        {% if benefit.employer_cnpj %}
+                        <span class="font-monospace">{{ benefit.employer_cnpj }}</span>
+                        {% else %}
+                        <span class="text-muted">-</span>
+                        {% endif %}
+                        {% if benefit.employer_name %}
+                        <small class="text-muted">{{ benefit.employer_name }}</small>
+                        {% endif %}
+                      </div>
+                    </td>
                     <td class="text-center">{{ status_badge(benefit.status) }}</td>
                     <td>
                       <div class="small">
@@ -488,7 +501,7 @@
       "pageLength": 25,
       "order": [[0, "desc"]],
       "columnDefs": [
-        { "orderable": false, "targets": 8 }
+        { "orderable": false, "targets": 9 }
       ]
     });
 
