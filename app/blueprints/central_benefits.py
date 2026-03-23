@@ -790,11 +790,15 @@ def edit_central_benefit(benefit_id):
             db.session.rollback()
             flash(f'Erro ao atualizar benefício: {str(e)}', 'danger')
 
+    import json as _json
+    clients_data = {str(c.id): {'name': c.name, 'cnpj': c.cnpj or ''} for c in clients}
+
     return render_template(
         'central_benefits/form.html',
         form=form,
         title='Editar Benefício Centralizado',
         benefit_id=benefit_id,
+        clients_data=_json.dumps(clients_data),
     )
 
 

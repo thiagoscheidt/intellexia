@@ -6,7 +6,14 @@
 
 {% block content %}
 {% call page_hero(title=title, subtitle=hero_subtitle|default(''), icon='bi bi-collection') %}
-<nav aria-label="breadcrumb"><ol class="breadcrumb mb-0 bg-transparent small"><li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li><li class="breadcrumb-item"><a href="{{ url_for('central_benefits.list_central_benefits') }}">Beneficios Centralizados</a></li><li class="breadcrumb-item active" aria-current="page">{{ title }}</li></ol></nav>
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb mb-0 bg-transparent small">
+    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('central_benefits.list_central_benefits') }}">Beneficios
+        Centralizados</a></li>
+    <li class="breadcrumb-item active" aria-current="page">{{ title }}</li>
+  </ol>
+</nav>
 {% endcall %}
 
 <div class="app-content">
@@ -30,69 +37,135 @@
                 <div class="col-md-4">
                   <div class="mb-3">
                     {{ form.benefit_number.label(class="form-label") }}
-                    {{ form.benefit_number(class="form-control" + (" is-invalid" if form.benefit_number.errors else "")) }}
-                    {% if form.benefit_number.errors %}<div class="invalid-feedback">{% for error in form.benefit_number.errors %}{{ error }}{% endfor %}</div>{% endif %}
+                    {{ form.benefit_number(class="form-control" + (" is-invalid" if form.benefit_number.errors else ""))
+                    }}
+                    {% if form.benefit_number.errors %}<div class="invalid-feedback">{% for error in
+                      form.benefit_number.errors %}{{ error }}{% endfor %}</div>{% endif %}
                   </div>
                 </div>
                 <div class="col-md-4">
                   <div class="mb-3">
                     {{ form.benefit_type.label(class="form-label") }}
                     {{ form.benefit_type(class="form-select" + (" is-invalid" if form.benefit_type.errors else "")) }}
-                    {% if form.benefit_type.errors %}<div class="invalid-feedback">{% for error in form.benefit_type.errors %}{{ error }}{% endfor %}</div>{% endif %}
+                    {% if form.benefit_type.errors %}<div class="invalid-feedback">{% for error in
+                      form.benefit_type.errors %}{{ error }}{% endfor %}</div>{% endif %}
                   </div>
                 </div>
               </div>
 
               <h5 class="mt-2 mb-3">Dados do Segurado</h5>
               <div class="row">
-                <div class="col-md-5"><div class="mb-3">{{ form.insured_name.label(class="form-label") }}{{ form.insured_name(class="form-control") }}</div></div>
-                <div class="col-md-3"><div class="mb-3">{{ form.insured_nit.label(class="form-label") }}{{ form.insured_nit(class="form-control") }}</div></div>
-                <div class="col-md-2"><div class="mb-3">{{ form.insured_cpf.label(class="form-label") }}{{ form.insured_cpf(class="form-control") }}</div></div>
-                <div class="col-md-2"><div class="mb-3">{{ form.insured_date_of_birth.label(class="form-label") }}{{ form.insured_date_of_birth(class="form-control", type="date") }}</div></div>
+                <div class="col-md-5">
+                  <div class="mb-3">{{ form.insured_name.label(class="form-label") }}{{
+                    form.insured_name(class="form-control") }}</div>
+                </div>
+                <div class="col-md-3">
+                  <div class="mb-3">{{ form.insured_nit.label(class="form-label") }}{{
+                    form.insured_nit(class="form-control") }}</div>
+                </div>
+                <div class="col-md-2">
+                  <div class="mb-3">{{ form.insured_cpf.label(class="form-label") }}{{
+                    form.insured_cpf(class="form-control") }}</div>
+                </div>
+                <div class="col-md-2">
+                  <div class="mb-3">{{ form.insured_date_of_birth.label(class="form-label") }}{{
+                    form.insured_date_of_birth(class="form-control", type="date") }}</div>
+                </div>
               </div>
 
               <h5 class="mt-2 mb-3">Dados do Empregador</h5>
               <div class="row">
-                <div class="col-md-8"><div class="mb-3">{{ form.employer_name.label(class="form-label") }}{{ form.employer_name(class="form-control") }}</div></div>
-                <div class="col-md-4"><div class="mb-3">{{ form.employer_cnpj.label(class="form-label") }}{{ form.employer_cnpj(class="form-control") }}</div></div>
+                <div class="col-md-8">
+                  <div class="mb-3">{{ form.employer_name.label(class="form-label") }}{{
+                    form.employer_name(class="form-control") }}</div>
+                </div>
+                <div class="col-md-4">
+                  <div class="mb-3">{{ form.employer_cnpj.label(class="form-label") }}{{
+                    form.employer_cnpj(class="form-control") }}</div>
+                </div>
               </div>
 
               <h5 class="mt-2 mb-3">Beneficio e Valores</h5>
               <div class="row">
-                <div class="col-md-3"><div class="mb-3">{{ form.benefit_start_date.label(class="form-label") }}{{ form.benefit_start_date(class="form-control", type="date") }}</div></div>
-                <div class="col-md-3"><div class="mb-3">{{ form.benefit_end_date.label(class="form-label") }}{{ form.benefit_end_date(class="form-control", type="date") }}</div></div>
-                <div class="col-md-3"><div class="mb-3">{{ form.initial_monthly_benefit.label(class="form-label") }}{{ form.initial_monthly_benefit(class="form-control", placeholder="0.00") }}</div></div>
-                <div class="col-md-3"><div class="mb-3">{{ form.total_paid.label(class="form-label") }}{{ form.total_paid(class="form-control", placeholder="0.00") }}</div></div>
+                <div class="col-md-3">
+                  <div class="mb-3">{{ form.benefit_start_date.label(class="form-label") }}{{
+                    form.benefit_start_date(class="form-control", type="date") }}</div>
+                </div>
+                <div class="col-md-3">
+                  <div class="mb-3">{{ form.benefit_end_date.label(class="form-label") }}{{
+                    form.benefit_end_date(class="form-control", type="date") }}</div>
+                </div>
+                <div class="col-md-3">
+                  <div class="mb-3">{{ form.initial_monthly_benefit.label(class="form-label") }}{{
+                    form.initial_monthly_benefit(class="form-control", placeholder="0.00") }}</div>
+                </div>
+                <div class="col-md-3">
+                  <div class="mb-3">{{ form.total_paid.label(class="form-label") }}{{
+                    form.total_paid(class="form-control", placeholder="0.00") }}</div>
+                </div>
               </div>
 
               <h5 class="mt-2 mb-3">Acidente e Contexto FAP</h5>
               <div class="row">
-                <div class="col-md-3"><div class="mb-3">{{ form.cat_number.label(class="form-label") }}{{ form.cat_number(class="form-control") }}</div></div>
-                <div class="col-md-3"><div class="mb-3">{{ form.bo_number.label(class="form-label") }}{{ form.bo_number(class="form-control") }}</div></div>
-                <div class="col-md-3"><div class="mb-3">{{ form.accident_date.label(class="form-label") }}{{ form.accident_date(class="form-control", type="date") }}</div></div>
-                <div class="col-md-3"><div class="mb-3">{{ form.request_type.label(class="form-label") }}{{ form.request_type(class="form-select") }}</div></div>
+                <div class="col-md-3">
+                  <div class="mb-3">{{ form.cat_number.label(class="form-label") }}{{
+                    form.cat_number(class="form-control") }}</div>
+                </div>
+                <div class="col-md-3">
+                  <div class="mb-3">{{ form.bo_number.label(class="form-label") }}{{
+                    form.bo_number(class="form-control") }}</div>
+                </div>
+                <div class="col-md-3">
+                  <div class="mb-3">{{ form.accident_date.label(class="form-label") }}{{
+                    form.accident_date(class="form-control", type="date") }}</div>
+                </div>
+                <div class="col-md-3">
+                  <div class="mb-3">{{ form.request_type.label(class="form-label") }}{{
+                    form.request_type(class="form-select") }}</div>
+                </div>
               </div>
 
               <div class="row">
-                <div class="col-md-6"><div class="mb-3">{{ form.accident_company_name.label(class="form-label") }}{{ form.accident_company_name(class="form-control") }}</div></div>
-                <div class="col-md-6"><div class="mb-3">{{ form.fap_vigencia_years.label(class="form-label") }}{{ form.fap_vigencia_years(class="form-control", placeholder="Ex.: 2021,2022") }}</div></div>
+                <div class="col-md-6">
+                  <div class="mb-3">{{ form.accident_company_name.label(class="form-label") }}{{
+                    form.accident_company_name(class="form-control") }}</div>
+                </div>
+                <div class="col-md-6">
+                  <div class="mb-3">{{ form.fap_vigencia_years.label(class="form-label") }}{{
+                    form.fap_vigencia_years(class="form-control", placeholder="Ex.: 2021,2022") }}</div>
+                </div>
               </div>
 
               <div class="row">
-                <div class="col-md-4"><div class="mb-3">{{ form.status.label(class="form-label") }}{{ form.status(class="form-select") }}</div></div>
-                <div class="col-md-8"><div class="mb-3">{{ form.justification.label(class="form-label") }}{{ form.justification(class="form-control", rows="2") }}</div></div>
+                <div class="col-md-4">
+                  <div class="mb-3">{{ form.status.label(class="form-label") }}{{ form.status(class="form-select") }}
+                  </div>
+                </div>
+                <div class="col-md-8">
+                  <div class="mb-3">{{ form.justification.label(class="form-label") }}{{
+                    form.justification(class="form-control", rows="2") }}</div>
+                </div>
               </div>
 
               <div class="row">
-                <div class="col-md-12"><div class="mb-3">{{ form.opinion.label(class="form-label") }}{{ form.opinion(class="form-control", rows="3") }}</div></div>
+                <div class="col-md-12">
+                  <div class="mb-3">{{ form.opinion.label(class="form-label") }}{{ form.opinion(class="form-control",
+                    rows="3") }}</div>
+                </div>
               </div>
 
               <div class="row">
-                <div class="col-md-12"><div class="mb-3">{{ form.accident_summary.label(class="form-label") }}{{ form.accident_summary(class="form-control", rows="3") }}</div></div>
+                <div class="col-md-12">
+                  <div class="mb-3">{{ form.accident_summary.label(class="form-label") }}{{
+                    form.accident_summary(class="form-control", rows="3") }}</div>
+                </div>
               </div>
 
               <div class="row">
-                <div class="col-md-12"><div class="mb-3">{{ form.notes.label(class="form-label") }}{{ form.notes(class="form-control", rows="4") }}</div></div>
+                <div class="col-md-12">
+                  <div class="mb-3">{{ form.notes.label(class="form-label") }}{{ form.notes(class="form-control",
+                    rows="4") }}</div>
+                </div>
               </div>
             </div>
             <div class="card-footer">
@@ -105,4 +178,26 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+{% if clients_data is defined %}
+<script>
+  (function () {
+    const CLIENTS = {{ clients_data | safe
+  }};
+  const clientSelect = document.getElementById('{{ form.client_id.id }}');
+  const employerName = document.getElementById('{{ form.employer_name.id }}');
+  const employerCnpj = document.getElementById('{{ form.employer_cnpj.id }}');
+  if (!clientSelect || !employerName || !employerCnpj) return;
+  clientSelect.addEventListener('change', function () {
+    const data = CLIENTS[this.value];
+    if (data) {
+      employerName.value = data.name;
+      employerCnpj.value = data.cnpj;
+    }
+  });
+}) ();
+</script>
+{% endif %}
 {% endblock %}
