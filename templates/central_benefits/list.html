@@ -54,6 +54,16 @@
     border-left: 4px solid var(--bs-primary);
   }
 
+  .stats-card .card-body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .stats-card .card-body > .d-flex {
+    width: 100%;
+  }
+
   .central-benefits-card {
     overflow: hidden;
   }
@@ -109,6 +119,64 @@
     height: 0.6rem;
     padding: 0.2rem;
   }
+
+  .stats-panel-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.35rem;
+    font-weight: 700;
+    color: var(--bs-emphasis-color);
+  }
+
+  .stats-panel-note {
+    border: 1px solid var(--bs-border-color-translucent);
+    border-left: 4px solid var(--bs-primary);
+    border-radius: 0.75rem;
+    background: var(--bs-tertiary-bg);
+    color: var(--bs-secondary-color);
+    font-size: 0.85rem;
+    padding: 0.55rem 0.8rem;
+    margin-bottom: 0.9rem;
+  }
+
+  .stats-panels-separator {
+    border-top: 1px dashed var(--bs-border-color);
+    margin: 0.25rem 0 1rem;
+  }
+
+  .stats-instance-split {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem;
+    margin-top: 0.55rem;
+    text-align: left;
+  }
+
+  .stats-instance-item {
+    border-radius: 0.7rem;
+    background: rgba(255, 255, 255, 0.55);
+    padding: 0.45rem 0.55rem;
+  }
+
+  .stats-instance-label {
+    display: block;
+    font-size: 0.72rem;
+    color: var(--bs-secondary-color);
+    margin-bottom: 0.1rem;
+  }
+
+  .stats-instance-value {
+    font-size: 1.05rem;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+
+  @media (max-width: 1399.98px) {
+    .stats-instance-split {
+      grid-template-columns: 1fr;
+    }
+  }
 </style>
 {% endblock %}
 
@@ -141,6 +209,14 @@
     {% endif %}
     {% endwith %}
 
+    <div class="stats-panel-header">
+      <i class="bi bi-bar-chart-line text-primary"></i>
+      Painel geral
+    </div>
+    <div class="stats-panel-note">
+      Este painel mostra o consolidado completo da base de benefícios, independentemente dos filtros da tabela.
+    </div>
+
     <div class="row row-cols-1 row-cols-md-2 row-cols-xl-5 g-3 mb-4">
       <div class="col">
         <div class="card stats-card h-100">
@@ -165,8 +241,17 @@
                 <i class="bi bi-check-circle text-success" style="font-size: 2rem;"></i>
               </div>
               <div>
-                <h3 class="mb-0 text-success">{{ approved_count }}</h3>
                 <p class="text-muted mb-0">Deferidos</p>
+                <div class="stats-instance-split">
+                  <div class="stats-instance-item">
+                    <span class="stats-instance-label">1ª instância</span>
+                    <div class="stats-instance-value text-success">{{ first_instance_stats.approved }}</div>
+                  </div>
+                  <div class="stats-instance-item">
+                    <span class="stats-instance-label">2ª instância</span>
+                    <div class="stats-instance-value text-success">{{ second_instance_stats.approved }}</div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -180,8 +265,17 @@
                 <i class="bi bi-x-circle text-danger" style="font-size: 2rem;"></i>
               </div>
               <div>
-                <h3 class="mb-0 text-danger">{{ rejected_count }}</h3>
                 <p class="text-muted mb-0">Indeferidos</p>
+                <div class="stats-instance-split">
+                  <div class="stats-instance-item">
+                    <span class="stats-instance-label">1ª instância</span>
+                    <div class="stats-instance-value text-danger">{{ first_instance_stats.rejected }}</div>
+                  </div>
+                  <div class="stats-instance-item">
+                    <span class="stats-instance-label">2ª instância</span>
+                    <div class="stats-instance-value text-danger">{{ second_instance_stats.rejected }}</div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -210,8 +304,132 @@
                 <i class="bi bi-clock text-secondary" style="font-size: 2rem;"></i>
               </div>
               <div>
-                <h3 class="mb-0 text-secondary">{{ pending_count }}</h3>
                 <p class="text-muted mb-0">Pendentes</p>
+                <div class="stats-instance-split">
+                  <div class="stats-instance-item">
+                    <span class="stats-instance-label">1ª instância</span>
+                    <div class="stats-instance-value text-secondary">{{ first_instance_stats.pending }}</div>
+                  </div>
+                  <div class="stats-instance-item">
+                    <span class="stats-instance-label">2ª instância</span>
+                    <div class="stats-instance-value text-secondary">{{ second_instance_stats.pending }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="stats-panels-separator"></div>
+
+    <div class="stats-panel-header">
+      <i class="bi bi-funnel-fill text-primary"></i>
+      Painel filtrado
+    </div>
+    <div class="stats-panel-note">
+      Este painel reflete somente os resultados atuais após busca, filtros e combinações aplicadas.
+    </div>
+
+    <div class="row row-cols-1 row-cols-md-2 row-cols-xl-5 g-3 mb-4" id="filteredStatsPanel">
+      <div class="col">
+        <div class="card stats-card h-100 border-primary-subtle">
+          <div class="card-body text-center">
+            <div class="d-flex align-items-center justify-content-center">
+              <div class="icon-wrapper me-3">
+                <i class="bi bi-funnel text-primary" style="font-size: 2rem;"></i>
+              </div>
+              <div>
+                <h3 id="filteredTotalCount" class="mb-0">{{ total_count|default(0) }}</h3>
+                <p class="text-muted mb-0">Benefícios</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card stats-card h-100 border-success-subtle" style="border-left-color: var(--bs-success);">
+          <div class="card-body text-center">
+            <div class="d-flex align-items-center justify-content-center">
+              <div class="icon-wrapper me-3">
+                <i class="bi bi-check-circle text-success" style="font-size: 2rem;"></i>
+              </div>
+              <div>
+                <p class="text-muted mb-0">Deferidos</p>
+                <div class="stats-instance-split">
+                  <div class="stats-instance-item">
+                    <span class="stats-instance-label">1ª instância</span>
+                    <div id="filteredApprovedFirstInstanceCount" class="stats-instance-value text-success">{{ first_instance_stats.approved }}</div>
+                  </div>
+                  <div class="stats-instance-item">
+                    <span class="stats-instance-label">2ª instância</span>
+                    <div id="filteredApprovedSecondInstanceCount" class="stats-instance-value text-success">{{ second_instance_stats.approved }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card stats-card h-100 border-danger-subtle" style="border-left-color: var(--bs-danger);">
+          <div class="card-body text-center">
+            <div class="d-flex align-items-center justify-content-center">
+              <div class="icon-wrapper me-3">
+                <i class="bi bi-x-circle text-danger" style="font-size: 2rem;"></i>
+              </div>
+              <div>
+                <p class="text-muted mb-0">Indeferidos</p>
+                <div class="stats-instance-split">
+                  <div class="stats-instance-item">
+                    <span class="stats-instance-label">1ª instância</span>
+                    <div id="filteredRejectedFirstInstanceCount" class="stats-instance-value text-danger">{{ first_instance_stats.rejected }}</div>
+                  </div>
+                  <div class="stats-instance-item">
+                    <span class="stats-instance-label">2ª instância</span>
+                    <div id="filteredRejectedSecondInstanceCount" class="stats-instance-value text-danger">{{ second_instance_stats.rejected }}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card stats-card h-100 border-warning-subtle" style="border-left-color: var(--bs-warning);">
+          <div class="card-body text-center">
+            <div class="d-flex align-items-center justify-content-center">
+              <div class="icon-wrapper me-3">
+                <i class="bi bi-hourglass-split text-warning" style="font-size: 2rem;"></i>
+              </div>
+              <div>
+                <h3 id="filteredInReviewCount" class="mb-0 text-warning">{{ in_review_count }}</h3>
+                <p class="text-muted mb-0">Em análise</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="col">
+        <div class="card stats-card h-100 border-secondary-subtle" style="border-left-color: var(--bs-secondary);">
+          <div class="card-body text-center">
+            <div class="d-flex align-items-center justify-content-center">
+              <div class="icon-wrapper me-3">
+                <i class="bi bi-clock text-secondary" style="font-size: 2rem;"></i>
+              </div>
+              <div>
+                <p class="text-muted mb-0">Pendentes</p>
+                <div class="stats-instance-split">
+                  <div class="stats-instance-item">
+                    <span class="stats-instance-label">1ª instância</span>
+                    <div id="filteredPendingFirstInstanceCount" class="stats-instance-value text-secondary">{{ first_instance_stats.pending }}</div>
+                  </div>
+                  <div class="stats-instance-item">
+                    <span class="stats-instance-label">2ª instância</span>
+                    <div id="filteredPendingSecondInstanceCount" class="stats-instance-value text-secondary">{{ second_instance_stats.pending }}</div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -468,6 +686,23 @@
     const apiListUrl = "{{ url_for('central_benefits.list_central_benefits_api') }}";
     const exportUrl = "{{ url_for('central_benefits.export_central_benefits_excel') }}";
       const filters = [];
+    function updateFilteredStats(stats) {
+      const safeStats = stats || {};
+      const safeFirst = safeStats.first_instance || {};
+      const safeSecond = safeStats.second_instance || {};
+      $('#filteredTotalCount').text(safeStats.total ?? 0);
+      $('#filteredApprovedCount').text(safeStats.approved ?? 0);
+      $('#filteredRejectedCount').text(safeStats.rejected ?? 0);
+      $('#filteredInReviewCount').text(safeStats.in_review ?? 0);
+      $('#filteredPendingCount').text(safeStats.pending ?? 0);
+      $('#filteredApprovedFirstInstanceCount').text(safeFirst.approved ?? 0);
+      $('#filteredApprovedSecondInstanceCount').text(safeSecond.approved ?? 0);
+      $('#filteredRejectedFirstInstanceCount').text(safeFirst.rejected ?? 0);
+      $('#filteredRejectedSecondInstanceCount').text(safeSecond.rejected ?? 0);
+      $('#filteredPendingFirstInstanceCount').text(safeFirst.pending ?? 0);
+      $('#filteredPendingSecondInstanceCount').text(safeSecond.pending ?? 0);
+    }
+
     const table = $('#centralBenefitsTable').DataTable({
       processing: true,
       serverSide: true,
@@ -484,6 +719,10 @@
           })));
           d.quick_client = ($('#quickClientFilter').val() || '').trim();
           d.quick_root = ($('#quickRootCnpjFilter').val() || '').trim();
+        },
+        dataSrc: function (json) {
+          updateFilteredStats(json.filtered_stats);
+          return json.data || [];
         },
       },
       "language": {

@@ -75,6 +75,10 @@ def _normalize_text(value):
     return (value or '').strip()
 
 
+def _normalize_status_key(value):
+    return _normalize_text(value).lower()
+
+
 def _extract_cnpj_root(cnpj):
     digits = ''.join(ch for ch in (cnpj or '') if ch.isdigit())
     return digits[:8] if len(digits) >= 8 else ''
@@ -141,6 +145,23 @@ def _base_benefits_query(law_firm_id):
         .outerjoin(Client, Benefit.client_id == Client.id)
         .filter(Benefit.law_firm_id == law_firm_id)
     )
+
+
+def _group_count_by_status(query, column):
+    status_expr = func.lower(func.coalesce(cast(column, String), ''))
+    rows = query.with_entities(status_expr.label('status_key'), func.count(Benefit.id)).group_by(status_expr).all()
+    return {_normalize_status_key(status): int(count or 0) for status, count in rows}
+
+
+def _build_instance_stats(total_count, status_counts):
+    approved = int(status_counts.get('deferido', 0) or 0)
+    rejected = int(status_counts.get('indeferido', 0) or 0)
+    pending = max(int(total_count) - approved - rejected, 0)
+    return {
+        'approved': approved,
+        'rejected': rejected,
+        'pending': pending,
+    }
 
 
 def _apply_benefits_filters(query, search_value='', custom_filters=None, quick_client='', quick_root=''):
@@ -291,6 +312,16 @@ def list_central_benefits():
     rejected_count = Benefit.query.filter_by(law_firm_id=law_firm_id, status='rejected').count()
     pending_count = max(total_count - approved_count - in_review_count - rejected_count, 0)
 
+    general_query = _base_benefits_query(law_firm_id)
+    first_instance_stats = _build_instance_stats(
+        total_count,
+        _group_count_by_status(general_query, Benefit.first_instance_status),
+    )
+    second_instance_stats = _build_instance_stats(
+        total_count,
+        _group_count_by_status(general_query, Benefit.second_instance_status),
+    )
+
     clients_data = (
         Client.query.with_entities(Client.cnpj, Client.name)
         .filter_by(law_firm_id=law_firm_id)
@@ -332,6 +363,8 @@ def list_central_benefits():
         in_review_count=in_review_count,
         rejected_count=rejected_count,
         pending_count=pending_count,
+        first_instance_stats=first_instance_stats,
+        second_instance_stats=second_instance_stats,
         cnpj_roots=cnpj_roots,
         client_options=client_options,
     )
@@ -356,6 +389,20 @@ def list_central_benefits_api():
 
     records_filtered = filtered_query.with_entities(func.count(Benefit.id)).scalar() or 0
 
+    status_counts = _group_count_by_status(filtered_query, Benefit.status)
+    approved_filtered = int(status_counts.get('approved', 0) or 0)
+    in_review_filtered = int(status_counts.get('in_review', 0) or 0)
+    rejected_filtered = int(status_counts.get('rejected', 0) or 0)
+    pending_filtered = max(int(records_filtered) - approved_filtered - in_review_filtered - rejected_filtered, 0)
+    filtered_first_instance_stats = _build_instance_stats(
+        records_filtered,
+        _group_count_by_status(filtered_query, Benefit.first_instance_status),
+    )
+    filtered_second_instance_stats = _build_instance_stats(
+        records_filtered,
+        _group_count_by_status(filtered_query, Benefit.second_instance_status),
+    )
+
     order_column = ORDER_COLUMN_MAP.get(payload['order_column'], Benefit.id)
     if payload['order_dir'] == 'asc':
         filtered_query = filtered_query.order_by(order_column.asc(), Benefit.id.asc())
@@ -376,6 +423,15 @@ def list_central_benefits_api():
             'draw': payload['draw'],
             'recordsTotal': records_total,
             'recordsFiltered': records_filtered,
+            'filtered_stats': {
+                'total': int(records_filtered),
+                'approved': approved_filtered,
+                'rejected': rejected_filtered,
+                'in_review': in_review_filtered,
+                'pending': pending_filtered,
+                'first_instance': filtered_first_instance_stats,
+                'second_instance': filtered_second_instance_stats,
+            },
             'data': data,
         }
     )
