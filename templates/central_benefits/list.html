@@ -3,15 +3,6 @@
 {% from "partials/page_hero.html" import page_hero %}
 
 {% set page_title = "Painel de beneficio" %}
-{% set approved_count = benefits|selectattr('status', 'equalto', 'approved')|list|length %}
-{% set in_review_count = benefits|selectattr('status', 'equalto', 'in_review')|list|length %}
-{% set rejected_count = benefits|selectattr('status', 'equalto', 'rejected')|list|length %}
-{% set pending_count = benefits
-| rejectattr('status', 'equalto', 'approved')
-| rejectattr('status', 'equalto', 'in_review')
-| rejectattr('status', 'equalto', 'rejected')
-| list
-| length %}
 
 {% macro status_badge(status) %}
 {% if status == 'approved' %}
@@ -150,7 +141,6 @@
     {% endif %}
     {% endwith %}
 
-    {% if benefits %}
     <div class="row row-cols-1 row-cols-md-2 row-cols-xl-5 g-3 mb-4">
       <div class="col">
         <div class="card stats-card h-100">
@@ -160,7 +150,7 @@
                 <i class="bi bi-list-ul text-primary" style="font-size: 2rem;"></i>
               </div>
               <div>
-                <h3 class="mb-0">{{ benefits|length }}</h3>
+                <h3 class="mb-0">{{ total_count|default(0) }}</h3>
                 <p class="text-muted mb-0">Benefícios</p>
               </div>
             </div>
@@ -242,8 +232,8 @@
                   documental.</small>
               </div>
               <div class="d-flex flex-wrap gap-2">
-                <span class="badge bg-info align-self-center px-3 py-2">{{ benefits|length }} registro{{ 's' if
-                  benefits|length != 1 else '' }}</span>
+                <span class="badge bg-info align-self-center px-3 py-2">{{ total_count|default(0) }} registro{{ 's' if
+                  total_count|default(0) != 1 else '' }}</span>
                 <button id="exportCentralBenefitsBtn" type="button" class="btn btn-outline-success btn-sm"
                   data-tooltip="Exportar resultado filtrado para Excel" data-bs-placement="top">
                   <i class="bi bi-file-earmark-excel me-1"></i>Exportar Excel
@@ -325,6 +315,9 @@
                     cliente</label>
                   <select id="quickClientFilter" class="form-select form-select-sm">
                     <option value="">Todos os clientes</option>
+                    {% for name in client_options or [] %}
+                    <option value="{{ name }}">{{ name }}</option>
+                    {% endfor %}
                   </select>
                 </div>
                 <div class="col-md-4">
@@ -366,167 +359,13 @@
                     <th style="width: 230px;" class="text-center">Ações</th>
                   </tr>
                 </thead>
-                <tbody>
-                  {% for benefit in benefits %}
-                  <tr class="central-benefit-row" data-id="{{ benefit.id or '' }}"
-                    data-benefit-number="{{ (benefit.benefit_number or '')|e }}"
-                    data-client-name="{{ (benefit.client.name if benefit.client else '')|e }}"
-                    data-insured-name="{{ (benefit.insured_name or '')|e }}"
-                    data-benefit-type="{{ (benefit.benefit_type or '')|e }}"
-                    data-insured-cpf="{{ (benefit.insured_cpf or '')|e }}"
-                    data-insured-nit="{{ (benefit.insured_nit or '')|e }}"
-                    data-insured-date-of-birth="{{ benefit.insured_date_of_birth.strftime('%d/%m/%Y') if benefit.insured_date_of_birth else '' }}"
-                    data-employer-cnpj="{{ (benefit.employer_cnpj or '')|e }}"
-                    data-employer-name="{{ (benefit.employer_name or '')|e }}"
-                    data-status="{{ (benefit.status or '')|e }}"
-                    data-first-instance-status="{{ (benefit.first_instance_status or '')|e }}"
-                    data-second-instance-status="{{ (benefit.second_instance_status or '')|e }}"
-                    data-first-instance-justification="{{ (benefit.first_instance_justification or '')|e }}"
-                    data-second-instance-justification="{{ (benefit.second_instance_justification or '')|e }}"
-                    data-first-instance-opinion="{{ (benefit.first_instance_opinion or '')|e }}"
-                    data-second-instance-opinion="{{ (benefit.second_instance_opinion or '')|e }}"
-                    data-fap-vigencia-years="{{ (benefit.fap_vigencia_years or '')|e }}"
-                    data-benefit-start-date="{{ benefit.benefit_start_date.strftime('%d/%m/%Y') if benefit.benefit_start_date else '' }}"
-                    data-benefit-end-date="{{ benefit.benefit_end_date.strftime('%d/%m/%Y') if benefit.benefit_end_date else '' }}"
-                    data-accident-date="{{ benefit.accident_date.strftime('%d/%m/%Y') if benefit.accident_date else '' }}"
-                    data-accident-company-name="{{ (benefit.accident_company_name or '')|e }}"
-                    data-cat-number="{{ (benefit.cat_number or '')|e }}"
-                    data-bo-number="{{ (benefit.bo_number or '')|e }}"
-                    data-request-type="{{ (benefit.request_type or '')|e }}"
-                    data-initial-monthly-benefit="{{ benefit.initial_monthly_benefit or '' }}"
-                    data-total-paid="{{ benefit.total_paid or '' }}"
-                    data-justification="{{ (benefit.justification or '')|e }}"
-                    data-opinion="{{ (benefit.opinion or '')|e }}" data-notes="{{ (benefit.notes or '')|e }}">
-                    <td><strong>{{ benefit.id }}</strong></td>
-                    <td>
-                      <div class="d-flex flex-column gap-1">
-                        <span class="benefit-number-pill text-primary fw-semibold">{{ benefit.benefit_number }}</span>
-                        {% if benefit.insured_nit %}
-                        <small class="font-monospace text-muted">NIT: {{ benefit.insured_nit }}</small>
-                        {% endif %}
-                        {% if benefit.benefit_type %}
-                        <span
-                          class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle align-self-start">{{
-                          benefit.benefit_type }}</span>
-                        {% endif %}
-                      </div>
-                    </td>
-                    <td>
-                      <div class="d-flex flex-column gap-1">
-                        <div class="fw-semibold">{{ benefit.insured_name or 'Não informado' }}</div>
-                        {% if benefit.insured_cpf %}
-                        <span class="font-monospace small">CPF: {{ benefit.insured_cpf }}</span>
-                        {% endif %}
-                        {% if benefit.insured_date_of_birth %}
-                        <small class="text-muted">Nasc.: {{ benefit.insured_date_of_birth.strftime('%d/%m/%Y')
-                          }}</small>
-                        {% endif %}
-                      </div>
-                    </td>
-                    <td>
-                      <div class="d-flex flex-column gap-1">
-                        {% if benefit.employer_cnpj %}
-                        <span class="font-monospace">{{ benefit.employer_cnpj }}</span>
-                        {% else %}
-                        <span class="text-muted">-</span>
-                        {% endif %}
-                        {% if benefit.employer_name %}
-                        <small class="text-muted">{{ benefit.employer_name }}</small>
-                        {% else %}
-                        <small class="text-muted">Não informado</small>
-                        {% endif %}
-                      </div>
-                    </td>
-                    <td class="text-center">
-                      {{ instance_status_badge(benefit.first_instance_status) }}
-                    </td>
-                    <td class="text-center">
-                      {{ instance_status_badge(benefit.second_instance_status) }}
-                    </td>
-                    <td>
-                      {% if benefit.fap_vigencia_years %}
-                      <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">{{
-                        benefit.fap_vigencia_years }}</span>
-                      {% else %}
-                      <span class="text-muted">-</span>
-                      {% endif %}
-                    </td>
-                    <td>
-                      <div class="small">
-                        <div><strong>DIB:</strong> {% if benefit.benefit_start_date %}{{
-                          benefit.benefit_start_date.strftime('%d/%m/%Y') }}{% else %}<span
-                            class="text-muted">-</span>{% endif %}</div>
-                        <div><strong>DCB:</strong> {% if benefit.benefit_end_date %}{{
-                          benefit.benefit_end_date.strftime('%d/%m/%Y') }}{% else %}<span class="text-muted">-</span>{%
-                          endif %}</div>
-                      </div>
-                    </td>
-                    <td class="text-center">
-                      <div class="d-flex flex-wrap justify-content-center gap-2">
-                        <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal"
-                          data-bs-target="#benefitDecisionModal" data-benefit-number="{{ benefit.benefit_number }}"
-                          data-benefit-insured="{{ (benefit.insured_name or '')|e }}"
-                          data-first-status="{{ (benefit.first_instance_status or '')|e }}"
-                          data-first-justification="{{ (benefit.first_instance_justification or '')|e|replace('\n', '&#10;') }}"
-                          data-first-opinion="{{ (benefit.first_instance_opinion or '')|e|replace('\n', '&#10;') }}"
-                          data-second-status="{{ (benefit.second_instance_status or '')|e }}"
-                          data-second-justification="{{ (benefit.second_instance_justification or '')|e|replace('\n', '&#10;') }}"
-                          data-second-opinion="{{ (benefit.second_instance_opinion or '')|e|replace('\n', '&#10;') }}"
-                          title="Ver resultado das instâncias" aria-label="Ver resultado das instâncias"
-                          data-tooltip="Abrir detalhes da 1ª e 2ª instância" data-bs-placement="top">
-                          <i class="bi bi-clipboard2-check"></i>
-                        </button>
-                        <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal"
-                          data-bs-target="#benefitDocumentsModal" data-benefit-number="{{ benefit.benefit_number }}"
-                          data-benefit-insured="{{ benefit.insured_name or '' }}" title="Pesquisar em documentos"
-                          aria-label="Pesquisar em documentos"
-                          data-tooltip="Pesquisar trechos deste benefício nos documentos" data-bs-placement="top">
-                          <i class="bi bi-file-earmark-text"></i>
-                        </button>
-                        <a href="{{ url_for('central_benefits.edit_central_benefit', benefit_id=benefit.id) }}"
-                          class="btn btn-warning btn-sm" title="Editar" aria-label="Editar"
-                          data-tooltip="Editar informações do benefício" data-bs-placement="top">
-                          <i class="bi bi-pencil"></i>
-                        </a>
-                        <button type="button" class="btn btn-outline-danger btn-sm" title="Excluir" aria-label="Excluir"
-                          data-delete-url="{{ url_for('central_benefits.delete_central_benefit', benefit_id=benefit.id) }}"
-                          onclick="confirmDelete(this.dataset.deleteUrl)" data-tooltip="Excluir este benefício"
-                          data-bs-placement="top">
-                          <i class="bi bi-trash"></i>
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                  {% endfor %}
-                </tbody>
+                <tbody></tbody>
               </table>
             </div>
           </div>
         </div>
       </div>
     </div>
-    {% else %}
-    <div class="row">
-      <div class="col-12">
-        <div class="card shadow-sm">
-          <div class="card-body text-center py-5">
-            <i class="bi bi-inbox text-muted" style="font-size: 4rem;"></i>
-            <h4 class="text-muted mt-3">Nenhum benefício centralizado cadastrado</h4>
-            <p class="text-muted mb-4">Cadastre o primeiro benefício para consolidar dados vindos de todas as fontes.
-            </p>
-            <div class="d-flex flex-wrap justify-content-center gap-2">
-              <a href="{{ url_for('central_benefits.new_central_benefit') }}" class="btn btn-success">
-                <i class="bi bi-plus-circle me-1"></i>Novo benefício
-              </a>
-              <a href="{{ url_for('central_benefits.fap_contestation_reports') }}" class="btn btn-outline-info">
-                <i class="bi bi-upload me-1"></i>Importar relatório FAP
-              </a>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    {% endif %}
   </div>
 
   <div class="modal fade" id="benefitDocumentsModal" tabindex="-1" aria-hidden="true">
@@ -621,14 +460,32 @@
 {% endblock %}
 
 {% block extra_js %}
-{% if benefits %}
 <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script>
   $(document).ready(function () {
+    const apiListUrl = "{{ url_for('central_benefits.list_central_benefits_api') }}";
+    const exportUrl = "{{ url_for('central_benefits.export_central_benefits_excel') }}";
+      const filters = [];
     const table = $('#centralBenefitsTable').DataTable({
+      processing: true,
+      serverSide: true,
+      searchDelay: 350,
+      deferRender: true,
+      ajax: {
+        url: apiListUrl,
+        type: 'GET',
+        data: function (d) {
+          d.custom_filters = JSON.stringify(filters.map((filter) => ({
+            field: filter.field,
+            operator: filter.operator,
+            value: filter.value,
+          })));
+          d.quick_client = ($('#quickClientFilter').val() || '').trim();
+          d.quick_root = ($('#quickRootCnpjFilter').val() || '').trim();
+        },
+      },
       "language": {
         "url": "//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json"
       },
@@ -636,38 +493,144 @@
       "order": [[0, "desc"]],
       "columnDefs": [
         { "orderable": false, "targets": 8 }
-      ]
-    });
+      ],
+      columns: [
+        {
+          data: 'id',
+          render: function (data) {
+            return `<strong>${data}</strong>`;
+          }
+        },
+        {
+          data: null,
+          render: function (_, __, row) {
+            const nit = row.insured_nit ? `<small class="font-monospace text-muted">NIT: ${escapeHtml(row.insured_nit)}</small>` : '';
+            const type = row.benefit_type ? `<span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle align-self-start">${escapeHtml(row.benefit_type)}</span>` : '';
+            return `
+              <div class="d-flex flex-column gap-1">
+                <span class="benefit-number-pill text-primary fw-semibold">${escapeHtml(row.benefit_number || '-')}</span>
+                ${nit}
+                ${type}
+              </div>`;
+          }
+        },
+        {
+          data: null,
+          render: function (_, __, row) {
+            const cpf = row.insured_cpf ? `<span class="font-monospace small">CPF: ${escapeHtml(row.insured_cpf)}</span>` : '';
+            const birth = row.insured_date_of_birth ? `<small class="text-muted">Nasc.: ${escapeHtml(row.insured_date_of_birth)}</small>` : '';
+            return `
+              <div class="d-flex flex-column gap-1">
+                <div class="fw-semibold">${escapeHtml(row.insured_name || 'Não informado')}</div>
+                ${cpf}
+                ${birth}
+              </div>`;
+          }
+        },
+        {
+          data: null,
+          render: function (_, __, row) {
+            const cnpj = row.employer_cnpj ? `<span class="font-monospace">${escapeHtml(row.employer_cnpj)}</span>` : '<span class="text-muted">-</span>';
+            const name = row.employer_name ? `<small class="text-muted">${escapeHtml(row.employer_name)}</small>` : '<small class="text-muted">Não informado</small>';
+            return `
+              <div class="d-flex flex-column gap-1">
+                ${cnpj}
+                ${name}
+              </div>`;
+          }
+        },
+        {
+          data: 'first_instance_status',
+          className: 'text-center',
+          render: function (data) {
+            return instanceStatusBadge(data);
+          }
+        },
+        {
+          data: 'second_instance_status',
+          className: 'text-center',
+          render: function (data) {
+            return instanceStatusBadge(data);
+          }
+        },
+        {
+          data: 'fap_vigencia_years',
+          render: function (data) {
+            if (!data) {
+              return '<span class="text-muted">-</span>';
+            }
+            return `<span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">${escapeHtml(data)}</span>`;
+          }
+        },
+        {
+          data: null,
+          render: function (_, __, row) {
+            const dib = row.benefit_start_date || '-';
+            const dcb = row.benefit_end_date || '-';
+            return `
+              <div class="small">
+                <div><strong>DIB:</strong> ${escapeHtml(dib)}</div>
+                <div><strong>DCB:</strong> ${escapeHtml(dcb)}</div>
+              </div>`;
+          }
+        },
+        {
+          data: null,
+          className: 'text-center',
+          render: function (_, __, row) {
+            const firstJustification = encodeMultilineAttr(row.first_instance_justification || '');
+            const firstOpinion = encodeMultilineAttr(row.first_instance_opinion || '');
+            const secondJustification = encodeMultilineAttr(row.second_instance_justification || '');
+            const secondOpinion = encodeMultilineAttr(row.second_instance_opinion || '');
 
-    const filters = [];
-    const fieldDatasetMap = {
-      id: 'id',
-      benefit_number: 'benefitNumber',
-      client_name: 'clientName',
-      insured_name: 'insuredName',
-      benefit_type: 'benefitType',
-      insured_cpf: 'insuredCpf',
-      insured_nit: 'insuredNit',
-      insured_date_of_birth: 'insuredDateOfBirth',
-      employer_cnpj: 'employerCnpj',
-      employer_name: 'employerName',
-      status: 'status',
-      first_instance_status: 'firstInstanceStatus',
-      second_instance_status: 'secondInstanceStatus',
-      fap_vigencia_years: 'fapVigenciaYears',
-      benefit_start_date: 'benefitStartDate',
-      benefit_end_date: 'benefitEndDate',
-      accident_date: 'accidentDate',
-      accident_company_name: 'accidentCompanyName',
-      cat_number: 'catNumber',
-      bo_number: 'boNumber',
-      request_type: 'requestType',
-      initial_monthly_benefit: 'initialMonthlyBenefit',
-      total_paid: 'totalPaid',
-      justification: 'justification',
-      opinion: 'opinion',
-      notes: 'notes',
-    };
+            return `
+              <div class="d-flex flex-wrap justify-content-center gap-2">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal"
+                  data-bs-target="#benefitDecisionModal" data-benefit-number="${escapeAttr(row.benefit_number || '')}"
+                  data-benefit-insured="${escapeAttr(row.insured_name || '')}"
+                  data-first-status="${escapeAttr(row.first_instance_status || '')}"
+                  data-first-justification="${firstJustification}"
+                  data-first-opinion="${firstOpinion}"
+                  data-second-status="${escapeAttr(row.second_instance_status || '')}"
+                  data-second-justification="${secondJustification}"
+                  data-second-opinion="${secondOpinion}"
+                  title="Ver resultado das instâncias" aria-label="Ver resultado das instâncias"
+                  data-tooltip="Abrir detalhes da 1ª e 2ª instância" data-bs-placement="top">
+                  <i class="bi bi-clipboard2-check"></i>
+                </button>
+                <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal"
+                  data-bs-target="#benefitDocumentsModal" data-benefit-number="${escapeAttr(row.benefit_number || '')}"
+                  data-benefit-insured="${escapeAttr(row.insured_name || '')}" title="Pesquisar em documentos"
+                  aria-label="Pesquisar em documentos"
+                  data-tooltip="Pesquisar trechos deste benefício nos documentos" data-bs-placement="top">
+                  <i class="bi bi-file-earmark-text"></i>
+                </button>
+                <a href="${escapeAttr(row.edit_url)}"
+                  class="btn btn-warning btn-sm" title="Editar" aria-label="Editar"
+                  data-tooltip="Editar informações do benefício" data-bs-placement="top">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <button type="button" class="btn btn-outline-danger btn-sm" title="Excluir" aria-label="Excluir"
+                  data-delete-url="${escapeAttr(row.delete_url)}"
+                  onclick="confirmDelete(this.dataset.deleteUrl)" data-tooltip="Excluir este benefício"
+                  data-bs-placement="top">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </div>`;
+          }
+        },
+      ],
+      drawCallback: function () {
+        document.querySelectorAll('[data-bs-toggle="tooltip"], [data-tooltip]').forEach((el) => {
+          if (el.hasAttribute('data-tooltip')) {
+            el.setAttribute('title', el.getAttribute('data-tooltip') || '');
+          }
+          if (!bootstrap.Tooltip.getInstance(el)) {
+            new bootstrap.Tooltip(el);
+          }
+        });
+      },
+    });
 
     const fieldLabelMap = {
       id: 'ID',
@@ -707,201 +670,80 @@
       not_empty: 'não está vazio',
     };
 
-    function stripHtml(value) {
-      return String(value || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
-    }
-
-    function normalize(value) {
-      return stripHtml(value)
-        .normalize('NFD')
-        .replace(/[\u0300-\u036f]/g, '')
-        .toLowerCase();
-    }
-
     function needsValue(operator) {
       return operator !== 'empty' && operator !== 'not_empty';
     }
 
-    function evaluateFilter(cellValue, filter) {
-      const normalizedCell = normalize(cellValue);
-      const normalizedFilterValue = normalize(filter.value || '');
-
-      if (filter.operator === 'empty') {
-        return normalizedCell === '' || normalizedCell === '-';
-      }
-      if (filter.operator === 'not_empty') {
-        return normalizedCell !== '' && normalizedCell !== '-';
-      }
-      if (filter.operator === 'equals') {
-        return normalizedCell === normalizedFilterValue;
-      }
-      if (filter.operator === 'starts_with') {
-        return normalizedCell.startsWith(normalizedFilterValue);
-      }
-      if (filter.operator === 'ends_with') {
-        return normalizedCell.endsWith(normalizedFilterValue);
-      }
-      return normalizedCell.includes(normalizedFilterValue);
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
     }
 
-    function normalizeCnpjRoot(value) {
-      return String(value || '').replace(/\D/g, '').slice(0, 8);
+    function escapeAttr(value) {
+      return escapeHtml(value).replace(/\n/g, ' ');
     }
 
-    function getRowFieldValue(dataIndex, field) {
-      const rowNode = table.row(dataIndex).node();
-      if (!rowNode) {
-        return '';
-      }
-      const datasetKey = fieldDatasetMap[field];
-      return datasetKey ? (rowNode.dataset[datasetKey] || '') : '';
+    function encodeMultilineAttr(value) {
+      return escapeHtml(value).replace(/\n/g, '&#10;');
     }
 
-    function refreshClientOptions() {
-      const select = $('#quickClientFilter');
-      const current = select.val();
-      const names = new Set();
-
-      table.rows().every(function () {
-        const rowNode = this.node();
-        if (!rowNode) {
-          return;
-        }
-        const clientName = (rowNode.dataset.clientName || '').trim();
-        if (clientName) {
-          names.add(clientName);
-        }
-      });
-
-      const options = ['<option value="">Todos os clientes</option>'];
-      Array.from(names).sort((a, b) => a.localeCompare(b, 'pt-BR')).forEach((name) => {
-        options.push(`<option value="${name}">${name}</option>`);
-      });
-      select.html(options.join(''));
-
-      if (current && names.has(current)) {
-        select.val(current);
-      }
-    }
-
-    function normalizeExportValue(value) {
-      const text = String(value || '').trim();
-      return text || '-';
-    }
-
-    function getGeneralStatusLabel(status) {
+    function instanceStatusBadge(status) {
       const s = String(status || '').trim().toLowerCase();
-      if (s === 'approved') return 'Deferido c/ exclusão';
-      if (s === 'rejected') return 'Indeferido';
-      if (s === 'in_review') return 'Em análise';
-      return s ? s : 'Pendente';
-    }
-
-    function getInstanceStatusLabel(status) {
-      const s = String(status || '').trim();
-      return s || '-';
+      if (s === 'deferido') {
+        return '<span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2">Deferido</span>';
+      }
+      if (s === 'indeferido') {
+        return '<span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2">Indeferido</span>';
+      }
+      return '<span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3 py-2">-</span>';
     }
 
     function exportFilteredBenefitsToExcel() {
-      if (!window.XLSX) {
-        alert('Biblioteca de exportação não carregada. Recarregue a página e tente novamente.');
-        return;
-      }
+      const order = table.order() || [[0, 'desc']];
+      const payload = {
+        search: table.search(),
+        order_column: order[0][0],
+        order_dir: order[0][1],
+        filters: filters.map((filter) => ({
+          field: filter.field,
+          operator: filter.operator,
+          value: filter.value,
+        })),
+        quick_client: ($('#quickClientFilter').val() || '').trim(),
+        quick_root: ($('#quickRootCnpjFilter').val() || '').trim(),
+      };
 
-      const headers = [
-        'ID',
-        'Número do benefício',
-        'Cliente',
-        'Segurado',
-        'Tipo benefício',
-        'CPF segurado',
-        'NIT segurado',
-        'Data nascimento segurado',
-        'CNPJ empregador',
-        'Nome empregador',
-        'Status geral',
-        'Status 1ª instância',
-        'Justificativa 1ª instância',
-        'Parecer 1ª instância',
-        'Status 2ª instância',
-        'Justificativa 2ª instância',
-        'Parecer 2ª instância',
-        'Vigência FAP',
-        'DIB',
-        'DCB',
-        'Data acidente',
-        'Empresa acidente',
-        'CAT',
-        'BO',
-        'Tipo solicitação',
-        'RMI',
-        'Total pago',
-        'Justificativa geral',
-        'Parecer geral',
-        'Observações',
-      ];
-
-      const filteredNodes = table.rows({ search: 'applied' }).nodes().toArray();
-      if (!filteredNodes.length) {
-        alert('Nenhum registro encontrado com os filtros atuais para exportação.');
-        return;
-      }
-
-      const rows = filteredNodes.map((row) => {
-        const d = row.dataset;
-        return [
-          normalizeExportValue(d.id),
-          normalizeExportValue(d.benefitNumber),
-          normalizeExportValue(d.clientName),
-          normalizeExportValue(d.insuredName),
-          normalizeExportValue(d.benefitType),
-          normalizeExportValue(d.insuredCpf),
-          normalizeExportValue(d.insuredNit),
-          normalizeExportValue(d.insuredDateOfBirth),
-          normalizeExportValue(d.employerCnpj),
-          normalizeExportValue(d.employerName),
-          getGeneralStatusLabel(d.status),
-          getInstanceStatusLabel(d.firstInstanceStatus),
-          normalizeExportValue(d.firstInstanceJustification),
-          normalizeExportValue(d.firstInstanceOpinion),
-          getInstanceStatusLabel(d.secondInstanceStatus),
-          normalizeExportValue(d.secondInstanceJustification),
-          normalizeExportValue(d.secondInstanceOpinion),
-          normalizeExportValue(d.fapVigenciaYears),
-          normalizeExportValue(d.benefitStartDate),
-          normalizeExportValue(d.benefitEndDate),
-          normalizeExportValue(d.accidentDate),
-          normalizeExportValue(d.accidentCompanyName),
-          normalizeExportValue(d.catNumber),
-          normalizeExportValue(d.boNumber),
-          normalizeExportValue(d.requestType),
-          normalizeExportValue(d.initialMonthlyBenefit),
-          normalizeExportValue(d.totalPaid),
-          normalizeExportValue(d.justification),
-          normalizeExportValue(d.opinion),
-          normalizeExportValue(d.notes),
-        ];
-      });
-
-      const sheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
-      sheet['!cols'] = headers.map((header) => ({
-        wch: Math.max(header.length + 2, 18),
-      }));
-
-      const workbook = XLSX.utils.book_new();
-      XLSX.utils.book_append_sheet(workbook, sheet, 'Beneficios');
-
-      const now = new Date();
-      const ts = [
-        now.getFullYear(),
-        String(now.getMonth() + 1).padStart(2, '0'),
-        String(now.getDate()).padStart(2, '0'),
-        '_',
-        String(now.getHours()).padStart(2, '0'),
-        String(now.getMinutes()).padStart(2, '0'),
-      ].join('');
-
-      XLSX.writeFile(workbook, `beneficios_centralizados_${ts}.xlsx`);
+      fetch(exportUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error('Falha ao gerar o arquivo de exportação.');
+          }
+          const disposition = response.headers.get('Content-Disposition') || '';
+          const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
+          const filename = filenameMatch ? filenameMatch[1] : 'beneficios_centralizados.xlsx';
+          return response.blob().then((blob) => ({ blob, filename }));
+        })
+        .then(({ blob, filename }) => {
+          const url = window.URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = filename;
+          document.body.appendChild(link);
+          link.click();
+          link.remove();
+          window.URL.revokeObjectURL(url);
+        })
+        .catch((error) => {
+          alert(error.message || 'Erro inesperado ao exportar.');
+        });
     }
 
     function renderActiveFilters() {
@@ -926,46 +768,13 @@
           if (idx >= 0) {
             filters.splice(idx, 1);
             renderActiveFilters();
-            table.draw();
+            table.ajax.reload();
           }
         });
 
         container.append(chip);
       });
     }
-
-    $.fn.dataTable.ext.search.push(function (settings, data, dataIndex) {
-      if (settings.nTable.id !== 'centralBenefitsTable') {
-        return true;
-      }
-
-      const rowNode = table.row(dataIndex).node();
-      const selectedClient = ($('#quickClientFilter').val() || '').trim();
-      const selectedRoot = normalizeCnpjRoot($('#quickRootCnpjFilter').val() || '');
-
-      if (selectedClient) {
-        const rowClient = rowNode ? (rowNode.dataset.clientName || '') : '';
-        if (normalize(rowClient) !== normalize(selectedClient)) {
-          return false;
-        }
-      }
-
-      if (selectedRoot) {
-        const rowCnpj = rowNode ? (rowNode.dataset.employerCnpj || '') : '';
-        if (normalizeCnpjRoot(rowCnpj) !== selectedRoot) {
-          return false;
-        }
-      }
-
-      if (!filters.length) {
-        return true;
-      }
-
-      return filters.every((filter) => {
-        const cellValue = getRowFieldValue(dataIndex, filter.field);
-        return evaluateFilter(cellValue, filter);
-      });
-    });
 
     $('#centralFilterOperator').on('change', function () {
       const op = $(this).val();
@@ -999,7 +808,7 @@
 
       $('#centralFilterValue').val('');
       renderActiveFilters();
-      table.draw();
+      table.ajax.reload();
     });
 
     $('#clearCentralFiltersBtn').on('click', function () {
@@ -1007,18 +816,17 @@
       $('#quickClientFilter').val('');
       $('#quickRootCnpjFilter').val('');
       renderActiveFilters();
-      table.draw();
+      table.search('');
+      table.ajax.reload();
     });
 
     $('#quickClientFilter').on('change', function () {
-      table.draw();
+      table.ajax.reload();
     });
 
     $('#quickRootCnpjFilter').on('change', function () {
-      table.draw();
+      table.ajax.reload();
     });
-
-    refreshClientOptions();
 
     renderActiveFilters();
 
@@ -1026,12 +834,7 @@
       exportFilteredBenefitsToExcel();
     });
 
-    document.querySelectorAll('[data-bs-toggle="tooltip"], [data-tooltip]').forEach((el) => {
-      if (el.hasAttribute('data-tooltip')) {
-        el.setAttribute('title', el.getAttribute('data-tooltip') || '');
-      }
-      new bootstrap.Tooltip(el);
-    });
+    $('#centralFilterOperator').trigger('change');
   });
 
   function confirmDelete(url) {
@@ -1284,5 +1087,4 @@
     });
   })();
 </script>
-{% endif %}
 {% endblock %}
