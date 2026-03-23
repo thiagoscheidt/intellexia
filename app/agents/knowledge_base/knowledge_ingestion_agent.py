@@ -24,7 +24,9 @@ QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
 MEILISEARCH_HOST = os.getenv("MEILISEARCH_HOST", "http://localhost:7700")
 MEILISEARCH_API_KEY = os.getenv("MEILISEARCH_API_KEY")
-MAX_CHARS_PER_CHUNK = int(os.getenv("MAX_CHARS_PER_CHUNK", "1500"))
+MAX_CHARS_PER_CHUNK = int(os.getenv("MAX_CHARS_PER_CHUNK", "3000"))
+QDRANT_UPSERT_BATCH_SIZE = int(os.getenv("QDRANT_UPSERT_BATCH_SIZE", "64"))
+MEILISEARCH_ADD_BATCH_SIZE = int(os.getenv("MEILISEARCH_ADD_BATCH_SIZE", "500"))
 
 
 class KnowledgeIngestionAgent:
@@ -181,8 +183,18 @@ class KnowledgeIngestionAgent:
             self._wait_for_meilisearch_task(delete_task)
 
             if meili_documents:
-                add_task = self.meilisearch.index(self.collection).add_documents(meili_documents)
-                self._wait_for_meilisearch_task(add_task)
+                meili_batches = self._chunk_list(meili_documents, MEILISEARCH_ADD_BATCH_SIZE)
+                print(
+                    f"Atualizando Meilisearch com {len(meili_documents)} documento(s) em "
+                    f"{len(meili_batches)} lote(s) (batch_size={MEILISEARCH_ADD_BATCH_SIZE})"
+                )
+                for batch_idx, batch_docs in enumerate(meili_batches, start=1):
+                    print(
+                        f"Add Meilisearch lote {batch_idx}/{len(meili_batches)} "
+                        f"com {len(batch_docs)} documento(s)"
+                    )
+                    add_task = self.meilisearch.index(self.collection).add_documents(batch_docs)
+                    self._wait_for_meilisearch_task(add_task)
         except Exception as error:
             if not self._is_missing_backend_resource_error(error):
                 raise
@@ -201,6 +213,12 @@ class KnowledgeIngestionAgent:
         text_splitter = RecursiveCharacterTextSplitter(chunk_size=chunk_size, chunk_overlap=20)
         texts = text_splitter.split_text(text)
         return [{"text": chunk, "metadata": {}} for chunk in texts]
+
+    @staticmethod
+    def _chunk_list(items: list, size: int) -> list[list]:
+        if size <= 0:
+            size = 1
+        return [items[idx : idx + size] for idx in range(0, len(items), size)]
 
     def ingest_document(
         self,
@@ -269,8 +287,31 @@ class KnowledgeIngestionAgent:
                 }
             )
 
-        self.qdrant.upsert(collection_name=self.collection, points=points, wait=True)
-        self.meilisearch.index(self.collection).add_documents(meilisearch_documents)
+        qdrant_batches = self._chunk_list(points, QDRANT_UPSERT_BATCH_SIZE)
+        print(
+            f"Enviando {len(points)} ponto(s) ao Qdrant em {len(qdrant_batches)} lote(s) "
+            f"(batch_size={QDRANT_UPSERT_BATCH_SIZE})"
+        )
+        for batch_idx, batch_points in enumerate(qdrant_batches, start=1):
+            print(
+                f"Upsert Qdrant lote {batch_idx}/{len(qdrant_batches)} "
+                f"com {len(batch_points)} ponto(s)"
+            )
+            self.qdrant.upsert(collection_name=self.collection, points=batch_points, wait=True)
+
+        meili_batches = self._chunk_list(meilisearch_documents, MEILISEARCH_ADD_BATCH_SIZE)
+        print(
+            f"Enviando {len(meilisearch_documents)} documento(s) ao Meilisearch em "
+            f"{len(meili_batches)} lote(s) (batch_size={MEILISEARCH_ADD_BATCH_SIZE})"
+        )
+        for batch_idx, batch_docs in enumerate(meili_batches, start=1):
+            print(
+                f"Add Meilisearch lote {batch_idx}/{len(meili_batches)} "
+                f"com {len(batch_docs)} documento(s)"
+            )
+            add_task = self.meilisearch.index(self.collection).add_documents(batch_docs)
+            self._wait_for_meilisearch_task(add_task)
+
         return point_ids
 
     def process_file(
@@ -303,12 +344,11 @@ class KnowledgeIngestionAgent:
                     page_no = chunk_data.get("page") if isinstance(chunk_data, dict) else None
                     section = chunk_data.get("section") if isinstance(chunk_data, dict) else None
 
-                    page_chunks = self._chunk_text(chunk_text)
-                    for page_chunk in page_chunks:
-                        page_chunk["page"] = page_no
-                        if section:
-                            page_chunk["section"] = section
-                        chunks_with_pages.append(page_chunk)
+                    # 1 chunk por página — não re-divide o texto que o Docling já segmentou
+                    page_chunk: dict = {"text": chunk_text, "page": page_no, "metadata": {}}
+                    if section:
+                        page_chunk["section"] = section
+                    chunks_with_pages.append(page_chunk)
 
                 print(f"✓ Total: {len(chunks_with_pages)} chunks COM informação de página")
 

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import re
 import unicodedata
 from dataclasses import dataclass, field
@@ -12,6 +13,7 @@ from docling.document_converter import DocumentConverter, PdfFormatOption
 from docling.datamodel.pipeline_options import PdfPipelineOptions
 from docling.datamodel.base_models import InputFormat
 from langchain_community.vectorstores import FAISS
+from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
@@ -24,7 +26,7 @@ class PageContent:
 
 
 DEFAULT_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
-DEFAULT_CHUNK_SIZE = 1500
+DEFAULT_CHUNK_SIZE = int(os.getenv("MAX_CHARS_PER_CHUNK", "3000"))
 DEFAULT_CHUNK_OVERLAP = 100
 
 
@@ -599,13 +601,23 @@ class DocumentProcessorService:
         if text is None:
             result = self.process_document(file_path)
             documents_with_meta = []
-            splitter = RecursiveCharacterTextSplitter(
-                chunk_size=self.chunk_size,
-                chunk_overlap=self.chunk_overlap,
-            )
-            for chunk in result.chunks_with_pages:
-                docs = splitter.create_documents([chunk["text"]], metadatas=[{"page": chunk.get("page")}])
-                documents_with_meta.extend(docs)
+            if result.chunks_with_pages:
+                # 1 documento por página — sem re-dividir
+                for chunk in result.chunks_with_pages:
+                    if chunk.get("text", "").strip():
+                        documents_with_meta.append(
+                            Document(
+                                page_content=chunk["text"],
+                                metadata={"page": chunk.get("page")},
+                            )
+                        )
+            if not documents_with_meta:
+                # Fallback: Docling não gerou chunks por página
+                splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=self.chunk_size,
+                    chunk_overlap=self.chunk_overlap,
+                )
+                documents_with_meta = splitter.create_documents([result.full_text])
         else:
             splitter = RecursiveCharacterTextSplitter(
                 chunk_size=self.chunk_size,

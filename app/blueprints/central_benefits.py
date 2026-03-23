@@ -2,6 +2,7 @@ from datetime import datetime
 from functools import wraps
 from io import BytesIO
 from decimal import Decimal
+import hashlib
 import json
 import os
 
@@ -11,7 +12,7 @@ from openpyxl.utils import get_column_letter
 from sqlalchemy import String, and_, cast, func, or_
 from werkzeug.utils import secure_filename
 
-from app.models import Benefit, Client, FapContestationJudgmentReport, db
+from app.models import Benefit, Client, FapContestationJudgmentReport, KnowledgeBase, db
 
 
 central_benefits_bp = Blueprint('central_benefits', __name__, url_prefix='/central-benefits')
@@ -87,6 +88,51 @@ def _extract_cnpj_root(cnpj):
 def _extract_cnpj_branch(cnpj):
     digits = ''.join(ch for ch in (cnpj or '') if ch.isdigit())
     return digits[8:12] if len(digits) >= 12 else ''
+
+
+def _compute_file_hash_from_path(file_path):
+    hasher = hashlib.sha256()
+
+    with open(file_path, 'rb') as stream:
+        while True:
+            chunk = stream.read(8192)
+            if not chunk:
+                break
+            hasher.update(chunk)
+
+    return hasher.hexdigest()
+
+
+def _ensure_fap_report_in_knowledge_base(law_firm_id, user_id, filename, file_path, file_size, file_type):
+    file_hash = _compute_file_hash_from_path(file_path)
+
+    duplicate = KnowledgeBase.query.filter_by(
+        law_firm_id=law_firm_id,
+        file_hash=file_hash,
+        is_active=True,
+    ).first()
+
+    if duplicate:
+        return duplicate
+
+    knowledge_file = KnowledgeBase(
+        user_id=user_id,
+        law_firm_id=law_firm_id,
+        original_filename=filename,
+        file_path=file_path,
+        file_size=file_size,
+        file_type=file_type,
+        file_hash=file_hash,
+        description='Relatório de julgamento de contestação do FAP importado pelo painel de benefícios.',
+        category='Relatórios FAP',
+        tags='fap,contestacao,julgamento',
+        lawsuit_number=None,
+        processing_status='pending',
+        is_active=True,
+    )
+    db.session.add(knowledge_file)
+    db.session.flush()
+    return knowledge_file
 
 
 def _apply_text_operator(column, operator, value):
@@ -586,8 +632,21 @@ def fap_contestation_reports():
                 )
 
                 db.session.add(report)
+                db.session.flush()
+                knowledge_file = _ensure_fap_report_in_knowledge_base(
+                    law_firm_id=law_firm_id,
+                    user_id=session.get('user_id'),
+                    filename=filename,
+                    file_path=file_path,
+                    file_size=file_size,
+                    file_type=file_extension.upper(),
+                )
+                report.knowledge_base_id = knowledge_file.id
                 db.session.commit()
-                flash('Relatório enviado com sucesso! Ele ficará pendente até processamento via script.', 'success')
+                flash(
+                    'Relatório enviado com sucesso! Ele ficará pendente até processamento via script e também foi adicionado à base de conhecimento sem vínculo com processo.',
+                    'success'
+                )
                 return redirect(url_for('central_benefits.fap_contestation_reports'))
             except Exception as e:
                 db.session.rollback()

@@ -10,6 +10,7 @@ from rich import print
 from app.models import (
     Client,
     db,
+    FapContestationJudgmentReport,
     JudicialDocument,
     JudicialDefendant,
     JudicialDocumentType,
@@ -72,6 +73,14 @@ class KnowledgeBaseProcessingService:
             return normalized_digits
 
         return text_value[:25]
+
+    @staticmethod
+    def _is_fap_benefits_report(item: KnowledgeBase, extraction_payload: dict | None = None) -> bool:
+        linked_report = FapContestationJudgmentReport.query.filter_by(
+            knowledge_base_id=item.id,
+            law_firm_id=item.law_firm_id,
+        ).first()
+        return linked_report is not None
 
     def _find_process_by_number(self, law_firm_id: int, process_number: str) -> JudicialProcess | None:
         if not process_number:
@@ -716,6 +725,7 @@ class KnowledgeBaseProcessingService:
                 document_processor = DocumentProcessorService()
                 ingestion_agent = KnowledgeIngestionAgent()
                 document_data = document_processor.process_document(file_path=str(file_path))
+
                 if isinstance(document_data, dict):
                     document_full_text = str(document_data.get("full_text", "") or "")
                 else:
@@ -737,7 +747,7 @@ class KnowledgeBaseProcessingService:
                     category=item.category,
                     description=item.description,
                     tags=item.tags,
-                    lawsuit_number=item.lawsuit_number,
+                    lawsuit_number=None if self._is_fap_benefits_report(item) else item.lawsuit_number,
                     file_id=item.id,
                 )
 
@@ -749,6 +759,7 @@ class KnowledgeBaseProcessingService:
                     raise RuntimeError("Extração estruturada não retornou conteúdo.")
 
                 if isinstance(extraction_payload, dict):
+                    is_fap_report = self._is_fap_benefits_report(item, extraction_payload)
                     extracted_process_number = str(extraction_payload.get("process_number", "") or "").strip()
                     extracted_category = str(extraction_payload.get("suggested_category", "") or "").strip()
                     extracted_doc_type_name = str(
@@ -758,7 +769,9 @@ class KnowledgeBaseProcessingService:
                         extraction_payload.get("suggested_document_type_key", "") or ""
                     ).strip()
 
-                    if extracted_process_number and (not item.lawsuit_number or item.lawsuit_number.strip() == ""):
+                    if is_fap_report:
+                        item.lawsuit_number = None
+                    elif extracted_process_number and (not item.lawsuit_number or item.lawsuit_number.strip() == ""):
                         item.lawsuit_number = extracted_process_number
 
                     if extracted_category and (not item.category or item.category.strip() == ""):
@@ -769,9 +782,10 @@ class KnowledgeBaseProcessingService:
                     ):
                         item.tags = extracted_doc_type_name or extracted_doc_type_key
 
-                    self._link_knowledge_to_process_if_needed(item, extraction_payload)
+                    if not is_fap_report:
+                        self._link_knowledge_to_process_if_needed(item, extraction_payload)
 
-                    if extracted_process_number:
+                    if not is_fap_report and extracted_process_number:
                         linked_doc = JudicialDocument.query.filter_by(knowledge_base_id=item.id).first()
                         if linked_doc:
                             linked_process = JudicialProcess.query.filter_by(id=linked_doc.process_id).first()
@@ -804,7 +818,7 @@ class KnowledgeBaseProcessingService:
                                             "Número temporário mantido."
                                         )
 
-                    if self._is_initial_petition_document(extraction_payload):
+                    if not is_fap_report and self._is_initial_petition_document(extraction_payload):
                         target_process = self._resolve_target_process(item, extraction_payload)
                         if target_process:
                             benefits_payload = extractor_agent.extract_benefits_from_petition(
@@ -838,6 +852,10 @@ class KnowledgeBaseProcessingService:
                                 )
 
                 summary_payload = extraction_payload if isinstance(extraction_payload, dict) else {}
+                if self._is_fap_benefits_report(item, summary_payload):
+                    summary_payload = dict(summary_payload)
+                    summary_payload.pop("process_number", None)
+                    item.lawsuit_number = None
 
                 existing_summary = KnowledgeSummary.query.filter_by(knowledge_base_id=item.id).first()
                 if existing_summary:

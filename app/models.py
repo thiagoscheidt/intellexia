@@ -1262,6 +1262,7 @@ class FapContestationJudgmentReport(db.Model):
     file_path = db.Column(db.String(500), nullable=False)
     file_size = db.Column(db.Integer)
     file_type = db.Column(db.String(50))
+    knowledge_base_id = db.Column(db.Integer, db.ForeignKey('knowledge_base.id'), index=True)
 
     status = db.Column(db.String(20), default='pending', index=True)  # pending, processing, completed, error
     error_message = db.Column(db.Text)
@@ -1273,6 +1274,7 @@ class FapContestationJudgmentReport(db.Model):
 
     user = db.relationship('User')
     law_firm = db.relationship('LawFirm')
+    knowledge_base = db.relationship('KnowledgeBase')
 
     def __repr__(self):
         return f'<FapContestationJudgmentReport {self.original_filename}>'

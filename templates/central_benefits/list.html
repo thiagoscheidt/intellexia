@@ -60,7 +60,7 @@
     justify-content: center;
   }
 
-  .stats-card .card-body > .d-flex {
+  .stats-card .card-body>.d-flex {
     width: 100%;
   }
 
@@ -82,8 +82,7 @@
   }
 
   .benefit-doc-excerpt {
-    max-height: 150px;
-    overflow-y: auto;
+    word-break: break-word;
   }
 
   .dataTables_wrapper .dataTables_filter input,
@@ -360,11 +359,13 @@
                 <div class="stats-instance-split">
                   <div class="stats-instance-item">
                     <span class="stats-instance-label">1ª instância</span>
-                    <div id="filteredApprovedFirstInstanceCount" class="stats-instance-value text-success">{{ first_instance_stats.approved }}</div>
+                    <div id="filteredApprovedFirstInstanceCount" class="stats-instance-value text-success">{{
+                      first_instance_stats.approved }}</div>
                   </div>
                   <div class="stats-instance-item">
                     <span class="stats-instance-label">2ª instância</span>
-                    <div id="filteredApprovedSecondInstanceCount" class="stats-instance-value text-success">{{ second_instance_stats.approved }}</div>
+                    <div id="filteredApprovedSecondInstanceCount" class="stats-instance-value text-success">{{
+                      second_instance_stats.approved }}</div>
                   </div>
                 </div>
               </div>
@@ -384,11 +385,13 @@
                 <div class="stats-instance-split">
                   <div class="stats-instance-item">
                     <span class="stats-instance-label">1ª instância</span>
-                    <div id="filteredRejectedFirstInstanceCount" class="stats-instance-value text-danger">{{ first_instance_stats.rejected }}</div>
+                    <div id="filteredRejectedFirstInstanceCount" class="stats-instance-value text-danger">{{
+                      first_instance_stats.rejected }}</div>
                   </div>
                   <div class="stats-instance-item">
                     <span class="stats-instance-label">2ª instância</span>
-                    <div id="filteredRejectedSecondInstanceCount" class="stats-instance-value text-danger">{{ second_instance_stats.rejected }}</div>
+                    <div id="filteredRejectedSecondInstanceCount" class="stats-instance-value text-danger">{{
+                      second_instance_stats.rejected }}</div>
                   </div>
                 </div>
               </div>
@@ -423,11 +426,13 @@
                 <div class="stats-instance-split">
                   <div class="stats-instance-item">
                     <span class="stats-instance-label">1ª instância</span>
-                    <div id="filteredPendingFirstInstanceCount" class="stats-instance-value text-secondary">{{ first_instance_stats.pending }}</div>
+                    <div id="filteredPendingFirstInstanceCount" class="stats-instance-value text-secondary">{{
+                      first_instance_stats.pending }}</div>
                   </div>
                   <div class="stats-instance-item">
                     <span class="stats-instance-label">2ª instância</span>
-                    <div id="filteredPendingSecondInstanceCount" class="stats-instance-value text-secondary">{{ second_instance_stats.pending }}</div>
+                    <div id="filteredPendingSecondInstanceCount" class="stats-instance-value text-secondary">{{
+                      second_instance_stats.pending }}</div>
                   </div>
                 </div>
               </div>
@@ -685,7 +690,7 @@
   $(document).ready(function () {
     const apiListUrl = "{{ url_for('central_benefits.list_central_benefits_api') }}";
     const exportUrl = "{{ url_for('central_benefits.export_central_benefits_excel') }}";
-      const filters = [];
+    const filters = [];
     function updateFilteredStats(stats) {
       const safeStats = stats || {};
       const safeFirst = safeStats.first_instance || {};
