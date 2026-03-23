@@ -357,7 +357,8 @@
                     <th style="width: 180px;">CNPJ Empregador</th>
                     <th style="width: 170px;" class="text-center">Status 1ª instância</th>
                     <th style="width: 170px;" class="text-center">Status 2ª instância</th>
-                    <th style="width: 150px;">Vigência</th>
+                    <th style="width: 150px;">Vigência FAP</th>
+                    <th style="width: 180px;">DIB / DCB</th>
                     <th style="width: 230px;" class="text-center">Ações</th>
                   </tr>
                 </thead>
@@ -437,6 +438,14 @@
                     </td>
                     <td class="text-center">
                       {{ instance_status_badge(benefit.second_instance_status) }}
+                    </td>
+                    <td>
+                      {% if benefit.fap_vigencia_years %}
+                      <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">{{
+                        benefit.fap_vigencia_years }}</span>
+                      {% else %}
+                      <span class="text-muted">-</span>
+                      {% endif %}
                     </td>
                     <td>
                       <div class="small">
@@ -621,7 +630,7 @@
       "pageLength": 25,
       "order": [[0, "desc"]],
       "columnDefs": [
-        { "orderable": false, "targets": 7 }
+        { "orderable": false, "targets": 8 }
       ]
     });
 
