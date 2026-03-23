@@ -1195,16 +1195,24 @@
         excerpt = highlightTerms(excerpt, highlightWords);
       }
 
+      const pageToggleBtn = (hit.file_id != null && hit.page != null) ? `
+      <button type="button" class="btn btn-sm btn-outline-secondary toggle-page-view" title="Ver página do PDF" data-page-loaded="0">
+        <i class="bi bi-file-image"></i>
+      </button>` : '';
+
       const actions = detailUrl ? `
       <div class="d-flex gap-2 flex-shrink-0">
+        ${pageToggleBtn}
         ${viewUrl ? `<a href="${viewUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-secondary" title="Visualizar"><i class="bi bi-eye"></i></a>` : ''}
         <a href="${detailUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary" title="Ver detalhes">
           <i class="bi bi-box-arrow-up-right me-1"></i>Detalhes
         </a>
-      </div>` : '';
+      </div>` : pageToggleBtn ? `<div class="d-flex gap-2 flex-shrink-0">${pageToggleBtn}</div>` : '';
+
+      const dataQ = (highlightWords && highlightWords.length) ? highlightWords.map(encodeURIComponent).join('&q=') : '';
 
       return `
-      <div class="card border shadow-sm">
+      <div class="card border shadow-sm" data-file-id="${hit.file_id ?? ''}" data-page="${hit.page ?? ''}" data-q="${highlightWords && highlightWords.length ? highlightWords.join('\x1f') : ''}">
         <div class="card-header bg-light py-2 px-3 d-flex align-items-start justify-content-between gap-2 flex-wrap">
           <div class="d-flex align-items-center gap-2 flex-wrap">
             <i class="bi bi-file-earmark-text text-primary"></i>
@@ -1218,7 +1226,8 @@
           </div>
         </div>
         <div class="card-body py-2 px-3">
-          <div class="benefit-doc-excerpt small lh-lg text-body-secondary">${excerpt}</div>
+          <div class="doc-excerpt-view benefit-doc-excerpt small lh-lg text-body-secondary">${excerpt}</div>
+          <div class="doc-page-view d-none text-center py-2"></div>
         </div>
       </div>`;
     }
@@ -1262,6 +1271,39 @@
           errorMsg.textContent = 'Falha na requisição: ' + err.message;
           setState('error');
         });
+    });
+
+    listWrap.addEventListener('click', function (e) {
+      const btn = e.target.closest('.toggle-page-view');
+      if (!btn) return;
+      const card = btn.closest('.card');
+      const fileId = card.dataset.fileId;
+      const page = card.dataset.page;
+      const excerptView = card.querySelector('.doc-excerpt-view');
+      const pageView = card.querySelector('.doc-page-view');
+      const showingPage = !pageView.classList.contains('d-none');
+      if (showingPage) {
+        pageView.classList.add('d-none');
+        excerptView.classList.remove('d-none');
+        btn.title = 'Ver página do PDF';
+        btn.innerHTML = '<i class="bi bi-file-image"></i>';
+      } else {
+        excerptView.classList.add('d-none');
+        pageView.classList.remove('d-none');
+        btn.title = 'Ver trecho';
+        btn.innerHTML = '<i class="bi bi-card-text"></i>';
+        if (!btn.dataset.pageLoaded || btn.dataset.pageLoaded === '0') {
+          btn.dataset.pageLoaded = '1';
+          pageView.innerHTML = '<div class="py-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+          const img = new Image();
+          img.className = 'img-fluid rounded border shadow-sm';
+          img.alt = 'Página ' + page;
+          img.onload = function () { pageView.innerHTML = ''; pageView.appendChild(img); };
+          img.onerror = function () { pageView.innerHTML = '<span class="text-danger small">Erro ao carregar a página.</span>'; };
+          const qTerms = (card.dataset.q || '').split('\x1f').filter(Boolean).map(encodeURIComponent).join('&q=');
+          img.src = kbBase + '/' + fileId + '/page-image/' + page + (qTerms ? '?q=' + qTerms : '');
+        }
+      }
     });
 
     modal.addEventListener('hidden.bs.modal', function () {

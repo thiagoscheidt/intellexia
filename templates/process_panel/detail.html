@@ -1,14 +1,51 @@
 {% extends "layout/base.html" %}
 {% block extra_css %}
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" crossorigin="anonymous" />
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+  crossorigin="anonymous" />
 <style>
-  .benefit-doc-excerpt h1,.benefit-doc-excerpt h2,.benefit-doc-excerpt h3 { font-size: .9rem; font-weight: 600; margin-top: .5rem; }
-  .benefit-doc-excerpt p  { margin-bottom: .35rem; }
-  .benefit-doc-excerpt ul,.benefit-doc-excerpt ol { padding-left: 1.25rem; margin-bottom: .35rem; }
-  .benefit-doc-excerpt code { font-size: .8rem; background: var(--bs-secondary-bg); padding: .1em .3em; border-radius: 3px; }
-  .benefit-doc-excerpt pre  { background: var(--bs-secondary-bg); padding: .5rem; border-radius: 6px; font-size: .8rem; overflow-x: auto; }
-  .benefit-doc-excerpt blockquote { border-left: 3px solid var(--bs-border-color); padding-left: .75rem; color: var(--bs-secondary-color); margin: .25rem 0; }
-  .benefit-doc-excerpt strong { color: var(--bs-emphasis-color); }
+  .benefit-doc-excerpt h1,
+  .benefit-doc-excerpt h2,
+  .benefit-doc-excerpt h3 {
+    font-size: .9rem;
+    font-weight: 600;
+    margin-top: .5rem;
+  }
+
+  .benefit-doc-excerpt p {
+    margin-bottom: .35rem;
+  }
+
+  .benefit-doc-excerpt ul,
+  .benefit-doc-excerpt ol {
+    padding-left: 1.25rem;
+    margin-bottom: .35rem;
+  }
+
+  .benefit-doc-excerpt code {
+    font-size: .8rem;
+    background: var(--bs-secondary-bg);
+    padding: .1em .3em;
+    border-radius: 3px;
+  }
+
+  .benefit-doc-excerpt pre {
+    background: var(--bs-secondary-bg);
+    padding: .5rem;
+    border-radius: 6px;
+    font-size: .8rem;
+    overflow-x: auto;
+  }
+
+  .benefit-doc-excerpt blockquote {
+    border-left: 3px solid var(--bs-border-color);
+    padding-left: .75rem;
+    color: var(--bs-secondary-color);
+    margin: .25rem 0;
+  }
+
+  .benefit-doc-excerpt strong {
+    color: var(--bs-emphasis-color);
+  }
 </style>
 {% endblock %}
 
@@ -496,7 +533,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                 </div>
                                 {% elif doc.knowledge_base_id and doc.kb_processing_status == 'processing' %}
                                 <div class="small text-muted mt-1">
-                                  <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                  <span class="spinner-border spinner-border-sm me-1" role="status"
+                                    aria-hidden="true"></span>
                                   Processando na base de conhecimento
                                 </div>
                                 {% endif %}
@@ -595,7 +633,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                 {% elif analysis.status == 'processing' %}
                                 <span class="badge bg-info"><i class="bi bi-hourglass-split"></i> Processando</span>
                                 {% elif analysis.status == 'pending' %}
-                                <span class="badge bg-warning text-dark"><i class="bi bi-clock"></i> Aguardando fila</span>
+                                <span class="badge bg-warning text-dark"><i class="bi bi-clock"></i> Aguardando
+                                  fila</span>
                                 {% elif analysis.status == 'error' %}
                                 <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Erro</span>
                                 {% else %}
@@ -907,7 +946,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                         data-bs-target="#benefits-cited-pane" type="button" role="tab"
                         aria-controls="benefits-cited-pane" aria-selected="false">
                         <i class="bi bi-clipboard2 me-1"></i>Benefícios Citados
-                        {% if cited_benefits %}<span class="badge bg-secondary ms-1">{{ cited_benefits|length }}</span>{% endif %}
+                        {% if cited_benefits %}<span class="badge bg-secondary ms-1">{{ cited_benefits|length
+                          }}</span>{% endif %}
                       </button>
                     </li>
                   </ul>
@@ -1062,8 +1102,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                             title="Buscar nos documentos da base de conhecimento">
                                             <i class="fa-solid fa-file-lines"></i>
                                           </button>
-                                          <button type="button" class="btn btn-outline-primary"
-                                            data-bs-toggle="modal" data-bs-target="#editBenefitLegalThesesModal"
+                                          <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal"
+                                            data-bs-target="#editBenefitLegalThesesModal"
                                             data-benefit-id="{{ benefit.id }}"
                                             data-benefit-number="{{ benefit.benefit_number or '-' }}"
                                             data-benefit-insured="{{ benefit.insured_name or '-' }}"
@@ -1113,8 +1153,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                 <button type="button" class="btn btn-sm btn-outline-secondary js-tooltip"
                                   data-bs-toggle="modal" data-bs-target="#benefitDocumentsModal"
                                   data-benefit-number="{{ cb.benefit_number or '' }}"
-                                  data-benefit-insured="{{ cb.insured_name or '' }}"
-                                  data-bs-placement="top"
+                                  data-benefit-insured="{{ cb.insured_name or '' }}" data-bs-placement="top"
                                   title="Buscar nos documentos da base de conhecimento">
                                   <i class="fa-solid fa-file-lines"></i>
                                 </button>
@@ -1299,9 +1338,9 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
     </div>
   </div>
 
-{% endblock %}
+  {% endblock %}
 
-{% block extra_js %}
+  {% block extra_js %}
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
@@ -1410,18 +1449,18 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
 
     // Modal: busca de documentos por NB (Meilisearch + Qdrant)
     (function () {
-      const modal    = document.getElementById('benefitDocumentsModal');
+      const modal = document.getElementById('benefitDocumentsModal');
       if (!modal) return;
 
-      const subtitle  = document.getElementById('benefitDocumentsSubtitle');
-      const loading   = document.getElementById('benefitDocumentsLoading');
-      const empty     = document.getElementById('benefitDocumentsEmpty');
-      const errorBox  = document.getElementById('benefitDocumentsError');
-      const errorMsg  = document.getElementById('benefitDocumentsErrorMsg');
-      const listWrap  = document.getElementById('benefitDocumentsList');
-      const countEl   = document.getElementById('benefitDocumentsCount');
-      const API_URL  = "{{ url_for('process_panel.api_benefit_documents') }}";
-      const KB_BASE  = "{{ url_for('knowledge_base.list') }}".replace(/\/$/, '');
+      const subtitle = document.getElementById('benefitDocumentsSubtitle');
+      const loading = document.getElementById('benefitDocumentsLoading');
+      const empty = document.getElementById('benefitDocumentsEmpty');
+      const errorBox = document.getElementById('benefitDocumentsError');
+      const errorMsg = document.getElementById('benefitDocumentsErrorMsg');
+      const listWrap = document.getElementById('benefitDocumentsList');
+      const countEl = document.getElementById('benefitDocumentsCount');
+      const API_URL = "{{ url_for('process_panel.api_benefit_documents') }}";
+      const KB_BASE = "{{ url_for('knowledge_base.list') }}".replace(/\/$/, '');
 
       function setState(state) {
         loading.classList.add('d-none');
@@ -1442,7 +1481,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
 
       function scoreBar(score) {
         if (score == null) return '';
-        const pct   = Math.round(score * 100);
+        const pct = Math.round(score * 100);
         const color = pct >= 70 ? 'bg-success' : pct >= 40 ? 'bg-warning' : 'bg-secondary';
         return `<div class="d-flex align-items-center gap-2 mt-1" style="max-width:200px;">
           <div class="progress flex-grow-1" style="height:5px;" title="Relevância ${pct}%">
@@ -1499,7 +1538,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
 
       function renderCard(hit, mdParser, highlightWords) {
         const detailUrl = hit.file_id ? KB_BASE + '/' + hit.file_id + '/details' : null;
-        const viewUrl   = hit.file_id ? KB_BASE + '/' + hit.file_id + '/view'    : null;
+        const viewUrl = hit.file_id ? KB_BASE + '/' + hit.file_id + '/view' : null;
 
         let excerpt = hit.excerpt
           ? (mdParser ? mdParser.parse(hit.excerpt) : hit.excerpt.replace(/</g, '&lt;').replace(/\n/g, '<br>'))
@@ -1508,20 +1547,26 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
           excerpt = highlightTerms(excerpt, highlightWords);
         }
 
+        const pageToggleBtn = (hit.file_id != null && hit.page != null) ? `
+          <button type="button" class="btn btn-sm btn-outline-secondary toggle-page-view" title="Ver página do PDF" data-page-loaded="0">
+            <i class="bi bi-file-image"></i>
+          </button>` : '';
+
         const actions = detailUrl ? `
           <div class="d-flex gap-2 flex-shrink-0">
+            ${pageToggleBtn}
             ${viewUrl ? `<a href="${viewUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-secondary" title="Visualizar"><i class="bi bi-eye"></i></a>` : ''}
             <a href="${detailUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary" title="Ver detalhes">
               <i class="bi bi-box-arrow-up-right me-1"></i>Detalhes
             </a>
-          </div>` : '';
+          </div>` : pageToggleBtn ? `<div class="d-flex gap-2 flex-shrink-0">${pageToggleBtn}</div>` : '';
 
         return `
-          <div class="card border shadow-sm">
+          <div class="card border shadow-sm" data-file-id="${hit.file_id ?? ''}" data-page="${hit.page ?? ''}" data-q="${highlightWords && highlightWords.length ? highlightWords.join('\x1f') : ''}">
             <div class="card-header bg-light py-2 px-3 d-flex align-items-start justify-content-between gap-2 flex-wrap">
               <div class="d-flex align-items-center gap-2 flex-wrap">
                 <i class="bi bi-file-earmark-text text-primary"></i>
-                <span class="fw-semibold small">${(hit.source || 'Documento').replace(/</g,'&lt;')}</span>
+                <span class="fw-semibold small">${(hit.source || 'Documento').replace(/</g, '&lt;')}</span>
                 ${hit.page != null ? `<span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">pág. ${hit.page}</span>` : ''}
                 ${originBadge(hit.origin)}
               </div>
@@ -1531,19 +1576,20 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
               </div>
             </div>
             <div class="card-body py-2 px-3">
-              <div class="benefit-doc-excerpt small lh-lg text-body-secondary">${excerpt}</div>
+              <div class="doc-excerpt-view benefit-doc-excerpt small lh-lg text-body-secondary">${excerpt}</div>
+              <div class="doc-page-view d-none text-center py-2"></div>
             </div>
           </div>`;
       }
 
       modal.addEventListener('show.bs.modal', function (event) {
-        const btn     = event.relatedTarget;
-        const nb      = (btn.getAttribute('data-benefit-number') || '').trim();
+        const btn = event.relatedTarget;
+        const nb = (btn.getAttribute('data-benefit-number') || '').trim();
         const insured = (btn.getAttribute('data-benefit-insured') || '').trim();
 
         subtitle.textContent = 'NB ' + nb + (insured ? ' • ' + insured : '');
-        listWrap.innerHTML   = '';
-        countEl.textContent  = '';
+        listWrap.innerHTML = '';
+        countEl.textContent = '';
         setState('loading');
 
         const mdParser = window.marked ? window.marked : null;
@@ -1572,10 +1618,43 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
           });
       });
 
+      listWrap.addEventListener('click', function (e) {
+        const btn = e.target.closest('.toggle-page-view');
+        if (!btn) return;
+        const card = btn.closest('.card');
+        const fileId = card.dataset.fileId;
+        const page = card.dataset.page;
+        const excerptView = card.querySelector('.doc-excerpt-view');
+        const pageView = card.querySelector('.doc-page-view');
+        const showingPage = !pageView.classList.contains('d-none');
+        if (showingPage) {
+          pageView.classList.add('d-none');
+          excerptView.classList.remove('d-none');
+          btn.title = 'Ver página do PDF';
+          btn.innerHTML = '<i class="bi bi-file-image"></i>';
+        } else {
+          excerptView.classList.add('d-none');
+          pageView.classList.remove('d-none');
+          btn.title = 'Ver trecho';
+          btn.innerHTML = '<i class="bi bi-card-text"></i>';
+          if (!btn.dataset.pageLoaded || btn.dataset.pageLoaded === '0') {
+            btn.dataset.pageLoaded = '1';
+            pageView.innerHTML = '<div class="py-3"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+            const img = new Image();
+            img.className = 'img-fluid rounded border shadow-sm';
+            img.alt = 'Página ' + page;
+            img.onload = function () { pageView.innerHTML = ''; pageView.appendChild(img); };
+            img.onerror = function () { pageView.innerHTML = '<span class="text-danger small">Erro ao carregar a página.</span>'; };
+            const qTerms = (card.dataset.q || '').split('\x1f').filter(Boolean).map(encodeURIComponent).join('&q=');
+            img.src = KB_BASE + '/' + fileId + '/page-image/' + page + (qTerms ? '?q=' + qTerms : '');
+          }
+        }
+      });
+
       modal.addEventListener('hidden.bs.modal', function () {
-        listWrap.innerHTML  = '';
+        listWrap.innerHTML = '';
         subtitle.textContent = '';
-        countEl.textContent  = '';
+        countEl.textContent = '';
         setState('loading');
       });
     })();
@@ -1590,4 +1669,4 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
       }
     }
   </script>
-{% endblock %}
+  {% endblock %}

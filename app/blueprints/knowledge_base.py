@@ -1014,6 +1014,93 @@ def view(file_id):
         return redirect(url_for('knowledge_base.list'))
 
 
+@knowledge_base_bp.route('/<int:file_id>/page-image/<int:page_no>')
+def page_image(file_id, page_no):
+    """Renderiza uma página específica do PDF como imagem PNG (para o modal de trechos)."""
+    import io
+    import fitz
+
+    law_firm_id = get_current_law_firm_id()
+    if not law_firm_id:
+        return '', 401
+
+    file = KnowledgeBase.query.filter_by(
+        id=file_id,
+        law_firm_id=law_firm_id,
+        is_active=True,
+    ).first()
+    if not file:
+        return '', 404
+
+    if not os.path.exists(file.file_path):
+        return '', 404
+
+    try:
+        import PIL.Image
+        import PIL.ImageDraw
+
+        doc = fitz.open(file.file_path)
+        page_index = max(0, page_no - 1)  # 1-based → 0-based
+        if page_index >= len(doc):
+            page_index = len(doc) - 1
+        page = doc[page_index]
+
+        scale = 2.0
+        mat = fitz.Matrix(scale, scale)
+
+        # Coleta os retângulos de match ANTES de renderizar
+        search_terms = [t.strip() for t in request.args.getlist('q') if t.strip()]
+        match_rects: list[fitz.Rect] = []
+        words = page.get_text("words")  # (x0,y0,x1,y1,word,block,line,word_idx)
+        for term in search_terms:
+            found = page.search_for(term, quads=False)
+            if not found:
+                # Fallback: percorre palavras e busca substring (ex: número dividido em partes)
+                for w in words:
+                    if term in w[4]:
+                        found.append(fitz.Rect(w[:4]))
+            if not found:
+                # Fallback 2: concatena palavras da mesma linha e verifica substring
+                # Agrupa por (block, line)
+                lines: dict = {}
+                for w in words:
+                    key = (w[5], w[6])  # (block_no, line_no)
+                    lines.setdefault(key, []).append(w)
+                for key, line_words in lines.items():
+                    line_text = ''.join(w[4] for w in line_words)
+                    if term in line_text:
+                        # Destaca todas as palavras da linha que contêm dígitos do termo
+                        for w in line_words:
+                            found.append(fitz.Rect(w[:4]))
+                        break
+            print(f"[page_image] term={term!r} found={len(found)} rects via search_for+fallback")
+            match_rects.extend(found)
+        print(f"[page_image] file_id={file_id} page_no={page_no} terms={search_terms} total_rects={len(match_rects)}")
+
+        # Renderiza a página limpa (sem anotações de desenho no PDF)
+        pix = page.get_pixmap(matrix=mat, colorspace=fitz.csRGB)
+        doc.close()
+
+        # Desenha os destaques via PIL por cima da imagem renderizada
+        img = PIL.Image.frombytes("RGB", (pix.width, pix.height), pix.samples)
+        if match_rects:
+            overlay = PIL.Image.new("RGBA", img.size, (0, 0, 0, 0))
+            draw = PIL.ImageDraw.Draw(overlay)
+            for rect in match_rects:
+                # Escala as coordenadas PDF para as coordenadas da imagem
+                x0, y0, x1, y1 = int(rect.x0 * scale), int(rect.y0 * scale), int(rect.x1 * scale), int(rect.y1 * scale)
+                # Área levemente maior para ficar visível
+                draw.rectangle([x0 - 2, y0 - 2, x1 + 2, y1 + 2], fill=(255, 230, 0, 140))
+            img = PIL.Image.alpha_composite(img.convert("RGBA"), overlay).convert("RGB")
+
+        buf = io.BytesIO()
+        img.save(buf, format="PNG")
+        buf.seek(0)
+        return send_file(buf, mimetype='image/png')
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @knowledge_base_bp.route('/<int:file_id>/view-docx')
 def view_docx(file_id):
     """Visualiza um arquivo DOCX da base de conhecimento em uma nova página"""
