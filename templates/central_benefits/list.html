@@ -244,6 +244,10 @@
               <div class="d-flex flex-wrap gap-2">
                 <span class="badge bg-info align-self-center px-3 py-2">{{ benefits|length }} registro{{ 's' if
                   benefits|length != 1 else '' }}</span>
+                <button id="exportCentralBenefitsBtn" type="button" class="btn btn-outline-success btn-sm"
+                  data-tooltip="Exportar resultado filtrado para Excel" data-bs-placement="top">
+                  <i class="bi bi-file-earmark-excel me-1"></i>Exportar Excel
+                </button>
                 <a href="{{ url_for('central_benefits.fap_contestation_reports') }}" class="btn btn-info btn-sm">
                   <i class="bi bi-upload me-1"></i>Importar relatório FAP
                 </a>
@@ -620,6 +624,7 @@
 {% if benefits %}
 <script src="https://cdn.datatables.net/1.13.7/js/jquery.dataTables.min.js"></script>
 <script src="https://cdn.datatables.net/1.13.7/js/dataTables.bootstrap5.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script>
   $(document).ready(function () {
@@ -779,6 +784,126 @@
       }
     }
 
+    function normalizeExportValue(value) {
+      const text = String(value || '').trim();
+      return text || '-';
+    }
+
+    function getGeneralStatusLabel(status) {
+      const s = String(status || '').trim().toLowerCase();
+      if (s === 'approved') return 'Deferido c/ exclusão';
+      if (s === 'rejected') return 'Indeferido';
+      if (s === 'in_review') return 'Em análise';
+      return s ? s : 'Pendente';
+    }
+
+    function getInstanceStatusLabel(status) {
+      const s = String(status || '').trim();
+      return s || '-';
+    }
+
+    function exportFilteredBenefitsToExcel() {
+      if (!window.XLSX) {
+        alert('Biblioteca de exportação não carregada. Recarregue a página e tente novamente.');
+        return;
+      }
+
+      const headers = [
+        'ID',
+        'Número do benefício',
+        'Cliente',
+        'Segurado',
+        'Tipo benefício',
+        'CPF segurado',
+        'NIT segurado',
+        'Data nascimento segurado',
+        'CNPJ empregador',
+        'Nome empregador',
+        'Status geral',
+        'Status 1ª instância',
+        'Justificativa 1ª instância',
+        'Parecer 1ª instância',
+        'Status 2ª instância',
+        'Justificativa 2ª instância',
+        'Parecer 2ª instância',
+        'Vigência FAP',
+        'DIB',
+        'DCB',
+        'Data acidente',
+        'Empresa acidente',
+        'CAT',
+        'BO',
+        'Tipo solicitação',
+        'RMI',
+        'Total pago',
+        'Justificativa geral',
+        'Parecer geral',
+        'Observações',
+      ];
+
+      const filteredNodes = table.rows({ search: 'applied' }).nodes().toArray();
+      if (!filteredNodes.length) {
+        alert('Nenhum registro encontrado com os filtros atuais para exportação.');
+        return;
+      }
+
+      const rows = filteredNodes.map((row) => {
+        const d = row.dataset;
+        return [
+          normalizeExportValue(d.id),
+          normalizeExportValue(d.benefitNumber),
+          normalizeExportValue(d.clientName),
+          normalizeExportValue(d.insuredName),
+          normalizeExportValue(d.benefitType),
+          normalizeExportValue(d.insuredCpf),
+          normalizeExportValue(d.insuredNit),
+          normalizeExportValue(d.insuredDateOfBirth),
+          normalizeExportValue(d.employerCnpj),
+          normalizeExportValue(d.employerName),
+          getGeneralStatusLabel(d.status),
+          getInstanceStatusLabel(d.firstInstanceStatus),
+          normalizeExportValue(d.firstInstanceJustification),
+          normalizeExportValue(d.firstInstanceOpinion),
+          getInstanceStatusLabel(d.secondInstanceStatus),
+          normalizeExportValue(d.secondInstanceJustification),
+          normalizeExportValue(d.secondInstanceOpinion),
+          normalizeExportValue(d.fapVigenciaYears),
+          normalizeExportValue(d.benefitStartDate),
+          normalizeExportValue(d.benefitEndDate),
+          normalizeExportValue(d.accidentDate),
+          normalizeExportValue(d.accidentCompanyName),
+          normalizeExportValue(d.catNumber),
+          normalizeExportValue(d.boNumber),
+          normalizeExportValue(d.requestType),
+          normalizeExportValue(d.initialMonthlyBenefit),
+          normalizeExportValue(d.totalPaid),
+          normalizeExportValue(d.justification),
+          normalizeExportValue(d.opinion),
+          normalizeExportValue(d.notes),
+        ];
+      });
+
+      const sheet = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+      sheet['!cols'] = headers.map((header) => ({
+        wch: Math.max(header.length + 2, 18),
+      }));
+
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, sheet, 'Beneficios');
+
+      const now = new Date();
+      const ts = [
+        now.getFullYear(),
+        String(now.getMonth() + 1).padStart(2, '0'),
+        String(now.getDate()).padStart(2, '0'),
+        '_',
+        String(now.getHours()).padStart(2, '0'),
+        String(now.getMinutes()).padStart(2, '0'),
+      ].join('');
+
+      XLSX.writeFile(workbook, `beneficios_centralizados_${ts}.xlsx`);
+    }
+
     function renderActiveFilters() {
       const container = $('#activeCentralFilters');
       container.empty();
@@ -896,6 +1021,10 @@
     refreshClientOptions();
 
     renderActiveFilters();
+
+    $('#exportCentralBenefitsBtn').on('click', function () {
+      exportFilteredBenefitsToExcel();
+    });
 
     document.querySelectorAll('[data-bs-toggle="tooltip"], [data-tooltip]').forEach((el) => {
       if (el.hasAttribute('data-tooltip')) {
