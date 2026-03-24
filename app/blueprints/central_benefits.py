@@ -6,7 +6,7 @@ import hashlib
 import json
 import os
 
-from flask import Blueprint, flash, jsonify, redirect, render_template, request, session, url_for, send_file
+from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session, url_for, send_file
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
 from sqlalchemy import String, and_, cast, func, or_
@@ -107,6 +107,21 @@ def _compute_file_hash_from_path(file_path):
     return hasher.hexdigest()
 
 
+def _resolve_existing_file_path(file_path: str | None) -> str | None:
+    if not file_path:
+        return None
+
+    candidates = [file_path]
+    if not os.path.isabs(file_path):
+        candidates.append(os.path.abspath(os.path.join(current_app.root_path, '..', file_path)))
+        candidates.append(os.path.abspath(file_path))
+
+    for candidate in candidates:
+        if candidate and os.path.exists(candidate):
+            return candidate
+    return None
+
+
 def _ensure_fap_report_in_knowledge_base(law_firm_id, user_id, filename, file_path, file_size, file_type):
     file_hash = _compute_file_hash_from_path(file_path)
 
@@ -117,6 +132,12 @@ def _ensure_fap_report_in_knowledge_base(law_firm_id, user_id, filename, file_pa
     ).first()
 
     if duplicate:
+        # Se já existe hash igual, garante que o caminho armazenado continue apontando para um arquivo real.
+        if (not duplicate.file_path or not os.path.exists(duplicate.file_path)) and os.path.exists(file_path):
+            duplicate.file_path = file_path
+            duplicate.file_size = file_size
+            duplicate.file_type = file_type
+            duplicate.updated_at = datetime.utcnow()
         return duplicate
 
     knowledge_file = KnowledgeBase(
@@ -386,8 +407,8 @@ def benefit_file_timeline(benefit_id):
                 'report_uploaded_at': _format_datetime(report.uploaded_at if report else None),
                 'report_filename': (report.original_filename if report else None) or '-',
                 'knowledge_details_url': (
-                    url_for('knowledge_base.details', file_id=item.knowledge_base_id)
-                    if item.knowledge_base_id else None
+                    url_for('central_benefits.view_fap_contestation_report', report_id=item.report_id)
+                    if report else None
                 ),
             }
         )
@@ -399,6 +420,32 @@ def benefit_file_timeline(benefit_id):
             'events': events,
         }
     )
+
+
+@central_benefits_bp.route('/fap-contestation-reports/<int:report_id>/view', methods=['GET'])
+@require_law_firm
+def view_fap_contestation_report(report_id):
+    law_firm_id = get_current_law_firm_id()
+    report = FapContestationJudgmentReport.query.filter_by(
+        id=report_id,
+        law_firm_id=law_firm_id,
+    ).first_or_404()
+
+    resolved_path = _resolve_existing_file_path(report.file_path)
+    if not resolved_path:
+        flash('Arquivo não encontrado no servidor.', 'error')
+        return redirect(url_for('central_benefits.fap_contestation_reports'))
+
+    mimetype = 'application/pdf'
+    ext = (report.file_type or '').strip().lower()
+    if ext in {'doc', 'docx'}:
+        mimetype = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    elif ext in {'xls', 'xlsx'}:
+        mimetype = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    elif ext == 'txt':
+        mimetype = 'text/plain'
+
+    return send_file(resolved_path, as_attachment=False, mimetype=mimetype)
 
 
 @central_benefits_bp.route('/')
@@ -669,7 +716,9 @@ def fap_contestation_reports():
 
         invalid_files = []
         success_count = 0
-        upload_dir = os.path.join('uploads', 'fap_contestation_reports')
+        upload_dir = os.path.abspath(
+            os.path.join(current_app.root_path, '..', 'uploads', 'fap_contestation_reports')
+        )
         os.makedirs(upload_dir, exist_ok=True)
 
         for file in files:

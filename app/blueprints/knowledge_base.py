@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file
+from flask import Blueprint, current_app, render_template, request, redirect, url_for, flash, jsonify, send_file
 from app.models import (
     db,
     KnowledgeBase,
@@ -36,6 +36,23 @@ import json as json_lib
 import hashlib
 
 knowledge_base_bp = Blueprint('knowledge_base', __name__, url_prefix='/knowledge-base')
+
+
+def _resolve_existing_file_path(file_path: str | None) -> str | None:
+    """Resolve caminho de arquivo suportando paths legados relativos ao projeto."""
+    if not file_path:
+        return None
+
+    candidates = [file_path]
+    if not os.path.isabs(file_path):
+        project_root = os.path.abspath(os.path.join(current_app.root_path, '..'))
+        candidates.append(os.path.abspath(os.path.join(project_root, file_path)))
+        candidates.append(os.path.abspath(file_path))
+
+    for candidate in candidates:
+        if candidate and os.path.exists(candidate):
+            return candidate
+    return None
 
 
 def _compute_file_hash(file_storage):
@@ -1003,12 +1020,13 @@ def view(file_id):
         flash('Arquivo não encontrado.', 'error')
         return redirect(url_for('knowledge_base.list'))
 
-    if not os.path.exists(file.file_path):
+    resolved_path = _resolve_existing_file_path(file.file_path)
+    if not resolved_path:
         flash('Arquivo não encontrado no servidor.', 'error')
         return redirect(url_for('knowledge_base.list'))
 
     try:
-        return send_file(file.file_path, as_attachment=False, mimetype='application/pdf')
+        return send_file(resolved_path, as_attachment=False, mimetype='application/pdf')
     except Exception as e:
         flash(f'Erro ao visualizar o arquivo: {str(e)}', 'error')
         return redirect(url_for('knowledge_base.list'))
@@ -1032,14 +1050,15 @@ def page_image(file_id, page_no):
     if not file:
         return '', 404
 
-    if not os.path.exists(file.file_path):
+    resolved_path = _resolve_existing_file_path(file.file_path)
+    if not resolved_path:
         return '', 404
 
     try:
         import PIL.Image
         import PIL.ImageDraw
 
-        doc = fitz.open(file.file_path)
+        doc = fitz.open(resolved_path)
         page_index = max(0, page_no - 1)  # 1-based → 0-based
         if page_index >= len(doc):
             page_index = len(doc) - 1
