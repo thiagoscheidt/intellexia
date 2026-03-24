@@ -4,9 +4,50 @@
 
 {% block title %}Importar Relatorio FAP - IntellexIA{% endblock %}
 
+{% block extra_css %}
+<style>
+  .dropzone {
+    border: 2px dashed #0d6efd66;
+    border-radius: 12px;
+    padding: 1rem;
+    background: #f8fbff;
+    transition: all .2s ease;
+    cursor: pointer;
+  }
+
+  .dropzone.dragover {
+    border-color: #0d6efd;
+    background: #eef5ff;
+  }
+
+  .dropzone-help {
+    font-size: .85rem;
+    color: #6c757d;
+  }
+
+  .selected-files {
+    margin-top: .6rem;
+    max-height: 180px;
+    overflow: auto;
+  }
+
+  .selected-files li {
+    font-size: .85rem;
+  }
+</style>
+{% endblock %}
+
 {% block content %}
-{% call page_hero(title='Importar Beneficios do Relatorio FAP', subtitle=hero_subtitle|default(''), icon='bi bi-file-earmark-arrow-up') %}
-<nav aria-label="breadcrumb"><ol class="breadcrumb mb-0 bg-transparent small"><li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li><li class="breadcrumb-item"><a href="{{ url_for('central_benefits.list_central_benefits') }}">Painel de Beneficios</a></li><li class="breadcrumb-item active" aria-current="page">Importar Relatorio FAP</li></ol></nav>
+{% call page_hero(title='Importar Beneficios do Relatorio FAP', subtitle=hero_subtitle|default(''), icon='bi
+bi-file-earmark-arrow-up') %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb mb-0 bg-transparent small">
+    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('central_benefits.list_central_benefits') }}">Painel de
+        Beneficios</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Importar Relatorio FAP</li>
+  </ol>
+</nav>
 {% endcall %}
 
 <div class="app-content">
@@ -21,25 +62,34 @@
             {{ form.hidden_tag() }}
             <div class="card-body">
               {% with messages = get_flashed_messages(with_categories=true) %}
-                {% if messages %}
-                  {% for category, message in messages %}
-                    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
-                      <i class="bi bi-info-circle"></i> {{ message }}
-                      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-                    </div>
-                  {% endfor %}
-                {% endif %}
+              {% if messages %}
+              {% for category, message in messages %}
+              <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                <i class="bi bi-info-circle"></i> {{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+              </div>
+              {% endfor %}
+              {% endif %}
               {% endwith %}
 
               <div class="mb-3">
                 {{ form.file.label(class="form-label") }}
-                {{ form.file(class="form-control" + (" is-invalid" if form.file.errors else "")) }}
-                {% if form.file.errors %}
-                  <div class="invalid-feedback">
-                    {% for error in form.file.errors %}{{ error }}{% endfor %}
+                <div id="fapDropzone" class="dropzone">
+                  <div class="fw-semibold mb-1"><i class="bi bi-cloud-arrow-up"></i> Arraste e solte os arquivos aqui
                   </div>
+                  <div class="dropzone-help mb-2">ou clique para selecionar múltiplos arquivos (PDF, DOC, DOCX, TXT,
+                    XLSX, XLS)</div>
+                  {{ form.file(class="form-control" + (" is-invalid" if form.file.errors else ""), multiple=true,
+                  id="fapFilesInput") }}
+                </div>
+                {% if form.file.errors %}
+                <div class="invalid-feedback">
+                  {% for error in form.file.errors %}{{ error }}{% endfor %}
+                </div>
                 {% endif %}
-                <small class="text-muted">O arquivo sera salvo em tabela propria e processado apenas por script dedicado.</small>
+                <ul id="selectedFilesList" class="list-group selected-files d-none"></ul>
+                <small class="text-muted">Os arquivos serão salvos em tabela própria e processados apenas por script
+                  dedicado.</small>
               </div>
             </div>
             <div class="card-footer">
@@ -74,25 +124,29 @@
                     <td><strong>{{ report.id }}</strong></td>
                     <td>
                       <div><strong>{{ report.original_filename }}</strong></div>
-                      <small class="text-muted">{{ report.file_type or '-' }}{% if report.file_size %} | {{ report.file_size }} bytes{% endif %}</small>
+                      <small class="text-muted">{{ report.file_type or '-' }}{% if report.file_size %} | {{
+                        report.file_size }} bytes{% endif %}</small>
                       {% if report.error_message %}
                       <div class="small text-danger mt-1">{{ report.error_message }}</div>
                       {% endif %}
                     </td>
                     <td class="text-center">
                       {% if report.status == 'completed' %}
-                        <span class="badge bg-success">completed</span>
+                      <span class="badge bg-success">completed</span>
                       {% elif report.status == 'processing' %}
-                        <span class="badge bg-warning text-dark">processing</span>
+                      <span class="badge bg-warning text-dark">processing</span>
                       {% elif report.status == 'error' %}
-                        <span class="badge bg-danger">error</span>
+                      <span class="badge bg-danger">error</span>
                       {% else %}
-                        <span class="badge bg-secondary">pending</span>
+                      <span class="badge bg-secondary">pending</span>
                       {% endif %}
                     </td>
-                    <td class="text-center">{{ report.uploaded_at.strftime('%d/%m/%Y %H:%M') if report.uploaded_at else '-' }}</td>
+                    <td class="text-center">{{ report.uploaded_at.strftime('%d/%m/%Y %H:%M') if report.uploaded_at else
+                      '-' }}</td>
                     <td class="text-center">
-                      <button type="button" class="btn btn-sm btn-danger" data-delete-url="{{ url_for('central_benefits.delete_fap_contestation_report', report_id=report.id) }}" onclick="confirmDelete(this.dataset.deleteUrl)">
+                      <button type="button" class="btn btn-sm btn-danger"
+                        data-delete-url="{{ url_for('central_benefits.delete_fap_contestation_report', report_id=report.id) }}"
+                        onclick="confirmDelete(this.dataset.deleteUrl)">
                         <i class="bi bi-trash"></i>
                       </button>
                     </td>
@@ -121,14 +175,60 @@
 
 {% block extra_js %}
 <script>
-function confirmDelete(url) {
-  if (confirm('Tem certeza que deseja excluir este relatorio?')) {
-    const form = document.createElement('form');
-    form.method = 'POST';
-    form.action = url;
-    document.body.appendChild(form);
-    form.submit();
+  function confirmDelete(url) {
+    if (confirm('Tem certeza que deseja excluir este relatorio?')) {
+      const form = document.createElement('form');
+      form.method = 'POST';
+      form.action = url;
+      document.body.appendChild(form);
+      form.submit();
+    }
   }
-}
+
+  document.addEventListener('DOMContentLoaded', function () {
+    const input = document.getElementById('fapFilesInput');
+    const dropzone = document.getElementById('fapDropzone');
+    const list = document.getElementById('selectedFilesList');
+    if (!input || !dropzone || !list) return;
+
+    const renderSelectedFiles = () => {
+      const files = Array.from(input.files || []);
+      list.innerHTML = '';
+      if (!files.length) {
+        list.classList.add('d-none');
+        return;
+      }
+
+      files.forEach(file => {
+        const item = document.createElement('li');
+        item.className = 'list-group-item d-flex justify-content-between align-items-center';
+        item.innerHTML = '<span class="text-truncate me-2">' + file.name + '</span><span class="badge bg-secondary">' + Math.round(file.size / 1024) + ' KB</span>';
+        list.appendChild(item);
+      });
+      list.classList.remove('d-none');
+    };
+
+    input.addEventListener('change', renderSelectedFiles);
+
+    ['dragenter', 'dragover'].forEach(evt => {
+      dropzone.addEventListener(evt, function (e) {
+        e.preventDefault();
+        dropzone.classList.add('dragover');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(evt => {
+      dropzone.addEventListener(evt, function (e) {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+      });
+    });
+
+    dropzone.addEventListener('drop', function (e) {
+      if (!e.dataTransfer || !e.dataTransfer.files) return;
+      input.files = e.dataTransfer.files;
+      renderSelectedFiles();
+    });
+  });
 </script>
 {% endblock %}

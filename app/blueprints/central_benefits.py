@@ -604,22 +604,36 @@ def fap_contestation_reports():
 
     law_firm_id = get_current_law_firm_id()
     form = FapContestationJudgmentReportForm()
+    allowed_extensions = {'pdf', 'doc', 'docx', 'txt', 'xlsx', 'xls'}
 
-    if form.validate_on_submit():
-        file = form.file.data
-        if file:
+    if request.method == 'POST' and form.validate_on_submit():
+        files = request.files.getlist('file') if 'file' in request.files else []
+        files = [f for f in files if f and f.filename and f.filename.strip()]
+
+        if not files:
+            flash('Selecione ao menos um arquivo para envio.', 'warning')
+            return redirect(url_for('central_benefits.fap_contestation_reports'))
+
+        invalid_files = []
+        success_count = 0
+        upload_dir = os.path.join('uploads', 'fap_contestation_reports')
+        os.makedirs(upload_dir, exist_ok=True)
+
+        for file in files:
+            filename = secure_filename(file.filename)
+            extension = os.path.splitext(filename)[1].lower().replace('.', '')
+            if extension not in allowed_extensions:
+                invalid_files.append(filename)
+                continue
+
             try:
-                filename = secure_filename(file.filename)
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
                 unique_filename = f'{timestamp}_{filename}'
-
-                upload_dir = os.path.join('uploads', 'fap_contestation_reports')
-                os.makedirs(upload_dir, exist_ok=True)
                 file_path = os.path.join(upload_dir, unique_filename)
                 file.save(file_path)
 
                 file_size = os.path.getsize(file_path)
-                file_extension = os.path.splitext(filename)[1].lower().replace('.', '')
+                file_type = extension.upper()
 
                 report = FapContestationJudgmentReport(
                     user_id=session.get('user_id'),
@@ -627,7 +641,7 @@ def fap_contestation_reports():
                     original_filename=filename,
                     file_path=file_path,
                     file_size=file_size,
-                    file_type=file_extension.upper(),
+                    file_type=file_type,
                     status='pending',
                 )
 
@@ -639,18 +653,28 @@ def fap_contestation_reports():
                     filename=filename,
                     file_path=file_path,
                     file_size=file_size,
-                    file_type=file_extension.upper(),
+                    file_type=file_type,
                 )
                 report.knowledge_base_id = knowledge_file.id
                 db.session.commit()
-                flash(
-                    'Relatório enviado com sucesso! Ele ficará pendente até processamento via script e também foi adicionado à base de conhecimento sem vínculo com processo.',
-                    'success'
-                )
-                return redirect(url_for('central_benefits.fap_contestation_reports'))
+                success_count += 1
             except Exception as e:
                 db.session.rollback()
-                flash(f'Erro ao enviar relatório: {str(e)}', 'danger')
+                flash(f'Erro ao enviar {filename}: {str(e)}', 'danger')
+
+        if success_count:
+            flash(
+                f'{success_count} relatório(s) enviado(s) com sucesso! Eles ficarão pendentes até processamento via script e também foram adicionados à base de conhecimento sem vínculo com processo.',
+                'success'
+            )
+
+        if invalid_files:
+            flash(
+                'Arquivos ignorados por extensão inválida: ' + ', '.join(invalid_files),
+                'warning'
+            )
+
+        return redirect(url_for('central_benefits.fap_contestation_reports'))
 
     reports = (
         FapContestationJudgmentReport.query.filter_by(law_firm_id=law_firm_id)
