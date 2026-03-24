@@ -620,7 +620,7 @@ class FapContestationJudgmentReportService:
 
         return imported_count
 
-    def process_pending_reports(
+    def     process_pending_reports(
         self,
         batch_size: int = 10,
         report_id: int | None = None,
@@ -638,9 +638,11 @@ class FapContestationJudgmentReportService:
                     statuses.append('error')
                 query = query.filter(FapContestationJudgmentReport.status.in_(statuses))
 
+            effective_batch_size = 1 if report_id else max(10, int(batch_size))
+
             reports = (
                 query.order_by(FapContestationJudgmentReport.uploaded_at.asc())
-                .limit(max(1, int(batch_size)))
+                .limit(effective_batch_size)
                 .all()
             )
 
@@ -648,15 +650,19 @@ class FapContestationJudgmentReportService:
                 print('Nenhum relatório pendente para processamento.')
                 return 0
 
+            # Marca o lote inteiro como processing antes de iniciar o trabalho,
+            # para reduzir chance de corrida com outra execução concorrente.
+            now = datetime.utcnow()
+            for report in reports:
+                report.status = 'processing'
+                report.error_message = None
+                report.updated_at = now
+            db.session.commit()
+
             processed_reports = 0
 
             for report in reports:
                 try:
-                    #report.status = 'processing'
-                    report.error_message = None
-                    report.updated_at = datetime.utcnow()
-                    db.session.commit()
-
                     markdown_content = self.convert_report_to_markdown_with_markitdown(report.file_path)
                     metadata = self.metadata_agent.extract_from_first_page(markdown_content)
                     extracted_benefits = self.parse_beneficios_from_markdown(markdown_content)
