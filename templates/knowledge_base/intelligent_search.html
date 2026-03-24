@@ -462,22 +462,21 @@
         line-height: 1.45;
         color: #333;
         font-style: italic;
-        max-height: 240px;
-        overflow-y: auto;
-    }
-
-    .result-text::-webkit-scrollbar {
-        width: 8px;
-    }
-
-    .result-text::-webkit-scrollbar-thumb {
-        background: rgba(102, 126, 234, 0.45);
-        border-radius: 8px;
     }
 
     [data-bs-theme="dark"] .result-text {
         background: rgba(102, 126, 234, 0.08);
         color: #d0d0d0;
+    }
+
+    .doc-page-view {
+        margin-top: .7rem;
+        text-align: center;
+    }
+
+    .doc-page-view img {
+        max-width: 100%;
+        height: auto;
     }
 
     .result-meta {
@@ -807,12 +806,15 @@
                             <input type="hidden" id="searchModeInput" name="search_mode"
                                 value="{{ search_mode or 'semantic' }}">
                             <div class="search-mode-toggle" id="searchModeToggle">
-                                <span class="search-mode-text semantic-text"><i class="bi bi-stars" aria-hidden="true"></i>Semântica</span>
+                                <span class="search-mode-text semantic-text"><i class="bi bi-stars"
+                                        aria-hidden="true"></i>Semântica</span>
                                 <label for="searchModeSwitch" class="mb-0 d-inline-flex">
-                                    <input class="search-mode-switch-input" type="checkbox" id="searchModeSwitch" {% if search_mode == 'full_text' %}checked{% endif %}>
+                                    <input class="search-mode-switch-input" type="checkbox" id="searchModeSwitch" {% if
+                                        search_mode=='full_text' %}checked{% endif %}>
                                     <span class="search-mode-switch" aria-hidden="true"></span>
                                 </label>
-                                <span class="search-mode-text fulltext-text"><i class="bi bi-fonts" aria-hidden="true"></i>Textual</span>
+                                <span class="search-mode-text fulltext-text"><i class="bi bi-fonts"
+                                        aria-hidden="true"></i>Textual</span>
                             </div>
                             <div class="search-mode-state" id="searchModeLabel">
                                 {% if search_mode == 'full_text' %}
@@ -1009,33 +1011,52 @@
                                     <hr class="my-3">
                                     {% endif %}
 
-                                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
-                                        <div class="small fw-semibold text-muted">
-                                            Trecho #{{ result.rank }}
-                                            {% if result.page %}
-                                            · Página {{ result.page }}
-                                            {% endif %}
+                                    <div class="snippet-item">
+                                        <div
+                                            class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
+                                            <div class="small fw-semibold text-muted">
+                                                Trecho #{{ result.rank }}
+                                                {% if result.page %}
+                                                · Página {{ result.page }}
+                                                {% endif %}
+                                            </div>
+                                            <div class="d-flex align-items-center gap-2 ms-auto">
+                                                <div>
+                                                    {% if result.score_percent >= 70 %}
+                                                    <span class="relevance-badge high">
+                                                        <i class="bi bi-star-fill"></i> {{ result.score_percent }}%
+                                                        relevante
+                                                    </span>
+                                                    {% elif result.score_percent >= 50 %}
+                                                    <span class="relevance-badge medium">
+                                                        <i class="bi bi-star-half"></i> {{ result.score_percent }}%
+                                                        relevante
+                                                    </span>
+                                                    {% else %}
+                                                    <span class="relevance-badge low">
+                                                        <i class="bi bi-star"></i> {{ result.score_percent }}%
+                                                        relevante
+                                                    </span>
+                                                    {% endif %}
+                                                </div>
+                                                {% if group.file_id and result.page %}
+                                                <button type="button"
+                                                    class="btn btn-sm btn-outline-secondary toggle-page-view"
+                                                    title="Ver página do PDF" data-page-loaded="0">
+                                                    <i class="bi bi-file-image me-1"></i>Ver página
+                                                </button>
+                                                {% endif %}
+                                            </div>
                                         </div>
-                                        <div>
-                                            {% if result.score_percent >= 70 %}
-                                            <span class="relevance-badge high">
-                                                <i class="bi bi-star-fill"></i> {{ result.score_percent }}% relevante
-                                            </span>
-                                            {% elif result.score_percent >= 50 %}
-                                            <span class="relevance-badge medium">
-                                                <i class="bi bi-star-half"></i> {{ result.score_percent }}% relevante
-                                            </span>
-                                            {% else %}
-                                            <span class="relevance-badge low">
-                                                <i class="bi bi-star"></i> {{ result.score_percent }}% relevante
-                                            </span>
-                                            {% endif %}
-                                        </div>
-                                    </div>
 
-                                    <div class="result-text">
-                                        <i class="bi bi-quote text-primary"></i>
-                                        {{ result.highlighted_text|safe }}
+                                        <div class="snippet-view" data-file-id="{{ group.file_id or '' }}"
+                                            data-page="{{ result.page or '' }}" data-query="{{ search_query|e }}">
+                                            <div class="result-text doc-excerpt-view">
+                                                <i class="bi bi-quote text-primary"></i>
+                                                {{ result.highlighted_text|safe }}
+                                            </div>
+                                            <div class="doc-page-view d-none"></div>
+                                        </div>
                                     </div>
                                     {% endfor %}
 
@@ -1200,6 +1221,67 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        const KB_BASE = "{{ url_for('knowledge_base.list').rstrip('/') }}";
+
+        document.addEventListener('click', function (e) {
+            const btn = e.target.closest('.toggle-page-view');
+            if (!btn) return;
+
+            const snippetItem = btn.closest('.snippet-item');
+            if (!snippetItem) return;
+            const snippet = snippetItem.querySelector('.snippet-view');
+            if (!snippet) return;
+
+            const fileId = snippet.dataset.fileId;
+            const page = snippet.dataset.page;
+            if (!fileId || !page) return;
+
+            const excerptView = snippet.querySelector('.doc-excerpt-view');
+            const pageView = snippet.querySelector('.doc-page-view');
+            if (!excerptView || !pageView) return;
+
+            const showingPage = !pageView.classList.contains('d-none');
+            if (showingPage) {
+                pageView.classList.add('d-none');
+                excerptView.classList.remove('d-none');
+                btn.title = 'Ver página do PDF';
+                btn.innerHTML = '<i class="bi bi-file-image me-1"></i>Ver página';
+                return;
+            }
+
+            excerptView.classList.add('d-none');
+            pageView.classList.remove('d-none');
+            btn.title = 'Ver trecho do texto';
+            btn.innerHTML = '<i class="bi bi-card-text me-1"></i>Ver trecho';
+
+            if (!btn.dataset.pageLoaded || btn.dataset.pageLoaded === '0') {
+                btn.dataset.pageLoaded = '1';
+                pageView.innerHTML = '<div class="py-2"><div class="spinner-border spinner-border-sm text-primary"></div></div>';
+
+                const markTerms = Array.from(excerptView.querySelectorAll('mark.highlight-term'))
+                    .map(el => (el.textContent || '').trim())
+                    .filter(Boolean);
+
+                const queryText = (snippet.dataset.query || '').trim();
+                const fallbackTerms = queryText ? [queryText] : [];
+                const qTerms = (markTerms.length ? markTerms : fallbackTerms)
+                    .map(encodeURIComponent)
+                    .join('&q=');
+
+                const img = new Image();
+                img.className = 'img-fluid rounded border shadow-sm';
+                img.alt = 'Página ' + page;
+                img.onload = function () {
+                    pageView.innerHTML = '';
+                    pageView.appendChild(img);
+                };
+                img.onerror = function () {
+                    pageView.innerHTML = '<span class="text-danger small">Erro ao carregar a página.</span>';
+                };
+                img.src = KB_BASE + '/' + fileId + '/page-image/' + page + (qTerms ? '?q=' + qTerms : '');
+            }
+        });
+
         const searchForm = document.getElementById('intelligentSearchForm');
         const searchInput = document.getElementById('query');
         const submitButton = document.getElementById('searchSubmitBtn');
