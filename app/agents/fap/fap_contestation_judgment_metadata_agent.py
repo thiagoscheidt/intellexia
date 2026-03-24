@@ -57,6 +57,24 @@ class FapContestationJudgmentMetadataAgent:
 
         return first_page.strip()
 
+    @staticmethod
+    def _extract_transmission_datetime(first_page_content: str) -> str | None:
+        """Extrai 'Data Transmissão' em formato brasileiro com horário, quando disponível."""
+        if not first_page_content:
+            return None
+
+        patterns = [
+            r'Data\s+Transmiss[aã]o\s*:?\s*(\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}:\d{2})',
+            r'Data\s+de\s+Transmiss[aã]o\s*:?\s*(\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}:\d{2})',
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, first_page_content, flags=re.IGNORECASE)
+            if match:
+                return match.group(1).strip()
+
+        return None
+
     def extract_from_first_page(self, markdown_content: str) -> FapContestationJudgmentMetadata:
         """Extrai metadados relevantes da primeira página do relatório em markdown."""
         first_page_content = self._extract_first_page_section(markdown_content)
@@ -75,7 +93,7 @@ class FapContestationJudgmentMetadataAgent:
             FapContestationJudgmentMetadata
         )
 
-        return llm.invoke([
+        metadata = llm.invoke([
             {
                 'role': 'system',
                 'content': (
@@ -85,3 +103,9 @@ class FapContestationJudgmentMetadataAgent:
             },
             {'role': 'user', 'content': prompt},
         ])
+
+        # Fallback determinístico para cenários em que o LLM não retorna o campo.
+        if not getattr(metadata, 'transmission_datetime', None):
+            metadata.transmission_datetime = self._extract_transmission_datetime(first_page_content)
+
+        return metadata

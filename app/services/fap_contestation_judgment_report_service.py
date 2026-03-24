@@ -13,7 +13,7 @@ from docling.datamodel.base_models import InputFormat
 from app.agents.fap.fap_contestation_judgment_metadata_agent import (
     FapContestationJudgmentMetadataAgent,
 )
-from app.models import Benefit, Client, FapContestationJudgmentReport, db
+from app.models import Benefit, BenefitFapSourceHistory, Client, FapContestationJudgmentReport, db
 from app.services.open_cnpj_service import OpenCNPJService
 
 
@@ -244,6 +244,19 @@ class FapContestationJudgmentReportService:
             return datetime.strptime(value, '%d/%m/%Y').date()
         except ValueError:
             return None
+
+    @staticmethod
+    def _parse_br_datetime(value: str | None):
+        if not value:
+            return None
+
+        normalized = str(value).strip()
+        for fmt in ('%d/%m/%Y %H:%M:%S', '%d/%m/%Y %H:%M'):
+            try:
+                return datetime.strptime(normalized, fmt)
+            except ValueError:
+                continue
+        return None
 
     @staticmethod
     def _extract_date_after_label(block: str, label_pattern: str, max_chars: int = 300):
@@ -512,22 +525,30 @@ class FapContestationJudgmentReportService:
                 cnpj_raw=metadata.establishment_cnpj,
             )
 
+        transmission_dt = self._parse_br_datetime(
+            getattr(metadata, 'transmission_datetime', None) if metadata is not None else None
+        )
+
         for item in extracted_benefits:
             benefit_number = str(item.get('benefit_number') or '').strip()
             if not benefit_number:
                 continue
 
+            is_new_benefit = False
             benefit = Benefit.query.filter_by(
                 law_firm_id=report.law_firm_id,
                 benefit_number=benefit_number,
             ).first()
 
             if benefit is None:
+                is_new_benefit = True
                 benefit = Benefit(
                     law_firm_id=report.law_firm_id,
                     benefit_number=benefit_number,
                 )
                 db.session.add(benefit)
+
+            db.session.flush()
 
             benefit.benefit_type = item.get('benefit_type') or benefit.benefit_type
             benefit.insured_nit = item.get('insured_nit') or benefit.insured_nit
@@ -576,6 +597,25 @@ class FapContestationJudgmentReportService:
                     benefit.notes = f'{benefit.notes}\n{decisions_summary}'
 
             benefit.updated_at = datetime.utcnow()
+
+            history = BenefitFapSourceHistory.query.filter_by(
+                benefit_id=benefit.id,
+                report_id=report.id,
+            ).first()
+
+            if history is None:
+                history = BenefitFapSourceHistory(
+                    law_firm_id=report.law_firm_id,
+                    benefit_id=benefit.id,
+                    report_id=report.id,
+                )
+                db.session.add(history)
+
+            history.knowledge_base_id = report.knowledge_base_id
+            history.action = 'added' if is_new_benefit else 'updated'
+            history.transmission_datetime = transmission_dt
+            history.updated_at = datetime.utcnow()
+
             imported_count += 1
 
         return imported_count

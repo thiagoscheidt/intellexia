@@ -679,6 +679,41 @@
       </div>
     </div>
   </div>
+
+  <div class="modal fade" id="benefitTimelineModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header border-bottom">
+          <div>
+            <h5 class="modal-title fw-semibold">
+              <i class="bi bi-clock-history me-2 text-info"></i>Timeline de arquivos do benefício
+            </h5>
+            <small class="text-muted d-block mt-1" id="benefitTimelineSubtitle"></small>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body p-3">
+          <div id="benefitTimelineLoading" class="text-center py-5">
+            <div class="spinner-border text-info" style="width:2.2rem;height:2.2rem;" role="status"></div>
+            <p class="text-muted mt-3 mb-0">Carregando timeline...</p>
+          </div>
+          <div id="benefitTimelineEmpty" class="text-center py-5 d-none">
+            <i class="bi bi-inbox text-muted" style="font-size: 2.6rem;"></i>
+            <p class="text-muted mt-3 mb-0 fw-semibold">Nenhum evento encontrado</p>
+            <small class="text-muted">Ainda não há histórico de arquivos para este benefício.</small>
+          </div>
+          <div id="benefitTimelineError" class="alert alert-danger d-none">
+            <i class="bi bi-exclamation-triangle me-2"></i><span id="benefitTimelineErrorMsg"></span>
+          </div>
+          <div id="benefitTimelineList" class="d-none vstack gap-2"></div>
+        </div>
+        <div class="modal-footer border-top">
+          <small class="text-muted me-auto" id="benefitTimelineCount"></small>
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 {% endblock %}
 
@@ -848,6 +883,14 @@
                   aria-label="Pesquisar em documentos"
                   data-tooltip="Pesquisar trechos deste benefício nos documentos" data-bs-placement="top">
                   <i class="bi bi-file-earmark-text"></i>
+                </button>
+                <button type="button" class="btn btn-outline-info btn-sm" data-bs-toggle="modal"
+                  data-bs-target="#benefitTimelineModal" data-benefit-number="${escapeAttr(row.benefit_number || '')}"
+                  data-benefit-insured="${escapeAttr(row.insured_name || '')}"
+                  data-timeline-url="${escapeAttr(row.timeline_url || '')}"
+                  title="Ver timeline de arquivos" aria-label="Ver timeline de arquivos"
+                  data-tooltip="Ver histórico de arquivos e data de tramitação" data-bs-placement="top">
+                  <i class="bi bi-clock-history"></i>
                 </button>
                 <a href="${escapeAttr(row.edit_url)}"
                   class="btn btn-warning btn-sm" title="Editar" aria-label="Editar"
@@ -1370,6 +1413,126 @@
       firstOpinion.innerHTML = formatLongText(btn.getAttribute('data-first-opinion'));
       secondJustification.innerHTML = formatLongText(btn.getAttribute('data-second-justification'));
       secondOpinion.innerHTML = formatLongText(btn.getAttribute('data-second-opinion'));
+    });
+  })();
+
+  (function () {
+    const modal = document.getElementById('benefitTimelineModal');
+    if (!modal) return;
+
+    const subtitle = document.getElementById('benefitTimelineSubtitle');
+    const loading = document.getElementById('benefitTimelineLoading');
+    const empty = document.getElementById('benefitTimelineEmpty');
+    const errorBox = document.getElementById('benefitTimelineError');
+    const errorMsg = document.getElementById('benefitTimelineErrorMsg');
+    const listWrap = document.getElementById('benefitTimelineList');
+    const countEl = document.getElementById('benefitTimelineCount');
+
+    function setState(state) {
+      loading.classList.add('d-none');
+      empty.classList.add('d-none');
+      errorBox.classList.add('d-none');
+      listWrap.classList.add('d-none');
+      if (state === 'loading') loading.classList.remove('d-none');
+      else if (state === 'empty') empty.classList.remove('d-none');
+      else if (state === 'error') errorBox.classList.remove('d-none');
+      else if (state === 'list') listWrap.classList.remove('d-none');
+    }
+
+    function actionBadge(action) {
+      const normalized = String(action || '').toLowerCase();
+      if (normalized === 'added') {
+        return '<span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">Adicionado</span>';
+      }
+      return '<span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">Atualizado</span>';
+    }
+
+    function escapeHtml(value) {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function renderEvent(item) {
+      const transmission = item.transmission_datetime || '-';
+      const uploaded = item.report_uploaded_at || item.created_at || '-';
+      const kbLink = item.knowledge_details_url
+        ? `<a href="${item.knowledge_details_url}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary"><i class="bi bi-box-arrow-up-right me-1"></i>Documento</a>`
+        : '';
+
+      return `
+      <div class="card border shadow-sm">
+        <div class="card-body py-2 px-3">
+          <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+            <div class="small">
+              <div class="fw-semibold">${escapeHtml(item.report_filename || '-')}</div>
+              <div class="text-muted mt-1">ID do arquivo: ${item.report_id ?? '-'}</div>
+              <div class="text-muted">Data de tramitação/transmissão: <strong>${escapeHtml(transmission)}</strong></div>
+              <div class="text-muted">Upload do relatório: ${escapeHtml(uploaded)}</div>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              ${actionBadge(item.action)}
+              ${kbLink}
+            </div>
+          </div>
+        </div>
+      </div>`;
+    }
+
+    modal.addEventListener('show.bs.modal', function (event) {
+      const btn = event.relatedTarget;
+      if (!btn) return;
+
+      const timelineUrl = btn.getAttribute('data-timeline-url') || '';
+      const number = btn.getAttribute('data-benefit-number') || '';
+      const insured = btn.getAttribute('data-benefit-insured') || '';
+
+      subtitle.textContent = 'NB ' + number + (insured ? ' • ' + insured : '');
+      listWrap.innerHTML = '';
+      countEl.textContent = '';
+      setState('loading');
+
+      if (!timelineUrl) {
+        errorMsg.textContent = 'URL da timeline não encontrada para este benefício.';
+        setState('error');
+        return;
+      }
+
+      fetch(timelineUrl)
+        .then((response) => {
+          if (!response.ok) {
+            throw new Error('Falha ao carregar timeline do benefício.');
+          }
+          return response.json();
+        })
+        .then((data) => {
+          const events = data.events || [];
+          if (!events.length) {
+            setState('empty');
+            return;
+          }
+
+          events.forEach((item) => {
+            listWrap.insertAdjacentHTML('beforeend', renderEvent(item));
+          });
+
+          countEl.textContent = events.length + ' evento' + (events.length !== 1 ? 's' : '') + ' no histórico';
+          setState('list');
+        })
+        .catch((err) => {
+          errorMsg.textContent = err.message || 'Erro ao carregar timeline.';
+          setState('error');
+        });
+    });
+
+    modal.addEventListener('hidden.bs.modal', function () {
+      listWrap.innerHTML = '';
+      subtitle.textContent = '';
+      countEl.textContent = '';
+      setState('loading');
     });
   })();
 </script>

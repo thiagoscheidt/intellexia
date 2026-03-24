@@ -12,7 +12,7 @@ from openpyxl.utils import get_column_letter
 from sqlalchemy import String, and_, cast, func, or_
 from werkzeug.utils import secure_filename
 
-from app.models import Benefit, Client, FapContestationJudgmentReport, KnowledgeBase, db
+from app.models import Benefit, BenefitFapSourceHistory, Client, FapContestationJudgmentReport, KnowledgeBase, db
 
 
 central_benefits_bp = Blueprint('central_benefits', __name__, url_prefix='/central-benefits')
@@ -70,6 +70,10 @@ def _format_decimal(value):
     if isinstance(value, Decimal):
         return f'{value:.2f}'
     return str(value)
+
+
+def _format_datetime(value):
+    return value.strftime('%d/%m/%Y %H:%M:%S') if value else None
 
 
 def _normalize_text(value):
@@ -288,6 +292,7 @@ def _serialize_benefit_row(benefit, client_name):
         'justification': benefit.justification or '',
         'opinion': benefit.opinion or '',
         'notes': benefit.notes or '',
+        'timeline_url': url_for('central_benefits.benefit_file_timeline', benefit_id=benefit.id),
         'edit_url': url_for('central_benefits.edit_central_benefit', benefit_id=benefit.id),
         'delete_url': url_for('central_benefits.delete_central_benefit', benefit_id=benefit.id),
     }
@@ -346,6 +351,54 @@ def require_law_firm(f):
         return f(*args, **kwargs)
 
     return decorated_function
+
+
+@central_benefits_bp.route('/<int:benefit_id>/file-timeline', methods=['GET'])
+@require_law_firm
+def benefit_file_timeline(benefit_id):
+    law_firm_id = get_current_law_firm_id()
+    benefit = Benefit.query.filter_by(id=benefit_id, law_firm_id=law_firm_id).first_or_404()
+
+    history_items = (
+        BenefitFapSourceHistory.query.filter_by(
+            law_firm_id=law_firm_id,
+            benefit_id=benefit_id,
+        )
+        .order_by(
+            BenefitFapSourceHistory.transmission_datetime.is_(None).asc(),
+            BenefitFapSourceHistory.transmission_datetime.desc(),
+            BenefitFapSourceHistory.created_at.desc(),
+        )
+        .all()
+    )
+
+    events = []
+    for item in history_items:
+        report = item.report
+        events.append(
+            {
+                'history_id': item.id,
+                'report_id': item.report_id,
+                'knowledge_base_id': item.knowledge_base_id,
+                'action': item.action,
+                'transmission_datetime': _format_datetime(item.transmission_datetime),
+                'created_at': _format_datetime(item.created_at),
+                'report_uploaded_at': _format_datetime(report.uploaded_at if report else None),
+                'report_filename': (report.original_filename if report else None) or '-',
+                'knowledge_details_url': (
+                    url_for('knowledge_base.details', file_id=item.knowledge_base_id)
+                    if item.knowledge_base_id else None
+                ),
+            }
+        )
+
+    return jsonify(
+        {
+            'benefit_id': benefit.id,
+            'benefit_number': benefit.benefit_number,
+            'events': events,
+        }
+    )
 
 
 @central_benefits_bp.route('/')

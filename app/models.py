@@ -1275,6 +1275,11 @@ class FapContestationJudgmentReport(db.Model):
     user = db.relationship('User')
     law_firm = db.relationship('LawFirm')
     knowledge_base = db.relationship('KnowledgeBase')
+    benefit_file_history = db.relationship(
+        'BenefitFapSourceHistory',
+        back_populates='report',
+        cascade='all, delete-orphan'
+    )
 
     def __repr__(self):
         return f'<FapContestationJudgmentReport {self.original_filename}>'
@@ -1352,9 +1357,48 @@ class Benefit(db.Model):
     # Relationships
     law_firm = db.relationship('LawFirm')
     client = db.relationship('Client')
+    fap_source_history = db.relationship(
+        'BenefitFapSourceHistory',
+        back_populates='benefit',
+        cascade='all, delete-orphan',
+        order_by='BenefitFapSourceHistory.updated_at.desc()'
+    )
 
     def __repr__(self):
         return f'<Benefit {self.benefit_number}>'
+
+
+class BenefitFapSourceHistory(db.Model):
+    """Histórico de arquivos FAP que adicionaram/alteraram um benefício."""
+    __tablename__ = 'benefit_fap_source_history'
+    __table_args__ = (
+        db.UniqueConstraint('benefit_id', 'report_id', name='uq_bfsh_benefit_report'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    benefit_id = db.Column(db.Integer, db.ForeignKey('benefits.id'), nullable=False, index=True)
+    report_id = db.Column(
+        db.Integer,
+        db.ForeignKey('fap_contestation_judgment_reports.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    knowledge_base_id = db.Column(db.Integer, db.ForeignKey('knowledge_base.id'), index=True)
+
+    action = db.Column(db.String(20), nullable=False, default='updated', index=True)  # added | updated
+    transmission_datetime = db.Column(db.DateTime, index=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    law_firm = db.relationship('LawFirm')
+    benefit = db.relationship('Benefit', back_populates='fap_source_history')
+    report = db.relationship('FapContestationJudgmentReport', back_populates='benefit_file_history')
+    knowledge_base = db.relationship('KnowledgeBase')
+
+    def __repr__(self):
+        return f'<BenefitFapSourceHistory benefit={self.benefit_id} report={self.report_id}>'
 
 
 class JudicialProcessCitedBenefit(db.Model):
