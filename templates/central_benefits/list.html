@@ -13,7 +13,7 @@
 <span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2">
   <i class="bi bi-x-circle me-1"></i>Indeferido
 </span>
-{% elif status == 'in_review' %}
+{% elif status == 'in_review' or status == 'analyzing' %}
 <span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2">
   <i class="bi bi-hourglass-split me-1"></i>Em análise
 </span>
@@ -32,6 +32,9 @@
 {% elif s == 'indeferido' %}
 <span
   class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2">Indeferido</span>
+{% elif s == 'analyzing' %}
+<span
+  class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2">Em análise</span>
 {% else %}
 <span
   class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3 py-2">-</span>
@@ -290,6 +293,16 @@
               <div>
                 <h3 class="mb-0 text-warning">{{ in_review_count }}</h3>
                 <p class="text-muted mb-0">Em análise</p>
+                <div class="stats-instance-split">
+                  <div class="stats-instance-item">
+                    <span class="stats-instance-label">1ª instância</span>
+                    <div class="stats-instance-value text-warning">{{ first_instance_stats.analyzing }}</div>
+                  </div>
+                  <div class="stats-instance-item">
+                    <span class="stats-instance-label">2ª instância</span>
+                    <div class="stats-instance-value text-warning">{{ second_instance_stats.analyzing }}</div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -409,6 +422,18 @@
               <div>
                 <h3 id="filteredInReviewCount" class="mb-0 text-warning">{{ in_review_count }}</h3>
                 <p class="text-muted mb-0">Em análise</p>
+                <div class="stats-instance-split">
+                  <div class="stats-instance-item">
+                    <span class="stats-instance-label">1ª instância</span>
+                    <div id="filteredAnalyzingFirstInstanceCount" class="stats-instance-value text-warning">{{
+                      first_instance_stats.analyzing }}</div>
+                  </div>
+                  <div class="stats-instance-item">
+                    <span class="stats-instance-label">2ª instância</span>
+                    <div id="filteredAnalyzingSecondInstanceCount" class="stats-instance-value text-warning">{{
+                      second_instance_stats.analyzing }}</div>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
@@ -739,6 +764,8 @@
       $('#filteredApprovedSecondInstanceCount').text(safeSecond.approved ?? 0);
       $('#filteredRejectedFirstInstanceCount').text(safeFirst.rejected ?? 0);
       $('#filteredRejectedSecondInstanceCount').text(safeSecond.rejected ?? 0);
+      $('#filteredAnalyzingFirstInstanceCount').text(safeFirst.analyzing ?? 0);
+      $('#filteredAnalyzingSecondInstanceCount').text(safeSecond.analyzing ?? 0);
       $('#filteredPendingFirstInstanceCount').text(safeFirst.pending ?? 0);
       $('#filteredPendingSecondInstanceCount').text(safeSecond.pending ?? 0);
     }
@@ -985,6 +1012,9 @@
       }
       if (s === 'indeferido') {
         return '<span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2">Indeferido</span>';
+      }
+      if (s === 'analyzing') {
+        return '<span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2">Em análise</span>';
       }
       return '<span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3 py-2">-</span>';
     }
@@ -1390,7 +1420,15 @@
       const s = String(status || '').trim().toLowerCase();
       if (s === 'deferido') return 'bg-success-subtle text-success-emphasis';
       if (s === 'indeferido') return 'bg-danger-subtle text-danger-emphasis';
+      if (s === 'analyzing') return 'bg-warning-subtle text-warning-emphasis';
       return 'bg-secondary-subtle text-secondary-emphasis';
+    }
+
+    function statusLabel(status) {
+      const s = String(status || '').trim().toLowerCase();
+      if (s === 'analyzing') return 'Em análise';
+      if (!s) return '-';
+      return status;
     }
 
     modal.addEventListener('show.bs.modal', function (event) {
@@ -1406,8 +1444,8 @@
 
       firstStatus.className = 'badge ' + statusClass(firstStatusValue);
       secondStatus.className = 'badge ' + statusClass(secondStatusValue);
-      firstStatus.textContent = firstStatusValue || '-';
-      secondStatus.textContent = secondStatusValue || '-';
+      firstStatus.textContent = statusLabel(firstStatusValue);
+      secondStatus.textContent = statusLabel(secondStatusValue);
 
       firstJustification.innerHTML = formatLongText(btn.getAttribute('data-first-justification'));
       firstOpinion.innerHTML = formatLongText(btn.getAttribute('data-first-opinion'));

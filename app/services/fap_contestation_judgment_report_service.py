@@ -462,11 +462,16 @@ class FapContestationJudgmentReportService:
         result['second_instance_opinion'] = second_decision.get('opinion')
 
         # status consolidado prioriza 2a instância, depois 1a.
-        result['raw_status'] = (
-            result['second_instance_status']
-            or result['first_instance_status']
-            or None
-        )
+        # Se tem justificativa na 2a instância mas não tem status, marca como 'analyzing'
+        if result['second_instance_justification'] and not result['second_instance_status']:
+            result['second_instance_status'] = 'analyzing'
+            result['raw_status'] = 'analyzing'
+        else:
+            result['raw_status'] = (
+                result['second_instance_status']
+                or result['first_instance_status']
+                or None
+            )
 
         # mantém compatibilidade com colunas atuais: prioriza 2a instância e fallback para 1a.
         result['justification'] = (
@@ -507,6 +512,8 @@ class FapContestationJudgmentReportService:
             return 'approved'
         if normalized == 'indeferido':
             return 'rejected'
+        if normalized == 'analyzing':
+            return 'analyzing'
         return 'pending'
 
     @staticmethod

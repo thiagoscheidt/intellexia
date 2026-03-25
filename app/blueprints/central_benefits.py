@@ -227,10 +227,12 @@ def _group_count_by_status(query, column):
 def _build_instance_stats(total_count, status_counts):
     approved = int(status_counts.get('deferido', 0) or 0)
     rejected = int(status_counts.get('indeferido', 0) or 0)
-    pending = max(int(total_count) - approved - rejected, 0)
+    analyzing = int(status_counts.get('analyzing', 0) or 0)
+    pending = max(int(total_count) - approved - rejected - analyzing, 0)
     return {
         'approved': approved,
         'rejected': rejected,
+        'analyzing': analyzing,
         'pending': pending,
     }
 
@@ -454,7 +456,10 @@ def list_central_benefits():
     law_firm_id = get_current_law_firm_id()
     total_count = Benefit.query.filter_by(law_firm_id=law_firm_id).count()
     approved_count = Benefit.query.filter_by(law_firm_id=law_firm_id, status='approved').count()
-    in_review_count = Benefit.query.filter_by(law_firm_id=law_firm_id, status='in_review').count()
+    in_review_count = Benefit.query.filter(
+        Benefit.law_firm_id == law_firm_id,
+        func.lower(cast(Benefit.status, String)).in_(['in_review', 'analyzing']),
+    ).count()
     rejected_count = Benefit.query.filter_by(law_firm_id=law_firm_id, status='rejected').count()
     pending_count = max(total_count - approved_count - in_review_count - rejected_count, 0)
 
@@ -537,7 +542,7 @@ def list_central_benefits_api():
 
     status_counts = _group_count_by_status(filtered_query, Benefit.status)
     approved_filtered = int(status_counts.get('approved', 0) or 0)
-    in_review_filtered = int(status_counts.get('in_review', 0) or 0)
+    in_review_filtered = int(status_counts.get('in_review', 0) or 0) + int(status_counts.get('analyzing', 0) or 0)
     rejected_filtered = int(status_counts.get('rejected', 0) or 0)
     pending_filtered = max(int(records_filtered) - approved_filtered - in_review_filtered - rejected_filtered, 0)
     filtered_first_instance_stats = _build_instance_stats(
