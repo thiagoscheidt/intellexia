@@ -56,6 +56,7 @@ def add_table():
                                 knowledge_base_id INT NULL,
                                 action VARCHAR(20) NOT NULL DEFAULT 'updated',
                                 transmission_datetime DATETIME NULL,
+                                publication_datetime DATETIME NULL,
                                 created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                                 updated_at DATETIME NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                                 CONSTRAINT uq_bfsh_benefit_report UNIQUE (benefit_id, report_id),
@@ -79,6 +80,7 @@ def add_table():
                                 knowledge_base_id INTEGER,
                                 action VARCHAR(20) NOT NULL DEFAULT 'updated',
                                 transmission_datetime DATETIME,
+                                publication_datetime DATETIME,
                                 created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
                                 updated_at DATETIME,
                                 CONSTRAINT uq_bfsh_benefit_report UNIQUE (benefit_id, report_id),
@@ -102,6 +104,7 @@ def add_table():
                     "ix_bfsh_knowledge_base_id": "CREATE INDEX ix_bfsh_knowledge_base_id ON benefit_fap_source_history (knowledge_base_id)",
                     "ix_bfsh_action": "CREATE INDEX ix_bfsh_action ON benefit_fap_source_history (action)",
                     "ix_bfsh_transmission_datetime": "CREATE INDEX ix_bfsh_transmission_datetime ON benefit_fap_source_history (transmission_datetime)",
+                    "ix_bfsh_publication_datetime": "CREATE INDEX ix_bfsh_publication_datetime ON benefit_fap_source_history (publication_datetime)",
                     "ix_bfsh_created_at": "CREATE INDEX ix_bfsh_created_at ON benefit_fap_source_history (created_at)",
                 }
 
@@ -128,6 +131,11 @@ def add_table():
                 connection.execute(
                     db.text(
                         "CREATE INDEX IF NOT EXISTS ix_bfsh_transmission_datetime ON benefit_fap_source_history (transmission_datetime)"
+                    )
+                )
+                connection.execute(
+                    db.text(
+                        "CREATE INDEX IF NOT EXISTS ix_bfsh_publication_datetime ON benefit_fap_source_history (publication_datetime)"
                     )
                 )
                 connection.execute(

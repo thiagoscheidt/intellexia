@@ -154,6 +154,42 @@
                 </div>
               </div>
 
+              <h5 class="mt-3 mb-3">Resultado Administrativo - 1ª Instância</h5>
+              <div class="row">
+                <div class="col-md-4">
+                  <div class="mb-3">{{ form.first_instance_status.label(class="form-label") }}{{
+                    form.first_instance_status(class="form-select") }}</div>
+                </div>
+                <div class="col-md-8">
+                  <div class="mb-3">{{ form.first_instance_justification.label(class="form-label") }}{{
+                    form.first_instance_justification(class="form-control", rows="3") }}</div>
+                </div>
+              </div>
+              <div class="row">
+                <div class="col-md-12">
+                  <div class="mb-3">{{ form.first_instance_opinion.label(class="form-label") }}{{
+                    form.first_instance_opinion(class="form-control", rows="3") }}</div>
+                </div>
+              </div>
+
+              <h5 class="mt-2 mb-3">Resultado Administrativo - 2ª Instância</h5>
+              <div class="row">
+                <div class="col-md-4">
+                  <div class="mb-3">{{ form.second_instance_status.label(class="form-label") }}{{
+                    form.second_instance_status(class="form-select") }}</div>
+                </div>
+                <div class="col-md-8">
+                  <div class="mb-3">{{ form.second_instance_justification.label(class="form-label") }}{{
+                    form.second_instance_justification(class="form-control", rows="3") }}</div>
+                </div>
+              </div>
+              <div class="row">
+                <div class="col-md-12">
+                  <div class="mb-3">{{ form.second_instance_opinion.label(class="form-label") }}{{
+                    form.second_instance_opinion(class="form-control", rows="3") }}</div>
+                </div>
+              </div>
+
               <div class="row">
                 <div class="col-md-12">
                   <div class="mb-3">{{ form.accident_summary.label(class="form-label") }}{{

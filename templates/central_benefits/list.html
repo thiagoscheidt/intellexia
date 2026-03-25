@@ -916,7 +916,7 @@
                   data-benefit-insured="${escapeAttr(row.insured_name || '')}"
                   data-timeline-url="${escapeAttr(row.timeline_url || '')}"
                   title="Ver timeline de arquivos" aria-label="Ver timeline de arquivos"
-                  data-tooltip="Ver histórico de arquivos e data de tramitação" data-bs-placement="top">
+                  data-tooltip="Ver histórico de arquivos, tramitação e publicação" data-bs-placement="top">
                   <i class="bi bi-clock-history"></i>
                 </button>
                 <a href="${escapeAttr(row.edit_url)}"
@@ -1496,6 +1496,7 @@
 
     function renderEvent(item) {
       const transmission = item.transmission_datetime || '-';
+      const publication = item.publication_datetime || transmission;
       const uploaded = item.report_uploaded_at || item.created_at || '-';
       const kbLink = item.knowledge_details_url
         ? `<a href="${item.knowledge_details_url}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary"><i class="bi bi-box-arrow-up-right me-1"></i>Documento</a>`
@@ -1509,6 +1510,7 @@
               <div class="fw-semibold">${escapeHtml(item.report_filename || '-')}</div>
               <div class="text-muted mt-1">ID do arquivo: ${item.report_id ?? '-'}</div>
               <div class="text-muted">Data de tramitação/transmissão: <strong>${escapeHtml(transmission)}</strong></div>
+              <div class="text-muted">Data publicação: <strong>${escapeHtml(publication)}</strong></div>
               <div class="text-muted">Upload do relatório: ${escapeHtml(uploaded)}</div>
             </div>
             <div class="d-flex align-items-center gap-2">

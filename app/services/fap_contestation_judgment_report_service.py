@@ -671,26 +671,40 @@ class FapContestationJudgmentReportService:
         return 'pending'
 
     @staticmethod
-    def _should_apply_benefit_update(benefit_id: int, transmission_dt, is_new_benefit: bool) -> bool:
+    def _should_apply_benefit_update(benefit_id: int, reference_dt, is_new_benefit: bool) -> bool:
         if is_new_benefit:
             return True
 
         latest_history = (
             BenefitFapSourceHistory.query
             .filter(BenefitFapSourceHistory.benefit_id == benefit_id)
-            .filter(BenefitFapSourceHistory.transmission_datetime.is_not(None))
-            .order_by(BenefitFapSourceHistory.transmission_datetime.desc())
+            .filter(
+                db.func.coalesce(
+                    BenefitFapSourceHistory.publication_datetime,
+                    BenefitFapSourceHistory.transmission_datetime,
+                ).is_not(None)
+            )
+            .order_by(
+                db.func.coalesce(
+                    BenefitFapSourceHistory.publication_datetime,
+                    BenefitFapSourceHistory.transmission_datetime,
+                ).desc()
+            )
             .first()
         )
 
-        latest_transmission = latest_history.transmission_datetime if latest_history else None
-        if latest_transmission is None:
+        latest_reference = (
+            latest_history.publication_datetime
+            or latest_history.transmission_datetime
+            if latest_history else None
+        )
+        if latest_reference is None:
             return True
 
-        if transmission_dt is None:
+        if reference_dt is None:
             return False
 
-        return transmission_dt > latest_transmission
+        return reference_dt > latest_reference
 
     def _upsert_benefits_from_report(
         self,
@@ -716,6 +730,11 @@ class FapContestationJudgmentReportService:
         transmission_dt = self._parse_br_datetime(
             getattr(metadata, 'transmission_datetime', None) if metadata is not None else None
         )
+        publication_date = self._parse_br_date(
+            getattr(metadata, 'publication_date', None) if metadata is not None else None
+        )
+        publication_dt = datetime.combine(publication_date, datetime.min.time()) if publication_date else None
+        reference_dt = publication_dt or transmission_dt
 
         for item in extracted_benefits:
             benefit_number = str(item.get('benefit_number') or '').strip()
@@ -740,7 +759,7 @@ class FapContestationJudgmentReportService:
 
             should_apply_update = self._should_apply_benefit_update(
                 benefit_id=benefit.id,
-                transmission_dt=transmission_dt,
+                reference_dt=reference_dt,
                 is_new_benefit=is_new_benefit,
             )
 
@@ -809,6 +828,7 @@ class FapContestationJudgmentReportService:
             history.knowledge_base_id = report.knowledge_base_id
             history.action = 'added' if is_new_benefit else 'updated'
             history.transmission_datetime = transmission_dt
+            history.publication_datetime = publication_dt
             history.updated_at = datetime.utcnow()
 
             if should_apply_update:

@@ -388,8 +388,14 @@ def benefit_file_timeline(benefit_id):
             benefit_id=benefit_id,
         )
         .order_by(
-            BenefitFapSourceHistory.transmission_datetime.is_(None).asc(),
-            BenefitFapSourceHistory.transmission_datetime.desc(),
+            func.coalesce(
+                BenefitFapSourceHistory.publication_datetime,
+                BenefitFapSourceHistory.transmission_datetime,
+            ).is_(None).asc(),
+            func.coalesce(
+                BenefitFapSourceHistory.publication_datetime,
+                BenefitFapSourceHistory.transmission_datetime,
+            ).desc(),
             BenefitFapSourceHistory.created_at.desc(),
         )
         .all()
@@ -405,6 +411,7 @@ def benefit_file_timeline(benefit_id):
                 'knowledge_base_id': item.knowledge_base_id,
                 'action': item.action,
                 'transmission_datetime': _format_datetime(item.transmission_datetime),
+                'publication_datetime': _format_datetime(item.publication_datetime or item.transmission_datetime),
                 'created_at': _format_datetime(item.created_at),
                 'report_uploaded_at': _format_datetime(report.uploaded_at if report else None),
                 'report_filename': (report.original_filename if report else None) or '-',
@@ -850,6 +857,12 @@ def new_central_benefit():
             fap_vigencia_years=form.fap_vigencia_years.data,
             request_type=form.request_type.data or None,
             status=form.status.data,
+            first_instance_status=form.first_instance_status.data or None,
+            first_instance_justification=form.first_instance_justification.data,
+            first_instance_opinion=form.first_instance_opinion.data,
+            second_instance_status=form.second_instance_status.data or None,
+            second_instance_justification=form.second_instance_justification.data,
+            second_instance_opinion=form.second_instance_opinion.data,
             justification=form.justification.data,
             opinion=form.opinion.data,
             notes=form.notes.data,
@@ -908,6 +921,12 @@ def edit_central_benefit(benefit_id):
         benefit.fap_vigencia_years = form.fap_vigencia_years.data
         benefit.request_type = form.request_type.data or None
         benefit.status = form.status.data
+        benefit.first_instance_status = form.first_instance_status.data or None
+        benefit.first_instance_justification = form.first_instance_justification.data
+        benefit.first_instance_opinion = form.first_instance_opinion.data
+        benefit.second_instance_status = form.second_instance_status.data or None
+        benefit.second_instance_justification = form.second_instance_justification.data
+        benefit.second_instance_opinion = form.second_instance_opinion.data
         benefit.justification = form.justification.data
         benefit.opinion = form.opinion.data
         benefit.notes = form.notes.data

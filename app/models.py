@@ -1388,6 +1388,7 @@ class BenefitFapSourceHistory(db.Model):
 
     action = db.Column(db.String(20), nullable=False, default='updated', index=True)  # added | updated
     transmission_datetime = db.Column(db.DateTime, index=True)
+    publication_datetime = db.Column(db.DateTime, index=True)
 
     created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

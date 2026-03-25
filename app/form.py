@@ -337,12 +337,40 @@ class CentralBenefitForm(FlaskForm):
         choices=[
             ('pending', 'Pendente'),
             ('in_review', 'Em análise'),
+            ('analyzing', 'Em análise'),
             ('approved', 'Deferido c/ exclusão do registro'),
             ('rejected', 'Indeferido')
         ],
         default='pending',
         validators=[DataRequired()]
     )
+
+    first_instance_status = SelectField(
+        'Status 1ª instância',
+        choices=[
+            ('', 'Não informado'),
+            ('deferido', 'Deferido'),
+            ('indeferido', 'Indeferido'),
+            ('analyzing', 'Em análise'),
+        ],
+        validators=[Optional()]
+    )
+    first_instance_justification = TextAreaField('Justificativa 1ª instância', validators=[Optional()])
+    first_instance_opinion = TextAreaField('Parecer 1ª instância', validators=[Optional()])
+
+    second_instance_status = SelectField(
+        'Status 2ª instância',
+        choices=[
+            ('', 'Não informado'),
+            ('deferido', 'Deferido'),
+            ('indeferido', 'Indeferido'),
+            ('analyzing', 'Em análise'),
+        ],
+        validators=[Optional()]
+    )
+    second_instance_justification = TextAreaField('Justificativa 2ª instância', validators=[Optional()])
+    second_instance_opinion = TextAreaField('Parecer 2ª instância', validators=[Optional()])
+
     justification = TextAreaField('Justificativa', validators=[Optional()])
     opinion = TextAreaField('Parecer', validators=[Optional()])
 
