@@ -350,7 +350,12 @@ class FapContestationJudgmentReportService:
         status_match = re.search(r'\b(Deferido|Indeferido)\b', section, flags=re.IGNORECASE)
         status = status_match.group(1).capitalize() if status_match else None
 
-        opinion = self._extract_text_between_keywords(section, r'\bParecer\b', [])
+        # Parecer: adiciona delimitadores para evitar capturar "Sumário dos Elementos Contestados" do próximo bloco
+        opinion = self._extract_text_between_keywords(
+            section,
+            r'\bParecer\b',
+            [r'\bSum[aá]rio\s+dos\s+Elementos\s+Contestados\b', r'\bN[aã]o\s+deve\s+ser\s+considerado\b'],
+        )
         if opinion:
             opinion = re.sub(r'^(Status\s*)?(Deferido|Indeferido)\b\s*', '', opinion, flags=re.IGNORECASE).strip()
             opinion = opinion or None
@@ -368,7 +373,7 @@ class FapContestationJudgmentReportService:
         first_match = re.search(r'Administrativo\s*1\s*[ªa]\s*inst[âa]ncia', block, flags=re.IGNORECASE)
         second_match = re.search(r'Administrativo\s*2\s*[ªa]\s*inst[âa]ncia', block, flags=re.IGNORECASE)
         end_match = re.search(
-            r'\bNB\s*:|Informa[cç][oõ]es\s+de\s+Revis[aã]o\s+de\s+Benef[ií]cio|Dados\s+do\s+Benef[ií]cio',
+            r'\bNB\s*:|Informa[cç][oõ]es\s+de\s+Revis[aã]o\s+de\s+Benef[ií]cio|Dados\s+do\s+Benef[ií]cio|Sum[aá]rio\s+dos\s+Elementos\s+Contestados',
             block,
             flags=re.IGNORECASE,
         )
@@ -552,6 +557,7 @@ class FapContestationJudgmentReportService:
         )
 
         for item in extracted_benefits:
+            print(item)
             benefit_number = str(item.get('benefit_number') or '').strip()
             if not benefit_number:
                 continue
@@ -652,7 +658,7 @@ class FapContestationJudgmentReportService:
 
     def     process_pending_reports(
         self,
-        batch_size: int = 10,
+        batch_size: int = 30,
         report_id: int | None = None,
         include_errors: bool = False,
     ) -> int:
@@ -668,7 +674,7 @@ class FapContestationJudgmentReportService:
                     statuses.append('error')
                 query = query.filter(FapContestationJudgmentReport.status.in_(statuses))
 
-            effective_batch_size = 1 if report_id else max(10, int(batch_size))
+            effective_batch_size = 1 if report_id else max(30, int(batch_size))
 
             reports = (
                 query.order_by(FapContestationJudgmentReport.uploaded_at.asc())
