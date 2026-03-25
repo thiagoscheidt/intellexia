@@ -34,6 +34,21 @@
   .selected-files li {
     font-size: .85rem;
   }
+
+  .status-loading-icon {
+    display: inline-block;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from {
+      transform: rotate(0deg);
+    }
+
+    to {
+      transform: rotate(360deg);
+    }
+  }
 </style>
 {% endblock %}
 
@@ -132,13 +147,16 @@ bi-file-earmark-arrow-up') %}
                     </td>
                     <td class="text-center">
                       {% if report.status == 'completed' %}
-                      <span class="badge bg-success">completed</span>
+                      <span class="badge bg-success">Concluido</span>
                       {% elif report.status == 'processing' %}
-                      <span class="badge bg-warning text-dark">processing</span>
+                      <span class="badge bg-warning text-dark">
+                        <i class="bi bi-arrow-repeat status-loading-icon me-1"></i>
+                        Processando
+                      </span>
                       {% elif report.status == 'error' %}
-                      <span class="badge bg-danger">error</span>
+                      <span class="badge bg-danger">Erro</span>
                       {% else %}
-                      <span class="badge bg-secondary">pending</span>
+                      <span class="badge bg-secondary">Pendente</span>
                       {% endif %}
                     </td>
                     <td class="text-center">{{ report.uploaded_at.strftime('%d/%m/%Y %H:%M') if report.uploaded_at else

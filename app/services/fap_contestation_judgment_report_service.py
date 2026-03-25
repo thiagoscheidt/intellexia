@@ -504,6 +504,28 @@ class FapContestationJudgmentReportService:
             return 'rejected'
         return 'pending'
 
+    @staticmethod
+    def _should_apply_benefit_update(benefit_id: int, transmission_dt, is_new_benefit: bool) -> bool:
+        if is_new_benefit:
+            return True
+
+        latest_history = (
+            BenefitFapSourceHistory.query
+            .filter(BenefitFapSourceHistory.benefit_id == benefit_id)
+            .filter(BenefitFapSourceHistory.transmission_datetime.is_not(None))
+            .order_by(BenefitFapSourceHistory.transmission_datetime.desc())
+            .first()
+        )
+
+        latest_transmission = latest_history.transmission_datetime if latest_history else None
+        if latest_transmission is None:
+            return True
+
+        if transmission_dt is None:
+            return False
+
+        return transmission_dt > latest_transmission
+
     def _upsert_benefits_from_report(
         self,
         report: FapContestationJudgmentReport,
@@ -550,53 +572,60 @@ class FapContestationJudgmentReportService:
 
             db.session.flush()
 
-            benefit.benefit_type = item.get('benefit_type') or benefit.benefit_type
-            benefit.insured_nit = item.get('insured_nit') or benefit.insured_nit
-            benefit.benefit_start_date = item.get('benefit_start_date') or benefit.benefit_start_date
-            benefit.benefit_end_date = item.get('benefit_end_date') or benefit.benefit_end_date
-            benefit.insured_date_of_birth = item.get('insured_date_of_birth') or benefit.insured_date_of_birth
+            should_apply_update = self._should_apply_benefit_update(
+                benefit_id=benefit.id,
+                transmission_dt=transmission_dt,
+                is_new_benefit=is_new_benefit,
+            )
 
-            benefit.first_instance_status = item.get('first_instance_status')
-            benefit.first_instance_justification = item.get('first_instance_justification')
-            benefit.first_instance_opinion = item.get('first_instance_opinion')
+            if should_apply_update:
+                benefit.benefit_type = item.get('benefit_type') or benefit.benefit_type
+                benefit.insured_nit = item.get('insured_nit') or benefit.insured_nit
+                benefit.benefit_start_date = item.get('benefit_start_date') or benefit.benefit_start_date
+                benefit.benefit_end_date = item.get('benefit_end_date') or benefit.benefit_end_date
+                benefit.insured_date_of_birth = item.get('insured_date_of_birth') or benefit.insured_date_of_birth
 
-            benefit.second_instance_status = item.get('second_instance_status')
-            benefit.second_instance_justification = item.get('second_instance_justification')
-            benefit.second_instance_opinion = item.get('second_instance_opinion')
+                benefit.first_instance_status = item.get('first_instance_status')
+                benefit.first_instance_justification = item.get('first_instance_justification')
+                benefit.first_instance_opinion = item.get('first_instance_opinion')
 
-            benefit.status = self._map_status(item.get('raw_status'))
-            benefit.justification = item.get('justification')
-            benefit.opinion = item.get('opinion')
+                benefit.second_instance_status = item.get('second_instance_status')
+                benefit.second_instance_justification = item.get('second_instance_justification')
+                benefit.second_instance_opinion = item.get('second_instance_opinion')
 
-            if employer_client is not None:
-                benefit.client = employer_client
+                benefit.status = self._map_status(item.get('raw_status'))
+                benefit.justification = item.get('justification')
+                benefit.opinion = item.get('opinion')
 
-            # Enriquecimento com metadados da primeira página
-            if metadata is not None:
-                if getattr(metadata, 'establishment_cnpj', None):
-                    benefit.employer_cnpj = employer_cnpj_formatted or metadata.establishment_cnpj
-                if getattr(metadata, 'validity_year', None):
-                    benefit.fap_vigencia_years = str(metadata.validity_year)
+                if employer_client is not None:
+                    benefit.client = employer_client
 
-            # Enriquecimento adicional com OpenCNPJ para campos existentes de empresa no benefício
-            if employer_company_data is not None:
-                benefit.employer_name = employer_company_data.get('razao_social') or benefit.employer_name
-                benefit.employer_cnpj = employer_cnpj_formatted or benefit.employer_cnpj
+                # Enriquecimento com metadados da primeira página
+                if metadata is not None:
+                    if getattr(metadata, 'establishment_cnpj', None):
+                        benefit.employer_cnpj = employer_cnpj_formatted or metadata.establishment_cnpj
+                    if getattr(metadata, 'validity_year', None):
+                        benefit.fap_vigencia_years = str(metadata.validity_year)
 
-            # Rastreabilidade de origem
-            source_note = f'Relatório FAP importado (id={report.id}, arquivo={report.original_filename})'
-            decisions_summary = item.get('decisions_summary')
-            if benefit.notes:
-                if source_note not in benefit.notes:
-                    benefit.notes = f'{benefit.notes}\n{source_note}'
-                if decisions_summary and decisions_summary not in benefit.notes:
-                    benefit.notes = f'{benefit.notes}\n{decisions_summary}'
-            else:
-                benefit.notes = source_note
-                if decisions_summary:
-                    benefit.notes = f'{benefit.notes}\n{decisions_summary}'
+                # Enriquecimento adicional com OpenCNPJ para campos existentes de empresa no benefício
+                if employer_company_data is not None:
+                    benefit.employer_name = employer_company_data.get('razao_social') or benefit.employer_name
+                    benefit.employer_cnpj = employer_cnpj_formatted or benefit.employer_cnpj
 
-            benefit.updated_at = datetime.utcnow()
+                # Rastreabilidade de origem
+                source_note = f'Relatório FAP importado (id={report.id}, arquivo={report.original_filename})'
+                decisions_summary = item.get('decisions_summary')
+                if benefit.notes:
+                    if source_note not in benefit.notes:
+                        benefit.notes = f'{benefit.notes}\n{source_note}'
+                    if decisions_summary and decisions_summary not in benefit.notes:
+                        benefit.notes = f'{benefit.notes}\n{decisions_summary}'
+                else:
+                    benefit.notes = source_note
+                    if decisions_summary:
+                        benefit.notes = f'{benefit.notes}\n{decisions_summary}'
+
+                benefit.updated_at = datetime.utcnow()
 
             history = BenefitFapSourceHistory.query.filter_by(
                 benefit_id=benefit.id,
@@ -616,7 +645,8 @@ class FapContestationJudgmentReportService:
             history.transmission_datetime = transmission_dt
             history.updated_at = datetime.utcnow()
 
-            imported_count += 1
+            if should_apply_update:
+                imported_count += 1
 
         return imported_count
 
