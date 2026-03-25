@@ -234,7 +234,117 @@ class FapContestationJudgmentReportService:
                 normalized = self._normalize_benefit_type(match.group(1))
                 if normalized:
                     return normalized
+
+        # Fallback para layout em que os rótulos ficam em cima e os valores
+        # aparecem somente no trecho inicial da 1a instância.
+        fallback_value = self._extract_benefit_type_from_first_instance_header(block)
+        if fallback_value:
+            return fallback_value
         return None
+
+    def _extract_first_instance_header_lines(self, block: str) -> list[str]:
+        first_section, _ = self._extract_instance_sections(block)
+        if not first_section:
+            return []
+
+        # Limita ao cabeçalho da 1a instância (antes de justificativa/parecer/status).
+        cut_match = re.search(r'\bJustificativa\b|\bStatus\b|\bParecer\b', first_section, flags=re.IGNORECASE)
+        header_chunk = first_section[:cut_match.start()] if cut_match else first_section
+
+        return [line.strip() for line in header_chunk.split('\n') if line.strip()]
+
+    @staticmethod
+    def _extract_pre_first_instance_label_lines(block: str) -> list[str]:
+        first_match = re.search(r'Administrativo\s*1\s*[ªa]\s*inst[âa]ncia', block, flags=re.IGNORECASE)
+        if not first_match:
+            return []
+
+        labels_chunk = block[:first_match.start()]
+        lines = [line.strip() for line in labels_chunk.split('\n') if line.strip()]
+
+        # Remove linha inicial com NB isolado quando presente.
+        if lines and re.fullmatch(r'\d{8,}', lines[0]):
+            lines = lines[1:]
+
+        return lines
+
+    def _extract_shifted_layout_value_by_label(
+        self,
+        block: str,
+        label_pattern: str,
+        value_pattern: str | None = None,
+    ) -> str | None:
+        label_lines = self._extract_pre_first_instance_label_lines(block)
+        value_lines = self._extract_first_instance_header_lines(block)
+        if not label_lines or not value_lines:
+            return None
+
+        for idx, label_line in enumerate(label_lines):
+            if not re.search(label_pattern, label_line, flags=re.IGNORECASE):
+                continue
+            if idx >= len(value_lines):
+                continue
+
+            candidate = value_lines[idx].strip()
+            if not candidate:
+                continue
+            if value_pattern and not re.fullmatch(value_pattern, candidate, flags=re.IGNORECASE):
+                continue
+
+            return candidate
+
+        return None
+
+    def _extract_benefit_type_from_first_instance_header(self, block: str) -> str | None:
+        mapped_value = self._extract_shifted_layout_value_by_label(
+            block,
+            r'Esp[ée]cie\s+do\s+Benef[ií]cio',
+            r'(?:B)?\d{2}',
+        )
+        if mapped_value:
+            normalized = self._normalize_benefit_type(mapped_value)
+            if normalized:
+                return normalized
+
+        for line in self._extract_first_instance_header_lines(block):
+            match = re.fullmatch(r'(?:B)?(\d{2})', line, flags=re.IGNORECASE)
+            if match:
+                return f"B{match.group(1)}"
+        return None
+
+    def _extract_birth_date_from_first_instance_header(self, block: str):
+        mapped_value = self._extract_shifted_layout_value_by_label(
+            block,
+            r'Data\s+de\s+Nascimento\s+do\s+Empregado',
+            r'\d{2}/\d{2}/\d{4}',
+        )
+        if mapped_value:
+            mapped_date = self._parse_br_date(mapped_value)
+            current_year = datetime.utcnow().year
+            # Garante plausibilidade mínima para data de nascimento e evita
+            # capturar datas operacionais (ex.: DIB/acidente) em layouts deslocados.
+            if mapped_date and mapped_date.year <= current_year - 14:
+                return mapped_date
+
+        dates = []
+        for line in self._extract_first_instance_header_lines(block):
+            match = re.fullmatch(r'(\d{2}/\d{2}/\d{4})', line)
+            if not match:
+                continue
+
+            parsed_date = self._parse_br_date(match.group(1))
+            if parsed_date:
+                dates.append(parsed_date)
+
+        if not dates:
+            return None
+
+        current_year = datetime.utcnow().year
+        plausible_birth_dates = [d for d in dates if d.year <= current_year - 14]
+        if plausible_birth_dates:
+            return min(plausible_birth_dates)
+
+        return min(dates)
 
     @staticmethod
     def _parse_br_date(value: str | None):
@@ -299,12 +409,16 @@ class FapContestationJudgmentReportService:
 
     def _extract_insured_birth_date(self, block: str):
         # Ex.: "Data de Nascimento do Empregado 27/08/1964"
-        value = self._extract_date_after_label(
-            block,
-            r'Data\s+de\s+Nascimento\s+do\s+Empregado',
-        )
-        if value:
-            return value
+        # Limita a busca ao trecho imediatamente após o rótulo para não capturar
+        # datas operacionais (DIB/acidente) em layouts deslocados.
+        label_match = re.search(r'Data\s+de\s+Nascimento\s+do\s+Empregado', block, flags=re.IGNORECASE)
+        if label_match:
+            local_snippet = block[label_match.end():label_match.end() + 80]
+            date_match = re.search(r'\b(\d{2}/\d{2}/\d{4})\b', local_snippet)
+            if date_match:
+                parsed_local_date = self._parse_br_date(date_match.group(1))
+                if parsed_local_date:
+                    return parsed_local_date
 
         # Fallback para formatos abreviados eventualmente extraídos do PDF.
         match = re.search(
@@ -312,7 +426,11 @@ class FapContestationJudgmentReportService:
             block,
             flags=re.IGNORECASE,
         )
-        return self._parse_br_date(match.group(1)) if match else None
+        if match:
+            return self._parse_br_date(match.group(1))
+
+        # Fallback para layout com valores deslocados para o cabeçalho da 1a instância.
+        return self._extract_birth_date_from_first_instance_header(block)
 
     @staticmethod
     def _extract_benefit_situation(block: str) -> str | None:
@@ -564,7 +682,6 @@ class FapContestationJudgmentReportService:
         )
 
         for item in extracted_benefits:
-            print(item)
             benefit_number = str(item.get('benefit_number') or '').strip()
             if not benefit_number:
                 continue
