@@ -6,15 +6,18 @@
 
 {% macro status_badge(status) %}
 {% if status == 'approved' %}
-<span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2">
+<span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2"
+  title="Pedido deferido na análise administrativa.">
   <i class="bi bi-check-circle me-1"></i>Deferido c/ exclusão
 </span>
 {% elif status == 'rejected' %}
-<span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2">
+<span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2"
+  title="Pedido indeferido na análise administrativa.">
   <i class="bi bi-x-circle me-1"></i>Indeferido
 </span>
 {% elif status == 'in_review' or status == 'analyzing' %}
-<span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2">
+<span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2"
+  title="Justificativa enviada, mas o pedido ainda não foi analisado.">
   <i class="bi bi-hourglass-split me-1"></i>Em análise
 </span>
 {% else %}
@@ -28,13 +31,16 @@
 {% set s = (status or '')|lower %}
 {% if s == 'deferido' %}
 <span
-  class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2">Deferido</span>
+  class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2"
+  title="Pedido deferido na análise administrativa.">Deferido</span>
 {% elif s == 'indeferido' %}
 <span
-  class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2">Indeferido</span>
+  class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2"
+  title="Pedido indeferido na análise administrativa.">Indeferido</span>
 {% elif s == 'analyzing' %}
 <span
-  class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2">Em análise</span>
+  class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2"
+  title="Justificativa enviada, mas o pedido ainda não foi analisado.">Em análise</span>
 {% else %}
 <span
   class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3 py-2">-</span>
@@ -1008,13 +1014,13 @@
     function instanceStatusBadge(status) {
       const s = String(status || '').trim().toLowerCase();
       if (s === 'deferido') {
-        return '<span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2">Deferido</span>';
+        return '<span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2" data-bs-toggle="tooltip" data-tooltip="Pedido deferido na análise administrativa." data-bs-placement="top">Deferido</span>';
       }
       if (s === 'indeferido') {
-        return '<span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2">Indeferido</span>';
+        return '<span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2" data-bs-toggle="tooltip" data-tooltip="Pedido indeferido na análise administrativa." data-bs-placement="top">Indeferido</span>';
       }
       if (s === 'analyzing') {
-        return '<span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2">Em análise</span>';
+        return '<span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2" data-bs-toggle="tooltip" data-tooltip="Justificativa enviada, mas o pedido ainda não foi analisado." data-bs-placement="top">Em análise</span>';
       }
       return '<span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3 py-2">-</span>';
     }
@@ -1431,6 +1437,14 @@
       return status;
     }
 
+    function statusTooltip(status) {
+      const s = String(status || '').trim().toLowerCase();
+      if (s === 'deferido') return 'Pedido deferido na análise administrativa.';
+      if (s === 'indeferido') return 'Pedido indeferido na análise administrativa.';
+      if (s === 'analyzing') return 'Justificativa enviada, mas o pedido ainda não foi analisado.';
+      return '';
+    }
+
     modal.addEventListener('show.bs.modal', function (event) {
       const btn = event.relatedTarget;
       if (!btn) return;
@@ -1446,6 +1460,29 @@
       secondStatus.className = 'badge ' + statusClass(secondStatusValue);
       firstStatus.textContent = statusLabel(firstStatusValue);
       secondStatus.textContent = statusLabel(secondStatusValue);
+
+      const firstTooltip = statusTooltip(firstStatusValue);
+      const secondTooltip = statusTooltip(secondStatusValue);
+      firstStatus.setAttribute('title', firstTooltip);
+      secondStatus.setAttribute('title', secondTooltip);
+
+      if (firstTooltip) {
+        firstStatus.setAttribute('data-bs-toggle', 'tooltip');
+        bootstrap.Tooltip.getOrCreateInstance(firstStatus);
+      } else {
+        const firstTooltipInstance = bootstrap.Tooltip.getInstance(firstStatus);
+        if (firstTooltipInstance) firstTooltipInstance.dispose();
+        firstStatus.removeAttribute('data-bs-toggle');
+      }
+
+      if (secondTooltip) {
+        secondStatus.setAttribute('data-bs-toggle', 'tooltip');
+        bootstrap.Tooltip.getOrCreateInstance(secondStatus);
+      } else {
+        const secondTooltipInstance = bootstrap.Tooltip.getInstance(secondStatus);
+        if (secondTooltipInstance) secondTooltipInstance.dispose();
+        secondStatus.removeAttribute('data-bs-toggle');
+      }
 
       firstJustification.innerHTML = formatLongText(btn.getAttribute('data-first-justification'));
       firstOpinion.innerHTML = formatLongText(btn.getAttribute('data-first-opinion'));
