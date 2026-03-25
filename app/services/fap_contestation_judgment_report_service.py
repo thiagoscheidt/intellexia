@@ -240,6 +240,12 @@ class FapContestationJudgmentReportService:
         fallback_value = self._extract_benefit_type_from_first_instance_header(block)
         if fallback_value:
             return fallback_value
+
+        # Fallback final: captura qualquer token BXX no bloco quando os layouts
+        # esperados não forem reconhecidos.
+        any_benefit_type_match = re.search(r'\bB(\d{2})\b', block, flags=re.IGNORECASE)
+        if any_benefit_type_match:
+            return f"B{any_benefit_type_match.group(1)}"
         return None
 
     def _extract_first_instance_header_lines(self, block: str) -> list[str]:
@@ -490,6 +496,7 @@ class FapContestationJudgmentReportService:
 
         first_match = re.search(r'Administrativo\s*1\s*[ªa]\s*inst[âa]ncia', block, flags=re.IGNORECASE)
         second_match = re.search(r'Administrativo\s*2\s*[ªa]\s*inst[âa]ncia', block, flags=re.IGNORECASE)
+        first_justification_match = re.search(r'\bJustificativa\b', block, flags=re.IGNORECASE)
         end_match = re.search(
             r'\bNB\s*:|Informa[cç][oõ]es\s+de\s+Revis[aã]o\s+de\s+Benef[ií]cio|Dados\s+do\s+Benef[ií]cio|Sum[aá]rio\s+dos\s+Elementos\s+Contestados',
             block,
@@ -497,8 +504,22 @@ class FapContestationJudgmentReportService:
         )
 
         if first_match:
-            first_start = first_match.end()
             first_end = second_match.start() if second_match else (end_match.start() if end_match else len(block))
+
+            # Modo padrão (rígido): começa após o título da 1a instância.
+            strict_first_section = block[first_match.end():first_end]
+
+            # Fallback somente para layout anômalo: quando "Justificativa" aparece
+            # antes do título da 1a instância e a seção rígida não contém os marcadores
+            # usuais de decisão. Isso evita impacto nos PDFs já bem estruturados.
+            use_pre_heading_justification = False
+            if first_justification_match and first_justification_match.start() < first_match.start():
+                has_decision_markers_in_strict = bool(
+                    re.search(r'\bJustificativa\b|\bStatus\b|\bParecer\b', strict_first_section, flags=re.IGNORECASE)
+                )
+                use_pre_heading_justification = not has_decision_markers_in_strict
+
+            first_start = first_justification_match.start() if use_pre_heading_justification else first_match.end()
             first_section = block[first_start:first_end].strip() or None
 
         if second_match:
@@ -540,16 +561,28 @@ class FapContestationJudgmentReportService:
     def parse_block(self, block: str) -> dict | None:
         """Faz parsing de um bloco de benefício."""
         if not block or not block.strip():
-            return None
+            return 
+        print(block)
 
         result: dict[str, object | None] = {}
 
         # número do benefício
-        match = re.search(r'^\s*[:\-]?\s*(\d{8,})', block, flags=re.IGNORECASE)
-        if not match:
-            return None
+        # Em alguns documentos há texto residual do benefício anterior no início do bloco.
+        # Prioriza o número que aparece imediatamente antes de "Espécie do Benefício".
+        number_with_species = re.search(
+            r'(\d{8,})\s*(?:\n|\r\n?)\s*Esp[ée]cie\s+do\s+Benef[ií]cio',
+            block,
+            flags=re.IGNORECASE,
+        )
+        if number_with_species:
+            result['benefit_number'] = number_with_species.group(1).strip()
+            block = block[number_with_species.start():]
+        else:
+            match = re.search(r'^\s*[:\-]?\s*(\d{8,})', block, flags=re.IGNORECASE)
+            if not match:
+                return None
 
-        result['benefit_number'] = match.group(1).strip()
+            result['benefit_number'] = match.group(1).strip()
 
         # espécie do benefício: aceita layout em linha e em seção "Dados do Benefício".
         result['benefit_type'] = self._extract_benefit_type(block)
@@ -579,17 +612,20 @@ class FapContestationJudgmentReportService:
         result['second_instance_justification'] = second_decision.get('justification')
         result['second_instance_opinion'] = second_decision.get('opinion')
 
-        # status consolidado prioriza 2a instância, depois 1a.
-        # Se tem justificativa na 2a instância mas não tem status, marca como 'analyzing'
+        # Se tem justificativa na 1a instância mas não tem status, marca como 'analyzing'.
+        if result['first_instance_justification'] and not result['first_instance_status']:
+            result['first_instance_status'] = 'analyzing'
+
+        # Se tem justificativa na 2a instância mas não tem status, marca como 'analyzing'.
         if result['second_instance_justification'] and not result['second_instance_status']:
             result['second_instance_status'] = 'analyzing'
-            result['raw_status'] = 'analyzing'
-        else:
-            result['raw_status'] = (
-                result['second_instance_status']
-                or result['first_instance_status']
-                or None
-            )
+
+        # status consolidado prioriza 2a instância, depois 1a.
+        result['raw_status'] = (
+            result['second_instance_status']
+            or result['first_instance_status']
+            or None
+        )
 
         # mantém compatibilidade com colunas atuais: prioriza 2a instância e fallback para 1a.
         result['justification'] = (
