@@ -634,7 +634,8 @@ def list_central_benefits():
 @require_law_firm
 def list_fap_vigencias():
     law_firm_id = get_current_law_firm_id()
-    status_key = func.lower(func.coalesce(cast(Benefit.status, String), ''))
+    first_instance_key = func.lower(func.coalesce(cast(Benefit.first_instance_status, String), ''))
+    second_instance_key = func.lower(func.coalesce(cast(Benefit.second_instance_status, String), ''))
 
     clients = (
         Client.query.filter_by(law_firm_id=law_firm_id)
@@ -648,9 +649,72 @@ def list_fap_vigencias():
             BenefitFapVigenciaCnpj,
             func.count(Benefit.id).label('benefits_count'),
             func.max(Benefit.updated_at).label('last_benefit_update'),
-            func.sum(case((status_key == 'approved', 1), else_=0)).label('approved_count'),
-            func.sum(case((status_key == 'rejected', 1), else_=0)).label('rejected_count'),
-            func.sum(case((status_key.in_(['in_review', 'analyzing']), 1), else_=0)).label('in_review_count'),
+            func.sum(
+                case((and_(Benefit.id.is_not(None), first_instance_key == 'deferido'), 1), else_=0)
+            ).label('first_approved_count'),
+            func.sum(
+                case((and_(Benefit.id.is_not(None), first_instance_key == 'indeferido'), 1), else_=0)
+            ).label('first_rejected_count'),
+            func.sum(
+                case((and_(Benefit.id.is_not(None), first_instance_key == 'analyzing'), 1), else_=0)
+            ).label('first_in_review_count'),
+            func.sum(
+                case(
+                    (
+                        and_(
+                            Benefit.id.is_not(None),
+                            ~first_instance_key.in_(['deferido', 'indeferido', 'analyzing']),
+                        ),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ).label('first_pending_count'),
+            func.sum(
+                case((and_(Benefit.id.is_not(None), second_instance_key == 'deferido'), 1), else_=0)
+            ).label('second_approved_count'),
+            func.sum(
+                case((and_(Benefit.id.is_not(None), second_instance_key == 'indeferido'), 1), else_=0)
+            ).label('second_rejected_count'),
+            func.sum(
+                case((and_(Benefit.id.is_not(None), second_instance_key == 'analyzing'), 1), else_=0)
+            ).label('second_in_review_count'),
+            func.sum(
+                case(
+                    (
+                        and_(
+                            Benefit.id.is_not(None),
+                            ~second_instance_key.in_(['deferido', 'indeferido', 'analyzing']),
+                        ),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ).label('second_pending_count'),
+            func.sum(
+                case(
+                    (
+                        and_(
+                            Benefit.id.is_not(None),
+                            second_instance_key.in_(['deferido', 'indeferido', 'analyzing']),
+                        ),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ).label('second_instance_activity_count'),
+            func.sum(
+                case(
+                    (
+                        and_(
+                            Benefit.id.is_not(None),
+                            ~first_instance_key.in_(['deferido', 'indeferido']),
+                        ),
+                        1,
+                    ),
+                    else_=0,
+                )
+            ).label('first_instance_eligible_count'),
         )
         .outerjoin(Benefit, Benefit.fap_vigencia_cnpj_id == BenefitFapVigenciaCnpj.id)
         .filter(BenefitFapVigenciaCnpj.law_firm_id == law_firm_id)
@@ -662,7 +726,21 @@ def list_fap_vigencias():
     grouped_clients = {}
     total_benefits_linked = 0
 
-    for vigencia, benefits_count, last_benefit_update, approved_count, rejected_count, in_review_count in vigencia_rows:
+    for (
+        vigencia,
+        benefits_count,
+        last_benefit_update,
+        first_approved_count,
+        first_rejected_count,
+        first_in_review_count,
+        first_pending_count,
+        second_approved_count,
+        second_rejected_count,
+        second_in_review_count,
+        second_pending_count,
+        second_instance_activity_count,
+        first_instance_eligible_count,
+    ) in vigencia_rows:
         resolved_client = _resolve_client_for_vigencia(
             vigencia.employer_cnpj,
             clients_by_exact,
@@ -690,10 +768,16 @@ def list_fap_vigencias():
             }
 
         benefits_count = int(benefits_count or 0)
-        approved_count = int(approved_count or 0)
-        rejected_count = int(rejected_count or 0)
-        in_review_count = int(in_review_count or 0)
-        pending_count = max(benefits_count - approved_count - rejected_count - in_review_count, 0)
+        first_approved_count = int(first_approved_count or 0)
+        first_rejected_count = int(first_rejected_count or 0)
+        first_in_review_count = int(first_in_review_count or 0)
+        first_pending_count = int(first_pending_count or 0)
+        second_approved_count = int(second_approved_count or 0)
+        second_rejected_count = int(second_rejected_count or 0)
+        second_in_review_count = int(second_in_review_count or 0)
+        second_pending_count = int(second_pending_count or 0)
+        second_instance_activity_count = int(second_instance_activity_count or 0)
+        first_instance_eligible_count = int(first_instance_eligible_count or 0)
         grouped_clients[group_key]['total_vigencias'] += 1
         grouped_clients[group_key]['total_benefits'] += benefits_count
         grouped_clients[group_key]['vigencias'].append(
@@ -702,10 +786,18 @@ def list_fap_vigencias():
                 'vigencia_year': vigencia.vigencia_year,
                 'employer_cnpj': _format_cnpj(vigencia.employer_cnpj),
                 'benefits_count': benefits_count,
-                'approved_count': approved_count,
-                'rejected_count': rejected_count,
-                'in_review_count': in_review_count,
-                'pending_count': pending_count,
+                'first_approved_count': first_approved_count,
+                'first_rejected_count': first_rejected_count,
+                'first_in_review_count': first_in_review_count,
+                'first_pending_count': first_pending_count,
+                'second_approved_count': second_approved_count,
+                'second_rejected_count': second_rejected_count,
+                'second_in_review_count': second_in_review_count,
+                'second_pending_count': second_pending_count,
+                'can_mark_first_instance_deferred': (
+                    second_instance_activity_count > 0 and first_instance_eligible_count > 0
+                ),
+                'first_instance_eligible_count': first_instance_eligible_count,
                 'created_at': _format_datetime(vigencia.created_at),
                 'updated_at': _format_datetime(vigencia.updated_at),
                 'last_benefit_update': _format_datetime(last_benefit_update),
@@ -743,6 +835,57 @@ def list_fap_vigencias():
         linked_clients_count=linked_clients_count,
         unlinked_groups_count=unlinked_groups_count,
     )
+
+
+@central_benefits_bp.route('/vigencias/<int:vigencia_id>/mark-first-instance-deferred', methods=['POST'])
+@require_law_firm
+def mark_vigencia_first_instance_deferred(vigencia_id):
+    law_firm_id = get_current_law_firm_id()
+
+    vigencia = BenefitFapVigenciaCnpj.query.filter_by(
+        id=vigencia_id,
+        law_firm_id=law_firm_id,
+    ).first_or_404()
+
+    second_instance_activity_exists = db.session.query(Benefit.id).filter(
+        Benefit.law_firm_id == law_firm_id,
+        Benefit.fap_vigencia_cnpj_id == vigencia.id,
+        func.lower(func.coalesce(cast(Benefit.second_instance_status, String), '')).in_(['deferido', 'indeferido', 'analyzing']),
+    ).first() is not None
+
+    if not second_instance_activity_exists:
+        flash(
+            'A ação em lote só pode ser aplicada quando houver decisão em 2ª instância ou benefício em análise.',
+            'warning',
+        )
+        return redirect(url_for('central_benefits.list_fap_vigencias'))
+
+    eligible_benefits = Benefit.query.filter(
+        Benefit.law_firm_id == law_firm_id,
+        Benefit.fap_vigencia_cnpj_id == vigencia.id,
+        ~func.lower(func.coalesce(cast(Benefit.first_instance_status, String), '')).in_(['deferido', 'indeferido']),
+    ).all()
+
+    if not eligible_benefits:
+        flash('Não há benefícios elegíveis para marcar como deferido na 1ª instância.', 'info')
+        return redirect(url_for('central_benefits.list_fap_vigencias'))
+
+    try:
+        now = datetime.utcnow()
+        for benefit in eligible_benefits:
+            benefit.first_instance_status = 'deferido'
+            benefit.updated_at = now
+
+        db.session.commit()
+        flash(
+            f'{len(eligible_benefits)} benefício(s) da vigência {vigencia.vigencia_year or "-"} marcado(s) como deferido na 1ª instância.',
+            'success',
+        )
+    except Exception as exc:
+        db.session.rollback()
+        flash(f'Erro ao aplicar atualização em lote: {str(exc)}', 'danger')
+
+    return redirect(url_for('central_benefits.list_fap_vigencias'))
 
 
 @central_benefits_bp.route('/api/list', methods=['GET'])

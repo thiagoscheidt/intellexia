@@ -278,6 +278,27 @@
         gap: 0.45rem;
     }
 
+    .vigencias-page .status-by-instance {
+        display: grid;
+        gap: 0.5rem;
+    }
+
+    .vigencias-page .status-instance-row {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+    }
+
+    .vigencias-page .status-instance-label {
+        min-width: 92px;
+        font-size: 0.75rem;
+        font-weight: 700;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        color: var(--bs-secondary-color);
+    }
+
     .vigencias-page .status-badge {
         display: inline-flex;
         align-items: center;
@@ -317,6 +338,23 @@
     .vigencias-page .row-actions {
         display: flex;
         justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+    }
+
+    .vigencias-page .row-action-help {
+        width: 1.7rem;
+        height: 1.7rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 999px;
+        border: 1px solid rgba(25, 135, 84, 0.28);
+        color: #146c43;
+        background: rgba(25, 135, 84, 0.10);
+        font-weight: 700;
+        font-size: 0.78rem;
+        cursor: help;
     }
 
     .vigencias-page .date-stack {
@@ -542,11 +580,10 @@ icon='bi bi-diagram-3') %}
                                 <th style="width: 110px;">Vigência</th>
                                 <th style="width: 220px;">CNPJ do empregador</th>
                                 <th style="width: 160px;">Benefícios</th>
-                                <th style="width: 260px;">Status</th>
-                                <th style="width: 200px;">Criado em</th>
-                                <th style="width: 200px;">Última atualização</th>
-                                <th style="width: 220px;">Último benefício atualizado</th>
-                                <th style="width: 170px;" class="text-end">Ações</th>
+                                <th style="width: 260px;">Status 1ª instância</th>
+                                <th style="width: 260px;">Status 2ª instância</th>
+                                <th style="width: 300px;">Datas</th>
+                                <th style="width: 320px;" class="text-end">Ações</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -567,43 +604,74 @@ icon='bi bi-diagram-3') %}
                                 <td>
                                     <div class="status-badges">
                                         <span class="status-badge is-approved">
-                                            <i class="bi bi-check-circle"></i>{{ vigencia.approved_count }} deferido{{
-                                            's' if vigencia.approved_count != 1 else '' }}
+                                            <i class="bi bi-check-circle"></i>{{ vigencia.first_approved_count }}
+                                            deferido{{
+                                            's' if vigencia.first_approved_count != 1 else '' }}
                                         </span>
                                         <span class="status-badge is-rejected">
-                                            <i class="bi bi-x-circle"></i>{{ vigencia.rejected_count }} indeferido{{ 's'
-                                            if vigencia.rejected_count != 1 else '' }}
+                                            <i class="bi bi-x-circle"></i>{{ vigencia.first_rejected_count }}
+                                            indeferido{{ 's'
+                                            if vigencia.first_rejected_count != 1 else '' }}
                                         </span>
                                         <span class="status-badge is-review">
-                                            <i class="bi bi-hourglass-split"></i>{{ vigencia.in_review_count }} em
+                                            <i class="bi bi-hourglass-split"></i>{{ vigencia.first_in_review_count }} em
                                             análise
                                         </span>
                                         <span class="status-badge is-pending">
-                                            <i class="bi bi-clock"></i>{{ vigencia.pending_count }} pendente{{ 's' if
-                                            vigencia.pending_count != 1 else '' }}
+                                            <i class="bi bi-clock"></i>{{ vigencia.first_pending_count }} pendente{{ 's'
+                                            if
+                                            vigencia.first_pending_count != 1 else '' }}
+                                        </span>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="status-badges">
+                                        <span class="status-badge is-approved">
+                                            <i class="bi bi-check-circle"></i>{{ vigencia.second_approved_count }}
+                                            deferido{{
+                                            's' if vigencia.second_approved_count != 1 else '' }}
+                                        </span>
+                                        <span class="status-badge is-rejected">
+                                            <i class="bi bi-x-circle"></i>{{ vigencia.second_rejected_count }}
+                                            indeferido{{ 's'
+                                            if vigencia.second_rejected_count != 1 else '' }}
+                                        </span>
+                                        <span class="status-badge is-review">
+                                            <i class="bi bi-hourglass-split"></i>{{ vigencia.second_in_review_count }}
+                                            em
+                                            análise
+                                        </span>
+                                        <span class="status-badge is-pending">
+                                            <i class="bi bi-clock"></i>{{ vigencia.second_pending_count }} pendente{{
+                                            's' if
+                                            vigencia.second_pending_count != 1 else '' }}
                                         </span>
                                     </div>
                                 </td>
                                 <td>
                                     <div class="date-stack">
-                                        <span>{{ vigencia.created_at or '-' }}</span>
-                                        <small>Cadastro da vigência</small>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="date-stack">
-                                        <span>{{ vigencia.updated_at or '-' }}</span>
-                                        <small>Atualização do registro</small>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="date-stack">
-                                        <span>{{ vigencia.last_benefit_update or '-' }}</span>
-                                        <small>Último benefício relacionado</small>
+                                        <span><strong>Cadastro:</strong> {{ vigencia.created_at or '-' }}</span>
+                                        <span><strong>Atualização:</strong> {{ vigencia.updated_at or '-' }}</span>
+                                        <span><strong>Último benefício:</strong> {{ vigencia.last_benefit_update or '-'
+                                            }}</span>
                                     </div>
                                 </td>
                                 <td class="text-end">
                                     <div class="row-actions">
+                                        {% if vigencia.can_mark_first_instance_deferred %}
+                                        <form method="POST"
+                                            action="{{ url_for('central_benefits.mark_vigencia_first_instance_deferred', vigencia_id=vigencia.id) }}"
+                                            onsubmit="return confirm('Marcar {{ vigencia.first_instance_eligible_count }} benefício(s) desta vigência como deferido na 1ª instância?');">
+                                            <button type="submit" class="btn btn-outline-success btn-sm">
+                                                <i class="bi bi-check2-square me-1"></i>Marcar {{
+                                                vigencia.first_instance_eligible_count }} como deferido
+                                            </button>
+                                        </form>
+                                        <button type="button" class="row-action-help" data-bs-toggle="tooltip"
+                                            title="Ação disponível porque esta vigência já tem benefício em 2ª instância (ou em análise). Serão marcados como deferido apenas benefícios da 1ª instância que ainda não estão deferidos/indeferidos.">
+                                            ?
+                                        </button>
+                                        {% endif %}
                                         <a href="{{ vigencia.benefits_view_url }}"
                                             class="btn btn-outline-primary btn-sm">
                                             <i class="bi bi-search me-1"></i>Ver benefícios
@@ -633,4 +701,16 @@ icon='bi bi-diagram-3') %}
         {% endif %}
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach((el) => {
+            if (!bootstrap.Tooltip.getInstance(el)) {
+                new bootstrap.Tooltip(el, { trigger: 'hover focus click' });
+            }
+        });
+    });
+</script>
 {% endblock %}
