@@ -549,7 +549,8 @@
           </div>
           <div class="card-body pt-0">
             <div class="filters-card p-3 mb-3">
-              <div id="vigenciaFilterNotice" class="vigencia-filter-notice {{ 'd-none' if not current_vigencia_filter else '' }}"
+              <div id="vigenciaFilterNotice"
+                class="vigencia-filter-notice {{ 'd-none' if not current_vigencia_filter else '' }}"
                 data-vigencia-label="{% if current_vigencia_filter %}{% if current_vigencia_filter.year %}Vigência {{ current_vigencia_filter.year }}{% else %}Vigência selecionada{% endif %}{% if current_vigencia_filter.company_name %} - {{ current_vigencia_filter.company_name }}{% elif current_vigencia_filter.company_cnpj %} - {{ current_vigencia_filter.company_cnpj }}{% endif %}{% endif %}">
                 <div>
                   <div class="vigencia-filter-notice-title">
@@ -558,7 +559,11 @@
                   </div>
                   <div class="vigencia-filter-notice-text">
                     A listagem abaixo está restrita aos benefícios vinculados à vigência selecionada.
-                    <span id="vigenciaFilterBadge" class="vigencia-filter-badge ms-1">{% if current_vigencia_filter %}{% if current_vigencia_filter.year %}Vigência {{ current_vigencia_filter.year }}{% else %}Vigência selecionada{% endif %}{% if current_vigencia_filter.company_name %} - {{ current_vigencia_filter.company_name }}{% elif current_vigencia_filter.company_cnpj %} - {{ current_vigencia_filter.company_cnpj }}{% endif %}{% endif %}</span>
+                    <span id="vigenciaFilterBadge" class="vigencia-filter-badge ms-1">{% if current_vigencia_filter %}{%
+                      if current_vigencia_filter.year %}Vigência {{ current_vigencia_filter.year }}{% else %}Vigência
+                      selecionada{% endif %}{% if current_vigencia_filter.company_name %} - {{
+                      current_vigencia_filter.company_name }}{% elif current_vigencia_filter.company_cnpj %} - {{
+                      current_vigencia_filter.company_cnpj }}{% endif %}{% endif %}</span>
                   </div>
                 </div>
                 <div class="d-flex flex-wrap gap-2">
