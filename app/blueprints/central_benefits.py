@@ -12,7 +12,15 @@ from openpyxl.utils import get_column_letter
 from sqlalchemy import String, and_, cast, func, or_
 from werkzeug.utils import secure_filename
 
-from app.models import Benefit, BenefitFapSourceHistory, Client, FapContestationJudgmentReport, KnowledgeBase, db
+from app.models import (
+    Benefit,
+    BenefitFapSourceHistory,
+    BenefitFapVigenciaCnpj,
+    Client,
+    FapContestationJudgmentReport,
+    KnowledgeBase,
+    db,
+)
 
 
 central_benefits_bp = Blueprint('central_benefits', __name__, url_prefix='/central-benefits')
@@ -80,18 +88,60 @@ def _normalize_text(value):
     return (value or '').strip()
 
 
+def _normalize_cnpj_digits(value):
+    return ''.join(ch for ch in (value or '') if ch.isdigit())
+
+
 def _normalize_status_key(value):
     return _normalize_text(value).lower()
 
 
 def _extract_cnpj_root(cnpj):
-    digits = ''.join(ch for ch in (cnpj or '') if ch.isdigit())
+    digits = _normalize_cnpj_digits(cnpj)
     return digits[:8] if len(digits) >= 8 else ''
 
 
 def _extract_cnpj_branch(cnpj):
-    digits = ''.join(ch for ch in (cnpj or '') if ch.isdigit())
+    digits = _normalize_cnpj_digits(cnpj)
     return digits[8:12] if len(digits) >= 12 else ''
+
+
+def _format_cnpj(value):
+    digits = _normalize_cnpj_digits(value)
+    if len(digits) != 14:
+        return value or ''
+    return f'{digits[:2]}.{digits[2:5]}.{digits[5:8]}/{digits[8:12]}-{digits[12:14]}'
+
+
+def _build_client_cnpj_lookup(clients):
+    exact_lookup = {}
+    root_lookup = {}
+
+    for client in clients:
+        digits = _normalize_cnpj_digits(client.cnpj)
+        if len(digits) != 14:
+            continue
+
+        exact_lookup[digits] = client
+
+        root = digits[:8]
+        branch = digits[8:12]
+        if root not in root_lookup or branch == '0001':
+            root_lookup[root] = client
+
+    return exact_lookup, root_lookup
+
+
+def _resolve_client_for_vigencia(employer_cnpj, clients_by_exact, clients_by_root):
+    digits = _normalize_cnpj_digits(employer_cnpj)
+    if len(digits) != 14:
+        return None
+
+    client = clients_by_exact.get(digits)
+    if client is not None:
+        return client
+
+    return clients_by_root.get(digits[:8])
 
 
 def _compute_file_hash_from_path(file_path):
@@ -525,6 +575,108 @@ def list_central_benefits():
         second_instance_stats=second_instance_stats,
         cnpj_roots=cnpj_roots,
         client_options=client_options,
+    )
+
+
+@central_benefits_bp.route('/vigencias', methods=['GET'])
+@require_law_firm
+def list_fap_vigencias():
+    law_firm_id = get_current_law_firm_id()
+
+    clients = (
+        Client.query.filter_by(law_firm_id=law_firm_id)
+        .order_by(Client.name.asc())
+        .all()
+    )
+    clients_by_exact, clients_by_root = _build_client_cnpj_lookup(clients)
+
+    vigencia_rows = (
+        db.session.query(
+            BenefitFapVigenciaCnpj,
+            func.count(Benefit.id).label('benefits_count'),
+            func.max(Benefit.updated_at).label('last_benefit_update'),
+        )
+        .outerjoin(Benefit, Benefit.fap_vigencia_cnpj_id == BenefitFapVigenciaCnpj.id)
+        .filter(BenefitFapVigenciaCnpj.law_firm_id == law_firm_id)
+        .group_by(BenefitFapVigenciaCnpj.id)
+        .order_by(BenefitFapVigenciaCnpj.vigencia_year.desc(), BenefitFapVigenciaCnpj.employer_cnpj.asc())
+        .all()
+    )
+
+    grouped_clients = {}
+    total_benefits_linked = 0
+
+    for vigencia, benefits_count, last_benefit_update in vigencia_rows:
+        resolved_client = _resolve_client_for_vigencia(
+            vigencia.employer_cnpj,
+            clients_by_exact,
+            clients_by_root,
+        )
+
+        if resolved_client is not None:
+            group_key = f'client:{resolved_client.id}'
+            client_name = resolved_client.name or 'Cliente sem nome'
+            client_cnpj = resolved_client.cnpj or _format_cnpj(vigencia.employer_cnpj)
+        else:
+            group_key = f'unlinked:{_normalize_cnpj_digits(vigencia.employer_cnpj) or vigencia.id}'
+            client_name = 'Sem cliente vinculado'
+            client_cnpj = _format_cnpj(vigencia.employer_cnpj)
+
+        if group_key not in grouped_clients:
+            grouped_clients[group_key] = {
+                'client_id': resolved_client.id if resolved_client is not None else None,
+                'client_name': client_name,
+                'client_cnpj': client_cnpj,
+                'is_unlinked': resolved_client is None,
+                'total_vigencias': 0,
+                'total_benefits': 0,
+                'vigencias': [],
+            }
+
+        benefits_count = int(benefits_count or 0)
+        grouped_clients[group_key]['total_vigencias'] += 1
+        grouped_clients[group_key]['total_benefits'] += benefits_count
+        grouped_clients[group_key]['vigencias'].append(
+            {
+                'id': vigencia.id,
+                'vigencia_year': vigencia.vigencia_year,
+                'employer_cnpj': _format_cnpj(vigencia.employer_cnpj),
+                'benefits_count': benefits_count,
+                'created_at': _format_datetime(vigencia.created_at),
+                'updated_at': _format_datetime(vigencia.updated_at),
+                'last_benefit_update': _format_datetime(last_benefit_update),
+            }
+        )
+        total_benefits_linked += benefits_count
+
+    grouped_client_list = sorted(
+        grouped_clients.values(),
+        key=lambda item: (
+            item['is_unlinked'],
+            (item['client_name'] or '').lower(),
+            item['client_cnpj'] or '',
+        ),
+    )
+
+    for group in grouped_client_list:
+        group['vigencias'].sort(
+            key=lambda item: (
+                str(item['vigencia_year'] or ''),
+                item['employer_cnpj'] or '',
+            ),
+            reverse=True,
+        )
+
+    linked_clients_count = sum(1 for item in grouped_client_list if not item['is_unlinked'])
+    unlinked_groups_count = sum(1 for item in grouped_client_list if item['is_unlinked'])
+
+    return render_template(
+        'central_benefits/vigencias.html',
+        grouped_clients=grouped_client_list,
+        total_vigencias=len(vigencia_rows),
+        total_benefits_linked=total_benefits_linked,
+        linked_clients_count=linked_clients_count,
+        unlinked_groups_count=unlinked_groups_count,
     )
 
 

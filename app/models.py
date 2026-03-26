@@ -1285,6 +1285,28 @@ class FapContestationJudgmentReport(db.Model):
         return f'<FapContestationJudgmentReport {self.original_filename}>'
 
 
+class BenefitFapVigenciaCnpj(db.Model):
+    """Vigências FAP por CNPJ para agrupamento de benefícios."""
+    __tablename__ = 'benefit_fap_vigencia_cnpjs'
+    __table_args__ = (
+        db.UniqueConstraint('law_firm_id', 'employer_cnpj', 'vigencia_year', name='uq_bfvc_law_firm_cnpj_vigencia'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    employer_cnpj = db.Column(db.String(20), nullable=False, index=True)
+    vigencia_year = db.Column(db.String(10), nullable=False, index=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    law_firm = db.relationship('LawFirm')
+    benefits = db.relationship('Benefit', back_populates='fap_vigencia_cnpj')
+
+    def __repr__(self):
+        return f'<BenefitFapVigenciaCnpj {self.employer_cnpj} {self.vigencia_year}>'
+
+
 class Benefit(db.Model):
     """Tabela benefits - Centralized benefit registry from all sources.
 
@@ -1302,6 +1324,7 @@ class Benefit(db.Model):
 
     # Optional link to the firm's client (employer that is contesting the benefit)
     client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), index=True)
+    fap_vigencia_cnpj_id = db.Column(db.Integer, db.ForeignKey('benefit_fap_vigencia_cnpjs.id'), index=True)
 
     # Benefit identification
     benefit_number = db.Column(db.String(50), nullable=False, index=True)
@@ -1357,6 +1380,7 @@ class Benefit(db.Model):
     # Relationships
     law_firm = db.relationship('LawFirm')
     client = db.relationship('Client')
+    fap_vigencia_cnpj = db.relationship('BenefitFapVigenciaCnpj', back_populates='benefits')
     fap_source_history = db.relationship(
         'BenefitFapSourceHistory',
         back_populates='benefit',

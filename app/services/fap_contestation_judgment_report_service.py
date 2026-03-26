@@ -13,7 +13,14 @@ from docling.datamodel.base_models import InputFormat
 from app.agents.fap.fap_contestation_judgment_metadata_agent import (
     FapContestationJudgmentMetadataAgent,
 )
-from app.models import Benefit, BenefitFapSourceHistory, Client, FapContestationJudgmentReport, db
+from app.models import (
+    Benefit,
+    BenefitFapSourceHistory,
+    BenefitFapVigenciaCnpj,
+    Client,
+    FapContestationJudgmentReport,
+    db,
+)
 from app.services.open_cnpj_service import OpenCNPJService
 
 
@@ -86,6 +93,36 @@ class FapContestationJudgmentReportService:
         client.updated_at = datetime.utcnow()
 
         return client, company_data, cnpj_formatado
+
+    def _upsert_benefit_vigencia_cnpj(
+        self,
+        law_firm_id: int,
+        employer_cnpj_raw: str | None,
+        vigencia_year_raw: str | int | None,
+    ) -> BenefitFapVigenciaCnpj | None:
+        employer_cnpj_digits = self._normalize_cnpj(employer_cnpj_raw)
+        if len(employer_cnpj_digits) != 14:
+            return None
+
+        vigencia_year = str(vigencia_year_raw or '').strip()
+        if not vigencia_year:
+            return None
+
+        record = BenefitFapVigenciaCnpj.query.filter_by(
+            law_firm_id=law_firm_id,
+            employer_cnpj=employer_cnpj_digits,
+            vigencia_year=vigencia_year,
+        ).first()
+        if record is not None:
+            return record
+
+        record = BenefitFapVigenciaCnpj(
+            law_firm_id=law_firm_id,
+            employer_cnpj=employer_cnpj_digits,
+            vigencia_year=vigencia_year,
+        )
+        db.session.add(record)
+        return record
 
     def convert_report_to_markdown(self, file_path: str | Path) -> str:
         """Converte um relatório de julgamento do FAP para markdown usando Docling."""
@@ -830,6 +867,7 @@ class FapContestationJudgmentReportService:
         employer_client: Client | None = None
         employer_company_data: dict | None = None
         employer_cnpj_formatted: str | None = None
+        employer_vigencia_record: BenefitFapVigenciaCnpj | None = None
 
         if metadata is not None and getattr(metadata, 'establishment_cnpj', None):
             employer_client, employer_company_data, employer_cnpj_formatted = self._upsert_client_from_cnpj(
@@ -845,6 +883,15 @@ class FapContestationJudgmentReportService:
         )
         publication_dt = datetime.combine(publication_date, datetime.min.time()) if publication_date else None
         reference_dt = publication_dt or transmission_dt
+
+        if metadata is not None:
+            metadata_cnpj = employer_cnpj_formatted or getattr(metadata, 'establishment_cnpj', None)
+            metadata_vigencia = getattr(metadata, 'validity_year', None)
+            employer_vigencia_record = self._upsert_benefit_vigencia_cnpj(
+                law_firm_id=report.law_firm_id,
+                employer_cnpj_raw=metadata_cnpj,
+                vigencia_year_raw=metadata_vigencia,
+            )
 
         for item in extracted_benefits:
             benefit_number = str(item.get('benefit_number') or '').strip()
@@ -894,6 +941,9 @@ class FapContestationJudgmentReportService:
 
                 if employer_client is not None:
                     benefit.client = employer_client
+
+                if employer_vigencia_record is not None:
+                    benefit.fap_vigencia_cnpj = employer_vigencia_record
 
                 # Enriquecimento com metadados da primeira página
                 if metadata is not None:

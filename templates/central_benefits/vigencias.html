@@ -1,0 +1,199 @@
+{% extends "layout/base.html" %}
+
+{% from "partials/page_hero.html" import page_hero %}
+
+{% set page_title = "Vigências FAP por Cliente" %}
+
+{% block title %}{{ page_title }} - IntellexIA{% endblock %}
+
+{% block extra_css %}
+<style>
+    .summary-card {
+        border-left: 4px solid var(--bs-primary);
+    }
+
+    .summary-card .metric-value {
+        font-size: 1.8rem;
+        font-weight: 700;
+        line-height: 1;
+    }
+
+    .client-group-card {
+        border: 1px solid var(--bs-border-color);
+        border-radius: 1rem;
+        overflow: hidden;
+    }
+
+    .client-group-header {
+        background: linear-gradient(135deg, rgba(13, 110, 253, 0.08), rgba(13, 110, 253, 0.02));
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+
+    .client-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+    }
+
+    .client-meta .badge {
+        font-size: 0.8rem;
+    }
+
+    .vigencia-table td,
+    .vigencia-table th {
+        vertical-align: middle;
+    }
+
+    .cnpj-code {
+        font-family: var(--bs-font-monospace);
+        font-size: 0.92rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% call page_hero(title=page_title, subtitle='Consulta das vigências já identificadas na base, agrupadas por cliente',
+icon='bi bi-diagram-3') %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-0 bg-transparent small">
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a>
+        </li>
+        <li class="breadcrumb-item"><a href="{{ url_for('central_benefits.list_central_benefits') }}">Painel de
+                Beneficios</a></li>
+        <li class="breadcrumb-item active" aria-current="page">{{ page_title }}</li>
+    </ol>
+</nav>
+{% endcall %}
+
+<div class="container-fluid">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="row mb-4">
+        <div class="col-12">
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                <i class="bi bi-info-circle me-2"></i>{{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    <div class="row row-cols-1 row-cols-md-2 row-cols-xl-4 g-3 mb-4">
+        <div class="col">
+            <div class="card summary-card h-100">
+                <div class="card-body">
+                    <div class="text-muted small mb-2">Clientes com vigência</div>
+                    <div class="metric-value text-primary">{{ linked_clients_count }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card summary-card h-100" style="border-left-color: var(--bs-success);">
+                <div class="card-body">
+                    <div class="text-muted small mb-2">Vigências cadastradas</div>
+                    <div class="metric-value text-success">{{ total_vigencias }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card summary-card h-100" style="border-left-color: var(--bs-info);">
+                <div class="card-body">
+                    <div class="text-muted small mb-2">Benefícios vinculados</div>
+                    <div class="metric-value text-info">{{ total_benefits_linked }}</div>
+                </div>
+            </div>
+        </div>
+        <div class="col">
+            <div class="card summary-card h-100" style="border-left-color: var(--bs-warning);">
+                <div class="card-body">
+                    <div class="text-muted small mb-2">Grupos sem cliente</div>
+                    <div class="metric-value text-warning">{{ unlinked_groups_count }}</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm mb-4">
+        <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
+            <div>
+                <h3 class="card-title mb-1"><i class="bi bi-table me-2"></i>Relação de vigências</h3>
+                <small class="text-muted">Cada bloco representa um cliente e suas vigências FAP já persistidas.</small>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                <a href="{{ url_for('central_benefits.fap_contestation_reports') }}"
+                    class="btn btn-outline-info btn-sm">
+                    <i class="bi bi-upload me-1"></i>Importar relatório FAP
+                </a>
+                <a href="{{ url_for('central_benefits.list_central_benefits') }}"
+                    class="btn btn-outline-secondary btn-sm">
+                    <i class="bi bi-arrow-left me-1"></i>Voltar ao painel
+                </a>
+            </div>
+        </div>
+    </div>
+
+    {% if grouped_clients %}
+    <div class="d-flex flex-column gap-4">
+        {% for group in grouped_clients %}
+        <section class="client-group-card shadow-sm">
+            <div class="client-group-header p-3 p-lg-4">
+                <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
+                    <div>
+                        <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
+                            <h4 class="mb-0">{{ group.client_name }}</h4>
+                            {% if group.is_unlinked %}
+                            <span class="badge rounded-pill text-bg-warning">Sem vínculo automático</span>
+                            {% endif %}
+                        </div>
+                        <div class="client-meta">
+                            <span class="badge rounded-pill text-bg-light border text-dark cnpj-code">{{
+                                group.client_cnpj or 'CNPJ não identificado' }}</span>
+                            <span class="badge rounded-pill text-bg-primary">{{ group.total_vigencias }} vigência{{ 's'
+                                if group.total_vigencias != 1 else '' }}</span>
+                            <span class="badge rounded-pill text-bg-success">{{ group.total_benefits }} benefício{{ 's'
+                                if group.total_benefits != 1 else '' }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0 vigencia-table">
+                    <thead class="table-light">
+                        <tr>
+                            <th style="width: 110px;">Vigência</th>
+                            <th style="width: 220px;">CNPJ do empregador</th>
+                            <th style="width: 160px;">Benefícios</th>
+                            <th style="width: 200px;">Criado em</th>
+                            <th style="width: 200px;">Última atualização</th>
+                            <th style="width: 220px;">Último benefício atualizado</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for vigencia in group.vigencias %}
+                        <tr>
+                            <td><span class="badge rounded-pill text-bg-secondary">{{ vigencia.vigencia_year or '-'
+                                    }}</span></td>
+                            <td class="cnpj-code">{{ vigencia.employer_cnpj or '-' }}</td>
+                            <td>{{ vigencia.benefits_count }}</td>
+                            <td>{{ vigencia.created_at or '-' }}</td>
+                            <td>{{ vigencia.updated_at or '-' }}</td>
+                            <td>{{ vigencia.last_benefit_update or '-' }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="alert alert-info mb-0">
+        <i class="bi bi-info-circle me-2"></i>Nenhuma vigência FAP cadastrada até o momento.
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

@@ -30,16 +30,13 @@
 {% macro instance_status_badge(status) %}
 {% set s = (status or '')|lower %}
 {% if s == 'deferido' %}
-<span
-  class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2"
+<span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2"
   title="Pedido deferido na análise administrativa.">Deferido</span>
 {% elif s == 'indeferido' %}
-<span
-  class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2"
+<span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2"
   title="Pedido indeferido na análise administrativa.">Indeferido</span>
 {% elif s == 'analyzing' %}
-<span
-  class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2"
+<span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2"
   title="Justificativa enviada, mas o pedido ainda não foi analisado.">Em análise</span>
 {% else %}
 <span
@@ -492,6 +489,9 @@
                   data-tooltip="Exportar resultado filtrado para Excel" data-bs-placement="top">
                   <i class="bi bi-file-earmark-excel me-1"></i>Exportar Excel
                 </button>
+                <a href="{{ url_for('central_benefits.list_fap_vigencias') }}" class="btn btn-outline-primary btn-sm">
+                  <i class="bi bi-diagram-3 me-1"></i>Ver vigências
+                </a>
                 <a href="{{ url_for('central_benefits.fap_contestation_reports') }}" class="btn btn-info btn-sm">
                   <i class="bi bi-upload me-1"></i>Importar relatório FAP
                 </a>
