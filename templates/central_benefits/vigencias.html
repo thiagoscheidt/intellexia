@@ -8,45 +8,324 @@
 
 {% block extra_css %}
 <style>
-    .summary-card {
-        border-left: 4px solid var(--bs-primary);
+    .vigencias-page {
+        --vigencias-accent: #0f5fd7;
+        --vigencias-accent-soft: rgba(15, 95, 215, 0.10);
+        --vigencias-success-soft: rgba(25, 135, 84, 0.12);
+        --vigencias-warning-soft: rgba(255, 193, 7, 0.16);
     }
 
-    .summary-card .metric-value {
-        font-size: 1.8rem;
+    .vigencias-page .overview-card {
+        position: relative;
+        overflow: hidden;
+        border: 0;
+        border-radius: 1.25rem;
+        background:
+            radial-gradient(circle at top right, rgba(13, 110, 253, 0.18), transparent 28%),
+            linear-gradient(135deg, #f8fbff 0%, #ffffff 52%, #f2f7ff 100%);
+        box-shadow: 0 18px 45px rgba(15, 23, 42, 0.08);
+    }
+
+    .vigencias-page .overview-card::after {
+        content: "";
+        position: absolute;
+        inset: auto -80px -80px auto;
+        width: 220px;
+        height: 220px;
+        border-radius: 50%;
+        background: rgba(13, 110, 253, 0.07);
+    }
+
+    .vigencias-page .overview-title {
+        font-size: 1.2rem;
+        font-weight: 700;
+        color: var(--bs-emphasis-color);
+    }
+
+    .vigencias-page .overview-text {
+        max-width: 760px;
+        color: var(--bs-secondary-color);
+    }
+
+    .vigencias-page .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 1rem;
+    }
+
+    .vigencias-page .summary-card {
+        position: relative;
+        overflow: hidden;
+        border: 1px solid rgba(15, 23, 42, 0.06);
+        border-radius: 1rem;
+        background: #fff;
+        box-shadow: 0 14px 30px rgba(15, 23, 42, 0.05);
+    }
+
+    .vigencias-page .summary-card::before {
+        content: "";
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 5px;
+        background: var(--accent-color, var(--vigencias-accent));
+    }
+
+    .vigencias-page .summary-card .card-body {
+        display: flex;
+        align-items: center;
+        gap: 0.9rem;
+        padding: 1.1rem 1.1rem 1.15rem 1.2rem;
+    }
+
+    .vigencias-page .summary-icon {
+        width: 3rem;
+        height: 3rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 0.9rem;
+        background: var(--accent-soft, var(--vigencias-accent-soft));
+        color: var(--accent-color, var(--vigencias-accent));
+        font-size: 1.2rem;
+        flex-shrink: 0;
+    }
+
+    .vigencias-page .summary-label {
+        font-size: 0.8rem;
+        font-weight: 600;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        color: var(--bs-secondary-color);
+        margin-bottom: 0.2rem;
+    }
+
+    .vigencias-page .metric-value {
+        font-size: 2rem;
         font-weight: 700;
         line-height: 1;
+        color: var(--bs-emphasis-color);
     }
 
-    .client-group-card {
-        border: 1px solid var(--bs-border-color);
+    .vigencias-page .metric-caption {
+        font-size: 0.84rem;
+        color: var(--bs-secondary-color);
+        margin-top: 0.3rem;
+    }
+
+    .vigencias-page .section-shell {
+        border: 1px solid rgba(15, 23, 42, 0.06);
+        border-radius: 1.15rem;
+        background: #fff;
+        box-shadow: 0 16px 32px rgba(15, 23, 42, 0.05);
+    }
+
+    .vigencias-page .section-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 1rem;
+        padding: 1.25rem 1.35rem;
+        border-bottom: 1px solid var(--bs-border-color-translucent);
+    }
+
+    .vigencias-page .section-title {
+        font-size: 1.05rem;
+        font-weight: 700;
+        margin-bottom: 0.25rem;
+    }
+
+    .vigencias-page .section-note {
+        color: var(--bs-secondary-color);
+        font-size: 0.92rem;
+    }
+
+    .vigencias-page .client-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 1rem;
+        padding: 1rem;
+    }
+
+    .vigencias-page .client-group-card {
+        border: 1px solid rgba(15, 23, 42, 0.08);
         border-radius: 1rem;
         overflow: hidden;
+        background: linear-gradient(180deg, rgba(248, 250, 252, 0.55), #fff 22%);
     }
 
-    .client-group-header {
-        background: linear-gradient(135deg, rgba(13, 110, 253, 0.08), rgba(13, 110, 253, 0.02));
-        border-bottom: 1px solid var(--bs-border-color);
+    .vigencias-page .client-group-header {
+        padding: 1.1rem 1.25rem;
+        border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+        background:
+            linear-gradient(135deg, rgba(13, 110, 253, 0.08), rgba(13, 110, 253, 0.02)),
+            linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(248, 250, 252, 0.92));
     }
 
-    .client-meta {
+    .vigencias-page .client-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+    }
+
+    .vigencias-page .client-title {
+        font-size: 1.1rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        color: var(--bs-emphasis-color);
+    }
+
+    .vigencias-page .client-code {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        padding: 0.45rem 0.7rem;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.85);
+        font-family: var(--bs-font-monospace);
+        font-size: 0.86rem;
+        color: var(--bs-emphasis-color);
+    }
+
+    .vigencias-page .client-meta {
         display: flex;
         flex-wrap: wrap;
-        gap: 0.5rem;
+        gap: 0.6rem;
+        justify-content: flex-end;
     }
 
-    .client-meta .badge {
-        font-size: 0.8rem;
+    .vigencias-page .client-kpi {
+        min-width: 132px;
+        padding: 0.75rem 0.85rem;
+        border-radius: 0.9rem;
+        background: rgba(255, 255, 255, 0.88);
+        border: 1px solid rgba(15, 23, 42, 0.06);
     }
 
-    .vigencia-table td,
-    .vigencia-table th {
+    .vigencias-page .client-kpi-label {
+        display: block;
+        font-size: 0.76rem;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: var(--bs-secondary-color);
+        margin-bottom: 0.2rem;
+    }
+
+    .vigencias-page .client-kpi-value {
+        font-size: 1.15rem;
+        font-weight: 700;
+        color: var(--bs-emphasis-color);
+    }
+
+    .vigencias-page .client-status {
+        margin-top: 0.65rem;
+    }
+
+    .vigencias-page .vigencia-table-wrap {
+        padding: 0.75rem;
+    }
+
+    .vigencias-page .vigencia-table {
+        margin-bottom: 0;
+        border-collapse: separate;
+        border-spacing: 0;
+    }
+
+    .vigencias-page .vigencia-table th,
+    .vigencias-page .vigencia-table td {
         vertical-align: middle;
+        border-color: rgba(15, 23, 42, 0.06);
+        padding: 0.95rem 0.9rem;
     }
 
-    .cnpj-code {
-        font-family: var(--bs-font-monospace);
-        font-size: 0.92rem;
+    .vigencias-page .vigencia-table thead th {
+        background: #f7f9fc;
+        font-size: 0.77rem;
+        letter-spacing: 0.03em;
+        text-transform: uppercase;
+        color: #5d6b82;
+        font-weight: 700;
+        border-top: 0;
+    }
+
+    .vigencias-page .vigencia-table tbody tr:hover {
+        background: rgba(13, 110, 253, 0.035);
+    }
+
+    .vigencias-page .year-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 76px;
+        padding: 0.4rem 0.7rem;
+        border-radius: 999px;
+        background: rgba(15, 95, 215, 0.12);
+        color: #0b4cb3;
+        font-weight: 700;
+    }
+
+    .vigencias-page .benefit-count {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.45rem;
+        font-weight: 600;
+    }
+
+    .vigencias-page .date-stack {
+        display: flex;
+        flex-direction: column;
+        gap: 0.1rem;
+    }
+
+    .vigencias-page .date-stack small {
+        color: var(--bs-secondary-color);
+        font-size: 0.76rem;
+    }
+
+    .vigencias-page .empty-state {
+        border: 1px dashed rgba(13, 110, 253, 0.25);
+        border-radius: 1.25rem;
+        background: linear-gradient(135deg, rgba(13, 110, 253, 0.05), rgba(13, 110, 253, 0.01));
+        padding: 2.5rem 1.5rem;
+        text-align: center;
+    }
+
+    @media (max-width: 1199.98px) {
+        .vigencias-page .summary-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+
+        .vigencias-page .client-heading {
+            flex-direction: column;
+        }
+
+        .vigencias-page .client-meta {
+            justify-content: flex-start;
+        }
+    }
+
+    @media (max-width: 767.98px) {
+        .vigencias-page .summary-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .vigencias-page .section-header {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .vigencias-page .overview-card .card-body {
+            padding: 1.15rem;
+        }
+
+        .vigencias-page .client-group-header {
+            padding: 1rem;
+        }
+
+        .vigencias-page .vigencia-table-wrap {
+            padding: 0;
+        }
     }
 </style>
 {% endblock %}
@@ -65,7 +344,7 @@ icon='bi bi-diagram-3') %}
 </nav>
 {% endcall %}
 
-<div class="container-fluid">
+<div class="container-fluid vigencias-page">
     {% with messages = get_flashed_messages(with_categories=true) %}
     {% if messages %}
     <div class="row mb-4">
@@ -81,119 +360,200 @@ icon='bi bi-diagram-3') %}
     {% endif %}
     {% endwith %}
 
-    <div class="row row-cols-1 row-cols-md-2 row-cols-xl-4 g-3 mb-4">
-        <div class="col">
-            <div class="card summary-card h-100">
-                <div class="card-body">
-                    <div class="text-muted small mb-2">Clientes com vigência</div>
-                    <div class="metric-value text-primary">{{ linked_clients_count }}</div>
+    <div class="card overview-card mb-4">
+        <div class="card-body position-relative p-4 p-lg-4">
+            <div class="row align-items-center g-4">
+                <div class="col-lg-8">
+                    <div class="overview-title mb-2">
+                        <i class="bi bi-diagram-3-fill text-primary me-2"></i>Mapa das vigências por cliente
+                    </div>
+                    <div class="overview-text">
+                        Esta visão consolida os vínculos de vigência FAP já persistidos e facilita identificar quais
+                        clientes possuem cobertura organizada, quantos benefícios estão associados e onde ainda existem
+                        grupos sem cliente relacionado.
+                    </div>
                 </div>
-            </div>
-        </div>
-        <div class="col">
-            <div class="card summary-card h-100" style="border-left-color: var(--bs-success);">
-                <div class="card-body">
-                    <div class="text-muted small mb-2">Vigências cadastradas</div>
-                    <div class="metric-value text-success">{{ total_vigencias }}</div>
-                </div>
-            </div>
-        </div>
-        <div class="col">
-            <div class="card summary-card h-100" style="border-left-color: var(--bs-info);">
-                <div class="card-body">
-                    <div class="text-muted small mb-2">Benefícios vinculados</div>
-                    <div class="metric-value text-info">{{ total_benefits_linked }}</div>
-                </div>
-            </div>
-        </div>
-        <div class="col">
-            <div class="card summary-card h-100" style="border-left-color: var(--bs-warning);">
-                <div class="card-body">
-                    <div class="text-muted small mb-2">Grupos sem cliente</div>
-                    <div class="metric-value text-warning">{{ unlinked_groups_count }}</div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <div class="card shadow-sm mb-4">
-        <div class="card-body d-flex flex-wrap justify-content-between align-items-center gap-3">
-            <div>
-                <h3 class="card-title mb-1"><i class="bi bi-table me-2"></i>Relação de vigências</h3>
-                <small class="text-muted">Cada bloco representa um cliente e suas vigências FAP já persistidas.</small>
-            </div>
-            <div class="d-flex flex-wrap gap-2">
-                <a href="{{ url_for('central_benefits.fap_contestation_reports') }}"
-                    class="btn btn-outline-info btn-sm">
-                    <i class="bi bi-upload me-1"></i>Importar relatório FAP
-                </a>
-                <a href="{{ url_for('central_benefits.list_central_benefits') }}"
-                    class="btn btn-outline-secondary btn-sm">
-                    <i class="bi bi-arrow-left me-1"></i>Voltar ao painel
-                </a>
-            </div>
-        </div>
-    </div>
-
-    {% if grouped_clients %}
-    <div class="d-flex flex-column gap-4">
-        {% for group in grouped_clients %}
-        <section class="client-group-card shadow-sm">
-            <div class="client-group-header p-3 p-lg-4">
-                <div class="d-flex flex-column flex-lg-row justify-content-between align-items-lg-center gap-3">
-                    <div>
-                        <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
-                            <h4 class="mb-0">{{ group.client_name }}</h4>
-                            {% if group.is_unlinked %}
-                            <span class="badge rounded-pill text-bg-warning">Sem vínculo automático</span>
-                            {% endif %}
-                        </div>
-                        <div class="client-meta">
-                            <span class="badge rounded-pill text-bg-light border text-dark cnpj-code">{{
-                                group.client_cnpj or 'CNPJ não identificado' }}</span>
-                            <span class="badge rounded-pill text-bg-primary">{{ group.total_vigencias }} vigência{{ 's'
-                                if group.total_vigencias != 1 else '' }}</span>
-                            <span class="badge rounded-pill text-bg-success">{{ group.total_benefits }} benefício{{ 's'
-                                if group.total_benefits != 1 else '' }}</span>
-                        </div>
+                <div class="col-lg-4">
+                    <div class="d-flex flex-wrap justify-content-lg-end gap-2">
+                        <a href="{{ url_for('central_benefits.fap_contestation_reports') }}"
+                            class="btn btn-info btn-sm px-3">
+                            <i class="bi bi-upload me-1"></i>Importar relatório FAP
+                        </a>
+                        <a href="{{ url_for('central_benefits.list_central_benefits') }}"
+                            class="btn btn-outline-secondary btn-sm px-3">
+                            <i class="bi bi-arrow-left me-1"></i>Voltar ao painel
+                        </a>
                     </div>
                 </div>
             </div>
+        </div>
+    </div>
 
-            <div class="table-responsive">
-                <table class="table table-hover align-middle mb-0 vigencia-table">
-                    <thead class="table-light">
-                        <tr>
-                            <th style="width: 110px;">Vigência</th>
-                            <th style="width: 220px;">CNPJ do empregador</th>
-                            <th style="width: 160px;">Benefícios</th>
-                            <th style="width: 200px;">Criado em</th>
-                            <th style="width: 200px;">Última atualização</th>
-                            <th style="width: 220px;">Último benefício atualizado</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for vigencia in group.vigencias %}
-                        <tr>
-                            <td><span class="badge rounded-pill text-bg-secondary">{{ vigencia.vigencia_year or '-'
-                                    }}</span></td>
-                            <td class="cnpj-code">{{ vigencia.employer_cnpj or '-' }}</td>
-                            <td>{{ vigencia.benefits_count }}</td>
-                            <td>{{ vigencia.created_at or '-' }}</td>
-                            <td>{{ vigencia.updated_at or '-' }}</td>
-                            <td>{{ vigencia.last_benefit_update or '-' }}</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+    <div class="summary-grid mb-4">
+        <div class="summary-card" style="--accent-color: #0f5fd7; --accent-soft: rgba(15, 95, 215, 0.10);">
+            <div class="card-body">
+                <div class="summary-icon">
+                    <i class="bi bi-buildings"></i>
+                </div>
+                <div>
+                    <div class="summary-label">Clientes com vigência</div>
+                    <div class="metric-value">{{ linked_clients_count }}</div>
+                    <div class="metric-caption">Clientes já vinculados aos agrupamentos de CNPJ e ano.</div>
+                </div>
             </div>
-        </section>
-        {% endfor %}
+        </div>
+
+        <div class="summary-card" style="--accent-color: #198754; --accent-soft: rgba(25, 135, 84, 0.12);">
+            <div class="card-body">
+                <div class="summary-icon">
+                    <i class="bi bi-calendar-range"></i>
+                </div>
+                <div>
+                    <div class="summary-label">Vigências cadastradas</div>
+                    <div class="metric-value">{{ total_vigencias }}</div>
+                    <div class="metric-caption">Registros distintos de vigência já materializados na base.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="summary-card" style="--accent-color: #0dcaf0; --accent-soft: rgba(13, 202, 240, 0.12);">
+            <div class="card-body">
+                <div class="summary-icon">
+                    <i class="bi bi-collection"></i>
+                </div>
+                <div>
+                    <div class="summary-label">Benefícios vinculados</div>
+                    <div class="metric-value">{{ total_benefits_linked }}</div>
+                    <div class="metric-caption">Quantidade total de benefícios associados às vigências exibidas.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="summary-card" style="--accent-color: #d39e00; --accent-soft: rgba(255, 193, 7, 0.16);">
+            <div class="card-body">
+                <div class="summary-icon">
+                    <i class="bi bi-exclamation-triangle"></i>
+                </div>
+                <div>
+                    <div class="summary-label">Grupos sem cliente</div>
+                    <div class="metric-value">{{ unlinked_groups_count }}</div>
+                    <div class="metric-caption">Agrupamentos que ainda não encontraram um cliente correspondente.</div>
+                </div>
+            </div>
+        </div>
     </div>
-    {% else %}
-    <div class="alert alert-info mb-0">
-        <i class="bi bi-info-circle me-2"></i>Nenhuma vigência FAP cadastrada até o momento.
+
+    <div class="section-shell mb-4">
+        <div class="section-header">
+            <div>
+                <div class="section-title"><i class="bi bi-table me-2 text-primary"></i>Relação de vigências</div>
+                <div class="section-note">Cada card representa um cliente com seus agrupamentos de vigência e
+                    indicadores resumidos.</div>
+            </div>
+            <span class="badge text-bg-light border text-dark px-3 py-2">{{ grouped_clients|length }} grupo{{ 's' if
+                grouped_clients|length != 1 else '' }}</span>
+        </div>
+
+        {% if grouped_clients %}
+        <div class="client-stack">
+            {% for group in grouped_clients %}
+            <section class="client-group-card shadow-sm">
+                <div class="client-group-header">
+                    <div class="client-heading">
+                        <div>
+                            <h4 class="client-title">{{ group.client_name }}</h4>
+                            <div class="client-code">
+                                <i class="bi bi-upc-scan"></i>
+                                <span>{{ group.client_cnpj or 'CNPJ não identificado' }}</span>
+                            </div>
+                            <div class="client-status">
+                                {% if group.is_unlinked %}
+                                <span class="badge rounded-pill text-bg-warning">Sem vínculo automático</span>
+                                {% else %}
+                                <span class="badge rounded-pill text-bg-success">Cliente identificado</span>
+                                {% endif %}
+                            </div>
+                        </div>
+
+                        <div class="client-meta">
+                            <div class="client-kpi">
+                                <span class="client-kpi-label">Vigências</span>
+                                <div class="client-kpi-value">{{ group.total_vigencias }}</div>
+                            </div>
+                            <div class="client-kpi">
+                                <span class="client-kpi-label">Benefícios</span>
+                                <div class="client-kpi-value">{{ group.total_benefits }}</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="table-responsive vigencia-table-wrap">
+                    <table class="table table-hover align-middle mb-0 vigencia-table">
+                        <thead>
+                            <tr>
+                                <th style="width: 110px;">Vigência</th>
+                                <th style="width: 220px;">CNPJ do empregador</th>
+                                <th style="width: 160px;">Benefícios</th>
+                                <th style="width: 200px;">Criado em</th>
+                                <th style="width: 200px;">Última atualização</th>
+                                <th style="width: 220px;">Último benefício atualizado</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for vigencia in group.vigencias %}
+                            <tr>
+                                <td>
+                                    <span class="year-pill">{{ vigencia.vigencia_year or '-' }}</span>
+                                </td>
+                                <td>
+                                    <div class="client-code">{{ vigencia.employer_cnpj or '-' }}</div>
+                                </td>
+                                <td>
+                                    <span class="benefit-count">
+                                        <i class="bi bi-stack text-primary"></i>
+                                        {{ vigencia.benefits_count }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="date-stack">
+                                        <span>{{ vigencia.created_at or '-' }}</span>
+                                        <small>Cadastro da vigência</small>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="date-stack">
+                                        <span>{{ vigencia.updated_at or '-' }}</span>
+                                        <small>Atualização do registro</small>
+                                    </div>
+                                </td>
+                                <td>
+                                    <div class="date-stack">
+                                        <span>{{ vigencia.last_benefit_update or '-' }}</span>
+                                        <small>Último benefício relacionado</small>
+                                    </div>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state m-3">
+            <div class="mb-3">
+                <i class="bi bi-info-circle text-primary" style="font-size: 2rem;"></i>
+            </div>
+            <h4 class="mb-2">Nenhuma vigência FAP cadastrada</h4>
+            <p class="text-muted mb-3">Assim que relatórios forem processados e gerarem agrupamentos por CNPJ e
+                vigência, eles aparecerão aqui.</p>
+            <a href="{{ url_for('central_benefits.fap_contestation_reports') }}" class="btn btn-info btn-sm px-3">
+                <i class="bi bi-upload me-1"></i>Importar relatório FAP
+            </a>
+        </div>
+        {% endif %}
     </div>
-    {% endif %}
 </div>
 {% endblock %}
