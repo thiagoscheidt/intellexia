@@ -125,6 +125,52 @@
     padding: 0.2rem;
   }
 
+  .vigencia-filter-notice {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.9rem;
+    border: 1px solid var(--bs-info-border-subtle);
+    background: linear-gradient(135deg, var(--bs-info-bg-subtle), rgba(13, 202, 240, 0.08));
+    color: var(--bs-info-text-emphasis);
+    border-radius: 0.85rem;
+    padding: 0.85rem 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .vigencia-filter-notice-title {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    font-weight: 700;
+    margin-bottom: 0.15rem;
+  }
+
+  .vigencia-filter-notice-text {
+    font-size: 0.88rem;
+    color: var(--bs-secondary-color);
+  }
+
+  .vigencia-filter-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid rgba(13, 202, 240, 0.3);
+    padding: 0.35rem 0.6rem;
+    font-family: var(--bs-font-monospace);
+    font-size: 0.82rem;
+    color: var(--bs-emphasis-color);
+  }
+
+  @media (max-width: 767.98px) {
+    .vigencia-filter-notice {
+      flex-direction: column;
+      align-items: stretch;
+    }
+  }
+
   .stats-panel-header {
     display: flex;
     align-items: center;
@@ -503,6 +549,25 @@
           </div>
           <div class="card-body pt-0">
             <div class="filters-card p-3 mb-3">
+              <div id="vigenciaFilterNotice" class="vigencia-filter-notice {{ 'd-none' if not current_vigencia_filter else '' }}"
+                data-vigencia-label="{% if current_vigencia_filter %}{% if current_vigencia_filter.year %}Vigência {{ current_vigencia_filter.year }}{% else %}Vigência selecionada{% endif %}{% if current_vigencia_filter.company_name %} - {{ current_vigencia_filter.company_name }}{% elif current_vigencia_filter.company_cnpj %} - {{ current_vigencia_filter.company_cnpj }}{% endif %}{% endif %}">
+                <div>
+                  <div class="vigencia-filter-notice-title">
+                    <i class="bi bi-funnel-fill"></i>
+                    Benefícios filtrados por vigência
+                  </div>
+                  <div class="vigencia-filter-notice-text">
+                    A listagem abaixo está restrita aos benefícios vinculados à vigência selecionada.
+                    <span id="vigenciaFilterBadge" class="vigencia-filter-badge ms-1">{% if current_vigencia_filter %}{% if current_vigencia_filter.year %}Vigência {{ current_vigencia_filter.year }}{% else %}Vigência selecionada{% endif %}{% if current_vigencia_filter.company_name %} - {{ current_vigencia_filter.company_name }}{% elif current_vigencia_filter.company_cnpj %} - {{ current_vigencia_filter.company_cnpj }}{% endif %}{% endif %}</span>
+                  </div>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                  <button id="clearVigenciaFilterBtn" type="button" class="btn btn-outline-info btn-sm">
+                    <i class="bi bi-x-circle me-1"></i>Remover filtro de vigência
+                  </button>
+                </div>
+              </div>
+
               <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-2">
                 <div class="fw-semibold">
                   <i class="bi bi-funnel-fill text-primary me-1"></i>Filtros personalizados
@@ -757,6 +822,76 @@
     const apiListUrl = "{{ url_for('central_benefits.list_central_benefits_api') }}";
     const exportUrl = "{{ url_for('central_benefits.export_central_benefits_excel') }}";
     const filters = [];
+    const urlParams = new URLSearchParams(window.location.search);
+    const initialVigenciaId = (urlParams.get('vigencia_id') || '').trim();
+
+    function renderVigenciaFilterNotice() {
+      const notice = $('#vigenciaFilterNotice');
+      const badge = $('#vigenciaFilterBadge');
+      const friendlyLabel = (notice.data('vigencia-label') || '').toString().trim();
+
+      if (!initialVigenciaId) {
+        notice.addClass('d-none');
+        badge.text('');
+        return;
+      }
+
+      badge.text(friendlyLabel || `Vigência #${initialVigenciaId}`);
+      notice.removeClass('d-none');
+    }
+
+    function clearVigenciaFilterFromUrl() {
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.delete('vigencia_id');
+      window.location.href = nextUrl.toString();
+    }
+
+    function applyFiltersFromUrl() {
+      const quickClient = (urlParams.get('quick_client') || '').trim();
+      const quickRoot = (urlParams.get('quick_root') || '').trim();
+      const rawFilters = (urlParams.get('custom_filters') || '').trim();
+
+      if (quickClient) {
+        $('#quickClientFilter').val(quickClient);
+      }
+
+      if (quickRoot) {
+        $('#quickRootCnpjFilter').val(quickRoot);
+      }
+
+      if (!rawFilters) {
+        return;
+      }
+
+      try {
+        const parsedFilters = JSON.parse(rawFilters);
+        if (!Array.isArray(parsedFilters)) {
+          return;
+        }
+
+        parsedFilters.forEach((filter) => {
+          const field = String(filter.field || '').trim();
+          const operator = String(filter.operator || 'contains').trim();
+          const value = String(filter.value || '').trim();
+
+          if (!field || !operator || !(field in fieldLabelMap) || !(operator in operatorLabelMap)) {
+            return;
+          }
+
+          const displayValue = needsValue(operator) ? ` "${value}"` : '';
+          filters.push({
+            id: Date.now() + Math.random(),
+            field,
+            operator,
+            value,
+            label: `${fieldLabelMap[field]} ${operatorLabelMap[operator]}${displayValue}`,
+          });
+        });
+      } catch (error) {
+        console.warn('Não foi possível aplicar os filtros vindos da URL.', error);
+      }
+    }
+
     function updateFilteredStats(stats) {
       const safeStats = stats || {};
       const safeFirst = safeStats.first_instance || {};
@@ -792,6 +927,7 @@
           })));
           d.quick_client = ($('#quickClientFilter').val() || '').trim();
           d.quick_root = ($('#quickRootCnpjFilter').val() || '').trim();
+          d.vigencia_id = initialVigenciaId;
         },
         dataSrc: function (json) {
           updateFilteredStats(json.filtered_stats);
@@ -1038,6 +1174,7 @@
         })),
         quick_client: ($('#quickClientFilter').val() || '').trim(),
         quick_root: ($('#quickRootCnpjFilter').val() || '').trim(),
+        vigencia_id: initialVigenciaId,
       };
 
       fetch(exportUrl, {
@@ -1151,7 +1288,16 @@
       table.ajax.reload();
     });
 
+    $('#clearVigenciaFilterBtn').on('click', function () {
+      clearVigenciaFilterFromUrl();
+    });
+
+    applyFiltersFromUrl();
+    renderVigenciaFilterNotice();
     renderActiveFilters();
+    if (filters.length || $('#quickClientFilter').val() || $('#quickRootCnpjFilter').val()) {
+      table.ajax.reload();
+    }
 
     $('#exportCentralBenefitsBtn').on('click', function () {
       exportFilteredBenefitsToExcel();

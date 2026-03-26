@@ -272,6 +272,53 @@
         font-weight: 600;
     }
 
+    .vigencias-page .status-badges {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.45rem;
+    }
+
+    .vigencias-page .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.35rem 0.55rem;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        font-size: 0.76rem;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+
+    .vigencias-page .status-badge.is-approved {
+        background: rgba(25, 135, 84, 0.10);
+        color: #146c43;
+        border-color: rgba(25, 135, 84, 0.18);
+    }
+
+    .vigencias-page .status-badge.is-rejected {
+        background: rgba(220, 53, 69, 0.10);
+        color: #b02a37;
+        border-color: rgba(220, 53, 69, 0.18);
+    }
+
+    .vigencias-page .status-badge.is-review {
+        background: rgba(255, 193, 7, 0.16);
+        color: #997404;
+        border-color: rgba(255, 193, 7, 0.28);
+    }
+
+    .vigencias-page .status-badge.is-pending {
+        background: rgba(108, 117, 125, 0.10);
+        color: #495057;
+        border-color: rgba(108, 117, 125, 0.18);
+    }
+
+    .vigencias-page .row-actions {
+        display: flex;
+        justify-content: flex-end;
+    }
+
     .vigencias-page .date-stack {
         display: flex;
         flex-direction: column;
@@ -495,9 +542,11 @@ icon='bi bi-diagram-3') %}
                                 <th style="width: 110px;">Vigência</th>
                                 <th style="width: 220px;">CNPJ do empregador</th>
                                 <th style="width: 160px;">Benefícios</th>
+                                <th style="width: 260px;">Status</th>
                                 <th style="width: 200px;">Criado em</th>
                                 <th style="width: 200px;">Última atualização</th>
                                 <th style="width: 220px;">Último benefício atualizado</th>
+                                <th style="width: 170px;" class="text-end">Ações</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -516,6 +565,26 @@ icon='bi bi-diagram-3') %}
                                     </span>
                                 </td>
                                 <td>
+                                    <div class="status-badges">
+                                        <span class="status-badge is-approved">
+                                            <i class="bi bi-check-circle"></i>{{ vigencia.approved_count }} deferido{{
+                                            's' if vigencia.approved_count != 1 else '' }}
+                                        </span>
+                                        <span class="status-badge is-rejected">
+                                            <i class="bi bi-x-circle"></i>{{ vigencia.rejected_count }} indeferido{{ 's'
+                                            if vigencia.rejected_count != 1 else '' }}
+                                        </span>
+                                        <span class="status-badge is-review">
+                                            <i class="bi bi-hourglass-split"></i>{{ vigencia.in_review_count }} em
+                                            análise
+                                        </span>
+                                        <span class="status-badge is-pending">
+                                            <i class="bi bi-clock"></i>{{ vigencia.pending_count }} pendente{{ 's' if
+                                            vigencia.pending_count != 1 else '' }}
+                                        </span>
+                                    </div>
+                                </td>
+                                <td>
                                     <div class="date-stack">
                                         <span>{{ vigencia.created_at or '-' }}</span>
                                         <small>Cadastro da vigência</small>
@@ -531,6 +600,14 @@ icon='bi bi-diagram-3') %}
                                     <div class="date-stack">
                                         <span>{{ vigencia.last_benefit_update or '-' }}</span>
                                         <small>Último benefício relacionado</small>
+                                    </div>
+                                </td>
+                                <td class="text-end">
+                                    <div class="row-actions">
+                                        <a href="{{ vigencia.benefits_view_url }}"
+                                            class="btn btn-outline-primary btn-sm">
+                                            <i class="bi bi-search me-1"></i>Ver benefícios
+                                        </a>
                                     </div>
                                 </td>
                             </tr>

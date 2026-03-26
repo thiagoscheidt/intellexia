@@ -9,7 +9,7 @@ import os
 from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session, url_for, send_file
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
-from sqlalchemy import String, and_, cast, func, or_
+from sqlalchemy import String, and_, case, cast, func, or_
 from werkzeug.utils import secure_filename
 
 from app.models import (
@@ -287,7 +287,7 @@ def _build_instance_stats(total_count, status_counts):
     }
 
 
-def _apply_benefits_filters(query, search_value='', custom_filters=None, quick_client='', quick_root=''):
+def _apply_benefits_filters(query, search_value='', custom_filters=None, quick_client='', quick_root='', vigencia_id=None):
     search_text = (search_value or '').strip().lower()
     if search_text:
         like_term = f'%{search_text}%'
@@ -323,6 +323,12 @@ def _apply_benefits_filters(query, search_value='', custom_filters=None, quick_c
                 '',
             )
             query = query.filter(sanitized_cnpj.like(f'{root}%'))
+
+    if vigencia_id:
+        try:
+            query = query.filter(Benefit.fap_vigencia_cnpj_id == int(vigencia_id))
+        except (TypeError, ValueError):
+            pass
 
     for item in custom_filters or []:
         column = FILTER_FIELD_MAP.get(item['field'])
@@ -384,6 +390,7 @@ def _collect_listing_payload(default_length=25):
             'filters': _parse_custom_filters(payload.get('filters')),
             'quick_client': _normalize_text(payload.get('quick_client', '')),
             'quick_root': _normalize_text(payload.get('quick_root', '')),
+            'vigencia_id': payload.get('vigencia_id'),
         }
 
     draw = int(request.args.get('draw', 1) or 1)
@@ -407,6 +414,7 @@ def _collect_listing_payload(default_length=25):
         'filters': filters,
         'quick_client': quick_client,
         'quick_root': quick_root,
+        'vigencia_id': request.args.get('vigencia_id'),
     }
 
 
@@ -511,6 +519,7 @@ def view_fap_contestation_report(report_id):
 @require_law_firm
 def list_central_benefits():
     law_firm_id = get_current_law_firm_id()
+    current_vigencia_filter = None
     total_count = Benefit.query.filter_by(law_firm_id=law_firm_id).count()
     approved_count = Benefit.query.filter_by(law_firm_id=law_firm_id, status='approved').count()
     in_review_count = Benefit.query.filter(
@@ -564,6 +573,48 @@ def list_central_benefits():
 
     client_options = sorted({(name or '').strip() for _, name in clients_data if (name or '').strip()})
 
+    current_vigencia_id = _normalize_text(request.args.get('vigencia_id', ''))
+    if current_vigencia_id:
+        try:
+            vigencia = BenefitFapVigenciaCnpj.query.filter_by(
+                id=int(current_vigencia_id),
+                law_firm_id=law_firm_id,
+            ).first()
+        except (TypeError, ValueError):
+            vigencia = None
+
+        if vigencia is not None:
+            clients = Client.query.filter_by(law_firm_id=law_firm_id).all()
+            clients_by_exact, clients_by_root = _build_client_cnpj_lookup(clients)
+            resolved_client = _resolve_client_for_vigencia(
+                vigencia.employer_cnpj,
+                clients_by_exact,
+                clients_by_root,
+            )
+            company_name = ''
+            if resolved_client is not None:
+                company_name = (resolved_client.name or '').strip()
+            if not company_name:
+                company_name = (
+                    db.session.query(Benefit.employer_name)
+                    .filter(
+                        Benefit.law_firm_id == law_firm_id,
+                        Benefit.fap_vigencia_cnpj_id == vigencia.id,
+                        Benefit.employer_name.is_not(None),
+                        func.trim(Benefit.employer_name) != '',
+                    )
+                    .order_by(Benefit.updated_at.desc(), Benefit.id.desc())
+                    .scalar()
+                    or ''
+                ).strip()
+
+            current_vigencia_filter = {
+                'id': vigencia.id,
+                'year': (vigencia.vigencia_year or '').strip(),
+                'company_name': company_name,
+                'company_cnpj': _format_cnpj(vigencia.employer_cnpj),
+            }
+
     return render_template(
         'central_benefits/list.html',
         total_count=total_count,
@@ -575,6 +626,7 @@ def list_central_benefits():
         second_instance_stats=second_instance_stats,
         cnpj_roots=cnpj_roots,
         client_options=client_options,
+        current_vigencia_filter=current_vigencia_filter,
     )
 
 
@@ -582,6 +634,7 @@ def list_central_benefits():
 @require_law_firm
 def list_fap_vigencias():
     law_firm_id = get_current_law_firm_id()
+    status_key = func.lower(func.coalesce(cast(Benefit.status, String), ''))
 
     clients = (
         Client.query.filter_by(law_firm_id=law_firm_id)
@@ -595,6 +648,9 @@ def list_fap_vigencias():
             BenefitFapVigenciaCnpj,
             func.count(Benefit.id).label('benefits_count'),
             func.max(Benefit.updated_at).label('last_benefit_update'),
+            func.sum(case((status_key == 'approved', 1), else_=0)).label('approved_count'),
+            func.sum(case((status_key == 'rejected', 1), else_=0)).label('rejected_count'),
+            func.sum(case((status_key.in_(['in_review', 'analyzing']), 1), else_=0)).label('in_review_count'),
         )
         .outerjoin(Benefit, Benefit.fap_vigencia_cnpj_id == BenefitFapVigenciaCnpj.id)
         .filter(BenefitFapVigenciaCnpj.law_firm_id == law_firm_id)
@@ -606,7 +662,7 @@ def list_fap_vigencias():
     grouped_clients = {}
     total_benefits_linked = 0
 
-    for vigencia, benefits_count, last_benefit_update in vigencia_rows:
+    for vigencia, benefits_count, last_benefit_update, approved_count, rejected_count, in_review_count in vigencia_rows:
         resolved_client = _resolve_client_for_vigencia(
             vigencia.employer_cnpj,
             clients_by_exact,
@@ -634,6 +690,10 @@ def list_fap_vigencias():
             }
 
         benefits_count = int(benefits_count or 0)
+        approved_count = int(approved_count or 0)
+        rejected_count = int(rejected_count or 0)
+        in_review_count = int(in_review_count or 0)
+        pending_count = max(benefits_count - approved_count - rejected_count - in_review_count, 0)
         grouped_clients[group_key]['total_vigencias'] += 1
         grouped_clients[group_key]['total_benefits'] += benefits_count
         grouped_clients[group_key]['vigencias'].append(
@@ -642,9 +702,14 @@ def list_fap_vigencias():
                 'vigencia_year': vigencia.vigencia_year,
                 'employer_cnpj': _format_cnpj(vigencia.employer_cnpj),
                 'benefits_count': benefits_count,
+                'approved_count': approved_count,
+                'rejected_count': rejected_count,
+                'in_review_count': in_review_count,
+                'pending_count': pending_count,
                 'created_at': _format_datetime(vigencia.created_at),
                 'updated_at': _format_datetime(vigencia.updated_at),
                 'last_benefit_update': _format_datetime(last_benefit_update),
+                'benefits_view_url': url_for('central_benefits.list_central_benefits', vigencia_id=vigencia.id),
             }
         )
         total_benefits_linked += benefits_count
@@ -695,6 +760,7 @@ def list_central_benefits_api():
         custom_filters=payload['filters'],
         quick_client=payload['quick_client'],
         quick_root=payload['quick_root'],
+        vigencia_id=payload.get('vigencia_id'),
     )
 
     records_filtered = filtered_query.with_entities(func.count(Benefit.id)).scalar() or 0
@@ -759,6 +825,7 @@ def export_central_benefits_excel():
         custom_filters=payload['filters'],
         quick_client=payload['quick_client'],
         quick_root=payload['quick_root'],
+        vigencia_id=payload.get('vigencia_id'),
     )
 
     order_column = ORDER_COLUMN_MAP.get(payload['order_column'], Benefit.id)
