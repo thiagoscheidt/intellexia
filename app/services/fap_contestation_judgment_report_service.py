@@ -55,25 +55,26 @@ class FapContestationJudgmentReportService:
 
         cnpj_formatado = self._format_cnpj(cnpj_digits)
         is_matriz = cnpj_digits[8:12] == '0001'
+
+        client = self._find_client_by_cnpj(law_firm_id, cnpj_digits)
+        if client is not None:
+            return client, None, cnpj_formatado
+
+        # Cliente não encontrado na base: consulta a API para obter os dados cadastrais.
         lookup_result = self.open_cnpj_service.lookup_company(cnpj_formatado)
         company_data = lookup_result.get('data') if lookup_result.get('success') else None
 
         if not company_data:
             return None, None, cnpj_formatado
 
-        client = self._find_client_by_cnpj(law_firm_id, cnpj_digits)
-        if client is None:
-            client = Client(
-                law_firm_id=law_firm_id,
-                name=company_data.get('razao_social') or f'Empresa {cnpj_formatado}',
-                cnpj=cnpj_formatado,
-            )
-            db.session.add(client)
-        else:
-            client.name = company_data.get('razao_social') or client.name
-            client.cnpj = cnpj_formatado
+        client = Client(
+            law_firm_id=law_firm_id,
+            name=company_data.get('razao_social') or f'Empresa {cnpj_formatado}',
+            cnpj=cnpj_formatado,
+        )
+        db.session.add(client)
 
-        # Sincroniza campos cadastrais principais quando disponíveis.
+        # Preenche campos cadastrais com os dados retornados pela API.
         client.street = company_data.get('logradouro') or client.street
         client.number = company_data.get('numero') or client.number
         client.district = company_data.get('bairro') or client.district
@@ -128,6 +129,101 @@ class FapContestationJudgmentReportService:
             raise ValueError('MarkItDown não retornou conteúdo em markdown para o arquivo informado.')
 
         return markdown_content
+
+    def extract_benefits_with_pdfplumber(self, file_path: str | Path) -> list[dict]:
+        """Extrai benefícios diretamente do PDF com pdfplumber, sem integrar ao fluxo principal.
+
+        O método preserva a estrutura textual do documento para facilitar a separação
+        por blocos de benefício em PDFs que parecem tabela, mas na prática são texto
+        posicionado com linhas horizontais.
+
+        O retorno segue o mesmo contrato de `parse_beneficios_from_markdown`.
+        """
+        path = Path(file_path)
+        if not path.exists():
+            raise FileNotFoundError(f'Arquivo não encontrado: {path}')
+
+        if path.suffix.lower() != '.pdf':
+            raise ValueError('O método com pdfplumber aceita apenas arquivos PDF.')
+
+        try:
+            import pdfplumber
+        except ImportError as exc:
+            raise ImportError('pdfplumber não está instalado no ambiente atual.') from exc
+
+        def normalize_page_text(page_text: str) -> str:
+            text = page_text.replace('\r\n', '\n').replace('\r', '\n')
+            text = re.sub(r'[ \t]+', ' ', text)
+            text = re.sub(r'\n{3,}', '\n\n', text)
+            return text.strip()
+
+        page_texts: list[str] = []
+        with pdfplumber.open(str(path)) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text(
+                    x_tolerance=2,
+                    y_tolerance=3,
+                    layout=False,
+                    use_text_flow=True,
+                )
+                if page_text:
+                    page_texts.append(normalize_page_text(page_text))
+
+        if not page_texts:
+            raise ValueError('pdfplumber não retornou texto para o arquivo informado.')
+
+        text = self.normalize_markdown('\n\n'.join(page_texts))
+        blocks = self.split_blocks(text)
+
+        benefits: list[dict] = []
+        for block in blocks:
+            if not block or not block.strip():
+                continue
+
+            parsed = self.parse_block(block)
+            if parsed:
+                benefits.append(parsed)
+
+        return benefits
+
+    def extract_metadata_from_first_page_with_pdfplumber(self, file_path: str | Path):
+        """Extrai metadados da primeira página via pdfplumber.
+
+        Método isolado para comparar com o caminho atual baseado em markdown.
+        Não altera o fluxo principal de processamento.
+        """
+        path = Path(file_path)
+        if not path.exists():
+            raise FileNotFoundError(f'Arquivo não encontrado: {path}')
+
+        if path.suffix.lower() != '.pdf':
+            raise ValueError('O método com pdfplumber aceita apenas arquivos PDF.')
+
+        try:
+            import pdfplumber
+        except ImportError as exc:
+            raise ImportError('pdfplumber não está instalado no ambiente atual.') from exc
+
+        with pdfplumber.open(str(path)) as pdf:
+            if not pdf.pages:
+                raise ValueError('PDF sem páginas para extração de metadados.')
+
+            first_page_text = pdf.pages[0].extract_text(
+                x_tolerance=2,
+                y_tolerance=3,
+                layout=False,
+                use_text_flow=True,
+            )
+
+        if not first_page_text or not first_page_text.strip():
+            raise ValueError('pdfplumber não retornou texto da primeira página.')
+
+        normalized_first_page = first_page_text.replace('\r\n', '\n').replace('\r', '\n')
+        normalized_first_page = re.sub(r'[ \t]+', ' ', normalized_first_page)
+        normalized_first_page = re.sub(r'\n{3,}', '\n\n', normalized_first_page)
+        normalized_first_page = self.normalize_markdown(normalized_first_page)
+
+        return self.metadata_agent.extract_from_first_page(normalized_first_page)
 
     @staticmethod
     def normalize_markdown(text: str) -> str:
@@ -402,12 +498,26 @@ class FapContestationJudgmentReportService:
 
     def _extract_dcb(self, block: str):
         # Ex.: "Data Cessação Benefício (DCB) 24/01/2013"
-        value = self._extract_date_after_label(
+        # Regra restritiva: só aceita data imediatamente após o rótulo do DCB
+        # para evitar capturar outras datas (ex.: data de nascimento) quando DCB está vazio.
+        inline_match = re.search(
+            r'Data\s+Cessa[cç][aã]o\s+Benef[ií]cio\s*\(?DCB\)?\s*[:\-]?\s*(\d{2}/\d{2}/\d{4})\b',
             block,
-            r'Data\s+Cessa[cç][aã]o\s+Benef[ií]cio\s*\(?DCB\)?',
+            flags=re.IGNORECASE,
         )
-        if value:
-            return value
+        if inline_match:
+            return self._parse_br_date(inline_match.group(1))
+
+        label_match = re.search(
+            r'Data\s+Cessa[cç][aã]o\s+Benef[ií]cio\s*\(?DCB\)?',
+            block,
+            flags=re.IGNORECASE,
+        )
+        if label_match:
+            local_snippet = block[label_match.end():label_match.end() + 24]
+            local_date_match = re.search(r'^\s*[:\-]?\s*(\d{2}/\d{2}/\d{4})\b', local_snippet)
+            if local_date_match:
+                return self._parse_br_date(local_date_match.group(1))
 
         # Ex.: "DCB: 24/01/2013"
         match = re.search(r'\bDCB\s*:\s*(\d{2}/\d{2}/\d{4})\b', block, flags=re.IGNORECASE)
@@ -879,12 +989,11 @@ class FapContestationJudgmentReportService:
 
             for report in reports:
                 try:
-                    markdown_content = self.convert_report_to_markdown_with_markitdown(report.file_path)
-                    metadata = self.metadata_agent.extract_from_first_page(markdown_content)
-                    extracted_benefits = self.parse_beneficios_from_markdown(markdown_content)
+                    metadata = self.extract_metadata_from_first_page_with_pdfplumber(report.file_path)
+                    extracted_benefits = self.extract_benefits_with_pdfplumber(report.file_path)
 
                     print(
-                        f'Relatório #{report.id}: {len(extracted_benefits)} benefício(s) identificado(s) no markdown.'
+                        f'Relatório #{report.id}: {len(extracted_benefits)} benefício(s) identificado(s) via pdfplumber.'
                     )
 
                     imported_count = self._upsert_benefits_from_report(report, extracted_benefits, metadata)
