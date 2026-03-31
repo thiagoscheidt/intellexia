@@ -696,6 +696,7 @@ def list_fap_vigencias():
     selected_client_id_raw = _normalize_text(request.args.get('client_id', ''))
     selected_client_cnpj = _normalize_cnpj_digits(request.args.get('client_cnpj', ''))[:14]
     selected_client_root = _normalize_cnpj_digits(request.args.get('client_root', ''))[:8]
+    selected_show_deferivel = request.args.get('show_deferivel', '') == '1'
 
     try:
         selected_client_id = int(selected_client_id_raw) if selected_client_id_raw else None
@@ -833,6 +834,14 @@ def list_fap_vigencias():
         ):
             continue
 
+        if selected_show_deferivel:
+            can_mark = (
+                int(second_instance_activity_count or 0) > 0
+                and int(first_instance_eligible_count or 0) > 0
+            )
+            if not can_mark:
+                continue
+
         total_filtered_vigencias += 1
 
         if resolved_client is not None:
@@ -919,7 +928,7 @@ def list_fap_vigencias():
     unlinked_groups_count = sum(1 for item in grouped_client_list if item['is_unlinked'])
     active_filter_count = sum(
         1 for value in (selected_client_id_raw, selected_client_cnpj, selected_client_root) if value
-    )
+    ) + (1 if selected_show_deferivel else 0)
 
     return render_template(
         'central_benefits/vigencias.html',
@@ -933,6 +942,7 @@ def list_fap_vigencias():
         selected_client_id=selected_client_id_raw,
         selected_client_cnpj=_format_cnpj(selected_client_cnpj) if selected_client_cnpj else '',
         selected_client_root=selected_client_root,
+        selected_show_deferivel=selected_show_deferivel,
         active_filter_count=active_filter_count,
     )
 

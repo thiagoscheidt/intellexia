@@ -518,7 +518,7 @@ icon='bi bi-diagram-3') %}
         <div class="p-3 p-lg-4">
             <form method="GET" action="{{ url_for('central_benefits.list_fap_vigencias') }}" class="filters-form">
                 <div class="row g-3 align-items-end">
-                    <div class="col-lg-4 col-md-6">
+                    <div class="col-lg-3 col-md-6">
                         <label for="clientFilter" class="form-label">Cliente</label>
                         <select id="clientFilter" name="client_id" class="form-select">
                             <option value="">Todos os clientes</option>
@@ -529,12 +529,12 @@ icon='bi bi-diagram-3') %}
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-lg-3 col-md-6">
+                    <div class="col-lg-2 col-md-6">
                         <label for="clientCnpjFilter" class="form-label">CNPJ</label>
                         <input id="clientCnpjFilter" name="client_cnpj" type="text" class="form-control"
                             value="{{ selected_client_cnpj }}" placeholder="00.000.000/0001-00">
                     </div>
-                    <div class="col-lg-3 col-md-6">
+                    <div class="col-lg-2 col-md-6">
                         <label for="clientRootFilter" class="form-label">Raiz do CNPJ</label>
                         <select id="clientRootFilter" name="client_root" class="form-select">
                             <option value="">Todas as raízes</option>
@@ -545,12 +545,22 @@ icon='bi bi-diagram-3') %}
                             {% endfor %}
                         </select>
                     </div>
+                    <div class="col-lg-3 col-md-6 align-self-end pb-1">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="showDeferivel"
+                                name="show_deferivel" value="1"
+                                {% if selected_show_deferivel %}checked{% endif %}>
+                            <label class="form-check-label" for="showDeferivel">
+                                Apenas com <strong>"Marcar como deferido"</strong>
+                            </label>
+                        </div>
+                    </div>
                     <div class="col-lg-2 col-md-6">
-                        <div class="d-grid gap-2">
-                            <button type="submit" class="btn btn-primary">
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary flex-fill">
                                 <i class="bi bi-search me-1"></i>Filtrar
                             </button>
-                            <a href="{{ url_for('central_benefits.list_fap_vigencias') }}" class="btn btn-outline-secondary">
+                            <a href="{{ url_for('central_benefits.list_fap_vigencias') }}" class="btn btn-outline-secondary flex-fill">
                                 <i class="bi bi-x-circle me-1"></i>Limpar
                             </a>
                         </div>
