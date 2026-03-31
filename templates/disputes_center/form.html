@@ -9,8 +9,8 @@
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb mb-0 bg-transparent small">
     <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('central_benefits.list_central_benefits') }}">Beneficios
-        Centralizados</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('disputes_center.list_disputes_center') }}">Disputes
+      Center</a></li>
     <li class="breadcrumb-item active" aria-current="page">{{ title }}</li>
   </ol>
 </nav>
@@ -206,7 +206,7 @@
             </div>
             <div class="card-footer">
               {{ form.submit(class="btn btn-primary") }}
-              <a href="{{ url_for('central_benefits.list_central_benefits') }}" class="btn btn-secondary">Cancelar</a>
+              <a href="{{ url_for('disputes_center.list_disputes_center') }}" class="btn btn-secondary">Cancelar</a>
             </div>
           </form>
         </div>

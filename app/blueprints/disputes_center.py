@@ -25,7 +25,7 @@ from app.models import (
 )
 
 
-central_benefits_bp = Blueprint('central_benefits', __name__, url_prefix='/central-benefits')
+disputes_center_bp = Blueprint('disputes_center', __name__, url_prefix='/disputes-center')
 
 
 FILTER_FIELD_MAP = {
@@ -428,9 +428,9 @@ def _serialize_benefit_row(benefit, client_name):
         'justification': benefit.justification or '',
         'opinion': benefit.opinion or '',
         'notes': benefit.notes or '',
-        'timeline_url': url_for('central_benefits.benefit_file_timeline', benefit_id=benefit.id),
-        'edit_url': url_for('central_benefits.edit_central_benefit', benefit_id=benefit.id),
-        'delete_url': url_for('central_benefits.delete_central_benefit', benefit_id=benefit.id),
+        'timeline_url': url_for('disputes_center.benefit_file_timeline', benefit_id=benefit.id),
+        'edit_url': url_for('disputes_center.edit_dispute', benefit_id=benefit.id),
+        'delete_url': url_for('disputes_center.delete_dispute', benefit_id=benefit.id),
     }
 
 
@@ -491,7 +491,7 @@ def require_law_firm(f):
     return decorated_function
 
 
-@central_benefits_bp.route('/<int:benefit_id>/file-timeline', methods=['GET'])
+@disputes_center_bp.route('/<int:benefit_id>/file-timeline', methods=['GET'])
 @require_law_firm
 def benefit_file_timeline(benefit_id):
     law_firm_id = get_current_law_firm_id()
@@ -531,7 +531,7 @@ def benefit_file_timeline(benefit_id):
                 'report_uploaded_at': _format_datetime(report.uploaded_at if report else None),
                 'report_filename': (report.original_filename if report else None) or '-',
                 'knowledge_details_url': (
-                    url_for('central_benefits.view_fap_contestation_report', report_id=item.report_id)
+                    url_for('disputes_center.view_fap_contestation_report', report_id=item.report_id)
                     if report else None
                 ),
             }
@@ -546,7 +546,7 @@ def benefit_file_timeline(benefit_id):
     )
 
 
-@central_benefits_bp.route('/fap-contestation-reports/<int:report_id>/view', methods=['GET'])
+@disputes_center_bp.route('/fap-contestation-reports/<int:report_id>/view', methods=['GET'])
 @require_law_firm
 def view_fap_contestation_report(report_id):
     law_firm_id = get_current_law_firm_id()
@@ -558,7 +558,7 @@ def view_fap_contestation_report(report_id):
     resolved_path = _resolve_existing_file_path(report.file_path)
     if not resolved_path:
         flash('Arquivo não encontrado no servidor.', 'error')
-        return redirect(url_for('central_benefits.fap_contestation_reports'))
+        return redirect(url_for('disputes_center.fap_contestation_reports'))
 
     mimetype = 'application/pdf'
     ext = (report.file_type or '').strip().lower()
@@ -572,9 +572,9 @@ def view_fap_contestation_report(report_id):
     return send_file(resolved_path, as_attachment=False, mimetype=mimetype)
 
 
-@central_benefits_bp.route('/')
+@disputes_center_bp.route('/')
 @require_law_firm
-def list_central_benefits():
+def list_disputes_center():
     law_firm_id = get_current_law_firm_id()
     current_vigencia_filter = None
     total_count = Benefit.query.filter_by(law_firm_id=law_firm_id).count()
@@ -673,7 +673,7 @@ def list_central_benefits():
             }
 
     return render_template(
-        'central_benefits/list.html',
+        'disputes_center/list.html',
         total_count=total_count,
         approved_count=approved_count,
         in_review_count=in_review_count,
@@ -687,7 +687,7 @@ def list_central_benefits():
     )
 
 
-@central_benefits_bp.route('/vigencias', methods=['GET'])
+@disputes_center_bp.route('/vigencias', methods=['GET'])
 @require_law_firm
 def list_fap_vigencias():
     law_firm_id = get_current_law_firm_id()
@@ -901,7 +901,7 @@ def list_fap_vigencias():
                 'created_at': _format_datetime(vigencia.created_at),
                 'updated_at': _format_datetime(vigencia.updated_at),
                 'last_benefit_update': _format_datetime(last_benefit_update),
-                'benefits_view_url': url_for('central_benefits.list_central_benefits', vigencia_id=vigencia.id),
+                'benefits_view_url': url_for('disputes_center.list_disputes_center', vigencia_id=vigencia.id),
             }
         )
         total_benefits_linked += benefits_count
@@ -931,7 +931,7 @@ def list_fap_vigencias():
     ) + (1 if selected_show_deferivel else 0)
 
     return render_template(
-        'central_benefits/vigencias.html',
+        'disputes_center/vigencias.html',
         grouped_clients=grouped_client_list,
         total_vigencias=total_filtered_vigencias,
         total_benefits_linked=total_benefits_linked,
@@ -947,7 +947,7 @@ def list_fap_vigencias():
     )
 
 
-@central_benefits_bp.route('/vigencias/<int:vigencia_id>/mark-first-instance-deferred', methods=['POST'])
+@disputes_center_bp.route('/vigencias/<int:vigencia_id>/mark-first-instance-deferred', methods=['POST'])
 @require_law_firm
 def mark_vigencia_first_instance_deferred(vigencia_id):
     law_firm_id = get_current_law_firm_id()
@@ -968,7 +968,7 @@ def mark_vigencia_first_instance_deferred(vigencia_id):
             'A ação em lote só pode ser aplicada quando houver decisão em 2ª instância ou benefício em análise.',
             'warning',
         )
-        return redirect(url_for('central_benefits.list_fap_vigencias'))
+        return redirect(url_for('disputes_center.list_fap_vigencias'))
 
     eligible_benefits = Benefit.query.filter(
         Benefit.law_firm_id == law_firm_id,
@@ -978,7 +978,7 @@ def mark_vigencia_first_instance_deferred(vigencia_id):
 
     if not eligible_benefits:
         flash('Não há benefícios elegíveis para marcar como deferido na 1ª instância.', 'info')
-        return redirect(url_for('central_benefits.list_fap_vigencias'))
+        return redirect(url_for('disputes_center.list_fap_vigencias'))
 
     try:
         now = datetime.utcnow()
@@ -995,12 +995,12 @@ def mark_vigencia_first_instance_deferred(vigencia_id):
         db.session.rollback()
         flash(f'Erro ao aplicar atualização em lote: {str(exc)}', 'danger')
 
-    return redirect(url_for('central_benefits.list_fap_vigencias'))
+    return redirect(url_for('disputes_center.list_fap_vigencias'))
 
 
-@central_benefits_bp.route('/api/list', methods=['GET'])
+@disputes_center_bp.route('/api/list', methods=['GET'])
 @require_law_firm
-def list_central_benefits_api():
+def list_disputes_center_api():
     law_firm_id = get_current_law_firm_id()
     payload = _collect_listing_payload(default_length=25)
 
@@ -1066,9 +1066,9 @@ def list_central_benefits_api():
     )
 
 
-@central_benefits_bp.route('/export-excel', methods=['POST'])
+@disputes_center_bp.route('/export-excel', methods=['POST'])
 @require_law_firm
-def export_central_benefits_excel():
+def export_disputes_center_excel():
     law_firm_id = get_current_law_firm_id()
     payload = _collect_listing_payload(default_length=1000)
 
@@ -1171,7 +1171,7 @@ def export_central_benefits_excel():
     stream.seek(0)
 
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    filename = f'beneficios_centralizados_{timestamp}.xlsx'
+    filename = f'disputes_center_{timestamp}.xlsx'
 
     return send_file(
         stream,
@@ -1181,7 +1181,7 @@ def export_central_benefits_excel():
     )
 
 
-@central_benefits_bp.route('/fap-contestation-reports', methods=['GET', 'POST'])
+@disputes_center_bp.route('/fap-contestation-reports', methods=['GET', 'POST'])
 @require_law_firm
 def fap_contestation_reports():
     from app.form import FapContestationJudgmentReportForm
@@ -1196,7 +1196,7 @@ def fap_contestation_reports():
 
         if not files:
             flash('Selecione ao menos um arquivo para envio.', 'warning')
-            return redirect(url_for('central_benefits.fap_contestation_reports'))
+            return redirect(url_for('disputes_center.fap_contestation_reports'))
 
         invalid_files = []
         success_count = 0
@@ -1260,7 +1260,7 @@ def fap_contestation_reports():
                 'warning'
             )
 
-        return redirect(url_for('central_benefits.fap_contestation_reports'))
+        return redirect(url_for('disputes_center.fap_contestation_reports'))
 
     reports = (
         FapContestationJudgmentReport.query.filter_by(law_firm_id=law_firm_id)
@@ -1271,10 +1271,10 @@ def fap_contestation_reports():
         .all()
     )
 
-    return render_template('central_benefits/fap_contestation_reports.html', form=form, reports=reports)
+    return render_template('disputes_center/fap_contestation_reports.html', form=form, reports=reports)
 
 
-@central_benefits_bp.route('/fap-contestation-reports/<int:report_id>/delete', methods=['POST'])
+@disputes_center_bp.route('/fap-contestation-reports/<int:report_id>/delete', methods=['POST'])
 @require_law_firm
 def delete_fap_contestation_report(report_id):
     law_firm_id = get_current_law_firm_id()
@@ -1290,12 +1290,12 @@ def delete_fap_contestation_report(report_id):
         db.session.rollback()
         flash(f'Erro ao excluir relatório: {str(e)}', 'danger')
 
-    return redirect(url_for('central_benefits.fap_contestation_reports'))
+    return redirect(url_for('disputes_center.fap_contestation_reports'))
 
 
-@central_benefits_bp.route('/new', methods=['GET', 'POST'])
+@disputes_center_bp.route('/new', methods=['GET', 'POST'])
 @require_law_firm
-def new_central_benefit():
+def new_dispute():
     from app.form import CentralBenefitForm
 
     law_firm_id = get_current_law_firm_id()
@@ -1346,18 +1346,18 @@ def new_central_benefit():
         db.session.add(benefit)
         try:
             db.session.commit()
-            flash('Benefício centralizado cadastrado com sucesso!', 'success')
-            return redirect(url_for('central_benefits.list_central_benefits'))
+            flash('Registro de disputa cadastrado com sucesso!', 'success')
+            return redirect(url_for('disputes_center.list_disputes_center'))
         except Exception as e:
             db.session.rollback()
             flash(f'Erro ao cadastrar benefício: {str(e)}', 'danger')
 
-    return render_template('central_benefits/form.html', form=form, title='Novo Benefício Centralizado')
+    return render_template('disputes_center/form.html', form=form, title='Novo Registro de Disputa')
 
 
-@central_benefits_bp.route('/<int:benefit_id>/edit', methods=['GET', 'POST'])
+@disputes_center_bp.route('/<int:benefit_id>/edit', methods=['GET', 'POST'])
 @require_law_firm
-def edit_central_benefit(benefit_id):
+def edit_dispute(benefit_id):
     from app.form import CentralBenefitForm
 
     law_firm_id = get_current_law_firm_id()
@@ -1409,8 +1409,8 @@ def edit_central_benefit(benefit_id):
 
         try:
             db.session.commit()
-            flash('Benefício centralizado atualizado com sucesso!', 'success')
-            return redirect(url_for('central_benefits.list_central_benefits'))
+            flash('Registro de disputa atualizado com sucesso!', 'success')
+            return redirect(url_for('disputes_center.list_disputes_center'))
         except Exception as e:
             db.session.rollback()
             flash(f'Erro ao atualizar benefício: {str(e)}', 'danger')
@@ -1419,26 +1419,26 @@ def edit_central_benefit(benefit_id):
     clients_data = {str(c.id): {'name': c.name, 'cnpj': c.cnpj or ''} for c in clients}
 
     return render_template(
-        'central_benefits/form.html',
+        'disputes_center/form.html',
         form=form,
-        title='Editar Benefício Centralizado',
+        title='Editar Registro de Disputa',
         benefit_id=benefit_id,
         clients_data=_json.dumps(clients_data),
     )
 
 
-@central_benefits_bp.route('/<int:benefit_id>/delete', methods=['POST'])
+@disputes_center_bp.route('/<int:benefit_id>/delete', methods=['POST'])
 @require_law_firm
-def delete_central_benefit(benefit_id):
+def delete_dispute(benefit_id):
     law_firm_id = get_current_law_firm_id()
     benefit = Benefit.query.filter_by(id=benefit_id, law_firm_id=law_firm_id).first_or_404()
 
     try:
         db.session.delete(benefit)
         db.session.commit()
-        flash('Benefício centralizado excluído com sucesso!', 'success')
+        flash('Registro de disputa excluído com sucesso!', 'success')
     except Exception as e:
         db.session.rollback()
         flash(f'Erro ao excluir benefício: {str(e)}', 'danger')
 
-    return redirect(url_for('central_benefits.list_central_benefits'))
+    return redirect(url_for('disputes_center.list_disputes_center'))

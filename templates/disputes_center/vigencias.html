@@ -453,8 +453,8 @@ icon='bi bi-diagram-3') %}
     <ol class="breadcrumb mb-0 bg-transparent small">
         <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a>
         </li>
-        <li class="breadcrumb-item"><a href="{{ url_for('central_benefits.list_central_benefits') }}">Painel de
-                Beneficios</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('disputes_center.list_disputes_center') }}">Disputes
+            Center</a></li>
         <li class="breadcrumb-item active" aria-current="page">{{ page_title }}</li>
     </ol>
 </nav>
@@ -491,13 +491,13 @@ icon='bi bi-diagram-3') %}
                 </div>
                 <div class="col-lg-4">
                     <div class="d-flex flex-wrap justify-content-lg-end gap-2">
-                        <a href="{{ url_for('central_benefits.fap_contestation_reports') }}"
+                        <a href="{{ url_for('disputes_center.fap_contestation_reports') }}"
                             class="btn btn-info btn-sm px-3">
                             <i class="bi bi-upload me-1"></i>Importar relatório FAP
                         </a>
-                        <a href="{{ url_for('central_benefits.list_central_benefits') }}"
+                        <a href="{{ url_for('disputes_center.list_disputes_center') }}"
                             class="btn btn-outline-secondary btn-sm px-3">
-                            <i class="bi bi-arrow-left me-1"></i>Voltar ao painel
+                            <i class="bi bi-arrow-left me-1"></i>Voltar ao Painel de Contestações
                         </a>
                     </div>
                 </div>
@@ -572,7 +572,7 @@ icon='bi bi-diagram-3') %}
             {% endif %}
         </div>
         <div class="p-3 p-lg-4">
-            <form method="GET" action="{{ url_for('central_benefits.list_fap_vigencias') }}" class="filters-form">
+            <form method="GET" action="{{ url_for('disputes_center.list_fap_vigencias') }}" class="filters-form">
                 <div class="row g-3 align-items-end">
                     <div class="col-lg-3 col-md-6">
                         <label for="clientFilter" class="form-label">Cliente</label>
@@ -617,7 +617,7 @@ icon='bi bi-diagram-3') %}
                             <button type="submit" class="btn btn-primary flex-fill">
                                 <i class="bi bi-search me-1"></i>Filtrar
                             </button>
-                            <a href="{{ url_for('central_benefits.list_fap_vigencias') }}"
+                            <a href="{{ url_for('disputes_center.list_fap_vigencias') }}"
                                 class="btn btn-outline-secondary flex-fill">
                                 <i class="bi bi-x-circle me-1"></i>Limpar
                             </a>
@@ -633,7 +633,7 @@ icon='bi bi-diagram-3') %}
                     <div class="text-muted small">Os totais e grupos exibidos abaixo já consideram o recorte
                         selecionado.</div>
                 </div>
-                <a href="{{ url_for('central_benefits.list_fap_vigencias') }}" class="btn btn-sm btn-outline-secondary">
+                <a href="{{ url_for('disputes_center.list_fap_vigencias') }}" class="btn btn-sm btn-outline-secondary">
                     <i class="bi bi-arrow-counterclockwise me-1"></i>Remover filtros
                 </a>
             </div>
@@ -779,7 +779,7 @@ icon='bi bi-diagram-3') %}
                                     <div class="row-actions">
                                         {% if vigencia.can_mark_first_instance_deferred %}
                                         <form method="POST"
-                                            action="{{ url_for('central_benefits.mark_vigencia_first_instance_deferred', vigencia_id=vigencia.id) }}"
+                                            action="{{ url_for('disputes_center.mark_vigencia_first_instance_deferred', vigencia_id=vigencia.id) }}"
                                             onsubmit="return confirm('Marcar {{ vigencia.first_instance_eligible_count }} benefício(s) desta vigência como deferido na 1ª instância?');">
                                             <button type="submit" class="btn btn-outline-success btn-sm">
                                                 <i class="bi bi-check2-square me-1"></i>Marcar {{
@@ -813,7 +813,7 @@ icon='bi bi-diagram-3') %}
             <h4 class="mb-2">Nenhuma vigência FAP cadastrada</h4>
             <p class="text-muted mb-3">Assim que relatórios forem processados e gerarem agrupamentos por CNPJ e
                 vigência, eles aparecerão aqui.</p>
-            <a href="{{ url_for('central_benefits.fap_contestation_reports') }}" class="btn btn-info btn-sm px-3">
+            <a href="{{ url_for('disputes_center.fap_contestation_reports') }}" class="btn btn-info btn-sm px-3">
                 <i class="bi bi-upload me-1"></i>Importar relatório FAP
             </a>
         </div>

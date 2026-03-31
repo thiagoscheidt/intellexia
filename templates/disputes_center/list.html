@@ -2,7 +2,7 @@
 
 {% from "partials/page_hero.html" import page_hero %}
 
-{% set page_title = "Painel de Contestações - Beneficios" %}
+{% set page_title = "Painel de Contestações - Benefícios" %}
 
 {% macro status_badge(status) %}
 {% if status == 'approved' %}
@@ -70,15 +70,15 @@
     width: 100%;
   }
 
-  .central-benefits-card {
+  .disputes-center-card {
     overflow: hidden;
   }
 
-  .central-benefit-row {
+  .disputes-center-row {
     transition: background-color 0.2s ease;
   }
 
-  .central-benefit-row:hover {
+  .disputes-center-row:hover {
     background-color: var(--bs-secondary-bg);
   }
 
@@ -518,7 +518,7 @@
 
     <div class="row">
       <div class="col-12">
-        <div class="card central-benefits-card shadow-sm">
+        <div class="card disputes-center-card shadow-sm">
           <div class="card-header border-0 py-3">
             <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
               <div>
@@ -535,14 +535,14 @@
                   data-tooltip="Exportar resultado filtrado para Excel" data-bs-placement="top">
                   <i class="bi bi-file-earmark-excel me-1"></i>Exportar Excel
                 </button>
-                <a href="{{ url_for('central_benefits.list_fap_vigencias') }}" class="btn btn-outline-primary btn-sm">
+                <a href="{{ url_for('disputes_center.list_fap_vigencias') }}" class="btn btn-outline-primary btn-sm">
                   <i class="bi bi-diagram-3 me-1"></i>Ver vigências
                 </a>
-                <a href="{{ url_for('central_benefits.fap_contestation_reports') }}" class="btn btn-info btn-sm">
+                <a href="{{ url_for('disputes_center.fap_contestation_reports') }}" class="btn btn-info btn-sm">
                   <i class="bi bi-upload me-1"></i>Importar relatório FAP
                 </a>
-                <a href="{{ url_for('central_benefits.new_central_benefit') }}" class="btn btn-success btn-sm">
-                  <i class="bi bi-plus-circle me-1"></i>Novo benefício
+                <a href="{{ url_for('disputes_center.new_dispute') }}" class="btn btn-success btn-sm">
+                  <i class="bi bi-plus-circle me-1"></i>Novo registro
                 </a>
               </div>
             </div>
@@ -824,8 +824,8 @@
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script>
   $(document).ready(function () {
-    const apiListUrl = "{{ url_for('central_benefits.list_central_benefits_api') }}";
-    const exportUrl = "{{ url_for('central_benefits.export_central_benefits_excel') }}";
+    const apiListUrl = "{{ url_for('disputes_center.list_disputes_center_api') }}";
+    const exportUrl = "{{ url_for('disputes_center.export_disputes_center_excel') }}";
     const filters = [];
     const urlParams = new URLSearchParams(window.location.search);
     const initialVigenciaId = (urlParams.get('vigencia_id') || '').trim();

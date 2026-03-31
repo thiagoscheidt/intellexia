@@ -2,7 +2,7 @@
 
 {% from "partials/page_hero.html" import page_hero %}
 
-{% block title %}Importar Relatorio FAP - IntellexIA{% endblock %}
+{% block title %}Importar Relatorio FAP - Painel de Contestações - IntellexIA{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -58,8 +58,8 @@ bi-file-earmark-arrow-up') %}
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb mb-0 bg-transparent small">
     <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('central_benefits.list_central_benefits') }}">Painel de
-        Beneficios</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('disputes_center.list_disputes_center') }}">Disputes
+      Center</a></li>
     <li class="breadcrumb-item active" aria-current="page">Importar Relatorio FAP</li>
   </ol>
 </nav>
@@ -109,7 +109,7 @@ bi-file-earmark-arrow-up') %}
             </div>
             <div class="card-footer">
               {{ form.submit(class="btn btn-primary") }}
-              <a href="{{ url_for('central_benefits.list_central_benefits') }}" class="btn btn-secondary">Voltar</a>
+              <a href="{{ url_for('disputes_center.list_disputes_center') }}" class="btn btn-secondary">Voltar</a>
             </div>
           </form>
         </div>
@@ -162,7 +162,7 @@ bi-file-earmark-arrow-up') %}
                     <td class="text-center">{{ report.uploaded_at | datetime_sp(fmt='%d/%m/%Y %H:%M') if report.uploaded_at else '-' }}</td>
                     <td class="text-center">
                       <button type="button" class="btn btn-sm btn-danger"
-                        data-delete-url="{{ url_for('central_benefits.delete_fap_contestation_report', report_id=report.id) }}"
+                        data-delete-url="{{ url_for('disputes_center.delete_fap_contestation_report', report_id=report.id) }}"
                         onclick="confirmDelete(this.dataset.deleteUrl)">
                         <i class="bi bi-trash"></i>
                       </button>

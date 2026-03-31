@@ -90,9 +90,9 @@
         </li>
 
         <li
-          class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('central_benefits.') else '' }}">
+          class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('disputes_center.') else '' }}">
           <a href="#"
-            class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('central_benefits.') else '' }}">
+            class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('disputes_center.') else '' }}">
             <i class="nav-icon bi bi-collection"></i>
             <p>
               Painel de Contestações
@@ -101,24 +101,24 @@
           </a>
           <ul class="nav nav-treeview" style="background-color: rgba(0,0,0,0.1);">
             <li class="nav-item">
-              <a href="{{ url_for('central_benefits.list_central_benefits') }}"
-                class="nav-link {{ 'active' if request.endpoint in ['central_benefits.list_central_benefits', 'central_benefits.list_central_benefits_api', 'central_benefits.export_central_benefits_excel', 'central_benefits.new_central_benefit', 'central_benefits.edit_central_benefit', 'central_benefits.delete_central_benefit', 'central_benefits.benefit_file_timeline', 'central_benefits.view_fap_contestation_report'] else '' }}"
+              <a href="{{ url_for('disputes_center.list_disputes_center') }}"
+                class="nav-link {{ 'active' if request.endpoint in ['disputes_center.list_disputes_center', 'disputes_center.list_disputes_center_api', 'disputes_center.export_disputes_center_excel', 'disputes_center.new_dispute', 'disputes_center.edit_dispute', 'disputes_center.delete_dispute', 'disputes_center.benefit_file_timeline', 'disputes_center.view_fap_contestation_report'] else '' }}"
                 style="font-size: 0.9em;">
                 <i class="nav-icon bi bi-card-list" style="margin-right: 8px; color: #6c757d;"></i>
-                <p style="margin-left: 15px;">Listagem de Beneficios</p>
+                <p style="margin-left: 15px;">Benefícios</p>
               </a>
             </li>
             <li class="nav-item">
-              <a href="{{ url_for('central_benefits.list_fap_vigencias') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'central_benefits.list_fap_vigencias' else '' }}"
+              <a href="{{ url_for('disputes_center.list_fap_vigencias') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'disputes_center.list_fap_vigencias' else '' }}"
                 style="font-size: 0.9em;">
                 <i class="nav-icon bi bi-diagram-3" style="margin-right: 8px; color: #6c757d;"></i>
                 <p style="margin-left: 15px;">Listagem de Vigencias</p>
               </a>
             </li>
             <li class="nav-item">
-              <a href="{{ url_for('central_benefits.fap_contestation_reports') }}"
-                class="nav-link {{ 'active' if request.endpoint in ['central_benefits.fap_contestation_reports', 'central_benefits.delete_fap_contestation_report'] else '' }}"
+              <a href="{{ url_for('disputes_center.fap_contestation_reports') }}"
+                class="nav-link {{ 'active' if request.endpoint in ['disputes_center.fap_contestation_reports', 'disputes_center.delete_fap_contestation_report'] else '' }}"
                 style="font-size: 0.9em;">
                 <i class="nav-icon bi bi-upload" style="margin-right: 8px; color: #6c757d;"></i>
                 <p style="margin-left: 15px;">Importar Relatorio FAP</p>

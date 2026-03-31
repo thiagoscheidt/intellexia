@@ -57,7 +57,7 @@ from app.blueprints import (
     lawyers_bp, courts_bp, benefits_bp, documents_bp,
     petitions_bp, assistant_bp, tools_bp, settings_bp,
     knowledge_base_bp, admin_users_bp, process_panel_bp,
-    central_benefits_bp
+    disputes_center_bp
 )
 from app.blueprints.case_comments import case_comments_bp
 from app.blueprints.fap_reasons import fap_reasons_bp
@@ -80,7 +80,7 @@ app.register_blueprint(admin_users_bp)
 app.register_blueprint(knowledge_base_bp)
 app.register_blueprint(case_comments_bp)
 app.register_blueprint(process_panel_bp)
-app.register_blueprint(central_benefits_bp)
+app.register_blueprint(disputes_center_bp)
 
 # Importar middlewares e contexto (mantém funcionalidade anterior)
 from app.middlewares import init_app_middlewares
