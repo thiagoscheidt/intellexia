@@ -312,6 +312,30 @@ def _apply_text_operator(column, operator, value):
     return column_text.like(f'%{value_text}%')
 
 
+def _normalize_br_date_filter_value(value):
+    raw = _normalize_text(value)
+    if not raw:
+        return raw
+
+    parts = raw.split('/')
+    if len(parts) != 3:
+        return raw
+
+    day, month, year = parts
+    if not (day.isdigit() and month.isdigit() and year.isdigit()):
+        return raw
+
+    if len(day) != 2 or len(month) != 2 or len(year) != 4:
+        return raw
+
+    try:
+        parsed = datetime(int(year), int(month), int(day))
+    except ValueError:
+        return raw
+
+    return parsed.strftime('%Y-%m-%d')
+
+
 def _parse_custom_filters(raw_filters):
     if not raw_filters:
         return []
@@ -337,6 +361,8 @@ def _parse_custom_filters(raw_filters):
             continue
         if operator not in {'contains', 'equals', 'starts_with', 'ends_with', 'empty', 'not_empty'}:
             continue
+        if field == 'insured_date_of_birth':
+            value = _normalize_br_date_filter_value(value)
         if operator in {'contains', 'equals', 'starts_with', 'ends_with'} and not str(value or '').strip():
             continue
         valid_filters.append({'field': field, 'operator': operator, 'value': value})

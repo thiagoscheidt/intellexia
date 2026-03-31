@@ -883,12 +883,14 @@
             return;
           }
 
-          const displayValue = needsValue(operator) ? ` "${value}"` : '';
+          const normalizedValue = normalizeFilterValueForField(field, value);
+          const displayValueText = normalizeDisplayValueForField(field, normalizedValue);
+          const displayValue = needsValue(operator) ? ` "${displayValueText}"` : '';
           filters.push({
             id: Date.now() + Math.random(),
             field,
             operator,
-            value,
+            value: normalizedValue,
             label: `${fieldLabelMap[field]} ${operatorLabelMap[operator]}${displayValue}`,
           });
         });
@@ -1131,6 +1133,84 @@
       not_empty: 'não está vazio',
     };
 
+    const BR_DATE_MASK_FIELDS = new Set(['insured_date_of_birth']);
+
+    function isBrDateMaskField(field) {
+      return BR_DATE_MASK_FIELDS.has(String(field || '').trim());
+    }
+
+    function formatBrDateMask(rawValue) {
+      const digits = String(rawValue || '').replace(/\D/g, '').slice(0, 8);
+      if (digits.length <= 2) return digits;
+      if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+      return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+    }
+
+    function convertBrDateToIso(rawValue) {
+      const value = String(rawValue || '').trim();
+      const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      if (!match) return '';
+
+      const day = Number(match[1]);
+      const month = Number(match[2]);
+      const year = Number(match[3]);
+      const parsed = new Date(year, month - 1, day);
+      if (
+        Number.isNaN(parsed.getTime()) ||
+        parsed.getFullYear() !== year ||
+        parsed.getMonth() !== month - 1 ||
+        parsed.getDate() !== day
+      ) {
+        return '';
+      }
+
+      return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    }
+
+    function convertIsoDateToBr(rawValue) {
+      const value = String(rawValue || '').trim();
+      const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (!match) return '';
+      return `${match[3]}/${match[2]}/${match[1]}`;
+    }
+
+    function normalizeFilterValueForField(field, rawValue) {
+      const normalized = String(rawValue || '').trim();
+      if (!isBrDateMaskField(field) || !normalized) {
+        return normalized;
+      }
+
+      const iso = convertBrDateToIso(normalized);
+      return iso || normalized;
+    }
+
+    function normalizeDisplayValueForField(field, normalizedValue) {
+      const value = String(normalizedValue || '').trim();
+      if (!isBrDateMaskField(field) || !value) {
+        return value;
+      }
+
+      return convertIsoDateToBr(value) || value;
+    }
+
+    function updateFilterValueInputMask() {
+      const field = $('#centralFilterField').val();
+      const input = $('#centralFilterValue');
+      const currentValue = input.val();
+
+      if (isBrDateMaskField(field)) {
+        input.attr('placeholder', 'DD/MM/AAAA');
+        input.attr('maxlength', '10');
+        input.attr('inputmode', 'numeric');
+        input.val(formatBrDateMask(currentValue));
+        return;
+      }
+
+      input.attr('placeholder', 'Digite um valor');
+      input.removeAttr('maxlength');
+      input.removeAttr('inputmode');
+    }
+
     function needsValue(operator) {
       return operator !== 'empty' && operator !== 'not_empty';
     }
@@ -1250,17 +1330,39 @@
       }
     });
 
+    $('#centralFilterField').on('change', function () {
+      updateFilterValueInputMask();
+    });
+
+    $('#centralFilterValue').on('input', function () {
+      const field = $('#centralFilterField').val();
+      if (!isBrDateMaskField(field)) {
+        return;
+      }
+
+      const maskedValue = formatBrDateMask($(this).val());
+      $(this).val(maskedValue);
+    });
+
     $('#addCentralFilterBtn').on('click', function () {
       const field = $('#centralFilterField').val();
       const operator = $('#centralFilterOperator').val();
-      const value = $('#centralFilterValue').val().trim();
+      const rawValue = $('#centralFilterValue').val().trim();
+      const value = normalizeFilterValueForField(field, rawValue);
 
-      if (needsValue(operator) && !value) {
+      if (needsValue(operator) && !rawValue) {
         $('#centralFilterValue').focus();
         return;
       }
 
-      const displayValue = needsValue(operator) ? ` "${value}"` : '';
+      if (needsValue(operator) && isBrDateMaskField(field) && !convertBrDateToIso(rawValue)) {
+        alert('Informe a data no formato DD/MM/AAAA. Exemplo: 19/08/1993.');
+        $('#centralFilterValue').focus();
+        return;
+      }
+
+      const displayFilterValue = normalizeDisplayValueForField(field, value);
+      const displayValue = needsValue(operator) ? ` "${displayFilterValue}"` : '';
       const label = `${fieldLabelMap[field]} ${operatorLabelMap[operator]}${displayValue}`;
 
       filters.push({
@@ -1308,6 +1410,7 @@
       exportFilteredBenefitsToExcel();
     });
 
+    updateFilterValueInputMask();
     $('#centralFilterOperator').trigger('change');
   });
 
