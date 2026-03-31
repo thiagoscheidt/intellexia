@@ -1667,10 +1667,34 @@
 
     function actionBadge(action) {
       const normalized = String(action || '').toLowerCase();
+      if (normalized === 'edit_dispute_first_instance_status') {
+        return '<span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">Edição manual</span>';
+      }
+      if (normalized === 'mark_first_instance_deferred') {
+        return '<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">Ação manual</span>';
+      }
       if (normalized === 'added') {
         return '<span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">Adicionado</span>';
       }
       return '<span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">Atualizado</span>';
+    }
+
+    function formatStatusLabel(value) {
+      const normalized = String(value || '').trim();
+      if (!normalized) return 'Sem status';
+
+      const map = {
+        analyzing: 'Em análise',
+        in_review: 'Em análise',
+        approved: 'Deferido',
+        deferido: 'Deferido',
+        rejected: 'Indeferido',
+        indeferido: 'Indeferido',
+        pending: 'Pendente',
+        pendente: 'Pendente',
+      };
+
+      return map[normalized.toLowerCase()] || normalized;
     }
 
     function escapeHtml(value) {
@@ -1683,6 +1707,35 @@
     }
 
     function renderEvent(item) {
+      if (item.event_type === 'manual_history') {
+        const created = item.created_at || '-';
+        const performer = item.performed_by || 'Usuário não identificado';
+        const oldStatus = formatStatusLabel(item.old_first_instance_status_label || item.old_first_instance_status);
+        const newStatus = formatStatusLabel(item.new_first_instance_status_label || item.new_first_instance_status);
+        const vigenciaId = item.vigencia_id ? String(item.vigencia_id) : '-';
+        const notes = item.notes ? `<div class="text-muted">Observação: ${escapeHtml(item.notes)}</div>` : '';
+
+        return `
+        <div class="card border shadow-sm">
+          <div class="card-body py-2 px-3">
+            <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+              <div class="small">
+                <div class="fw-semibold">${escapeHtml(item.manual_action_label || 'Ação manual')}</div>
+                <div class="text-muted mt-1">Descrição: ${escapeHtml(item.manual_description || '-')}</div>
+                <div class="text-muted">Usuário: <strong>${escapeHtml(performer)}</strong></div>
+                <div class="text-muted">Status 1ª instância: <strong>${escapeHtml(oldStatus)}</strong> → <strong>${escapeHtml(newStatus)}</strong></div>
+                <div class="text-muted">Vigência ID: ${escapeHtml(vigenciaId)}</div>
+                <div class="text-muted">Data da ação: ${escapeHtml(created)}</div>
+                ${notes}
+              </div>
+              <div class="d-flex align-items-center gap-2">
+                ${actionBadge(item.action)}
+              </div>
+            </div>
+          </div>
+        </div>`;
+      }
+
       const transmission = item.transmission_datetime || '-';
       const publication = item.publication_datetime || transmission;
       const uploaded = item.report_uploaded_at || item.created_at || '-';

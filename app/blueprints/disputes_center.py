@@ -16,6 +16,7 @@ from werkzeug.utils import secure_filename
 
 from app.models import (
     Benefit,
+    BenefitManualHistory,
     BenefitFapSourceHistory,
     BenefitFapVigenciaCnpj,
     Client,
@@ -96,6 +97,32 @@ def _normalize_cnpj_digits(value):
 
 def _normalize_status_key(value):
     return _normalize_text(value).lower()
+
+
+def _normalize_optional_status(value):
+    normalized = _normalize_text(value)
+    return normalized or None
+
+
+STATUS_LABEL_PT_MAP = {
+    'analyzing': 'Em análise',
+    'in_review': 'Em análise',
+    'approved': 'Deferido',
+    'deferido': 'Deferido',
+    'rejected': 'Indeferido',
+    'indeferido': 'Indeferido',
+    'pending': 'Pendente',
+    'pendente': 'Pendente',
+}
+
+
+def _status_label_pt(value):
+    normalized = _normalize_text(value)
+    if not normalized:
+        return 'Sem status'
+
+    translated = STATUS_LABEL_PT_MAP.get(normalized.lower())
+    return translated or normalized
 
 
 def _extract_cnpj_root(cnpj):
@@ -516,11 +543,21 @@ def benefit_file_timeline(benefit_id):
         .all()
     )
 
+    manual_history_items = (
+        BenefitManualHistory.query.filter_by(
+            law_firm_id=law_firm_id,
+            benefit_id=benefit_id,
+        )
+        .order_by(BenefitManualHistory.created_at.desc(), BenefitManualHistory.id.desc())
+        .all()
+    )
+
     events = []
     for item in history_items:
         report = item.report
         events.append(
             {
+                'event_type': 'fap_file_history',
                 'history_id': item.id,
                 'report_id': item.report_id,
                 'knowledge_base_id': item.knowledge_base_id,
@@ -534,8 +571,48 @@ def benefit_file_timeline(benefit_id):
                     url_for('disputes_center.view_fap_contestation_report', report_id=item.report_id)
                     if report else None
                 ),
+                'sort_datetime': item.publication_datetime or item.transmission_datetime or item.created_at,
             }
         )
+
+    for item in manual_history_items:
+        if item.action == 'edit_dispute_first_instance_status':
+            manual_action_label = 'Edição manual'
+            manual_description = 'Status da 1ª instância alterado na tela de edição.'
+        else:
+            manual_action_label = 'Marcação manual em lote'
+            manual_description = '1ª instância marcada como deferido.'
+
+        performer_name = (item.performed_by_user.name if item.performed_by_user else '') or 'Usuário não identificado'
+        events.append(
+            {
+                'event_type': 'manual_history',
+                'history_id': item.id,
+                'report_id': None,
+                'knowledge_base_id': None,
+                'action': item.action,
+                'manual_action_label': manual_action_label,
+                'manual_description': manual_description,
+                'performed_by': performer_name,
+                'old_first_instance_status': item.old_first_instance_status,
+                'new_first_instance_status': item.new_first_instance_status,
+                'old_first_instance_status_label': _status_label_pt(item.old_first_instance_status),
+                'new_first_instance_status_label': _status_label_pt(item.new_first_instance_status),
+                'notes': item.notes,
+                'vigencia_id': item.vigencia_id,
+                'transmission_datetime': None,
+                'publication_datetime': None,
+                'created_at': _format_datetime(item.created_at),
+                'report_uploaded_at': None,
+                'report_filename': None,
+                'knowledge_details_url': None,
+                'sort_datetime': item.created_at,
+            }
+        )
+
+    events.sort(key=lambda item: item.get('sort_datetime') or datetime.min, reverse=True)
+    for item in events:
+        item.pop('sort_datetime', None)
 
     return jsonify(
         {
@@ -587,12 +664,12 @@ def list_disputes_center():
     pending_count = max(total_count - approved_count - in_review_count - rejected_count, 0)
 
     general_query = _base_benefits_query(law_firm_id)
-    first_instance_stats = _build_instance_stats(
-        total_count,
-        _group_count_by_status(general_query, Benefit.first_instance_status),
-    )
+    first_instance_status_counts = _group_count_by_status(general_query, Benefit.first_instance_status)
+    first_instance_stats = _build_instance_stats(total_count, first_instance_status_counts)
+    first_instance_deferred_count = int(first_instance_status_counts.get('deferido', 0) or 0)
+    second_instance_total_base = max(int(total_count) - first_instance_deferred_count, 0)
     second_instance_stats = _build_instance_stats(
-        total_count,
+        second_instance_total_base,
         _group_count_by_status(general_query, Benefit.second_instance_status),
     )
 
@@ -760,6 +837,7 @@ def list_fap_vigencias():
                     (
                         and_(
                             Benefit.id.is_not(None),
+                            first_instance_key != 'deferido',
                             ~second_instance_key.in_(['deferido', 'indeferido', 'analyzing']),
                         ),
                         1,
@@ -951,6 +1029,7 @@ def list_fap_vigencias():
 @require_law_firm
 def mark_vigencia_first_instance_deferred(vigencia_id):
     law_firm_id = get_current_law_firm_id()
+    user_id = session.get('user_id')
 
     vigencia = BenefitFapVigenciaCnpj.query.filter_by(
         id=vigencia_id,
@@ -982,9 +1061,29 @@ def mark_vigencia_first_instance_deferred(vigencia_id):
 
     try:
         now = datetime.utcnow()
+        history_rows = []
         for benefit in eligible_benefits:
+            old_status = benefit.first_instance_status
             benefit.first_instance_status = 'deferido'
             benefit.updated_at = now
+
+            history_rows.append(
+                BenefitManualHistory(
+                    law_firm_id=law_firm_id,
+                    benefit_id=benefit.id,
+                    vigencia_id=vigencia.id,
+                    performed_by_user_id=user_id,
+                    action='mark_first_instance_deferred',
+                    old_first_instance_status=old_status,
+                    new_first_instance_status='deferido',
+                    notes='Ação em lote aplicada na tela de vigências.',
+                    created_at=now,
+                    updated_at=now,
+                )
+            )
+
+        if history_rows:
+            db.session.add_all(history_rows)
 
         db.session.commit()
         flash(
@@ -1023,12 +1122,15 @@ def list_disputes_center_api():
     in_review_filtered = int(status_counts.get('in_review', 0) or 0) + int(status_counts.get('analyzing', 0) or 0)
     rejected_filtered = int(status_counts.get('rejected', 0) or 0)
     pending_filtered = max(int(records_filtered) - approved_filtered - in_review_filtered - rejected_filtered, 0)
+    filtered_first_instance_status_counts = _group_count_by_status(filtered_query, Benefit.first_instance_status)
     filtered_first_instance_stats = _build_instance_stats(
         records_filtered,
-        _group_count_by_status(filtered_query, Benefit.first_instance_status),
+        filtered_first_instance_status_counts,
     )
+    filtered_first_instance_deferred_count = int(filtered_first_instance_status_counts.get('deferido', 0) or 0)
+    filtered_second_instance_total_base = max(int(records_filtered) - filtered_first_instance_deferred_count, 0)
     filtered_second_instance_stats = _build_instance_stats(
-        records_filtered,
+        filtered_second_instance_total_base,
         _group_count_by_status(filtered_query, Benefit.second_instance_status),
     )
 
@@ -1375,6 +1477,10 @@ def edit_dispute(benefit_id):
         form.client_id.data = benefit.client_id
 
     if form.validate_on_submit():
+        user_id = session.get('user_id')
+        old_first_instance_status = _normalize_optional_status(benefit.first_instance_status)
+        new_first_instance_status = _normalize_optional_status(form.first_instance_status.data)
+
         benefit.client_id = form.client_id.data
         benefit.benefit_number = form.benefit_number.data
         benefit.benefit_type = form.benefit_type.data
@@ -1406,6 +1512,20 @@ def edit_dispute(benefit_id):
         benefit.opinion = form.opinion.data
         benefit.notes = form.notes.data
         benefit.updated_at = datetime.utcnow()
+
+        if old_first_instance_status != new_first_instance_status:
+            db.session.add(
+                BenefitManualHistory(
+                    law_firm_id=law_firm_id,
+                    benefit_id=benefit.id,
+                    vigencia_id=benefit.fap_vigencia_cnpj_id,
+                    performed_by_user_id=user_id,
+                    action='edit_dispute_first_instance_status',
+                    old_first_instance_status=old_first_instance_status,
+                    new_first_instance_status=new_first_instance_status or '',
+                    notes='Status da 1ª instância alterado na tela de edição.',
+                )
+            )
 
         try:
             db.session.commit()

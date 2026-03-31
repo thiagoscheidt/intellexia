@@ -1387,6 +1387,12 @@ class Benefit(db.Model):
         cascade='all, delete-orphan',
         order_by='BenefitFapSourceHistory.updated_at.desc()'
     )
+    manual_history = db.relationship(
+        'BenefitManualHistory',
+        back_populates='benefit',
+        cascade='all, delete-orphan',
+        order_by='BenefitManualHistory.created_at.desc()'
+    )
 
     def __repr__(self):
         return f'<Benefit {self.benefit_number}>'
@@ -1424,6 +1430,33 @@ class BenefitFapSourceHistory(db.Model):
 
     def __repr__(self):
         return f'<BenefitFapSourceHistory benefit={self.benefit_id} report={self.report_id}>'
+
+
+class BenefitManualHistory(db.Model):
+    """Histórico manual de alterações do benefício realizadas por usuários."""
+    __tablename__ = 'benefit_manual_history'
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    benefit_id = db.Column(db.Integer, db.ForeignKey('benefits.id'), nullable=False, index=True)
+    vigencia_id = db.Column(db.Integer, db.ForeignKey('benefit_fap_vigencia_cnpjs.id'), index=True)
+    performed_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
+
+    action = db.Column(db.String(60), nullable=False, default='mark_first_instance_deferred', index=True)
+    old_first_instance_status = db.Column(db.String(30), index=True)
+    new_first_instance_status = db.Column(db.String(30), nullable=False, index=True)
+    notes = db.Column(db.Text)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    law_firm = db.relationship('LawFirm')
+    benefit = db.relationship('Benefit', back_populates='manual_history')
+    vigencia = db.relationship('BenefitFapVigenciaCnpj')
+    performed_by_user = db.relationship('User')
+
+    def __repr__(self):
+        return f'<BenefitManualHistory benefit={self.benefit_id} action={self.action}>'
 
 
 class JudicialProcessCitedBenefit(db.Model):
