@@ -108,11 +108,66 @@ def _extract_cnpj_branch(cnpj):
     return digits[8:12] if len(digits) >= 12 else ''
 
 
+def _get_cnpj_establishment_type(cnpj):
+    branch = _extract_cnpj_branch(cnpj)
+    if not branch:
+        return ''
+    return 'Matriz' if branch == '0001' else 'Filial'
+
+
 def _format_cnpj(value):
     digits = _normalize_cnpj_digits(value)
     if len(digits) != 14:
         return value or ''
     return f'{digits[:2]}.{digits[2:5]}.{digits[5:8]}/{digits[8:12]}-{digits[12:14]}'
+
+
+def _matches_vigencia_filters(vigencia, resolved_client, client_id=None, client_cnpj='', client_root=''):
+    vigencia_cnpj_digits = _normalize_cnpj_digits(vigencia.employer_cnpj)
+    resolved_client_cnpj_digits = _normalize_cnpj_digits(resolved_client.cnpj if resolved_client else '')
+
+    if client_id is not None and (resolved_client is None or resolved_client.id != client_id):
+        return False
+
+    if client_cnpj and client_cnpj not in {vigencia_cnpj_digits, resolved_client_cnpj_digits}:
+        return False
+
+    if client_root:
+        matching_roots = {
+            vigencia_cnpj_digits[:8],
+            resolved_client_cnpj_digits[:8],
+        }
+        if client_root not in matching_roots:
+            return False
+
+    return True
+
+
+def _build_unique_root_options(clients, vigencia_rows):
+    root_map = {}
+
+    for client in clients:
+        root = _extract_cnpj_root(client.cnpj)
+        if not root:
+            continue
+
+        current_name = (client.name or '').strip()
+        if root not in root_map or current_name:
+            root_map[root] = current_name
+
+    for vigencia, *_ in vigencia_rows:
+        root = _extract_cnpj_root(vigencia.employer_cnpj)
+        if not root or root in root_map:
+            continue
+        root_map[root] = ''
+
+    return [
+        {
+            'root': root,
+            'label': f'{root} - {name}' if name else root,
+        }
+        for root, name in sorted(root_map.items(), key=lambda item: item[0])
+    ]
 
 
 def _build_client_cnpj_lookup(clients):
@@ -638,6 +693,15 @@ def list_fap_vigencias():
     law_firm_id = get_current_law_firm_id()
     first_instance_key = func.lower(func.coalesce(cast(Benefit.first_instance_status, String), ''))
     second_instance_key = func.lower(func.coalesce(cast(Benefit.second_instance_status, String), ''))
+    selected_client_id_raw = _normalize_text(request.args.get('client_id', ''))
+    selected_client_cnpj = _normalize_cnpj_digits(request.args.get('client_cnpj', ''))[:14]
+    selected_client_root = _normalize_cnpj_digits(request.args.get('client_root', ''))[:8]
+
+    try:
+        selected_client_id = int(selected_client_id_raw) if selected_client_id_raw else None
+    except ValueError:
+        selected_client_id = None
+        selected_client_id_raw = ''
 
     clients = (
         Client.query.filter_by(law_firm_id=law_firm_id)
@@ -645,6 +709,15 @@ def list_fap_vigencias():
         .all()
     )
     clients_by_exact, clients_by_root = _build_client_cnpj_lookup(clients)
+    client_filter_options = [
+        {
+            'id': client.id,
+            'name': (client.name or '').strip() or f'Cliente #{client.id}',
+            'cnpj': _format_cnpj(client.cnpj),
+            'root': _extract_cnpj_root(client.cnpj),
+        }
+        for client in clients
+    ]
 
     vigencia_rows = (
         db.session.query(
@@ -724,9 +797,11 @@ def list_fap_vigencias():
         .order_by(BenefitFapVigenciaCnpj.vigencia_year.desc(), BenefitFapVigenciaCnpj.employer_cnpj.asc())
         .all()
     )
+    root_filter_options = _build_unique_root_options(clients, vigencia_rows)
 
     grouped_clients = {}
     total_benefits_linked = 0
+    total_filtered_vigencias = 0
 
     for (
         vigencia,
@@ -749,6 +824,17 @@ def list_fap_vigencias():
             clients_by_root,
         )
 
+        if not _matches_vigencia_filters(
+            vigencia,
+            resolved_client,
+            client_id=selected_client_id,
+            client_cnpj=selected_client_cnpj,
+            client_root=selected_client_root,
+        ):
+            continue
+
+        total_filtered_vigencias += 1
+
         if resolved_client is not None:
             group_key = f'client:{resolved_client.id}'
             client_name = resolved_client.name or 'Cliente sem nome'
@@ -763,6 +849,9 @@ def list_fap_vigencias():
                 'client_id': resolved_client.id if resolved_client is not None else None,
                 'client_name': client_name,
                 'client_cnpj': client_cnpj,
+                'client_establishment_type': _get_cnpj_establishment_type(
+                    resolved_client.cnpj if resolved_client is not None else vigencia.employer_cnpj
+                ),
                 'is_unlinked': resolved_client is None,
                 'total_vigencias': 0,
                 'total_benefits': 0,
@@ -828,14 +917,23 @@ def list_fap_vigencias():
 
     linked_clients_count = sum(1 for item in grouped_client_list if not item['is_unlinked'])
     unlinked_groups_count = sum(1 for item in grouped_client_list if item['is_unlinked'])
+    active_filter_count = sum(
+        1 for value in (selected_client_id_raw, selected_client_cnpj, selected_client_root) if value
+    )
 
     return render_template(
         'central_benefits/vigencias.html',
         grouped_clients=grouped_client_list,
-        total_vigencias=len(vigencia_rows),
+        total_vigencias=total_filtered_vigencias,
         total_benefits_linked=total_benefits_linked,
         linked_clients_count=linked_clients_count,
         unlinked_groups_count=unlinked_groups_count,
+        client_filter_options=client_filter_options,
+        root_filter_options=root_filter_options,
+        selected_client_id=selected_client_id_raw,
+        selected_client_cnpj=_format_cnpj(selected_client_cnpj) if selected_client_cnpj else '',
+        selected_client_root=selected_client_root,
+        active_filter_count=active_filter_count,
     )
 
 

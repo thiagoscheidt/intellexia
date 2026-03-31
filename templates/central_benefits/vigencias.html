@@ -119,6 +119,37 @@
         box-shadow: 0 16px 32px rgba(15, 23, 42, 0.05);
     }
 
+    .vigencias-page .filters-shell {
+        border: 1px solid rgba(15, 23, 42, 0.06);
+        border-radius: 1.15rem;
+        background: linear-gradient(180deg, rgba(248, 250, 252, 0.92), #fff 28%);
+        box-shadow: 0 16px 32px rgba(15, 23, 42, 0.05);
+    }
+
+    .vigencias-page .filters-form .form-label {
+        font-size: 0.8rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.03em;
+        color: var(--bs-secondary-color);
+        margin-bottom: 0.35rem;
+    }
+
+    .vigencias-page .filters-active-note {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 0.85rem;
+        padding: 0.85rem 1rem;
+        border: 1px solid rgba(13, 202, 240, 0.24);
+        border-radius: 0.9rem;
+        background: linear-gradient(135deg, rgba(13, 202, 240, 0.10), rgba(13, 202, 240, 0.04));
+    }
+
+    .vigencias-page .filters-active-note strong {
+        color: var(--bs-emphasis-color);
+    }
+
     .vigencias-page .section-header {
         display: flex;
         justify-content: space-between;
@@ -474,6 +505,73 @@ icon='bi bi-diagram-3') %}
         </div>
     </div>
 
+    <div class="filters-shell mb-4">
+        <div class="section-header">
+            <div>
+                <div class="section-title"><i class="bi bi-funnel me-2 text-primary"></i>Filtros da listagem</div>
+                <div class="section-note">Refine os agrupamentos exibidos por cliente, CNPJ completo ou raiz do CNPJ.</div>
+            </div>
+            {% if active_filter_count %}
+            <span class="badge text-bg-info px-3 py-2">{{ active_filter_count }} filtro{{ 's' if active_filter_count != 1 else '' }} ativo{{ 's' if active_filter_count != 1 else '' }}</span>
+            {% endif %}
+        </div>
+        <div class="p-3 p-lg-4">
+            <form method="GET" action="{{ url_for('central_benefits.list_fap_vigencias') }}" class="filters-form">
+                <div class="row g-3 align-items-end">
+                    <div class="col-lg-4 col-md-6">
+                        <label for="clientFilter" class="form-label">Cliente</label>
+                        <select id="clientFilter" name="client_id" class="form-select">
+                            <option value="">Todos os clientes</option>
+                            {% for client in client_filter_options %}
+                            <option value="{{ client.id }}" {{ 'selected' if selected_client_id == (client.id|string) else '' }}>
+                                {{ client.name }}{% if client.cnpj %} - {{ client.cnpj }}{% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-lg-3 col-md-6">
+                        <label for="clientCnpjFilter" class="form-label">CNPJ</label>
+                        <input id="clientCnpjFilter" name="client_cnpj" type="text" class="form-control"
+                            value="{{ selected_client_cnpj }}" placeholder="00.000.000/0001-00">
+                    </div>
+                    <div class="col-lg-3 col-md-6">
+                        <label for="clientRootFilter" class="form-label">Raiz do CNPJ</label>
+                        <select id="clientRootFilter" name="client_root" class="form-select">
+                            <option value="">Todas as raízes</option>
+                            {% for option in root_filter_options %}
+                            <option value="{{ option.root }}" {{ 'selected' if selected_client_root == option.root else '' }}>
+                                {{ option.label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-lg-2 col-md-6">
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-search me-1"></i>Filtrar
+                            </button>
+                            <a href="{{ url_for('central_benefits.list_fap_vigencias') }}" class="btn btn-outline-secondary">
+                                <i class="bi bi-x-circle me-1"></i>Limpar
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </form>
+
+            {% if active_filter_count %}
+            <div class="filters-active-note mt-3">
+                <div>
+                    <strong>Filtros aplicados na listagem.</strong>
+                    <div class="text-muted small">Os totais e grupos exibidos abaixo já consideram o recorte selecionado.</div>
+                </div>
+                <a href="{{ url_for('central_benefits.list_fap_vigencias') }}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>Remover filtros
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
     <div class="summary-grid mb-4">
         <div class="summary-card" style="--accent-color: #0f5fd7; --accent-soft: rgba(15, 95, 215, 0.10);">
             <div class="card-body">
@@ -547,9 +645,14 @@ icon='bi bi-diagram-3') %}
                     <div class="client-heading">
                         <div>
                             <h4 class="client-title">{{ group.client_name }}</h4>
-                            <div class="client-code">
-                                <i class="bi bi-upc-scan"></i>
-                                <span>{{ group.client_cnpj or 'CNPJ não identificado' }}</span>
+                            <div class="d-flex flex-wrap align-items-center gap-2 mb-2">
+                                <div class="client-code">
+                                    <i class="bi bi-upc-scan"></i>
+                                    <span>{{ group.client_cnpj or 'CNPJ não identificado' }}</span>
+                                </div>
+                                {% if group.client_establishment_type %}
+                                <span class="badge rounded-pill text-bg-primary">{{ group.client_establishment_type }}</span>
+                                {% endif %}
                             </div>
                             <div class="client-status">
                                 {% if group.is_unlinked %}
