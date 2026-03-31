@@ -344,6 +344,72 @@ def _parse_custom_filters(raw_filters):
     return valid_filters
 
 
+def _parse_int_list(values):
+    parsed = []
+    for value in values or []:
+        try:
+            parsed.append(int(value))
+        except (TypeError, ValueError):
+            continue
+    return parsed
+
+
+def _mark_first_instance_deferred_for_vigencia(law_firm_id, user_id, vigencia, note):
+    second_instance_activity_exists = db.session.query(Benefit.id).filter(
+        Benefit.law_firm_id == law_firm_id,
+        Benefit.fap_vigencia_cnpj_id == vigencia.id,
+        func.lower(func.coalesce(cast(Benefit.second_instance_status, String), '')).in_(['deferido', 'indeferido', 'analyzing']),
+    ).first() is not None
+
+    if not second_instance_activity_exists:
+        return {
+            'status': 'missing_second_instance_activity',
+            'updated_count': 0,
+        }
+
+    eligible_benefits = Benefit.query.filter(
+        Benefit.law_firm_id == law_firm_id,
+        Benefit.fap_vigencia_cnpj_id == vigencia.id,
+        ~func.lower(func.coalesce(cast(Benefit.first_instance_status, String), '')).in_(['deferido', 'indeferido']),
+    ).all()
+
+    if not eligible_benefits:
+        return {
+            'status': 'no_eligible_benefits',
+            'updated_count': 0,
+        }
+
+    now = datetime.utcnow()
+    history_rows = []
+    for benefit in eligible_benefits:
+        old_status = benefit.first_instance_status
+        benefit.first_instance_status = 'deferido'
+        benefit.updated_at = now
+
+        history_rows.append(
+            BenefitManualHistory(
+                law_firm_id=law_firm_id,
+                benefit_id=benefit.id,
+                vigencia_id=vigencia.id,
+                performed_by_user_id=user_id,
+                action='mark_first_instance_deferred',
+                old_first_instance_status=old_status,
+                new_first_instance_status='deferido',
+                notes=note,
+                created_at=now,
+                updated_at=now,
+            )
+        )
+
+    if history_rows:
+        db.session.add_all(history_rows)
+
+    return {
+        'status': 'updated',
+        'updated_count': len(eligible_benefits),
+    }
+
+
 def _base_benefits_query(law_firm_id):
     return (
         db.session.query(Benefit, Client.name.label('client_name'))
@@ -1002,6 +1068,15 @@ def list_fap_vigencias():
             reverse=True,
         )
 
+    markable_vigencia_ids = []
+    markable_benefits_count = 0
+    for group in grouped_client_list:
+        for vigencia in group['vigencias']:
+            if not vigencia['can_mark_first_instance_deferred']:
+                continue
+            markable_vigencia_ids.append(vigencia['id'])
+            markable_benefits_count += int(vigencia['first_instance_eligible_count'] or 0)
+
     linked_clients_count = sum(1 for item in grouped_client_list if not item['is_unlinked'])
     unlinked_groups_count = sum(1 for item in grouped_client_list if item['is_unlinked'])
     active_filter_count = sum(
@@ -1022,6 +1097,8 @@ def list_fap_vigencias():
         selected_client_root=selected_client_root,
         selected_show_deferivel=selected_show_deferivel,
         active_filter_count=active_filter_count,
+        markable_vigencia_ids=markable_vigencia_ids,
+        markable_benefits_count=markable_benefits_count,
     )
 
 
@@ -1036,58 +1113,28 @@ def mark_vigencia_first_instance_deferred(vigencia_id):
         law_firm_id=law_firm_id,
     ).first_or_404()
 
-    second_instance_activity_exists = db.session.query(Benefit.id).filter(
-        Benefit.law_firm_id == law_firm_id,
-        Benefit.fap_vigencia_cnpj_id == vigencia.id,
-        func.lower(func.coalesce(cast(Benefit.second_instance_status, String), '')).in_(['deferido', 'indeferido', 'analyzing']),
-    ).first() is not None
+    result = _mark_first_instance_deferred_for_vigencia(
+        law_firm_id=law_firm_id,
+        user_id=user_id,
+        vigencia=vigencia,
+        note='Ação em lote aplicada na tela de vigências.',
+    )
 
-    if not second_instance_activity_exists:
+    if result['status'] == 'missing_second_instance_activity':
         flash(
             'A ação em lote só pode ser aplicada quando houver decisão em 2ª instância ou benefício em análise.',
             'warning',
         )
         return redirect(url_for('disputes_center.list_fap_vigencias'))
 
-    eligible_benefits = Benefit.query.filter(
-        Benefit.law_firm_id == law_firm_id,
-        Benefit.fap_vigencia_cnpj_id == vigencia.id,
-        ~func.lower(func.coalesce(cast(Benefit.first_instance_status, String), '')).in_(['deferido', 'indeferido']),
-    ).all()
-
-    if not eligible_benefits:
+    if result['status'] == 'no_eligible_benefits':
         flash('Não há benefícios elegíveis para marcar como deferido na 1ª instância.', 'info')
         return redirect(url_for('disputes_center.list_fap_vigencias'))
 
     try:
-        now = datetime.utcnow()
-        history_rows = []
-        for benefit in eligible_benefits:
-            old_status = benefit.first_instance_status
-            benefit.first_instance_status = 'deferido'
-            benefit.updated_at = now
-
-            history_rows.append(
-                BenefitManualHistory(
-                    law_firm_id=law_firm_id,
-                    benefit_id=benefit.id,
-                    vigencia_id=vigencia.id,
-                    performed_by_user_id=user_id,
-                    action='mark_first_instance_deferred',
-                    old_first_instance_status=old_status,
-                    new_first_instance_status='deferido',
-                    notes='Ação em lote aplicada na tela de vigências.',
-                    created_at=now,
-                    updated_at=now,
-                )
-            )
-
-        if history_rows:
-            db.session.add_all(history_rows)
-
         db.session.commit()
         flash(
-            f'{len(eligible_benefits)} benefício(s) da vigência {vigencia.vigencia_year or "-"} marcado(s) como deferido na 1ª instância.',
+            f'{result["updated_count"]} benefício(s) da vigência {vigencia.vigencia_year or "-"} marcado(s) como deferido na 1ª instância.',
             'success',
         )
     except Exception as exc:
@@ -1095,6 +1142,94 @@ def mark_vigencia_first_instance_deferred(vigencia_id):
         flash(f'Erro ao aplicar atualização em lote: {str(exc)}', 'danger')
 
     return redirect(url_for('disputes_center.list_fap_vigencias'))
+
+
+@disputes_center_bp.route('/vigencias/mark-first-instance-deferred-batch', methods=['POST'])
+@require_law_firm
+def mark_vigencias_first_instance_deferred_batch():
+    law_firm_id = get_current_law_firm_id()
+    user_id = session.get('user_id')
+    vigencia_ids = list(dict.fromkeys(_parse_int_list(request.form.getlist('vigencia_ids'))))
+
+    selected_client_id = _normalize_text(request.form.get('client_id', ''))
+    selected_client_cnpj = _normalize_text(request.form.get('client_cnpj', ''))
+    selected_client_root = _normalize_text(request.form.get('client_root', ''))
+    selected_show_deferivel = request.form.get('show_deferivel', '') == '1'
+
+    redirect_kwargs = {
+        'client_id': selected_client_id or None,
+        'client_cnpj': selected_client_cnpj or None,
+        'client_root': selected_client_root or None,
+        'show_deferivel': '1' if selected_show_deferivel else None,
+    }
+
+    if not vigencia_ids:
+        flash('Nenhuma vigência elegível foi enviada para atualização em massa.', 'info')
+        return redirect(url_for('disputes_center.list_fap_vigencias', **redirect_kwargs))
+
+    vigencias = BenefitFapVigenciaCnpj.query.filter(
+        BenefitFapVigenciaCnpj.law_firm_id == law_firm_id,
+        BenefitFapVigenciaCnpj.id.in_(vigencia_ids),
+    ).all()
+    vigencias_by_id = {vigencia.id: vigencia for vigencia in vigencias}
+
+    updated_vigencias = 0
+    updated_benefits = 0
+    skipped_no_activity = 0
+    skipped_no_eligible = 0
+
+    try:
+        for vigencia_id in vigencia_ids:
+            vigencia = vigencias_by_id.get(vigencia_id)
+            if vigencia is None:
+                continue
+
+            result = _mark_first_instance_deferred_for_vigencia(
+                law_firm_id=law_firm_id,
+                user_id=user_id,
+                vigencia=vigencia,
+                note='Ação em massa aplicada na tela de vigências.',
+            )
+
+            if result['status'] == 'updated':
+                updated_vigencias += 1
+                updated_benefits += int(result['updated_count'] or 0)
+                continue
+
+            if result['status'] == 'missing_second_instance_activity':
+                skipped_no_activity += 1
+                continue
+
+            if result['status'] == 'no_eligible_benefits':
+                skipped_no_eligible += 1
+
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        flash(f'Erro ao aplicar atualização em massa: {str(exc)}', 'danger')
+        return redirect(url_for('disputes_center.list_fap_vigencias', **redirect_kwargs))
+
+    if updated_benefits:
+        flash(
+            f'Ação em massa concluída: {updated_benefits} benefício(s) atualizado(s) em {updated_vigencias} vigência(s).',
+            'success',
+        )
+    else:
+        flash('Nenhum benefício foi atualizado na ação em massa.', 'info')
+
+    if skipped_no_activity:
+        flash(
+            f'{skipped_no_activity} vigência(s) foram ignoradas por não terem atividade na 2ª instância.',
+            'warning',
+        )
+
+    if skipped_no_eligible:
+        flash(
+            f'{skipped_no_eligible} vigência(s) foram ignoradas por não terem benefícios elegíveis.',
+            'warning',
+        )
+
+    return redirect(url_for('disputes_center.list_fap_vigencias', **redirect_kwargs))
 
 
 @disputes_center_bp.route('/api/list', methods=['GET'])

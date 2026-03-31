@@ -648,8 +648,25 @@ icon='bi bi-diagram-3') %}
                 <div class="section-note">Cada card representa um cliente com seus agrupamentos de vigência e
                     indicadores resumidos.</div>
             </div>
-            <span class="badge text-bg-light border text-dark px-3 py-2">{{ grouped_clients|length }} grupo{{ 's' if
-                grouped_clients|length != 1 else '' }}</span>
+            <div class="d-flex flex-wrap align-items-center justify-content-end gap-2">
+                {% if selected_show_deferivel and markable_vigencia_ids %}
+                <form method="POST" action="{{ url_for('disputes_center.mark_vigencias_first_instance_deferred_batch') }}"
+                    onsubmit="return confirm('Marcar como deferido na 1ª instância todos os {{ markable_benefits_count }} benefício(s) elegíveis das {{ markable_vigencia_ids|length }} vigência(s) exibidas nesta página?');">
+                    <input type="hidden" name="client_id" value="{{ selected_client_id }}">
+                    <input type="hidden" name="client_cnpj" value="{{ selected_client_cnpj }}">
+                    <input type="hidden" name="client_root" value="{{ selected_client_root }}">
+                    <input type="hidden" name="show_deferivel" value="1">
+                    {% for vigencia_id in markable_vigencia_ids %}
+                    <input type="hidden" name="vigencia_ids" value="{{ vigencia_id }}">
+                    {% endfor %}
+                    <button type="submit" class="btn btn-success btn-sm px-3">
+                        <i class="bi bi-check2-all me-1"></i>Marcar em lote ({{ markable_benefits_count }})
+                    </button>
+                </form>
+                {% endif %}
+                <span class="badge text-bg-light border text-dark px-3 py-2">{{ grouped_clients|length }} grupo{{ 's' if
+                    grouped_clients|length != 1 else '' }}</span>
+            </div>
         </div>
 
         {% if grouped_clients %}
