@@ -505,83 +505,6 @@ icon='bi bi-diagram-3') %}
         </div>
     </div>
 
-    <div class="filters-shell mb-4">
-        <div class="section-header">
-            <div>
-                <div class="section-title"><i class="bi bi-funnel me-2 text-primary"></i>Filtros da listagem</div>
-                <div class="section-note">Refine os agrupamentos exibidos por cliente, CNPJ completo ou raiz do CNPJ.</div>
-            </div>
-            {% if active_filter_count %}
-            <span class="badge text-bg-info px-3 py-2">{{ active_filter_count }} filtro{{ 's' if active_filter_count != 1 else '' }} ativo{{ 's' if active_filter_count != 1 else '' }}</span>
-            {% endif %}
-        </div>
-        <div class="p-3 p-lg-4">
-            <form method="GET" action="{{ url_for('central_benefits.list_fap_vigencias') }}" class="filters-form">
-                <div class="row g-3 align-items-end">
-                    <div class="col-lg-3 col-md-6">
-                        <label for="clientFilter" class="form-label">Cliente</label>
-                        <select id="clientFilter" name="client_id" class="form-select">
-                            <option value="">Todos os clientes</option>
-                            {% for client in client_filter_options %}
-                            <option value="{{ client.id }}" {{ 'selected' if selected_client_id == (client.id|string) else '' }}>
-                                {{ client.name }}{% if client.cnpj %} - {{ client.cnpj }}{% endif %}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-lg-2 col-md-6">
-                        <label for="clientCnpjFilter" class="form-label">CNPJ</label>
-                        <input id="clientCnpjFilter" name="client_cnpj" type="text" class="form-control"
-                            value="{{ selected_client_cnpj }}" placeholder="00.000.000/0001-00">
-                    </div>
-                    <div class="col-lg-2 col-md-6">
-                        <label for="clientRootFilter" class="form-label">Raiz do CNPJ</label>
-                        <select id="clientRootFilter" name="client_root" class="form-select">
-                            <option value="">Todas as raízes</option>
-                            {% for option in root_filter_options %}
-                            <option value="{{ option.root }}" {{ 'selected' if selected_client_root == option.root else '' }}>
-                                {{ option.label }}
-                            </option>
-                            {% endfor %}
-                        </select>
-                    </div>
-                    <div class="col-lg-3 col-md-6 align-self-end pb-1">
-                        <div class="form-check form-switch">
-                            <input class="form-check-input" type="checkbox" id="showDeferivel"
-                                name="show_deferivel" value="1"
-                                {% if selected_show_deferivel %}checked{% endif %}>
-                            <label class="form-check-label" for="showDeferivel">
-                                Apenas com <strong>"Marcar como deferido"</strong>
-                            </label>
-                        </div>
-                    </div>
-                    <div class="col-lg-2 col-md-6">
-                        <div class="d-flex gap-2">
-                            <button type="submit" class="btn btn-primary flex-fill">
-                                <i class="bi bi-search me-1"></i>Filtrar
-                            </button>
-                            <a href="{{ url_for('central_benefits.list_fap_vigencias') }}" class="btn btn-outline-secondary flex-fill">
-                                <i class="bi bi-x-circle me-1"></i>Limpar
-                            </a>
-                        </div>
-                    </div>
-                </div>
-            </form>
-
-            {% if active_filter_count %}
-            <div class="filters-active-note mt-3">
-                <div>
-                    <strong>Filtros aplicados na listagem.</strong>
-                    <div class="text-muted small">Os totais e grupos exibidos abaixo já consideram o recorte selecionado.</div>
-                </div>
-                <a href="{{ url_for('central_benefits.list_fap_vigencias') }}" class="btn btn-sm btn-outline-secondary">
-                    <i class="bi bi-arrow-counterclockwise me-1"></i>Remover filtros
-                </a>
-            </div>
-            {% endif %}
-        </div>
-    </div>
-
     <div class="summary-grid mb-4">
         <div class="summary-card" style="--accent-color: #0f5fd7; --accent-soft: rgba(15, 95, 215, 0.10);">
             <div class="card-body">
@@ -636,6 +559,88 @@ icon='bi bi-diagram-3') %}
         </div>
     </div>
 
+    <div class="filters-shell mb-4">
+        <div class="section-header">
+            <div>
+                <div class="section-title"><i class="bi bi-funnel me-2 text-primary"></i>Filtros da listagem</div>
+                <div class="section-note">Refine os agrupamentos exibidos por cliente, CNPJ completo ou raiz do CNPJ.
+                </div>
+            </div>
+            {% if active_filter_count %}
+            <span class="badge text-bg-info px-3 py-2">{{ active_filter_count }} filtro{{ 's' if active_filter_count !=
+                1 else '' }} ativo{{ 's' if active_filter_count != 1 else '' }}</span>
+            {% endif %}
+        </div>
+        <div class="p-3 p-lg-4">
+            <form method="GET" action="{{ url_for('central_benefits.list_fap_vigencias') }}" class="filters-form">
+                <div class="row g-3 align-items-end">
+                    <div class="col-lg-3 col-md-6">
+                        <label for="clientFilter" class="form-label">Cliente</label>
+                        <select id="clientFilter" name="client_id" class="form-select">
+                            <option value="">Todos os clientes</option>
+                            {% for client in client_filter_options %}
+                            <option value="{{ client.id }}" {{ 'selected' if selected_client_id==(client.id|string)
+                                else '' }}>
+                                {{ client.name }}{% if client.cnpj %} - {{ client.cnpj }}{% endif %}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-lg-2 col-md-6">
+                        <label for="clientCnpjFilter" class="form-label">CNPJ</label>
+                        <input id="clientCnpjFilter" name="client_cnpj" type="text" class="form-control"
+                            value="{{ selected_client_cnpj }}" placeholder="00.000.000/0001-00">
+                    </div>
+                    <div class="col-lg-2 col-md-6">
+                        <label for="clientRootFilter" class="form-label">Raiz do CNPJ</label>
+                        <select id="clientRootFilter" name="client_root" class="form-select">
+                            <option value="">Todas as raízes</option>
+                            {% for option in root_filter_options %}
+                            <option value="{{ option.root }}" {{ 'selected' if selected_client_root==option.root else ''
+                                }}>
+                                {{ option.label }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-lg-3 col-md-6 align-self-end pb-1">
+                        <div class="form-check form-switch">
+                            <input class="form-check-input" type="checkbox" id="showDeferivel" name="show_deferivel"
+                                value="1" {% if selected_show_deferivel %}checked{% endif %}>
+                            <label class="form-check-label" for="showDeferivel">
+                                Apenas com <strong>"Marcar como deferido"</strong>
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-lg-2 col-md-6">
+                        <div class="d-flex gap-2">
+                            <button type="submit" class="btn btn-primary flex-fill">
+                                <i class="bi bi-search me-1"></i>Filtrar
+                            </button>
+                            <a href="{{ url_for('central_benefits.list_fap_vigencias') }}"
+                                class="btn btn-outline-secondary flex-fill">
+                                <i class="bi bi-x-circle me-1"></i>Limpar
+                            </a>
+                        </div>
+                    </div>
+                </div>
+            </form>
+
+            {% if active_filter_count %}
+            <div class="filters-active-note mt-3">
+                <div>
+                    <strong>Filtros aplicados na listagem.</strong>
+                    <div class="text-muted small">Os totais e grupos exibidos abaixo já consideram o recorte
+                        selecionado.</div>
+                </div>
+                <a href="{{ url_for('central_benefits.list_fap_vigencias') }}" class="btn btn-sm btn-outline-secondary">
+                    <i class="bi bi-arrow-counterclockwise me-1"></i>Remover filtros
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+
     <div class="section-shell mb-4">
         <div class="section-header">
             <div>
@@ -661,7 +666,8 @@ icon='bi bi-diagram-3') %}
                                     <span>{{ group.client_cnpj or 'CNPJ não identificado' }}</span>
                                 </div>
                                 {% if group.client_establishment_type %}
-                                <span class="badge rounded-pill text-bg-primary">{{ group.client_establishment_type }}</span>
+                                <span class="badge rounded-pill text-bg-primary">{{ group.client_establishment_type
+                                    }}</span>
                                 {% endif %}
                             </div>
                             <div class="client-status">
