@@ -1,7 +1,11 @@
 from flask import Flask
 import os
 import json
+import time
+from datetime import datetime, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
+from app.utils.timezone import now_sp, SP_TZ as APP_TIMEZONE
 
 # Carregar variáveis do .env se existir
 env_path = Path('.') / '.env'
@@ -12,9 +16,17 @@ if env_path.exists():
                 key, value = line.strip().split('=', 1)
                 os.environ[key] = value  # Usar assignment ao invés de setdefault
 
+# Timezone padrão da aplicação (São Paulo)
+APP_TIMEZONE_NAME = 'America/Sao_Paulo'
+APP_TIMEZONE = ZoneInfo(APP_TIMEZONE_NAME)
+os.environ.setdefault('TZ', APP_TIMEZONE_NAME)
+if hasattr(time, 'tzset'):
+    time.tzset()
+
 # Criar aplicação Flask
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'your-secret-key-change-in-production')
+app.config['APP_TIMEZONE'] = APP_TIMEZONE_NAME
 
 # Configuração do banco de dados baseada no ambiente
 environment = os.environ.get('ENVIRONMENT', 'development')
@@ -74,6 +86,18 @@ app.register_blueprint(central_benefits_bp)
 from app.middlewares import init_app_middlewares
 init_app_middlewares(app)
 
+
+def _to_sao_paulo_datetime(value):
+    """Converte datetime para timezone de São Paulo para exibição."""
+    if not isinstance(value, datetime):
+        return None
+
+    # Datetimes sem tzinfo no projeto são tratados como UTC.
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+
+    return value.astimezone(APP_TIMEZONE)
+
 # Registrar filtro Jinja para converter JSON
 @app.template_filter('from_json')
 def from_json_filter(value):
@@ -86,6 +110,29 @@ def from_json_filter(value):
         return value
     except (json.JSONDecodeError, TypeError):
         return {}
+
+
+@app.template_filter('datetime_sp')
+def datetime_sp_filter(value, fmt='%d/%m/%Y %H:%M:%S'):
+    """Formata datetime no fuso de São Paulo."""
+    converted = _to_sao_paulo_datetime(value)
+    if converted is None:
+        return ''
+    return converted.strftime(fmt)
+
+
+@app.template_filter('date_sp')
+def date_sp_filter(value, fmt='%d/%m/%Y'):
+    """Formata data no fuso de São Paulo."""
+    converted = _to_sao_paulo_datetime(value)
+    if converted is None:
+        return ''
+    return converted.strftime(fmt)
+
+
+@app.context_processor
+def inject_current_datetime_sp():
+    return {'current_datetime_sp': now_sp()}
 
 if __name__ == '__main__':
     # Criar tabelas apenas quando executando diretamente

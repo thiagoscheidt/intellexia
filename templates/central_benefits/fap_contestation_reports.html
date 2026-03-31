@@ -159,8 +159,7 @@ bi-file-earmark-arrow-up') %}
                       <span class="badge bg-secondary">Pendente</span>
                       {% endif %}
                     </td>
-                    <td class="text-center">{{ report.uploaded_at.strftime('%d/%m/%Y %H:%M') if report.uploaded_at else
-                      '-' }}</td>
+                    <td class="text-center">{{ report.uploaded_at | datetime_sp(fmt='%d/%m/%Y %H:%M') if report.uploaded_at else '-' }}</td>
                     <td class="text-center">
                       <button type="button" class="btn btn-sm btn-danger"
                         data-delete-url="{{ url_for('central_benefits.delete_fap_contestation_report', report_id=report.id) }}"

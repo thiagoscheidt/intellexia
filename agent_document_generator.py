@@ -12,6 +12,7 @@ from app.models import Case, CaseBenefit, Document as DocumentModel, CaseTemplat
 from app.agents.fap.fap_section_generator_agent import FapSectionGeneratorAgent
 from datetime import datetime
 from copy import deepcopy
+from app.utils.timezone import now_sp
 from docxcompose.composer import Composer
 import os
 from pdf2image import convert_from_path
@@ -230,8 +231,8 @@ class AgentDocumentGenerator:
             },
             'Datas': {
                 '{{data_ajuizamento}}': case.filing_date.strftime('%d/%m/%Y') if case.filing_date else 'Não informado',
-                '{{data_atual}}': datetime.now().strftime('%d/%m/%Y'),
-                '{{mes_ano_atual}}': datetime.now().strftime('%B de %Y'),
+                '{{data_atual}}': now_sp().strftime('%d/%m/%Y'),
+                '{{mes_ano_atual}}': now_sp().strftime('%B de %Y'),
                 '{{vigencia_fap}}': self._format_years_range(case.fap_start_year, case.fap_end_year) or 'Não informado',
             },
             'Imagens': {
@@ -304,8 +305,8 @@ class AgentDocumentGenerator:
             
             # Datas
             '{{data_ajuizamento}}': case.filing_date.strftime('%d/%m/%Y') if case.filing_date else '',
-            '{{data_atual}}': datetime.now().strftime('%d/%m/%Y'),
-            '{{mes_ano_atual}}': datetime.now().strftime('%B de %Y'),
+            '{{data_atual}}': now_sp().strftime('%d/%m/%Y'),
+            '{{mes_ano_atual}}': now_sp().strftime('%B de %Y'),
             '{{vigencia_fap}}': self._format_years_range(case.fap_start_year, case.fap_end_year),
             
             # Nota: Placeholders de imagem ({{imagem_*}}) são tratados separadamente pelo método _insert_document_images()

@@ -6,6 +6,8 @@ import hashlib
 import json
 import os
 
+from app.utils.timezone import now_sp
+
 from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session, url_for, send_file
 from openpyxl import Workbook
 from openpyxl.utils import get_column_letter
@@ -1103,7 +1105,7 @@ def fap_contestation_reports():
                 continue
 
             try:
-                timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+                timestamp = now_sp().strftime('%Y%m%d_%H%M%S_%f')
                 unique_filename = f'{timestamp}_{filename}'
                 file_path = os.path.join(upload_dir, unique_filename)
                 file.save(file_path)
@@ -1154,7 +1156,10 @@ def fap_contestation_reports():
 
     reports = (
         FapContestationJudgmentReport.query.filter_by(law_firm_id=law_firm_id)
-        .order_by(FapContestationJudgmentReport.uploaded_at.desc())
+        .order_by(
+            FapContestationJudgmentReport.uploaded_at.desc(),
+            FapContestationJudgmentReport.id.desc(),
+        )
         .all()
     )
 
