@@ -609,7 +609,7 @@ class FapContestationJudgmentReportService:
 
     def _extract_instance_decision(self, section: str) -> dict[str, str | None]:
         if not section:
-            return {'status': None, 'justification': None, 'opinion': None}
+            return {'status': None, 'status_raw': None, 'justification': None, 'opinion': None}
 
         justification = self._extract_text_between_keywords(
             section,
@@ -620,6 +620,16 @@ class FapContestationJudgmentReportService:
         # O status pode aparecer isolado após os rótulos "Status"/"Parecer" por quebra de layout.
         status_match = re.search(r'\b(Deferido|Indeferido)\b', section, flags=re.IGNORECASE)
         status = status_match.group(1).capitalize() if status_match else None
+
+        # Texto completo do status: captura tudo após o rótulo "Status" até o próximo marcador.
+        status_raw = self._extract_text_between_keywords(
+            section,
+            r'\bStatus\b',
+            [r'\bParecer\b', r'\bSum[aá]rio\s+dos\s+Elementos\s+Contestados\b'],
+        )
+        if not status_raw and status_match:
+            # Fallback: usa o valor normalizado como raw quando não há rótulo "Status" explícito.
+            status_raw = status_match.group(1).capitalize()
 
         # Parecer: adiciona delimitadores para evitar capturar "Sumário dos Elementos Contestados" do próximo bloco
         opinion = self._extract_text_between_keywords(
@@ -633,6 +643,7 @@ class FapContestationJudgmentReportService:
 
         return {
             'status': status,
+            'status_raw': status_raw or None,
             'justification': justification,
             'opinion': opinion,
         }
@@ -752,10 +763,12 @@ class FapContestationJudgmentReportService:
         second_decision = self._extract_instance_decision(second_section or '')
 
         result['first_instance_status'] = first_decision.get('status')
+        result['first_instance_status_raw'] = first_decision.get('status_raw')
         result['first_instance_justification'] = first_decision.get('justification')
         result['first_instance_opinion'] = first_decision.get('opinion')
 
         result['second_instance_status'] = second_decision.get('status')
+        result['second_instance_status_raw'] = second_decision.get('status_raw')
         result['second_instance_justification'] = second_decision.get('justification')
         result['second_instance_opinion'] = second_decision.get('opinion')
 
@@ -928,10 +941,12 @@ class FapContestationJudgmentReportService:
                 benefit.insured_date_of_birth = item.get('insured_date_of_birth') or benefit.insured_date_of_birth
 
                 benefit.first_instance_status = item.get('first_instance_status')
+                benefit.first_instance_status_raw = item.get('first_instance_status_raw')
                 benefit.first_instance_justification = item.get('first_instance_justification')
                 benefit.first_instance_opinion = item.get('first_instance_opinion')
 
                 benefit.second_instance_status = item.get('second_instance_status')
+                benefit.second_instance_status_raw = item.get('second_instance_status_raw')
                 benefit.second_instance_justification = item.get('second_instance_justification')
                 benefit.second_instance_opinion = item.get('second_instance_opinion')
 

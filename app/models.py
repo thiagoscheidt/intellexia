@@ -1364,9 +1364,11 @@ class Benefit(db.Model):
     # General notes
     notes = db.Column(db.Text)
     first_instance_status = db.Column(db.String(30), index=True)
+    first_instance_status_raw = db.Column(db.String(255))
     first_instance_justification = db.Column(db.Text)
     first_instance_opinion = db.Column(db.Text)
     second_instance_status = db.Column(db.String(30), index=True)
+    second_instance_status_raw = db.Column(db.String(255))
     second_instance_justification = db.Column(db.Text)
     second_instance_opinion = db.Column(db.Text)
     justification = db.Column(db.Text)
