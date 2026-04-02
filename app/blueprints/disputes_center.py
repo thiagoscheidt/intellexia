@@ -463,7 +463,7 @@ def _build_instance_stats(total_count, status_counts):
     }
 
 
-def _apply_benefits_filters(query, search_value='', custom_filters=None, quick_client='', quick_root='', vigencia_id=None):
+def _apply_benefits_filters(query, search_value='', custom_filters=None, quick_client='', quick_root='', quick_cnpj='', vigencia_id=None):
     search_text = (search_value or '').strip().lower()
     if search_text:
         like_term = f'%{search_text}%'
@@ -499,6 +499,20 @@ def _apply_benefits_filters(query, search_value='', custom_filters=None, quick_c
                 '',
             )
             query = query.filter(sanitized_cnpj.like(f'{root}%'))
+
+    if quick_cnpj:
+        cnpj_digits = ''.join(ch for ch in quick_cnpj if ch.isdigit())[:14]
+        if cnpj_digits:
+            sanitized_employer_cnpj = func.replace(
+                func.replace(
+                    func.replace(func.replace(cast(Benefit.employer_cnpj, String), '.', ''), '/', ''),
+                    '-',
+                    '',
+                ),
+                ' ',
+                '',
+            )
+            query = query.filter(sanitized_employer_cnpj == cnpj_digits)
 
     if vigencia_id:
         try:
@@ -566,6 +580,7 @@ def _collect_listing_payload(default_length=25):
             'filters': _parse_custom_filters(payload.get('filters')),
             'quick_client': _normalize_text(payload.get('quick_client', '')),
             'quick_root': _normalize_text(payload.get('quick_root', '')),
+            'quick_cnpj': _normalize_text(payload.get('quick_cnpj', '')),
             'vigencia_id': payload.get('vigencia_id'),
         }
 
@@ -579,6 +594,7 @@ def _collect_listing_payload(default_length=25):
     filters = _parse_custom_filters(request.args.get('custom_filters', '[]'))
     quick_client = _normalize_text(request.args.get('quick_client', ''))
     quick_root = _normalize_text(request.args.get('quick_root', ''))
+    quick_cnpj = _normalize_text(request.args.get('quick_cnpj', ''))
 
     return {
         'draw': draw,
@@ -590,6 +606,7 @@ def _collect_listing_payload(default_length=25):
         'filters': filters,
         'quick_client': quick_client,
         'quick_root': quick_root,
+        'quick_cnpj': quick_cnpj,
         'vigencia_id': request.args.get('vigencia_id'),
     }
 
@@ -797,6 +814,23 @@ def list_disputes_center():
         for _, item in sorted(roots_map.items(), key=lambda entry: entry[0])
     ]
 
+    cnpj_by_root = {}
+    for cnpj, name in clients_data:
+        root = _extract_cnpj_root(cnpj)
+        digits = _normalize_cnpj_digits(cnpj)
+        if not root or len(digits) < 14:
+            continue
+        clean_name = (name or '').strip()
+        formatted = _format_cnpj(cnpj)
+        if root not in cnpj_by_root:
+            cnpj_by_root[root] = []
+        if not any(item['digits'] == digits for item in cnpj_by_root[root]):
+            cnpj_by_root[root].append({'cnpj': formatted, 'digits': digits, 'company_name': clean_name})
+    for root_key in cnpj_by_root:
+        cnpj_by_root[root_key].sort(key=lambda x: x['digits'])
+        for item in cnpj_by_root[root_key]:
+            del item['digits']
+
     client_options = sorted({(name or '').strip() for _, name in clients_data if (name or '').strip()})
 
     current_vigencia_id = _normalize_text(request.args.get('vigencia_id', ''))
@@ -851,6 +885,7 @@ def list_disputes_center():
         first_instance_stats=first_instance_stats,
         second_instance_stats=second_instance_stats,
         cnpj_roots=cnpj_roots,
+        cnpj_by_root=cnpj_by_root,
         client_options=client_options,
         current_vigencia_filter=current_vigencia_filter,
     )
@@ -1273,6 +1308,7 @@ def list_disputes_center_api():
         custom_filters=payload['filters'],
         quick_client=payload['quick_client'],
         quick_root=payload['quick_root'],
+        quick_cnpj=payload.get('quick_cnpj', ''),
         vigencia_id=payload.get('vigencia_id'),
     )
 
@@ -1341,6 +1377,7 @@ def export_disputes_center_excel():
         custom_filters=payload['filters'],
         quick_client=payload['quick_client'],
         quick_root=payload['quick_root'],
+        quick_cnpj=payload.get('quick_cnpj', ''),
         vigencia_id=payload.get('vigencia_id'),
     )
 

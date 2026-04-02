@@ -644,7 +644,7 @@
                     {% endfor %}
                   </select>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                   <label for="quickRootCnpjFilter" class="form-label mb-1 small text-muted">Filtro adicional: CNPJ
                     raiz</label>
                   <select id="quickRootCnpjFilter" class="form-select form-select-sm">
@@ -655,9 +655,13 @@
                     {% endfor %}
                   </select>
                 </div>
-                <div class="col-md-4">
-                  <small class="text-muted d-block mb-1">Esses filtros funcionam fora dos chips.</small>
+                <div class="col-md-4" id="quickCnpjFilterWrapper" style="display:none;">
+                  <label for="quickCnpjFilter" class="form-label mb-1 small text-muted">Empresa / CNPJ</label>
+                  <select id="quickCnpjFilter" class="form-select form-select-sm">
+                    <option value="">Todas as empresas</option>
+                  </select>
                 </div>
+                <div class="col-md-1" id="quickCnpjFilterSpacer"></div>
               </div>
 
               <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">
@@ -829,6 +833,7 @@
     const filters = [];
     const urlParams = new URLSearchParams(window.location.search);
     const initialVigenciaId = (urlParams.get('vigencia_id') || '').trim();
+    const cnpjByRoot = {{ cnpj_by_root | tojson }};
 
     function renderVigenciaFilterNotice() {
       const notice = $('#vigenciaFilterNotice');
@@ -862,6 +867,12 @@
 
       if (quickRoot) {
         $('#quickRootCnpjFilter').val(quickRoot);
+        populateCnpjFilter(quickRoot);
+      }
+
+      const quickCnpj = (urlParams.get('quick_cnpj') || '').trim();
+      if (quickCnpj) {
+        $('#quickCnpjFilter').val(quickCnpj);
       }
 
       if (!rawFilters) {
@@ -934,6 +945,7 @@
           })));
           d.quick_client = ($('#quickClientFilter').val() || '').trim();
           d.quick_root = ($('#quickRootCnpjFilter').val() || '').trim();
+          d.quick_cnpj = ($('#quickCnpjFilter').val() || '').trim();
           d.vigencia_id = initialVigenciaId;
         },
         dataSrc: function (json) {
@@ -1259,6 +1271,7 @@
         })),
         quick_client: ($('#quickClientFilter').val() || '').trim(),
         quick_root: ($('#quickRootCnpjFilter').val() || '').trim(),
+        quick_cnpj: ($('#quickCnpjFilter').val() || '').trim(),
         vigencia_id: initialVigenciaId,
       };
 
@@ -1382,6 +1395,9 @@
       filters.splice(0, filters.length);
       $('#quickClientFilter').val('');
       $('#quickRootCnpjFilter').val('');
+      $('#quickCnpjFilter').val('').empty().append('<option value="">Todas as empresas</option>');
+      $('#quickCnpjFilterWrapper').hide();
+      $('#quickCnpjFilterSpacer').show();
       renderActiveFilters();
       table.search('');
       table.ajax.reload();
@@ -1391,7 +1407,31 @@
       table.ajax.reload();
     });
 
+    function populateCnpjFilter(root) {
+      const select = $('#quickCnpjFilter');
+      select.empty().append('<option value="">Todas as empresas</option>');
+      const items = cnpjByRoot[root] || [];
+      items.forEach(function (item) {
+        const label = item.company_name ? `${item.cnpj} — ${item.company_name}` : item.cnpj;
+        select.append(`<option value="${item.cnpj}">${label}</option>`);
+      });
+    }
+
     $('#quickRootCnpjFilter').on('change', function () {
+      const root = $(this).val();
+      if (root) {
+        populateCnpjFilter(root);
+        $('#quickCnpjFilterWrapper').show();
+        $('#quickCnpjFilterSpacer').hide();
+      } else {
+        $('#quickCnpjFilter').val('').empty().append('<option value="">Todas as empresas</option>');
+        $('#quickCnpjFilterWrapper').hide();
+        $('#quickCnpjFilterSpacer').show();
+      }
+      table.ajax.reload();
+    });
+
+    $('#quickCnpjFilter').on('change', function () {
       table.ajax.reload();
     });
 
