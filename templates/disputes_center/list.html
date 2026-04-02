@@ -755,6 +755,10 @@
                   <span class="badge bg-secondary-subtle text-secondary-emphasis" id="decisionFirstStatus">-</span>
                 </div>
                 <div class="card-body">
+                  <div id="decisionFirstStatusRawWrapper" class="mb-3 d-none">
+                    <p class="text-muted small mb-1">Texto original do status</p>
+                    <div class="small font-monospace text-secondary" id="decisionFirstStatusRaw"></div>
+                  </div>
                   <p class="text-muted small mb-1">Justificativa</p>
                   <div class="small mb-3" id="decisionFirstJustification">Não informado</div>
                   <p class="text-muted small mb-1">Parecer</p>
@@ -769,6 +773,10 @@
                   <span class="badge bg-secondary-subtle text-secondary-emphasis" id="decisionSecondStatus">-</span>
                 </div>
                 <div class="card-body">
+                  <div id="decisionSecondStatusRawWrapper" class="mb-3 d-none">
+                    <p class="text-muted small mb-1">Texto original do status</p>
+                    <div class="small font-monospace text-secondary" id="decisionSecondStatusRaw"></div>
+                  </div>
                   <p class="text-muted small mb-1">Justificativa</p>
                   <div class="small mb-3" id="decisionSecondJustification">Não informado</div>
                   <p class="text-muted small mb-1">Parecer</p>
@@ -1007,17 +1015,23 @@
           }
         },
         {
-          data: 'first_instance_status',
+          data: null,
           className: 'text-center',
-          render: function (data) {
-            return instanceStatusBadge(data);
+          render: function (_, __, row) {
+            const badge = instanceStatusBadge(row.first_instance_status);
+            const raw = (row.first_instance_status_raw || '').trim();
+            const rawHtml = raw ? `<div class="text-muted" style="font-size:0.72rem;margin-top:0.3rem;line-height:1.2;">${escapeHtml(raw)}</div>` : '';
+            return badge + rawHtml;
           }
         },
         {
-          data: 'second_instance_status',
+          data: null,
           className: 'text-center',
-          render: function (data) {
-            return instanceStatusBadge(data);
+          render: function (_, __, row) {
+            const badge = instanceStatusBadge(row.second_instance_status);
+            const raw = (row.second_instance_status_raw || '').trim();
+            const rawHtml = raw ? `<div class="text-muted" style="font-size:0.72rem;margin-top:0.3rem;line-height:1.2;">${escapeHtml(raw)}</div>` : '';
+            return badge + rawHtml;
           }
         },
         {
@@ -1056,9 +1070,11 @@
                   data-bs-target="#benefitDecisionModal" data-benefit-number="${escapeAttr(row.benefit_number || '')}"
                   data-benefit-insured="${escapeAttr(row.insured_name || '')}"
                   data-first-status="${escapeAttr(row.first_instance_status || '')}"
+                  data-first-status-raw="${escapeAttr(row.first_instance_status_raw || '')}"
                   data-first-justification="${firstJustification}"
                   data-first-opinion="${firstOpinion}"
                   data-second-status="${escapeAttr(row.second_instance_status || '')}"
+                  data-second-status-raw="${escapeAttr(row.second_instance_status_raw || '')}"
                   data-second-justification="${secondJustification}"
                   data-second-opinion="${secondOpinion}"
                   title="Ver resultado das instâncias" aria-label="Ver resultado das instâncias"
@@ -1693,9 +1709,13 @@
 
     const subtitle = document.getElementById('benefitDecisionSubtitle');
     const firstStatus = document.getElementById('decisionFirstStatus');
+    const firstStatusRaw = document.getElementById('decisionFirstStatusRaw');
+    const firstStatusRawWrapper = document.getElementById('decisionFirstStatusRawWrapper');
     const firstJustification = document.getElementById('decisionFirstJustification');
     const firstOpinion = document.getElementById('decisionFirstOpinion');
     const secondStatus = document.getElementById('decisionSecondStatus');
+    const secondStatusRaw = document.getElementById('decisionSecondStatusRaw');
+    const secondStatusRawWrapper = document.getElementById('decisionSecondStatusRawWrapper');
     const secondJustification = document.getElementById('decisionSecondJustification');
     const secondOpinion = document.getElementById('decisionSecondOpinion');
 
@@ -1776,6 +1796,24 @@
         const secondTooltipInstance = bootstrap.Tooltip.getInstance(secondStatus);
         if (secondTooltipInstance) secondTooltipInstance.dispose();
         secondStatus.removeAttribute('data-bs-toggle');
+      }
+
+      const firstRaw = (btn.getAttribute('data-first-status-raw') || '').trim();
+      if (firstRaw) {
+        firstStatusRaw.textContent = firstRaw;
+        firstStatusRawWrapper.classList.remove('d-none');
+      } else {
+        firstStatusRaw.textContent = '';
+        firstStatusRawWrapper.classList.add('d-none');
+      }
+
+      const secondRaw = (btn.getAttribute('data-second-status-raw') || '').trim();
+      if (secondRaw) {
+        secondStatusRaw.textContent = secondRaw;
+        secondStatusRawWrapper.classList.remove('d-none');
+      } else {
+        secondStatusRaw.textContent = '';
+        secondStatusRawWrapper.classList.add('d-none');
       }
 
       firstJustification.innerHTML = formatLongText(btn.getAttribute('data-first-justification'));
