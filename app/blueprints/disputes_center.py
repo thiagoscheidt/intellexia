@@ -536,6 +536,7 @@ def _serialize_cat_row(cat):
         'cat_number': cat.cat_number or '',
         'employer_cnpj': cat.employer_cnpj or '',
         'employer_cnpj_assigned': cat.employer_cnpj_assigned or '',
+        'employer_name': cat.employer_name or '',
         'insured_nit': cat.insured_nit or '',
         'insured_date_of_birth': _format_date(cat.insured_date_of_birth),
         'insured_death_date': _format_date(cat.insured_death_date),

@@ -447,7 +447,8 @@
                 <thead class="table-light">
                   <tr>
                     <th style="width: 60px;">ID</th>
-                    <th>CAT / CNPJ Empregador</th>
+                    <th>CAT</th>
+                    <th>Empregador</th>
                     <th>NIT Segurado</th>
                     <th>Data Acidente / CAT</th>
                     <th class="text-center" style="min-width: 120px;">1ª Instância</th>
@@ -671,7 +672,7 @@
       language: { url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json' },
       pageLength: 25,
       order: [[0, 'desc']],
-      columnDefs: [{ orderable: false, targets: 7 }],
+      columnDefs: [{ orderable: false, targets: 8 }],
       columns: [
         {
           data: 'id',
@@ -685,13 +686,18 @@
             const cat = row.cat_number
               ? `<span class="cat-number-pill fw-bold text-primary">${escapeHtml(row.cat_number)}</span>`
               : '<span class="text-muted">—</span>';
-            const cnpj = row.employer_cnpj
-              ? `<small class="font-monospace text-muted">CNPJ CAT: ${escapeHtml(row.employer_cnpj)}</small>`
-              : '';
+            return `<div>${cat}</div>`;
+          },
+        },
+        {
+          data: null,
+          render: function (_, __, row) {
+            const cnpj = row.employer_cnpj ? `<span class="font-monospace">${escapeHtml(row.employer_cnpj)}</span>` : '<span class="text-muted">-</span>';
+            const name = row.employer_name ? `<small class="text-muted">${escapeHtml(row.employer_name)}</small>` : '<small class="text-muted">Não informado</small>';
             const cnpjAssigned = row.employer_cnpj_assigned
-              ? `<small class="font-monospace text-muted d-block">CNPJ Atrib.: ${escapeHtml(row.employer_cnpj_assigned)}</small>`
+              ? `<small class="font-monospace text-muted d-block">Atrib.: ${escapeHtml(row.employer_cnpj_assigned)}</small>`
               : '';
-            return `<div class="d-flex flex-column gap-1">${cat}${cnpj ? `<span>${cnpj}</span>` : ''}${cnpjAssigned}</div>`;
+            return `<div class="d-flex flex-column gap-1">${cnpj}${name}${cnpjAssigned}</div>`;
           },
         },
         {

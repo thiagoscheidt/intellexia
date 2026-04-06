@@ -1123,6 +1123,9 @@ class FapContestationJudgmentReportService:
                 if employer_company_data is not None:
                     benefit.employer_name = employer_company_data.get('razao_social') or benefit.employer_name
                     benefit.employer_cnpj = employer_cnpj_formatted or benefit.employer_cnpj
+                elif employer_client is not None:
+                    benefit.employer_name = employer_client.name or benefit.employer_name
+                    benefit.employer_cnpj = employer_cnpj_formatted or benefit.employer_cnpj
 
                 # Rastreabilidade de origem
                 source_note = f'Relatório FAP importado (id={report.id}, arquivo={report.original_filename})'
@@ -1177,6 +1180,16 @@ class FapContestationJudgmentReportService:
         """
         imported_count = 0
 
+        employer_client: Client | None = None
+        employer_company_data: dict | None = None
+        employer_cnpj_formatted: str | None = None
+
+        if metadata is not None and getattr(metadata, 'establishment_cnpj', None):
+            employer_client, employer_company_data, employer_cnpj_formatted = self._upsert_client_from_cnpj(
+                law_firm_id=report.law_firm_id,
+                cnpj_raw=metadata.establishment_cnpj,
+            )
+
         transmission_dt = self._parse_br_datetime(
             getattr(metadata, 'transmission_datetime', None) if metadata is not None else None
         )
@@ -1217,6 +1230,12 @@ class FapContestationJudgmentReportService:
             if should_apply_update:
                 cat.employer_cnpj = item.get('employer_cnpj') or cat.employer_cnpj
                 cat.employer_cnpj_assigned = item.get('employer_cnpj_assigned') or cat.employer_cnpj_assigned
+
+                if employer_company_data is not None:
+                    cat.employer_name = employer_company_data.get('razao_social') or cat.employer_name
+                elif employer_client is not None:
+                    cat.employer_name = employer_client.name or cat.employer_name
+
                 cat.insured_nit = item.get('insured_nit') or cat.insured_nit
                 cat.insured_date_of_birth = item.get('insured_date_of_birth') or cat.insured_date_of_birth
                 cat.insured_death_date = item.get('insured_death_date') or cat.insured_death_date

@@ -1488,6 +1488,7 @@ class FapContestationCat(db.Model):
     # Employer data
     employer_cnpj = db.Column(db.String(20), index=True)           # CNPJ constante na CAT
     employer_cnpj_assigned = db.Column(db.String(20), index=True)  # CNPJ do Empregador Atribuído
+    employer_name = db.Column(db.String(255))
 
     # Insured person data
     insured_nit = db.Column(db.String(50), index=True)
