@@ -12,7 +12,7 @@ from app.agents.fap.fap_contestation_judgment_metadata_agent import (
 from app.models import (
     Benefit,
     BenefitFapSourceHistory,
-    BenefitFapVigenciaCnpj,
+    FapVigenciaCnpj,
     Client,
     FapContestationCat,
     FapContestationCatSourceHistory,
@@ -97,7 +97,7 @@ class FapContestationJudgmentReportService:
         law_firm_id: int,
         employer_cnpj_raw: str | None,
         vigencia_year_raw: str | int | None,
-    ) -> BenefitFapVigenciaCnpj | None:
+    ) -> FapVigenciaCnpj | None:
         employer_cnpj_digits = self._normalize_cnpj(employer_cnpj_raw)
         if len(employer_cnpj_digits) != 14:
             return None
@@ -106,7 +106,7 @@ class FapContestationJudgmentReportService:
         if not vigencia_year:
             return None
 
-        record = BenefitFapVigenciaCnpj.query.filter_by(
+        record = FapVigenciaCnpj.query.filter_by(
             law_firm_id=law_firm_id,
             employer_cnpj=employer_cnpj_digits,
             vigencia_year=vigencia_year,
@@ -114,7 +114,7 @@ class FapContestationJudgmentReportService:
         if record is not None:
             return record
 
-        record = BenefitFapVigenciaCnpj(
+        record = FapVigenciaCnpj(
             law_firm_id=law_firm_id,
             employer_cnpj=employer_cnpj_digits,
             vigencia_year=vigencia_year,
@@ -1032,7 +1032,7 @@ class FapContestationJudgmentReportService:
         employer_client: Client | None = None
         employer_company_data: dict | None = None
         employer_cnpj_formatted: str | None = None
-        employer_vigencia_record: BenefitFapVigenciaCnpj | None = None
+        employer_vigencia_record: FapVigenciaCnpj | None = None
 
         if metadata is not None and getattr(metadata, 'establishment_cnpj', None):
             employer_client, employer_company_data, employer_cnpj_formatted = self._upsert_client_from_cnpj(
@@ -1172,7 +1172,7 @@ class FapContestationJudgmentReportService:
         extracted_cats: list[dict],
         metadata=None,
     ) -> int:
-        """Insere ou atualiza CATs extraídas do relatório na tabela fap_contestation_cats.
+        """Insere ou atualiza CATs extraídas do relatório na tabela cats.
 
         Usa a mesma lógica de `_upsert_benefits_from_report`: só sobrescreve dados de
         instâncias se o arquivo sendo importado for mais recente que o último registrado.
@@ -1183,6 +1183,7 @@ class FapContestationJudgmentReportService:
         employer_client: Client | None = None
         employer_company_data: dict | None = None
         employer_cnpj_formatted: str | None = None
+        employer_vigencia_record: FapVigenciaCnpj | None = None
 
         if metadata is not None and getattr(metadata, 'establishment_cnpj', None):
             employer_client, employer_company_data, employer_cnpj_formatted = self._upsert_client_from_cnpj(
@@ -1198,6 +1199,15 @@ class FapContestationJudgmentReportService:
         )
         publication_dt = datetime.combine(publication_date, datetime.min.time()) if publication_date else None
         reference_dt = publication_dt or transmission_dt
+
+        if metadata is not None:
+            metadata_cnpj = employer_cnpj_formatted or getattr(metadata, 'establishment_cnpj', None)
+            metadata_vigencia = getattr(metadata, 'validity_year', None)
+            employer_vigencia_record = self._upsert_benefit_vigencia_cnpj(
+                law_firm_id=report.law_firm_id,
+                employer_cnpj_raw=metadata_cnpj,
+                vigencia_year_raw=metadata_vigencia,
+            )
 
         for item in extracted_cats:
             cat_number = str(item.get('benefit_number') or '').strip()
@@ -1235,6 +1245,15 @@ class FapContestationJudgmentReportService:
                     cat.employer_name = employer_company_data.get('razao_social') or cat.employer_name
                 elif employer_client is not None:
                     cat.employer_name = employer_client.name or cat.employer_name
+
+                # Vínculo com vigência FAP
+                if employer_vigencia_record is not None:
+                    cat.vigencia_id = employer_vigencia_record.id
+                    cat.vigencia_year = employer_vigencia_record.vigencia_year
+                elif cat.vigencia_year is None and metadata is not None:
+                    metadata_vigencia = getattr(metadata, 'validity_year', None)
+                    if metadata_vigencia:
+                        cat.vigencia_year = str(metadata_vigencia).strip()
 
                 cat.insured_nit = item.get('insured_nit') or cat.insured_nit
                 cat.insured_date_of_birth = item.get('insured_date_of_birth') or cat.insured_date_of_birth

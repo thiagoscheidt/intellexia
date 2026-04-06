@@ -1290,9 +1290,9 @@ class FapContestationJudgmentReport(db.Model):
         return f'<FapContestationJudgmentReport {self.original_filename}>'
 
 
-class BenefitFapVigenciaCnpj(db.Model):
-    """Vigências FAP por CNPJ para agrupamento de benefícios."""
-    __tablename__ = 'benefit_fap_vigencia_cnpjs'
+class FapVigenciaCnpj(db.Model):
+    """Vigências FAP por CNPJ para agrupamento de benefícios e CATs."""
+    __tablename__ = 'fap_vigencia_cnpjs'
     __table_args__ = (
         db.UniqueConstraint('law_firm_id', 'employer_cnpj', 'vigencia_year', name='uq_bfvc_law_firm_cnpj_vigencia'),
     )
@@ -1309,7 +1309,7 @@ class BenefitFapVigenciaCnpj(db.Model):
     benefits = db.relationship('Benefit', back_populates='fap_vigencia_cnpj')
 
     def __repr__(self):
-        return f'<BenefitFapVigenciaCnpj {self.employer_cnpj} {self.vigencia_year}>'
+        return f'<FapVigenciaCnpj {self.employer_cnpj} {self.vigencia_year}>'
 
 
 class Benefit(db.Model):
@@ -1329,7 +1329,7 @@ class Benefit(db.Model):
 
     # Optional link to the firm's client (employer that is contesting the benefit)
     client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), index=True)
-    fap_vigencia_cnpj_id = db.Column(db.Integer, db.ForeignKey('benefit_fap_vigencia_cnpjs.id'), index=True)
+    fap_vigencia_cnpj_id = db.Column(db.Integer, db.ForeignKey('fap_vigencia_cnpjs.id'), index=True)
 
     # Benefit identification
     benefit_number = db.Column(db.String(50), nullable=False, index=True)
@@ -1387,7 +1387,7 @@ class Benefit(db.Model):
     # Relationships
     law_firm = db.relationship('LawFirm')
     client = db.relationship('Client')
-    fap_vigencia_cnpj = db.relationship('BenefitFapVigenciaCnpj', back_populates='benefits')
+    fap_vigencia_cnpj = db.relationship('FapVigenciaCnpj', back_populates='benefits')
     fap_source_history = db.relationship(
         'BenefitFapSourceHistory',
         back_populates='benefit',
@@ -1446,7 +1446,7 @@ class BenefitManualHistory(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
     benefit_id = db.Column(db.Integer, db.ForeignKey('benefits.id'), nullable=False, index=True)
-    vigencia_id = db.Column(db.Integer, db.ForeignKey('benefit_fap_vigencia_cnpjs.id'), index=True)
+    vigencia_id = db.Column(db.Integer, db.ForeignKey('fap_vigencia_cnpjs.id'), index=True)
     performed_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
 
     action = db.Column(db.String(60), nullable=False, default='mark_first_instance_deferred', index=True)
@@ -1459,7 +1459,7 @@ class BenefitManualHistory(db.Model):
 
     law_firm = db.relationship('LawFirm')
     benefit = db.relationship('Benefit', back_populates='manual_history')
-    vigencia = db.relationship('BenefitFapVigenciaCnpj')
+    vigencia = db.relationship('FapVigenciaCnpj')
     performed_by_user = db.relationship('User')
 
     def __repr__(self):
@@ -1467,10 +1467,10 @@ class BenefitManualHistory(db.Model):
 
 
 class FapContestationCat(db.Model):
-    """Tabela fap_contestation_cats - CATs (Comunicação de Acidente de Trabalho) extraídas dos relatórios de contestação do FAP."""
+    """Tabela fap_contestation_cats - CATs (Comunicação de Acidente de Trabalho) extraídas dos relatórios de contestação."""
     __tablename__ = 'fap_contestation_cats'
     __table_args__ = (
-        db.UniqueConstraint('law_firm_id', 'report_id', 'cat_number', name='uq_fcc_law_firm_report_cat'),
+        db.UniqueConstraint('law_firm_id', 'report_id', 'cat_number', name='uq_cat_law_firm_report_cat'),
     )
 
     id = db.Column(db.Integer, primary_key=True)
@@ -1481,6 +1481,10 @@ class FapContestationCat(db.Model):
         nullable=False,
         index=True,
     )
+
+    # Vínculo com vigência FAP
+    vigencia_id = db.Column(db.Integer, db.ForeignKey('fap_vigencia_cnpjs.id'), index=True)
+    vigencia_year = db.Column(db.String(10), index=True)
 
     # CAT identification
     cat_number = db.Column(db.String(50), nullable=False, index=True)
@@ -1521,6 +1525,7 @@ class FapContestationCat(db.Model):
     # Relationships
     law_firm = db.relationship('LawFirm')
     report = db.relationship('FapContestationJudgmentReport', back_populates='cat_records')
+    vigencia = db.relationship('FapVigenciaCnpj')
     source_history = db.relationship(
         'FapContestationCatSourceHistory',
         back_populates='cat',
@@ -1539,10 +1544,10 @@ class FapContestationCat(db.Model):
 
 
 class FapContestationCatSourceHistory(db.Model):
-    """Histórico de arquivos FAP que adicionaram/alteraram uma CAT."""
+    """Histórico de arquivos que adicionaram/alteraram uma CAT."""
     __tablename__ = 'fap_contestation_cat_source_history'
     __table_args__ = (
-        db.UniqueConstraint('cat_id', 'report_id', name='uq_fccsh_cat_report'),
+        db.UniqueConstraint('cat_id', 'report_id', name='uq_cat_source_history_cat_report'),
     )
 
     id = db.Column(db.Integer, primary_key=True)

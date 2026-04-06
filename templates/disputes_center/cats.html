@@ -138,6 +138,45 @@
     line-height: 1.1;
   }
 
+  .vigencia-filter-notice {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.9rem;
+    border: 1px solid var(--bs-info-border-subtle);
+    background: linear-gradient(135deg, var(--bs-info-bg-subtle), rgba(13, 202, 240, 0.08));
+    color: var(--bs-info-text-emphasis);
+    border-radius: 0.85rem;
+    padding: 0.85rem 1rem;
+    margin-bottom: 1rem;
+  }
+  .vigencia-filter-notice-title {
+    display: flex;
+    align-items: center;
+    gap: 0.55rem;
+    font-weight: 700;
+    margin-bottom: 0.15rem;
+  }
+  .vigencia-filter-notice-text {
+    font-size: 0.88rem;
+    color: var(--bs-secondary-color);
+  }
+  .vigencia-filter-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.72);
+    border: 1px solid rgba(13,202,240,0.3);
+    padding: 0.35rem 0.6rem;
+    font-family: var(--bs-font-monospace);
+    font-size: 0.82rem;
+    color: var(--bs-emphasis-color);
+  }
+  @media (max-width: 767.98px) {
+    .vigencia-filter-notice { flex-direction: column; align-items: stretch; }
+  }
+
   @media (max-width: 1399.98px) {
     .stats-instance-split {
       grid-template-columns: 1fr;
@@ -395,6 +434,27 @@
 
             <!-- Filtros -->
             <div class="filters-card p-3 mb-3">
+
+              {% set _vf = current_vigencia_filter %}
+              <div id="vigenciaFilterNotice"
+                class="vigencia-filter-notice {{ 'd-none' if not _vf else '' }}"
+                data-vigencia-label="{% if _vf %}Vigência {{ _vf.year }}{% if _vf.company_name %} - {{ _vf.company_name }}{% elif _vf.company_cnpj %} - {{ _vf.company_cnpj }}{% endif %}{% endif %}">
+                <div>
+                  <div class="vigencia-filter-notice-title">
+                    <i class="bi bi-funnel-fill"></i>
+                    CATs filtradas por vigência
+                  </div>
+                  <div class="vigencia-filter-notice-text">
+                    A listagem abaixo está restrita às CATs vinculadas à vigência selecionada.
+                    <span class="vigencia-filter-badge ms-1">{% if _vf %}Vigência {{ _vf.year }}{% if _vf.company_name %} - {{ _vf.company_name }}{% elif _vf.company_cnpj %} - {{ _vf.company_cnpj }}{% endif %}{% endif %}</span>
+                  </div>
+                </div>
+                <div class="d-flex flex-wrap gap-2">
+                  <button id="clearVigenciaFilterBtn" type="button" class="btn btn-outline-info btn-sm">
+                    <i class="bi bi-x-circle me-1"></i>Remover filtro de vigência
+                  </button>
+                </div>
+              </div>
               <div class="row g-2 align-items-end mb-2">
                 <div class="col-12 col-md-3">
                   <label class="form-label form-label-sm mb-1 fw-semibold">Campo</label>
@@ -437,6 +497,37 @@
                   </button>
                 </div>
               </div>
+              <div class="row g-2 align-items-end mt-1 pt-2 border-top">
+                <div class="col-md-4">
+                  <label for="quickEmployerFilter" class="form-label mb-1 small text-muted">Filtro adicional:
+                    cliente</label>
+                  <select id="quickEmployerFilter" class="form-select form-select-sm">
+                    <option value="">Todos os clientes</option>
+                    {% for name in employer_name_options or [] %}
+                    <option value="{{ name }}">{{ name }}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="col-md-3">
+                  <label for="quickRootCnpjFilter" class="form-label mb-1 small text-muted">Filtro adicional: CNPJ
+                    raiz</label>
+                  <select id="quickRootCnpjFilter" class="form-select form-select-sm">
+                    <option value="">Todos os CNPJ raiz</option>
+                    {% for item in cnpj_roots or [] %}
+                    <option value="{{ item.root }}">{{ item.root }}{% if item.company_name %} - {{ item.company_name
+                      }}{% endif %}</option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="col-md-4" id="quickCnpjFilterWrapper" style="display:none;">
+                  <label for="quickCnpjFilter" class="form-label mb-1 small text-muted">Empresa / CNPJ</label>
+                  <select id="quickCnpjFilter" class="form-select form-select-sm">
+                    <option value="">Todas as empresas</option>
+                  </select>
+                </div>
+                <div class="col-md-1" id="quickCnpjFilterSpacer"></div>
+              </div>
+
               <div id="activeCatFilters" class="d-flex flex-wrap gap-2 mt-2">
                 <span class="text-muted small">Nenhum filtro ativo.</span>
               </div>
@@ -448,6 +539,7 @@
                   <tr>
                     <th style="width: 60px;">ID</th>
                     <th>CAT</th>
+                    <th style="width: 80px;">Vigência</th>
                     <th>Empregador</th>
                     <th>NIT Segurado</th>
                     <th>Data Acidente / CAT</th>
@@ -587,6 +679,15 @@
   $(document).ready(function () {
     const apiUrl = "{{ url_for('disputes_center.list_cats_api') }}";
     const filters = [];
+    const cnpjByRoot = {{ cnpj_by_root | tojson }};
+    const initialCnpjFilter = "{{ initial_cnpj | default('') | e }}";
+    const initialVigenciaId = (new URLSearchParams(window.location.search).get('vigencia_id') || '').trim();
+
+    function clearVigenciaFilterFromUrl() {
+      const nextUrl = new URL(window.location.href);
+      nextUrl.searchParams.delete('vigencia_id');
+      window.location.href = nextUrl.toString();
+    }
 
     const fieldLabelMap = {
       cat_number: 'Número da CAT',
@@ -663,6 +764,10 @@
             operator: f.operator,
             value: f.value,
           })));
+          d.quick_client = ($('#quickEmployerFilter').val() || '').trim();
+          d.quick_root = ($('#quickRootCnpjFilter').val() || '').trim();
+          d.quick_cnpj = ($('#quickCnpjFilter').val() || '').trim();
+          if (initialVigenciaId) d.vigencia_id = initialVigenciaId;
         },
         dataSrc: function (json) {
           updateFilteredStats(json.filtered_stats);
@@ -672,7 +777,7 @@
       language: { url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json' },
       pageLength: 25,
       order: [[0, 'desc']],
-      columnDefs: [{ orderable: false, targets: 8 }],
+      columnDefs: [{ orderable: false, targets: 9 }],
       columns: [
         {
           data: 'id',
@@ -687,6 +792,14 @@
               ? `<span class="cat-number-pill fw-bold text-primary">${escapeHtml(row.cat_number)}</span>`
               : '<span class="text-muted">—</span>';
             return `<div>${cat}</div>`;
+          },
+        },
+        {
+          data: 'vigencia_year',
+          render: function (data) {
+            return data
+              ? `<span class="badge rounded-pill" style="background:rgba(15,95,215,.12);color:#0b4cb3;font-weight:700;">${escapeHtml(data)}</span>`
+              : '<span class="text-muted">—</span>';
           },
         },
         {
@@ -844,8 +957,45 @@
 
     $('#clearCatFiltersBtn').on('click', function () {
       filters.splice(0, filters.length);
+      $('#quickEmployerFilter').val('');
+      $('#quickRootCnpjFilter').val('');
+      $('#quickCnpjFilter').val('').empty().append('<option value="">Todas as empresas</option>');
+      $('#quickCnpjFilterWrapper').hide();
+      $('#quickCnpjFilterSpacer').show();
       renderActiveFilters();
       table.search('');
+      table.ajax.reload();
+    });
+
+    $('#quickEmployerFilter').on('change', function () {
+      table.ajax.reload();
+    });
+
+    function populateCnpjFilter(root) {
+      const select = $('#quickCnpjFilter');
+      select.empty().append('<option value="">Todas as empresas</option>');
+      const items = cnpjByRoot[root] || [];
+      items.forEach(function (item) {
+        const label = item.company_name ? `${item.cnpj} — ${item.company_name}` : item.cnpj;
+        select.append(`<option value="${item.cnpj}">${label}</option>`);
+      });
+    }
+
+    $('#quickRootCnpjFilter').on('change', function () {
+      const root = $(this).val();
+      if (root) {
+        populateCnpjFilter(root);
+        $('#quickCnpjFilterWrapper').show();
+        $('#quickCnpjFilterSpacer').hide();
+      } else {
+        $('#quickCnpjFilter').val('').empty().append('<option value="">Todas as empresas</option>');
+        $('#quickCnpjFilterWrapper').hide();
+        $('#quickCnpjFilterSpacer').show();
+      }
+      table.ajax.reload();
+    });
+
+    $('#quickCnpjFilter').on('change', function () {
       table.ajax.reload();
     });
 
@@ -876,6 +1026,28 @@
 
         container.append(chip);
       });
+    }
+
+    $('#clearVigenciaFilterBtn').on('click', function () {
+      clearVigenciaFilterFromUrl();
+    });
+
+    // Pré-filtragem por CNPJ (vinda de link externo)
+    if (initialCnpjFilter) {
+      const root = initialCnpjFilter.substring(0, 8);
+      $('#quickRootCnpjFilter').val(root);
+      if (cnpjByRoot[root]) {
+        populateCnpjFilter(root);
+        $('#quickCnpjFilterWrapper').show();
+        $('#quickCnpjFilterSpacer').hide();
+        const items = cnpjByRoot[root] || [];
+        const match = items.find(function (item) {
+          return item.cnpj.replace(/\D/g, '') === initialCnpjFilter;
+        });
+        if (match) {
+          $('#quickCnpjFilter').val(match.cnpj);
+        }
+      }
     }
 
     // Inicializa painel filtrado

@@ -705,6 +705,10 @@ icon='bi bi-diagram-3') %}
                                 <span class="client-kpi-label">Benefícios</span>
                                 <div class="client-kpi-value">{{ group.total_benefits }}</div>
                             </div>
+                            <div class="client-kpi">
+                                <span class="client-kpi-label">CATs</span>
+                                <div class="client-kpi-value">{{ group.total_cats }}</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -715,10 +719,10 @@ icon='bi bi-diagram-3') %}
                             <tr>
                                 <th style="width: 110px;">Vigência</th>
                                 <th style="width: 220px;">CNPJ do empregador</th>
-                                <th style="width: 160px;">Benefícios</th>
+                                <th style="width: 100px;">Benefícios</th>
+                                <th style="width: 100px;">CATs</th>
                                 <th style="width: 260px;">Status 1ª instância</th>
                                 <th style="width: 260px;">Status 2ª instância</th>
-                                <th style="width: 300px;">Datas</th>
                                 <th style="width: 320px;" class="text-end">Ações</th>
                             </tr>
                         </thead>
@@ -735,6 +739,12 @@ icon='bi bi-diagram-3') %}
                                     <span class="benefit-count">
                                         <i class="bi bi-stack text-primary"></i>
                                         {{ vigencia.benefits_count }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="benefit-count">
+                                        <i class="bi bi-exclamation-triangle text-warning"></i>
+                                        {{ vigencia.cats_count }}
                                     </span>
                                 </td>
                                 <td>
@@ -784,14 +794,6 @@ icon='bi bi-diagram-3') %}
                                         </span>
                                     </div>
                                 </td>
-                                <td>
-                                    <div class="date-stack">
-                                        <span><strong>Cadastro:</strong> {{ vigencia.created_at or '-' }}</span>
-                                        <span><strong>Atualização:</strong> {{ vigencia.updated_at or '-' }}</span>
-                                        <span><strong>Último benefício:</strong> {{ vigencia.last_benefit_update or '-'
-                                            }}</span>
-                                    </div>
-                                </td>
                                 <td class="text-end">
                                     <div class="row-actions">
                                         {% if vigencia.can_mark_first_instance_deferred %}
@@ -808,6 +810,10 @@ icon='bi bi-diagram-3') %}
                                             ?
                                         </button>
                                         {% endif %}
+                                        <a href="{{ vigencia.cats_view_url }}"
+                                            class="btn btn-outline-warning btn-sm">
+                                            <i class="bi bi-exclamation-triangle me-1"></i>Ver CATs
+                                        </a>
                                         <a href="{{ vigencia.benefits_view_url }}"
                                             class="btn btn-outline-primary btn-sm">
                                             <i class="bi bi-search me-1"></i>Ver benefícios

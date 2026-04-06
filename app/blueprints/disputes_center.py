@@ -18,7 +18,7 @@ from app.models import (
     Benefit,
     BenefitManualHistory,
     BenefitFapSourceHistory,
-    BenefitFapVigenciaCnpj,
+    FapVigenciaCnpj,
     Client,
     FapContestationCat,
     FapContestationCatSourceHistory,
@@ -508,7 +508,7 @@ def _parse_cat_custom_filters(raw_filters):
     return valid_filters
 
 
-def _apply_cats_filters(query, search_value='', custom_filters=None):
+def _apply_cats_filters(query, search_value='', custom_filters=None, quick_employer_name='', quick_root='', quick_cnpj='', vigencia_id=None):
     search_text = (search_value or '').strip().lower()
     if search_text:
         like_term = f'%{search_text}%'
@@ -522,6 +522,42 @@ def _apply_cats_filters(query, search_value='', custom_filters=None):
                 func.lower(cast(FapContestationCat.cat_block, String)).like(like_term),
             )
         )
+
+    if quick_employer_name:
+        query = query.filter(
+            func.lower(cast(FapContestationCat.employer_name, String)) == quick_employer_name.strip().lower()
+        )
+
+    if quick_root:
+        root = ''.join(ch for ch in quick_root if ch.isdigit())[:8]
+        if root:
+            sanitized_cnpj = func.replace(
+                func.replace(
+                    func.replace(func.replace(cast(FapContestationCat.employer_cnpj, String), '.', ''), '/', ''),
+                    '-', '',
+                ),
+                ' ', '',
+            )
+            query = query.filter(sanitized_cnpj.like(f'{root}%'))
+
+    if quick_cnpj:
+        cnpj_digits = ''.join(ch for ch in quick_cnpj if ch.isdigit())[:14]
+        if cnpj_digits:
+            sanitized_employer_cnpj = func.replace(
+                func.replace(
+                    func.replace(func.replace(cast(FapContestationCat.employer_cnpj, String), '.', ''), '/', ''),
+                    '-', '',
+                ),
+                ' ', '',
+            )
+            query = query.filter(sanitized_employer_cnpj == cnpj_digits)
+
+    if vigencia_id:
+        try:
+            query = query.filter(FapContestationCat.vigencia_id == int(vigencia_id))
+        except (TypeError, ValueError):
+            pass
+
     for item in custom_filters or []:
         column = CAT_FILTER_FIELD_MAP.get(item['field'])
         if column is None:
@@ -534,6 +570,7 @@ def _serialize_cat_row(cat):
     return {
         'id': cat.id,
         'cat_number': cat.cat_number or '',
+        'vigencia_year': cat.vigencia_year or '',
         'employer_cnpj': cat.employer_cnpj or '',
         'employer_cnpj_assigned': cat.employer_cnpj_assigned or '',
         'employer_name': cat.employer_name or '',
@@ -953,7 +990,7 @@ def list_disputes_center():
     current_vigencia_id = _normalize_text(request.args.get('vigencia_id', ''))
     if current_vigencia_id:
         try:
-            vigencia = BenefitFapVigenciaCnpj.query.filter_by(
+            vigencia = FapVigenciaCnpj.query.filter_by(
                 id=int(current_vigencia_id),
                 law_firm_id=law_firm_id,
             ).first()
@@ -1043,7 +1080,7 @@ def list_fap_vigencias():
 
     vigencia_rows = (
         db.session.query(
-            BenefitFapVigenciaCnpj,
+            FapVigenciaCnpj,
             func.count(Benefit.id).label('benefits_count'),
             func.max(Benefit.updated_at).label('last_benefit_update'),
             func.sum(
@@ -1114,13 +1151,58 @@ def list_fap_vigencias():
                 )
             ).label('first_instance_eligible_count'),
         )
-        .outerjoin(Benefit, Benefit.fap_vigencia_cnpj_id == BenefitFapVigenciaCnpj.id)
-        .filter(BenefitFapVigenciaCnpj.law_firm_id == law_firm_id)
-        .group_by(BenefitFapVigenciaCnpj.id)
-        .order_by(BenefitFapVigenciaCnpj.vigencia_year.desc(), BenefitFapVigenciaCnpj.employer_cnpj.asc())
+        .outerjoin(Benefit, Benefit.fap_vigencia_cnpj_id == FapVigenciaCnpj.id)
+        .filter(FapVigenciaCnpj.law_firm_id == law_firm_id)
+        .group_by(FapVigenciaCnpj.id)
+        .order_by(FapVigenciaCnpj.vigencia_year.desc(), FapVigenciaCnpj.employer_cnpj.asc())
         .all()
     )
     root_filter_options = _build_unique_root_options(clients, vigencia_rows)
+
+    # CAT stats grouped by normalized employer_cnpj (14 digits)
+    _cat_agg_rows = (
+        db.session.query(
+            FapContestationCat.employer_cnpj,
+            func.count(FapContestationCat.id).label('total'),
+            func.sum(case((func.lower(func.coalesce(cast(FapContestationCat.first_instance_status, String), '')) == 'deferido', 1), else_=0)).label('f_appr'),
+            func.sum(case((func.lower(func.coalesce(cast(FapContestationCat.first_instance_status, String), '')) == 'indeferido', 1), else_=0)).label('f_rej'),
+            func.sum(case((func.lower(func.coalesce(cast(FapContestationCat.first_instance_status, String), '')) == 'analyzing', 1), else_=0)).label('f_rev'),
+            func.sum(case((func.lower(func.coalesce(cast(FapContestationCat.second_instance_status, String), '')) == 'deferido', 1), else_=0)).label('s_appr'),
+            func.sum(case((func.lower(func.coalesce(cast(FapContestationCat.second_instance_status, String), '')) == 'indeferido', 1), else_=0)).label('s_rej'),
+            func.sum(case((func.lower(func.coalesce(cast(FapContestationCat.second_instance_status, String), '')) == 'analyzing', 1), else_=0)).label('s_rev'),
+        )
+        .filter(
+            FapContestationCat.law_firm_id == law_firm_id,
+            FapContestationCat.employer_cnpj.isnot(None),
+            func.trim(cast(FapContestationCat.employer_cnpj, String)) != '',
+        )
+        .group_by(FapContestationCat.employer_cnpj)
+        .all()
+    )
+    cat_stats_by_cnpj = {}
+    for _cr in _cat_agg_rows:
+        _digits = _normalize_cnpj_digits(_cr.employer_cnpj)
+        if not _digits:
+            continue
+        _total = int(_cr.total or 0)
+        _fa = int(_cr.f_appr or 0)
+        _fr = int(_cr.f_rej or 0)
+        _fv = int(_cr.f_rev or 0)
+        _sa = int(_cr.s_appr or 0)
+        _sr = int(_cr.s_rej or 0)
+        _sv = int(_cr.s_rev or 0)
+        if _digits not in cat_stats_by_cnpj:
+            cat_stats_by_cnpj[_digits] = {'total': 0, 'fa': 0, 'fr': 0, 'fv': 0, 'fp': 0, 'sa': 0, 'sr': 0, 'sv': 0, 'sp': 0}
+        _e = cat_stats_by_cnpj[_digits]
+        _e['total'] += _total
+        _e['fa'] += _fa
+        _e['fr'] += _fr
+        _e['fv'] += _fv
+        _e['fp'] += max(_total - _fa - _fr - _fv, 0)
+        _e['sa'] += _sa
+        _e['sr'] += _sr
+        _e['sv'] += _sv
+        _e['sp'] += max(_total - _sa - _sr - _sv, 0)
 
     grouped_clients = {}
     total_benefits_linked = 0
@@ -1186,6 +1268,7 @@ def list_fap_vigencias():
                 'is_unlinked': resolved_client is None,
                 'total_vigencias': 0,
                 'total_benefits': 0,
+                'total_cats': 0,
                 'vigencias': [],
             }
 
@@ -1200,30 +1283,33 @@ def list_fap_vigencias():
         second_pending_count = int(second_pending_count or 0)
         second_instance_activity_count = int(second_instance_activity_count or 0)
         first_instance_eligible_count = int(first_instance_eligible_count or 0)
+        _vdig = _normalize_cnpj_digits(vigencia.employer_cnpj)
+        _cs = cat_stats_by_cnpj.get(_vdig, {})
+        cats_count = _cs.get('total', 0)
         grouped_clients[group_key]['total_vigencias'] += 1
         grouped_clients[group_key]['total_benefits'] += benefits_count
+        grouped_clients[group_key]['total_cats'] += cats_count
         grouped_clients[group_key]['vigencias'].append(
             {
                 'id': vigencia.id,
                 'vigencia_year': vigencia.vigencia_year,
                 'employer_cnpj': _format_cnpj(vigencia.employer_cnpj),
                 'benefits_count': benefits_count,
-                'first_approved_count': first_approved_count,
-                'first_rejected_count': first_rejected_count,
-                'first_in_review_count': first_in_review_count,
-                'first_pending_count': first_pending_count,
-                'second_approved_count': second_approved_count,
-                'second_rejected_count': second_rejected_count,
-                'second_in_review_count': second_in_review_count,
-                'second_pending_count': second_pending_count,
+                'cats_count': cats_count,
+                'first_approved_count': first_approved_count + _cs.get('fa', 0),
+                'first_rejected_count': first_rejected_count + _cs.get('fr', 0),
+                'first_in_review_count': first_in_review_count + _cs.get('fv', 0),
+                'first_pending_count': first_pending_count + _cs.get('fp', 0),
+                'second_approved_count': second_approved_count + _cs.get('sa', 0),
+                'second_rejected_count': second_rejected_count + _cs.get('sr', 0),
+                'second_in_review_count': second_in_review_count + _cs.get('sv', 0),
+                'second_pending_count': second_pending_count + _cs.get('sp', 0),
                 'can_mark_first_instance_deferred': (
                     second_instance_activity_count > 0 and first_instance_eligible_count > 0
                 ),
                 'first_instance_eligible_count': first_instance_eligible_count,
-                'created_at': _format_datetime(vigencia.created_at),
-                'updated_at': _format_datetime(vigencia.updated_at),
-                'last_benefit_update': _format_datetime(last_benefit_update),
                 'benefits_view_url': url_for('disputes_center.list_disputes_center', vigencia_id=vigencia.id),
+                'cats_view_url': url_for('disputes_center.list_cats', vigencia_id=vigencia.id),
             }
         )
         total_benefits_linked += benefits_count
@@ -1286,7 +1372,7 @@ def mark_vigencia_first_instance_deferred(vigencia_id):
     law_firm_id = get_current_law_firm_id()
     user_id = session.get('user_id')
 
-    vigencia = BenefitFapVigenciaCnpj.query.filter_by(
+    vigencia = FapVigenciaCnpj.query.filter_by(
         id=vigencia_id,
         law_firm_id=law_firm_id,
     ).first_or_404()
@@ -1345,9 +1431,9 @@ def mark_vigencias_first_instance_deferred_batch():
         flash('Nenhuma vigência elegível foi enviada para atualização em massa.', 'info')
         return redirect(url_for('disputes_center.list_fap_vigencias', **redirect_kwargs))
 
-    vigencias = BenefitFapVigenciaCnpj.query.filter(
-        BenefitFapVigenciaCnpj.law_firm_id == law_firm_id,
-        BenefitFapVigenciaCnpj.id.in_(vigencia_ids),
+    vigencias = FapVigenciaCnpj.query.filter(
+        FapVigenciaCnpj.law_firm_id == law_firm_id,
+        FapVigenciaCnpj.id.in_(vigencia_ids),
     ).all()
     vigencias_by_id = {vigencia.id: vigencia for vigencia in vigencias}
 
@@ -1914,11 +2000,99 @@ def list_cats():
     second_total_base = max(total_count - first_deferred_count, 0)
     second_instance_stats = _build_instance_stats(second_total_base, second_status_counts)
 
+    # Quick filter data: client names, CNPJ roots and breakdown (from Client model, same as benefits)
+    cnpj_entries = (
+        Client.query.with_entities(Client.cnpj, Client.name)
+        .filter_by(law_firm_id=law_firm_id)
+        .all()
+    )
+
+    cats_roots_map = {}
+    for cnpj, name in cnpj_entries:
+        root = _extract_cnpj_root(cnpj)
+        if not root:
+            continue
+        branch = _extract_cnpj_branch(cnpj)
+        clean_name = (name or '').strip()
+        if root not in cats_roots_map:
+            cats_roots_map[root] = {'root': root, 'company_name': '', 'is_main': False}
+        current = cats_roots_map[root]
+        if branch == '0001' and clean_name:
+            current['company_name'] = clean_name
+            current['is_main'] = True
+            continue
+        if not current['is_main'] and clean_name and not current['company_name']:
+            current['company_name'] = clean_name
+
+    cnpj_roots = [
+        {'root': item['root'], 'company_name': item['company_name']}
+        for _, item in sorted(cats_roots_map.items(), key=lambda entry: entry[0])
+    ]
+
+    cnpj_by_root = {}
+    for cnpj, name in cnpj_entries:
+        root = _extract_cnpj_root(cnpj)
+        digits = _normalize_cnpj_digits(cnpj)
+        if not root or len(digits) < 14:
+            continue
+        clean_name = (name or '').strip()
+        formatted = _format_cnpj(cnpj)
+        if root not in cnpj_by_root:
+            cnpj_by_root[root] = []
+        if not any(item['digits'] == digits for item in cnpj_by_root[root]):
+            cnpj_by_root[root].append({'cnpj': formatted, 'digits': digits, 'company_name': clean_name})
+    for root_key in cnpj_by_root:
+        cnpj_by_root[root_key].sort(key=lambda x: x['digits'])
+        for item in cnpj_by_root[root_key]:
+            del item['digits']
+
+    employer_name_options = sorted({(name or '').strip() for _, name in cnpj_entries if (name or '').strip()})
+
+    initial_cnpj = _normalize_cnpj_digits(request.args.get('quick_cnpj', ''))
+
+    # Resolve vigência filter label (from vigencia_id URL param, same pattern as list_disputes_center)
+    current_vigencia_filter = None
+    current_vigencia_id_raw = _normalize_text(request.args.get('vigencia_id', ''))
+    if current_vigencia_id_raw:
+        try:
+            vigencia_obj = FapVigenciaCnpj.query.filter_by(
+                id=int(current_vigencia_id_raw),
+                law_firm_id=law_firm_id,
+            ).first()
+        except (TypeError, ValueError):
+            vigencia_obj = None
+
+        if vigencia_obj is not None:
+            # Try to resolve company name from CATs of this vigência
+            company_name = (
+                db.session.query(FapContestationCat.employer_name)
+                .filter(
+                    FapContestationCat.law_firm_id == law_firm_id,
+                    FapContestationCat.vigencia_id == vigencia_obj.id,
+                    FapContestationCat.employer_name.is_not(None),
+                    func.trim(FapContestationCat.employer_name) != '',
+                )
+                .order_by(FapContestationCat.updated_at.desc(), FapContestationCat.id.desc())
+                .scalar()
+                or ''
+            ).strip()
+            current_vigencia_filter = {
+                'id': vigencia_obj.id,
+                'year': (vigencia_obj.vigencia_year or '').strip(),
+                'company_name': company_name,
+                'company_cnpj': _format_cnpj(vigencia_obj.employer_cnpj),
+            }
+
     return render_template(
         'disputes_center/cats.html',
         total_count=total_count,
         first_instance_stats=first_instance_stats,
         second_instance_stats=second_instance_stats,
+        cnpj_roots=cnpj_roots,
+        cnpj_by_root=cnpj_by_root,
+        employer_name_options=employer_name_options,
+        initial_cnpj=initial_cnpj,
+        current_vigencia_filter=current_vigencia_filter,
     )
 
 
@@ -1944,6 +2118,10 @@ def list_cats_api():
         _base_cats_query(law_firm_id),
         search_value=payload['search'],
         custom_filters=cat_filters,
+        quick_employer_name=payload['quick_client'],
+        quick_root=payload['quick_root'],
+        quick_cnpj=payload['quick_cnpj'],
+        vigencia_id=payload['vigencia_id'],
     )
     records_filtered = filtered_query.with_entities(func.count(FapContestationCat.id)).scalar() or 0
 
