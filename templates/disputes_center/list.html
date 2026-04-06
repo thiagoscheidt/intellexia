@@ -744,7 +744,8 @@
         <div class="modal-header border-bottom">
           <div>
             <h5 class="modal-title fw-semibold">
-              <i class="bi bi-clipboard2-check me-2 text-secondary"></i>Resultado das instâncias
+              <i class="bi bi-card-list me-2"></i>Decisões do Benefício
+              <span id="benefitDecisionNumber" class="font-monospace text-primary ms-1"></span>
             </h5>
             <small class="text-muted d-block mt-1" id="benefitDecisionSubtitle"></small>
           </div>
@@ -753,38 +754,52 @@
         <div class="modal-body">
           <div class="row g-3">
             <div class="col-12 col-lg-6">
-              <div class="card h-100 border">
-                <div class="card-header bg-light d-flex align-items-center justify-content-between">
-                  <span class="fw-semibold">1ª instância</span>
-                  <span class="badge bg-secondary-subtle text-secondary-emphasis" id="decisionFirstStatus">-</span>
+              <div class="card h-100 border-0 bg-light">
+                <div class="card-header bg-transparent fw-semibold border-bottom">
+                  <i class="bi bi-1-circle me-1 text-primary"></i>1ª Instância
                 </div>
                 <div class="card-body">
-                  <div id="decisionFirstStatusRawWrapper" class="mb-3 d-none">
-                    <p class="text-muted small mb-1">Texto original do status</p>
-                    <div class="small font-monospace text-secondary" id="decisionFirstStatusRaw"></div>
+                  <div class="mb-2">
+                    <span class="text-muted small d-block mb-1">Status</span>
+                    <span id="decisionFirstStatus" class="badge fs-6"></span>
                   </div>
-                  <p class="text-muted small mb-1">Justificativa</p>
-                  <div class="small mb-3" id="decisionFirstJustification">Não informado</div>
-                  <p class="text-muted small mb-1">Parecer</p>
-                  <div class="small" id="decisionFirstOpinion">Não informado</div>
+                  <div id="decisionFirstStatusRawWrapper" class="mb-2 d-none">
+                    <span class="text-muted small d-block mb-1">Texto original</span>
+                    <span id="decisionFirstStatusRaw" class="font-monospace small text-secondary"></span>
+                  </div>
+                  <div class="mb-2">
+                    <span class="text-muted small d-block mb-1">Justificativa</span>
+                    <div id="decisionFirstJustification" class="small border rounded p-2 bg-white"></div>
+                  </div>
+                  <div>
+                    <span class="text-muted small d-block mb-1">Parecer</span>
+                    <div id="decisionFirstOpinion" class="small border rounded p-2 bg-white"></div>
+                  </div>
                 </div>
               </div>
             </div>
             <div class="col-12 col-lg-6">
-              <div class="card h-100 border">
-                <div class="card-header bg-light d-flex align-items-center justify-content-between">
-                  <span class="fw-semibold">2ª instância</span>
-                  <span class="badge bg-secondary-subtle text-secondary-emphasis" id="decisionSecondStatus">-</span>
+              <div class="card h-100 border-0 bg-light">
+                <div class="card-header bg-transparent fw-semibold border-bottom">
+                  <i class="bi bi-2-circle me-1 text-primary"></i>2ª Instância
                 </div>
                 <div class="card-body">
-                  <div id="decisionSecondStatusRawWrapper" class="mb-3 d-none">
-                    <p class="text-muted small mb-1">Texto original do status</p>
-                    <div class="small font-monospace text-secondary" id="decisionSecondStatusRaw"></div>
+                  <div class="mb-2">
+                    <span class="text-muted small d-block mb-1">Status</span>
+                    <span id="decisionSecondStatus" class="badge fs-6"></span>
                   </div>
-                  <p class="text-muted small mb-1">Justificativa</p>
-                  <div class="small mb-3" id="decisionSecondJustification">Não informado</div>
-                  <p class="text-muted small mb-1">Parecer</p>
-                  <div class="small" id="decisionSecondOpinion">Não informado</div>
+                  <div id="decisionSecondStatusRawWrapper" class="mb-2 d-none">
+                    <span class="text-muted small d-block mb-1">Texto original</span>
+                    <span id="decisionSecondStatusRaw" class="font-monospace small text-secondary"></span>
+                  </div>
+                  <div class="mb-2">
+                    <span class="text-muted small d-block mb-1">Justificativa</span>
+                    <div id="decisionSecondJustification" class="small border rounded p-2 bg-white"></div>
+                  </div>
+                  <div>
+                    <span class="text-muted small d-block mb-1">Parecer</span>
+                    <div id="decisionSecondOpinion" class="small border rounded p-2 bg-white"></div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1070,7 +1085,7 @@
 
             return `
               <div class="d-flex flex-wrap justify-content-center gap-2">
-                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal"
+                <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal"
                   data-bs-target="#benefitDecisionModal" data-benefit-number="${escapeAttr(row.benefit_number || '')}"
                   data-benefit-insured="${escapeAttr(row.insured_name || '')}"
                   data-first-status="${escapeAttr(row.first_instance_status || '')}"
@@ -1081,34 +1096,29 @@
                   data-second-status-raw="${escapeAttr(row.second_instance_status_raw || '')}"
                   data-second-justification="${secondJustification}"
                   data-second-opinion="${secondOpinion}"
-                  title="Ver resultado das instâncias" aria-label="Ver resultado das instâncias"
-                  data-tooltip="Abrir detalhes da 1ª e 2ª instância" data-bs-placement="top">
-                  <i class="bi bi-clipboard2-check"></i>
+                  title="Ver decisões" aria-label="Ver decisões">
+                  <i class="bi bi-card-list"></i>
                 </button>
-                <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal"
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal"
                   data-bs-target="#benefitDocumentsModal" data-benefit-number="${escapeAttr(row.benefit_number || '')}"
                   data-benefit-insured="${escapeAttr(row.insured_name || '')}" title="Pesquisar em documentos"
-                  aria-label="Pesquisar em documentos"
-                  data-tooltip="Pesquisar trechos deste benefício nos documentos" data-bs-placement="top">
+                  aria-label="Pesquisar em documentos">
                   <i class="bi bi-file-earmark-text"></i>
                 </button>
                 <button type="button" class="btn btn-outline-info btn-sm" data-bs-toggle="modal"
                   data-bs-target="#benefitTimelineModal" data-benefit-number="${escapeAttr(row.benefit_number || '')}"
                   data-benefit-insured="${escapeAttr(row.insured_name || '')}"
                   data-timeline-url="${escapeAttr(row.timeline_url || '')}"
-                  title="Ver timeline de arquivos" aria-label="Ver timeline de arquivos"
-                  data-tooltip="Ver histórico de arquivos, tramitação e publicação" data-bs-placement="top">
+                  title="Histórico de arquivos" aria-label="Histórico de arquivos">
                   <i class="bi bi-clock-history"></i>
                 </button>
                 <a href="${escapeAttr(row.edit_url)}"
-                  class="btn btn-warning btn-sm" title="Editar" aria-label="Editar"
-                  data-tooltip="Editar informações do benefício" data-bs-placement="top">
+                  class="btn btn-outline-warning btn-sm" title="Editar" aria-label="Editar">
                   <i class="bi bi-pencil"></i>
                 </a>
                 <button type="button" class="btn btn-outline-danger btn-sm" title="Excluir" aria-label="Excluir"
                   data-delete-url="${escapeAttr(row.delete_url)}"
-                  onclick="confirmDelete(this.dataset.deleteUrl)" data-tooltip="Excluir este benefício"
-                  data-bs-placement="top">
+                  onclick="confirmDelete(this.dataset.deleteUrl)">
                   <i class="bi bi-trash"></i>
                 </button>
               </div>`;
@@ -1714,6 +1724,7 @@
     if (!modal) return;
 
     const subtitle = document.getElementById('benefitDecisionSubtitle');
+    const benefitDecisionNumber = document.getElementById('benefitDecisionNumber');
     const firstStatus = document.getElementById('decisionFirstStatus');
     const firstStatusRaw = document.getElementById('decisionFirstStatusRaw');
     const firstStatusRawWrapper = document.getElementById('decisionFirstStatusRawWrapper');
@@ -1771,7 +1782,8 @@
 
       const number = btn.getAttribute('data-benefit-number') || '';
       const insured = btn.getAttribute('data-benefit-insured') || '';
-      subtitle.textContent = 'NB ' + number + (insured ? ' • ' + insured : '');
+      if (benefitDecisionNumber) benefitDecisionNumber.textContent = number;
+      subtitle.textContent = insured || ('NB ' + number);
 
       const firstStatusValue = btn.getAttribute('data-first-status') || '-';
       const secondStatusValue = btn.getAttribute('data-second-status') || '-';

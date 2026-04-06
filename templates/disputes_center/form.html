@@ -9,8 +9,7 @@
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb mb-0 bg-transparent small">
     <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
-    <li class="breadcrumb-item"><a href="{{ url_for('disputes_center.list_disputes_center') }}">Disputes
-      Center</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('disputes_center.list_disputes_center') }}">Disputes Center</a></li>
     <li class="breadcrumb-item active" aria-current="page">{{ title }}</li>
   </ol>
 </nav>
@@ -18,195 +17,238 @@
 
 <div class="app-content">
   <div class="container-fluid">
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="row mb-3">
+      <div class="col-12">
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+          <i class="bi bi-info-circle me-2"></i>{{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    {% endwith %}
+
     <div class="row">
       <div class="col-12">
-        <div class="card">
-          <div class="card-header">
-            <h3 class="card-title">{{ title }}</h3>
+        <div class="card shadow-sm">
+          <div class="card-header border-0 py-3">
+            <h5 class="card-title mb-0 fw-semibold">
+              <i class="bi bi-pencil-square me-2 text-primary"></i>{{ title }}
+            </h5>
           </div>
+
           <form method="POST" action="">
             {{ form.hidden_tag() }}
             <div class="card-body">
-              <div class="row">
+
+              <!-- Identificação do Benefício -->
+              <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.06em;">
+                <i class="bi bi-card-text me-1"></i>Identificação do Benefício
+              </h6>
+              <div class="row g-3 mb-4">
                 <div class="col-md-4">
-                  <div class="mb-3">
-                    {{ form.client_id.label(class="form-label") }}
-                    {{ form.client_id(class="form-select") }}
-                  </div>
+                  {{ form.client_id.label(class="form-label") }}
+                  {{ form.client_id(class="form-select") }}
                 </div>
                 <div class="col-md-4">
-                  <div class="mb-3">
-                    {{ form.benefit_number.label(class="form-label") }}
-                    {{ form.benefit_number(class="form-control" + (" is-invalid" if form.benefit_number.errors else ""))
-                    }}
-                    {% if form.benefit_number.errors %}<div class="invalid-feedback">{% for error in
-                      form.benefit_number.errors %}{{ error }}{% endfor %}</div>{% endif %}
-                  </div>
+                  {{ form.benefit_number.label(class="form-label") }}
+                  {{ form.benefit_number(class="form-control" + (" is-invalid" if form.benefit_number.errors else "")) }}
+                  {% if form.benefit_number.errors %}
+                  <div class="invalid-feedback">{% for e in form.benefit_number.errors %}{{ e }}{% endfor %}</div>
+                  {% endif %}
                 </div>
                 <div class="col-md-4">
-                  <div class="mb-3">
-                    {{ form.benefit_type.label(class="form-label") }}
-                    {{ form.benefit_type(class="form-select" + (" is-invalid" if form.benefit_type.errors else "")) }}
-                    {% if form.benefit_type.errors %}<div class="invalid-feedback">{% for error in
-                      form.benefit_type.errors %}{{ error }}{% endfor %}</div>{% endif %}
-                  </div>
+                  {{ form.benefit_type.label(class="form-label") }}
+                  {{ form.benefit_type(class="form-select" + (" is-invalid" if form.benefit_type.errors else "")) }}
+                  {% if form.benefit_type.errors %}
+                  <div class="invalid-feedback">{% for e in form.benefit_type.errors %}{{ e }}{% endfor %}</div>
+                  {% endif %}
                 </div>
               </div>
 
-              <h5 class="mt-2 mb-3">Dados do Segurado</h5>
-              <div class="row">
+              <!-- Dados do Segurado -->
+              <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.06em;">
+                <i class="bi bi-person me-1"></i>Dados do Segurado
+              </h6>
+              <div class="row g-3 mb-4">
                 <div class="col-md-5">
-                  <div class="mb-3">{{ form.insured_name.label(class="form-label") }}{{
-                    form.insured_name(class="form-control") }}</div>
+                  {{ form.insured_name.label(class="form-label") }}
+                  {{ form.insured_name(class="form-control") }}
                 </div>
                 <div class="col-md-3">
-                  <div class="mb-3">{{ form.insured_nit.label(class="form-label") }}{{
-                    form.insured_nit(class="form-control") }}</div>
+                  {{ form.insured_nit.label(class="form-label") }}
+                  {{ form.insured_nit(class="form-control font-monospace") }}
                 </div>
                 <div class="col-md-2">
-                  <div class="mb-3">{{ form.insured_cpf.label(class="form-label") }}{{
-                    form.insured_cpf(class="form-control") }}</div>
+                  {{ form.insured_cpf.label(class="form-label") }}
+                  {{ form.insured_cpf(class="form-control font-monospace") }}
                 </div>
                 <div class="col-md-2">
-                  <div class="mb-3">{{ form.insured_date_of_birth.label(class="form-label") }}{{
-                    form.insured_date_of_birth(class="form-control", type="date") }}</div>
+                  {{ form.insured_date_of_birth.label(class="form-label") }}
+                  {{ form.insured_date_of_birth(class="form-control", type="date") }}
                 </div>
               </div>
 
-              <h5 class="mt-2 mb-3">Dados do Empregador</h5>
-              <div class="row">
+              <!-- Dados do Empregador -->
+              <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.06em;">
+                <i class="bi bi-building me-1"></i>Dados do Empregador
+              </h6>
+              <div class="row g-3 mb-4">
                 <div class="col-md-8">
-                  <div class="mb-3">{{ form.employer_name.label(class="form-label") }}{{
-                    form.employer_name(class="form-control") }}</div>
+                  {{ form.employer_name.label(class="form-label") }}
+                  {{ form.employer_name(class="form-control") }}
                 </div>
                 <div class="col-md-4">
-                  <div class="mb-3">{{ form.employer_cnpj.label(class="form-label") }}{{
-                    form.employer_cnpj(class="form-control") }}</div>
+                  {{ form.employer_cnpj.label(class="form-label") }}
+                  {{ form.employer_cnpj(class="form-control font-monospace") }}
                 </div>
               </div>
 
-              <h5 class="mt-2 mb-3">Beneficio e Valores</h5>
-              <div class="row">
+              <hr class="my-4">
+
+              <!-- Benefício e Valores -->
+              <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.06em;">
+                <i class="bi bi-currency-dollar me-1"></i>Benefício e Valores
+              </h6>
+              <div class="row g-3 mb-4">
                 <div class="col-md-3">
-                  <div class="mb-3">{{ form.benefit_start_date.label(class="form-label") }}{{
-                    form.benefit_start_date(class="form-control", type="date") }}</div>
+                  {{ form.benefit_start_date.label(class="form-label") }}
+                  {{ form.benefit_start_date(class="form-control", type="date") }}
                 </div>
                 <div class="col-md-3">
-                  <div class="mb-3">{{ form.benefit_end_date.label(class="form-label") }}{{
-                    form.benefit_end_date(class="form-control", type="date") }}</div>
+                  {{ form.benefit_end_date.label(class="form-label") }}
+                  {{ form.benefit_end_date(class="form-control", type="date") }}
                 </div>
                 <div class="col-md-3">
-                  <div class="mb-3">{{ form.initial_monthly_benefit.label(class="form-label") }}{{
-                    form.initial_monthly_benefit(class="form-control", placeholder="0.00") }}</div>
+                  {{ form.initial_monthly_benefit.label(class="form-label") }}
+                  {{ form.initial_monthly_benefit(class="form-control", placeholder="0.00") }}
                 </div>
                 <div class="col-md-3">
-                  <div class="mb-3">{{ form.total_paid.label(class="form-label") }}{{
-                    form.total_paid(class="form-control", placeholder="0.00") }}</div>
+                  {{ form.total_paid.label(class="form-label") }}
+                  {{ form.total_paid(class="form-control", placeholder="0.00") }}
                 </div>
               </div>
 
-              <h5 class="mt-2 mb-3">Acidente e Contexto FAP</h5>
-              <div class="row">
+              <!-- Acidente e Contexto FAP -->
+              <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.06em;">
+                <i class="bi bi-exclamation-triangle me-1"></i>Acidente e Contexto FAP
+              </h6>
+              <div class="row g-3 mb-4">
                 <div class="col-md-3">
-                  <div class="mb-3">{{ form.cat_number.label(class="form-label") }}{{
-                    form.cat_number(class="form-control") }}</div>
+                  {{ form.cat_number.label(class="form-label") }}
+                  {{ form.cat_number(class="form-control font-monospace") }}
                 </div>
                 <div class="col-md-3">
-                  <div class="mb-3">{{ form.bo_number.label(class="form-label") }}{{
-                    form.bo_number(class="form-control") }}</div>
+                  {{ form.bo_number.label(class="form-label") }}
+                  {{ form.bo_number(class="form-control font-monospace") }}
                 </div>
                 <div class="col-md-3">
-                  <div class="mb-3">{{ form.accident_date.label(class="form-label") }}{{
-                    form.accident_date(class="form-control", type="date") }}</div>
+                  {{ form.accident_date.label(class="form-label") }}
+                  {{ form.accident_date(class="form-control", type="date") }}
                 </div>
                 <div class="col-md-3">
-                  <div class="mb-3">{{ form.request_type.label(class="form-label") }}{{
-                    form.request_type(class="form-select") }}</div>
+                  {{ form.request_type.label(class="form-label") }}
+                  {{ form.request_type(class="form-select") }}
                 </div>
-              </div>
-
-              <div class="row">
                 <div class="col-md-6">
-                  <div class="mb-3">{{ form.accident_company_name.label(class="form-label") }}{{
-                    form.accident_company_name(class="form-control") }}</div>
+                  {{ form.accident_company_name.label(class="form-label") }}
+                  {{ form.accident_company_name(class="form-control") }}
                 </div>
                 <div class="col-md-6">
-                  <div class="mb-3">{{ form.fap_vigencia_years.label(class="form-label") }}{{
-                    form.fap_vigencia_years(class="form-control", placeholder="Ex.: 2021,2022") }}</div>
+                  {{ form.fap_vigencia_years.label(class="form-label") }}
+                  {{ form.fap_vigencia_years(class="form-control", placeholder="Ex.: 2021,2022") }}
                 </div>
               </div>
 
-              <div class="row">
+              <hr class="my-4">
+
+              <!-- Resultado Consolidado -->
+              <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.06em;">
+                <i class="bi bi-check-circle me-1"></i>Resultado Consolidado
+              </h6>
+              <div class="row g-3 mb-4">
+                <div class="col-md-3">
+                  {{ form.status.label(class="form-label") }}
+                  {{ form.status(class="form-select") }}
+                </div>
+                <div class="col-md-9">
+                  {{ form.justification.label(class="form-label") }}
+                  {{ form.justification(class="form-control", rows="2") }}
+                </div>
+                <div class="col-12">
+                  {{ form.opinion.label(class="form-label") }}
+                  {{ form.opinion(class="form-control", rows="3") }}
+                </div>
+              </div>
+
+              <hr class="my-4">
+
+              <!-- 1ª Instância -->
+              <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.06em;">
+                <i class="bi bi-1-circle me-1"></i>Administrativo 1ª Instância
+              </h6>
+              <div class="row g-3 mb-4">
                 <div class="col-md-4">
-                  <div class="mb-3">{{ form.status.label(class="form-label") }}{{ form.status(class="form-select") }}
-                  </div>
+                  {{ form.first_instance_status.label(class="form-label") }}
+                  {{ form.first_instance_status(class="form-select") }}
                 </div>
                 <div class="col-md-8">
-                  <div class="mb-3">{{ form.justification.label(class="form-label") }}{{
-                    form.justification(class="form-control", rows="2") }}</div>
+                  {{ form.first_instance_justification.label(class="form-label") }}
+                  {{ form.first_instance_justification(class="form-control", rows="3") }}
+                </div>
+                <div class="col-12">
+                  {{ form.first_instance_opinion.label(class="form-label") }}
+                  {{ form.first_instance_opinion(class="form-control", rows="3") }}
                 </div>
               </div>
 
-              <div class="row">
-                <div class="col-md-12">
-                  <div class="mb-3">{{ form.opinion.label(class="form-label") }}{{ form.opinion(class="form-control",
-                    rows="3") }}</div>
-                </div>
-              </div>
-
-              <h5 class="mt-3 mb-3">Resultado Administrativo - 1ª Instância</h5>
-              <div class="row">
+              <!-- 2ª Instância -->
+              <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.06em;">
+                <i class="bi bi-2-circle me-1"></i>Administrativo 2ª Instância
+              </h6>
+              <div class="row g-3 mb-4">
                 <div class="col-md-4">
-                  <div class="mb-3">{{ form.first_instance_status.label(class="form-label") }}{{
-                    form.first_instance_status(class="form-select") }}</div>
+                  {{ form.second_instance_status.label(class="form-label") }}
+                  {{ form.second_instance_status(class="form-select") }}
                 </div>
                 <div class="col-md-8">
-                  <div class="mb-3">{{ form.first_instance_justification.label(class="form-label") }}{{
-                    form.first_instance_justification(class="form-control", rows="3") }}</div>
+                  {{ form.second_instance_justification.label(class="form-label") }}
+                  {{ form.second_instance_justification(class="form-control", rows="3") }}
                 </div>
-              </div>
-              <div class="row">
-                <div class="col-md-12">
-                  <div class="mb-3">{{ form.first_instance_opinion.label(class="form-label") }}{{
-                    form.first_instance_opinion(class="form-control", rows="3") }}</div>
-                </div>
-              </div>
-
-              <h5 class="mt-2 mb-3">Resultado Administrativo - 2ª Instância</h5>
-              <div class="row">
-                <div class="col-md-4">
-                  <div class="mb-3">{{ form.second_instance_status.label(class="form-label") }}{{
-                    form.second_instance_status(class="form-select") }}</div>
-                </div>
-                <div class="col-md-8">
-                  <div class="mb-3">{{ form.second_instance_justification.label(class="form-label") }}{{
-                    form.second_instance_justification(class="form-control", rows="3") }}</div>
-                </div>
-              </div>
-              <div class="row">
-                <div class="col-md-12">
-                  <div class="mb-3">{{ form.second_instance_opinion.label(class="form-label") }}{{
-                    form.second_instance_opinion(class="form-control", rows="3") }}</div>
+                <div class="col-12">
+                  {{ form.second_instance_opinion.label(class="form-label") }}
+                  {{ form.second_instance_opinion(class="form-control", rows="3") }}
                 </div>
               </div>
 
-              <div class="row">
-                <div class="col-md-12">
-                  <div class="mb-3">{{ form.accident_summary.label(class="form-label") }}{{
-                    form.accident_summary(class="form-control", rows="3") }}</div>
+              <hr class="my-4">
+
+              <!-- Resumo e Notas -->
+              <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.06em;">
+                <i class="bi bi-journal-text me-1"></i>Resumo e Notas
+              </h6>
+              <div class="row g-3">
+                <div class="col-12">
+                  {{ form.accident_summary.label(class="form-label") }}
+                  {{ form.accident_summary(class="form-control", rows="3") }}
+                </div>
+                <div class="col-12">
+                  {{ form.notes.label(class="form-label") }}
+                  {{ form.notes(class="form-control", rows="4") }}
                 </div>
               </div>
 
-              <div class="row">
-                <div class="col-md-12">
-                  <div class="mb-3">{{ form.notes.label(class="form-label") }}{{ form.notes(class="form-control",
-                    rows="4") }}</div>
-                </div>
-              </div>
             </div>
-            <div class="card-footer">
+            <div class="card-footer d-flex gap-2">
               {{ form.submit(class="btn btn-primary") }}
-              <a href="{{ url_for('disputes_center.list_disputes_center') }}" class="btn btn-secondary">Cancelar</a>
+              <a href="{{ url_for('disputes_center.list_disputes_center') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i>Cancelar
+              </a>
             </div>
           </form>
         </div>

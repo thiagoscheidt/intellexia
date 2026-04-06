@@ -768,7 +768,7 @@
             const secondJustification = encodeMultilineAttr(row.second_instance_justification || '');
             const secondOpinion = encodeMultilineAttr(row.second_instance_opinion || '');
             return `
-              <div class="d-flex gap-1 justify-content-center">
+              <div class="d-flex gap-2 justify-content-center">
                 <button type="button" class="btn btn-sm btn-outline-primary"
                   data-bs-toggle="modal" data-bs-target="#catDecisionModal"
                   data-cat-number="${escapeHtml(row.cat_number)}"
@@ -781,22 +781,22 @@
                   data-second-justification="${secondJustification}"
                   data-second-opinion="${secondOpinion}"
                   data-report-id="${escapeHtml(String(row.report_id || ''))}"
-                  title="Ver decisões">
+                  title="Ver decisões" aria-label="Ver decisões">
                   <i class="bi bi-card-list"></i>
                 </button>
                 <a href="${escapeHtml(row.edit_url)}" class="btn btn-sm btn-outline-warning"
-                  data-bs-toggle="tooltip" title="Editar CAT">
+                  title="Editar CAT" aria-label="Editar CAT">
                   <i class="bi bi-pencil"></i>
                 </a>
                 <button class="btn btn-sm btn-outline-info"
                   data-bs-toggle="modal" data-bs-target="#catTimelineModal"
                   data-cat-number="${escapeHtml(row.cat_number || '')}"
                   data-timeline-url="${escapeHtml(row.timeline_url || '')}"
-                  title="Histórico de arquivos">
+                  title="Histórico de arquivos" aria-label="Histórico de arquivos">
                   <i class="bi bi-clock-history"></i>
                 </button>
                 <a href="${escapeHtml(row.report_view_url)}" class="btn btn-sm btn-outline-secondary"
-                  data-bs-toggle="tooltip" title="Ver relatório de origem" target="_blank">
+                  title="Ver relatório de origem" aria-label="Ver relatório de origem" target="_blank">
                   <i class="bi bi-file-earmark-text"></i>
                 </a>
               </div>`;
