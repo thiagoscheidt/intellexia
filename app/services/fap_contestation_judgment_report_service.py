@@ -303,19 +303,56 @@ class FapContestationJudgmentReportService:
     def _split_all_blocks(text: str) -> list[tuple[str, str]]:
         """Divide o documento em blocos tipados (benefit ou cat).
 
+        Estratégia em dois passos:
+        1. Localiza a seção CAT pelo cabeçalho "Comunicação de Acidente de Trabalho (CAT)"
+           e divide seu conteúdo por "Número da CAT" para obter cada CAT individualmente.
+        2. O restante do texto (antes/depois da seção CAT) é dividido por
+           "Número do Benefício" — comportamento original inalterado.
+
         Retorna lista de tuplas (tipo, conteúdo) onde tipo é 'benefit' ou 'cat'.
         """
-        combined = (
-            r'(\bN[uú]mero\s+do\s+Benef[ií]cio\b'
-            r'|\bComunica[cç][aã]o\s+de\s+Acidente\s+de\s+Trabalho\s*\(CAT\)\b)'
-        )
-        parts = re.split(combined, text, flags=re.IGNORECASE)
         blocks: list[tuple[str, str]] = []
-        for i in range(1, len(parts) - 1, 2):
-            delimiter = parts[i]
-            content = parts[i + 1] if (i + 1) < len(parts) else ''
-            block_type = 'cat' if re.search(r'Comunica[cç][aã]o', delimiter, flags=re.IGNORECASE) else 'benefit'
-            blocks.append((block_type, content))
+
+        # --- Passo 1: seção CAT ---
+        # Nota: não usar \b no final pois ")" é não-palavra e \b exigiria um
+        # caractere de palavra a seguir (ex.: letra/dígito), mas o header é
+        # normalmente seguido de \n ou espaço, causando falha silenciosa.
+        cat_section_match = re.search(
+            r'Comunica[cç][aã]o\s+de\s+Acidente\s+de\s+Trabalho\s*\(CAT\)',
+            text,
+            flags=re.IGNORECASE,
+        )
+
+        if cat_section_match:
+            before_cat_section = text[:cat_section_match.start()]
+            after_cat_header = text[cat_section_match.end():]
+
+            # A seção CAT vai até o primeiro "Número do Benefício" (início da seção de benefícios)
+            first_benefit_match = re.search(
+                r'\bN[uú]mero\s+do\s+Benef[ií]cio\b', after_cat_header, flags=re.IGNORECASE
+            )
+            if first_benefit_match:
+                cat_section_content = after_cat_header[:first_benefit_match.start()]
+                benefit_section_text = before_cat_section + after_cat_header[first_benefit_match.start():]
+            else:
+                cat_section_content = after_cat_header
+                benefit_section_text = before_cat_section
+
+            # Divide a seção CAT em blocos individuais por "Número da CAT"
+            cat_parts = re.split(r'\bN[uú]mero\s+da\s+CAT\b', cat_section_content, flags=re.IGNORECASE)
+            for cat_content in cat_parts[1:]:
+                if cat_content.strip():
+                    # Reconstrói o prefixo para que parse_cat_block encontre o padrão esperado
+                    blocks.append(('cat', 'Número da CAT ' + cat_content))
+        else:
+            benefit_section_text = text
+
+        # --- Passo 2: blocos de benefícios (lógica original preservada) ---
+        benefit_parts = re.split(r'\bN[uú]mero\s+do\s+Benef[ií]cio\b', benefit_section_text, flags=re.IGNORECASE)
+        for benefit_content in benefit_parts[1:]:
+            if benefit_content.strip():
+                blocks.append(('benefit', benefit_content))
+
         return blocks
 
     @staticmethod
