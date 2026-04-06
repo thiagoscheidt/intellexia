@@ -21,6 +21,8 @@ from app.models import (
     BenefitFapVigenciaCnpj,
     Client,
     FapContestationCat,
+    FapContestationCatSourceHistory,
+    FapContestationCatManualHistory,
     FapContestationJudgmentReport,
     KnowledgeBase,
     db,
@@ -551,6 +553,8 @@ def _serialize_cat_row(cat):
         'second_instance_opinion': cat.second_instance_opinion or '',
         'report_id': cat.report_id,
         'report_view_url': url_for('disputes_center.view_fap_contestation_report', report_id=cat.report_id),
+        'edit_url': url_for('disputes_center.edit_cat', cat_id=cat.id),
+        'timeline_url': url_for('disputes_center.cat_file_timeline', cat_id=cat.id),
     }
 
 
@@ -1976,3 +1980,185 @@ def list_cats_api():
         },
         'data': data,
     })
+
+
+@disputes_center_bp.route('/cats/<int:cat_id>/edit', methods=['GET', 'POST'])
+@require_law_firm
+def edit_cat(cat_id):
+    law_firm_id = get_current_law_firm_id()
+    cat = FapContestationCat.query.filter_by(id=cat_id, law_firm_id=law_firm_id).first_or_404()
+
+    if request.method == 'POST':
+        old_first_instance_status = cat.first_instance_status or ''
+
+        cat.employer_cnpj = request.form.get('employer_cnpj') or cat.employer_cnpj
+        cat.employer_cnpj_assigned = request.form.get('employer_cnpj_assigned') or None
+        cat.insured_nit = request.form.get('insured_nit') or cat.insured_nit
+        cat.cat_block = request.form.get('cat_block') or cat.cat_block
+
+        def parse_date(val):
+            if not val:
+                return None
+            try:
+                return datetime.strptime(val.strip(), '%Y-%m-%d').date()
+            except ValueError:
+                return None
+
+        cat.insured_date_of_birth = parse_date(request.form.get('insured_date_of_birth')) or cat.insured_date_of_birth
+        cat.insured_death_date = parse_date(request.form.get('insured_death_date'))
+        cat.accident_date = parse_date(request.form.get('accident_date')) or cat.accident_date
+        cat.cat_registration_date = parse_date(request.form.get('cat_registration_date')) or cat.cat_registration_date
+
+        cat.first_instance_status = request.form.get('first_instance_status') or None
+        cat.first_instance_status_raw = request.form.get('first_instance_status_raw') or None
+        cat.first_instance_justification = request.form.get('first_instance_justification') or None
+        cat.first_instance_opinion = request.form.get('first_instance_opinion') or None
+
+        cat.second_instance_status = request.form.get('second_instance_status') or None
+        cat.second_instance_status_raw = request.form.get('second_instance_status_raw') or None
+        cat.second_instance_justification = request.form.get('second_instance_justification') or None
+        cat.second_instance_opinion = request.form.get('second_instance_opinion') or None
+
+        # Consolidado: prioriza 2a instância
+        raw_consolidated = (
+            request.form.get('second_instance_status') or request.form.get('first_instance_status') or ''
+        ).strip().lower()
+        if raw_consolidated == 'deferido':
+            cat.status = 'approved'
+        elif raw_consolidated == 'indeferido':
+            cat.status = 'rejected'
+        elif raw_consolidated == 'analyzing':
+            cat.status = 'analyzing'
+        else:
+            cat.status = 'pending'
+        cat.justification = (
+            request.form.get('second_instance_justification')
+            or request.form.get('first_instance_justification')
+            or None
+        )
+        cat.opinion = (
+            request.form.get('second_instance_opinion')
+            or request.form.get('first_instance_opinion')
+            or None
+        )
+        cat.notes = request.form.get('notes') or None
+        cat.updated_at = datetime.utcnow()
+
+        new_first_instance_status = cat.first_instance_status or ''
+        if new_first_instance_status != old_first_instance_status:
+            db.session.add(FapContestationCatManualHistory(
+                law_firm_id=law_firm_id,
+                cat_id=cat.id,
+                performed_by_user_id=session.get('user_id'),
+                action='edit_cat_first_instance_status',
+                old_first_instance_status=old_first_instance_status or None,
+                new_first_instance_status=new_first_instance_status,
+                notes='Status da 1ª instância alterado na tela de edição.',
+            ))
+
+        try:
+            db.session.commit()
+            flash('CAT atualizada com sucesso!', 'success')
+            return redirect(url_for('disputes_center.list_cats'))
+        except Exception as exc:
+            db.session.rollback()
+            flash(f'Erro ao atualizar CAT: {exc}', 'danger')
+
+    return render_template('disputes_center/cat_edit.html', cat=cat)
+
+
+@disputes_center_bp.route('/cats/<int:cat_id>/timeline', methods=['GET'])
+@require_law_firm
+def cat_file_timeline(cat_id):
+    law_firm_id = get_current_law_firm_id()
+    cat = FapContestationCat.query.filter_by(id=cat_id, law_firm_id=law_firm_id).first_or_404()
+
+    history_items = (
+        FapContestationCatSourceHistory.query.filter_by(
+            law_firm_id=law_firm_id,
+            cat_id=cat_id,
+        )
+        .order_by(
+            func.coalesce(
+                FapContestationCatSourceHistory.publication_datetime,
+                FapContestationCatSourceHistory.transmission_datetime,
+            ).is_(None).asc(),
+            func.coalesce(
+                FapContestationCatSourceHistory.publication_datetime,
+                FapContestationCatSourceHistory.transmission_datetime,
+            ).desc(),
+            FapContestationCatSourceHistory.created_at.desc(),
+        )
+        .all()
+    )
+
+    manual_history_items = (
+        FapContestationCatManualHistory.query.filter_by(
+            law_firm_id=law_firm_id,
+            cat_id=cat_id,
+        )
+        .order_by(FapContestationCatManualHistory.created_at.desc(), FapContestationCatManualHistory.id.desc())
+        .all()
+    )
+
+    events = []
+    for item in history_items:
+        report = item.report
+        events.append(
+            {
+                'event_type': 'fap_file_history',
+                'history_id': item.id,
+                'report_id': item.report_id,
+                'knowledge_base_id': item.knowledge_base_id,
+                'action': item.action,
+                'transmission_datetime': _format_datetime(item.transmission_datetime),
+                'publication_datetime': _format_datetime(item.publication_datetime or item.transmission_datetime),
+                'created_at': _format_datetime(item.created_at),
+                'report_uploaded_at': _format_datetime(report.uploaded_at if report else None),
+                'report_filename': (report.original_filename if report else None) or '-',
+                'knowledge_details_url': (
+                    url_for('disputes_center.view_fap_contestation_report', report_id=item.report_id)
+                    if report else None
+                ),
+                'sort_datetime': item.publication_datetime or item.transmission_datetime or item.created_at,
+            }
+        )
+
+    for item in manual_history_items:
+        performer_name = (item.performed_by_user.name if item.performed_by_user else '') or 'Usuário não identificado'
+        events.append(
+            {
+                'event_type': 'manual_history',
+                'history_id': item.id,
+                'report_id': None,
+                'knowledge_base_id': None,
+                'action': item.action,
+                'manual_action_label': 'Edição manual',
+                'manual_description': 'Status da 1ª instância alterado na tela de edição.',
+                'performed_by': performer_name,
+                'old_first_instance_status': item.old_first_instance_status,
+                'new_first_instance_status': item.new_first_instance_status,
+                'old_first_instance_status_label': _status_label_pt(item.old_first_instance_status),
+                'new_first_instance_status_label': _status_label_pt(item.new_first_instance_status),
+                'notes': item.notes,
+                'transmission_datetime': None,
+                'publication_datetime': None,
+                'created_at': _format_datetime(item.created_at),
+                'report_uploaded_at': None,
+                'report_filename': None,
+                'knowledge_details_url': None,
+                'sort_datetime': item.created_at,
+            }
+        )
+
+    events.sort(key=lambda e: e.get('sort_datetime') or datetime.min, reverse=True)
+    for e in events:
+        e.pop('sort_datetime', None)
+
+    return jsonify(
+        {
+            'cat_id': cat.id,
+            'cat_number': cat.cat_number,
+            'events': events,
+        }
+    )

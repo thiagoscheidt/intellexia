@@ -1,0 +1,211 @@
+{% extends "layout/base.html" %}
+
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}Editar CAT {{ cat.cat_number }} - IntellexIA{% endblock %}
+
+{% block content %}
+{% call page_hero(title='Editar CAT', subtitle='CAT nº ' ~ cat.cat_number, icon='bi bi-exclamation-triangle') %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb mb-0 bg-transparent small">
+    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('disputes_center.list_disputes_center') }}">Disputes Center</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('disputes_center.list_cats') }}">CATs</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Editar CAT {{ cat.cat_number }}</li>
+  </ol>
+</nav>
+{% endcall %}
+
+<div class="app-content">
+  <div class="container-fluid">
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="row mb-3">
+      <div class="col-12">
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+          <i class="bi bi-info-circle me-2"></i>{{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    <div class="row">
+      <div class="col-12">
+        <div class="card shadow-sm">
+          <div class="card-header border-0 py-3">
+            <h5 class="card-title mb-0 fw-semibold">
+              <i class="bi bi-pencil-square me-2 text-primary"></i>Editar dados da CAT
+              <span class="font-monospace text-primary ms-1">{{ cat.cat_number }}</span>
+            </h5>
+          </div>
+
+          <form method="POST">
+            <div class="card-body">
+
+              <!-- Dados de Identificação -->
+              <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.06em;">
+                <i class="bi bi-id-card me-1"></i>Identificação
+              </h6>
+              <div class="row g-3 mb-4">
+                <div class="col-md-3">
+                  <label class="form-label">Número da CAT</label>
+                  <input type="text" class="form-control" value="{{ cat.cat_number }}" disabled>
+                  <small class="text-muted">Campo não editável</small>
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label" for="employer_cnpj">CNPJ Empregador (CAT)</label>
+                  <input type="text" class="form-control font-monospace" id="employer_cnpj" name="employer_cnpj"
+                    value="{{ cat.employer_cnpj or '' }}">
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label" for="employer_cnpj_assigned">CNPJ Empregador Atribuído</label>
+                  <input type="text" class="form-control font-monospace" id="employer_cnpj_assigned" name="employer_cnpj_assigned"
+                    value="{{ cat.employer_cnpj_assigned or '' }}">
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label" for="insured_nit">NIT do Segurado</label>
+                  <input type="text" class="form-control font-monospace" id="insured_nit" name="insured_nit"
+                    value="{{ cat.insured_nit or '' }}">
+                </div>
+              </div>
+
+              <!-- Datas -->
+              <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.06em;">
+                <i class="bi bi-calendar3 me-1"></i>Datas
+              </h6>
+              <div class="row g-3 mb-4">
+                <div class="col-md-3">
+                  <label class="form-label" for="accident_date">Data do Acidente</label>
+                  <input type="date" class="form-control" id="accident_date" name="accident_date"
+                    value="{{ cat.accident_date.strftime('%Y-%m-%d') if cat.accident_date else '' }}">
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label" for="cat_registration_date">Data de Cadastramento da CAT</label>
+                  <input type="date" class="form-control" id="cat_registration_date" name="cat_registration_date"
+                    value="{{ cat.cat_registration_date.strftime('%Y-%m-%d') if cat.cat_registration_date else '' }}">
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label" for="insured_date_of_birth">Data de Nascimento do Segurado</label>
+                  <input type="date" class="form-control" id="insured_date_of_birth" name="insured_date_of_birth"
+                    value="{{ cat.insured_date_of_birth.strftime('%Y-%m-%d') if cat.insured_date_of_birth else '' }}">
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label" for="insured_death_date">Data de Óbito do Segurado</label>
+                  <input type="date" class="form-control" id="insured_death_date" name="insured_death_date"
+                    value="{{ cat.insured_death_date.strftime('%Y-%m-%d') if cat.insured_death_date else '' }}">
+                </div>
+              </div>
+
+              <!-- Bloqueio -->
+              <div class="row g-3 mb-4">
+                <div class="col-md-3">
+                  <label class="form-label" for="cat_block">Bloqueio</label>
+                  <select class="form-select" id="cat_block" name="cat_block">
+                    <option value="" {% if not cat.cat_block %}selected{% endif %}>Não informado</option>
+                    <option value="Sim" {% if cat.cat_block and cat.cat_block|lower == 'sim' %}selected{% endif %}>Sim</option>
+                    <option value="Não" {% if cat.cat_block and cat.cat_block|lower in ['não', 'nao'] %}selected{% endif %}>Não</option>
+                  </select>
+                </div>
+              </div>
+
+              <hr class="my-4">
+
+              <!-- 1ª Instância -->
+              <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.06em;">
+                <i class="bi bi-1-circle me-1"></i>Administrativo 1ª Instância
+              </h6>
+              <div class="row g-3 mb-4">
+                <div class="col-md-3">
+                  <label class="form-label" for="first_instance_status">Status</label>
+                  <select class="form-select" id="first_instance_status" name="first_instance_status">
+                    <option value="" {% if not cat.first_instance_status %}selected{% endif %}>Não informado</option>
+                    <option value="Deferido" {% if cat.first_instance_status and cat.first_instance_status|lower == 'deferido' %}selected{% endif %}>Deferido</option>
+                    <option value="Indeferido" {% if cat.first_instance_status and cat.first_instance_status|lower == 'indeferido' %}selected{% endif %}>Indeferido</option>
+                    <option value="analyzing" {% if cat.first_instance_status == 'analyzing' %}selected{% endif %}>Em análise</option>
+                  </select>
+                </div>
+                <div class="col-md-9">
+                  <label class="form-label" for="first_instance_status_raw">Texto original do status</label>
+                  <input type="text" class="form-control" id="first_instance_status_raw" name="first_instance_status_raw"
+                    value="{{ cat.first_instance_status_raw or '' }}">
+                </div>
+                <div class="col-12">
+                  <label class="form-label" for="first_instance_justification">Justificativa</label>
+                  <textarea class="form-control" id="first_instance_justification" name="first_instance_justification"
+                    rows="4">{{ cat.first_instance_justification or '' }}</textarea>
+                </div>
+                <div class="col-12">
+                  <label class="form-label" for="first_instance_opinion">Parecer</label>
+                  <textarea class="form-control" id="first_instance_opinion" name="first_instance_opinion"
+                    rows="4">{{ cat.first_instance_opinion or '' }}</textarea>
+                </div>
+              </div>
+
+              <!-- 2ª Instância -->
+              <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.06em;">
+                <i class="bi bi-2-circle me-1"></i>Administrativo 2ª Instância
+              </h6>
+              <div class="row g-3 mb-4">
+                <div class="col-md-3">
+                  <label class="form-label" for="second_instance_status">Status</label>
+                  <select class="form-select" id="second_instance_status" name="second_instance_status">
+                    <option value="" {% if not cat.second_instance_status %}selected{% endif %}>Não informado</option>
+                    <option value="Deferido" {% if cat.second_instance_status and cat.second_instance_status|lower == 'deferido' %}selected{% endif %}>Deferido</option>
+                    <option value="Indeferido" {% if cat.second_instance_status and cat.second_instance_status|lower == 'indeferido' %}selected{% endif %}>Indeferido</option>
+                    <option value="analyzing" {% if cat.second_instance_status == 'analyzing' %}selected{% endif %}>Em análise</option>
+                  </select>
+                </div>
+                <div class="col-md-9">
+                  <label class="form-label" for="second_instance_status_raw">Texto original do status</label>
+                  <input type="text" class="form-control" id="second_instance_status_raw" name="second_instance_status_raw"
+                    value="{{ cat.second_instance_status_raw or '' }}">
+                </div>
+                <div class="col-12">
+                  <label class="form-label" for="second_instance_justification">Justificativa</label>
+                  <textarea class="form-control" id="second_instance_justification" name="second_instance_justification"
+                    rows="4">{{ cat.second_instance_justification or '' }}</textarea>
+                </div>
+                <div class="col-12">
+                  <label class="form-label" for="second_instance_opinion">Parecer</label>
+                  <textarea class="form-control" id="second_instance_opinion" name="second_instance_opinion"
+                    rows="4">{{ cat.second_instance_opinion or '' }}</textarea>
+                </div>
+              </div>
+
+              <hr class="my-4">
+
+              <!-- Notas -->
+              <div class="row g-3">
+                <div class="col-12">
+                  <label class="form-label" for="notes">Notas internas</label>
+                  <textarea class="form-control" id="notes" name="notes" rows="3">{{ cat.notes or '' }}</textarea>
+                </div>
+              </div>
+
+            </div>
+            <div class="card-footer d-flex gap-2">
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-check-lg me-1"></i>Salvar alterações
+              </button>
+              <a href="{{ url_for('disputes_center.list_cats') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i>Cancelar
+              </a>
+              {% if cat.report_id %}
+              <a href="{{ url_for('disputes_center.view_fap_contestation_report', report_id=cat.report_id) }}"
+                class="btn btn-outline-info ms-auto" target="_blank">
+                <i class="bi bi-file-earmark-text me-1"></i>Ver relatório de origem
+              </a>
+              {% endif %}
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

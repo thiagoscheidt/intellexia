@@ -1520,9 +1520,80 @@ class FapContestationCat(db.Model):
     # Relationships
     law_firm = db.relationship('LawFirm')
     report = db.relationship('FapContestationJudgmentReport', back_populates='cat_records')
+    source_history = db.relationship(
+        'FapContestationCatSourceHistory',
+        back_populates='cat',
+        cascade='all, delete-orphan',
+        order_by='FapContestationCatSourceHistory.updated_at.desc()',
+    )
+    manual_history = db.relationship(
+        'FapContestationCatManualHistory',
+        back_populates='cat',
+        cascade='all, delete-orphan',
+        order_by='FapContestationCatManualHistory.created_at.desc()',
+    )
 
     def __repr__(self):
         return f'<FapContestationCat {self.cat_number}>'
+
+
+class FapContestationCatSourceHistory(db.Model):
+    """Histórico de arquivos FAP que adicionaram/alteraram uma CAT."""
+    __tablename__ = 'fap_contestation_cat_source_history'
+    __table_args__ = (
+        db.UniqueConstraint('cat_id', 'report_id', name='uq_fccsh_cat_report'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    cat_id = db.Column(db.Integer, db.ForeignKey('fap_contestation_cats.id'), nullable=False, index=True)
+    report_id = db.Column(
+        db.Integer,
+        db.ForeignKey('fap_contestation_judgment_reports.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    knowledge_base_id = db.Column(db.Integer, db.ForeignKey('knowledge_base.id'), index=True)
+
+    action = db.Column(db.String(20), nullable=False, default='updated', index=True)  # added | updated
+    transmission_datetime = db.Column(db.DateTime, index=True)
+    publication_datetime = db.Column(db.DateTime, index=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    law_firm = db.relationship('LawFirm')
+    cat = db.relationship('FapContestationCat', back_populates='source_history')
+    report = db.relationship('FapContestationJudgmentReport')
+    knowledge_base = db.relationship('KnowledgeBase')
+
+    def __repr__(self):
+        return f'<FapContestationCatSourceHistory cat={self.cat_id} report={self.report_id}>'
+
+
+class FapContestationCatManualHistory(db.Model):
+    """Histórico manual de alterações de CATs realizadas por usuários."""
+    __tablename__ = 'fap_contestation_cat_manual_history'
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    cat_id = db.Column(db.Integer, db.ForeignKey('fap_contestation_cats.id'), nullable=False, index=True)
+    performed_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
+
+    action = db.Column(db.String(60), nullable=False, default='edit_cat_first_instance_status', index=True)
+    old_first_instance_status = db.Column(db.String(30), index=True)
+    new_first_instance_status = db.Column(db.String(30), nullable=False, index=True)
+    notes = db.Column(db.Text)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    law_firm = db.relationship('LawFirm')
+    cat = db.relationship('FapContestationCat', back_populates='manual_history')
+    performed_by_user = db.relationship('User')
+
+    def __repr__(self):
+        return f'<FapContestationCatManualHistory cat={self.cat_id} action={self.action}>'
 
 
 class JudicialProcessCitedBenefit(db.Model):

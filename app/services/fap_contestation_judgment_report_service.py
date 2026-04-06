@@ -15,6 +15,7 @@ from app.models import (
     BenefitFapVigenciaCnpj,
     Client,
     FapContestationCat,
+    FapContestationCatSourceHistory,
     FapContestationJudgmentReport,
     db,
 )
@@ -927,6 +928,47 @@ class FapContestationJudgmentReportService:
         return result
 
     @staticmethod
+    def _should_apply_cat_update(cat_id: int, reference_dt, is_new_cat: bool) -> bool:
+        """Decide se a atualização da CAT deve ser aplicada com base na data de referência do arquivo.
+
+        Usa a mesma lógica de `_should_apply_benefit_update`: só sobrescreve dados se o
+        arquivo que está sendo importado for mais recente que o último arquivo já registrado.
+        """
+        if is_new_cat:
+            return True
+
+        latest_history = (
+            FapContestationCatSourceHistory.query
+            .filter(FapContestationCatSourceHistory.cat_id == cat_id)
+            .filter(
+                db.func.coalesce(
+                    FapContestationCatSourceHistory.publication_datetime,
+                    FapContestationCatSourceHistory.transmission_datetime,
+                ).is_not(None)
+            )
+            .order_by(
+                db.func.coalesce(
+                    FapContestationCatSourceHistory.publication_datetime,
+                    FapContestationCatSourceHistory.transmission_datetime,
+                ).desc()
+            )
+            .first()
+        )
+
+        latest_reference = (
+            latest_history.publication_datetime
+            or latest_history.transmission_datetime
+            if latest_history else None
+        )
+        if latest_reference is None:
+            return True
+
+        if reference_dt is None:
+            return False
+
+        return reference_dt > latest_reference
+
+    @staticmethod
     def _map_status(raw_status: str | None) -> str:
         if not raw_status:
             return 'pending'
@@ -1125,9 +1167,24 @@ class FapContestationJudgmentReportService:
         self,
         report: FapContestationJudgmentReport,
         extracted_cats: list[dict],
+        metadata=None,
     ) -> int:
-        """Insere ou atualiza CATs extraídas do relatório na tabela fap_contestation_cats."""
+        """Insere ou atualiza CATs extraídas do relatório na tabela fap_contestation_cats.
+
+        Usa a mesma lógica de `_upsert_benefits_from_report`: só sobrescreve dados de
+        instâncias se o arquivo sendo importado for mais recente que o último registrado.
+        Registra histórico de fonte (arquivo) para cada CAT.
+        """
         imported_count = 0
+
+        transmission_dt = self._parse_br_datetime(
+            getattr(metadata, 'transmission_datetime', None) if metadata is not None else None
+        )
+        publication_date = self._parse_br_date(
+            getattr(metadata, 'publication_date', None) if metadata is not None else None
+        )
+        publication_dt = datetime.combine(publication_date, datetime.min.time()) if publication_date else None
+        reference_dt = publication_dt or transmission_dt
 
         for item in extracted_cats:
             cat_number = str(item.get('benefit_number') or '').strip()
@@ -1140,8 +1197,8 @@ class FapContestationJudgmentReportService:
                 cat_number=cat_number,
             ).first()
 
-            is_new = cat is None
-            if is_new:
+            is_new_cat = cat is None
+            if is_new_cat:
                 cat = FapContestationCat(
                     law_firm_id=report.law_firm_id,
                     report_id=report.id,
@@ -1149,36 +1206,65 @@ class FapContestationJudgmentReportService:
                 )
                 db.session.add(cat)
 
-            cat.employer_cnpj = item.get('employer_cnpj') or cat.employer_cnpj
-            cat.employer_cnpj_assigned = item.get('employer_cnpj_assigned') or cat.employer_cnpj_assigned
-            cat.insured_nit = item.get('insured_nit') or cat.insured_nit
-            cat.insured_date_of_birth = item.get('insured_date_of_birth') or cat.insured_date_of_birth
-            cat.insured_death_date = item.get('insured_death_date') or cat.insured_death_date
-            cat.accident_date = item.get('accident_date') or cat.accident_date
-            cat.cat_registration_date = item.get('cat_registration_date') or cat.cat_registration_date
-            cat.cat_block = item.get('cat_block') or cat.cat_block
+            db.session.flush()
 
-            cat.first_instance_status = item.get('first_instance_status')
-            cat.first_instance_status_raw = item.get('first_instance_status_raw')
-            cat.first_instance_justification = item.get('first_instance_justification')
-            cat.first_instance_opinion = item.get('first_instance_opinion')
-            cat.second_instance_status = item.get('second_instance_status')
-            cat.second_instance_status_raw = item.get('second_instance_status_raw')
-            cat.second_instance_justification = item.get('second_instance_justification')
-            cat.second_instance_opinion = item.get('second_instance_opinion')
-            cat.status = self._map_status(item.get('raw_status'))
-            cat.justification = item.get('justification')
-            cat.opinion = item.get('opinion')
+            should_apply_update = self._should_apply_cat_update(
+                cat_id=cat.id,
+                reference_dt=reference_dt,
+                is_new_cat=is_new_cat,
+            )
 
-            decisions_summary = item.get('decisions_summary')
-            source_note = f'Relatório FAP importado (id={report.id}, arquivo={report.original_filename})'
-            notes_parts = [source_note]
-            if decisions_summary:
-                notes_parts.append(decisions_summary)
-            cat.notes = '\n'.join(notes_parts)
+            if should_apply_update:
+                cat.employer_cnpj = item.get('employer_cnpj') or cat.employer_cnpj
+                cat.employer_cnpj_assigned = item.get('employer_cnpj_assigned') or cat.employer_cnpj_assigned
+                cat.insured_nit = item.get('insured_nit') or cat.insured_nit
+                cat.insured_date_of_birth = item.get('insured_date_of_birth') or cat.insured_date_of_birth
+                cat.insured_death_date = item.get('insured_death_date') or cat.insured_death_date
+                cat.accident_date = item.get('accident_date') or cat.accident_date
+                cat.cat_registration_date = item.get('cat_registration_date') or cat.cat_registration_date
+                cat.cat_block = item.get('cat_block') or cat.cat_block
 
-            cat.updated_at = datetime.utcnow()
-            imported_count += 1
+                cat.first_instance_status = item.get('first_instance_status')
+                cat.first_instance_status_raw = item.get('first_instance_status_raw')
+                cat.first_instance_justification = item.get('first_instance_justification')
+                cat.first_instance_opinion = item.get('first_instance_opinion')
+                cat.second_instance_status = item.get('second_instance_status')
+                cat.second_instance_status_raw = item.get('second_instance_status_raw')
+                cat.second_instance_justification = item.get('second_instance_justification')
+                cat.second_instance_opinion = item.get('second_instance_opinion')
+                cat.status = self._map_status(item.get('raw_status'))
+                cat.justification = item.get('justification')
+                cat.opinion = item.get('opinion')
+
+                decisions_summary = item.get('decisions_summary')
+                source_note = f'Relatório FAP importado (id={report.id}, arquivo={report.original_filename})'
+                notes_parts = [source_note]
+                if decisions_summary:
+                    notes_parts.append(decisions_summary)
+                cat.notes = '\n'.join(notes_parts)
+
+                cat.updated_at = datetime.utcnow()
+                imported_count += 1
+
+            # Registra histórico de arquivo para rastreabilidade
+            history = FapContestationCatSourceHistory.query.filter_by(
+                cat_id=cat.id,
+                report_id=report.id,
+            ).first()
+
+            if history is None:
+                history = FapContestationCatSourceHistory(
+                    law_firm_id=report.law_firm_id,
+                    cat_id=cat.id,
+                    report_id=report.id,
+                )
+                db.session.add(history)
+
+            history.knowledge_base_id = report.knowledge_base_id
+            history.action = 'added' if is_new_cat else 'updated'
+            history.transmission_datetime = transmission_dt
+            history.publication_datetime = publication_dt
+            history.updated_at = datetime.utcnow()
 
         return imported_count
 
@@ -1235,7 +1321,7 @@ class FapContestationJudgmentReportService:
                     )
 
                     imported_count = self._upsert_benefits_from_report(report, extracted_benefits, metadata)
-                    imported_cats = self._upsert_cats_from_report(report, extracted_cats)
+                    imported_cats = self._upsert_cats_from_report(report, extracted_cats, metadata)
 
                     report.imported_benefits_count = imported_count
                     report.status = 'completed'
