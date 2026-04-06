@@ -5,10 +5,6 @@ from pathlib import Path
 import re
 
 from rich import print
-from markitdown import MarkItDown
-from docling.document_converter import DocumentConverter, PdfFormatOption
-from docling.datamodel.pipeline_options import PdfPipelineOptions
-from docling.datamodel.base_models import InputFormat
 
 from app.agents.fap.fap_contestation_judgment_metadata_agent import (
     FapContestationJudgmentMetadataAgent,
@@ -18,6 +14,7 @@ from app.models import (
     BenefitFapSourceHistory,
     BenefitFapVigenciaCnpj,
     Client,
+    FapContestationCat,
     FapContestationJudgmentReport,
     db,
 )
@@ -124,49 +121,6 @@ class FapContestationJudgmentReportService:
         db.session.add(record)
         return record
 
-    def convert_report_to_markdown(self, file_path: str | Path) -> str:
-        """Converte um relatório de julgamento do FAP para markdown usando Docling."""
-        path = Path(file_path)
-        if not path.exists():
-            raise FileNotFoundError(f'Arquivo não encontrado: {path}')
-
-        file_ext = path.suffix.lower()
-        if file_ext == '.pdf':
-            pipeline_options = PdfPipelineOptions(
-                do_ocr=False,
-                generate_page_images=False,
-                do_table_structure=False,
-                enable_parallel_processing=True,
-            )
-            converter = DocumentConverter(
-                format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
-            )
-        else:
-            converter = DocumentConverter()
-
-        result = converter.convert(str(path))
-        markdown_content = result.document.export_to_markdown() if result and result.document else ''
-
-        if not markdown_content.strip():
-            raise ValueError('Docling não retornou conteúdo em markdown para o arquivo informado.')
-
-        return markdown_content
-
-    def convert_report_to_markdown_with_markitdown(self, file_path: str | Path) -> str:
-        """Converte um relatório de julgamento do FAP para markdown usando MarkItDown."""
-        path = Path(file_path)
-        if not path.exists():
-            raise FileNotFoundError(f'Arquivo não encontrado: {path}')
-
-        converter = MarkItDown()
-        result = converter.convert(str(path))
-        markdown_content = (result.text_content or '') if result else ''
-
-        if not markdown_content.strip():
-            raise ValueError('MarkItDown não retornou conteúdo em markdown para o arquivo informado.')
-
-        return markdown_content
-
     def extract_benefits_with_pdfplumber(self, file_path: str | Path) -> list[dict]:
         """Extrai benefícios diretamente do PDF com pdfplumber, sem integrar ao fluxo principal.
 
@@ -174,7 +128,6 @@ class FapContestationJudgmentReportService:
         por blocos de benefício em PDFs que parecem tabela, mas na prática são texto
         posicionado com linhas horizontais.
 
-        O retorno segue o mesmo contrato de `parse_beneficios_from_markdown`.
         """
         path = Path(file_path)
         if not path.exists():
@@ -210,18 +163,69 @@ class FapContestationJudgmentReportService:
             raise ValueError('pdfplumber não retornou texto para o arquivo informado.')
 
         text = self.normalize_markdown('\n\n'.join(page_texts))
-        blocks = self.split_blocks(text)
+        typed_blocks = self._split_all_blocks(text)
 
         benefits: list[dict] = []
-        for block in blocks:
+        for block_type, block in typed_blocks:
             if not block or not block.strip():
                 continue
-
+            if block_type == 'cat':
+                continue
             parsed = self.parse_block(block)
             if parsed:
                 benefits.append(parsed)
 
         return benefits
+
+    def extract_cats_with_pdfplumber(self, file_path: str | Path) -> list[dict]:
+        """Extrai CATs diretamente do PDF com pdfplumber."""
+        path = Path(file_path)
+        if not path.exists():
+            raise FileNotFoundError(f'Arquivo não encontrado: {path}')
+
+        if path.suffix.lower() != '.pdf':
+            raise ValueError('O método com pdfplumber aceita apenas arquivos PDF.')
+
+        try:
+            import pdfplumber
+        except ImportError as exc:
+            raise ImportError('pdfplumber não está instalado no ambiente atual.') from exc
+
+        def normalize_page_text(page_text: str) -> str:
+            text = page_text.replace('\r\n', '\n').replace('\r', '\n')
+            text = re.sub(r'[ \t]+', ' ', text)
+            text = re.sub(r'\n{3,}', '\n\n', text)
+            return text.strip()
+
+        page_texts: list[str] = []
+        with pdfplumber.open(str(path)) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text(
+                    x_tolerance=2,
+                    y_tolerance=3,
+                    layout=False,
+                    use_text_flow=True,
+                )
+                if page_text:
+                    page_texts.append(normalize_page_text(page_text))
+
+        if not page_texts:
+            return []
+
+        text = self.normalize_markdown('\n\n'.join(page_texts))
+        typed_blocks = self._split_all_blocks(text)
+
+        cats: list[dict] = []
+        for block_type, block in typed_blocks:
+            if not block or not block.strip():
+                continue
+            if block_type != 'cat':
+                continue
+            parsed = self.parse_cat_block(block)
+            if parsed:
+                cats.append(parsed)
+
+        return cats
 
     def extract_metadata_from_first_page_with_pdfplumber(self, file_path: str | Path):
         """Extrai metadados da primeira página via pdfplumber.
@@ -296,6 +300,25 @@ class FapContestationJudgmentReportService:
         return re.split(r'\bN[uú]mero do Benef[ií]cio\b', text, flags=re.IGNORECASE)
 
     @staticmethod
+    def _split_all_blocks(text: str) -> list[tuple[str, str]]:
+        """Divide o documento em blocos tipados (benefit ou cat).
+
+        Retorna lista de tuplas (tipo, conteúdo) onde tipo é 'benefit' ou 'cat'.
+        """
+        combined = (
+            r'(\bN[uú]mero\s+do\s+Benef[ií]cio\b'
+            r'|\bComunica[cç][aã]o\s+de\s+Acidente\s+de\s+Trabalho\s*\(CAT\)\b)'
+        )
+        parts = re.split(combined, text, flags=re.IGNORECASE)
+        blocks: list[tuple[str, str]] = []
+        for i in range(1, len(parts) - 1, 2):
+            delimiter = parts[i]
+            content = parts[i + 1] if (i + 1) < len(parts) else ''
+            block_type = 'cat' if re.search(r'Comunica[cç][aã]o', delimiter, flags=re.IGNORECASE) else 'benefit'
+            blocks.append((block_type, content))
+        return blocks
+
+    @staticmethod
     def extract_between(text: str, start: str, end: str | None = None) -> str | None:
         """Extrai texto entre delimitadores."""
         start_match = re.search(re.escape(start), text, flags=re.IGNORECASE)
@@ -309,25 +332,6 @@ class FapContestationJudgmentReportService:
                 return segment[:end_match.start()].strip() or None
 
         return segment.strip() or None
-
-    @staticmethod
-    def extract_field_value(block: str, label: str, next_labels: list[str] | None = None) -> str | None:
-        """Extrai o valor de um campo identificado por label no bloco."""
-        next_labels = next_labels or []
-        label_match = re.search(re.escape(label), block, flags=re.IGNORECASE)
-        if not label_match:
-            return None
-
-        segment = block[label_match.end():]
-        end_indexes: list[int] = []
-        for next_label in next_labels:
-            next_match = re.search(re.escape(next_label), segment, flags=re.IGNORECASE)
-            if next_match:
-                end_indexes.append(next_match.start())
-
-        value = segment[:min(end_indexes)] if end_indexes else segment
-        value = re.sub(r'\s+', ' ', value).strip(' :-\n\t')
-        return value or None
 
     @staticmethod
     def _extract_text_between_keywords(text: str, start_pattern: str, end_patterns: list[str] | None = None) -> str | None:
@@ -720,7 +724,6 @@ class FapContestationJudgmentReportService:
         """Faz parsing de um bloco de benefício."""
         if not block or not block.strip():
             return 
-        print(block)
 
         result: dict[str, object | None] = {}
 
@@ -804,17 +807,87 @@ class FapContestationJudgmentReportService:
 
         return result
 
-    def parse_beneficios_from_markdown(self, markdown_content: str) -> list[dict]:
-        """Função principal para extrair benefícios do markdown."""
-        text = self.normalize_markdown(markdown_content)
-        blocks = self.split_blocks(text)
+    def parse_cat_block(self, block: str) -> dict | None:
+        """Faz parsing de um bloco de CAT (Comunicação de Acidente de Trabalho)."""
+        if not block or not block.strip():
+            return None
 
-        results: list[dict] = []
-        for block in blocks:
-            parsed = self.parse_block(block)
-            if parsed:
-                results.append(parsed)
-        return results
+        result: dict[str, object | None] = {}
+        result['tipo'] = 'CAT'
+
+        # Número da CAT
+        cat_match = re.search(r'N[uú]mero\s+da\s+CAT\s+(\d+)', block, flags=re.IGNORECASE)
+        if not cat_match:
+            return None
+        result['benefit_number'] = cat_match.group(1).strip()
+        result['cat_number'] = result['benefit_number']
+
+        # CNPJ do Empregador constante na CAT
+        cnpj_match = re.search(
+            r'CNPJ\s+do\s+Empregador\s+constante\s+na\s+CAT\s+([\d./\-]+)',
+            block,
+            flags=re.IGNORECASE,
+        )
+        result['employer_cnpj'] = cnpj_match.group(1).strip() if cnpj_match else None
+
+        # NIT do Empregado
+        nit_match = re.search(r'NIT\s+do\s+Empregado\s+(\d{8,20})', block, flags=re.IGNORECASE)
+        result['insured_nit'] = nit_match.group(1).strip() if nit_match else None
+
+        # Datas
+        result['accident_date'] = self._extract_date_after_label(
+            block, r'Data\s+do\s+Acidente\s+de\s+Trabalho'
+        )
+        result['insured_date_of_birth'] = self._extract_insured_birth_date(block)
+        result['cat_registration_date'] = self._extract_date_after_label(
+            block, r'Data\s+de\s+Cadastramento\s+da\s+CAT'
+        )
+        result['insured_death_date'] = self._extract_date_after_label(
+            block, r'Data\s+de\s+[OÓ]bito\s+do\s+Empregado'
+        )
+
+        # Bloqueio
+        bloqueio_match = re.search(r'\bBloqueio\s+(\S+)', block, flags=re.IGNORECASE)
+        result['cat_block'] = bloqueio_match.group(1).strip() if bloqueio_match else None
+
+        # Decisões administrativas (mesma estrutura dos benefícios)
+        first_section, second_section = self._extract_instance_sections(block)
+        first_decision = self._extract_instance_decision(first_section or '')
+        second_decision = self._extract_instance_decision(second_section or '')
+
+        result['first_instance_status'] = first_decision.get('status')
+        result['first_instance_status_raw'] = first_decision.get('status_raw')
+        result['first_instance_justification'] = first_decision.get('justification')
+        result['first_instance_opinion'] = first_decision.get('opinion')
+
+        result['second_instance_status'] = second_decision.get('status')
+        result['second_instance_status_raw'] = second_decision.get('status_raw')
+        result['second_instance_justification'] = second_decision.get('justification')
+        result['second_instance_opinion'] = second_decision.get('opinion')
+
+        if result['first_instance_justification'] and not result['first_instance_status']:
+            result['first_instance_status'] = 'analyzing'
+        if result['second_instance_justification'] and not result['second_instance_status']:
+            result['second_instance_status'] = 'analyzing'
+
+        result['raw_status'] = (
+            result['second_instance_status']
+            or result['first_instance_status']
+            or None
+        )
+        result['justification'] = (
+            result['second_instance_justification']
+            or result['first_instance_justification']
+            or self.extract_between(block, 'Justificativa', 'Status')
+        )
+        result['opinion'] = (
+            result['second_instance_opinion']
+            or result['first_instance_opinion']
+            or self.extract_between(block, 'Parecer')
+        )
+        result['decisions_summary'] = self._build_decision_summary(result)
+
+        return result
 
     @staticmethod
     def _map_status(raw_status: str | None) -> str:
@@ -1011,6 +1084,67 @@ class FapContestationJudgmentReportService:
 
         return imported_count
 
+    def _upsert_cats_from_report(
+        self,
+        report: FapContestationJudgmentReport,
+        extracted_cats: list[dict],
+    ) -> int:
+        """Insere ou atualiza CATs extraídas do relatório na tabela fap_contestation_cats."""
+        imported_count = 0
+
+        for item in extracted_cats:
+            cat_number = str(item.get('benefit_number') or '').strip()
+            if not cat_number:
+                continue
+
+            cat = FapContestationCat.query.filter_by(
+                law_firm_id=report.law_firm_id,
+                report_id=report.id,
+                cat_number=cat_number,
+            ).first()
+
+            is_new = cat is None
+            if is_new:
+                cat = FapContestationCat(
+                    law_firm_id=report.law_firm_id,
+                    report_id=report.id,
+                    cat_number=cat_number,
+                )
+                db.session.add(cat)
+
+            cat.employer_cnpj = item.get('employer_cnpj') or cat.employer_cnpj
+            cat.employer_cnpj_assigned = item.get('employer_cnpj_assigned') or cat.employer_cnpj_assigned
+            cat.insured_nit = item.get('insured_nit') or cat.insured_nit
+            cat.insured_date_of_birth = item.get('insured_date_of_birth') or cat.insured_date_of_birth
+            cat.insured_death_date = item.get('insured_death_date') or cat.insured_death_date
+            cat.accident_date = item.get('accident_date') or cat.accident_date
+            cat.cat_registration_date = item.get('cat_registration_date') or cat.cat_registration_date
+            cat.cat_block = item.get('cat_block') or cat.cat_block
+
+            cat.first_instance_status = item.get('first_instance_status')
+            cat.first_instance_status_raw = item.get('first_instance_status_raw')
+            cat.first_instance_justification = item.get('first_instance_justification')
+            cat.first_instance_opinion = item.get('first_instance_opinion')
+            cat.second_instance_status = item.get('second_instance_status')
+            cat.second_instance_status_raw = item.get('second_instance_status_raw')
+            cat.second_instance_justification = item.get('second_instance_justification')
+            cat.second_instance_opinion = item.get('second_instance_opinion')
+            cat.status = self._map_status(item.get('raw_status'))
+            cat.justification = item.get('justification')
+            cat.opinion = item.get('opinion')
+
+            decisions_summary = item.get('decisions_summary')
+            source_note = f'Relatório FAP importado (id={report.id}, arquivo={report.original_filename})'
+            notes_parts = [source_note]
+            if decisions_summary:
+                notes_parts.append(decisions_summary)
+            cat.notes = '\n'.join(notes_parts)
+
+            cat.updated_at = datetime.utcnow()
+            imported_count += 1
+
+        return imported_count
+
     def     process_pending_reports(
         self,
         batch_size: int = 30,
@@ -1056,12 +1190,15 @@ class FapContestationJudgmentReportService:
                 try:
                     metadata = self.extract_metadata_from_first_page_with_pdfplumber(report.file_path)
                     extracted_benefits = self.extract_benefits_with_pdfplumber(report.file_path)
+                    extracted_cats = self.extract_cats_with_pdfplumber(report.file_path)
 
                     print(
-                        f'Relatório #{report.id}: {len(extracted_benefits)} benefício(s) identificado(s) via pdfplumber.'
+                        f'Relatório #{report.id}: {len(extracted_benefits)} benefício(s) e '
+                        f'{len(extracted_cats)} CAT(s) identificado(s) via pdfplumber.'
                     )
 
                     imported_count = self._upsert_benefits_from_report(report, extracted_benefits, metadata)
+                    imported_cats = self._upsert_cats_from_report(report, extracted_cats)
 
                     report.imported_benefits_count = imported_count
                     report.status = 'completed'
@@ -1072,7 +1209,7 @@ class FapContestationJudgmentReportService:
                     processed_reports += 1
                     print(
                         f'Relatório #{report.id} processado com sucesso. '
-                        f'Benefícios importados/atualizados: {imported_count}'
+                        f'Benefícios: {imported_count}, CATs: {imported_cats}'
                     )
                 except Exception as exc:
                     db.session.rollback()

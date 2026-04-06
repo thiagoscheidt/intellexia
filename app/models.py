@@ -1280,6 +1280,11 @@ class FapContestationJudgmentReport(db.Model):
         back_populates='report',
         cascade='all, delete-orphan'
     )
+    cat_records = db.relationship(
+        'FapContestationCat',
+        back_populates='report',
+        cascade='all, delete-orphan'
+    )
 
     def __repr__(self):
         return f'<FapContestationJudgmentReport {self.original_filename}>'
@@ -1459,6 +1464,65 @@ class BenefitManualHistory(db.Model):
 
     def __repr__(self):
         return f'<BenefitManualHistory benefit={self.benefit_id} action={self.action}>'
+
+
+class FapContestationCat(db.Model):
+    """Tabela fap_contestation_cats - CATs (Comunicação de Acidente de Trabalho) extraídas dos relatórios de contestação do FAP."""
+    __tablename__ = 'fap_contestation_cats'
+    __table_args__ = (
+        db.UniqueConstraint('law_firm_id', 'report_id', 'cat_number', name='uq_fcc_law_firm_report_cat'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    report_id = db.Column(
+        db.Integer,
+        db.ForeignKey('fap_contestation_judgment_reports.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+
+    # CAT identification
+    cat_number = db.Column(db.String(50), nullable=False, index=True)
+
+    # Employer data
+    employer_cnpj = db.Column(db.String(20), index=True)           # CNPJ constante na CAT
+    employer_cnpj_assigned = db.Column(db.String(20), index=True)  # CNPJ do Empregador Atribuído
+
+    # Insured person data
+    insured_nit = db.Column(db.String(50), index=True)
+    insured_date_of_birth = db.Column(db.Date)
+    insured_death_date = db.Column(db.Date)
+
+    # Accident / CAT dates
+    accident_date = db.Column(db.Date)
+    cat_registration_date = db.Column(db.Date)
+    cat_block = db.Column(db.String(20))  # Bloqueio (Sim/Não)
+
+    # Administrative decisions
+    first_instance_status = db.Column(db.String(30), index=True)
+    first_instance_status_raw = db.Column(db.String(255))
+    first_instance_justification = db.Column(db.Text)
+    first_instance_opinion = db.Column(db.Text)
+    second_instance_status = db.Column(db.String(30), index=True)
+    second_instance_status_raw = db.Column(db.String(255))
+    second_instance_justification = db.Column(db.Text)
+    second_instance_opinion = db.Column(db.Text)
+    status = db.Column(db.String(30), default='pending', index=True)
+    justification = db.Column(db.Text)
+    opinion = db.Column(db.Text)
+    notes = db.Column(db.Text)
+
+    # Audit
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    law_firm = db.relationship('LawFirm')
+    report = db.relationship('FapContestationJudgmentReport', back_populates='cat_records')
+
+    def __repr__(self):
+        return f'<FapContestationCat {self.cat_number}>'
 
 
 class JudicialProcessCitedBenefit(db.Model):

@@ -109,6 +109,14 @@
               </a>
             </li>
             <li class="nav-item">
+              <a href="{{ url_for('disputes_center.list_cats') }}"
+                class="nav-link {{ 'active' if request.endpoint in ['disputes_center.list_cats', 'disputes_center.list_cats_api'] else '' }}"
+                style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-exclamation-triangle" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">CATs</p>
+              </a>
+            </li>
+            <li class="nav-item">
               <a href="{{ url_for('disputes_center.list_fap_vigencias') }}"
                 class="nav-link {{ 'active' if request.endpoint == 'disputes_center.list_fap_vigencias' else '' }}"
                 style="font-size: 0.9em;">

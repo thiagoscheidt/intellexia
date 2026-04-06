@@ -20,6 +20,7 @@ from app.models import (
     BenefitFapSourceHistory,
     BenefitFapVigenciaCnpj,
     Client,
+    FapContestationCat,
     FapContestationJudgmentReport,
     KnowledgeBase,
     db,
@@ -70,6 +71,32 @@ ORDER_COLUMN_MAP = {
     5: Benefit.second_instance_status,
     6: Benefit.fap_vigencia_years,
     7: Benefit.benefit_start_date,
+}
+
+
+CAT_FILTER_FIELD_MAP = {
+    'id': FapContestationCat.id,
+    'cat_number': FapContestationCat.cat_number,
+    'employer_cnpj': FapContestationCat.employer_cnpj,
+    'employer_cnpj_assigned': FapContestationCat.employer_cnpj_assigned,
+    'insured_nit': FapContestationCat.insured_nit,
+    'cat_block': FapContestationCat.cat_block,
+    'status': FapContestationCat.status,
+    'first_instance_status': FapContestationCat.first_instance_status,
+    'first_instance_status_raw': FapContestationCat.first_instance_status_raw,
+    'second_instance_status': FapContestationCat.second_instance_status,
+    'second_instance_status_raw': FapContestationCat.second_instance_status_raw,
+}
+
+CAT_ORDER_COLUMN_MAP = {
+    0: FapContestationCat.id,
+    1: FapContestationCat.cat_number,
+    2: FapContestationCat.employer_cnpj,
+    3: FapContestationCat.insured_nit,
+    4: FapContestationCat.first_instance_status,
+    5: FapContestationCat.second_instance_status,
+    6: FapContestationCat.accident_date,
+    7: FapContestationCat.cat_registration_date,
 }
 
 
@@ -444,6 +471,87 @@ def _base_benefits_query(law_firm_id):
         .outerjoin(Client, Benefit.client_id == Client.id)
         .filter(Benefit.law_firm_id == law_firm_id)
     )
+
+
+def _base_cats_query(law_firm_id):
+    return db.session.query(FapContestationCat).filter(FapContestationCat.law_firm_id == law_firm_id)
+
+
+def _parse_cat_custom_filters(raw_filters):
+    if not raw_filters:
+        return []
+    if isinstance(raw_filters, str):
+        try:
+            loaded = json.loads(raw_filters)
+        except json.JSONDecodeError:
+            return []
+    elif isinstance(raw_filters, list):
+        loaded = raw_filters
+    else:
+        return []
+    valid_filters = []
+    for item in loaded:
+        if not isinstance(item, dict):
+            continue
+        field = (item.get('field') or '').strip()
+        operator = (item.get('operator') or 'contains').strip()
+        value = item.get('value')
+        if field not in CAT_FILTER_FIELD_MAP:
+            continue
+        if operator not in {'contains', 'equals', 'starts_with', 'ends_with', 'empty', 'not_empty'}:
+            continue
+        if operator in {'contains', 'equals', 'starts_with', 'ends_with'} and not str(value or '').strip():
+            continue
+        valid_filters.append({'field': field, 'operator': operator, 'value': value})
+    return valid_filters
+
+
+def _apply_cats_filters(query, search_value='', custom_filters=None):
+    search_text = (search_value or '').strip().lower()
+    if search_text:
+        like_term = f'%{search_text}%'
+        query = query.filter(
+            or_(
+                func.lower(cast(FapContestationCat.id, String)).like(like_term),
+                func.lower(cast(FapContestationCat.cat_number, String)).like(like_term),
+                func.lower(cast(FapContestationCat.employer_cnpj, String)).like(like_term),
+                func.lower(cast(FapContestationCat.employer_cnpj_assigned, String)).like(like_term),
+                func.lower(cast(FapContestationCat.insured_nit, String)).like(like_term),
+                func.lower(cast(FapContestationCat.cat_block, String)).like(like_term),
+            )
+        )
+    for item in custom_filters or []:
+        column = CAT_FILTER_FIELD_MAP.get(item['field'])
+        if column is None:
+            continue
+        query = query.filter(_apply_text_operator(column, item['operator'], item.get('value')))
+    return query
+
+
+def _serialize_cat_row(cat):
+    return {
+        'id': cat.id,
+        'cat_number': cat.cat_number or '',
+        'employer_cnpj': cat.employer_cnpj or '',
+        'employer_cnpj_assigned': cat.employer_cnpj_assigned or '',
+        'insured_nit': cat.insured_nit or '',
+        'insured_date_of_birth': _format_date(cat.insured_date_of_birth),
+        'insured_death_date': _format_date(cat.insured_death_date),
+        'accident_date': _format_date(cat.accident_date),
+        'cat_registration_date': _format_date(cat.cat_registration_date),
+        'cat_block': cat.cat_block or '',
+        'status': cat.status or '',
+        'first_instance_status': cat.first_instance_status or '',
+        'first_instance_status_raw': cat.first_instance_status_raw or '',
+        'first_instance_justification': cat.first_instance_justification or '',
+        'first_instance_opinion': cat.first_instance_opinion or '',
+        'second_instance_status': cat.second_instance_status or '',
+        'second_instance_status_raw': cat.second_instance_status_raw or '',
+        'second_instance_justification': cat.second_instance_justification or '',
+        'second_instance_opinion': cat.second_instance_opinion or '',
+        'report_id': cat.report_id,
+        'report_view_url': url_for('disputes_center.view_fap_contestation_report', report_id=cat.report_id),
+    }
 
 
 def _group_count_by_status(query, column):
@@ -1768,3 +1876,103 @@ def delete_dispute(benefit_id):
         flash(f'Erro ao excluir benefício: {str(e)}', 'danger')
 
     return redirect(url_for('disputes_center.list_disputes_center'))
+
+
+# ---------------------------------------------------------------------------
+# CATs (Comunicação de Acidente de Trabalho)
+# ---------------------------------------------------------------------------
+
+@disputes_center_bp.route('/cats')
+@require_law_firm
+def list_cats():
+    law_firm_id = get_current_law_firm_id()
+    base_query = _base_cats_query(law_firm_id)
+    total_count = base_query.with_entities(func.count(FapContestationCat.id)).scalar() or 0
+
+    first_status_counts = {
+        _normalize_status_key(status): int(count or 0)
+        for status, count in base_query.with_entities(
+            func.lower(func.coalesce(cast(FapContestationCat.first_instance_status, String), '')),
+            func.count(FapContestationCat.id),
+        ).group_by(func.lower(func.coalesce(cast(FapContestationCat.first_instance_status, String), ''))).all()
+    }
+    first_instance_stats = _build_instance_stats(total_count, first_status_counts)
+
+    second_status_counts = {
+        _normalize_status_key(status): int(count or 0)
+        for status, count in base_query.with_entities(
+            func.lower(func.coalesce(cast(FapContestationCat.second_instance_status, String), '')),
+            func.count(FapContestationCat.id),
+        ).group_by(func.lower(func.coalesce(cast(FapContestationCat.second_instance_status, String), ''))).all()
+    }
+    first_deferred_count = int(first_status_counts.get('deferido', 0))
+    second_total_base = max(total_count - first_deferred_count, 0)
+    second_instance_stats = _build_instance_stats(second_total_base, second_status_counts)
+
+    return render_template(
+        'disputes_center/cats.html',
+        total_count=total_count,
+        first_instance_stats=first_instance_stats,
+        second_instance_stats=second_instance_stats,
+    )
+
+
+@disputes_center_bp.route('/api/cats', methods=['GET'])
+@require_law_firm
+def list_cats_api():
+    law_firm_id = get_current_law_firm_id()
+    payload = _collect_listing_payload(default_length=25)
+    # Override filter parsing to use CAT fields
+    if request.is_json:
+        raw = (request.get_json(silent=True) or {}).get('filters')
+    else:
+        raw = request.args.get('custom_filters', '[]')
+    cat_filters = _parse_cat_custom_filters(raw)
+
+    total_count = (
+        _base_cats_query(law_firm_id)
+        .with_entities(func.count(FapContestationCat.id))
+        .scalar() or 0
+    )
+
+    filtered_query = _apply_cats_filters(
+        _base_cats_query(law_firm_id),
+        search_value=payload['search'],
+        custom_filters=cat_filters,
+    )
+    records_filtered = filtered_query.with_entities(func.count(FapContestationCat.id)).scalar() or 0
+
+    first_counts = {
+        _normalize_status_key(s): int(c or 0)
+        for s, c in filtered_query.with_entities(
+            func.lower(func.coalesce(cast(FapContestationCat.first_instance_status, String), '')),
+            func.count(FapContestationCat.id),
+        ).group_by(func.lower(func.coalesce(cast(FapContestationCat.first_instance_status, String), ''))).all()
+    }
+    approved_filtered = first_counts.get('deferido', 0)
+    rejected_filtered = first_counts.get('indeferido', 0)
+    in_review_filtered = first_counts.get('analyzing', 0)
+    pending_filtered = max(int(records_filtered) - approved_filtered - rejected_filtered - in_review_filtered, 0)
+
+    order_column = CAT_ORDER_COLUMN_MAP.get(payload['order_column'], FapContestationCat.id)
+    if payload['order_dir'] == 'asc':
+        filtered_query = filtered_query.order_by(order_column.asc(), FapContestationCat.id.asc())
+    else:
+        filtered_query = filtered_query.order_by(order_column.desc(), FapContestationCat.id.desc())
+
+    paged_results = filtered_query.offset(payload['start']).limit(payload['length']).all()
+    data = [_serialize_cat_row(cat) for cat in paged_results]
+
+    return jsonify({
+        'draw': payload['draw'],
+        'recordsTotal': total_count,
+        'recordsFiltered': records_filtered,
+        'filtered_stats': {
+            'total': int(records_filtered),
+            'approved': approved_filtered,
+            'rejected': rejected_filtered,
+            'in_review': in_review_filtered,
+            'pending': pending_filtered,
+        },
+        'data': data,
+    })
