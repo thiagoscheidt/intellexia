@@ -1389,6 +1389,125 @@ class FapContestationJudgmentReportService:
 
         return result
 
+    def parse_turnover_rate_block(self, block: str) -> dict | None:
+        """Faz parsing de um bloco de Taxa Média de Rotatividade."""
+        if not block or not block.strip():
+            return None
+
+        result: dict[str, object | None] = {}
+        result['tipo'] = 'TaxaMediaRotatividade'
+
+        # CNPJ (required)
+        cnpj_match = re.search(r'CNPJ\s+([\d./\-]+)', block, flags=re.IGNORECASE)
+        if not cnpj_match:
+            return None
+        result['employer_cnpj'] = cnpj_match.group(1).strip()
+
+        # Ano (required — unique key for this type)
+        year_match = re.search(r'\bAno\s+(\d{4})\b', block, flags=re.IGNORECASE)
+        if not year_match:
+            return None
+        result['year'] = year_match.group(1).strip()
+
+        # Taxa de Rotatividade (decimal, e.g. "40,0000")
+        taxa_match = re.search(
+            r'Taxa\s+de\s+Rotatividade\s+([\d.,]+)',
+            block,
+            flags=re.IGNORECASE,
+        )
+        result['turnover_rate'] = self._parse_br_decimal(taxa_match.group(1)) if taxa_match else None
+
+        # Admissões (plain count — word boundary prevents matching "Nº Admissões Solicitado")
+        adm_match = re.search(r'\bAdmiss[o\xf5]es\s+(\d+)', block, flags=re.IGNORECASE)
+        result['admissions'] = int(adm_match.group(1)) if adm_match else None
+
+        # Rescisões
+        res_match = re.search(r'\bRescis[o\xf5]es\s+(\d+)', block, flags=re.IGNORECASE)
+        result['dismissals'] = int(res_match.group(1)) if res_match else None
+
+        # Número de Vínculos no Início do Ano
+        init_match = re.search(
+            r'N[u\xfa]mero\s+de\s+V[i\xed]nculos\s+no\s+In[i\xed]cio\s+do\s+Ano\s+(\d+)',
+            block,
+            flags=re.IGNORECASE,
+        )
+        result['initial_links_count'] = int(init_match.group(1)) if init_match else None
+
+        # Valores solicitados por instância
+        first_section, second_section = self._extract_instance_sections(block)
+
+        def _extract_requested(section_text: str):
+            if not section_text:
+                return None, None, None
+            adm_sol = re.search(
+                r'N[o\xba\xb0\.]\s*Admiss[o\xf5]es\s+Solicitado\s+(\d+)',
+                section_text, flags=re.IGNORECASE,
+            )
+            res_sol = re.search(
+                r'N[o\xba\xb0\.]\s*Rescis[o\xf5]es\s+Solicitado\s+(\d+)',
+                section_text, flags=re.IGNORECASE,
+            )
+            ini_sol = re.search(
+                r'N[o\xba\xb0\.]\s*Inicial\s+V[i\xed]nculos\s+Solicitado\s+(\d+)',
+                section_text, flags=re.IGNORECASE,
+            )
+            return (
+                int(adm_sol.group(1)) if adm_sol else None,
+                int(res_sol.group(1)) if res_sol else None,
+                int(ini_sol.group(1)) if ini_sol else None,
+            )
+
+        req_adm1, req_res1, req_ini1 = _extract_requested(first_section)
+        req_adm2, req_res2, req_ini2 = _extract_requested(second_section)
+
+        # Fallback: se não há seções, procura no bloco todo
+        if req_adm1 is None and req_res1 is None and req_ini1 is None:
+            req_adm1, req_res1, req_ini1 = _extract_requested(block)
+
+        result['first_instance_requested_admissions'] = req_adm1
+        result['first_instance_requested_dismissals'] = req_res1
+        result['first_instance_requested_initial_links'] = req_ini1
+        result['second_instance_requested_admissions'] = req_adm2
+        result['second_instance_requested_dismissals'] = req_res2
+        result['second_instance_requested_initial_links'] = req_ini2
+
+        # Decisões administrativas
+        first_decision = self._extract_instance_decision(first_section or '')
+        second_decision = self._extract_instance_decision(second_section or '')
+
+        result['first_instance_status'] = first_decision.get('status')
+        result['first_instance_status_raw'] = first_decision.get('status_raw')
+        result['first_instance_justification'] = first_decision.get('justification')
+        result['first_instance_opinion'] = first_decision.get('opinion')
+        result['second_instance_status'] = second_decision.get('status')
+        result['second_instance_status_raw'] = second_decision.get('status_raw')
+        result['second_instance_justification'] = second_decision.get('justification')
+        result['second_instance_opinion'] = second_decision.get('opinion')
+
+        if result['first_instance_justification'] and not result['first_instance_status']:
+            result['first_instance_status'] = 'analyzing'
+        if result['second_instance_justification'] and not result['second_instance_status']:
+            result['second_instance_status'] = 'analyzing'
+
+        result['raw_status'] = (
+            result['second_instance_status']
+            or result['first_instance_status']
+            or None
+        )
+        result['justification'] = (
+            result['second_instance_justification']
+            or result['first_instance_justification']
+            or self.extract_between(block, 'Justificativa', 'Status')
+        )
+        result['opinion'] = (
+            result['second_instance_opinion']
+            or result['first_instance_opinion']
+            or self.extract_between(block, 'Parecer')
+        )
+        result['decisions_summary'] = self._build_decision_summary(result)
+
+        return result
+
     @staticmethod
     def _parse_br_decimal(value: str | None):
         """Converte valor monetário brasileiro (e.g. '87.182,85') para Decimal."""
@@ -1957,6 +2076,41 @@ class FapContestationJudgmentReportService:
         return imported_count
 
     @staticmethod
+    def _should_apply_turnover_rate_update(turnover_rate_id: int, reference_dt, is_new: bool) -> bool:
+        """Decide se a atualização de Taxa de Rotatividade deve ser aplicada com base na data de referência."""
+        if is_new:
+            return True
+
+        latest_history = (
+            FapContestationTurnoverRateSourceHistory.query
+            .filter(FapContestationTurnoverRateSourceHistory.turnover_rate_id == turnover_rate_id)
+            .filter(
+                db.func.coalesce(
+                    FapContestationTurnoverRateSourceHistory.publication_datetime,
+                    FapContestationTurnoverRateSourceHistory.transmission_datetime,
+                ).is_not(None)
+            )
+            .order_by(
+                db.func.coalesce(
+                    FapContestationTurnoverRateSourceHistory.publication_datetime,
+                    FapContestationTurnoverRateSourceHistory.transmission_datetime,
+                ).desc()
+            )
+            .first()
+        )
+
+        latest_reference = (
+            latest_history.publication_datetime
+            or latest_history.transmission_datetime
+            if latest_history else None
+        )
+        if latest_reference is None:
+            return True
+        if reference_dt is None:
+            return False
+        return reference_dt > latest_reference
+
+    @staticmethod
     def _should_apply_employment_link_update(employment_link_id: int, reference_dt, is_new: bool) -> bool:
         """Decide se a atualização de Vínculo deve ser aplicada com base na data de referência."""
         if is_new:
@@ -2136,6 +2290,172 @@ class FapContestationJudgmentReportService:
 
         return imported_count
 
+    def _upsert_turnover_rates_from_report(
+        self,
+        report: FapContestationJudgmentReport,
+        extracted_rates: list[dict],
+        metadata=None,
+    ) -> int:
+        """Insere ou atualiza entradas de Taxa Média de Rotatividade extraídas do relatório."""
+        imported_count = 0
+
+        employer_client: Client | None = None
+        employer_company_data: dict | None = None
+        employer_cnpj_formatted: str | None = None
+        employer_vigencia_record: FapVigenciaCnpj | None = None
+
+        if metadata is not None and getattr(metadata, 'establishment_cnpj', None):
+            employer_client, employer_company_data, employer_cnpj_formatted = self._upsert_client_from_cnpj(
+                law_firm_id=report.law_firm_id,
+                cnpj_raw=metadata.establishment_cnpj,
+            )
+
+        transmission_dt = self._parse_br_datetime(
+            getattr(metadata, 'transmission_datetime', None) if metadata is not None else None
+        )
+        publication_date = self._parse_br_date(
+            getattr(metadata, 'publication_date', None) if metadata is not None else None
+        )
+        publication_dt = datetime.combine(publication_date, datetime.min.time()) if publication_date else None
+        reference_dt = publication_dt or transmission_dt
+
+        if metadata is not None:
+            metadata_cnpj = employer_cnpj_formatted or getattr(metadata, 'establishment_cnpj', None)
+            metadata_vigencia = getattr(metadata, 'validity_year', None)
+            employer_vigencia_record = self._upsert_benefit_vigencia_cnpj(
+                law_firm_id=report.law_firm_id,
+                employer_cnpj_raw=metadata_cnpj,
+                vigencia_year_raw=metadata_vigencia,
+            )
+
+        for item in extracted_rates:
+            employer_cnpj_raw = item.get('employer_cnpj')
+            year = str(item.get('year') or '').strip()
+            if not employer_cnpj_raw or not year:
+                continue
+
+            employer_cnpj_digits = self._normalize_cnpj(employer_cnpj_raw)
+            if not employer_cnpj_digits:
+                continue
+
+            turnover_rate = FapContestationTurnoverRate.query.filter_by(
+                law_firm_id=report.law_firm_id,
+                report_id=report.id,
+                employer_cnpj=employer_cnpj_digits,
+                year=year,
+            ).first()
+
+            is_new = turnover_rate is None
+            if is_new:
+                turnover_rate = FapContestationTurnoverRate(
+                    law_firm_id=report.law_firm_id,
+                    report_id=report.id,
+                    employer_cnpj=employer_cnpj_digits,
+                    year=year,
+                )
+                db.session.add(turnover_rate)
+
+            db.session.flush()
+
+            should_apply_update = self._should_apply_turnover_rate_update(
+                turnover_rate_id=turnover_rate.id,
+                reference_dt=reference_dt,
+                is_new=is_new,
+            )
+
+            if should_apply_update:
+                if employer_company_data is not None:
+                    turnover_rate.employer_name = employer_company_data.get('razao_social') or turnover_rate.employer_name
+                elif employer_client is not None:
+                    turnover_rate.employer_name = employer_client.name or turnover_rate.employer_name
+
+                if employer_vigencia_record is not None:
+                    turnover_rate.vigencia_id = employer_vigencia_record.id
+                    turnover_rate.vigencia_year = employer_vigencia_record.vigencia_year
+                elif turnover_rate.vigencia_year is None and metadata is not None:
+                    metadata_vigencia = getattr(metadata, 'validity_year', None)
+                    if metadata_vigencia:
+                        turnover_rate.vigencia_year = str(metadata_vigencia).strip()
+
+                turnover_rate.turnover_rate = item.get('turnover_rate') if item.get('turnover_rate') is not None else turnover_rate.turnover_rate
+                turnover_rate.admissions = item.get('admissions') if item.get('admissions') is not None else turnover_rate.admissions
+                turnover_rate.dismissals = item.get('dismissals') if item.get('dismissals') is not None else turnover_rate.dismissals
+                turnover_rate.initial_links_count = item.get('initial_links_count') if item.get('initial_links_count') is not None else turnover_rate.initial_links_count
+
+                turnover_rate.first_instance_requested_admissions = (
+                    item.get('first_instance_requested_admissions')
+                    if item.get('first_instance_requested_admissions') is not None
+                    else turnover_rate.first_instance_requested_admissions
+                )
+                turnover_rate.first_instance_requested_dismissals = (
+                    item.get('first_instance_requested_dismissals')
+                    if item.get('first_instance_requested_dismissals') is not None
+                    else turnover_rate.first_instance_requested_dismissals
+                )
+                turnover_rate.first_instance_requested_initial_links = (
+                    item.get('first_instance_requested_initial_links')
+                    if item.get('first_instance_requested_initial_links') is not None
+                    else turnover_rate.first_instance_requested_initial_links
+                )
+                turnover_rate.second_instance_requested_admissions = (
+                    item.get('second_instance_requested_admissions')
+                    if item.get('second_instance_requested_admissions') is not None
+                    else turnover_rate.second_instance_requested_admissions
+                )
+                turnover_rate.second_instance_requested_dismissals = (
+                    item.get('second_instance_requested_dismissals')
+                    if item.get('second_instance_requested_dismissals') is not None
+                    else turnover_rate.second_instance_requested_dismissals
+                )
+                turnover_rate.second_instance_requested_initial_links = (
+                    item.get('second_instance_requested_initial_links')
+                    if item.get('second_instance_requested_initial_links') is not None
+                    else turnover_rate.second_instance_requested_initial_links
+                )
+
+                turnover_rate.first_instance_status = item.get('first_instance_status')
+                turnover_rate.first_instance_status_raw = item.get('first_instance_status_raw')
+                turnover_rate.first_instance_justification = item.get('first_instance_justification')
+                turnover_rate.first_instance_opinion = item.get('first_instance_opinion')
+                turnover_rate.second_instance_status = item.get('second_instance_status')
+                turnover_rate.second_instance_status_raw = item.get('second_instance_status_raw')
+                turnover_rate.second_instance_justification = item.get('second_instance_justification')
+                turnover_rate.second_instance_opinion = item.get('second_instance_opinion')
+                turnover_rate.status = self._map_status(item.get('raw_status'))
+                turnover_rate.justification = item.get('justification')
+                turnover_rate.opinion = item.get('opinion')
+
+                decisions_summary = item.get('decisions_summary')
+                source_note = f'Relatório FAP importado (id={report.id}, arquivo={report.original_filename})'
+                notes_parts = [source_note]
+                if decisions_summary:
+                    notes_parts.append(decisions_summary)
+                turnover_rate.notes = '\n'.join(notes_parts)
+
+                turnover_rate.updated_at = datetime.utcnow()
+                imported_count += 1
+
+            history = FapContestationTurnoverRateSourceHistory.query.filter_by(
+                turnover_rate_id=turnover_rate.id,
+                report_id=report.id,
+            ).first()
+
+            if history is None:
+                history = FapContestationTurnoverRateSourceHistory(
+                    law_firm_id=report.law_firm_id,
+                    turnover_rate_id=turnover_rate.id,
+                    report_id=report.id,
+                )
+                db.session.add(history)
+
+            history.knowledge_base_id = report.knowledge_base_id
+            history.action = 'added' if is_new else 'updated'
+            history.transmission_datetime = transmission_dt
+            history.publication_datetime = publication_dt
+            history.updated_at = datetime.utcnow()
+
+        return imported_count
+
     def     process_pending_reports(
         self,
         batch_size: int = 30,
@@ -2184,18 +2504,21 @@ class FapContestationJudgmentReportService:
                     extracted_cats = self.extract_cats_with_pdfplumber(report.file_path)
                     extracted_payroll_masses = self.extract_payroll_masses_with_pdfplumber(report.file_path)
                     extracted_employment_links = self.extract_employment_links_with_pdfplumber(report.file_path)
+                    extracted_turnover_rates = self.extract_turnover_rates_with_pdfplumber(report.file_path)
 
                     print(
                         f'Relatório #{report.id}: {len(extracted_benefits)} benefício(s), '
                         f'{len(extracted_cats)} CAT(s), '
-                        f'{len(extracted_payroll_masses)} Massa(s) Salarial(s) e '
-                        f'{len(extracted_employment_links)} Vínculo(s) identificado(s) via pdfplumber.'
+                        f'{len(extracted_payroll_masses)} Massa(s) Salarial(s), '
+                        f'{len(extracted_employment_links)} Vínculo(s) e '
+                        f'{len(extracted_turnover_rates)} Taxa(s) de Rotatividade identificado(s) via pdfplumber.'
                     )
 
                     imported_count = self._upsert_benefits_from_report(report, extracted_benefits, metadata)
                     imported_cats = self._upsert_cats_from_report(report, extracted_cats, metadata)
                     imported_payroll_masses = self._upsert_payroll_masses_from_report(report, extracted_payroll_masses, metadata)
                     imported_employment_links = self._upsert_employment_links_from_report(report, extracted_employment_links, metadata)
+                    imported_turnover_rates = self._upsert_turnover_rates_from_report(report, extracted_turnover_rates, metadata)
 
                     report.imported_benefits_count = imported_count
                     report.status = 'completed'
@@ -2207,7 +2530,8 @@ class FapContestationJudgmentReportService:
                     print(
                         f'Relatório #{report.id} processado com sucesso. '
                         f'Benefícios: {imported_count}, CATs: {imported_cats}, '
-                        f'Massas Salariais: {imported_payroll_masses}, Vínculos: {imported_employment_links}'
+                        f'Massas Salariais: {imported_payroll_masses}, Vínculos: {imported_employment_links}, '
+                        f'Taxas de Rotatividade: {imported_turnover_rates}'
                     )
                 except Exception as exc:
                     db.session.rollback()
