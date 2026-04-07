@@ -30,6 +30,9 @@ from app.models import (
     FapContestationEmploymentLink,
     FapContestationEmploymentLinkSourceHistory,
     FapContestationEmploymentLinkManualHistory,
+    FapContestationTurnoverRate,
+    FapContestationTurnoverRateSourceHistory,
+    FapContestationTurnoverRateManualHistory,
     KnowledgeBase,
     db,
 )
@@ -147,6 +150,27 @@ EMPLOYMENT_LINK_ORDER_COLUMN_MAP = {
     4: FapContestationEmploymentLink.first_instance_requested_quantity,
     5: FapContestationEmploymentLink.first_instance_status,
     6: FapContestationEmploymentLink.second_instance_status,
+}
+
+TURNOVER_RATE_FILTER_FIELD_MAP = {
+    'id': FapContestationTurnoverRate.id,
+    'employer_cnpj': FapContestationTurnoverRate.employer_cnpj,
+    'year': FapContestationTurnoverRate.year,
+    'status': FapContestationTurnoverRate.status,
+    'first_instance_status': FapContestationTurnoverRate.first_instance_status,
+    'first_instance_status_raw': FapContestationTurnoverRate.first_instance_status_raw,
+    'second_instance_status': FapContestationTurnoverRate.second_instance_status,
+    'second_instance_status_raw': FapContestationTurnoverRate.second_instance_status_raw,
+}
+
+TURNOVER_RATE_ORDER_COLUMN_MAP = {
+    0: FapContestationTurnoverRate.id,
+    1: FapContestationTurnoverRate.employer_cnpj,
+    2: FapContestationTurnoverRate.year,
+    3: FapContestationTurnoverRate.turnover_rate,
+    4: FapContestationTurnoverRate.admissions,
+    5: FapContestationTurnoverRate.first_instance_status,
+    6: FapContestationTurnoverRate.second_instance_status,
 }
 
 
@@ -864,6 +888,123 @@ def _serialize_employment_link_row(el):
     }
 
 
+def _base_turnover_rates_query(law_firm_id):
+    return db.session.query(FapContestationTurnoverRate).filter(FapContestationTurnoverRate.law_firm_id == law_firm_id)
+
+
+def _parse_turnover_rate_custom_filters(raw_filters):
+    if not raw_filters:
+        return []
+    if isinstance(raw_filters, str):
+        try:
+            loaded = json.loads(raw_filters)
+        except json.JSONDecodeError:
+            return []
+    elif isinstance(raw_filters, list):
+        loaded = raw_filters
+    else:
+        return []
+    valid_filters = []
+    for item in loaded:
+        if not isinstance(item, dict):
+            continue
+        field = (item.get('field') or '').strip()
+        operator = (item.get('operator') or 'contains').strip()
+        value = item.get('value')
+        if field not in TURNOVER_RATE_FILTER_FIELD_MAP:
+            continue
+        if operator not in {'contains', 'equals', 'starts_with', 'ends_with', 'empty', 'not_empty'}:
+            continue
+        if operator in {'contains', 'equals', 'starts_with', 'ends_with'} and not str(value or '').strip():
+            continue
+        valid_filters.append({'field': field, 'operator': operator, 'value': value})
+    return valid_filters
+
+
+def _apply_turnover_rate_filters(query, search_value='', custom_filters=None, quick_root='', quick_cnpj='', vigencia_id=None):
+    search_text = (search_value or '').strip().lower()
+    if search_text:
+        like_term = f'%{search_text}%'
+        query = query.filter(
+            or_(
+                func.lower(cast(FapContestationTurnoverRate.id, String)).like(like_term),
+                func.lower(cast(FapContestationTurnoverRate.employer_cnpj, String)).like(like_term),
+                func.lower(cast(FapContestationTurnoverRate.employer_name, String)).like(like_term),
+                func.lower(cast(FapContestationTurnoverRate.year, String)).like(like_term),
+            )
+        )
+
+    if quick_root:
+        root = ''.join(ch for ch in quick_root if ch.isdigit())[:8]
+        if root:
+            sanitized_cnpj = func.replace(
+                func.replace(
+                    func.replace(func.replace(cast(FapContestationTurnoverRate.employer_cnpj, String), '.', ''), '/', ''),
+                    '-', '',
+                ),
+                ' ', '',
+            )
+            query = query.filter(sanitized_cnpj.like(f'{root}%'))
+
+    if quick_cnpj:
+        cnpj_digits = ''.join(ch for ch in quick_cnpj if ch.isdigit())[:14]
+        if cnpj_digits:
+            sanitized_cnpj = func.replace(
+                func.replace(
+                    func.replace(func.replace(cast(FapContestationTurnoverRate.employer_cnpj, String), '.', ''), '/', ''),
+                    '-', '',
+                ),
+                ' ', '',
+            )
+            query = query.filter(sanitized_cnpj == cnpj_digits)
+
+    if vigencia_id:
+        try:
+            query = query.filter(FapContestationTurnoverRate.vigencia_id == int(vigencia_id))
+        except (TypeError, ValueError):
+            pass
+
+    for item in custom_filters or []:
+        column = TURNOVER_RATE_FILTER_FIELD_MAP.get(item['field'])
+        if column is None:
+            continue
+        query = query.filter(_apply_text_operator(column, item['operator'], item.get('value')))
+    return query
+
+
+def _serialize_turnover_rate_row(tr):
+    return {
+        'id': tr.id,
+        'vigencia_year': tr.vigencia_year or '',
+        'employer_cnpj': tr.employer_cnpj or '',
+        'employer_name': tr.employer_name or '',
+        'year': tr.year or '',
+        'turnover_rate': _format_decimal(tr.turnover_rate),
+        'admissions': tr.admissions if tr.admissions is not None else '',
+        'dismissals': tr.dismissals if tr.dismissals is not None else '',
+        'initial_links_count': tr.initial_links_count if tr.initial_links_count is not None else '',
+        'first_instance_requested_admissions': tr.first_instance_requested_admissions if tr.first_instance_requested_admissions is not None else '',
+        'first_instance_requested_dismissals': tr.first_instance_requested_dismissals if tr.first_instance_requested_dismissals is not None else '',
+        'first_instance_requested_initial_links': tr.first_instance_requested_initial_links if tr.first_instance_requested_initial_links is not None else '',
+        'second_instance_requested_admissions': tr.second_instance_requested_admissions if tr.second_instance_requested_admissions is not None else '',
+        'second_instance_requested_dismissals': tr.second_instance_requested_dismissals if tr.second_instance_requested_dismissals is not None else '',
+        'second_instance_requested_initial_links': tr.second_instance_requested_initial_links if tr.second_instance_requested_initial_links is not None else '',
+        'status': tr.status or '',
+        'first_instance_status': tr.first_instance_status or '',
+        'first_instance_status_raw': tr.first_instance_status_raw or '',
+        'first_instance_justification': tr.first_instance_justification or '',
+        'first_instance_opinion': tr.first_instance_opinion or '',
+        'second_instance_status': tr.second_instance_status or '',
+        'second_instance_status_raw': tr.second_instance_status_raw or '',
+        'second_instance_justification': tr.second_instance_justification or '',
+        'second_instance_opinion': tr.second_instance_opinion or '',
+        'report_id': tr.report_id,
+        'report_view_url': url_for('disputes_center.view_fap_contestation_report', report_id=tr.report_id),
+        'edit_url': url_for('disputes_center.edit_turnover_rate', turnover_rate_id=tr.id),
+        'timeline_url': url_for('disputes_center.turnover_rate_timeline', turnover_rate_id=tr.id),
+    }
+
+
 def _group_count_by_status(query, column):
     status_expr = func.lower(func.coalesce(cast(column, String), ''))
     rows = query.with_entities(status_expr.label('status_key'), func.count(Benefit.id)).group_by(status_expr).all()
@@ -1514,6 +1655,27 @@ def list_fap_vigencias():
             continue
         el_stats_by_cnpj[_digits] = el_stats_by_cnpj.get(_digits, 0) + int(_er.total or 0)
 
+    # Turnover-rate stats grouped by normalized employer_cnpj (14 digits)
+    _tr_agg_rows = (
+        db.session.query(
+            FapContestationTurnoverRate.employer_cnpj,
+            func.count(FapContestationTurnoverRate.id).label('total'),
+        )
+        .filter(
+            FapContestationTurnoverRate.law_firm_id == law_firm_id,
+            FapContestationTurnoverRate.employer_cnpj.isnot(None),
+            func.trim(cast(FapContestationTurnoverRate.employer_cnpj, String)) != '',
+        )
+        .group_by(FapContestationTurnoverRate.employer_cnpj)
+        .all()
+    )
+    tr_stats_by_cnpj: dict[str, int] = {}
+    for _tr in _tr_agg_rows:
+        _digits = _normalize_cnpj_digits(_tr.employer_cnpj)
+        if not _digits:
+            continue
+        tr_stats_by_cnpj[_digits] = tr_stats_by_cnpj.get(_digits, 0) + int(_tr.total or 0)
+
     grouped_clients = {}
     total_benefits_linked = 0
     total_filtered_vigencias = 0
@@ -1581,6 +1743,7 @@ def list_fap_vigencias():
                 'total_cats': 0,
                 'total_payroll_masses': 0,
                 'total_employment_links': 0,
+                'total_turnover_rates': 0,
                 'vigencias': [],
             }
 
@@ -1600,11 +1763,13 @@ def list_fap_vigencias():
         cats_count = _cs.get('total', 0)
         pm_count = pm_stats_by_cnpj.get(_vdig, 0)
         el_count = el_stats_by_cnpj.get(_vdig, 0)
+        tr_count = tr_stats_by_cnpj.get(_vdig, 0)
         grouped_clients[group_key]['total_vigencias'] += 1
         grouped_clients[group_key]['total_benefits'] += benefits_count
         grouped_clients[group_key]['total_cats'] += cats_count
         grouped_clients[group_key]['total_payroll_masses'] += pm_count
         grouped_clients[group_key]['total_employment_links'] += el_count
+        grouped_clients[group_key]['total_turnover_rates'] += tr_count
         grouped_clients[group_key]['vigencias'].append(
             {
                 'id': vigencia.id,
@@ -1614,6 +1779,7 @@ def list_fap_vigencias():
                 'cats_count': cats_count,
                 'payroll_masses_count': pm_count,
                 'employment_links_count': el_count,
+                'turnover_rates_count': tr_count,
                 'first_approved_count': first_approved_count + _cs.get('fa', 0),
                 'first_rejected_count': first_rejected_count + _cs.get('fr', 0),
                 'first_in_review_count': first_in_review_count + _cs.get('fv', 0),
@@ -1630,6 +1796,7 @@ def list_fap_vigencias():
                 'cats_view_url': url_for('disputes_center.list_cats', vigencia_id=vigencia.id),
                 'payroll_masses_view_url': url_for('disputes_center.list_payroll_masses', vigencia_id=vigencia.id),
                 'employment_links_view_url': url_for('disputes_center.list_employment_links', vigencia_id=vigencia.id),
+                'turnover_rates_view_url': url_for('disputes_center.list_turnover_rates', vigencia_id=vigencia.id),
             }
         )
         total_benefits_linked += benefits_count
@@ -3382,5 +3549,375 @@ def employment_link_timeline(employment_link_id):
         'employment_link_id': el.id,
         'employer_cnpj': el.employer_cnpj,
         'competence': el.competence,
+        'events': events,
+    })
+
+
+@disputes_center_bp.route('/turnover-rates', methods=['GET'])
+@require_law_firm
+def list_turnover_rates():
+    law_firm_id = get_current_law_firm_id()
+    base_query = _base_turnover_rates_query(law_firm_id)
+    total_count = base_query.with_entities(func.count(FapContestationTurnoverRate.id)).scalar() or 0
+
+    first_status_counts = {
+        _normalize_status_key(status): int(count or 0)
+        for status, count in base_query.with_entities(
+            func.lower(func.coalesce(cast(FapContestationTurnoverRate.first_instance_status, String), '')),
+            func.count(FapContestationTurnoverRate.id),
+        ).group_by(func.lower(func.coalesce(cast(FapContestationTurnoverRate.first_instance_status, String), ''))).all()
+    }
+    first_instance_stats = _build_instance_stats(total_count, first_status_counts)
+
+    second_status_counts = {
+        _normalize_status_key(status): int(count or 0)
+        for status, count in base_query.with_entities(
+            func.lower(func.coalesce(cast(FapContestationTurnoverRate.second_instance_status, String), '')),
+            func.count(FapContestationTurnoverRate.id),
+        ).group_by(func.lower(func.coalesce(cast(FapContestationTurnoverRate.second_instance_status, String), ''))).all()
+    }
+    first_deferred_count = int(first_status_counts.get('deferido', 0))
+    second_total_base = max(total_count - first_deferred_count, 0)
+    second_instance_stats = _build_instance_stats(second_total_base, second_status_counts)
+
+    cnpj_entries = (
+        Client.query.with_entities(Client.cnpj, Client.name)
+        .filter_by(law_firm_id=law_firm_id)
+        .all()
+    )
+
+    roots_map = {}
+    for cnpj, name in cnpj_entries:
+        root = _extract_cnpj_root(cnpj)
+        if not root:
+            continue
+        branch = _extract_cnpj_branch(cnpj)
+        clean_name = (name or '').strip()
+        if root not in roots_map:
+            roots_map[root] = {'root': root, 'company_name': '', 'is_main': False}
+        current = roots_map[root]
+        if branch == '0001' and clean_name:
+            current['company_name'] = clean_name
+            current['is_main'] = True
+            continue
+        if not current['is_main'] and clean_name and not current['company_name']:
+            current['company_name'] = clean_name
+
+    cnpj_roots = [
+        {'root': item['root'], 'company_name': item['company_name']}
+        for _, item in sorted(roots_map.items(), key=lambda entry: entry[0])
+    ]
+
+    cnpj_by_root = {}
+    for cnpj, name in cnpj_entries:
+        root = _extract_cnpj_root(cnpj)
+        digits = _normalize_cnpj_digits(cnpj)
+        if not root or len(digits) < 14:
+            continue
+        clean_name = (name or '').strip()
+        formatted = _format_cnpj(cnpj)
+        if root not in cnpj_by_root:
+            cnpj_by_root[root] = []
+        if not any(item['digits'] == digits for item in cnpj_by_root[root]):
+            cnpj_by_root[root].append({'cnpj': formatted, 'digits': digits, 'company_name': clean_name})
+    for root_key in cnpj_by_root:
+        cnpj_by_root[root_key].sort(key=lambda x: x['digits'])
+        for item in cnpj_by_root[root_key]:
+            del item['digits']
+
+    initial_cnpj = _normalize_cnpj_digits(request.args.get('quick_cnpj', ''))
+
+    current_vigencia_filter = None
+    current_vigencia_id_raw = _normalize_text(request.args.get('vigencia_id', ''))
+    if current_vigencia_id_raw:
+        try:
+            vigencia_obj = FapVigenciaCnpj.query.filter_by(
+                id=int(current_vigencia_id_raw),
+                law_firm_id=law_firm_id,
+            ).first()
+        except (TypeError, ValueError):
+            vigencia_obj = None
+
+        if vigencia_obj is not None:
+            company_name = (
+                db.session.query(FapContestationTurnoverRate.employer_name)
+                .filter(
+                    FapContestationTurnoverRate.law_firm_id == law_firm_id,
+                    FapContestationTurnoverRate.vigencia_id == vigencia_obj.id,
+                    FapContestationTurnoverRate.employer_name.is_not(None),
+                    func.trim(FapContestationTurnoverRate.employer_name) != '',
+                )
+                .order_by(FapContestationTurnoverRate.updated_at.desc(), FapContestationTurnoverRate.id.desc())
+                .scalar()
+                or ''
+            ).strip()
+            current_vigencia_filter = {
+                'id': vigencia_obj.id,
+                'year': (vigencia_obj.vigencia_year or '').strip(),
+                'company_name': company_name,
+                'company_cnpj': _format_cnpj(vigencia_obj.employer_cnpj),
+            }
+
+    return render_template(
+        'disputes_center/turnover_rates.html',
+        total_count=total_count,
+        first_instance_stats=first_instance_stats,
+        second_instance_stats=second_instance_stats,
+        cnpj_roots=cnpj_roots,
+        cnpj_by_root=cnpj_by_root,
+        initial_cnpj=initial_cnpj,
+        current_vigencia_filter=current_vigencia_filter,
+    )
+
+
+@disputes_center_bp.route('/api/turnover-rates', methods=['GET'])
+@require_law_firm
+def list_turnover_rates_api():
+    law_firm_id = get_current_law_firm_id()
+    payload = _collect_listing_payload(default_length=25)
+    if request.is_json:
+        raw = (request.get_json(silent=True) or {}).get('filters')
+    else:
+        raw = request.args.get('custom_filters', '[]')
+    tr_filters = _parse_turnover_rate_custom_filters(raw)
+
+    total_count = (
+        _base_turnover_rates_query(law_firm_id)
+        .with_entities(func.count(FapContestationTurnoverRate.id))
+        .scalar() or 0
+    )
+
+    filtered_query = _apply_turnover_rate_filters(
+        _base_turnover_rates_query(law_firm_id),
+        search_value=payload['search'],
+        custom_filters=tr_filters,
+        quick_root=payload['quick_root'],
+        quick_cnpj=payload['quick_cnpj'],
+        vigencia_id=payload['vigencia_id'],
+    )
+    records_filtered = filtered_query.with_entities(func.count(FapContestationTurnoverRate.id)).scalar() or 0
+
+    first_counts = {
+        _normalize_status_key(s): int(c or 0)
+        for s, c in filtered_query.with_entities(
+            func.lower(func.coalesce(cast(FapContestationTurnoverRate.first_instance_status, String), '')),
+            func.count(FapContestationTurnoverRate.id),
+        ).group_by(func.lower(func.coalesce(cast(FapContestationTurnoverRate.first_instance_status, String), ''))).all()
+    }
+    approved_filtered = first_counts.get('deferido', 0)
+    rejected_filtered = first_counts.get('indeferido', 0)
+    in_review_filtered = first_counts.get('analyzing', 0)
+    pending_filtered = max(int(records_filtered) - approved_filtered - rejected_filtered - in_review_filtered, 0)
+
+    order_column = TURNOVER_RATE_ORDER_COLUMN_MAP.get(payload['order_column'], FapContestationTurnoverRate.id)
+    if payload['order_dir'] == 'asc':
+        filtered_query = filtered_query.order_by(order_column.asc(), FapContestationTurnoverRate.id.asc())
+    else:
+        filtered_query = filtered_query.order_by(order_column.desc(), FapContestationTurnoverRate.id.desc())
+
+    paged_results = filtered_query.offset(payload['start']).limit(payload['length']).all()
+    data = [_serialize_turnover_rate_row(tr) for tr in paged_results]
+
+    return jsonify({
+        'draw': payload['draw'],
+        'recordsTotal': total_count,
+        'recordsFiltered': records_filtered,
+        'filtered_stats': {
+            'total': int(records_filtered),
+            'approved': approved_filtered,
+            'rejected': rejected_filtered,
+            'in_review': in_review_filtered,
+            'pending': pending_filtered,
+        },
+        'data': data,
+    })
+
+
+@disputes_center_bp.route('/turnover-rates/<int:turnover_rate_id>/edit', methods=['GET', 'POST'])
+@require_law_firm
+def edit_turnover_rate(turnover_rate_id):
+    law_firm_id = get_current_law_firm_id()
+    tr = FapContestationTurnoverRate.query.filter_by(id=turnover_rate_id, law_firm_id=law_firm_id).first_or_404()
+
+    if request.method == 'POST':
+        old_first_instance_status = tr.first_instance_status or ''
+
+        def parse_int(val):
+            if not val:
+                return None
+            try:
+                return int(str(val).strip())
+            except (ValueError, TypeError):
+                return None
+
+        def parse_decimal(val):
+            if not val:
+                return None
+            from decimal import Decimal, InvalidOperation
+            try:
+                cleaned = str(val).strip().replace(',', '.')
+                return Decimal(cleaned)
+            except (InvalidOperation, ValueError):
+                return None
+
+        tr.employer_cnpj = request.form.get('employer_cnpj') or tr.employer_cnpj
+        tr.employer_name = request.form.get('employer_name') or tr.employer_name
+        tr.year = request.form.get('year') or tr.year
+        tr.turnover_rate = parse_decimal(request.form.get('turnover_rate'))
+        tr.admissions = parse_int(request.form.get('admissions'))
+        tr.dismissals = parse_int(request.form.get('dismissals'))
+        tr.initial_links_count = parse_int(request.form.get('initial_links_count'))
+        tr.first_instance_requested_admissions = parse_int(request.form.get('first_instance_requested_admissions'))
+        tr.first_instance_requested_dismissals = parse_int(request.form.get('first_instance_requested_dismissals'))
+        tr.first_instance_requested_initial_links = parse_int(request.form.get('first_instance_requested_initial_links'))
+        tr.second_instance_requested_admissions = parse_int(request.form.get('second_instance_requested_admissions'))
+        tr.second_instance_requested_dismissals = parse_int(request.form.get('second_instance_requested_dismissals'))
+        tr.second_instance_requested_initial_links = parse_int(request.form.get('second_instance_requested_initial_links'))
+
+        tr.first_instance_status = request.form.get('first_instance_status') or None
+        tr.first_instance_status_raw = request.form.get('first_instance_status_raw') or None
+        tr.first_instance_justification = request.form.get('first_instance_justification') or None
+        tr.first_instance_opinion = request.form.get('first_instance_opinion') or None
+
+        tr.second_instance_status = request.form.get('second_instance_status') or None
+        tr.second_instance_status_raw = request.form.get('second_instance_status_raw') or None
+        tr.second_instance_justification = request.form.get('second_instance_justification') or None
+        tr.second_instance_opinion = request.form.get('second_instance_opinion') or None
+
+        raw_consolidated = (
+            request.form.get('second_instance_status') or request.form.get('first_instance_status') or ''
+        ).strip().lower()
+        if raw_consolidated == 'deferido':
+            tr.status = 'approved'
+        elif raw_consolidated == 'indeferido':
+            tr.status = 'rejected'
+        elif raw_consolidated == 'analyzing':
+            tr.status = 'analyzing'
+        else:
+            tr.status = 'pending'
+        tr.justification = (
+            request.form.get('second_instance_justification')
+            or request.form.get('first_instance_justification')
+            or None
+        )
+        tr.opinion = (
+            request.form.get('second_instance_opinion')
+            or request.form.get('first_instance_opinion')
+            or None
+        )
+        tr.notes = request.form.get('notes') or None
+        tr.updated_at = datetime.utcnow()
+
+        new_first_instance_status = tr.first_instance_status or ''
+        if new_first_instance_status != old_first_instance_status:
+            db.session.add(FapContestationTurnoverRateManualHistory(
+                law_firm_id=law_firm_id,
+                turnover_rate_id=tr.id,
+                performed_by_user_id=session.get('user_id'),
+                action='edit_turnover_rate_first_instance_status',
+                old_first_instance_status=old_first_instance_status or None,
+                new_first_instance_status=new_first_instance_status,
+                notes='Status da 1ª instância alterado na tela de edição.',
+            ))
+
+        try:
+            db.session.commit()
+            flash('Taxa de Rotatividade atualizada com sucesso!', 'success')
+            return redirect(url_for('disputes_center.list_turnover_rates'))
+        except Exception as exc:
+            db.session.rollback()
+            flash(f'Erro ao atualizar Taxa de Rotatividade: {exc}', 'danger')
+
+    return render_template('disputes_center/turnover_rate_edit.html', tr=tr)
+
+
+@disputes_center_bp.route('/turnover-rates/<int:turnover_rate_id>/timeline', methods=['GET'])
+@require_law_firm
+def turnover_rate_timeline(turnover_rate_id):
+    law_firm_id = get_current_law_firm_id()
+    tr = FapContestationTurnoverRate.query.filter_by(id=turnover_rate_id, law_firm_id=law_firm_id).first_or_404()
+
+    history_items = (
+        FapContestationTurnoverRateSourceHistory.query.filter_by(
+            law_firm_id=law_firm_id,
+            turnover_rate_id=turnover_rate_id,
+        )
+        .order_by(
+            func.coalesce(
+                FapContestationTurnoverRateSourceHistory.publication_datetime,
+                FapContestationTurnoverRateSourceHistory.transmission_datetime,
+            ).is_(None).asc(),
+            func.coalesce(
+                FapContestationTurnoverRateSourceHistory.publication_datetime,
+                FapContestationTurnoverRateSourceHistory.transmission_datetime,
+            ).desc(),
+            FapContestationTurnoverRateSourceHistory.created_at.desc(),
+        )
+        .all()
+    )
+
+    manual_history_items = (
+        FapContestationTurnoverRateManualHistory.query.filter_by(
+            law_firm_id=law_firm_id,
+            turnover_rate_id=turnover_rate_id,
+        )
+        .order_by(FapContestationTurnoverRateManualHistory.created_at.desc(), FapContestationTurnoverRateManualHistory.id.desc())
+        .all()
+    )
+
+    events = []
+    for item in history_items:
+        report = item.report
+        events.append({
+            'event_type': 'fap_file_history',
+            'history_id': item.id,
+            'report_id': item.report_id,
+            'knowledge_base_id': item.knowledge_base_id,
+            'action': item.action,
+            'transmission_datetime': _format_datetime(item.transmission_datetime),
+            'publication_datetime': _format_datetime(item.publication_datetime or item.transmission_datetime),
+            'created_at': _format_datetime(item.created_at),
+            'report_uploaded_at': _format_datetime(report.uploaded_at if report else None),
+            'report_filename': (report.original_filename if report else None) or '-',
+            'knowledge_details_url': (
+                url_for('disputes_center.view_fap_contestation_report', report_id=item.report_id)
+                if report else None
+            ),
+            'sort_datetime': item.publication_datetime or item.transmission_datetime or item.created_at,
+        })
+
+    for item in manual_history_items:
+        performer_name = (item.performed_by_user.name if item.performed_by_user else '') or 'Usuário não identificado'
+        events.append({
+            'event_type': 'manual_history',
+            'history_id': item.id,
+            'report_id': None,
+            'knowledge_base_id': None,
+            'action': item.action,
+            'manual_action_label': 'Edição manual',
+            'manual_description': 'Status da 1ª instância alterado na tela de edição.',
+            'performed_by': performer_name,
+            'old_first_instance_status': item.old_first_instance_status,
+            'new_first_instance_status': item.new_first_instance_status,
+            'old_first_instance_status_label': _status_label_pt(item.old_first_instance_status),
+            'new_first_instance_status_label': _status_label_pt(item.new_first_instance_status),
+            'notes': item.notes,
+            'transmission_datetime': None,
+            'publication_datetime': None,
+            'created_at': _format_datetime(item.created_at),
+            'report_uploaded_at': None,
+            'report_filename': None,
+            'knowledge_details_url': None,
+            'sort_datetime': item.created_at,
+        })
+
+    events.sort(key=lambda e: e.get('sort_datetime') or datetime.min, reverse=True)
+    for e in events:
+        e.pop('sort_datetime', None)
+
+    return jsonify({
+        'turnover_rate_id': tr.id,
+        'employer_cnpj': tr.employer_cnpj,
+        'year': tr.year,
         'events': events,
     })

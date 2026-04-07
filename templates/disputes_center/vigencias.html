@@ -717,6 +717,10 @@ icon='bi bi-diagram-3') %}
                                 <span class="client-kpi-label">Vínculos</span>
                                 <div class="client-kpi-value">{{ group.total_employment_links }}</div>
                             </div>
+                            <div class="client-kpi">
+                                <span class="client-kpi-label">Rotat.</span>
+                                <div class="client-kpi-value">{{ group.total_turnover_rates }}</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -731,6 +735,7 @@ icon='bi bi-diagram-3') %}
                                 <th style="width: 100px;">CATs</th>
                                 <th style="width: 100px;">Massas</th>
                                 <th style="width: 100px;">Vínculos</th>
+                                <th style="width: 100px;">Taxa Rot.</th>
                                 <th style="width: 260px;">Status 1ª instância</th>
                                 <th style="width: 260px;">Status 2ª instância</th>
                                 <th style="width: 320px;" class="text-end">Ações</th>
@@ -767,6 +772,12 @@ icon='bi bi-diagram-3') %}
                                     <span class="benefit-count">
                                         <i class="bi bi-diagram-2 text-info"></i>
                                         {{ vigencia.employment_links_count }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="benefit-count">
+                                        <i class="bi bi-arrow-repeat text-warning"></i>
+                                        {{ vigencia.turnover_rates_count }}
                                     </span>
                                 </td>
                                 <td>
@@ -843,6 +854,10 @@ icon='bi bi-diagram-3') %}
                                         <a href="{{ vigencia.employment_links_view_url }}"
                                             class="btn btn-outline-info btn-sm">
                                             <i class="bi bi-diagram-2 me-1"></i>Ver Vínculos
+                                        </a>
+                                        <a href="{{ vigencia.turnover_rates_view_url }}"
+                                            class="btn btn-outline-warning btn-sm">
+                                            <i class="bi bi-arrow-repeat me-1"></i>Ver Taxa Rot.
                                         </a>
                                         <a href="{{ vigencia.benefits_view_url }}"
                                             class="btn btn-outline-primary btn-sm">

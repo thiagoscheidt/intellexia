@@ -21,6 +21,8 @@ from app.models import (
     FapContestationPayrollMassSourceHistory,
     FapContestationEmploymentLink,
     FapContestationEmploymentLinkSourceHistory,
+    FapContestationTurnoverRate,
+    FapContestationTurnoverRateSourceHistory,
     db,
 )
 from app.services.open_cnpj_service import OpenCNPJService
@@ -332,7 +334,57 @@ class FapContestationJudgmentReportService:
 
         return employment_links
 
-(self, file_path: str | Path):
+    def extract_turnover_rates_with_pdfplumber(self, file_path: str | Path) -> list[dict]:
+        """Extrai entradas de Taxa Média de Rotatividade diretamente do PDF com pdfplumber."""
+        path = Path(file_path)
+        if not path.exists():
+            raise FileNotFoundError(f'Arquivo não encontrado: {path}')
+
+        if path.suffix.lower() != '.pdf':
+            raise ValueError('O método com pdfplumber aceita apenas arquivos PDF.')
+
+        try:
+            import pdfplumber
+        except ImportError as exc:
+            raise ImportError('pdfplumber não está instalado no ambiente atual.') from exc
+
+        def normalize_page_text(page_text: str) -> str:
+            text = page_text.replace('\r\n', '\n').replace('\r', '\n')
+            text = re.sub(r'[ \t]+', ' ', text)
+            text = re.sub(r'\n{3,}', '\n\n', text)
+            return text.strip()
+
+        page_texts: list[str] = []
+        with pdfplumber.open(str(path)) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text(
+                    x_tolerance=2,
+                    y_tolerance=3,
+                    layout=False,
+                    use_text_flow=True,
+                )
+                if page_text:
+                    page_texts.append(normalize_page_text(page_text))
+
+        if not page_texts:
+            return []
+
+        text = self.normalize_markdown('\n\n'.join(page_texts))
+        typed_blocks = self._split_all_blocks(text)
+
+        turnover_rates: list[dict] = []
+        for block_type, block in typed_blocks:
+            if not block or not block.strip():
+                continue
+            if block_type != 'turnover_rate':
+                continue
+            parsed = self.parse_turnover_rate_block(block)
+            if parsed:
+                turnover_rates.append(parsed)
+
+        return turnover_rates
+
+    def extract_metadata_from_first_page_with_pdfplumber(self, file_path: str | Path):
         """Extrai metadados da primeira página via pdfplumber.
 
         Método isolado para comparar com o caminho atual baseado em markdown.
@@ -421,11 +473,22 @@ class FapContestationJudgmentReportService:
         blocks: list[tuple[str, str]] = []
 
         # --- Passo 1: seção CAT ---
-        cat_section_match = re.search(
+        # Busca pelo cabeçalho da seção CAT. Valida que é de fato o cabeçalho
+        # (e não uma menção dentro de uma justificativa) exigindo que "Número da CAT"
+        # apareça nos próximos 300 caracteres após o match.
+        _cat_candidate = re.search(
             r'Comunica[cç][aã]o\s+de\s+Acidente\s+de\s+Trabalho\s*\(CAT\)',
             text,
             flags=re.IGNORECASE,
         )
+        if _cat_candidate and re.search(
+            r'\bN[uú]mero\s+da\s+CAT\b',
+            text[_cat_candidate.end():_cat_candidate.end() + 300],
+            flags=re.IGNORECASE,
+        ):
+            cat_section_match = _cat_candidate
+        else:
+            cat_section_match = None
 
         if cat_section_match:
             before_cat_section = text[:cat_section_match.start()]
@@ -467,6 +530,7 @@ class FapContestationJudgmentReportService:
             next_section_match = re.search(
                 r'\bN[uú]mero\s+do\s+Benef[ií]cio\b'
                 r'|\bN[uú]mero\s+M[eé]dio\s+de\s+V[ií]nculos\b'
+                r'|\bTaxa\s+M[eé]dia\s+de\s+Rotatividade\b'
                 r'|\bComunica[cç][aã]o\s+de\s+Acidente\s+de\s+Trabalho\b',
                 after_payroll_header,
                 flags=re.IGNORECASE,
@@ -503,6 +567,7 @@ class FapContestationJudgmentReportService:
             next_el_section_match = re.search(
                 r'\bN[uú]mero\s+do\s+Benef[ií]cio\b'
                 r'|\bMassa\s+Salarial\b'
+                r'|\bTaxa\s+M[eé]dia\s+de\s+Rotatividade\b'
                 r'|\bComunica[cç][aã]o\s+de\s+Acidente\s+de\s+Trabalho\b',
                 after_employment_links_header,
                 flags=re.IGNORECASE,
@@ -523,6 +588,41 @@ class FapContestationJudgmentReportService:
             for el_content in employment_link_parts:
                 if el_content.strip() and re.search(r'CNPJ\s+[\d./\-]+', el_content, flags=re.IGNORECASE):
                     blocks.append(('employment_link', el_content))
+
+        # --- Passo 2.75: seção Taxa Média de Rotatividade ---
+        turnover_section_match = re.search(
+            r'\bTaxa\s+M[eé]dia\s+de\s+Rotatividade\b',
+            benefit_section_text,
+            flags=re.IGNORECASE,
+        )
+
+        if turnover_section_match:
+            before_turnover = benefit_section_text[:turnover_section_match.start()]
+            after_turnover_header = benefit_section_text[turnover_section_match.end():]
+
+            next_tr_section_match = re.search(
+                r'\bN[uú]mero\s+do\s+Benef[ií]cio\b'
+                r'|\bMassa\s+Salarial\b'
+                r'|\bN[uú]mero\s+M[eé]dio\s+de\s+V[ií]nculos\b'
+                r'|\bComunica[cç][aã]o\s+de\s+Acidente\s+de\s+Trabalho\b',
+                after_turnover_header,
+                flags=re.IGNORECASE,
+            )
+            if next_tr_section_match:
+                turnover_section_content = after_turnover_header[:next_tr_section_match.start()]
+                benefit_section_text = before_turnover + after_turnover_header[next_tr_section_match.start():]
+            else:
+                turnover_section_content = after_turnover_header
+                benefit_section_text = before_turnover
+
+            turnover_parts = re.split(
+                r'(?=CNPJ\s+[\d./\-]+\s+Ano\s+\d{4}\b)',
+                turnover_section_content,
+                flags=re.IGNORECASE,
+            )
+            for tr_content in turnover_parts:
+                if tr_content.strip() and re.search(r'CNPJ\s+[\d./\-]+', tr_content, flags=re.IGNORECASE):
+                    blocks.append(('turnover_rate', tr_content))
 
         # --- Passo 3: blocos de benefícios (lógica original preservada) ---
         benefit_parts = re.split(r'\bN[uú]mero\s+do\s+Benef[ií]cio\b', benefit_section_text, flags=re.IGNORECASE)
