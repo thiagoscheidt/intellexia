@@ -1290,6 +1290,11 @@ class FapContestationJudgmentReport(db.Model):
         back_populates='report',
         cascade='all, delete-orphan'
     )
+    employment_link_records = db.relationship(
+        'FapContestationEmploymentLink',
+        back_populates='report',
+        cascade='all, delete-orphan'
+    )
 
     def __repr__(self):
         return f'<FapContestationJudgmentReport {self.original_filename}>'
@@ -1738,6 +1743,139 @@ class FapContestationPayrollMassManualHistory(db.Model):
 
     def __repr__(self):
         return f'<FapContestationPayrollMassManualHistory mass={self.payroll_mass_id} action={self.action}>'
+
+
+class FapContestationEmploymentLink(db.Model):
+    """Número Médio de Vínculos entries extracted from FAP contestation judgment reports."""
+    __tablename__ = 'fap_contestation_employment_links'
+    __table_args__ = (
+        db.UniqueConstraint(
+            'law_firm_id', 'report_id', 'employer_cnpj', 'competence',
+            name='uq_employment_link_law_firm_report_cnpj_competence',
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    report_id = db.Column(
+        db.Integer,
+        db.ForeignKey('fap_contestation_judgment_reports.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+
+    # Link to FAP validity period
+    vigencia_id = db.Column(db.Integer, db.ForeignKey('fap_vigencia_cnpjs.id'), index=True)
+    vigencia_year = db.Column(db.String(10), index=True)
+
+    # Employer data
+    employer_cnpj = db.Column(db.String(20), nullable=False, index=True)
+    employer_name = db.Column(db.String(255))
+
+    # Competence period (e.g. "01/2022")
+    competence = db.Column(db.String(10), nullable=False, index=True)
+
+    # Quantity data (integer values)
+    quantity = db.Column(db.Integer)                               # Quantidade (original)
+    first_instance_requested_quantity = db.Column(db.Integer)     # Número Vínculo Solicitado (1ª instância)
+    second_instance_requested_quantity = db.Column(db.Integer)    # Número Vínculo Solicitado (2ª instância)
+
+    # Administrative decisions
+    first_instance_status = db.Column(db.String(30), index=True)
+    first_instance_status_raw = db.Column(db.String(255))
+    first_instance_justification = db.Column(db.Text)
+    first_instance_opinion = db.Column(db.Text)
+    second_instance_status = db.Column(db.String(30), index=True)
+    second_instance_status_raw = db.Column(db.String(255))
+    second_instance_justification = db.Column(db.Text)
+    second_instance_opinion = db.Column(db.Text)
+    status = db.Column(db.String(30), default='pending', index=True)
+    justification = db.Column(db.Text)
+    opinion = db.Column(db.Text)
+    notes = db.Column(db.Text)
+
+    # Audit
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    law_firm = db.relationship('LawFirm')
+    report = db.relationship('FapContestationJudgmentReport', back_populates='employment_link_records')
+    vigencia = db.relationship('FapVigenciaCnpj')
+    source_history = db.relationship(
+        'FapContestationEmploymentLinkSourceHistory',
+        back_populates='employment_link',
+        cascade='all, delete-orphan',
+        order_by='FapContestationEmploymentLinkSourceHistory.updated_at.desc()',
+    )
+    manual_history = db.relationship(
+        'FapContestationEmploymentLinkManualHistory',
+        back_populates='employment_link',
+        cascade='all, delete-orphan',
+        order_by='FapContestationEmploymentLinkManualHistory.created_at.desc()',
+    )
+
+    def __repr__(self):
+        return f'<FapContestationEmploymentLink {self.employer_cnpj} {self.competence}>'
+
+
+class FapContestationEmploymentLinkSourceHistory(db.Model):
+    """File audit trail for employment link entries."""
+    __tablename__ = 'fap_contestation_employment_link_source_history'
+    __table_args__ = (
+        db.UniqueConstraint('employment_link_id', 'report_id', name='uq_el_source_history_link_report'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    employment_link_id = db.Column(db.Integer, db.ForeignKey('fap_contestation_employment_links.id'), nullable=False, index=True)
+    report_id = db.Column(
+        db.Integer,
+        db.ForeignKey('fap_contestation_judgment_reports.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    knowledge_base_id = db.Column(db.Integer, db.ForeignKey('knowledge_base.id'), index=True)
+
+    action = db.Column(db.String(20), nullable=False, default='updated', index=True)  # added | updated
+    transmission_datetime = db.Column(db.DateTime, index=True)
+    publication_datetime = db.Column(db.DateTime, index=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    law_firm = db.relationship('LawFirm')
+    employment_link = db.relationship('FapContestationEmploymentLink', back_populates='source_history')
+    report = db.relationship('FapContestationJudgmentReport')
+    knowledge_base = db.relationship('KnowledgeBase')
+
+    def __repr__(self):
+        return f'<FapContestationEmploymentLinkSourceHistory link={self.employment_link_id} report={self.report_id}>'
+
+
+class FapContestationEmploymentLinkManualHistory(db.Model):
+    """User edit history for employment link entries."""
+    __tablename__ = 'fap_contestation_employment_link_manual_history'
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    employment_link_id = db.Column(db.Integer, db.ForeignKey('fap_contestation_employment_links.id'), nullable=False, index=True)
+    performed_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
+
+    action = db.Column(db.String(60), nullable=False, default='edit_employment_link_first_instance_status', index=True)
+    old_first_instance_status = db.Column(db.String(30), index=True)
+    new_first_instance_status = db.Column(db.String(30), nullable=False, index=True)
+    notes = db.Column(db.Text)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    law_firm = db.relationship('LawFirm')
+    employment_link = db.relationship('FapContestationEmploymentLink', back_populates='manual_history')
+    performed_by_user = db.relationship('User')
+
+    def __repr__(self):
+        return f'<FapContestationEmploymentLinkManualHistory link={self.employment_link_id} action={self.action}>'
 
 
 class JudicialProcessCitedBenefit(db.Model):

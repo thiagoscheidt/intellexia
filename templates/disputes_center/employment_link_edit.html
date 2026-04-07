@@ -1,0 +1,198 @@
+{% extends "layout/base.html" %}
+
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}Editar Vínculo Médio {{ employment_link.employer_cnpj }} / {{ employment_link.competence }} - IntellexIA{% endblock %}
+
+{% block content %}
+{% call page_hero(title='Editar Vínculo Médio', subtitle=employment_link.employer_cnpj ~ ' — Competência ' ~ employment_link.competence, icon='bi bi-diagram-2') %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb mb-0 bg-transparent small">
+    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('disputes_center.list_disputes_center') }}">Painel de Contestações</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('disputes_center.list_employment_links') }}">Vínculos Médios</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Editar Vínculo Médio</li>
+  </ol>
+</nav>
+{% endcall %}
+
+<div class="app-content">
+  <div class="container-fluid">
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="row mb-3">
+      <div class="col-12">
+        {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+          <i class="bi bi-info-circle me-2"></i>{{ message }}
+          <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+    {% endif %}
+    {% endwith %}
+
+    <div class="row">
+      <div class="col-12">
+        <div class="card shadow-sm">
+          <div class="card-header border-0 py-3">
+            <h5 class="card-title mb-0 fw-semibold">
+              <i class="bi bi-pencil-square me-2 text-primary"></i>Editar dados do Vínculo Médio
+              <span class="font-monospace text-primary ms-1">{{ employment_link.employer_cnpj }}</span>
+              <span class="text-muted ms-1">/ {{ employment_link.competence }}</span>
+            </h5>
+          </div>
+
+          <form method="POST">
+            <div class="card-body">
+
+              <!-- Identificação -->
+              <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.06em;">
+                <i class="bi bi-id-card me-1"></i>Identificação
+              </h6>
+              <div class="row g-3 mb-4">
+                <div class="col-md-4">
+                  <label class="form-label">CNPJ Empregador</label>
+                  <input type="text" class="form-control font-monospace" value="{{ employment_link.employer_cnpj }}" disabled>
+                  <small class="text-muted">Campo não editável</small>
+                </div>
+                <div class="col-md-2">
+                  <label class="form-label">Competência</label>
+                  <input type="text" class="form-control font-monospace" value="{{ employment_link.competence }}" disabled>
+                  <small class="text-muted">Campo não editável</small>
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label">Vigência</label>
+                  <input type="text" class="form-control" value="{{ employment_link.vigencia_year or '' }}" disabled>
+                </div>
+                <div class="col-md-3">
+                  <label class="form-label" for="employer_name">Nome do Empregador</label>
+                  <input type="text" class="form-control" id="employer_name" name="employer_name"
+                    value="{{ employment_link.employer_name or '' }}">
+                </div>
+              </div>
+
+              <!-- Quantidades -->
+              <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.06em;">
+                <i class="bi bi-123 me-1"></i>Quantidades de vínculos
+              </h6>
+              <div class="row g-3 mb-4">
+                <div class="col-md-4">
+                  <label class="form-label" for="quantity">Quantidade Original</label>
+                  <input type="number" class="form-control font-monospace" id="quantity" name="quantity"
+                    value="{{ employment_link.quantity if employment_link.quantity is not none else '' }}"
+                    placeholder="0" min="0">
+                  <small class="text-muted">Número médio de vínculos conforme relatório</small>
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label" for="first_instance_requested_quantity">Quantidade Solicitada (1ª Instância)</label>
+                  <input type="number" class="form-control font-monospace" id="first_instance_requested_quantity" name="first_instance_requested_quantity"
+                    value="{{ employment_link.first_instance_requested_quantity if employment_link.first_instance_requested_quantity is not none else '' }}"
+                    placeholder="0" min="0">
+                </div>
+                <div class="col-md-4">
+                  <label class="form-label" for="second_instance_requested_quantity">Quantidade Solicitada (2ª Instância)</label>
+                  <input type="number" class="form-control font-monospace" id="second_instance_requested_quantity" name="second_instance_requested_quantity"
+                    value="{{ employment_link.second_instance_requested_quantity if employment_link.second_instance_requested_quantity is not none else '' }}"
+                    placeholder="0" min="0">
+                </div>
+              </div>
+
+              <hr class="my-4">
+
+              <!-- 1ª Instância -->
+              <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.06em;">
+                <i class="bi bi-1-circle me-1"></i>Administrativo 1ª Instância
+              </h6>
+              <div class="row g-3 mb-4">
+                <div class="col-md-3">
+                  <label class="form-label" for="first_instance_status">Status</label>
+                  <select class="form-select" id="first_instance_status" name="first_instance_status">
+                    <option value="" {% if not employment_link.first_instance_status %}selected{% endif %}>Não informado</option>
+                    <option value="Deferido" {% if employment_link.first_instance_status and employment_link.first_instance_status|lower == 'deferido' %}selected{% endif %}>Deferido</option>
+                    <option value="Indeferido" {% if employment_link.first_instance_status and employment_link.first_instance_status|lower == 'indeferido' %}selected{% endif %}>Indeferido</option>
+                    <option value="analyzing" {% if employment_link.first_instance_status == 'analyzing' %}selected{% endif %}>Em análise</option>
+                  </select>
+                </div>
+                <div class="col-md-9">
+                  <label class="form-label" for="first_instance_status_raw">Texto original do status</label>
+                  <input type="text" class="form-control" id="first_instance_status_raw" name="first_instance_status_raw"
+                    value="{{ employment_link.first_instance_status_raw or '' }}">
+                </div>
+                <div class="col-12">
+                  <label class="form-label" for="first_instance_justification">Justificativa</label>
+                  <textarea class="form-control" id="first_instance_justification" name="first_instance_justification"
+                    rows="4">{{ employment_link.first_instance_justification or '' }}</textarea>
+                </div>
+                <div class="col-12">
+                  <label class="form-label" for="first_instance_opinion">Parecer</label>
+                  <textarea class="form-control" id="first_instance_opinion" name="first_instance_opinion"
+                    rows="4">{{ employment_link.first_instance_opinion or '' }}</textarea>
+                </div>
+              </div>
+
+              <!-- 2ª Instância -->
+              <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.06em;">
+                <i class="bi bi-2-circle me-1"></i>Administrativo 2ª Instância
+              </h6>
+              <div class="row g-3 mb-4">
+                <div class="col-md-3">
+                  <label class="form-label" for="second_instance_status">Status</label>
+                  <select class="form-select" id="second_instance_status" name="second_instance_status">
+                    <option value="" {% if not employment_link.second_instance_status %}selected{% endif %}>Não informado</option>
+                    <option value="Deferido" {% if employment_link.second_instance_status and employment_link.second_instance_status|lower == 'deferido' %}selected{% endif %}>Deferido</option>
+                    <option value="Indeferido" {% if employment_link.second_instance_status and employment_link.second_instance_status|lower == 'indeferido' %}selected{% endif %}>Indeferido</option>
+                    <option value="analyzing" {% if employment_link.second_instance_status == 'analyzing' %}selected{% endif %}>Em análise</option>
+                  </select>
+                </div>
+                <div class="col-md-9">
+                  <label class="form-label" for="second_instance_status_raw">Texto original do status</label>
+                  <input type="text" class="form-control" id="second_instance_status_raw" name="second_instance_status_raw"
+                    value="{{ employment_link.second_instance_status_raw or '' }}">
+                </div>
+                <div class="col-12">
+                  <label class="form-label" for="second_instance_justification">Justificativa</label>
+                  <textarea class="form-control" id="second_instance_justification" name="second_instance_justification"
+                    rows="4">{{ employment_link.second_instance_justification or '' }}</textarea>
+                </div>
+                <div class="col-12">
+                  <label class="form-label" for="second_instance_opinion">Parecer</label>
+                  <textarea class="form-control" id="second_instance_opinion" name="second_instance_opinion"
+                    rows="4">{{ employment_link.second_instance_opinion or '' }}</textarea>
+                </div>
+              </div>
+
+              <hr class="my-4">
+
+              <!-- Notas -->
+              <div class="row g-3">
+                <div class="col-12">
+                  <label class="form-label" for="notes">Notas internas</label>
+                  <textarea class="form-control" id="notes" name="notes" rows="3">{{ employment_link.notes or '' }}</textarea>
+                </div>
+              </div>
+
+            </div>
+            <div class="card-footer d-flex gap-2">
+              <button type="submit" class="btn btn-primary">
+                <i class="bi bi-check-lg me-1"></i>Salvar alterações
+              </button>
+              <a href="{{ url_for('disputes_center.list_employment_links') }}" class="btn btn-outline-secondary">
+                <i class="bi bi-arrow-left me-1"></i>Cancelar
+              </a>
+              {% if employment_link.report_id %}
+              <a href="{{ url_for('disputes_center.view_fap_contestation_report', report_id=employment_link.report_id) }}"
+                class="btn btn-outline-info ms-auto" target="_blank">
+                <i class="bi bi-file-earmark-text me-1"></i>Ver relatório de origem
+              </a>
+              {% endif %}
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

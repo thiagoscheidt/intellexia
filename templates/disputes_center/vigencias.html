@@ -713,6 +713,10 @@ icon='bi bi-diagram-3') %}
                                 <span class="client-kpi-label">Massas Salariais</span>
                                 <div class="client-kpi-value">{{ group.total_payroll_masses }}</div>
                             </div>
+                            <div class="client-kpi">
+                                <span class="client-kpi-label">Vínculos</span>
+                                <div class="client-kpi-value">{{ group.total_employment_links }}</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -726,6 +730,7 @@ icon='bi bi-diagram-3') %}
                                 <th style="width: 100px;">Benefícios</th>
                                 <th style="width: 100px;">CATs</th>
                                 <th style="width: 100px;">Massas</th>
+                                <th style="width: 100px;">Vínculos</th>
                                 <th style="width: 260px;">Status 1ª instância</th>
                                 <th style="width: 260px;">Status 2ª instância</th>
                                 <th style="width: 320px;" class="text-end">Ações</th>
@@ -756,6 +761,12 @@ icon='bi bi-diagram-3') %}
                                     <span class="benefit-count">
                                         <i class="bi bi-cash-stack text-success"></i>
                                         {{ vigencia.payroll_masses_count }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="benefit-count">
+                                        <i class="bi bi-diagram-2 text-info"></i>
+                                        {{ vigencia.employment_links_count }}
                                     </span>
                                 </td>
                                 <td>
@@ -828,6 +839,10 @@ icon='bi bi-diagram-3') %}
                                         <a href="{{ vigencia.payroll_masses_view_url }}"
                                             class="btn btn-outline-success btn-sm">
                                             <i class="bi bi-cash-stack me-1"></i>Ver Massas
+                                        </a>
+                                        <a href="{{ vigencia.employment_links_view_url }}"
+                                            class="btn btn-outline-info btn-sm">
+                                            <i class="bi bi-diagram-2 me-1"></i>Ver Vínculos
                                         </a>
                                         <a href="{{ vigencia.benefits_view_url }}"
                                             class="btn btn-outline-primary btn-sm">

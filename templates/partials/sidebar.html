@@ -125,6 +125,14 @@
               </a>
             </li>
             <li class="nav-item">
+              <a href="{{ url_for('disputes_center.list_employment_links') }}"
+                class="nav-link {{ 'active' if request.endpoint in ['disputes_center.list_employment_links', 'disputes_center.list_employment_links_api', 'disputes_center.edit_employment_link', 'disputes_center.employment_link_timeline'] else '' }}"
+                style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-diagram-2" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Vínculos Médios</p>
+              </a>
+            </li>
+            <li class="nav-item">
               <a href="{{ url_for('disputes_center.list_fap_vigencias') }}"
                 class="nav-link {{ 'active' if request.endpoint == 'disputes_center.list_fap_vigencias' else '' }}"
                 style="font-size: 0.9em;">

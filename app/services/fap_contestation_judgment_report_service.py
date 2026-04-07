@@ -19,6 +19,8 @@ from app.models import (
     FapContestationJudgmentReport,
     FapContestationPayrollMass,
     FapContestationPayrollMassSourceHistory,
+    FapContestationEmploymentLink,
+    FapContestationEmploymentLinkSourceHistory,
     db,
 )
 from app.services.open_cnpj_service import OpenCNPJService
@@ -280,7 +282,57 @@ class FapContestationJudgmentReportService:
 
         return payroll_masses
 
-    def extract_metadata_from_first_page_with_pdfplumber(self, file_path: str | Path):
+    def extract_employment_links_with_pdfplumber(self, file_path: str | Path) -> list[dict]:
+        """Extrai entradas de Número Médio de Vínculos diretamente do PDF com pdfplumber."""
+        path = Path(file_path)
+        if not path.exists():
+            raise FileNotFoundError(f'Arquivo não encontrado: {path}')
+
+        if path.suffix.lower() != '.pdf':
+            raise ValueError('O método com pdfplumber aceita apenas arquivos PDF.')
+
+        try:
+            import pdfplumber
+        except ImportError as exc:
+            raise ImportError('pdfplumber não está instalado no ambiente atual.') from exc
+
+        def normalize_page_text(page_text: str) -> str:
+            text = page_text.replace('\r\n', '\n').replace('\r', '\n')
+            text = re.sub(r'[ \t]+', ' ', text)
+            text = re.sub(r'\n{3,}', '\n\n', text)
+            return text.strip()
+
+        page_texts: list[str] = []
+        with pdfplumber.open(str(path)) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text(
+                    x_tolerance=2,
+                    y_tolerance=3,
+                    layout=False,
+                    use_text_flow=True,
+                )
+                if page_text:
+                    page_texts.append(normalize_page_text(page_text))
+
+        if not page_texts:
+            return []
+
+        text = self.normalize_markdown('\n\n'.join(page_texts))
+        typed_blocks = self._split_all_blocks(text)
+
+        employment_links: list[dict] = []
+        for block_type, block in typed_blocks:
+            if not block or not block.strip():
+                continue
+            if block_type != 'employment_link':
+                continue
+            parsed = self.parse_employment_link_block(block)
+            if parsed:
+                employment_links.append(parsed)
+
+        return employment_links
+
+(self, file_path: str | Path):
         """Extrai metadados da primeira página via pdfplumber.
 
         Método isolado para comparar com o caminho atual baseado em markdown.
@@ -435,6 +487,42 @@ class FapContestationJudgmentReportService:
             for payroll_content in payroll_parts:
                 if payroll_content.strip() and re.search(r'CNPJ\s+[\d./\-]+', payroll_content, flags=re.IGNORECASE):
                     blocks.append(('payroll_mass', payroll_content))
+
+        # --- Passo 2.5: seção Número Médio de Vínculos ---
+        employment_link_section_match = re.search(
+            r'\bN[uú]mero\s+M[eé]dio\s+de\s+V[ií]nculos\b',
+            benefit_section_text,
+            flags=re.IGNORECASE,
+        )
+
+        if employment_link_section_match:
+            before_employment_links = benefit_section_text[:employment_link_section_match.start()]
+            after_employment_links_header = benefit_section_text[employment_link_section_match.end():]
+
+            # The employment link section ends at the next known top-level section header.
+            next_el_section_match = re.search(
+                r'\bN[uú]mero\s+do\s+Benef[ií]cio\b'
+                r'|\bMassa\s+Salarial\b'
+                r'|\bComunica[cç][aã]o\s+de\s+Acidente\s+de\s+Trabalho\b',
+                after_employment_links_header,
+                flags=re.IGNORECASE,
+            )
+            if next_el_section_match:
+                employment_link_section_content = after_employment_links_header[:next_el_section_match.start()]
+                benefit_section_text = before_employment_links + after_employment_links_header[next_el_section_match.start():]
+            else:
+                employment_link_section_content = after_employment_links_header
+                benefit_section_text = before_employment_links
+
+            # Split employment link section into individual entries by "CNPJ XX Competência"
+            employment_link_parts = re.split(
+                r'(?=CNPJ\s+[\d./\-]+\s+Compet[êe]ncia\b)',
+                employment_link_section_content,
+                flags=re.IGNORECASE,
+            )
+            for el_content in employment_link_parts:
+                if el_content.strip() and re.search(r'CNPJ\s+[\d./\-]+', el_content, flags=re.IGNORECASE):
+                    blocks.append(('employment_link', el_content))
 
         # --- Passo 3: blocos de benefícios (lógica original preservada) ---
         benefit_parts = re.split(r'\bN[uú]mero\s+do\s+Benef[ií]cio\b', benefit_section_text, flags=re.IGNORECASE)
@@ -1110,6 +1198,97 @@ class FapContestationJudgmentReportService:
 
         return result
 
+    def parse_employment_link_block(self, block: str) -> dict | None:
+        """Faz parsing de um bloco de Número Médio de Vínculos."""
+        if not block or not block.strip():
+            return None
+
+        result: dict[str, object | None] = {}
+        result['tipo'] = 'NumeroMedioVinculos'
+
+        # CNPJ
+        cnpj_match = re.search(r'CNPJ\s+([\d./\-]+)', block, flags=re.IGNORECASE)
+        if not cnpj_match:
+            return None
+        result['employer_cnpj'] = cnpj_match.group(1).strip()
+
+        # Competência (e.g. "01/2022")
+        competence_match = re.search(r'Compet[êe]ncia\s+(\d{1,2}/\d{4})', block, flags=re.IGNORECASE)
+        result['competence'] = competence_match.group(1).strip() if competence_match else None
+
+        if not result['competence']:
+            return None
+
+        # Quantidade original
+        quantity_match = re.search(r'Quantidade\s+(\d+)', block, flags=re.IGNORECASE)
+        result['quantity'] = int(quantity_match.group(1)) if quantity_match else None
+
+        # Número Vínculo Solicitado por instância
+        first_section, second_section = self._extract_instance_sections(block)
+
+        def _extract_requested_quantity(section_text: str):
+            if not section_text:
+                return None
+            qty_match = re.search(
+                r'N[uú]mero\s+V[ií]nculo\s+Solicitado\s+(\d+)',
+                section_text,
+                flags=re.IGNORECASE,
+            )
+            if qty_match:
+                return int(qty_match.group(1))
+            return None
+
+        result['first_instance_requested_quantity'] = _extract_requested_quantity(first_section)
+        result['second_instance_requested_quantity'] = _extract_requested_quantity(second_section)
+
+        # If no instance-level values found, try on the full block
+        if result['first_instance_requested_quantity'] is None:
+            qty_match = re.search(
+                r'N[uú]mero\s+V[ií]nculo\s+Solicitado\s+(\d+)',
+                block,
+                flags=re.IGNORECASE,
+            )
+            if qty_match:
+                result['first_instance_requested_quantity'] = int(qty_match.group(1))
+
+        # Administrative decisions (same structure as benefits, CATs and payroll masses)
+        first_decision = self._extract_instance_decision(first_section or '')
+        second_decision = self._extract_instance_decision(second_section or '')
+
+        result['first_instance_status'] = first_decision.get('status')
+        result['first_instance_status_raw'] = first_decision.get('status_raw')
+        result['first_instance_justification'] = first_decision.get('justification')
+        result['first_instance_opinion'] = first_decision.get('opinion')
+
+        result['second_instance_status'] = second_decision.get('status')
+        result['second_instance_status_raw'] = second_decision.get('status_raw')
+        result['second_instance_justification'] = second_decision.get('justification')
+        result['second_instance_opinion'] = second_decision.get('opinion')
+
+        if result['first_instance_justification'] and not result['first_instance_status']:
+            result['first_instance_status'] = 'analyzing'
+        if result['second_instance_justification'] and not result['second_instance_status']:
+            result['second_instance_status'] = 'analyzing'
+
+        result['raw_status'] = (
+            result['second_instance_status']
+            or result['first_instance_status']
+            or None
+        )
+        result['justification'] = (
+            result['second_instance_justification']
+            or result['first_instance_justification']
+            or self.extract_between(block, 'Justificativa', 'Status')
+        )
+        result['opinion'] = (
+            result['second_instance_opinion']
+            or result['first_instance_opinion']
+            or self.extract_between(block, 'Parecer')
+        )
+        result['decisions_summary'] = self._build_decision_summary(result)
+
+        return result
+
     @staticmethod
     def _parse_br_decimal(value: str | None):
         """Converte valor monetário brasileiro (e.g. '87.182,85') para Decimal."""
@@ -1677,6 +1856,186 @@ class FapContestationJudgmentReportService:
 
         return imported_count
 
+    @staticmethod
+    def _should_apply_employment_link_update(employment_link_id: int, reference_dt, is_new: bool) -> bool:
+        """Decide se a atualização de Vínculo deve ser aplicada com base na data de referência."""
+        if is_new:
+            return True
+
+        latest_history = (
+            FapContestationEmploymentLinkSourceHistory.query
+            .filter(FapContestationEmploymentLinkSourceHistory.employment_link_id == employment_link_id)
+            .filter(
+                db.func.coalesce(
+                    FapContestationEmploymentLinkSourceHistory.publication_datetime,
+                    FapContestationEmploymentLinkSourceHistory.transmission_datetime,
+                ).is_not(None)
+            )
+            .order_by(
+                db.func.coalesce(
+                    FapContestationEmploymentLinkSourceHistory.publication_datetime,
+                    FapContestationEmploymentLinkSourceHistory.transmission_datetime,
+                ).desc()
+            )
+            .first()
+        )
+
+        latest_reference = (
+            latest_history.publication_datetime
+            or latest_history.transmission_datetime
+            if latest_history else None
+        )
+        if latest_reference is None:
+            return True
+        if reference_dt is None:
+            return False
+        return reference_dt > latest_reference
+
+    def _upsert_employment_links_from_report(
+        self,
+        report: FapContestationJudgmentReport,
+        extracted_links: list[dict],
+        metadata=None,
+    ) -> int:
+        """Insere ou atualiza entradas de Número Médio de Vínculos extraídas do relatório.
+
+        Usa a mesma lógica de `_upsert_payroll_masses_from_report`.
+        """
+        imported_count = 0
+
+        employer_client: Client | None = None
+        employer_company_data: dict | None = None
+        employer_cnpj_formatted: str | None = None
+        employer_vigencia_record: FapVigenciaCnpj | None = None
+
+        if metadata is not None and getattr(metadata, 'establishment_cnpj', None):
+            employer_client, employer_company_data, employer_cnpj_formatted = self._upsert_client_from_cnpj(
+                law_firm_id=report.law_firm_id,
+                cnpj_raw=metadata.establishment_cnpj,
+            )
+
+        transmission_dt = self._parse_br_datetime(
+            getattr(metadata, 'transmission_datetime', None) if metadata is not None else None
+        )
+        publication_date = self._parse_br_date(
+            getattr(metadata, 'publication_date', None) if metadata is not None else None
+        )
+        publication_dt = datetime.combine(publication_date, datetime.min.time()) if publication_date else None
+        reference_dt = publication_dt or transmission_dt
+
+        if metadata is not None:
+            metadata_cnpj = employer_cnpj_formatted or getattr(metadata, 'establishment_cnpj', None)
+            metadata_vigencia = getattr(metadata, 'validity_year', None)
+            employer_vigencia_record = self._upsert_benefit_vigencia_cnpj(
+                law_firm_id=report.law_firm_id,
+                employer_cnpj_raw=metadata_cnpj,
+                vigencia_year_raw=metadata_vigencia,
+            )
+
+        for item in extracted_links:
+            employer_cnpj_raw = item.get('employer_cnpj')
+            competence = str(item.get('competence') or '').strip()
+            if not employer_cnpj_raw or not competence:
+                continue
+
+            employer_cnpj_digits = self._normalize_cnpj(employer_cnpj_raw)
+            if not employer_cnpj_digits:
+                continue
+
+            employment_link = FapContestationEmploymentLink.query.filter_by(
+                law_firm_id=report.law_firm_id,
+                report_id=report.id,
+                employer_cnpj=employer_cnpj_digits,
+                competence=competence,
+            ).first()
+
+            is_new = employment_link is None
+            if is_new:
+                employment_link = FapContestationEmploymentLink(
+                    law_firm_id=report.law_firm_id,
+                    report_id=report.id,
+                    employer_cnpj=employer_cnpj_digits,
+                    competence=competence,
+                )
+                db.session.add(employment_link)
+
+            db.session.flush()
+
+            should_apply_update = self._should_apply_employment_link_update(
+                employment_link_id=employment_link.id,
+                reference_dt=reference_dt,
+                is_new=is_new,
+            )
+
+            if should_apply_update:
+                if employer_company_data is not None:
+                    employment_link.employer_name = employer_company_data.get('razao_social') or employment_link.employer_name
+                elif employer_client is not None:
+                    employment_link.employer_name = employer_client.name or employment_link.employer_name
+
+                if employer_vigencia_record is not None:
+                    employment_link.vigencia_id = employer_vigencia_record.id
+                    employment_link.vigencia_year = employer_vigencia_record.vigencia_year
+                elif employment_link.vigencia_year is None and metadata is not None:
+                    metadata_vigencia = getattr(metadata, 'validity_year', None)
+                    if metadata_vigencia:
+                        employment_link.vigencia_year = str(metadata_vigencia).strip()
+
+                employment_link.quantity = item.get('quantity') if item.get('quantity') is not None else employment_link.quantity
+                employment_link.first_instance_requested_quantity = (
+                    item.get('first_instance_requested_quantity')
+                    if item.get('first_instance_requested_quantity') is not None
+                    else employment_link.first_instance_requested_quantity
+                )
+                employment_link.second_instance_requested_quantity = (
+                    item.get('second_instance_requested_quantity')
+                    if item.get('second_instance_requested_quantity') is not None
+                    else employment_link.second_instance_requested_quantity
+                )
+
+                employment_link.first_instance_status = item.get('first_instance_status')
+                employment_link.first_instance_status_raw = item.get('first_instance_status_raw')
+                employment_link.first_instance_justification = item.get('first_instance_justification')
+                employment_link.first_instance_opinion = item.get('first_instance_opinion')
+                employment_link.second_instance_status = item.get('second_instance_status')
+                employment_link.second_instance_status_raw = item.get('second_instance_status_raw')
+                employment_link.second_instance_justification = item.get('second_instance_justification')
+                employment_link.second_instance_opinion = item.get('second_instance_opinion')
+                employment_link.status = self._map_status(item.get('raw_status'))
+                employment_link.justification = item.get('justification')
+                employment_link.opinion = item.get('opinion')
+
+                decisions_summary = item.get('decisions_summary')
+                source_note = f'Relatório FAP importado (id={report.id}, arquivo={report.original_filename})'
+                notes_parts = [source_note]
+                if decisions_summary:
+                    notes_parts.append(decisions_summary)
+                employment_link.notes = '\n'.join(notes_parts)
+
+                employment_link.updated_at = datetime.utcnow()
+                imported_count += 1
+
+            history = FapContestationEmploymentLinkSourceHistory.query.filter_by(
+                employment_link_id=employment_link.id,
+                report_id=report.id,
+            ).first()
+
+            if history is None:
+                history = FapContestationEmploymentLinkSourceHistory(
+                    law_firm_id=report.law_firm_id,
+                    employment_link_id=employment_link.id,
+                    report_id=report.id,
+                )
+                db.session.add(history)
+
+            history.knowledge_base_id = report.knowledge_base_id
+            history.action = 'added' if is_new else 'updated'
+            history.transmission_datetime = transmission_dt
+            history.publication_datetime = publication_dt
+            history.updated_at = datetime.utcnow()
+
+        return imported_count
+
     def     process_pending_reports(
         self,
         batch_size: int = 30,
@@ -1724,16 +2083,19 @@ class FapContestationJudgmentReportService:
                     extracted_benefits = self.extract_benefits_with_pdfplumber(report.file_path)
                     extracted_cats = self.extract_cats_with_pdfplumber(report.file_path)
                     extracted_payroll_masses = self.extract_payroll_masses_with_pdfplumber(report.file_path)
+                    extracted_employment_links = self.extract_employment_links_with_pdfplumber(report.file_path)
 
                     print(
                         f'Relatório #{report.id}: {len(extracted_benefits)} benefício(s), '
-                        f'{len(extracted_cats)} CAT(s) e '
-                        f'{len(extracted_payroll_masses)} Massa(s) Salarial(s) identificado(s) via pdfplumber.'
+                        f'{len(extracted_cats)} CAT(s), '
+                        f'{len(extracted_payroll_masses)} Massa(s) Salarial(s) e '
+                        f'{len(extracted_employment_links)} Vínculo(s) identificado(s) via pdfplumber.'
                     )
 
                     imported_count = self._upsert_benefits_from_report(report, extracted_benefits, metadata)
                     imported_cats = self._upsert_cats_from_report(report, extracted_cats, metadata)
                     imported_payroll_masses = self._upsert_payroll_masses_from_report(report, extracted_payroll_masses, metadata)
+                    imported_employment_links = self._upsert_employment_links_from_report(report, extracted_employment_links, metadata)
 
                     report.imported_benefits_count = imported_count
                     report.status = 'completed'
@@ -1744,7 +2106,8 @@ class FapContestationJudgmentReportService:
                     processed_reports += 1
                     print(
                         f'Relatório #{report.id} processado com sucesso. '
-                        f'Benefícios: {imported_count}, CATs: {imported_cats}, Massas Salariais: {imported_payroll_masses}'
+                        f'Benefícios: {imported_count}, CATs: {imported_cats}, '
+                        f'Massas Salariais: {imported_payroll_masses}, Vínculos: {imported_employment_links}'
                     )
                 except Exception as exc:
                     db.session.rollback()
