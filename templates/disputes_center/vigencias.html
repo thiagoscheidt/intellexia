@@ -709,6 +709,10 @@ icon='bi bi-diagram-3') %}
                                 <span class="client-kpi-label">CATs</span>
                                 <div class="client-kpi-value">{{ group.total_cats }}</div>
                             </div>
+                            <div class="client-kpi">
+                                <span class="client-kpi-label">Massas Salariais</span>
+                                <div class="client-kpi-value">{{ group.total_payroll_masses }}</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -721,6 +725,7 @@ icon='bi bi-diagram-3') %}
                                 <th style="width: 220px;">CNPJ do empregador</th>
                                 <th style="width: 100px;">Benefícios</th>
                                 <th style="width: 100px;">CATs</th>
+                                <th style="width: 100px;">Massas</th>
                                 <th style="width: 260px;">Status 1ª instância</th>
                                 <th style="width: 260px;">Status 2ª instância</th>
                                 <th style="width: 320px;" class="text-end">Ações</th>
@@ -745,6 +750,12 @@ icon='bi bi-diagram-3') %}
                                     <span class="benefit-count">
                                         <i class="bi bi-exclamation-triangle text-warning"></i>
                                         {{ vigencia.cats_count }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="benefit-count">
+                                        <i class="bi bi-cash-stack text-success"></i>
+                                        {{ vigencia.payroll_masses_count }}
                                     </span>
                                 </td>
                                 <td>
@@ -813,6 +824,10 @@ icon='bi bi-diagram-3') %}
                                         <a href="{{ vigencia.cats_view_url }}"
                                             class="btn btn-outline-warning btn-sm">
                                             <i class="bi bi-exclamation-triangle me-1"></i>Ver CATs
+                                        </a>
+                                        <a href="{{ vigencia.payroll_masses_view_url }}"
+                                            class="btn btn-outline-success btn-sm">
+                                            <i class="bi bi-cash-stack me-1"></i>Ver Massas
                                         </a>
                                         <a href="{{ vigencia.benefits_view_url }}"
                                             class="btn btn-outline-primary btn-sm">

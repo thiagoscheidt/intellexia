@@ -24,6 +24,9 @@ from app.models import (
     FapContestationCatSourceHistory,
     FapContestationCatManualHistory,
     FapContestationJudgmentReport,
+    FapContestationPayrollMass,
+    FapContestationPayrollMassSourceHistory,
+    FapContestationPayrollMassManualHistory,
     KnowledgeBase,
     db,
 )
@@ -99,6 +102,27 @@ CAT_ORDER_COLUMN_MAP = {
     5: FapContestationCat.second_instance_status,
     6: FapContestationCat.accident_date,
     7: FapContestationCat.cat_registration_date,
+}
+
+PAYROLL_MASS_FILTER_FIELD_MAP = {
+    'id': FapContestationPayrollMass.id,
+    'employer_cnpj': FapContestationPayrollMass.employer_cnpj,
+    'competence': FapContestationPayrollMass.competence,
+    'status': FapContestationPayrollMass.status,
+    'first_instance_status': FapContestationPayrollMass.first_instance_status,
+    'first_instance_status_raw': FapContestationPayrollMass.first_instance_status_raw,
+    'second_instance_status': FapContestationPayrollMass.second_instance_status,
+    'second_instance_status_raw': FapContestationPayrollMass.second_instance_status_raw,
+}
+
+PAYROLL_MASS_ORDER_COLUMN_MAP = {
+    0: FapContestationPayrollMass.id,
+    1: FapContestationPayrollMass.employer_cnpj,
+    2: FapContestationPayrollMass.competence,
+    3: FapContestationPayrollMass.total_remuneration,
+    4: FapContestationPayrollMass.first_instance_requested_value,
+    5: FapContestationPayrollMass.first_instance_status,
+    6: FapContestationPayrollMass.second_instance_status,
 }
 
 
@@ -479,6 +503,10 @@ def _base_cats_query(law_firm_id):
     return db.session.query(FapContestationCat).filter(FapContestationCat.law_firm_id == law_firm_id)
 
 
+def _base_payroll_masses_query(law_firm_id):
+    return db.session.query(FapContestationPayrollMass).filter(FapContestationPayrollMass.law_firm_id == law_firm_id)
+
+
 def _parse_cat_custom_filters(raw_filters):
     if not raw_filters:
         return []
@@ -593,6 +621,112 @@ def _serialize_cat_row(cat):
         'report_view_url': url_for('disputes_center.view_fap_contestation_report', report_id=cat.report_id),
         'edit_url': url_for('disputes_center.edit_cat', cat_id=cat.id),
         'timeline_url': url_for('disputes_center.cat_file_timeline', cat_id=cat.id),
+    }
+
+
+def _parse_payroll_mass_custom_filters(raw_filters):
+    if not raw_filters:
+        return []
+    if isinstance(raw_filters, str):
+        try:
+            loaded = json.loads(raw_filters)
+        except json.JSONDecodeError:
+            return []
+    elif isinstance(raw_filters, list):
+        loaded = raw_filters
+    else:
+        return []
+    valid_filters = []
+    for item in loaded:
+        if not isinstance(item, dict):
+            continue
+        field = (item.get('field') or '').strip()
+        operator = (item.get('operator') or 'contains').strip()
+        value = item.get('value')
+        if field not in PAYROLL_MASS_FILTER_FIELD_MAP:
+            continue
+        if operator not in {'contains', 'equals', 'starts_with', 'ends_with', 'empty', 'not_empty'}:
+            continue
+        if operator in {'contains', 'equals', 'starts_with', 'ends_with'} and not str(value or '').strip():
+            continue
+        valid_filters.append({'field': field, 'operator': operator, 'value': value})
+    return valid_filters
+
+
+def _apply_payroll_mass_filters(query, search_value='', custom_filters=None, quick_root='', quick_cnpj='', vigencia_id=None):
+    search_text = (search_value or '').strip().lower()
+    if search_text:
+        like_term = f'%{search_text}%'
+        query = query.filter(
+            or_(
+                func.lower(cast(FapContestationPayrollMass.id, String)).like(like_term),
+                func.lower(cast(FapContestationPayrollMass.employer_cnpj, String)).like(like_term),
+                func.lower(cast(FapContestationPayrollMass.employer_name, String)).like(like_term),
+                func.lower(cast(FapContestationPayrollMass.competence, String)).like(like_term),
+            )
+        )
+
+    if quick_root:
+        root = ''.join(ch for ch in quick_root if ch.isdigit())[:8]
+        if root:
+            sanitized_cnpj = func.replace(
+                func.replace(
+                    func.replace(func.replace(cast(FapContestationPayrollMass.employer_cnpj, String), '.', ''), '/', ''),
+                    '-', '',
+                ),
+                ' ', '',
+            )
+            query = query.filter(sanitized_cnpj.like(f'{root}%'))
+
+    if quick_cnpj:
+        cnpj_digits = ''.join(ch for ch in quick_cnpj if ch.isdigit())[:14]
+        if cnpj_digits:
+            sanitized_cnpj = func.replace(
+                func.replace(
+                    func.replace(func.replace(cast(FapContestationPayrollMass.employer_cnpj, String), '.', ''), '/', ''),
+                    '-', '',
+                ),
+                ' ', '',
+            )
+            query = query.filter(sanitized_cnpj == cnpj_digits)
+
+    if vigencia_id:
+        try:
+            query = query.filter(FapContestationPayrollMass.vigencia_id == int(vigencia_id))
+        except (TypeError, ValueError):
+            pass
+
+    for item in custom_filters or []:
+        column = PAYROLL_MASS_FILTER_FIELD_MAP.get(item['field'])
+        if column is None:
+            continue
+        query = query.filter(_apply_text_operator(column, item['operator'], item.get('value')))
+    return query
+
+
+def _serialize_payroll_mass_row(pm):
+    return {
+        'id': pm.id,
+        'vigencia_year': pm.vigencia_year or '',
+        'employer_cnpj': pm.employer_cnpj or '',
+        'employer_name': pm.employer_name or '',
+        'competence': pm.competence or '',
+        'total_remuneration': _format_decimal(pm.total_remuneration),
+        'first_instance_requested_value': _format_decimal(pm.first_instance_requested_value),
+        'second_instance_requested_value': _format_decimal(pm.second_instance_requested_value),
+        'status': pm.status or '',
+        'first_instance_status': pm.first_instance_status or '',
+        'first_instance_status_raw': pm.first_instance_status_raw or '',
+        'first_instance_justification': pm.first_instance_justification or '',
+        'first_instance_opinion': pm.first_instance_opinion or '',
+        'second_instance_status': pm.second_instance_status or '',
+        'second_instance_status_raw': pm.second_instance_status_raw or '',
+        'second_instance_justification': pm.second_instance_justification or '',
+        'second_instance_opinion': pm.second_instance_opinion or '',
+        'report_id': pm.report_id,
+        'report_view_url': url_for('disputes_center.view_fap_contestation_report', report_id=pm.report_id),
+        'edit_url': url_for('disputes_center.edit_payroll_mass', payroll_mass_id=pm.id),
+        'timeline_url': url_for('disputes_center.payroll_mass_timeline', payroll_mass_id=pm.id),
     }
 
 
@@ -1204,6 +1338,27 @@ def list_fap_vigencias():
         _e['sv'] += _sv
         _e['sp'] += max(_total - _sa - _sr - _sv, 0)
 
+    # Payroll-mass stats grouped by normalized employer_cnpj (14 digits)
+    _pm_agg_rows = (
+        db.session.query(
+            FapContestationPayrollMass.employer_cnpj,
+            func.count(FapContestationPayrollMass.id).label('total'),
+        )
+        .filter(
+            FapContestationPayrollMass.law_firm_id == law_firm_id,
+            FapContestationPayrollMass.employer_cnpj.isnot(None),
+            func.trim(cast(FapContestationPayrollMass.employer_cnpj, String)) != '',
+        )
+        .group_by(FapContestationPayrollMass.employer_cnpj)
+        .all()
+    )
+    pm_stats_by_cnpj: dict[str, int] = {}
+    for _pr in _pm_agg_rows:
+        _digits = _normalize_cnpj_digits(_pr.employer_cnpj)
+        if not _digits:
+            continue
+        pm_stats_by_cnpj[_digits] = pm_stats_by_cnpj.get(_digits, 0) + int(_pr.total or 0)
+
     grouped_clients = {}
     total_benefits_linked = 0
     total_filtered_vigencias = 0
@@ -1269,6 +1424,7 @@ def list_fap_vigencias():
                 'total_vigencias': 0,
                 'total_benefits': 0,
                 'total_cats': 0,
+                'total_payroll_masses': 0,
                 'vigencias': [],
             }
 
@@ -1286,9 +1442,11 @@ def list_fap_vigencias():
         _vdig = _normalize_cnpj_digits(vigencia.employer_cnpj)
         _cs = cat_stats_by_cnpj.get(_vdig, {})
         cats_count = _cs.get('total', 0)
+        pm_count = pm_stats_by_cnpj.get(_vdig, 0)
         grouped_clients[group_key]['total_vigencias'] += 1
         grouped_clients[group_key]['total_benefits'] += benefits_count
         grouped_clients[group_key]['total_cats'] += cats_count
+        grouped_clients[group_key]['total_payroll_masses'] += pm_count
         grouped_clients[group_key]['vigencias'].append(
             {
                 'id': vigencia.id,
@@ -1296,6 +1454,7 @@ def list_fap_vigencias():
                 'employer_cnpj': _format_cnpj(vigencia.employer_cnpj),
                 'benefits_count': benefits_count,
                 'cats_count': cats_count,
+                'payroll_masses_count': pm_count,
                 'first_approved_count': first_approved_count + _cs.get('fa', 0),
                 'first_rejected_count': first_rejected_count + _cs.get('fr', 0),
                 'first_in_review_count': first_in_review_count + _cs.get('fv', 0),
@@ -1310,6 +1469,7 @@ def list_fap_vigencias():
                 'first_instance_eligible_count': first_instance_eligible_count,
                 'benefits_view_url': url_for('disputes_center.list_disputes_center', vigencia_id=vigencia.id),
                 'cats_view_url': url_for('disputes_center.list_cats', vigencia_id=vigencia.id),
+                'payroll_masses_view_url': url_for('disputes_center.list_payroll_masses', vigencia_id=vigencia.id),
             }
         )
         total_benefits_linked += benefits_count
@@ -2341,3 +2501,369 @@ def cat_file_timeline(cat_id):
             'events': events,
         }
     )
+
+
+# ---------------------------------------------------------------------------
+# Payroll Masses (Massa Salarial)
+# ---------------------------------------------------------------------------
+
+@disputes_center_bp.route('/payroll-masses')
+@require_law_firm
+def list_payroll_masses():
+    law_firm_id = get_current_law_firm_id()
+    base_query = _base_payroll_masses_query(law_firm_id)
+    total_count = base_query.with_entities(func.count(FapContestationPayrollMass.id)).scalar() or 0
+
+    first_status_counts = {
+        _normalize_status_key(status): int(count or 0)
+        for status, count in base_query.with_entities(
+            func.lower(func.coalesce(cast(FapContestationPayrollMass.first_instance_status, String), '')),
+            func.count(FapContestationPayrollMass.id),
+        ).group_by(func.lower(func.coalesce(cast(FapContestationPayrollMass.first_instance_status, String), ''))).all()
+    }
+    first_instance_stats = _build_instance_stats(total_count, first_status_counts)
+
+    second_status_counts = {
+        _normalize_status_key(status): int(count or 0)
+        for status, count in base_query.with_entities(
+            func.lower(func.coalesce(cast(FapContestationPayrollMass.second_instance_status, String), '')),
+            func.count(FapContestationPayrollMass.id),
+        ).group_by(func.lower(func.coalesce(cast(FapContestationPayrollMass.second_instance_status, String), ''))).all()
+    }
+    first_deferred_count = int(first_status_counts.get('deferido', 0))
+    second_total_base = max(total_count - first_deferred_count, 0)
+    second_instance_stats = _build_instance_stats(second_total_base, second_status_counts)
+
+    cnpj_entries = (
+        Client.query.with_entities(Client.cnpj, Client.name)
+        .filter_by(law_firm_id=law_firm_id)
+        .all()
+    )
+
+    roots_map = {}
+    for cnpj, name in cnpj_entries:
+        root = _extract_cnpj_root(cnpj)
+        if not root:
+            continue
+        branch = _extract_cnpj_branch(cnpj)
+        clean_name = (name or '').strip()
+        if root not in roots_map:
+            roots_map[root] = {'root': root, 'company_name': '', 'is_main': False}
+        current = roots_map[root]
+        if branch == '0001' and clean_name:
+            current['company_name'] = clean_name
+            current['is_main'] = True
+            continue
+        if not current['is_main'] and clean_name and not current['company_name']:
+            current['company_name'] = clean_name
+
+    cnpj_roots = [
+        {'root': item['root'], 'company_name': item['company_name']}
+        for _, item in sorted(roots_map.items(), key=lambda entry: entry[0])
+    ]
+
+    cnpj_by_root = {}
+    for cnpj, name in cnpj_entries:
+        root = _extract_cnpj_root(cnpj)
+        digits = _normalize_cnpj_digits(cnpj)
+        if not root or len(digits) < 14:
+            continue
+        clean_name = (name or '').strip()
+        formatted = _format_cnpj(cnpj)
+        if root not in cnpj_by_root:
+            cnpj_by_root[root] = []
+        if not any(item['digits'] == digits for item in cnpj_by_root[root]):
+            cnpj_by_root[root].append({'cnpj': formatted, 'digits': digits, 'company_name': clean_name})
+    for root_key in cnpj_by_root:
+        cnpj_by_root[root_key].sort(key=lambda x: x['digits'])
+        for item in cnpj_by_root[root_key]:
+            del item['digits']
+
+    initial_cnpj = _normalize_cnpj_digits(request.args.get('quick_cnpj', ''))
+
+    current_vigencia_filter = None
+    current_vigencia_id_raw = _normalize_text(request.args.get('vigencia_id', ''))
+    if current_vigencia_id_raw:
+        try:
+            vigencia_obj = FapVigenciaCnpj.query.filter_by(
+                id=int(current_vigencia_id_raw),
+                law_firm_id=law_firm_id,
+            ).first()
+        except (TypeError, ValueError):
+            vigencia_obj = None
+
+        if vigencia_obj is not None:
+            company_name = (
+                db.session.query(FapContestationPayrollMass.employer_name)
+                .filter(
+                    FapContestationPayrollMass.law_firm_id == law_firm_id,
+                    FapContestationPayrollMass.vigencia_id == vigencia_obj.id,
+                    FapContestationPayrollMass.employer_name.is_not(None),
+                    func.trim(FapContestationPayrollMass.employer_name) != '',
+                )
+                .order_by(FapContestationPayrollMass.updated_at.desc(), FapContestationPayrollMass.id.desc())
+                .scalar()
+                or ''
+            ).strip()
+            current_vigencia_filter = {
+                'id': vigencia_obj.id,
+                'year': (vigencia_obj.vigencia_year or '').strip(),
+                'company_name': company_name,
+                'company_cnpj': _format_cnpj(vigencia_obj.employer_cnpj),
+            }
+
+    return render_template(
+        'disputes_center/payroll_masses.html',
+        total_count=total_count,
+        first_instance_stats=first_instance_stats,
+        second_instance_stats=second_instance_stats,
+        cnpj_roots=cnpj_roots,
+        cnpj_by_root=cnpj_by_root,
+        initial_cnpj=initial_cnpj,
+        current_vigencia_filter=current_vigencia_filter,
+    )
+
+
+@disputes_center_bp.route('/api/payroll-masses', methods=['GET'])
+@require_law_firm
+def list_payroll_masses_api():
+    law_firm_id = get_current_law_firm_id()
+    payload = _collect_listing_payload(default_length=25)
+    if request.is_json:
+        raw = (request.get_json(silent=True) or {}).get('filters')
+    else:
+        raw = request.args.get('custom_filters', '[]')
+    pm_filters = _parse_payroll_mass_custom_filters(raw)
+
+    total_count = (
+        _base_payroll_masses_query(law_firm_id)
+        .with_entities(func.count(FapContestationPayrollMass.id))
+        .scalar() or 0
+    )
+
+    filtered_query = _apply_payroll_mass_filters(
+        _base_payroll_masses_query(law_firm_id),
+        search_value=payload['search'],
+        custom_filters=pm_filters,
+        quick_root=payload['quick_root'],
+        quick_cnpj=payload['quick_cnpj'],
+        vigencia_id=payload['vigencia_id'],
+    )
+    records_filtered = filtered_query.with_entities(func.count(FapContestationPayrollMass.id)).scalar() or 0
+
+    first_counts = {
+        _normalize_status_key(s): int(c or 0)
+        for s, c in filtered_query.with_entities(
+            func.lower(func.coalesce(cast(FapContestationPayrollMass.first_instance_status, String), '')),
+            func.count(FapContestationPayrollMass.id),
+        ).group_by(func.lower(func.coalesce(cast(FapContestationPayrollMass.first_instance_status, String), ''))).all()
+    }
+    approved_filtered = first_counts.get('deferido', 0)
+    rejected_filtered = first_counts.get('indeferido', 0)
+    in_review_filtered = first_counts.get('analyzing', 0)
+    pending_filtered = max(int(records_filtered) - approved_filtered - rejected_filtered - in_review_filtered, 0)
+
+    order_column = PAYROLL_MASS_ORDER_COLUMN_MAP.get(payload['order_column'], FapContestationPayrollMass.id)
+    if payload['order_dir'] == 'asc':
+        filtered_query = filtered_query.order_by(order_column.asc(), FapContestationPayrollMass.id.asc())
+    else:
+        filtered_query = filtered_query.order_by(order_column.desc(), FapContestationPayrollMass.id.desc())
+
+    paged_results = filtered_query.offset(payload['start']).limit(payload['length']).all()
+    data = [_serialize_payroll_mass_row(pm) for pm in paged_results]
+
+    return jsonify({
+        'draw': payload['draw'],
+        'recordsTotal': total_count,
+        'recordsFiltered': records_filtered,
+        'filtered_stats': {
+            'total': int(records_filtered),
+            'approved': approved_filtered,
+            'rejected': rejected_filtered,
+            'in_review': in_review_filtered,
+            'pending': pending_filtered,
+        },
+        'data': data,
+    })
+
+
+@disputes_center_bp.route('/payroll-masses/<int:payroll_mass_id>/edit', methods=['GET', 'POST'])
+@require_law_firm
+def edit_payroll_mass(payroll_mass_id):
+    law_firm_id = get_current_law_firm_id()
+    pm = FapContestationPayrollMass.query.filter_by(id=payroll_mass_id, law_firm_id=law_firm_id).first_or_404()
+
+    if request.method == 'POST':
+        old_first_instance_status = pm.first_instance_status or ''
+
+        def parse_date(val):
+            if not val:
+                return None
+            try:
+                return datetime.strptime(val.strip(), '%Y-%m-%d').date()
+            except ValueError:
+                return None
+
+        def parse_decimal(val):
+            from decimal import Decimal, InvalidOperation
+            if not val:
+                return None
+            try:
+                return Decimal(val.strip().replace(',', '.'))
+            except (InvalidOperation, ValueError):
+                return None
+
+        pm.employer_cnpj = request.form.get('employer_cnpj') or pm.employer_cnpj
+        pm.employer_name = request.form.get('employer_name') or pm.employer_name
+        pm.competence = request.form.get('competence') or pm.competence
+        pm.total_remuneration = parse_decimal(request.form.get('total_remuneration'))
+        pm.first_instance_requested_value = parse_decimal(request.form.get('first_instance_requested_value'))
+        pm.second_instance_requested_value = parse_decimal(request.form.get('second_instance_requested_value'))
+
+        pm.first_instance_status = request.form.get('first_instance_status') or None
+        pm.first_instance_status_raw = request.form.get('first_instance_status_raw') or None
+        pm.first_instance_justification = request.form.get('first_instance_justification') or None
+        pm.first_instance_opinion = request.form.get('first_instance_opinion') or None
+
+        pm.second_instance_status = request.form.get('second_instance_status') or None
+        pm.second_instance_status_raw = request.form.get('second_instance_status_raw') or None
+        pm.second_instance_justification = request.form.get('second_instance_justification') or None
+        pm.second_instance_opinion = request.form.get('second_instance_opinion') or None
+
+        raw_consolidated = (
+            request.form.get('second_instance_status') or request.form.get('first_instance_status') or ''
+        ).strip().lower()
+        if raw_consolidated == 'deferido':
+            pm.status = 'approved'
+        elif raw_consolidated == 'indeferido':
+            pm.status = 'rejected'
+        elif raw_consolidated == 'analyzing':
+            pm.status = 'analyzing'
+        else:
+            pm.status = 'pending'
+        pm.justification = (
+            request.form.get('second_instance_justification')
+            or request.form.get('first_instance_justification')
+            or None
+        )
+        pm.opinion = (
+            request.form.get('second_instance_opinion')
+            or request.form.get('first_instance_opinion')
+            or None
+        )
+        pm.notes = request.form.get('notes') or None
+        pm.updated_at = datetime.utcnow()
+
+        new_first_instance_status = pm.first_instance_status or ''
+        if new_first_instance_status != old_first_instance_status:
+            db.session.add(FapContestationPayrollMassManualHistory(
+                law_firm_id=law_firm_id,
+                payroll_mass_id=pm.id,
+                performed_by_user_id=session.get('user_id'),
+                action='edit_payroll_mass_first_instance_status',
+                old_first_instance_status=old_first_instance_status or None,
+                new_first_instance_status=new_first_instance_status,
+                notes='Status da 1ª instância alterado na tela de edição.',
+            ))
+
+        try:
+            db.session.commit()
+            flash('Massa Salarial atualizada com sucesso!', 'success')
+            return redirect(url_for('disputes_center.list_payroll_masses'))
+        except Exception as exc:
+            db.session.rollback()
+            flash(f'Erro ao atualizar Massa Salarial: {exc}', 'danger')
+
+    return render_template('disputes_center/payroll_mass_edit.html', pm=pm)
+
+
+@disputes_center_bp.route('/payroll-masses/<int:payroll_mass_id>/timeline', methods=['GET'])
+@require_law_firm
+def payroll_mass_timeline(payroll_mass_id):
+    law_firm_id = get_current_law_firm_id()
+    pm = FapContestationPayrollMass.query.filter_by(id=payroll_mass_id, law_firm_id=law_firm_id).first_or_404()
+
+    history_items = (
+        FapContestationPayrollMassSourceHistory.query.filter_by(
+            law_firm_id=law_firm_id,
+            payroll_mass_id=payroll_mass_id,
+        )
+        .order_by(
+            func.coalesce(
+                FapContestationPayrollMassSourceHistory.publication_datetime,
+                FapContestationPayrollMassSourceHistory.transmission_datetime,
+            ).is_(None).asc(),
+            func.coalesce(
+                FapContestationPayrollMassSourceHistory.publication_datetime,
+                FapContestationPayrollMassSourceHistory.transmission_datetime,
+            ).desc(),
+            FapContestationPayrollMassSourceHistory.created_at.desc(),
+        )
+        .all()
+    )
+
+    manual_history_items = (
+        FapContestationPayrollMassManualHistory.query.filter_by(
+            law_firm_id=law_firm_id,
+            payroll_mass_id=payroll_mass_id,
+        )
+        .order_by(FapContestationPayrollMassManualHistory.created_at.desc(), FapContestationPayrollMassManualHistory.id.desc())
+        .all()
+    )
+
+    events = []
+    for item in history_items:
+        report = item.report
+        events.append({
+            'event_type': 'fap_file_history',
+            'history_id': item.id,
+            'report_id': item.report_id,
+            'knowledge_base_id': item.knowledge_base_id,
+            'action': item.action,
+            'transmission_datetime': _format_datetime(item.transmission_datetime),
+            'publication_datetime': _format_datetime(item.publication_datetime or item.transmission_datetime),
+            'created_at': _format_datetime(item.created_at),
+            'report_uploaded_at': _format_datetime(report.uploaded_at if report else None),
+            'report_filename': (report.original_filename if report else None) or '-',
+            'knowledge_details_url': (
+                url_for('disputes_center.view_fap_contestation_report', report_id=item.report_id)
+                if report else None
+            ),
+            'sort_datetime': item.publication_datetime or item.transmission_datetime or item.created_at,
+        })
+
+    for item in manual_history_items:
+        performer_name = (item.performed_by_user.name if item.performed_by_user else '') or 'Usuário não identificado'
+        events.append({
+            'event_type': 'manual_history',
+            'history_id': item.id,
+            'report_id': None,
+            'knowledge_base_id': None,
+            'action': item.action,
+            'manual_action_label': 'Edição manual',
+            'manual_description': 'Status da 1ª instância alterado na tela de edição.',
+            'performed_by': performer_name,
+            'old_first_instance_status': item.old_first_instance_status,
+            'new_first_instance_status': item.new_first_instance_status,
+            'old_first_instance_status_label': _status_label_pt(item.old_first_instance_status),
+            'new_first_instance_status_label': _status_label_pt(item.new_first_instance_status),
+            'notes': item.notes,
+            'transmission_datetime': None,
+            'publication_datetime': None,
+            'created_at': _format_datetime(item.created_at),
+            'report_uploaded_at': None,
+            'report_filename': None,
+            'knowledge_details_url': None,
+            'sort_datetime': item.created_at,
+        })
+
+    events.sort(key=lambda e: e.get('sort_datetime') or datetime.min, reverse=True)
+    for e in events:
+        e.pop('sort_datetime', None)
+
+    return jsonify({
+        'payroll_mass_id': pm.id,
+        'employer_cnpj': pm.employer_cnpj,
+        'competence': pm.competence,
+        'events': events,
+    })

@@ -110,10 +110,18 @@
             </li>
             <li class="nav-item">
               <a href="{{ url_for('disputes_center.list_cats') }}"
-                class="nav-link {{ 'active' if request.endpoint in ['disputes_center.list_cats', 'disputes_center.list_cats_api'] else '' }}"
+                class="nav-link {{ 'active' if request.endpoint in ['disputes_center.list_cats', 'disputes_center.list_cats_api', 'disputes_center.edit_cat', 'disputes_center.cat_file_timeline'] else '' }}"
                 style="font-size: 0.9em;">
                 <i class="nav-icon bi bi-exclamation-triangle" style="margin-right: 8px; color: #6c757d;"></i>
                 <p style="margin-left: 15px;">CATs</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('disputes_center.list_payroll_masses') }}"
+                class="nav-link {{ 'active' if request.endpoint in ['disputes_center.list_payroll_masses', 'disputes_center.list_payroll_masses_api', 'disputes_center.edit_payroll_mass', 'disputes_center.payroll_mass_timeline'] else '' }}"
+                style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-cash-stack" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Massas Salariais</p>
               </a>
             </li>
             <li class="nav-item">

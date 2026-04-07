@@ -17,6 +17,8 @@ from app.models import (
     FapContestationCat,
     FapContestationCatSourceHistory,
     FapContestationJudgmentReport,
+    FapContestationPayrollMass,
+    FapContestationPayrollMassSourceHistory,
     db,
 )
 from app.services.open_cnpj_service import OpenCNPJService
@@ -228,6 +230,56 @@ class FapContestationJudgmentReportService:
 
         return cats
 
+    def extract_payroll_masses_with_pdfplumber(self, file_path: str | Path) -> list[dict]:
+        """Extrai entradas de Massa Salarial diretamente do PDF com pdfplumber."""
+        path = Path(file_path)
+        if not path.exists():
+            raise FileNotFoundError(f'Arquivo não encontrado: {path}')
+
+        if path.suffix.lower() != '.pdf':
+            raise ValueError('O método com pdfplumber aceita apenas arquivos PDF.')
+
+        try:
+            import pdfplumber
+        except ImportError as exc:
+            raise ImportError('pdfplumber não está instalado no ambiente atual.') from exc
+
+        def normalize_page_text(page_text: str) -> str:
+            text = page_text.replace('\r\n', '\n').replace('\r', '\n')
+            text = re.sub(r'[ \t]+', ' ', text)
+            text = re.sub(r'\n{3,}', '\n\n', text)
+            return text.strip()
+
+        page_texts: list[str] = []
+        with pdfplumber.open(str(path)) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text(
+                    x_tolerance=2,
+                    y_tolerance=3,
+                    layout=False,
+                    use_text_flow=True,
+                )
+                if page_text:
+                    page_texts.append(normalize_page_text(page_text))
+
+        if not page_texts:
+            return []
+
+        text = self.normalize_markdown('\n\n'.join(page_texts))
+        typed_blocks = self._split_all_blocks(text)
+
+        payroll_masses: list[dict] = []
+        for block_type, block in typed_blocks:
+            if not block or not block.strip():
+                continue
+            if block_type != 'payroll_mass':
+                continue
+            parsed = self.parse_payroll_mass_block(block)
+            if parsed:
+                payroll_masses.append(parsed)
+
+        return payroll_masses
+
     def extract_metadata_from_first_page_with_pdfplumber(self, file_path: str | Path):
         """Extrai metadados da primeira página via pdfplumber.
 
@@ -302,22 +354,21 @@ class FapContestationJudgmentReportService:
 
     @staticmethod
     def _split_all_blocks(text: str) -> list[tuple[str, str]]:
-        """Divide o documento em blocos tipados (benefit ou cat).
+        """Divide o documento em blocos tipados (benefit, cat ou payroll_mass).
 
-        Estratégia em dois passos:
+        Estratégia em três passos:
         1. Localiza a seção CAT pelo cabeçalho "Comunicação de Acidente de Trabalho (CAT)"
            e divide seu conteúdo por "Número da CAT" para obter cada CAT individualmente.
-        2. O restante do texto (antes/depois da seção CAT) é dividido por
+        2. Localiza a seção Massa Salarial pelo cabeçalho "Massa Salarial" e divide seu
+           conteúdo por "CNPJ" + "Competência" para obter cada entrada individualmente.
+        3. O restante do texto (antes/depois das seções especiais) é dividido por
            "Número do Benefício" — comportamento original inalterado.
 
-        Retorna lista de tuplas (tipo, conteúdo) onde tipo é 'benefit' ou 'cat'.
+        Retorna lista de tuplas (tipo, conteúdo) onde tipo é 'benefit', 'cat' ou 'payroll_mass'.
         """
         blocks: list[tuple[str, str]] = []
 
         # --- Passo 1: seção CAT ---
-        # Nota: não usar \b no final pois ")" é não-palavra e \b exigiria um
-        # caractere de palavra a seguir (ex.: letra/dígito), mas o header é
-        # normalmente seguido de \n ou espaço, causando falha silenciosa.
         cat_section_match = re.search(
             r'Comunica[cç][aã]o\s+de\s+Acidente\s+de\s+Trabalho\s*\(CAT\)',
             text,
@@ -328,7 +379,6 @@ class FapContestationJudgmentReportService:
             before_cat_section = text[:cat_section_match.start()]
             after_cat_header = text[cat_section_match.end():]
 
-            # A seção CAT vai até o primeiro "Número do Benefício" (início da seção de benefícios)
             first_benefit_match = re.search(
                 r'\bN[uú]mero\s+do\s+Benef[ií]cio\b', after_cat_header, flags=re.IGNORECASE
             )
@@ -339,16 +389,54 @@ class FapContestationJudgmentReportService:
                 cat_section_content = after_cat_header
                 benefit_section_text = before_cat_section
 
-            # Divide a seção CAT em blocos individuais por "Número da CAT"
             cat_parts = re.split(r'\bN[uú]mero\s+da\s+CAT\b', cat_section_content, flags=re.IGNORECASE)
             for cat_content in cat_parts[1:]:
                 if cat_content.strip():
-                    # Reconstrói o prefixo para que parse_cat_block encontre o padrão esperado
                     blocks.append(('cat', 'Número da CAT ' + cat_content))
         else:
             benefit_section_text = text
 
-        # --- Passo 2: blocos de benefícios (lógica original preservada) ---
+        # --- Passo 2: seção Massa Salarial ---
+        payroll_section_match = re.search(
+            r'\bMassa\s+Salarial\b',
+            benefit_section_text,
+            flags=re.IGNORECASE,
+        )
+
+        if payroll_section_match:
+            before_payroll = benefit_section_text[:payroll_section_match.start()]
+            after_payroll_header = benefit_section_text[payroll_section_match.end():]
+
+            # The payroll mass section ends at the next known top-level section header.
+            # Recognised terminators:
+            #   - "Número do Benefício"  (more benefits follow)
+            #   - "Número Médio de Vínculos"  (different contestation type)
+            #   - "Comunicação de Acidente de Trabalho" (CAT section, unlikely but safe)
+            next_section_match = re.search(
+                r'\bN[uú]mero\s+do\s+Benef[ií]cio\b'
+                r'|\bN[uú]mero\s+M[eé]dio\s+de\s+V[ií]nculos\b'
+                r'|\bComunica[cç][aã]o\s+de\s+Acidente\s+de\s+Trabalho\b',
+                after_payroll_header,
+                flags=re.IGNORECASE,
+            )
+            if next_section_match:
+                payroll_section_content = after_payroll_header[:next_section_match.start()]
+                benefit_section_text = before_payroll + after_payroll_header[next_section_match.start():]
+            else:
+                payroll_section_content = after_payroll_header
+                benefit_section_text = before_payroll
+
+            # Split payroll section into individual entries by "CNPJ XX Competência"
+            payroll_parts = re.split(
+                r'(?=CNPJ\s+[\d./\-]+\s+Compet[êe]ncia\b)',
+                payroll_section_content,
+                flags=re.IGNORECASE,
+            )
+            for payroll_content in payroll_parts:
+                if payroll_content.strip() and re.search(r'CNPJ\s+[\d./\-]+', payroll_content, flags=re.IGNORECASE):
+                    blocks.append(('payroll_mass', payroll_content))
+
+        # --- Passo 3: blocos de benefícios (lógica original preservada) ---
         benefit_parts = re.split(r'\bN[uú]mero\s+do\s+Benef[ií]cio\b', benefit_section_text, flags=re.IGNORECASE)
         for benefit_content in benefit_parts[1:]:
             if benefit_content.strip():
@@ -927,6 +1015,113 @@ class FapContestationJudgmentReportService:
 
         return result
 
+    def parse_payroll_mass_block(self, block: str) -> dict | None:
+        """Faz parsing de um bloco de Massa Salarial."""
+        if not block or not block.strip():
+            return None
+
+        result: dict[str, object | None] = {}
+        result['tipo'] = 'MassaSalarial'
+
+        # CNPJ
+        cnpj_match = re.search(r'CNPJ\s+([\d./\-]+)', block, flags=re.IGNORECASE)
+        if not cnpj_match:
+            return None
+        result['employer_cnpj'] = cnpj_match.group(1).strip()
+
+        # Competência (e.g. "11/2023")
+        competence_match = re.search(r'Compet[êe]ncia\s+(\d{1,2}/\d{4})', block, flags=re.IGNORECASE)
+        result['competence'] = competence_match.group(1).strip() if competence_match else None
+
+        if not result['competence']:
+            return None
+
+        # Total Remunerações
+        total_match = re.search(
+            r'Total\s+Remunera[cç][oõ]es\s+R\$\s*([\d.,]+)',
+            block,
+            flags=re.IGNORECASE,
+        )
+        result['total_remuneration'] = self._parse_br_decimal(total_match.group(1)) if total_match else None
+
+        # Valor Massa Salarial Solicitado (1ª instância — captured from first instance section)
+        first_section, second_section = self._extract_instance_sections(block)
+
+        def _extract_requested_value(section_text: str):
+            if not section_text:
+                return None
+            val_match = re.search(
+                r'Valor\s+Massa\s+Salarial\s+Solicitado\s+R\$\s*([\d.,]+)',
+                section_text,
+                flags=re.IGNORECASE,
+            )
+            if val_match:
+                return self._parse_br_decimal(val_match.group(1))
+            return None
+
+        result['first_instance_requested_value'] = _extract_requested_value(first_section)
+        result['second_instance_requested_value'] = _extract_requested_value(second_section)
+
+        # If no instance-level values found, try on the full block
+        if result['first_instance_requested_value'] is None:
+            val_match = re.search(
+                r'Valor\s+Massa\s+Salarial\s+Solicitado\s+R\$\s*([\d.,]+)',
+                block,
+                flags=re.IGNORECASE,
+            )
+            if val_match:
+                result['first_instance_requested_value'] = self._parse_br_decimal(val_match.group(1))
+
+        # Administrative decisions (same structure as benefits and CATs)
+        first_decision = self._extract_instance_decision(first_section or '')
+        second_decision = self._extract_instance_decision(second_section or '')
+
+        result['first_instance_status'] = first_decision.get('status')
+        result['first_instance_status_raw'] = first_decision.get('status_raw')
+        result['first_instance_justification'] = first_decision.get('justification')
+        result['first_instance_opinion'] = first_decision.get('opinion')
+
+        result['second_instance_status'] = second_decision.get('status')
+        result['second_instance_status_raw'] = second_decision.get('status_raw')
+        result['second_instance_justification'] = second_decision.get('justification')
+        result['second_instance_opinion'] = second_decision.get('opinion')
+
+        if result['first_instance_justification'] and not result['first_instance_status']:
+            result['first_instance_status'] = 'analyzing'
+        if result['second_instance_justification'] and not result['second_instance_status']:
+            result['second_instance_status'] = 'analyzing'
+
+        result['raw_status'] = (
+            result['second_instance_status']
+            or result['first_instance_status']
+            or None
+        )
+        result['justification'] = (
+            result['second_instance_justification']
+            or result['first_instance_justification']
+            or self.extract_between(block, 'Justificativa', 'Status')
+        )
+        result['opinion'] = (
+            result['second_instance_opinion']
+            or result['first_instance_opinion']
+            or self.extract_between(block, 'Parecer')
+        )
+        result['decisions_summary'] = self._build_decision_summary(result)
+
+        return result
+
+    @staticmethod
+    def _parse_br_decimal(value: str | None):
+        """Converte valor monetário brasileiro (e.g. '87.182,85') para Decimal."""
+        from decimal import Decimal, InvalidOperation
+        if not value:
+            return None
+        cleaned = value.strip().replace('.', '').replace(',', '.')
+        try:
+            return Decimal(cleaned)
+        except InvalidOperation:
+            return None
+
     @staticmethod
     def _should_apply_cat_update(cat_id: int, reference_dt, is_new_cat: bool) -> bool:
         """Decide se a atualização da CAT deve ser aplicada com base na data de referência do arquivo.
@@ -1306,6 +1501,182 @@ class FapContestationJudgmentReportService:
 
         return imported_count
 
+    @staticmethod
+    def _should_apply_payroll_mass_update(payroll_mass_id: int, reference_dt, is_new: bool) -> bool:
+        """Decide se a atualização de Massa Salarial deve ser aplicada com base na data de referência."""
+        if is_new:
+            return True
+
+        latest_history = (
+            FapContestationPayrollMassSourceHistory.query
+            .filter(FapContestationPayrollMassSourceHistory.payroll_mass_id == payroll_mass_id)
+            .filter(
+                db.func.coalesce(
+                    FapContestationPayrollMassSourceHistory.publication_datetime,
+                    FapContestationPayrollMassSourceHistory.transmission_datetime,
+                ).is_not(None)
+            )
+            .order_by(
+                db.func.coalesce(
+                    FapContestationPayrollMassSourceHistory.publication_datetime,
+                    FapContestationPayrollMassSourceHistory.transmission_datetime,
+                ).desc()
+            )
+            .first()
+        )
+
+        latest_reference = (
+            latest_history.publication_datetime
+            or latest_history.transmission_datetime
+            if latest_history else None
+        )
+        if latest_reference is None:
+            return True
+        if reference_dt is None:
+            return False
+        return reference_dt > latest_reference
+
+    def _upsert_payroll_masses_from_report(
+        self,
+        report: FapContestationJudgmentReport,
+        extracted_masses: list[dict],
+        metadata=None,
+    ) -> int:
+        """Insere ou atualiza entradas de Massa Salarial extraídas do relatório.
+
+        Usa a mesma lógica de `_upsert_cats_from_report`.
+        """
+        imported_count = 0
+
+        employer_client: Client | None = None
+        employer_company_data: dict | None = None
+        employer_cnpj_formatted: str | None = None
+        employer_vigencia_record: FapVigenciaCnpj | None = None
+
+        if metadata is not None and getattr(metadata, 'establishment_cnpj', None):
+            employer_client, employer_company_data, employer_cnpj_formatted = self._upsert_client_from_cnpj(
+                law_firm_id=report.law_firm_id,
+                cnpj_raw=metadata.establishment_cnpj,
+            )
+
+        transmission_dt = self._parse_br_datetime(
+            getattr(metadata, 'transmission_datetime', None) if metadata is not None else None
+        )
+        publication_date = self._parse_br_date(
+            getattr(metadata, 'publication_date', None) if metadata is not None else None
+        )
+        publication_dt = datetime.combine(publication_date, datetime.min.time()) if publication_date else None
+        reference_dt = publication_dt or transmission_dt
+
+        if metadata is not None:
+            metadata_cnpj = employer_cnpj_formatted or getattr(metadata, 'establishment_cnpj', None)
+            metadata_vigencia = getattr(metadata, 'validity_year', None)
+            employer_vigencia_record = self._upsert_benefit_vigencia_cnpj(
+                law_firm_id=report.law_firm_id,
+                employer_cnpj_raw=metadata_cnpj,
+                vigencia_year_raw=metadata_vigencia,
+            )
+
+        for item in extracted_masses:
+            employer_cnpj_raw = item.get('employer_cnpj')
+            competence = str(item.get('competence') or '').strip()
+            if not employer_cnpj_raw or not competence:
+                continue
+
+            employer_cnpj_digits = self._normalize_cnpj(employer_cnpj_raw)
+            if not employer_cnpj_digits:
+                continue
+
+            payroll_mass = FapContestationPayrollMass.query.filter_by(
+                law_firm_id=report.law_firm_id,
+                report_id=report.id,
+                employer_cnpj=employer_cnpj_digits,
+                competence=competence,
+            ).first()
+
+            is_new = payroll_mass is None
+            if is_new:
+                payroll_mass = FapContestationPayrollMass(
+                    law_firm_id=report.law_firm_id,
+                    report_id=report.id,
+                    employer_cnpj=employer_cnpj_digits,
+                    competence=competence,
+                )
+                db.session.add(payroll_mass)
+
+            db.session.flush()
+
+            should_apply_update = self._should_apply_payroll_mass_update(
+                payroll_mass_id=payroll_mass.id,
+                reference_dt=reference_dt,
+                is_new=is_new,
+            )
+
+            if should_apply_update:
+                if employer_company_data is not None:
+                    payroll_mass.employer_name = employer_company_data.get('razao_social') or payroll_mass.employer_name
+                elif employer_client is not None:
+                    payroll_mass.employer_name = employer_client.name or payroll_mass.employer_name
+
+                if employer_vigencia_record is not None:
+                    payroll_mass.vigencia_id = employer_vigencia_record.id
+                    payroll_mass.vigencia_year = employer_vigencia_record.vigencia_year
+                elif payroll_mass.vigencia_year is None and metadata is not None:
+                    metadata_vigencia = getattr(metadata, 'validity_year', None)
+                    if metadata_vigencia:
+                        payroll_mass.vigencia_year = str(metadata_vigencia).strip()
+
+                payroll_mass.total_remuneration = item.get('total_remuneration') or payroll_mass.total_remuneration
+                payroll_mass.first_instance_requested_value = (
+                    item.get('first_instance_requested_value') or payroll_mass.first_instance_requested_value
+                )
+                payroll_mass.second_instance_requested_value = (
+                    item.get('second_instance_requested_value') or payroll_mass.second_instance_requested_value
+                )
+
+                payroll_mass.first_instance_status = item.get('first_instance_status')
+                payroll_mass.first_instance_status_raw = item.get('first_instance_status_raw')
+                payroll_mass.first_instance_justification = item.get('first_instance_justification')
+                payroll_mass.first_instance_opinion = item.get('first_instance_opinion')
+                payroll_mass.second_instance_status = item.get('second_instance_status')
+                payroll_mass.second_instance_status_raw = item.get('second_instance_status_raw')
+                payroll_mass.second_instance_justification = item.get('second_instance_justification')
+                payroll_mass.second_instance_opinion = item.get('second_instance_opinion')
+                payroll_mass.status = self._map_status(item.get('raw_status'))
+                payroll_mass.justification = item.get('justification')
+                payroll_mass.opinion = item.get('opinion')
+
+                decisions_summary = item.get('decisions_summary')
+                source_note = f'Relatório FAP importado (id={report.id}, arquivo={report.original_filename})'
+                notes_parts = [source_note]
+                if decisions_summary:
+                    notes_parts.append(decisions_summary)
+                payroll_mass.notes = '\n'.join(notes_parts)
+
+                payroll_mass.updated_at = datetime.utcnow()
+                imported_count += 1
+
+            history = FapContestationPayrollMassSourceHistory.query.filter_by(
+                payroll_mass_id=payroll_mass.id,
+                report_id=report.id,
+            ).first()
+
+            if history is None:
+                history = FapContestationPayrollMassSourceHistory(
+                    law_firm_id=report.law_firm_id,
+                    payroll_mass_id=payroll_mass.id,
+                    report_id=report.id,
+                )
+                db.session.add(history)
+
+            history.knowledge_base_id = report.knowledge_base_id
+            history.action = 'added' if is_new else 'updated'
+            history.transmission_datetime = transmission_dt
+            history.publication_datetime = publication_dt
+            history.updated_at = datetime.utcnow()
+
+        return imported_count
+
     def     process_pending_reports(
         self,
         batch_size: int = 30,
@@ -1352,14 +1723,17 @@ class FapContestationJudgmentReportService:
                     metadata = self.extract_metadata_from_first_page_with_pdfplumber(report.file_path)
                     extracted_benefits = self.extract_benefits_with_pdfplumber(report.file_path)
                     extracted_cats = self.extract_cats_with_pdfplumber(report.file_path)
+                    extracted_payroll_masses = self.extract_payroll_masses_with_pdfplumber(report.file_path)
 
                     print(
-                        f'Relatório #{report.id}: {len(extracted_benefits)} benefício(s) e '
-                        f'{len(extracted_cats)} CAT(s) identificado(s) via pdfplumber.'
+                        f'Relatório #{report.id}: {len(extracted_benefits)} benefício(s), '
+                        f'{len(extracted_cats)} CAT(s) e '
+                        f'{len(extracted_payroll_masses)} Massa(s) Salarial(s) identificado(s) via pdfplumber.'
                     )
 
                     imported_count = self._upsert_benefits_from_report(report, extracted_benefits, metadata)
                     imported_cats = self._upsert_cats_from_report(report, extracted_cats, metadata)
+                    imported_payroll_masses = self._upsert_payroll_masses_from_report(report, extracted_payroll_masses, metadata)
 
                     report.imported_benefits_count = imported_count
                     report.status = 'completed'
@@ -1370,7 +1744,7 @@ class FapContestationJudgmentReportService:
                     processed_reports += 1
                     print(
                         f'Relatório #{report.id} processado com sucesso. '
-                        f'Benefícios: {imported_count}, CATs: {imported_cats}'
+                        f'Benefícios: {imported_count}, CATs: {imported_cats}, Massas Salariais: {imported_payroll_masses}'
                     )
                 except Exception as exc:
                     db.session.rollback()
