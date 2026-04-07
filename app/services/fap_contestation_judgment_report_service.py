@@ -1330,7 +1330,7 @@ class FapContestationJudgmentReportService:
             if not section_text:
                 return None
             qty_match = re.search(
-                r'N[uú]mero\s+V[ií]nculo\s+Solicitado\s+(\d+)',
+                r'N[uú]mero\s+V[ií]nculo\s+Solicitado\s*(\d+)',
                 section_text,
                 flags=re.IGNORECASE,
             )
@@ -1344,7 +1344,7 @@ class FapContestationJudgmentReportService:
         # If no instance-level values found, try on the full block
         if result['first_instance_requested_quantity'] is None:
             qty_match = re.search(
-                r'N[uú]mero\s+V[ií]nculo\s+Solicitado\s+(\d+)',
+                r'N[uú]mero\s+V[ií]nculo\s+Solicitado\s*(\d+)',
                 block,
                 flags=re.IGNORECASE,
             )
