@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 import re
 
@@ -2456,7 +2456,84 @@ class FapContestationJudgmentReportService:
 
         return imported_count
 
-    def     process_pending_reports(
+    def process_single_report(
+        self,
+        report_id: int,
+        retry_delay_seconds: int = 120,
+    ) -> tuple[bool, int, str | None]:
+        """Processa um único relatório com controle de tentativas e retry automático."""
+        report = FapContestationJudgmentReport.query.get(report_id)
+        if report is None:
+            return False, 0, 'Relatório não encontrado.'
+
+        now = datetime.utcnow()
+        report.status = 'processing'
+        report.last_attempt_at = now
+        report.error_message = None
+        report.processing_attempts = int(report.processing_attempts or 0) + 1
+        report.updated_at = now
+        db.session.commit()
+
+        try:
+            metadata = self.extract_metadata_from_first_page_with_pdfplumber(report.file_path)
+            extracted_benefits = self.extract_benefits_with_pdfplumber(report.file_path)
+            extracted_cats = self.extract_cats_with_pdfplumber(report.file_path)
+            extracted_payroll_masses = self.extract_payroll_masses_with_pdfplumber(report.file_path)
+            extracted_employment_links = self.extract_employment_links_with_pdfplumber(report.file_path)
+            extracted_turnover_rates = self.extract_turnover_rates_with_pdfplumber(report.file_path)
+
+            print(
+                f'Relatório #{report.id}: {len(extracted_benefits)} benefício(s), '
+                f'{len(extracted_cats)} CAT(s), '
+                f'{len(extracted_payroll_masses)} Massa(s) Salarial(s), '
+                f'{len(extracted_employment_links)} Vínculo(s) e '
+                f'{len(extracted_turnover_rates)} Taxa(s) de Rotatividade identificado(s) via pdfplumber.'
+            )
+
+            imported_count = self._upsert_benefits_from_report(report, extracted_benefits, metadata)
+            imported_cats = self._upsert_cats_from_report(report, extracted_cats, metadata)
+            imported_payroll_masses = self._upsert_payroll_masses_from_report(report, extracted_payroll_masses, metadata)
+            imported_employment_links = self._upsert_employment_links_from_report(report, extracted_employment_links, metadata)
+            imported_turnover_rates = self._upsert_turnover_rates_from_report(report, extracted_turnover_rates, metadata)
+
+            report.imported_benefits_count = imported_count
+            report.status = 'completed'
+            report.processed_at = datetime.utcnow()
+            report.next_retry_at = None
+            report.updated_at = datetime.utcnow()
+            db.session.commit()
+
+            print(
+                f'Relatório #{report.id} processado com sucesso. '
+                f'Benefícios: {imported_count}, CATs: {imported_cats}, '
+                f'Massas Salariais: {imported_payroll_masses}, Vínculos: {imported_employment_links}, '
+                f'Taxas de Rotatividade: {imported_turnover_rates}'
+            )
+            return True, imported_count, None
+        except Exception as exc:
+            db.session.rollback()
+
+            report = FapContestationJudgmentReport.query.get(report_id)
+            if report is None:
+                return False, 0, str(exc)
+
+            report.error_message = str(exc)
+            report.updated_at = datetime.utcnow()
+
+            max_retries = int(report.max_retries or 3)
+            current_attempts = int(report.processing_attempts or 0)
+            if current_attempts < max_retries:
+                report.status = 'retry_pending'
+                report.next_retry_at = datetime.utcnow() + timedelta(seconds=max(30, int(retry_delay_seconds)))
+            else:
+                report.status = 'error'
+                report.next_retry_at = None
+
+            db.session.commit()
+            print(f'Erro ao processar relatório #{report_id}: {exc}')
+            return False, 0, str(exc)
+
+    def process_pending_reports(
         self,
         batch_size: int = 30,
         report_id: int | None = None,
@@ -2469,12 +2546,12 @@ class FapContestationJudgmentReportService:
             if report_id:
                 query = query.filter(FapContestationJudgmentReport.id == report_id)
             else:
-                statuses = ['pending']
+                statuses = ['pending', 'queued', 'retry_pending']
                 if include_errors:
                     statuses.append('error')
                 query = query.filter(FapContestationJudgmentReport.status.in_(statuses))
 
-            effective_batch_size = 1 if report_id else max(30, int(batch_size))
+            effective_batch_size = 1 if report_id else max(1, min(int(batch_size), 20))
 
             reports = (
                 query.order_by(FapContestationJudgmentReport.uploaded_at.asc())
@@ -2486,59 +2563,11 @@ class FapContestationJudgmentReportService:
                 print('Nenhum relatório pendente para processamento.')
                 return 0
 
-            # Marca o lote inteiro como processing antes de iniciar o trabalho,
-            # para reduzir chance de corrida com outra execução concorrente.
-            now = datetime.utcnow()
-            for report in reports:
-                report.status = 'processing'
-                report.error_message = None
-                report.updated_at = now
-            db.session.commit()
-
             processed_reports = 0
 
             for report in reports:
-                try:
-                    metadata = self.extract_metadata_from_first_page_with_pdfplumber(report.file_path)
-                    extracted_benefits = self.extract_benefits_with_pdfplumber(report.file_path)
-                    extracted_cats = self.extract_cats_with_pdfplumber(report.file_path)
-                    extracted_payroll_masses = self.extract_payroll_masses_with_pdfplumber(report.file_path)
-                    extracted_employment_links = self.extract_employment_links_with_pdfplumber(report.file_path)
-                    extracted_turnover_rates = self.extract_turnover_rates_with_pdfplumber(report.file_path)
-
-                    print(
-                        f'Relatório #{report.id}: {len(extracted_benefits)} benefício(s), '
-                        f'{len(extracted_cats)} CAT(s), '
-                        f'{len(extracted_payroll_masses)} Massa(s) Salarial(s), '
-                        f'{len(extracted_employment_links)} Vínculo(s) e '
-                        f'{len(extracted_turnover_rates)} Taxa(s) de Rotatividade identificado(s) via pdfplumber.'
-                    )
-
-                    imported_count = self._upsert_benefits_from_report(report, extracted_benefits, metadata)
-                    imported_cats = self._upsert_cats_from_report(report, extracted_cats, metadata)
-                    imported_payroll_masses = self._upsert_payroll_masses_from_report(report, extracted_payroll_masses, metadata)
-                    imported_employment_links = self._upsert_employment_links_from_report(report, extracted_employment_links, metadata)
-                    imported_turnover_rates = self._upsert_turnover_rates_from_report(report, extracted_turnover_rates, metadata)
-
-                    report.imported_benefits_count = imported_count
-                    report.status = 'completed'
-                    report.processed_at = datetime.utcnow()
-                    report.updated_at = datetime.utcnow()
-                    db.session.commit()
-
+                success, _, _ = self.process_single_report(report.id)
+                if success:
                     processed_reports += 1
-                    print(
-                        f'Relatório #{report.id} processado com sucesso. '
-                        f'Benefícios: {imported_count}, CATs: {imported_cats}, '
-                        f'Massas Salariais: {imported_payroll_masses}, Vínculos: {imported_employment_links}, '
-                        f'Taxas de Rotatividade: {imported_turnover_rates}'
-                    )
-                except Exception as exc:
-                    db.session.rollback()
-                    report.status = 'error'
-                    report.error_message = str(exc)
-                    report.updated_at = datetime.utcnow()
-                    db.session.commit()
-                    print(f'Erro ao processar relatório #{report.id}: {exc}')
 
             return processed_reports

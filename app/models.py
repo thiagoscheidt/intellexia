@@ -1263,11 +1263,16 @@ class FapContestationJudgmentReport(db.Model):
     file_size = db.Column(db.Integer)
     file_type = db.Column(db.String(50))
     knowledge_base_id = db.Column(db.Integer, db.ForeignKey('knowledge_base.id'), index=True)
+    import_batch_id = db.Column(db.Integer, db.ForeignKey('fap_contestation_import_batches.id'), index=True)
 
-    status = db.Column(db.String(20), default='pending', index=True)  # pending, processing, completed, error
+    status = db.Column(db.String(20), default='pending', index=True)  # pending, queued, processing, retry_pending, completed, error
     error_message = db.Column(db.Text)
     processed_at = db.Column(db.DateTime)
     imported_benefits_count = db.Column(db.Integer, default=0)
+    processing_attempts = db.Column(db.Integer, default=0)
+    max_retries = db.Column(db.Integer, default=3)
+    last_attempt_at = db.Column(db.DateTime)
+    next_retry_at = db.Column(db.DateTime)
 
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -1275,6 +1280,7 @@ class FapContestationJudgmentReport(db.Model):
     user = db.relationship('User')
     law_firm = db.relationship('LawFirm')
     knowledge_base = db.relationship('KnowledgeBase')
+    import_batch = db.relationship('FapContestationImportBatch', back_populates='reports')
     benefit_file_history = db.relationship(
         'BenefitFapSourceHistory',
         back_populates='report',
@@ -1303,6 +1309,45 @@ class FapContestationJudgmentReport(db.Model):
 
     def __repr__(self):
         return f'<FapContestationJudgmentReport {self.original_filename}>'
+
+
+class FapContestationImportBatch(db.Model):
+    """Lote persistido para processamento assíncrono dos relatórios FAP."""
+    __tablename__ = 'fap_contestation_import_batches'
+
+    id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+
+    status = db.Column(db.String(20), default='pending', nullable=False, index=True)
+    retry_count = db.Column(db.Integer, default=0)
+    max_retries = db.Column(db.Integer, default=3)
+    batch_size = db.Column(db.Integer, default=20)
+
+    total_files = db.Column(db.Integer, default=0)
+    processed_files = db.Column(db.Integer, default=0)
+    success_files = db.Column(db.Integer, default=0)
+    error_files = db.Column(db.Integer, default=0)
+    pending_files = db.Column(db.Integer, default=0)
+
+    started_at = db.Column(db.DateTime)
+    finished_at = db.Column(db.DateTime)
+    next_retry_at = db.Column(db.DateTime)
+    last_error = db.Column(db.Text)
+
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    user = db.relationship('User')
+    law_firm = db.relationship('LawFirm')
+    reports = db.relationship(
+        'FapContestationJudgmentReport',
+        back_populates='import_batch',
+        lazy='select',
+    )
+
+    def __repr__(self):
+        return f'<FapContestationImportBatch {self.id} status={self.status}>'
 
 
 class FapVigenciaCnpj(db.Model):

@@ -35,6 +35,89 @@
     font-size: .85rem;
   }
 
+  .upload-card {
+    position: relative;
+  }
+
+  .upload-form.is-submitting {
+    opacity: .75;
+  }
+
+  .upload-form.is-submitting .dropzone {
+    pointer-events: none;
+  }
+
+  .upload-loading-overlay {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    background: rgba(255, 255, 255, .88);
+    border-radius: 0.5rem;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity .2s ease, visibility .2s ease;
+    z-index: 5;
+  }
+
+  .upload-loading-overlay.is-visible {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  .upload-loading-panel {
+    width: min(100%, 320px);
+    padding: 1rem 1.25rem;
+    border-radius: 14px;
+    background: #ffffff;
+    border: 1px solid #dbe7ff;
+    box-shadow: 0 18px 45px rgba(13, 110, 253, .12);
+    text-align: center;
+  }
+
+  .upload-loading-title {
+    font-weight: 700;
+    color: #0d3b8c;
+  }
+
+  .upload-loading-subtitle {
+    font-size: .9rem;
+    color: #5f6f89;
+  }
+
+  .upload-loading-dots::after {
+    content: '';
+    display: inline-block;
+    width: 1.4em;
+    text-align: left;
+    animation: upload-dots 1.1s steps(4, end) infinite;
+  }
+
+  .upload-loading-bar {
+    height: 8px;
+    overflow: hidden;
+    border-radius: 999px;
+    background: #e8eefc;
+  }
+
+  .upload-loading-bar::before {
+    content: '';
+    display: block;
+    width: 45%;
+    height: 100%;
+    border-radius: inherit;
+    background: linear-gradient(90deg, #0d6efd 0%, #6ea8fe 100%);
+    animation: upload-progress 1.2s ease-in-out infinite;
+  }
+
+  .submit-loading {
+    display: inline-flex;
+    align-items: center;
+    gap: .5rem;
+  }
+
   .status-loading-icon {
     display: inline-block;
     animation: spin 1s linear infinite;
@@ -47,6 +130,38 @@
 
     to {
       transform: rotate(360deg);
+    }
+  }
+
+  @keyframes upload-dots {
+    0% {
+      content: '';
+    }
+
+    25% {
+      content: '.';
+    }
+
+    50% {
+      content: '..';
+    }
+
+    75% {
+      content: '...';
+    }
+
+    100% {
+      content: '';
+    }
+  }
+
+  @keyframes upload-progress {
+    0% {
+      transform: translateX(-110%);
+    }
+
+    100% {
+      transform: translateX(260%);
     }
   }
 </style>
@@ -69,11 +184,23 @@ bi-file-earmark-arrow-up') %}
   <div class="container-fluid">
     <div class="row">
       <div class="col-lg-5">
-        <div class="card card-primary card-outline">
+        <div class="card card-primary card-outline upload-card">
+          <div id="uploadLoadingOverlay" class="upload-loading-overlay" aria-hidden="true">
+            <div class="upload-loading-panel">
+              <div class="upload-loading-title mb-2">
+                <i class="bi bi-cloud-arrow-up me-1"></i>
+                Enviando arquivos<span class="upload-loading-dots"></span>
+              </div>
+              <div class="upload-loading-subtitle mb-3">
+                Aguarde enquanto os documentos sao enviados e organizados em lotes.
+              </div>
+              <div class="upload-loading-bar" aria-hidden="true"></div>
+            </div>
+          </div>
           <div class="card-header">
             <h3 class="card-title"><i class="bi bi-upload"></i> Enviar Documento</h3>
           </div>
-          <form method="POST" enctype="multipart/form-data">
+          <form method="POST" enctype="multipart/form-data" id="fapUploadForm" class="upload-form">
             {{ form.hidden_tag() }}
             <div class="card-body">
               {% with messages = get_flashed_messages(with_categories=true) %}
@@ -108,7 +235,7 @@ bi-file-earmark-arrow-up') %}
               </div>
             </div>
             <div class="card-footer">
-              {{ form.submit(class="btn btn-primary") }}
+              {{ form.submit(class="btn btn-primary", id="fapUploadSubmit") }}
               <a href="{{ url_for('disputes_center.list_disputes_center') }}" class="btn btn-secondary">Voltar</a>
             </div>
           </form>
@@ -147,16 +274,14 @@ bi-file-earmark-arrow-up') %}
                     </td>
                     <td class="text-center">
                       {% if report.status == 'completed' %}
-                      <span class="badge bg-success">Concluido</span>
+                      <span class="badge bg-success">Processado</span>
                       {% elif report.status == 'processing' %}
                       <span class="badge bg-warning text-dark">
                         <i class="bi bi-arrow-repeat status-loading-icon me-1"></i>
-                        Processando
+                        Em processamento
                       </span>
-                      {% elif report.status == 'error' %}
-                      <span class="badge bg-danger">Erro</span>
                       {% else %}
-                      <span class="badge bg-secondary">Pendente</span>
+                      <span class="badge bg-secondary">Nao processado</span>
                       {% endif %}
                     </td>
                     <td class="text-center">{{ report.uploaded_at | datetime_sp(fmt='%d/%m/%Y %H:%M') if report.uploaded_at else '-' }}</td>
@@ -180,7 +305,7 @@ bi-file-earmark-arrow-up') %}
           </div>
           <div class="card-footer">
             <small class="text-muted">
-              Processamento via script: <code>uv run python scripts/process_fap_contestation_judgment_reports.py</code>
+              Processamento via script/cron.
             </small>
           </div>
         </div>
@@ -203,10 +328,15 @@ bi-file-earmark-arrow-up') %}
   }
 
   document.addEventListener('DOMContentLoaded', function () {
+    const uploadForm = document.getElementById('fapUploadForm');
     const input = document.getElementById('fapFilesInput');
     const dropzone = document.getElementById('fapDropzone');
     const list = document.getElementById('selectedFilesList');
-    if (!input || !dropzone || !list) return;
+    const loadingOverlay = document.getElementById('uploadLoadingOverlay');
+    const submitButton = document.getElementById('fapUploadSubmit');
+    if (!uploadForm || !input || !dropzone || !list || !loadingOverlay || !submitButton) return;
+
+    let isSubmitting = false;
 
     const renderSelectedFiles = () => {
       const files = Array.from(input.files || []);
@@ -246,6 +376,22 @@ bi-file-earmark-arrow-up') %}
       input.files = e.dataTransfer.files;
       renderSelectedFiles();
     });
+
+    uploadForm.addEventListener('submit', function (event) {
+      if (isSubmitting) {
+        event.preventDefault();
+        return;
+      }
+
+      isSubmitting = true;
+      uploadForm.classList.add('is-submitting');
+      loadingOverlay.classList.add('is-visible');
+      loadingOverlay.setAttribute('aria-hidden', 'false');
+      submitButton.disabled = true;
+      submitButton.innerHTML = '<span class="submit-loading"><span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span><span>Enviando arquivos...</span></span>';
+      submitButton.setAttribute('aria-busy', 'true');
+    });
+
   });
 </script>
 {% endblock %}
