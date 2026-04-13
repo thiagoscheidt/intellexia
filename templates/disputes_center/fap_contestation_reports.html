@@ -35,6 +35,15 @@
     font-size: .85rem;
   }
 
+  .selected-files-summary {
+    padding: .85rem 1rem;
+    border: 1px dashed #c8d6f3;
+    border-radius: 10px;
+    background: #f8fbff;
+    color: #5f6f89;
+    font-size: .9rem;
+  }
+
   .upload-card {
     position: relative;
   }
@@ -213,6 +222,7 @@ bi-file-earmark-arrow-up') %}
               {% endfor %}
               {% endif %}
               {% endwith %}
+              <div id="uploadAlerts"></div>
 
               <div class="mb-3">
                 {{ form.file.label(class="form-label") }}
@@ -360,17 +370,96 @@ bi-file-earmark-arrow-up') %}
     const input = document.getElementById('fapFilesInput');
     const dropzone = document.getElementById('fapDropzone');
     const list = document.getElementById('selectedFilesList');
+    const alerts = document.getElementById('uploadAlerts');
     const loadingOverlay = document.getElementById('uploadLoadingOverlay');
+    const loadingTitle = loadingOverlay ? loadingOverlay.querySelector('.upload-loading-title') : null;
+    const loadingSubtitle = loadingOverlay ? loadingOverlay.querySelector('.upload-loading-subtitle') : null;
     const submitButton = document.getElementById('fapUploadSubmit');
-    if (!uploadForm || !input || !dropzone || !list || !loadingOverlay || !submitButton) return;
+    if (!uploadForm || !input || !dropzone || !list || !alerts || !loadingOverlay || !submitButton) return;
 
+    const CHUNK_SIZE = 20;
+    const MAX_RENDERED_FILES = 60;
+    const FLASH_STORAGE_KEY = 'fapReportUploadFlash';
     let isSubmitting = false;
+
+    const escapeHtml = (value) => {
+      return String(value || '')
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    };
+
+    const setLoadingState = (title, subtitle) => {
+      if (loadingTitle) {
+        loadingTitle.innerHTML = '<i class="bi bi-cloud-arrow-up me-1"></i>' + escapeHtml(title) + '<span class="upload-loading-dots"></span>';
+      }
+      if (loadingSubtitle) {
+        loadingSubtitle.textContent = subtitle;
+      }
+    };
+
+    const renderAlert = (category, message) => {
+      alerts.innerHTML = '';
+      const element = document.createElement('div');
+      element.className = 'alert alert-' + category + ' alert-dismissible fade show';
+      element.setAttribute('role', 'alert');
+      element.innerHTML = '<i class="bi bi-info-circle"></i> ' + escapeHtml(message) + '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>';
+      alerts.appendChild(element);
+    };
+
+    const restoreStoredAlert = () => {
+      const raw = sessionStorage.getItem(FLASH_STORAGE_KEY);
+      if (!raw) return;
+
+      sessionStorage.removeItem(FLASH_STORAGE_KEY);
+      try {
+        const payload = JSON.parse(raw);
+        if (payload && payload.category && payload.message) {
+          renderAlert(payload.category, payload.message);
+        }
+      } catch (error) {
+        sessionStorage.removeItem(FLASH_STORAGE_KEY);
+      }
+    };
+
+    const persistAlertAndReload = (category, message) => {
+      sessionStorage.setItem(FLASH_STORAGE_KEY, JSON.stringify({ category, message }));
+      window.location.reload();
+    };
+
+    const summarizeFileNames = (files, limit) => {
+      if (!files.length) return '';
+      const visible = files.slice(0, limit);
+      const suffix = files.length > limit ? ' e mais ' + (files.length - limit) + ' arquivo(s)' : '';
+      return visible.join(', ') + suffix;
+    };
+
+    const buildChunks = (files, chunkSize) => {
+      const chunks = [];
+      for (let index = 0; index < files.length; index += chunkSize) {
+        chunks.push(files.slice(index, index + chunkSize));
+      }
+      return chunks;
+    };
+
+    restoreStoredAlert();
 
     const renderSelectedFiles = () => {
       const files = Array.from(input.files || []);
       list.innerHTML = '';
       if (!files.length) {
         list.classList.add('d-none');
+        return;
+      }
+
+      if (files.length > MAX_RENDERED_FILES) {
+        const summary = document.createElement('div');
+        summary.className = 'selected-files-summary';
+        summary.textContent = files.length + ' arquivo(s) selecionado(s). A lista detalhada foi ocultada para economizar memória do navegador.';
+        list.appendChild(summary);
+        list.classList.remove('d-none');
         return;
       }
 
@@ -405,9 +494,16 @@ bi-file-earmark-arrow-up') %}
       renderSelectedFiles();
     });
 
-    uploadForm.addEventListener('submit', function (event) {
+    uploadForm.addEventListener('submit', async function (event) {
+      event.preventDefault();
+
       if (isSubmitting) {
-        event.preventDefault();
+        return;
+      }
+
+      const selectedFiles = Array.from(input.files || []);
+      if (!selectedFiles.length) {
+        renderAlert('warning', 'Selecione ao menos um arquivo para envio.');
         return;
       }
 
@@ -418,6 +514,102 @@ bi-file-earmark-arrow-up') %}
       submitButton.disabled = true;
       submitButton.innerHTML = '<span class="submit-loading"><span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span><span>Enviando arquivos...</span></span>';
       submitButton.setAttribute('aria-busy', 'true');
+
+      const csrfInput = uploadForm.querySelector('input[name="csrf_token"]');
+      const csrfToken = csrfInput ? csrfInput.value : '';
+      const chunks = buildChunks(selectedFiles, CHUNK_SIZE);
+      const aggregate = {
+        uploadedCount: 0,
+        invalidFiles: [],
+        errors: []
+      };
+
+      try {
+        for (let index = 0; index < chunks.length; index += 1) {
+          const chunk = chunks[index];
+          setLoadingState(
+            'Enviando lote ' + (index + 1) + ' de ' + chunks.length,
+            'Processando ' + chunk.length + ' arquivo(s) neste lote.'
+          );
+
+          const formData = new FormData();
+          if (csrfToken) {
+            formData.append('csrf_token', csrfToken);
+          }
+          formData.append('response_format', 'json');
+
+          chunk.forEach(file => {
+            formData.append('file', file, file.name);
+          });
+
+          const response = await fetch(uploadForm.action || window.location.href, {
+            method: 'POST',
+            body: formData,
+            credentials: 'same-origin',
+            headers: {
+              'X-Requested-With': 'XMLHttpRequest'
+            }
+          });
+
+          let payload = null;
+          try {
+            payload = await response.json();
+          } catch (error) {
+            throw new Error('O servidor retornou uma resposta inválida durante o envio do lote ' + (index + 1) + '.');
+          }
+
+          if (!response.ok) {
+            const serverMessage = payload && payload.message ? payload.message : 'Falha ao enviar o lote ' + (index + 1) + '.';
+            const serverErrors = payload && Array.isArray(payload.errors) ? payload.errors.join(' ') : '';
+            throw new Error((serverMessage + ' ' + serverErrors).trim());
+          }
+
+          aggregate.uploadedCount += Number(payload.uploaded_count || 0);
+          if (Array.isArray(payload.invalid_files) && payload.invalid_files.length) {
+            aggregate.invalidFiles = aggregate.invalidFiles.concat(payload.invalid_files);
+          }
+          if (Array.isArray(payload.errors) && payload.errors.length) {
+            aggregate.errors = aggregate.errors.concat(payload.errors);
+          }
+        }
+
+        const messageParts = [];
+        if (aggregate.uploadedCount) {
+          messageParts.push(aggregate.uploadedCount + ' relatório(s) enviado(s) com sucesso.');
+        }
+        if (aggregate.invalidFiles.length) {
+          messageParts.push(
+            aggregate.invalidFiles.length + ' arquivo(s) ignorado(s) por extensão inválida: ' + summarizeFileNames(aggregate.invalidFiles, 8) + '.'
+          );
+        }
+        if (aggregate.errors.length) {
+          messageParts.push(
+            aggregate.errors.length + ' arquivo(s) falharam no envio. Exemplos: ' + summarizeFileNames(aggregate.errors, 3) + '.'
+          );
+        }
+
+        if (!messageParts.length) {
+          messageParts.push('Nenhum arquivo foi enviado.');
+        }
+
+        setLoadingState('Concluído', 'Atualizando o histórico de relatórios.');
+
+        const alertCategory = aggregate.errors.length
+          ? (aggregate.uploadedCount ? 'warning' : 'danger')
+          : (aggregate.invalidFiles.length ? 'warning' : 'success');
+
+        persistAlertAndReload(alertCategory, messageParts.join(' '));
+      } catch (error) {
+        renderAlert('danger', error && error.message ? error.message : 'Erro ao enviar os arquivos.');
+        isSubmitting = false;
+        uploadForm.classList.remove('is-submitting');
+        loadingOverlay.classList.remove('is-visible');
+        loadingOverlay.setAttribute('aria-hidden', 'true');
+        submitButton.disabled = false;
+        submitButton.innerHTML = 'Enviar Relatório';
+        submitButton.removeAttribute('aria-busy');
+        setLoadingState('Enviando arquivos', 'Aguarde enquanto os documentos sao enviados e organizados em lotes.');
+      }
     });
 
   });

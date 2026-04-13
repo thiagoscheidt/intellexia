@@ -2185,78 +2185,129 @@ def fap_contestation_reports():
     page = request.args.get('page', 1, type=int)
     form = FapContestationJudgmentReportForm()
     allowed_extensions = {'pdf', 'doc', 'docx', 'txt', 'xlsx', 'xls'}
+    wants_json = request.method == 'POST' and _normalize_text(request.form.get('response_format')) == 'json'
 
-    if request.method == 'POST' and form.validate_on_submit():
-        files = request.files.getlist('file') if 'file' in request.files else []
-        files = [f for f in files if f and f.filename and f.filename.strip()]
+    if request.method == 'POST':
+        if not form.validate_on_submit():
+            if wants_json:
+                form_errors = []
+                for field_errors in form.errors.values():
+                    form_errors.extend(field_errors)
 
-        if not files:
-            flash('Selecione ao menos um arquivo para envio.', 'warning')
-            return redirect(url_for('disputes_center.fap_contestation_reports'))
+                return jsonify(
+                    {
+                        'ok': False,
+                        'message': 'Falha ao validar o envio.',
+                        'uploaded_count': 0,
+                        'invalid_files': [],
+                        'errors': form_errors,
+                    }
+                ), 400
+        else:
+            files = request.files.getlist('file') if 'file' in request.files else []
+            files = [f for f in files if f and f.filename and f.filename.strip()]
 
-        invalid_files = []
-        success_count = 0
-        upload_dir = os.path.abspath(
-            os.path.join(current_app.root_path, '..', 'uploads', 'fap_contestation_reports')
-        )
-        os.makedirs(upload_dir, exist_ok=True)
+            if not files:
+                if wants_json:
+                    return jsonify(
+                        {
+                            'ok': False,
+                            'message': 'Selecione ao menos um arquivo para envio.',
+                            'uploaded_count': 0,
+                            'invalid_files': [],
+                            'errors': [],
+                        }
+                    ), 400
+                flash('Selecione ao menos um arquivo para envio.', 'warning')
+                return redirect(url_for('disputes_center.fap_contestation_reports'))
 
-        for file in files:
-            filename = secure_filename(file.filename)
-            extension = os.path.splitext(filename)[1].lower().replace('.', '')
-            if extension not in allowed_extensions:
-                invalid_files.append(filename)
-                continue
-
-            try:
-                timestamp = now_sp().strftime('%Y%m%d_%H%M%S_%f')
-                unique_filename = f'{timestamp}_{filename}'
-                file_path = os.path.join(upload_dir, unique_filename)
-                file.save(file_path)
-
-                file_size = os.path.getsize(file_path)
-                file_type = extension.upper()
-
-                report = FapContestationJudgmentReport(
-                    user_id=current_user_id,
-                    law_firm_id=law_firm_id,
-                    original_filename=filename,
-                    file_path=file_path,
-                    file_size=file_size,
-                    file_type=file_type,
-                    status='pending',
-                )
-
-                db.session.add(report)
-                db.session.flush()
-                knowledge_file = _ensure_fap_report_in_knowledge_base(
-                    law_firm_id=law_firm_id,
-                    user_id=session.get('user_id'),
-                    filename=filename,
-                    file_path=file_path,
-                    file_size=file_size,
-                    file_type=file_type,
-                )
-                report.knowledge_base_id = knowledge_file.id
-                db.session.commit()
-                success_count += 1
-            except Exception as e:
-                db.session.rollback()
-                flash(f'Erro ao enviar {filename}: {str(e)}', 'danger')
-
-        if success_count:
-            flash(
-                f'{success_count} relatório(s) enviado(s) com sucesso.',
-                'success',
+            invalid_files = []
+            success_count = 0
+            upload_errors = []
+            upload_dir = os.path.abspath(
+                os.path.join(current_app.root_path, '..', 'uploads', 'fap_contestation_reports')
             )
+            os.makedirs(upload_dir, exist_ok=True)
 
-        if invalid_files:
-            flash(
+            for file in files:
+                filename = secure_filename(file.filename)
+                extension = os.path.splitext(filename)[1].lower().replace('.', '')
+                if extension not in allowed_extensions:
+                    invalid_files.append(filename)
+                    continue
+
+                try:
+                    timestamp = now_sp().strftime('%Y%m%d_%H%M%S_%f')
+                    unique_filename = f'{timestamp}_{filename}'
+                    file_path = os.path.join(upload_dir, unique_filename)
+                    file.save(file_path)
+
+                    file_size = os.path.getsize(file_path)
+                    file_type = extension.upper()
+
+                    report = FapContestationJudgmentReport(
+                        user_id=current_user_id,
+                        law_firm_id=law_firm_id,
+                        original_filename=filename,
+                        file_path=file_path,
+                        file_size=file_size,
+                        file_type=file_type,
+                        status='pending',
+                    )
+
+                    db.session.add(report)
+                    db.session.flush()
+                    knowledge_file = _ensure_fap_report_in_knowledge_base(
+                        law_firm_id=law_firm_id,
+                        user_id=session.get('user_id'),
+                        filename=filename,
+                        file_path=file_path,
+                        file_size=file_size,
+                        file_type=file_type,
+                    )
+                    report.knowledge_base_id = knowledge_file.id
+                    db.session.commit()
+                    success_count += 1
+                except Exception as e:
+                    db.session.rollback()
+                    upload_errors.append(f'Erro ao enviar {filename}: {str(e)}')
+                    if wants_json:
+                        current_app.logger.exception('Erro ao enviar relatório FAP %s', filename)
+                    else:
+                        flash(f'Erro ao enviar {filename}: {str(e)}', 'danger')
+
+            if wants_json:
+                messages = []
+                if success_count:
+                    messages.append(f'{success_count} relatório(s) enviado(s) com sucesso.')
+                if invalid_files:
+                    messages.append(f'{len(invalid_files)} arquivo(s) ignorado(s) por extensão inválida.')
+                if upload_errors:
+                    messages.append(f'{len(upload_errors)} arquivo(s) falharam no envio.')
+
+                return jsonify(
+                    {
+                        'ok': success_count > 0 and not upload_errors,
+                        'message': ' '.join(messages) if messages else 'Nenhum arquivo foi enviado.',
+                        'uploaded_count': success_count,
+                        'invalid_files': invalid_files,
+                        'errors': upload_errors,
+                    }
+                )
+
+            if success_count:
+                flash(
+                    f'{success_count} relatório(s) enviado(s) com sucesso.',
+                    'success',
+                )
+
+            if invalid_files:
+                flash(
                 'Arquivos ignorados por extensão inválida: ' + ', '.join(invalid_files),
                 'warning'
-            )
+                )
 
-        return redirect(url_for('disputes_center.fap_contestation_reports'))
+            return redirect(url_for('disputes_center.fap_contestation_reports'))
 
     reports = (
         FapContestationJudgmentReport.query.filter_by(law_firm_id=law_firm_id)
