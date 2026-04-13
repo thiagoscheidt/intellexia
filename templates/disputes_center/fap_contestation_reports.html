@@ -248,7 +248,7 @@ bi-file-earmark-arrow-up') %}
             <h3 class="card-title"><i class="bi bi-list-task"></i> Historico de Relatorios</h3>
           </div>
           <div class="card-body">
-            {% if reports %}
+            {% if reports.items %}
             <div class="table-responsive">
               <table class="table table-bordered table-striped table-hover">
                 <thead class="table-light">
@@ -261,7 +261,7 @@ bi-file-earmark-arrow-up') %}
                   </tr>
                 </thead>
                 <tbody>
-                  {% for report in reports %}
+                  {% for report in reports.items %}
                   <tr>
                     <td><strong>{{ report.id }}</strong></td>
                     <td>
@@ -296,6 +296,34 @@ bi-file-earmark-arrow-up') %}
                   {% endfor %}
                 </tbody>
               </table>
+            </div>
+            <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">
+              <small class="text-muted">
+                Exibindo {{ reports.items|length }} de {{ reports.total }} relatorio(s). Pagina {{ reports.page }} de {{ reports.pages or 1 }}.
+              </small>
+              {% if reports.pages > 1 %}
+              <nav aria-label="Paginacao do historico de relatorios">
+                <ul class="pagination pagination-sm mb-0">
+                  <li class="page-item {{ 'disabled' if not reports.has_prev else '' }}">
+                    <a class="page-link" href="{{ url_for('disputes_center.fap_contestation_reports', page=reports.prev_num) if reports.has_prev else '#' }}">Anterior</a>
+                  </li>
+                  {% for page_num in reports.iter_pages(left_edge=1, left_current=1, right_current=2, right_edge=1) %}
+                  {% if page_num %}
+                  <li class="page-item {{ 'active' if page_num == reports.page else '' }}">
+                    <a class="page-link" href="{{ url_for('disputes_center.fap_contestation_reports', page=page_num) }}">{{ page_num }}</a>
+                  </li>
+                  {% else %}
+                  <li class="page-item disabled">
+                    <span class="page-link">...</span>
+                  </li>
+                  {% endif %}
+                  {% endfor %}
+                  <li class="page-item {{ 'disabled' if not reports.has_next else '' }}">
+                    <a class="page-link" href="{{ url_for('disputes_center.fap_contestation_reports', page=reports.next_num) if reports.has_next else '#' }}">Proxima</a>
+                  </li>
+                </ul>
+              </nav>
+              {% endif %}
             </div>
             {% else %}
             <div class="alert alert-info mb-0">

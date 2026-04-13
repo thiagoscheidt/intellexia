@@ -2342,6 +2342,7 @@ def fap_contestation_reports():
 
     law_firm_id = get_current_law_firm_id()
     current_user_id = session.get('user_id')
+    page = request.args.get('page', 1, type=int)
     form = FapContestationJudgmentReportForm()
     allowed_extensions = {'pdf', 'doc', 'docx', 'txt', 'xlsx', 'xls'}
 
@@ -2466,7 +2467,7 @@ def fap_contestation_reports():
             FapContestationJudgmentReport.uploaded_at.desc(),
             FapContestationJudgmentReport.id.desc(),
         )
-        .all()
+        .paginate(page=page, per_page=50, error_out=False)
     )
 
     return render_template(
