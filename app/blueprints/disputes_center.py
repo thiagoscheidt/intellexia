@@ -33,7 +33,6 @@ from app.models import (
     FapContestationTurnoverRate,
     FapContestationTurnoverRateSourceHistory,
     FapContestationTurnoverRateManualHistory,
-    FapContestationImportBatch,
     KnowledgeBase,
     db,
 )
@@ -227,165 +226,6 @@ def _status_label_pt(value):
 
     translated = STATUS_LABEL_PT_MAP.get(normalized.lower())
     return translated or normalized
-
-
-def _chunked(values, size):
-    chunk_size = max(1, int(size or 1))
-    for idx in range(0, len(values), chunk_size):
-        yield values[idx:idx + chunk_size]
-
-
-def _parse_csv_ints(raw_value):
-    values = []
-    for part in str(raw_value or '').split(','):
-        part = part.strip()
-        if not part:
-            continue
-        try:
-            values.append(int(part))
-        except (TypeError, ValueError):
-            continue
-    return values
-
-
-def _build_fap_import_status_payload(law_firm_id, recent_limit=12):
-    status_rows = (
-        db.session.query(FapContestationJudgmentReport.status, func.count(FapContestationJudgmentReport.id))
-        .filter(FapContestationJudgmentReport.law_firm_id == law_firm_id)
-        .group_by(FapContestationJudgmentReport.status)
-        .all()
-    )
-    status_counts = {str(status or '').strip().lower(): int(count or 0) for status, count in status_rows}
-
-    total_reports = int(sum(status_counts.values()))
-    pending_reports = int(
-        status_counts.get('pending', 0)
-        + status_counts.get('queued', 0)
-        + status_counts.get('retry_pending', 0)
-    )
-    processing_reports = int(status_counts.get('processing', 0))
-    completed_reports = int(status_counts.get('completed', 0))
-    error_reports = int(status_counts.get('error', 0))
-
-    active_batch_statuses = ['pending', 'processing', 'waiting_retry']
-    active_batches = (
-        db.session.query(func.count(FapContestationImportBatch.id))
-        .filter(
-            FapContestationImportBatch.law_firm_id == law_firm_id,
-            FapContestationImportBatch.status.in_(active_batch_statuses),
-        )
-        .scalar()
-        or 0
-    )
-
-    recent_batches = (
-        FapContestationImportBatch.query
-        .filter(FapContestationImportBatch.law_firm_id == law_firm_id)
-        .order_by(FapContestationImportBatch.created_at.desc(), FapContestationImportBatch.id.desc())
-        .limit(max(1, int(recent_limit)))
-        .all()
-    )
-
-    serialized_batches = []
-    for batch in recent_batches:
-        total_files = int(batch.total_files or 0)
-        processed_files = int(batch.processed_files or 0)
-        progress_percent = int((processed_files / total_files) * 100) if total_files else 0
-        serialized_batches.append(
-            {
-                'id': batch.id,
-                'status': batch.status or 'pending',
-                'retry_count': int(batch.retry_count or 0),
-                'total_files': total_files,
-                'processed_files': processed_files,
-                'success_files': int(batch.success_files or 0),
-                'error_files': int(batch.error_files or 0),
-                'pending_files': int(batch.pending_files or 0),
-                'progress_percent': progress_percent,
-                'started_at': batch.started_at,
-                'finished_at': batch.finished_at,
-                'next_retry_at': batch.next_retry_at,
-                'last_error': batch.last_error,
-                'can_retry': (batch.status in {'completed_with_errors', 'error'}) and int(batch.error_files or 0) > 0,
-            }
-        )
-
-    return {
-        'summary': {
-            'total_reports': total_reports,
-            'pending_reports': pending_reports,
-            'processing_reports': processing_reports,
-            'completed_reports': completed_reports,
-            'error_reports': error_reports,
-            'active_batches': int(active_batches),
-        },
-        'batches': serialized_batches,
-    }
-
-
-def _build_fap_batch_progress_payload(law_firm_id, batch_ids):
-    if not batch_ids:
-        return {
-            'status': 'completed',
-            'is_done': True,
-            'progress_percent': 100,
-            'total_files': 0,
-            'processed_files': 0,
-            'success_files': 0,
-            'error_files': 0,
-            'pending_files': 0,
-        }
-
-    batches = (
-        FapContestationImportBatch.query
-        .filter(
-            FapContestationImportBatch.law_firm_id == law_firm_id,
-            FapContestationImportBatch.id.in_(batch_ids),
-        )
-        .all()
-    )
-
-    reports = (
-        FapContestationJudgmentReport.query
-        .filter(
-            FapContestationJudgmentReport.law_firm_id == law_firm_id,
-            FapContestationJudgmentReport.import_batch_id.in_(batch_ids),
-        )
-        .all()
-    )
-
-    total_files = len(reports)
-    success_files = sum(1 for report in reports if (report.status or '').strip().lower() == 'completed')
-    error_files = sum(1 for report in reports if (report.status or '').strip().lower() == 'error')
-    processing_files = sum(1 for report in reports if (report.status or '').strip().lower() == 'processing')
-    pending_files = sum(
-        1
-        for report in reports
-        if (report.status or '').strip().lower() in {'pending', 'queued', 'retry_pending'}
-    )
-    processed_files = success_files + error_files
-
-    has_active_batches = any((batch.status or '').strip().lower() in {'pending', 'processing', 'waiting_retry'} for batch in batches)
-    is_done = pending_files == 0 and processing_files == 0 and (not has_active_batches or processed_files == total_files)
-    progress_percent = int((processed_files / total_files) * 100) if total_files else 100
-
-    status = 'processing'
-    if is_done and error_files > 0:
-        status = 'completed_with_errors'
-    elif is_done:
-        status = 'completed'
-
-    return {
-        'status': status,
-        'is_done': bool(is_done),
-        'progress_percent': max(0, min(100, progress_percent)),
-        'total_files': int(total_files),
-        'processed_files': int(processed_files),
-        'success_files': int(success_files),
-        'error_files': int(error_files),
-        'pending_files': int(pending_files),
-        'processing_files': int(processing_files),
-    }
 
 
 def _extract_cnpj_root(cnpj):
@@ -2356,7 +2196,6 @@ def fap_contestation_reports():
 
         invalid_files = []
         success_count = 0
-        created_report_ids = []
         upload_dir = os.path.abspath(
             os.path.join(current_app.root_path, '..', 'uploads', 'fap_contestation_reports')
         )
@@ -2402,54 +2241,14 @@ def fap_contestation_reports():
                 )
                 report.knowledge_base_id = knowledge_file.id
                 db.session.commit()
-                created_report_ids.append(report.id)
                 success_count += 1
             except Exception as e:
                 db.session.rollback()
                 flash(f'Erro ao enviar {filename}: {str(e)}', 'danger')
 
-        created_batch_ids = []
-        if created_report_ids:
-            try:
-                for report_id_chunk in _chunked(created_report_ids, 20):
-                    batch = FapContestationImportBatch(
-                        user_id=current_user_id,
-                        law_firm_id=law_firm_id,
-                        status='pending',
-                        batch_size=min(20, len(report_id_chunk)),
-                        total_files=len(report_id_chunk),
-                        pending_files=len(report_id_chunk),
-                        max_retries=3,
-                    )
-                    db.session.add(batch)
-                    db.session.flush()
-                    created_batch_ids.append(batch.id)
-
-                    (
-                        FapContestationJudgmentReport.query
-                        .filter(
-                            FapContestationJudgmentReport.law_firm_id == law_firm_id,
-                            FapContestationJudgmentReport.id.in_(report_id_chunk),
-                        )
-                        .update(
-                            {
-                                FapContestationJudgmentReport.import_batch_id: batch.id,
-                                FapContestationJudgmentReport.status: 'pending',
-                                FapContestationJudgmentReport.error_message: None,
-                                FapContestationJudgmentReport.next_retry_at: None,
-                                FapContestationJudgmentReport.updated_at: datetime.utcnow(),
-                            },
-                            synchronize_session=False,
-                        )
-                    )
-                db.session.commit()
-            except Exception as exc:
-                db.session.rollback()
-                flash(f'Erro ao enfileirar lotes para processamento: {str(exc)}', 'danger')
-
         if success_count:
             flash(
-                f'{success_count} relatório(s) enviado(s) com sucesso em {len(created_batch_ids)} lote(s) (máx. 20 por lote). O processamento será feito via script/cron.',
+                f'{success_count} relatório(s) enviado(s) com sucesso.',
                 'success',
             )
 
@@ -2475,64 +2274,6 @@ def fap_contestation_reports():
         form=form,
         reports=reports,
     )
-
-
-@disputes_center_bp.route('/fap-contestation-reports/import-status', methods=['GET'])
-@require_law_firm
-def fap_contestation_reports_import_status():
-    law_firm_id = get_current_law_firm_id()
-
-    batch_ids = _parse_csv_ints(request.args.get('batch_ids', ''))
-    if batch_ids:
-        payload = _build_fap_batch_progress_payload(law_firm_id, batch_ids)
-        payload['batch_ids'] = batch_ids
-        return jsonify(payload)
-
-    payload = _build_fap_import_status_payload(law_firm_id)
-    return jsonify(payload)
-
-
-@disputes_center_bp.route('/fap-contestation-reports/batches/<int:batch_id>/retry', methods=['POST'])
-@require_law_firm
-def retry_fap_contestation_report_batch(batch_id):
-    law_firm_id = get_current_law_firm_id()
-    batch = FapContestationImportBatch.query.filter_by(id=batch_id, law_firm_id=law_firm_id).first_or_404()
-
-    failed_reports = (
-        FapContestationJudgmentReport.query
-        .filter(
-            FapContestationJudgmentReport.law_firm_id == law_firm_id,
-            FapContestationJudgmentReport.import_batch_id == batch.id,
-            FapContestationJudgmentReport.status == 'error',
-        )
-        .all()
-    )
-
-    if not failed_reports:
-        flash('Este lote não possui arquivos com erro para reprocessar.', 'warning')
-        return redirect(url_for('disputes_center.fap_contestation_reports'))
-
-    now = datetime.utcnow()
-    for report in failed_reports:
-        report.status = 'retry_pending'
-        report.error_message = None
-        report.next_retry_at = now
-        report.updated_at = now
-
-    batch.status = 'pending'
-    batch.next_retry_at = now
-    batch.finished_at = None
-    batch.last_error = None
-    batch.updated_at = now
-
-    try:
-        db.session.commit()
-        flash(f'Reprocessamento marcado para {len(failed_reports)} arquivo(s) do lote #{batch.id}. Execute o script/cron para processar.', 'success')
-    except Exception as exc:
-        db.session.rollback()
-        flash(f'Falha ao reagendar lote #{batch.id}: {str(exc)}', 'danger')
-
-    return redirect(url_for('disputes_center.fap_contestation_reports'))
 
 
 @disputes_center_bp.route('/fap-contestation-reports/<int:report_id>/delete', methods=['POST'])
