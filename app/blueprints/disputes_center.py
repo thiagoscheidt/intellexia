@@ -2225,8 +2225,6 @@ def fap_contestation_reports():
                     file_size=file_size,
                     file_type=file_type,
                     status='pending',
-                    max_retries=3,
-                    processing_attempts=0,
                 )
 
                 db.session.add(report)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 import re
 
@@ -2459,19 +2459,15 @@ class FapContestationJudgmentReportService:
     def process_single_report(
         self,
         report_id: int,
-        retry_delay_seconds: int = 120,
     ) -> tuple[bool, int, str | None]:
-        """Processa um único relatório com controle de tentativas e retry automático."""
+        """Processa um único relatório."""
         report = FapContestationJudgmentReport.query.get(report_id)
         if report is None:
             return False, 0, 'Relatório não encontrado.'
 
-        now = datetime.utcnow()
         report.status = 'processing'
-        report.last_attempt_at = now
         report.error_message = None
-        report.processing_attempts = int(report.processing_attempts or 0) + 1
-        report.updated_at = now
+        report.updated_at = datetime.utcnow()
         db.session.commit()
 
         try:
@@ -2499,7 +2495,6 @@ class FapContestationJudgmentReportService:
             report.imported_benefits_count = imported_count
             report.status = 'completed'
             report.processed_at = datetime.utcnow()
-            report.next_retry_at = None
             report.updated_at = datetime.utcnow()
             db.session.commit()
 
@@ -2518,16 +2513,8 @@ class FapContestationJudgmentReportService:
                 return False, 0, str(exc)
 
             report.error_message = str(exc)
+            report.status = 'error'
             report.updated_at = datetime.utcnow()
-
-            max_retries = int(report.max_retries or 3)
-            current_attempts = int(report.processing_attempts or 0)
-            if current_attempts < max_retries:
-                report.status = 'retry_pending'
-                report.next_retry_at = datetime.utcnow() + timedelta(seconds=max(30, int(retry_delay_seconds)))
-            else:
-                report.status = 'error'
-                report.next_retry_at = None
 
             db.session.commit()
             print(f'Erro ao processar relatório #{report_id}: {exc}')
@@ -2546,7 +2533,7 @@ class FapContestationJudgmentReportService:
             if report_id:
                 query = query.filter(FapContestationJudgmentReport.id == report_id)
             else:
-                statuses = ['pending', 'queued', 'retry_pending']
+                statuses = ['pending', 'queued']
                 if include_errors:
                     statuses.append('error')
                 query = query.filter(FapContestationJudgmentReport.status.in_(statuses))

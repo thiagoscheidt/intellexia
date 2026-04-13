@@ -1264,14 +1264,10 @@ class FapContestationJudgmentReport(db.Model):
     file_type = db.Column(db.String(50))
     knowledge_base_id = db.Column(db.Integer, db.ForeignKey('knowledge_base.id'), index=True)
 
-    status = db.Column(db.String(20), default='pending', index=True)  # pending, queued, processing, retry_pending, completed, error
+    status = db.Column(db.String(20), default='pending', index=True)  # pending, queued, processing, completed, error
     error_message = db.Column(db.Text)
     processed_at = db.Column(db.DateTime)
     imported_benefits_count = db.Column(db.Integer, default=0)
-    processing_attempts = db.Column(db.Integer, default=0)
-    max_retries = db.Column(db.Integer, default=3)
-    last_attempt_at = db.Column(db.DateTime)
-    next_retry_at = db.Column(db.DateTime)
 
     uploaded_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
     updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
