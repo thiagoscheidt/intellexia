@@ -24,10 +24,10 @@ class FapContestationJudgmentMetadata(BaseModel):
 class FapContestationJudgmentMetadataAgent:
     """Agente para extrair metadados da primeira página do relatório de julgamento FAP."""
 
-    def __init__(self, model_name: str = 'gpt-5-mini'):
+    def __init__(self, model_name: str = 'gpt-5.4-nano'):
         self.model_name = model_name
 
-    def _extract_first_page_section(self, markdown_content: str, max_chars: int = 12000) -> str:
+    def _extract_first_page_section(self, markdown_content: str, max_chars: int = 700) -> str:
         """Tenta isolar a primeira página do markdown usando marcadores comuns."""
         text = (markdown_content or '').strip()
         if not text:
@@ -121,6 +121,8 @@ class FapContestationJudgmentMetadataAgent:
             },
             {'role': 'user', 'content': prompt},
         ])
+
+        print(metadata)
 
         # Fallback determinístico para cenários em que o LLM não retorna o campo.
         if not getattr(metadata, 'transmission_datetime', None):

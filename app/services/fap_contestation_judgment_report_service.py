@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from pathlib import Path
 import re
+from time import perf_counter
 
 from rich import print
 from sqlalchemy.dialects.mysql import insert as mysql_insert
@@ -2516,12 +2517,32 @@ class FapContestationJudgmentReportService:
         db.session.commit()
 
         try:
+            extraction_started_at = perf_counter()
+
+            step_started_at = perf_counter()
             metadata = self.extract_metadata_from_first_page_with_pdfplumber(report.file_path)
+            print(f'Relatório #{report.id} | etapa metadata levou {perf_counter() - step_started_at:.2f}s')
+
+            step_started_at = perf_counter()
             extracted_benefits = self.extract_benefits_with_pdfplumber(report.file_path)
+            print(f'Relatório #{report.id} | etapa benefits levou {perf_counter() - step_started_at:.2f}s')
+
+            step_started_at = perf_counter()
             extracted_cats = self.extract_cats_with_pdfplumber(report.file_path)
+            print(f'Relatório #{report.id} | etapa cats levou {perf_counter() - step_started_at:.2f}s')
+
+            step_started_at = perf_counter()
             extracted_payroll_masses = self.extract_payroll_masses_with_pdfplumber(report.file_path)
+            print(f'Relatório #{report.id} | etapa payroll_masses levou {perf_counter() - step_started_at:.2f}s')
+
+            step_started_at = perf_counter()
             extracted_employment_links = self.extract_employment_links_with_pdfplumber(report.file_path)
+            print(f'Relatório #{report.id} | etapa employment_links levou {perf_counter() - step_started_at:.2f}s')
+
+            step_started_at = perf_counter()
             extracted_turnover_rates = self.extract_turnover_rates_with_pdfplumber(report.file_path)
+            print(f'Relatório #{report.id} | etapa turnover_rates levou {perf_counter() - step_started_at:.2f}s')
+            print(f'Relatório #{report.id} | extração completa levou {perf_counter() - extraction_started_at:.2f}s')
 
             print(
                 f'Relatório #{report.id}: {len(extracted_benefits)} benefício(s), '
@@ -2567,7 +2588,7 @@ class FapContestationJudgmentReportService:
 
     def process_pending_reports(
         self,
-        batch_size: int = 30,
+        batch_size: int = 100,
         report_id: int | None = None,
         include_errors: bool = False,
     ) -> int:
