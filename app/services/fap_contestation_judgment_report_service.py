@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 
 from rich import print
+from sqlalchemy.dialects.mysql import insert as mysql_insert
 
 from app.agents.fap.fap_contestation_judgment_metadata_agent import (
     FapContestationJudgmentMetadataAgent,
@@ -112,20 +113,26 @@ class FapContestationJudgmentReportService:
         if not vigencia_year:
             return None
 
-        record = FapVigenciaCnpj.query.filter_by(
+        vigencia_now = datetime.utcnow()
+        vigencia_insert_stmt = mysql_insert(FapVigenciaCnpj.__table__).values(
             law_firm_id=law_firm_id,
             employer_cnpj=employer_cnpj_digits,
             vigencia_year=vigencia_year,
-        ).first()
-        if record is not None:
-            return record
-
-        record = FapVigenciaCnpj(
-            law_firm_id=law_firm_id,
-            employer_cnpj=employer_cnpj_digits,
-            vigencia_year=vigencia_year,
+            created_at=vigencia_now,
+            updated_at=vigencia_now,
         )
-        db.session.add(record)
+        vigencia_upsert_stmt = vigencia_insert_stmt.on_duplicate_key_update(
+            updated_at=vigencia_insert_stmt.inserted.updated_at,
+        )
+        db.session.execute(vigencia_upsert_stmt)
+
+        with db.session.no_autoflush:
+            record = FapVigenciaCnpj.query.filter_by(
+                law_firm_id=law_firm_id,
+                employer_cnpj=employer_cnpj_digits,
+                vigencia_year=vigencia_year,
+            ).first()
+
         return record
 
     def extract_benefits_with_pdfplumber(self, file_path: str | Path) -> list[dict]:
@@ -936,8 +943,8 @@ class FapContestationJudgmentReportService:
         )
 
         # O status pode aparecer isolado após os rótulos "Status"/"Parecer" por quebra de layout.
-        status_match = re.search(r'\b(Deferido|Indeferido)\b', section, flags=re.IGNORECASE)
-        status = status_match.group(1).capitalize() if status_match else None
+        status_match = re.search(r'\b(Indeferido|Deferido|Analyzing)\b', section, flags=re.IGNORECASE)
+        fallback_status = status_match.group(1).capitalize() if status_match else None
 
         # Texto completo do status: captura tudo após o rótulo "Status" até o próximo marcador.
         status_raw = self._extract_text_between_keywords(
@@ -948,6 +955,20 @@ class FapContestationJudgmentReportService:
         if not status_raw and status_match:
             # Fallback: usa o valor normalizado como raw quando não há rótulo "Status" explícito.
             status_raw = status_match.group(1).capitalize()
+
+        # Prioriza o valor de status_raw para reduzir falso positivo vindo de justificativa/parecer.
+        status = None
+        if status_raw:
+            status_from_raw_match = re.search(
+                r'\b(Indeferido|Deferido|Analyzing)\b',
+                status_raw,
+                flags=re.IGNORECASE,
+            )
+            if status_from_raw_match:
+                status = status_from_raw_match.group(1).capitalize()
+
+        if not status:
+            status = fallback_status
 
         # Parecer: adiciona delimitadores para evitar capturar "Sumário dos Elementos Contestados" do próximo bloco
         opinion = self._extract_text_between_keywords(
@@ -1097,9 +1118,11 @@ class FapContestationJudgmentReportService:
         if result['second_instance_justification'] and not result['second_instance_status']:
             result['second_instance_status'] = 'analyzing'
 
-        # status consolidado prioriza 2a instância, depois 1a.
+        # status consolidado prioriza os textos "raw" por instância e usa status simples como fallback.
         result['raw_status'] = (
-            result['second_instance_status']
+            result['second_instance_status_raw']
+            or result['second_instance_status']
+            or result['first_instance_status_raw']
             or result['first_instance_status']
             or None
         )
@@ -1185,7 +1208,9 @@ class FapContestationJudgmentReportService:
             result['second_instance_status'] = 'analyzing'
 
         result['raw_status'] = (
-            result['second_instance_status']
+            result['second_instance_status_raw']
+            or result['second_instance_status']
+            or result['first_instance_status_raw']
             or result['first_instance_status']
             or None
         )
@@ -1280,7 +1305,9 @@ class FapContestationJudgmentReportService:
             result['second_instance_status'] = 'analyzing'
 
         result['raw_status'] = (
-            result['second_instance_status']
+            result['second_instance_status_raw']
+            or result['second_instance_status']
+            or result['first_instance_status_raw']
             or result['first_instance_status']
             or None
         )
@@ -1371,7 +1398,9 @@ class FapContestationJudgmentReportService:
             result['second_instance_status'] = 'analyzing'
 
         result['raw_status'] = (
-            result['second_instance_status']
+            result['second_instance_status_raw']
+            or result['second_instance_status']
+            or result['first_instance_status_raw']
             or result['first_instance_status']
             or None
         )
@@ -1490,7 +1519,9 @@ class FapContestationJudgmentReportService:
             result['second_instance_status'] = 'analyzing'
 
         result['raw_status'] = (
-            result['second_instance_status']
+            result['second_instance_status_raw']
+            or result['second_instance_status']
+            or result['first_instance_status_raw']
             or result['first_instance_status']
             or None
         )
@@ -1566,13 +1597,17 @@ class FapContestationJudgmentReportService:
         if not raw_status:
             return 'pending'
 
-        normalized = raw_status.strip().lower()
-        if normalized == 'deferido':
-            return 'approved'
-        if normalized == 'indeferido':
+        normalized = re.sub(r'\s+', ' ', str(raw_status)).strip().lower()
+
+        # Ordem importa: "indeferido" contém o token "deferido".
+        if 'indefer' in normalized:
             return 'rejected'
-        if normalized == 'analyzing':
+        if 'defer' in normalized:
+            return 'approved'
+        if 'analy' in normalized or 'analis' in normalized:
             return 'analyzing'
+        if 'pend' in normalized:
+            return 'pending'
         return 'pending'
 
     @staticmethod
@@ -1735,24 +1770,26 @@ class FapContestationJudgmentReportService:
 
                 benefit.updated_at = datetime.utcnow()
 
-            history = BenefitFapSourceHistory.query.filter_by(
+            history_now = datetime.utcnow()
+            history_insert_stmt = mysql_insert(BenefitFapSourceHistory.__table__).values(
+                law_firm_id=report.law_firm_id,
                 benefit_id=benefit.id,
                 report_id=report.id,
-            ).first()
-
-            if history is None:
-                history = BenefitFapSourceHistory(
-                    law_firm_id=report.law_firm_id,
-                    benefit_id=benefit.id,
-                    report_id=report.id,
-                )
-                db.session.add(history)
-
-            history.knowledge_base_id = report.knowledge_base_id
-            history.action = 'added' if is_new_benefit else 'updated'
-            history.transmission_datetime = transmission_dt
-            history.publication_datetime = publication_dt
-            history.updated_at = datetime.utcnow()
+                knowledge_base_id=report.knowledge_base_id,
+                action='added' if is_new_benefit else 'updated',
+                transmission_datetime=transmission_dt,
+                publication_datetime=publication_dt,
+                created_at=history_now,
+                updated_at=history_now,
+            )
+            history_upsert_stmt = history_insert_stmt.on_duplicate_key_update(
+                knowledge_base_id=history_insert_stmt.inserted.knowledge_base_id,
+                action=history_insert_stmt.inserted.action,
+                transmission_datetime=history_insert_stmt.inserted.transmission_datetime,
+                publication_datetime=history_insert_stmt.inserted.publication_datetime,
+                updated_at=history_insert_stmt.inserted.updated_at,
+            )
+            db.session.execute(history_upsert_stmt)
 
             if should_apply_update:
                 imported_count += 1
@@ -1877,25 +1914,27 @@ class FapContestationJudgmentReportService:
                 cat.updated_at = datetime.utcnow()
                 imported_count += 1
 
-            # Registra histórico de arquivo para rastreabilidade
-            history = FapContestationCatSourceHistory.query.filter_by(
+            # Registra histórico de arquivo para rastreabilidade (idempotente em concorrência)
+            cat_history_now = datetime.utcnow()
+            cat_history_insert_stmt = mysql_insert(FapContestationCatSourceHistory.__table__).values(
+                law_firm_id=report.law_firm_id,
                 cat_id=cat.id,
                 report_id=report.id,
-            ).first()
-
-            if history is None:
-                history = FapContestationCatSourceHistory(
-                    law_firm_id=report.law_firm_id,
-                    cat_id=cat.id,
-                    report_id=report.id,
-                )
-                db.session.add(history)
-
-            history.knowledge_base_id = report.knowledge_base_id
-            history.action = 'added' if is_new_cat else 'updated'
-            history.transmission_datetime = transmission_dt
-            history.publication_datetime = publication_dt
-            history.updated_at = datetime.utcnow()
+                knowledge_base_id=report.knowledge_base_id,
+                action='added' if is_new_cat else 'updated',
+                transmission_datetime=transmission_dt,
+                publication_datetime=publication_dt,
+                created_at=cat_history_now,
+                updated_at=cat_history_now,
+            )
+            cat_history_upsert_stmt = cat_history_insert_stmt.on_duplicate_key_update(
+                knowledge_base_id=cat_history_insert_stmt.inserted.knowledge_base_id,
+                action=cat_history_insert_stmt.inserted.action,
+                transmission_datetime=cat_history_insert_stmt.inserted.transmission_datetime,
+                publication_datetime=cat_history_insert_stmt.inserted.publication_datetime,
+                updated_at=cat_history_insert_stmt.inserted.updated_at,
+            )
+            db.session.execute(cat_history_upsert_stmt)
 
         return imported_count
 
@@ -2054,24 +2093,26 @@ class FapContestationJudgmentReportService:
                 payroll_mass.updated_at = datetime.utcnow()
                 imported_count += 1
 
-            history = FapContestationPayrollMassSourceHistory.query.filter_by(
+            payroll_history_now = datetime.utcnow()
+            payroll_history_insert_stmt = mysql_insert(FapContestationPayrollMassSourceHistory.__table__).values(
+                law_firm_id=report.law_firm_id,
                 payroll_mass_id=payroll_mass.id,
                 report_id=report.id,
-            ).first()
-
-            if history is None:
-                history = FapContestationPayrollMassSourceHistory(
-                    law_firm_id=report.law_firm_id,
-                    payroll_mass_id=payroll_mass.id,
-                    report_id=report.id,
-                )
-                db.session.add(history)
-
-            history.knowledge_base_id = report.knowledge_base_id
-            history.action = 'added' if is_new else 'updated'
-            history.transmission_datetime = transmission_dt
-            history.publication_datetime = publication_dt
-            history.updated_at = datetime.utcnow()
+                knowledge_base_id=report.knowledge_base_id,
+                action='added' if is_new else 'updated',
+                transmission_datetime=transmission_dt,
+                publication_datetime=publication_dt,
+                created_at=payroll_history_now,
+                updated_at=payroll_history_now,
+            )
+            payroll_history_upsert_stmt = payroll_history_insert_stmt.on_duplicate_key_update(
+                knowledge_base_id=payroll_history_insert_stmt.inserted.knowledge_base_id,
+                action=payroll_history_insert_stmt.inserted.action,
+                transmission_datetime=payroll_history_insert_stmt.inserted.transmission_datetime,
+                publication_datetime=payroll_history_insert_stmt.inserted.publication_datetime,
+                updated_at=payroll_history_insert_stmt.inserted.updated_at,
+            )
+            db.session.execute(payroll_history_upsert_stmt)
 
         return imported_count
 
@@ -2269,24 +2310,26 @@ class FapContestationJudgmentReportService:
                 employment_link.updated_at = datetime.utcnow()
                 imported_count += 1
 
-            history = FapContestationEmploymentLinkSourceHistory.query.filter_by(
+            employment_history_now = datetime.utcnow()
+            employment_history_insert_stmt = mysql_insert(FapContestationEmploymentLinkSourceHistory.__table__).values(
+                law_firm_id=report.law_firm_id,
                 employment_link_id=employment_link.id,
                 report_id=report.id,
-            ).first()
-
-            if history is None:
-                history = FapContestationEmploymentLinkSourceHistory(
-                    law_firm_id=report.law_firm_id,
-                    employment_link_id=employment_link.id,
-                    report_id=report.id,
-                )
-                db.session.add(history)
-
-            history.knowledge_base_id = report.knowledge_base_id
-            history.action = 'added' if is_new else 'updated'
-            history.transmission_datetime = transmission_dt
-            history.publication_datetime = publication_dt
-            history.updated_at = datetime.utcnow()
+                knowledge_base_id=report.knowledge_base_id,
+                action='added' if is_new else 'updated',
+                transmission_datetime=transmission_dt,
+                publication_datetime=publication_dt,
+                created_at=employment_history_now,
+                updated_at=employment_history_now,
+            )
+            employment_history_upsert_stmt = employment_history_insert_stmt.on_duplicate_key_update(
+                knowledge_base_id=employment_history_insert_stmt.inserted.knowledge_base_id,
+                action=employment_history_insert_stmt.inserted.action,
+                transmission_datetime=employment_history_insert_stmt.inserted.transmission_datetime,
+                publication_datetime=employment_history_insert_stmt.inserted.publication_datetime,
+                updated_at=employment_history_insert_stmt.inserted.updated_at,
+            )
+            db.session.execute(employment_history_upsert_stmt)
 
         return imported_count
 
@@ -2435,24 +2478,26 @@ class FapContestationJudgmentReportService:
                 turnover_rate.updated_at = datetime.utcnow()
                 imported_count += 1
 
-            history = FapContestationTurnoverRateSourceHistory.query.filter_by(
+            turnover_history_now = datetime.utcnow()
+            turnover_history_insert_stmt = mysql_insert(FapContestationTurnoverRateSourceHistory.__table__).values(
+                law_firm_id=report.law_firm_id,
                 turnover_rate_id=turnover_rate.id,
                 report_id=report.id,
-            ).first()
-
-            if history is None:
-                history = FapContestationTurnoverRateSourceHistory(
-                    law_firm_id=report.law_firm_id,
-                    turnover_rate_id=turnover_rate.id,
-                    report_id=report.id,
-                )
-                db.session.add(history)
-
-            history.knowledge_base_id = report.knowledge_base_id
-            history.action = 'added' if is_new else 'updated'
-            history.transmission_datetime = transmission_dt
-            history.publication_datetime = publication_dt
-            history.updated_at = datetime.utcnow()
+                knowledge_base_id=report.knowledge_base_id,
+                action='added' if is_new else 'updated',
+                transmission_datetime=transmission_dt,
+                publication_datetime=publication_dt,
+                created_at=turnover_history_now,
+                updated_at=turnover_history_now,
+            )
+            turnover_history_upsert_stmt = turnover_history_insert_stmt.on_duplicate_key_update(
+                knowledge_base_id=turnover_history_insert_stmt.inserted.knowledge_base_id,
+                action=turnover_history_insert_stmt.inserted.action,
+                transmission_datetime=turnover_history_insert_stmt.inserted.transmission_datetime,
+                publication_datetime=turnover_history_insert_stmt.inserted.publication_datetime,
+                updated_at=turnover_history_insert_stmt.inserted.updated_at,
+            )
+            db.session.execute(turnover_history_upsert_stmt)
 
         return imported_count
 
