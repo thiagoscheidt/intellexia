@@ -243,6 +243,31 @@ def _resolve_general_status_key(first_instance_status, second_instance_status, f
     return normalized_fallback or 'pending'
 
 
+def _resolve_general_status_excel_value(
+    first_instance_status,
+    second_instance_status,
+    first_instance_status_raw=None,
+    second_instance_status_raw=None,
+    fallback_status=None,
+):
+    general_status_key = _resolve_general_status_key(
+        first_instance_status,
+        second_instance_status,
+        fallback_status,
+    )
+
+    if general_status_key != 'deferido':
+        return _status_label_pt(general_status_key)
+
+    if _normalize_status_key(second_instance_status) == 'deferido':
+        return _normalize_text(second_instance_status_raw) or _status_label_pt(general_status_key)
+
+    if _normalize_status_key(first_instance_status) == 'deferido':
+        return _normalize_text(first_instance_status_raw) or _status_label_pt(general_status_key)
+
+    return _status_label_pt(general_status_key)
+
+
 def _extract_cnpj_root(cnpj):
     digits = _normalize_cnpj_digits(cnpj)
     return digits[:8] if len(digits) >= 8 else ''
@@ -2135,9 +2160,11 @@ def export_disputes_center_excel():
     sheet.append(headers)
 
     for benefit, client_name in benefits:
-        general_status_key = _resolve_general_status_key(
+        general_status_value = _resolve_general_status_excel_value(
             benefit.first_instance_status,
             benefit.second_instance_status,
+            benefit.first_instance_status_raw,
+            benefit.second_instance_status_raw,
             benefit.status,
         )
 
@@ -2153,7 +2180,7 @@ def export_disputes_center_excel():
                 _format_date(benefit.insured_date_of_birth),
                 benefit.employer_cnpj or '',
                 benefit.employer_name or '',
-                _status_label_pt(general_status_key),
+                general_status_value,
                 _status_label_pt(benefit.first_instance_status),
                 benefit.first_instance_status_raw or '',
                 benefit.first_instance_justification or '',
