@@ -24,19 +24,18 @@ class FapContestationJudgmentMetadata(BaseModel):
 class FapContestationJudgmentMetadataAgent:
     """Agente para extrair metadados da primeira página do relatório de julgamento FAP."""
 
-    IMPORTANT_FIELDS = (
+    REQUIRED_FIELDS_FOR_REGEX_ONLY = (
         'establishment_cnpj',
         'validity_year',
         'process_status',
         'protocol_number',
         'transmission_datetime',
-        'publication_date',
     )
 
     def __init__(self, model_name: str = 'gpt-5.4-nano'):
         self.model_name = model_name
 
-    def _extract_first_page_section(self, markdown_content: str, max_chars: int = 700) -> str:
+    def _extract_first_page_section(self, markdown_content: str, max_chars: int = 2500) -> str:
         """Tenta isolar a primeira página do markdown usando marcadores comuns."""
         text = (markdown_content or '').strip()
         if not text:
@@ -93,6 +92,8 @@ class FapContestationJudgmentMetadataAgent:
         patterns = [
             r'Data\s+Publica[cç][aã]o\s*:?\s*(\d{2}/\d{2}/\d{4})',
             r'Data\s+de\s+Publica[cç][aã]o\s*:?\s*(\d{2}/\d{2}/\d{4})',
+            r'Data\s+Publica[cç][aã]o\s+(?:no\s+)?D\.?O\.?U\.?\s*:?\s*(\d{2}/\d{2}/\d{4})',
+            r'Data\s+Publica[cç][aã]o\s*:?\s*(?:\n\s*)?(\d{2}/\d{2}/\d{4})',
         ]
 
         for pattern in patterns:
@@ -126,6 +127,8 @@ class FapContestationJudgmentMetadataAgent:
         patterns = [
             r'Vig[êe]ncia\s*: ?\s*(\d{4})',
             r'Vig[êe]ncia\s+do\s+FAP\s*: ?\s*(\d{4})',
+            r'Vig[êe]ncia\s*:?\s*(?:\n\s*)?(\d{4})',
+            r'Ano\s+de\s+Vig[êe]ncia\s*:?\s*(\d{4})',
         ]
         for pattern in patterns:
             match = re.search(pattern, first_page_content, flags=re.IGNORECASE)
@@ -141,6 +144,8 @@ class FapContestationJudgmentMetadataAgent:
         patterns = [
             r'N[uú]mero\s+do\s+Protocolo\s*: ?\s*([A-Za-z0-9./\-]+)',
             r'Protocolo\s*(?:n[oº°.]?|n[uú]mero)?\s*: ?\s*([A-Za-z0-9./\-]+)',
+            r'N[uú]mero\s+do\s+Protocolo\s*:?\s*(?:\n\s*)?([A-Za-z0-9./\-]+)',
+            r'Protocolo\s*:?\s*(?:\n\s*)?([A-Za-z0-9./\-]+)',
         ]
         for pattern in patterns:
             match = re.search(pattern, first_page_content, flags=re.IGNORECASE)
@@ -156,6 +161,9 @@ class FapContestationJudgmentMetadataAgent:
         patterns = [
             r'Situa[cç][aã]o\s+do\s+Processo\s*: ?\s*([^\n]+)',
             r'Situa[cç][aã]o\s*: ?\s*([^\n]+)',
+            r'Status\s+do\s+Processo\s*:?\s*([^\n]+)',
+            r'Situa[cç][aã]o\s+do\s+Processo\s*:?\s*(?:\n\s*)?([^\n]+)',
+            r'Status\s+do\s+Processo\s*:?\s*(?:\n\s*)?([^\n]+)',
         ]
         for pattern in patterns:
             match = re.search(pattern, first_page_content, flags=re.IGNORECASE)
@@ -179,8 +187,17 @@ class FapContestationJudgmentMetadataAgent:
             if match:
                 value = re.sub(r'\s+', ' ', match.group(1)).strip(' :-\n\t')
                 if value:
-                    return value
+                    return FapContestationJudgmentMetadataAgent._normalize_administrative_instance(value)
         return None
+
+    @staticmethod
+    def _normalize_administrative_instance(value: str | None) -> str | None:
+        if not value:
+            return None
+
+        normalized = re.sub(r'\s+', ' ', str(value)).strip(' :-\n\t')
+        normalized = re.sub(r'^Administrativo\s+', '', normalized, flags=re.IGNORECASE)
+        return normalized or None
 
     @staticmethod
     def _extract_analyst_name(first_page_content: str) -> str | None:
@@ -237,8 +254,8 @@ class FapContestationJudgmentMetadataAgent:
             publication_date=self._extract_publication_date(first_page_content),
         )
 
-    def _has_all_important_fields(self, metadata: FapContestationJudgmentMetadata) -> bool:
-        for field_name in self.IMPORTANT_FIELDS:
+    def _has_all_required_fields_for_regex_only(self, metadata: FapContestationJudgmentMetadata) -> bool:
+        for field_name in self.REQUIRED_FIELDS_FOR_REGEX_ONLY:
             if not getattr(metadata, field_name, None):
                 return False
         return True
@@ -253,13 +270,13 @@ class FapContestationJudgmentMetadataAgent:
         # Caminho rápido: regex cobre a maioria dos campos em milissegundos.
         regex_metadata = self._extract_metadata_with_regex(first_page_content)
         print(f'[MetadataAgent] regex_data={regex_metadata.model_dump()}')
-        if self._has_all_important_fields(regex_metadata):
-            print('[MetadataAgent] origem=regex-only | todos os campos importantes foram preenchidos por regex')
+        if self._has_all_required_fields_for_regex_only(regex_metadata):
+            print('[MetadataAgent] origem=regex-only | todos os campos principais foram preenchidos por regex')
             return regex_metadata
 
         missing_fields = [
             field_name
-            for field_name in self.IMPORTANT_FIELDS
+            for field_name in self.REQUIRED_FIELDS_FOR_REGEX_ONLY
             if not getattr(regex_metadata, field_name, None)
         ]
         print(
@@ -300,7 +317,9 @@ class FapContestationJudgmentMetadataAgent:
             validity_year=regex_metadata.validity_year or llm_metadata.validity_year,
             process_status=regex_metadata.process_status or llm_metadata.process_status,
             protocol_number=regex_metadata.protocol_number or llm_metadata.protocol_number,
-            administrative_instance=regex_metadata.administrative_instance or llm_metadata.administrative_instance,
+            administrative_instance=self._normalize_administrative_instance(
+                regex_metadata.administrative_instance or llm_metadata.administrative_instance
+            ),
             analyst_name=regex_metadata.analyst_name or llm_metadata.analyst_name,
             analysis_finished_at=regex_metadata.analysis_finished_at or llm_metadata.analysis_finished_at,
             version_number=regex_metadata.version_number or llm_metadata.version_number,
