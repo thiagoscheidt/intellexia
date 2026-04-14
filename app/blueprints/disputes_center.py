@@ -228,6 +228,21 @@ def _status_label_pt(value):
     return translated or normalized
 
 
+def _resolve_general_status_key(first_instance_status, second_instance_status, fallback_status=None):
+    valid_instance_statuses = {'deferido', 'indeferido', 'analyzing'}
+
+    normalized_second = _normalize_status_key(second_instance_status)
+    if normalized_second in valid_instance_statuses:
+        return normalized_second
+
+    normalized_first = _normalize_status_key(first_instance_status)
+    if normalized_first in valid_instance_statuses:
+        return normalized_first
+
+    normalized_fallback = _normalize_status_key(fallback_status)
+    return normalized_fallback or 'pending'
+
+
 def _extract_cnpj_root(cnpj):
     digits = _normalize_cnpj_digits(cnpj)
     return digits[:8] if len(digits) >= 8 else ''
@@ -2120,6 +2135,12 @@ def export_disputes_center_excel():
     sheet.append(headers)
 
     for benefit, client_name in benefits:
+        general_status_key = _resolve_general_status_key(
+            benefit.first_instance_status,
+            benefit.second_instance_status,
+            benefit.status,
+        )
+
         sheet.append(
             [
                 benefit.id,
@@ -2132,12 +2153,12 @@ def export_disputes_center_excel():
                 _format_date(benefit.insured_date_of_birth),
                 benefit.employer_cnpj or '',
                 benefit.employer_name or '',
-                benefit.status or '',
-                benefit.first_instance_status or '',
+                _status_label_pt(general_status_key),
+                _status_label_pt(benefit.first_instance_status),
                 benefit.first_instance_status_raw or '',
                 benefit.first_instance_justification or '',
                 benefit.first_instance_opinion or '',
-                benefit.second_instance_status or '',
+                _status_label_pt(benefit.second_instance_status),
                 benefit.second_instance_status_raw or '',
                 benefit.second_instance_justification or '',
                 benefit.second_instance_opinion or '',
