@@ -2366,10 +2366,32 @@ def fap_contestation_reports():
         .paginate(page=page, per_page=50, error_out=False)
     )
 
+    processed_count = (
+        FapContestationJudgmentReport.query.filter_by(
+            law_firm_id=law_firm_id,
+            status='completed',
+        ).count()
+    )
+    processing_count = (
+        FapContestationJudgmentReport.query.filter_by(
+            law_firm_id=law_firm_id,
+            status='processing',
+        ).count()
+    )
+    not_processed_count = (
+        FapContestationJudgmentReport.query.filter(
+            FapContestationJudgmentReport.law_firm_id == law_firm_id,
+            FapContestationJudgmentReport.status.in_(['pending', 'queued', 'error']),
+        ).count()
+    )
+
     return render_template(
         'disputes_center/fap_contestation_reports.html',
         form=form,
         reports=reports,
+        processed_count=processed_count,
+        not_processed_count=not_processed_count,
+        processing_count=processing_count,
     )
 
 

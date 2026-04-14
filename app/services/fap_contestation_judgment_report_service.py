@@ -2604,7 +2604,7 @@ class FapContestationJudgmentReportService:
                     statuses.append('error')
                 query = query.filter(FapContestationJudgmentReport.status.in_(statuses))
 
-            effective_batch_size = 1 if report_id else max(1, min(int(batch_size), 20))
+            effective_batch_size = 1 if report_id else max(1, int(batch_size))
 
             reports = (
                 query.order_by(FapContestationJudgmentReport.uploaded_at.asc())

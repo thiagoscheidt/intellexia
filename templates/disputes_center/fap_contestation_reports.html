@@ -2,7 +2,7 @@
 
 {% from "partials/page_hero.html" import page_hero %}
 
-{% block title %}Importar Relatorio FAP - Painel de Contestações - IntellexIA{% endblock %}
+{% block title %}Importar Relatório FAP - Painel de Contestações - IntellexIA{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -177,14 +177,14 @@
 {% endblock %}
 
 {% block content %}
-{% call page_hero(title='Importar Beneficios do Relatorio FAP', subtitle=hero_subtitle|default(''), icon='bi
+{% call page_hero(title='Importar Benefícios do Relatório FAP', subtitle=hero_subtitle|default(''), icon='bi
 bi-file-earmark-arrow-up') %}
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb mb-0 bg-transparent small">
     <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
     <li class="breadcrumb-item"><a href="{{ url_for('disputes_center.list_disputes_center') }}">Disputes
       Center</a></li>
-    <li class="breadcrumb-item active" aria-current="page">Importar Relatorio FAP</li>
+    <li class="breadcrumb-item active" aria-current="page">Importar Relatório FAP</li>
   </ol>
 </nav>
 {% endcall %}
@@ -201,7 +201,7 @@ bi-file-earmark-arrow-up') %}
                 Enviando arquivos<span class="upload-loading-dots"></span>
               </div>
               <div class="upload-loading-subtitle mb-3">
-                Aguarde enquanto os documentos sao enviados e organizados em lotes.
+                Aguarde enquanto os documentos são enviados e organizados em lotes.
               </div>
               <div class="upload-loading-bar" aria-hidden="true"></div>
             </div>
@@ -255,9 +255,30 @@ bi-file-earmark-arrow-up') %}
       <div class="col-lg-7">
         <div class="card card-success card-outline">
           <div class="card-header">
-            <h3 class="card-title"><i class="bi bi-list-task"></i> Historico de Relatorios</h3>
+            <h3 class="card-title"><i class="bi bi-list-task"></i> Histórico de Relatórios</h3>
           </div>
           <div class="card-body">
+            <div class="row g-2 mb-3">
+              <div class="col-md-4">
+                <div class="border rounded p-2 h-100 bg-success-subtle border-success-subtle">
+                  <div class="small text-muted"><i class="bi bi-check-circle-fill me-1"></i>Processados</div>
+                  <div class="fs-4 fw-bold text-success">{{ processed_count or 0 }}</div>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="border rounded p-2 h-100 bg-secondary-subtle border-secondary-subtle">
+                  <div class="small text-muted"><i class="bi bi-hourglass-split me-1"></i>Não processados</div>
+                  <div class="fs-4 fw-bold text-secondary">{{ not_processed_count or 0 }}</div>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="border rounded p-2 h-100 bg-warning-subtle border-warning-subtle">
+                  <div class="small text-muted"><i class="bi bi-arrow-repeat me-1"></i>Em processamento</div>
+                  <div class="fs-4 fw-bold text-warning">{{ processing_count or 0 }}</div>
+                </div>
+              </div>
+            </div>
+
             {% if reports.items %}
             <div class="table-responsive">
               <table class="table table-bordered table-striped table-hover">
@@ -267,7 +288,7 @@ bi-file-earmark-arrow-up') %}
                     <th>Arquivo</th>
                     <th style="width: 120px;" class="text-center">Status</th>
                     <th style="width: 130px;" class="text-center">Upload</th>
-                    <th style="width: 90px;" class="text-center">Acoes</th>
+                    <th style="width: 90px;" class="text-center">Ações</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -284,14 +305,14 @@ bi-file-earmark-arrow-up') %}
                     </td>
                     <td class="text-center">
                       {% if report.status == 'completed' %}
-                      <span class="badge bg-success">Processado</span>
+                      <span class="badge bg-success"><i class="bi bi-check-circle-fill me-1"></i>Processado</span>
                       {% elif report.status == 'processing' %}
                       <span class="badge bg-warning text-dark">
                         <i class="bi bi-arrow-repeat status-loading-icon me-1"></i>
                         Em processamento
                       </span>
                       {% else %}
-                      <span class="badge bg-secondary">Nao processado</span>
+                      <span class="badge bg-secondary"><i class="bi bi-hourglass-split me-1"></i>Não processado</span>
                       {% endif %}
                     </td>
                     <td class="text-center">{{ report.uploaded_at | datetime_sp(fmt='%d/%m/%Y %H:%M') if report.uploaded_at else '-' }}</td>
@@ -309,10 +330,10 @@ bi-file-earmark-arrow-up') %}
             </div>
             <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mt-3">
               <small class="text-muted">
-                Exibindo {{ reports.items|length }} de {{ reports.total }} relatorio(s). Pagina {{ reports.page }} de {{ reports.pages or 1 }}.
+                Exibindo {{ reports.items|length }} de {{ reports.total }} relatório(s). Página {{ reports.page }} de {{ reports.pages or 1 }}.
               </small>
               {% if reports.pages > 1 %}
-              <nav aria-label="Paginacao do historico de relatorios">
+              <nav aria-label="Paginação do histórico de relatórios">
                 <ul class="pagination pagination-sm mb-0">
                   <li class="page-item {{ 'disabled' if not reports.has_prev else '' }}">
                     <a class="page-link" href="{{ url_for('disputes_center.fap_contestation_reports', page=reports.prev_num) if reports.has_prev else '#' }}">Anterior</a>
@@ -329,7 +350,7 @@ bi-file-earmark-arrow-up') %}
                   {% endif %}
                   {% endfor %}
                   <li class="page-item {{ 'disabled' if not reports.has_next else '' }}">
-                    <a class="page-link" href="{{ url_for('disputes_center.fap_contestation_reports', page=reports.next_num) if reports.has_next else '#' }}">Proxima</a>
+                    <a class="page-link" href="{{ url_for('disputes_center.fap_contestation_reports', page=reports.next_num) if reports.has_next else '#' }}">Próxima</a>
                   </li>
                 </ul>
               </nav>
@@ -337,7 +358,7 @@ bi-file-earmark-arrow-up') %}
             </div>
             {% else %}
             <div class="alert alert-info mb-0">
-              <i class="bi bi-info-circle"></i> Nenhum relatorio enviado ainda.
+              <i class="bi bi-info-circle"></i> Nenhum relatório enviado ainda.
             </div>
             {% endif %}
           </div>
@@ -356,7 +377,7 @@ bi-file-earmark-arrow-up') %}
 {% block extra_js %}
 <script>
   function confirmDelete(url) {
-    if (confirm('Tem certeza que deseja excluir este relatorio?')) {
+    if (confirm('Tem certeza que deseja excluir este relatório?')) {
       const form = document.createElement('form');
       form.method = 'POST';
       form.action = url;

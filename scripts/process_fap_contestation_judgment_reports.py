@@ -28,7 +28,7 @@ def parse_args():
     parser = argparse.ArgumentParser(
         description='Processa relatórios pendentes de julgamento de contestação do FAP'
     )
-    parser.add_argument('--batch-size', type=int, default=50, help='Quantidade máxima por execução')
+    parser.add_argument('--batch-size', type=int, default=100, help='Quantidade máxima por execução')
     parser.add_argument('--report-id', type=int, help='ID específico do relatório para processar')
     parser.add_argument(
         '--include-errors',
