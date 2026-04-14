@@ -136,6 +136,104 @@ class FapContestationJudgmentReportService:
 
         return record
 
+    def _extract_typed_blocks_with_pdfplumber(self, file_path: str | Path) -> list[tuple[str, str]]:
+        """Extrai texto do PDF uma única vez e retorna blocos tipados."""
+        path = Path(file_path)
+        if not path.exists():
+            raise FileNotFoundError(f'Arquivo não encontrado: {path}')
+
+        if path.suffix.lower() != '.pdf':
+            raise ValueError('O método com pdfplumber aceita apenas arquivos PDF.')
+
+        try:
+            import pdfplumber
+        except ImportError as exc:
+            raise ImportError('pdfplumber não está instalado no ambiente atual.') from exc
+
+        def normalize_page_text(page_text: str) -> str:
+            text = page_text.replace('\r\n', '\n').replace('\r', '\n')
+            text = re.sub(r'[ \t]+', ' ', text)
+            text = re.sub(r'\n{3,}', '\n\n', text)
+            return text.strip()
+
+        page_texts: list[str] = []
+        with pdfplumber.open(str(path)) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text(
+                    x_tolerance=2,
+                    y_tolerance=3,
+                    layout=False,
+                    use_text_flow=True,
+                )
+                if page_text:
+                    page_texts.append(normalize_page_text(page_text))
+
+        if not page_texts:
+            raise ValueError('pdfplumber não retornou texto para o arquivo informado.')
+
+        text = self.normalize_markdown('\n\n'.join(page_texts))
+        return self._split_all_blocks(text)
+
+    def extract_all_sections_with_pdfplumber(self, file_path: str | Path) -> tuple[dict[str, list[dict]], dict[str, float]]:
+        """Extrai e faz parsing de todas as seções em uma única leitura do PDF."""
+        typed_blocks = self._extract_typed_blocks_with_pdfplumber(file_path)
+
+        extracted_sections: dict[str, list[dict]] = {
+            'benefits': [],
+            'cats': [],
+            'payroll_masses': [],
+            'employment_links': [],
+            'turnover_rates': [],
+        }
+        parse_timings: dict[str, float] = {
+            'benefits': 0.0,
+            'cats': 0.0,
+            'payroll_masses': 0.0,
+            'employment_links': 0.0,
+            'turnover_rates': 0.0,
+        }
+
+        for block_type, block in typed_blocks:
+            if not block or not block.strip():
+                continue
+
+            started_at = perf_counter()
+            if block_type == 'benefit':
+                parsed = self.parse_block(block)
+                parse_timings['benefits'] += perf_counter() - started_at
+                if parsed:
+                    extracted_sections['benefits'].append(parsed)
+                continue
+
+            if block_type == 'cat':
+                parsed = self.parse_cat_block(block)
+                parse_timings['cats'] += perf_counter() - started_at
+                if parsed:
+                    extracted_sections['cats'].append(parsed)
+                continue
+
+            if block_type == 'payroll_mass':
+                parsed = self.parse_payroll_mass_block(block)
+                parse_timings['payroll_masses'] += perf_counter() - started_at
+                if parsed:
+                    extracted_sections['payroll_masses'].append(parsed)
+                continue
+
+            if block_type == 'employment_link':
+                parsed = self.parse_employment_link_block(block)
+                parse_timings['employment_links'] += perf_counter() - started_at
+                if parsed:
+                    extracted_sections['employment_links'].append(parsed)
+                continue
+
+            if block_type == 'turnover_rate':
+                parsed = self.parse_turnover_rate_block(block)
+                parse_timings['turnover_rates'] += perf_counter() - started_at
+                if parsed:
+                    extracted_sections['turnover_rates'].append(parsed)
+
+        return extracted_sections, parse_timings
+
     def extract_benefits_with_pdfplumber(self, file_path: str | Path) -> list[dict]:
         """Extrai benefícios diretamente do PDF com pdfplumber, sem integrar ao fluxo principal.
 
@@ -2524,24 +2622,19 @@ class FapContestationJudgmentReportService:
             print(f'Relatório #{report.id} | etapa metadata levou {perf_counter() - step_started_at:.2f}s')
 
             step_started_at = perf_counter()
-            extracted_benefits = self.extract_benefits_with_pdfplumber(report.file_path)
-            print(f'Relatório #{report.id} | etapa benefits levou {perf_counter() - step_started_at:.2f}s')
+            extracted_sections, parse_timings = self.extract_all_sections_with_pdfplumber(report.file_path)
+            extracted_benefits = extracted_sections['benefits']
+            extracted_cats = extracted_sections['cats']
+            extracted_payroll_masses = extracted_sections['payroll_masses']
+            extracted_employment_links = extracted_sections['employment_links']
+            extracted_turnover_rates = extracted_sections['turnover_rates']
 
-            step_started_at = perf_counter()
-            extracted_cats = self.extract_cats_with_pdfplumber(report.file_path)
-            print(f'Relatório #{report.id} | etapa cats levou {perf_counter() - step_started_at:.2f}s')
-
-            step_started_at = perf_counter()
-            extracted_payroll_masses = self.extract_payroll_masses_with_pdfplumber(report.file_path)
-            print(f'Relatório #{report.id} | etapa payroll_masses levou {perf_counter() - step_started_at:.2f}s')
-
-            step_started_at = perf_counter()
-            extracted_employment_links = self.extract_employment_links_with_pdfplumber(report.file_path)
-            print(f'Relatório #{report.id} | etapa employment_links levou {perf_counter() - step_started_at:.2f}s')
-
-            step_started_at = perf_counter()
-            extracted_turnover_rates = self.extract_turnover_rates_with_pdfplumber(report.file_path)
-            print(f'Relatório #{report.id} | etapa turnover_rates levou {perf_counter() - step_started_at:.2f}s')
+            print(f'Relatório #{report.id} | etapa extraction_single_pass levou {perf_counter() - step_started_at:.2f}s')
+            print(f'Relatório #{report.id} | etapa benefits (parse) levou {parse_timings["benefits"]:.2f}s')
+            print(f'Relatório #{report.id} | etapa cats (parse) levou {parse_timings["cats"]:.2f}s')
+            print(f'Relatório #{report.id} | etapa payroll_masses (parse) levou {parse_timings["payroll_masses"]:.2f}s')
+            print(f'Relatório #{report.id} | etapa employment_links (parse) levou {parse_timings["employment_links"]:.2f}s')
+            print(f'Relatório #{report.id} | etapa turnover_rates (parse) levou {parse_timings["turnover_rates"]:.2f}s')
             print(f'Relatório #{report.id} | extração completa levou {perf_counter() - extraction_started_at:.2f}s')
 
             print(
