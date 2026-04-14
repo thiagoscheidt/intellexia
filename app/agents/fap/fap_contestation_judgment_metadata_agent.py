@@ -24,6 +24,15 @@ class FapContestationJudgmentMetadata(BaseModel):
 class FapContestationJudgmentMetadataAgent:
     """Agente para extrair metadados da primeira página do relatório de julgamento FAP."""
 
+    IMPORTANT_FIELDS = (
+        'establishment_cnpj',
+        'validity_year',
+        'process_status',
+        'protocol_number',
+        'transmission_datetime',
+        'publication_date',
+    )
+
     def __init__(self, model_name: str = 'gpt-5.4-nano'):
         self.model_name = model_name
 
@@ -93,12 +102,169 @@ class FapContestationJudgmentMetadataAgent:
 
         return None
 
+    @staticmethod
+    def _extract_establishment_cnpj(first_page_content: str) -> str | None:
+        if not first_page_content:
+            return None
+
+        patterns = [
+            r'Estabelecimento\s*:?\s*([\d./\-]{14,18})',
+            r'CNPJ\s+do\s+Estabelecimento\s*: ?\s*([\d./\-]{14,18})',
+            r'CNPJ\s*: ?\s*([\d./\-]{14,18})',
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, first_page_content, flags=re.IGNORECASE)
+            if match:
+                return match.group(1).strip()
+        return None
+
+    @staticmethod
+    def _extract_validity_year(first_page_content: str) -> str | None:
+        if not first_page_content:
+            return None
+
+        patterns = [
+            r'Vig[êe]ncia\s*: ?\s*(\d{4})',
+            r'Vig[êe]ncia\s+do\s+FAP\s*: ?\s*(\d{4})',
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, first_page_content, flags=re.IGNORECASE)
+            if match:
+                return match.group(1).strip()
+        return None
+
+    @staticmethod
+    def _extract_protocol_number(first_page_content: str) -> str | None:
+        if not first_page_content:
+            return None
+
+        patterns = [
+            r'N[uú]mero\s+do\s+Protocolo\s*: ?\s*([A-Za-z0-9./\-]+)',
+            r'Protocolo\s*(?:n[oº°.]?|n[uú]mero)?\s*: ?\s*([A-Za-z0-9./\-]+)',
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, first_page_content, flags=re.IGNORECASE)
+            if match:
+                return match.group(1).strip()
+        return None
+
+    @staticmethod
+    def _extract_process_status(first_page_content: str) -> str | None:
+        if not first_page_content:
+            return None
+
+        patterns = [
+            r'Situa[cç][aã]o\s+do\s+Processo\s*: ?\s*([^\n]+)',
+            r'Situa[cç][aã]o\s*: ?\s*([^\n]+)',
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, first_page_content, flags=re.IGNORECASE)
+            if match:
+                value = re.sub(r'\s+', ' ', match.group(1)).strip(' :-\n\t')
+                if value:
+                    return value
+        return None
+
+    @staticmethod
+    def _extract_administrative_instance(first_page_content: str) -> str | None:
+        if not first_page_content:
+            return None
+
+        patterns = [
+            r'Inst[âa]ncia\s*:?\s*([^\n]+)',
+            r'Inst[âa]ncia\s+Administrativ[ao]\s*:?\s*([^\n]+)',
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, first_page_content, flags=re.IGNORECASE)
+            if match:
+                value = re.sub(r'\s+', ' ', match.group(1)).strip(' :-\n\t')
+                if value:
+                    return value
+        return None
+
+    @staticmethod
+    def _extract_analyst_name(first_page_content: str) -> str | None:
+        if not first_page_content:
+            return None
+
+        match = re.search(r'Analista\s+Respons[aá]vel\s*:?\s*([^\n]+)', first_page_content, flags=re.IGNORECASE)
+        if not match:
+            return None
+
+        value = re.sub(r'\s+', ' ', match.group(1)).strip(' :-\n\t')
+        return value or None
+
+    @staticmethod
+    def _extract_analysis_finished_at(first_page_content: str) -> str | None:
+        if not first_page_content:
+            return None
+
+        match = re.search(
+            r'An[aá]lise\s+Finalizada\s+Em\s*:?\s*(\d{2}/\d{2}/\d{4})',
+            first_page_content,
+            flags=re.IGNORECASE,
+        )
+        return match.group(1).strip() if match else None
+
+    @staticmethod
+    def _extract_version_number(first_page_content: str) -> str | None:
+        if not first_page_content:
+            return None
+
+        patterns = [
+            r'N[ºo°]\s*Vers[aã]o\s*:?\s*([^\n]+)',
+            r'Vers[aã]o\s*:?\s*([^\n]+)',
+        ]
+        for pattern in patterns:
+            match = re.search(pattern, first_page_content, flags=re.IGNORECASE)
+            if match:
+                value = re.sub(r'\s+', ' ', match.group(1)).strip(' :-\n\t')
+                if value:
+                    return value
+        return None
+
+    def _extract_metadata_with_regex(self, first_page_content: str) -> FapContestationJudgmentMetadata:
+        return FapContestationJudgmentMetadata(
+            establishment_cnpj=self._extract_establishment_cnpj(first_page_content),
+            validity_year=self._extract_validity_year(first_page_content),
+            process_status=self._extract_process_status(first_page_content),
+            protocol_number=self._extract_protocol_number(first_page_content),
+            administrative_instance=self._extract_administrative_instance(first_page_content),
+            analyst_name=self._extract_analyst_name(first_page_content),
+            analysis_finished_at=self._extract_analysis_finished_at(first_page_content),
+            version_number=self._extract_version_number(first_page_content),
+            transmission_datetime=self._extract_transmission_datetime(first_page_content),
+            publication_date=self._extract_publication_date(first_page_content),
+        )
+
+    def _has_all_important_fields(self, metadata: FapContestationJudgmentMetadata) -> bool:
+        for field_name in self.IMPORTANT_FIELDS:
+            if not getattr(metadata, field_name, None):
+                return False
+        return True
+
     def extract_from_first_page(self, markdown_content: str) -> FapContestationJudgmentMetadata:
         """Extrai metadados relevantes da primeira página do relatório em markdown."""
         first_page_content = self._extract_first_page_section(markdown_content)
 
         if not first_page_content:
             return FapContestationJudgmentMetadata()
+
+        # Caminho rápido: regex cobre a maioria dos campos em milissegundos.
+        regex_metadata = self._extract_metadata_with_regex(first_page_content)
+        print(f'[MetadataAgent] regex_data={regex_metadata.model_dump()}')
+        if self._has_all_important_fields(regex_metadata):
+            print('[MetadataAgent] origem=regex-only | todos os campos importantes foram preenchidos por regex')
+            return regex_metadata
+
+        missing_fields = [
+            field_name
+            for field_name in self.IMPORTANT_FIELDS
+            if not getattr(regex_metadata, field_name, None)
+        ]
+        print(
+            f'[MetadataAgent] origem=regex+ia | faltaram campos importantes no regex: {", ".join(missing_fields)}'
+        )
 
         prompt = (
             'Extraia APENAS os campos solicitados da primeira página do relatório de julgamento de contestação do FAP.\n'
@@ -107,28 +273,51 @@ class FapContestationJudgmentMetadataAgent:
             f'TEXTO DA PRIMEIRA PAGINA:\n{first_page_content}'
         )
 
-        llm = ChatOpenAI(model=self.model_name, temperature=0).with_structured_output(
-            FapContestationJudgmentMetadata
+        try:
+            llm = ChatOpenAI(model=self.model_name, temperature=0).with_structured_output(
+                FapContestationJudgmentMetadata
+            )
+
+            llm_metadata = llm.invoke([
+                {
+                    'role': 'system',
+                    'content': (
+                        'Você é um extrator de metadados documentais jurídicos. '
+                        'Retorne somente os campos do schema solicitado.'
+                    ),
+                },
+                {'role': 'user', 'content': prompt},
+            ])
+            print(f'[MetadataAgent] ia_data={llm_metadata.model_dump()}')
+        except Exception:
+            # Em erro do LLM, mantém extração determinística por regex.
+            print('[MetadataAgent] origem=regex-only | falha ao consultar IA, mantendo resultado por regex')
+            return regex_metadata
+
+        # Merge: prioriza regex (mais determinístico) e completa com LLM quando faltar valor.
+        merged = FapContestationJudgmentMetadata(
+            establishment_cnpj=regex_metadata.establishment_cnpj or llm_metadata.establishment_cnpj,
+            validity_year=regex_metadata.validity_year or llm_metadata.validity_year,
+            process_status=regex_metadata.process_status or llm_metadata.process_status,
+            protocol_number=regex_metadata.protocol_number or llm_metadata.protocol_number,
+            administrative_instance=regex_metadata.administrative_instance or llm_metadata.administrative_instance,
+            analyst_name=regex_metadata.analyst_name or llm_metadata.analyst_name,
+            analysis_finished_at=regex_metadata.analysis_finished_at or llm_metadata.analysis_finished_at,
+            version_number=regex_metadata.version_number or llm_metadata.version_number,
+            transmission_datetime=regex_metadata.transmission_datetime or llm_metadata.transmission_datetime,
+            publication_date=regex_metadata.publication_date or llm_metadata.publication_date,
         )
 
-        metadata = llm.invoke([
-            {
-                'role': 'system',
-                'content': (
-                    'Você é um extrator de metadados documentais jurídicos. '
-                    'Retorne somente os campos do schema solicitado.'
-                ),
-            },
-            {'role': 'user', 'content': prompt},
-        ])
+        llm_filled_fields = [
+            field_name
+            for field_name in merged.model_fields
+            if not getattr(regex_metadata, field_name, None) and getattr(merged, field_name, None)
+        ]
+        if llm_filled_fields:
+            print(
+                f'[MetadataAgent] origem=regex+ia | IA complementou campos: {", ".join(llm_filled_fields)}'
+            )
+        else:
+            print('[MetadataAgent] origem=regex+ia | IA chamada, mas regex já cobria os campos finais')
 
-        print(metadata)
-
-        # Fallback determinístico para cenários em que o LLM não retorna o campo.
-        if not getattr(metadata, 'transmission_datetime', None):
-            metadata.transmission_datetime = self._extract_transmission_datetime(first_page_content)
-
-        if not getattr(metadata, 'publication_date', None):
-            metadata.publication_date = self._extract_publication_date(first_page_content)
-
-        return metadata
+        return merged
