@@ -683,24 +683,26 @@ def _apply_cats_filters(query, search_value='', custom_filters=None, quick_emplo
         operator = item['operator']
         value = (item.get('value') or '').strip().lower()
 
-        # "Analyzing" for the general status field must match both stored values.
-        if operator == 'equals' and value == 'analyzing' and field == 'status':
-            query = query.filter(
-                func.lower(func.coalesce(cast(FapContestationCat.status, String), '')).in_(
-                    ['in_review', 'analyzing']
+        # "Status geral" uses both instance fields with second-instance priority.
+        if operator == 'equals' and field == 'status':
+            second_expr = func.lower(func.coalesce(cast(FapContestationCat.second_instance_status, String), ''))
+            first_expr = func.lower(func.coalesce(cast(FapContestationCat.first_instance_status, String), ''))
+            if value == 'pending':
+                query = query.filter(
+                    ~second_expr.in_(['deferido', 'indeferido', 'analyzing']),
+                    ~first_expr.in_(['deferido', 'analyzing']),
                 )
-            )
+            else:
+                query = query.filter(
+                    or_(
+                        second_expr == value,
+                        and_(~second_expr.in_(['deferido', 'indeferido', 'analyzing']), first_expr == value),
+                    )
+                )
             continue
 
         # "Pending" for status fields must mirror the counter logic, not a simple equality check.
         if operator == 'equals' and value == 'pending':
-            if field == 'status':
-                query = query.filter(
-                    ~func.lower(func.coalesce(cast(FapContestationCat.status, String), '')).in_(
-                        ['approved', 'in_review', 'analyzing', 'rejected']
-                    )
-                )
-                continue
             if field == 'first_instance_status':
                 query = query.filter(
                     ~func.lower(func.coalesce(cast(FapContestationCat.first_instance_status, String), '')).in_(
@@ -835,24 +837,26 @@ def _apply_payroll_mass_filters(query, search_value='', custom_filters=None, qui
         operator = item['operator']
         value = (item.get('value') or '').strip().lower()
 
-        # "Analyzing" for the general status field must match both stored values.
-        if operator == 'equals' and value == 'analyzing' and field == 'status':
-            query = query.filter(
-                func.lower(func.coalesce(cast(FapContestationPayrollMass.status, String), '')).in_(
-                    ['in_review', 'analyzing']
+        # "Status geral" uses both instance fields with second-instance priority.
+        if operator == 'equals' and field == 'status':
+            second_expr = func.lower(func.coalesce(cast(FapContestationPayrollMass.second_instance_status, String), ''))
+            first_expr = func.lower(func.coalesce(cast(FapContestationPayrollMass.first_instance_status, String), ''))
+            if value == 'pending':
+                query = query.filter(
+                    ~second_expr.in_(['deferido', 'indeferido', 'analyzing']),
+                    ~first_expr.in_(['deferido', 'analyzing']),
                 )
-            )
+            else:
+                query = query.filter(
+                    or_(
+                        second_expr == value,
+                        and_(~second_expr.in_(['deferido', 'indeferido', 'analyzing']), first_expr == value),
+                    )
+                )
             continue
 
         # "Pending" for status fields must mirror the counter logic, not a simple equality check.
         if operator == 'equals' and value == 'pending':
-            if field == 'status':
-                query = query.filter(
-                    ~func.lower(func.coalesce(cast(FapContestationPayrollMass.status, String), '')).in_(
-                        ['approved', 'in_review', 'analyzing', 'rejected']
-                    )
-                )
-                continue
             if field == 'first_instance_status':
                 query = query.filter(
                     ~func.lower(func.coalesce(cast(FapContestationPayrollMass.first_instance_status, String), '')).in_(
@@ -983,24 +987,26 @@ def _apply_employment_link_filters(query, search_value='', custom_filters=None, 
         operator = item['operator']
         value = (item.get('value') or '').strip().lower()
 
-        # "Analyzing" for the general status field must match both stored values.
-        if operator == 'equals' and value == 'analyzing' and field == 'status':
-            query = query.filter(
-                func.lower(func.coalesce(cast(FapContestationEmploymentLink.status, String), '')).in_(
-                    ['in_review', 'analyzing']
+        # "Status geral" uses both instance fields with second-instance priority.
+        if operator == 'equals' and field == 'status':
+            second_expr = func.lower(func.coalesce(cast(FapContestationEmploymentLink.second_instance_status, String), ''))
+            first_expr = func.lower(func.coalesce(cast(FapContestationEmploymentLink.first_instance_status, String), ''))
+            if value == 'pending':
+                query = query.filter(
+                    ~second_expr.in_(['deferido', 'indeferido', 'analyzing']),
+                    ~first_expr.in_(['deferido', 'analyzing']),
                 )
-            )
+            else:
+                query = query.filter(
+                    or_(
+                        second_expr == value,
+                        and_(~second_expr.in_(['deferido', 'indeferido', 'analyzing']), first_expr == value),
+                    )
+                )
             continue
 
         # "Pending" for status fields must mirror the counter logic, not a simple equality check.
         if operator == 'equals' and value == 'pending':
-            if field == 'status':
-                query = query.filter(
-                    ~func.lower(func.coalesce(cast(FapContestationEmploymentLink.status, String), '')).in_(
-                        ['approved', 'in_review', 'analyzing', 'rejected']
-                    )
-                )
-                continue
             if field == 'first_instance_status':
                 query = query.filter(
                     ~func.lower(func.coalesce(cast(FapContestationEmploymentLink.first_instance_status, String), '')).in_(
@@ -1135,24 +1141,26 @@ def _apply_turnover_rate_filters(query, search_value='', custom_filters=None, qu
         operator = item['operator']
         value = (item.get('value') or '').strip().lower()
 
-        # "Analyzing" for the general status field must match both stored values.
-        if operator == 'equals' and value == 'analyzing' and field == 'status':
-            query = query.filter(
-                func.lower(func.coalesce(cast(FapContestationTurnoverRate.status, String), '')).in_(
-                    ['in_review', 'analyzing']
+        # "Status geral" uses both instance fields with second-instance priority.
+        if operator == 'equals' and field == 'status':
+            second_expr = func.lower(func.coalesce(cast(FapContestationTurnoverRate.second_instance_status, String), ''))
+            first_expr = func.lower(func.coalesce(cast(FapContestationTurnoverRate.first_instance_status, String), ''))
+            if value == 'pending':
+                query = query.filter(
+                    ~second_expr.in_(['deferido', 'indeferido', 'analyzing']),
+                    ~first_expr.in_(['deferido', 'analyzing']),
                 )
-            )
+            else:
+                query = query.filter(
+                    or_(
+                        second_expr == value,
+                        and_(~second_expr.in_(['deferido', 'indeferido', 'analyzing']), first_expr == value),
+                    )
+                )
             continue
 
         # "Pending" for status fields must mirror the counter logic, not a simple equality check.
         if operator == 'equals' and value == 'pending':
-            if field == 'status':
-                query = query.filter(
-                    ~func.lower(func.coalesce(cast(FapContestationTurnoverRate.status, String), '')).in_(
-                        ['approved', 'in_review', 'analyzing', 'rejected']
-                    )
-                )
-                continue
             if field == 'first_instance_status':
                 query = query.filter(
                     ~func.lower(func.coalesce(cast(FapContestationTurnoverRate.first_instance_status, String), '')).in_(
@@ -1294,24 +1302,26 @@ def _apply_benefits_filters(query, search_value='', custom_filters=None, quick_c
         operator = item['operator']
         value = (item.get('value') or '').strip().lower()
 
-        # \"Analyzing\" for the general status field must match both stored values.
-        if operator == 'equals' and value == 'analyzing' and field == 'status':
-            query = query.filter(
-                func.lower(func.coalesce(cast(Benefit.status, String), '')).in_(
-                    ['in_review', 'analyzing']
+        # "Status geral" uses both instance fields with second-instance priority.
+        if operator == 'equals' and field == 'status':
+            second_expr = func.lower(func.coalesce(cast(Benefit.second_instance_status, String), ''))
+            first_expr = func.lower(func.coalesce(cast(Benefit.first_instance_status, String), ''))
+            if value == 'pending':
+                query = query.filter(
+                    ~second_expr.in_(['deferido', 'indeferido', 'analyzing']),
+                    ~first_expr.in_(['deferido', 'analyzing']),
                 )
-            )
+            else:
+                query = query.filter(
+                    or_(
+                        second_expr == value,
+                        and_(~second_expr.in_(['deferido', 'indeferido', 'analyzing']), first_expr == value),
+                    )
+                )
             continue
 
         # "Pending" for status fields must mirror the counter logic, not a simple equality check.
         if operator == 'equals' and value == 'pending':
-            if field == 'status':
-                query = query.filter(
-                    ~func.lower(func.coalesce(cast(Benefit.status, String), '')).in_(
-                        ['approved', 'in_review', 'analyzing', 'rejected']
-                    )
-                )
-                continue
             if field == 'first_instance_status':
                 query = query.filter(
                     ~func.lower(func.coalesce(cast(Benefit.first_instance_status, String), '')).in_(

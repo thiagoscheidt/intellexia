@@ -457,7 +457,7 @@
                   <select id="pmFilterField" class="form-select form-select-sm">
                     <option value="employer_cnpj">CNPJ Empregador</option>
                     <option value="competence">Competência</option>
-                    <option value="status">Status</option>
+                    <option value="status">Status geral</option>
                     <option value="first_instance_status">Status 1ª instância</option>
                     <option value="first_instance_status_raw">Texto status 1ª instância</option>
                     <option value="second_instance_status">Status 2ª instância</option>
@@ -695,7 +695,7 @@
     const fieldLabelMap = {
       employer_cnpj: 'CNPJ Empregador',
       competence: 'Competência',
-      status: 'Status',
+      status: 'Status geral',
       first_instance_status: 'Status 1ª instância',
       first_instance_status_raw: 'Texto status 1ª instância',
       second_instance_status: 'Status 2ª instância',
@@ -713,8 +713,8 @@
 
     const STATUS_SELECT_OPTIONS = {
       status: [
-        { value: 'approved', label: 'Deferido' },
-        { value: 'rejected', label: 'Indeferido' },
+        { value: 'deferido', label: 'Deferido' },
+        { value: 'indeferido', label: 'Indeferido' },
         { value: 'analyzing', label: 'Em análise' },
         { value: 'pending', label: 'Pendente' },
       ],

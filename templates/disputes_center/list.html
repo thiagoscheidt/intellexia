@@ -594,7 +594,7 @@
                     <option value="insured_date_of_birth">Data nascimento</option>
                     <option value="employer_cnpj">CNPJ Empregador</option>
                     <option value="employer_name">Nome empregador</option>
-                    <option value="status">Status</option>
+                    <option value="status">Status geral</option>
                     <option value="first_instance_status">Status 1ª instância</option>
                     <option value="first_instance_status_raw">Texto status 1ª instância</option>
                     <option value="second_instance_status">Status 2ª instância</option>
@@ -1152,7 +1152,7 @@
     insured_date_of_birth: 'Data nascimento',
     employer_cnpj: 'CNPJ Empregador',
     employer_name: 'Nome empregador',
-    status: 'Status',
+    status: 'Status geral',
     first_instance_status: 'Status 1ª instância',
     first_instance_status_raw: 'Texto status 1ª instância',
     second_instance_status: 'Status 2ª instância',
@@ -1184,8 +1184,8 @@
   const BR_DATE_MASK_FIELDS = new Set(['insured_date_of_birth']);
   const STATUS_SELECT_OPTIONS = {
     status: [
-      { value: 'approved', label: 'Deferido' },
-      { value: 'rejected', label: 'Indeferido' },
+      { value: 'deferido', label: 'Deferido' },
+      { value: 'indeferido', label: 'Indeferido' },
       { value: 'analyzing', label: 'Em análise' },
       { value: 'pending', label: 'Pendente' },
     ],
