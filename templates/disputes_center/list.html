@@ -629,6 +629,9 @@
                   <label for="centralFilterValue" class="form-label mb-1 small text-muted">Valor</label>
                   <input id="centralFilterValue" type="text" class="form-control form-control-sm"
                     placeholder="Digite um valor">
+                  <select id="centralFilterValueSelect" class="form-select form-select-sm d-none">
+                    <option value="">Selecione um status</option>
+                  </select>
                 </div>
                 <div class="col-md-2 d-grid">
                   <button id="addCentralFilterBtn" type="button" class="btn btn-primary btn-sm">
@@ -860,230 +863,231 @@
     const filters = [];
     const urlParams = new URLSearchParams(window.location.search);
     const initialVigenciaId = (urlParams.get('vigencia_id') || '').trim();
-    const cnpjByRoot = {{ cnpj_by_root | tojson }};
+    const cnpjByRoot = {{ cnpj_by_root | tojson
+  }};
 
-    function renderVigenciaFilterNotice() {
-      const notice = $('#vigenciaFilterNotice');
-      const badge = $('#vigenciaFilterBadge');
-      const friendlyLabel = (notice.data('vigencia-label') || '').toString().trim();
+  function renderVigenciaFilterNotice() {
+    const notice = $('#vigenciaFilterNotice');
+    const badge = $('#vigenciaFilterBadge');
+    const friendlyLabel = (notice.data('vigencia-label') || '').toString().trim();
 
-      if (!initialVigenciaId) {
-        notice.addClass('d-none');
-        badge.text('');
+    if (!initialVigenciaId) {
+      notice.addClass('d-none');
+      badge.text('');
+      return;
+    }
+
+    badge.text(friendlyLabel || `Vigência #${initialVigenciaId}`);
+    notice.removeClass('d-none');
+  }
+
+  function clearVigenciaFilterFromUrl() {
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.delete('vigencia_id');
+    window.location.href = nextUrl.toString();
+  }
+
+  function applyFiltersFromUrl() {
+    const quickClient = (urlParams.get('quick_client') || '').trim();
+    const quickRoot = (urlParams.get('quick_root') || '').trim();
+    const rawFilters = (urlParams.get('custom_filters') || '').trim();
+
+    if (quickClient) {
+      $('#quickClientFilter').val(quickClient);
+    }
+
+    if (quickRoot) {
+      $('#quickRootCnpjFilter').val(quickRoot);
+      populateCnpjFilter(quickRoot);
+    }
+
+    const quickCnpj = (urlParams.get('quick_cnpj') || '').trim();
+    if (quickCnpj) {
+      $('#quickCnpjFilter').val(quickCnpj);
+    }
+
+    if (!rawFilters) {
+      return;
+    }
+
+    try {
+      const parsedFilters = JSON.parse(rawFilters);
+      if (!Array.isArray(parsedFilters)) {
         return;
       }
 
-      badge.text(friendlyLabel || `Vigência #${initialVigenciaId}`);
-      notice.removeClass('d-none');
-    }
+      parsedFilters.forEach((filter) => {
+        const field = String(filter.field || '').trim();
+        const operator = String(filter.operator || 'contains').trim();
+        const value = String(filter.value || '').trim();
 
-    function clearVigenciaFilterFromUrl() {
-      const nextUrl = new URL(window.location.href);
-      nextUrl.searchParams.delete('vigencia_id');
-      window.location.href = nextUrl.toString();
-    }
-
-    function applyFiltersFromUrl() {
-      const quickClient = (urlParams.get('quick_client') || '').trim();
-      const quickRoot = (urlParams.get('quick_root') || '').trim();
-      const rawFilters = (urlParams.get('custom_filters') || '').trim();
-
-      if (quickClient) {
-        $('#quickClientFilter').val(quickClient);
-      }
-
-      if (quickRoot) {
-        $('#quickRootCnpjFilter').val(quickRoot);
-        populateCnpjFilter(quickRoot);
-      }
-
-      const quickCnpj = (urlParams.get('quick_cnpj') || '').trim();
-      if (quickCnpj) {
-        $('#quickCnpjFilter').val(quickCnpj);
-      }
-
-      if (!rawFilters) {
-        return;
-      }
-
-      try {
-        const parsedFilters = JSON.parse(rawFilters);
-        if (!Array.isArray(parsedFilters)) {
+        if (!field || !operator || !(field in fieldLabelMap) || !(operator in operatorLabelMap)) {
           return;
         }
 
-        parsedFilters.forEach((filter) => {
-          const field = String(filter.field || '').trim();
-          const operator = String(filter.operator || 'contains').trim();
-          const value = String(filter.value || '').trim();
-
-          if (!field || !operator || !(field in fieldLabelMap) || !(operator in operatorLabelMap)) {
-            return;
-          }
-
-          const normalizedValue = normalizeFilterValueForField(field, value);
-          const displayValueText = normalizeDisplayValueForField(field, normalizedValue);
-          const displayValue = needsValue(operator) ? ` "${displayValueText}"` : '';
-          filters.push({
-            id: Date.now() + Math.random(),
-            field,
-            operator,
-            value: normalizedValue,
-            label: `${fieldLabelMap[field]} ${operatorLabelMap[operator]}${displayValue}`,
-          });
+        const normalizedValue = normalizeFilterValueForField(field, value);
+        const displayValueText = normalizeDisplayValueForField(field, normalizedValue);
+        const displayValue = needsValue(operator) ? ` "${displayValueText}"` : '';
+        filters.push({
+          id: Date.now() + Math.random(),
+          field,
+          operator,
+          value: normalizedValue,
+          label: `${fieldLabelMap[field]} ${operatorLabelMap[operator]}${displayValue}`,
         });
-      } catch (error) {
-        console.warn('Não foi possível aplicar os filtros vindos da URL.', error);
-      }
+      });
+    } catch (error) {
+      console.warn('Não foi possível aplicar os filtros vindos da URL.', error);
     }
+  }
 
-    function updateFilteredStats(stats) {
-      const safeStats = stats || {};
-      const safeFirst = safeStats.first_instance || {};
-      const safeSecond = safeStats.second_instance || {};
-      $('#filteredTotalCount').text(safeStats.total ?? 0);
-      $('#filteredApprovedCount').text(safeStats.approved ?? 0);
-      $('#filteredRejectedCount').text(safeStats.rejected ?? 0);
-      $('#filteredInReviewCount').text(safeStats.in_review ?? 0);
-      $('#filteredPendingCount').text(safeStats.pending ?? 0);
-      $('#filteredApprovedFirstInstanceCount').text(safeFirst.approved ?? 0);
-      $('#filteredApprovedSecondInstanceCount').text(safeSecond.approved ?? 0);
-      $('#filteredRejectedFirstInstanceCount').text(safeFirst.rejected ?? 0);
-      $('#filteredRejectedSecondInstanceCount').text(safeSecond.rejected ?? 0);
-      $('#filteredAnalyzingFirstInstanceCount').text(safeFirst.analyzing ?? 0);
-      $('#filteredAnalyzingSecondInstanceCount').text(safeSecond.analyzing ?? 0);
-      $('#filteredPendingFirstInstanceCount').text(safeFirst.pending ?? 0);
-      $('#filteredPendingSecondInstanceCount').text(safeSecond.pending ?? 0);
-    }
+  function updateFilteredStats(stats) {
+    const safeStats = stats || {};
+    const safeFirst = safeStats.first_instance || {};
+    const safeSecond = safeStats.second_instance || {};
+    $('#filteredTotalCount').text(safeStats.total ?? 0);
+    $('#filteredApprovedCount').text(safeStats.approved ?? 0);
+    $('#filteredRejectedCount').text(safeStats.rejected ?? 0);
+    $('#filteredInReviewCount').text(safeStats.in_review ?? 0);
+    $('#filteredPendingCount').text(safeStats.pending ?? 0);
+    $('#filteredApprovedFirstInstanceCount').text(safeFirst.approved ?? 0);
+    $('#filteredApprovedSecondInstanceCount').text(safeSecond.approved ?? 0);
+    $('#filteredRejectedFirstInstanceCount').text(safeFirst.rejected ?? 0);
+    $('#filteredRejectedSecondInstanceCount').text(safeSecond.rejected ?? 0);
+    $('#filteredAnalyzingFirstInstanceCount').text(safeFirst.analyzing ?? 0);
+    $('#filteredAnalyzingSecondInstanceCount').text(safeSecond.analyzing ?? 0);
+    $('#filteredPendingFirstInstanceCount').text(safeFirst.pending ?? 0);
+    $('#filteredPendingSecondInstanceCount').text(safeSecond.pending ?? 0);
+  }
 
-    const table = $('#centralBenefitsTable').DataTable({
-      processing: true,
-      serverSide: true,
-      searchDelay: 350,
-      deferRender: true,
-      ajax: {
-        url: apiListUrl,
-        type: 'GET',
-        data: function (d) {
-          d.custom_filters = JSON.stringify(filters.map((filter) => ({
-            field: filter.field,
-            operator: filter.operator,
-            value: filter.value,
-          })));
-          d.quick_client = ($('#quickClientFilter').val() || '').trim();
-          d.quick_root = ($('#quickRootCnpjFilter').val() || '').trim();
-          d.quick_cnpj = ($('#quickCnpjFilter').val() || '').trim();
-          d.vigencia_id = initialVigenciaId;
-        },
-        dataSrc: function (json) {
-          updateFilteredStats(json.filtered_stats);
-          return json.data || [];
-        },
+  const table = $('#centralBenefitsTable').DataTable({
+    processing: true,
+    serverSide: true,
+    searchDelay: 350,
+    deferRender: true,
+    ajax: {
+      url: apiListUrl,
+      type: 'GET',
+      data: function (d) {
+        d.custom_filters = JSON.stringify(filters.map((filter) => ({
+          field: filter.field,
+          operator: filter.operator,
+          value: filter.value,
+        })));
+        d.quick_client = ($('#quickClientFilter').val() || '').trim();
+        d.quick_root = ($('#quickRootCnpjFilter').val() || '').trim();
+        d.quick_cnpj = ($('#quickCnpjFilter').val() || '').trim();
+        d.vigencia_id = initialVigenciaId;
       },
-      "language": {
-        "url": "//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json"
+      dataSrc: function (json) {
+        updateFilteredStats(json.filtered_stats);
+        return json.data || [];
       },
-      "pageLength": 25,
-      "order": [[0, "desc"]],
-      "columnDefs": [
-        { "orderable": false, "targets": 8 }
-      ],
-      columns: [
-        {
-          data: 'id',
-          render: function (data) {
-            return `<strong>${data}</strong>`;
-          }
-        },
-        {
-          data: null,
-          render: function (_, __, row) {
-            const nit = row.insured_nit ? `<small class="font-monospace text-muted">NIT: ${escapeHtml(row.insured_nit)}</small>` : '';
-            const type = row.benefit_type ? `<span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle align-self-start">${escapeHtml(row.benefit_type)}</span>` : '';
-            return `
+    },
+    "language": {
+      "url": "//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json"
+    },
+    "pageLength": 25,
+    "order": [[0, "desc"]],
+    "columnDefs": [
+      { "orderable": false, "targets": 8 }
+    ],
+    columns: [
+      {
+        data: 'id',
+        render: function (data) {
+          return `<strong>${data}</strong>`;
+        }
+      },
+      {
+        data: null,
+        render: function (_, __, row) {
+          const nit = row.insured_nit ? `<small class="font-monospace text-muted">NIT: ${escapeHtml(row.insured_nit)}</small>` : '';
+          const type = row.benefit_type ? `<span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle align-self-start">${escapeHtml(row.benefit_type)}</span>` : '';
+          return `
               <div class="d-flex flex-column gap-1">
                 <span class="benefit-number-pill text-primary fw-semibold">${escapeHtml(row.benefit_number || '-')}</span>
                 ${nit}
                 ${type}
               </div>`;
-          }
-        },
-        {
-          data: null,
-          render: function (_, __, row) {
-            const cpf = row.insured_cpf ? `<span class="font-monospace small">CPF: ${escapeHtml(row.insured_cpf)}</span>` : '';
-            const birth = row.insured_date_of_birth ? `<small class="text-muted">Nasc.: ${escapeHtml(row.insured_date_of_birth)}</small>` : '';
-            return `
+        }
+      },
+      {
+        data: null,
+        render: function (_, __, row) {
+          const cpf = row.insured_cpf ? `<span class="font-monospace small">CPF: ${escapeHtml(row.insured_cpf)}</span>` : '';
+          const birth = row.insured_date_of_birth ? `<small class="text-muted">Nasc.: ${escapeHtml(row.insured_date_of_birth)}</small>` : '';
+          return `
               <div class="d-flex flex-column gap-1">
                 <div class="fw-semibold">${escapeHtml(row.insured_name || 'Não informado')}</div>
                 ${cpf}
                 ${birth}
               </div>`;
-          }
-        },
-        {
-          data: null,
-          render: function (_, __, row) {
-            const cnpj = row.employer_cnpj ? `<span class="font-monospace">${escapeHtml(row.employer_cnpj)}</span>` : '<span class="text-muted">-</span>';
-            const name = row.employer_name ? `<small class="text-muted">${escapeHtml(row.employer_name)}</small>` : '<small class="text-muted">Não informado</small>';
-            return `
+        }
+      },
+      {
+        data: null,
+        render: function (_, __, row) {
+          const cnpj = row.employer_cnpj ? `<span class="font-monospace">${escapeHtml(row.employer_cnpj)}</span>` : '<span class="text-muted">-</span>';
+          const name = row.employer_name ? `<small class="text-muted">${escapeHtml(row.employer_name)}</small>` : '<small class="text-muted">Não informado</small>';
+          return `
               <div class="d-flex flex-column gap-1">
                 ${cnpj}
                 ${name}
               </div>`;
+        }
+      },
+      {
+        data: null,
+        className: 'text-center',
+        render: function (_, __, row) {
+          const badge = instanceStatusBadge(row.first_instance_status);
+          const raw = (row.first_instance_status_raw || '').trim();
+          const rawHtml = raw ? `<div class="text-muted" style="font-size:0.72rem;margin-top:0.3rem;line-height:1.2;">${escapeHtml(raw)}</div>` : '';
+          return badge + rawHtml;
+        }
+      },
+      {
+        data: null,
+        className: 'text-center',
+        render: function (_, __, row) {
+          const badge = instanceStatusBadge(row.second_instance_status);
+          const raw = (row.second_instance_status_raw || '').trim();
+          const rawHtml = raw ? `<div class="text-muted" style="font-size:0.72rem;margin-top:0.3rem;line-height:1.2;">${escapeHtml(raw)}</div>` : '';
+          return badge + rawHtml;
+        }
+      },
+      {
+        data: 'fap_vigencia_years',
+        render: function (data) {
+          if (!data) {
+            return '<span class="text-muted">-</span>';
           }
-        },
-        {
-          data: null,
-          className: 'text-center',
-          render: function (_, __, row) {
-            const badge = instanceStatusBadge(row.first_instance_status);
-            const raw = (row.first_instance_status_raw || '').trim();
-            const rawHtml = raw ? `<div class="text-muted" style="font-size:0.72rem;margin-top:0.3rem;line-height:1.2;">${escapeHtml(raw)}</div>` : '';
-            return badge + rawHtml;
-          }
-        },
-        {
-          data: null,
-          className: 'text-center',
-          render: function (_, __, row) {
-            const badge = instanceStatusBadge(row.second_instance_status);
-            const raw = (row.second_instance_status_raw || '').trim();
-            const rawHtml = raw ? `<div class="text-muted" style="font-size:0.72rem;margin-top:0.3rem;line-height:1.2;">${escapeHtml(raw)}</div>` : '';
-            return badge + rawHtml;
-          }
-        },
-        {
-          data: 'fap_vigencia_years',
-          render: function (data) {
-            if (!data) {
-              return '<span class="text-muted">-</span>';
-            }
-            return `<span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">${escapeHtml(data)}</span>`;
-          }
-        },
-        {
-          data: null,
-          render: function (_, __, row) {
-            const dib = row.benefit_start_date || '-';
-            const dcb = row.benefit_end_date || '-';
-            return `
+          return `<span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">${escapeHtml(data)}</span>`;
+        }
+      },
+      {
+        data: null,
+        render: function (_, __, row) {
+          const dib = row.benefit_start_date || '-';
+          const dcb = row.benefit_end_date || '-';
+          return `
               <div class="small">
                 <div><strong>DIB:</strong> ${escapeHtml(dib)}</div>
                 <div><strong>DCB:</strong> ${escapeHtml(dcb)}</div>
               </div>`;
-          }
-        },
-        {
-          data: null,
-          className: 'text-center',
-          render: function (_, __, row) {
-            const firstJustification = encodeMultilineAttr(row.first_instance_justification || '');
-            const firstOpinion = encodeMultilineAttr(row.first_instance_opinion || '');
-            const secondJustification = encodeMultilineAttr(row.second_instance_justification || '');
-            const secondOpinion = encodeMultilineAttr(row.second_instance_opinion || '');
+        }
+      },
+      {
+        data: null,
+        className: 'text-center',
+        render: function (_, __, row) {
+          const firstJustification = encodeMultilineAttr(row.first_instance_justification || '');
+          const firstOpinion = encodeMultilineAttr(row.first_instance_opinion || '');
+          const secondJustification = encodeMultilineAttr(row.second_instance_justification || '');
+          const secondOpinion = encodeMultilineAttr(row.second_instance_opinion || '');
 
-            return `
+          return `
               <div class="d-flex flex-wrap justify-content-center gap-2">
                 <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal"
                   data-bs-target="#benefitDecisionModal" data-benefit-number="${escapeAttr(row.benefit_number || '')}"
@@ -1122,368 +1126,449 @@
                   <i class="bi bi-trash"></i>
                 </button>
               </div>`;
-          }
-        },
-      ],
-      drawCallback: function () {
-        document.querySelectorAll('[data-bs-toggle="tooltip"], [data-tooltip]').forEach((el) => {
-          if (el.hasAttribute('data-tooltip')) {
-            el.setAttribute('title', el.getAttribute('data-tooltip') || '');
-          }
-          if (!bootstrap.Tooltip.getInstance(el)) {
-            new bootstrap.Tooltip(el);
-          }
-        });
+        }
       },
+    ],
+    drawCallback: function () {
+      document.querySelectorAll('[data-bs-toggle="tooltip"], [data-tooltip]').forEach((el) => {
+        if (el.hasAttribute('data-tooltip')) {
+          el.setAttribute('title', el.getAttribute('data-tooltip') || '');
+        }
+        if (!bootstrap.Tooltip.getInstance(el)) {
+          new bootstrap.Tooltip(el);
+        }
+      });
+    },
+  });
+
+  const fieldLabelMap = {
+    id: 'ID',
+    benefit_number: 'Número',
+    client_name: 'Cliente',
+    insured_name: 'Segurado',
+    benefit_type: 'Tipo',
+    insured_cpf: 'CPF',
+    insured_nit: 'NIT',
+    insured_date_of_birth: 'Data nascimento',
+    employer_cnpj: 'CNPJ Empregador',
+    employer_name: 'Nome empregador',
+    status: 'Status',
+    first_instance_status: 'Status 1ª instância',
+    first_instance_status_raw: 'Texto status 1ª instância',
+    second_instance_status: 'Status 2ª instância',
+    second_instance_status_raw: 'Texto status 2ª instância',
+    fap_vigencia_years: 'Vigência',
+    benefit_start_date: 'DIB',
+    benefit_end_date: 'DCB',
+    accident_date: 'Data acidente',
+    accident_company_name: 'Empresa acidente',
+    cat_number: 'CAT',
+    bo_number: 'BO',
+    request_type: 'Tipo solicitação',
+    initial_monthly_benefit: 'RMI',
+    total_paid: 'Total pago',
+    justification: 'Justificativa',
+    opinion: 'Parecer',
+    notes: 'Observações',
+  };
+
+  const operatorLabelMap = {
+    contains: 'contém',
+    equals: 'igual a',
+    starts_with: 'começa com',
+    ends_with: 'termina com',
+    empty: 'está vazio',
+    not_empty: 'não está vazio',
+  };
+
+  const BR_DATE_MASK_FIELDS = new Set(['insured_date_of_birth']);
+  const STATUS_SELECT_OPTIONS = {
+    status: [
+      { value: 'approved', label: 'Deferido' },
+      { value: 'rejected', label: 'Indeferido' },
+      { value: 'in_review', label: 'Em análise (in_review)' },
+      { value: 'analyzing', label: 'Em análise (analyzing)' },
+      { value: 'pending', label: 'Pendente' },
+    ],
+    first_instance_status: [
+      { value: 'deferido', label: 'Deferido' },
+      { value: 'indeferido', label: 'Indeferido' },
+      { value: 'analyzing', label: 'Em análise' },
+    ],
+    second_instance_status: [
+      { value: 'deferido', label: 'Deferido' },
+      { value: 'indeferido', label: 'Indeferido' },
+      { value: 'analyzing', label: 'Em análise' },
+    ],
+  };
+
+  function isStatusSelectField(field) {
+    return Object.prototype.hasOwnProperty.call(STATUS_SELECT_OPTIONS, String(field || '').trim());
+  }
+
+  function getStatusOptionLabel(field, value) {
+    const options = STATUS_SELECT_OPTIONS[String(field || '').trim()] || [];
+    const normalizedValue = String(value || '').trim().toLowerCase();
+    const found = options.find((item) => item.value.toLowerCase() === normalizedValue);
+    return found ? found.label : String(value || '').trim();
+  }
+
+  function populateStatusFilterSelect(field, selectedValue) {
+    const select = $('#centralFilterValueSelect');
+    const normalizedField = String(field || '').trim();
+    const normalizedSelected = String(selectedValue || '').trim();
+
+    select.empty().append('<option value="">Selecione um status</option>');
+    (STATUS_SELECT_OPTIONS[normalizedField] || []).forEach((option) => {
+      const isSelected = normalizedSelected && option.value.toLowerCase() === normalizedSelected.toLowerCase();
+      select.append(`<option value="${option.value}"${isSelected ? ' selected' : ''}>${option.label}</option>`);
     });
+  }
 
-    const fieldLabelMap = {
-      id: 'ID',
-      benefit_number: 'Número',
-      client_name: 'Cliente',
-      insured_name: 'Segurado',
-      benefit_type: 'Tipo',
-      insured_cpf: 'CPF',
-      insured_nit: 'NIT',
-      insured_date_of_birth: 'Data nascimento',
-      employer_cnpj: 'CNPJ Empregador',
-      employer_name: 'Nome empregador',
-      status: 'Status',
-      first_instance_status: 'Status 1ª instância',
-      first_instance_status_raw: 'Texto status 1ª instância',
-      second_instance_status: 'Status 2ª instância',
-      second_instance_status_raw: 'Texto status 2ª instância',
-      fap_vigencia_years: 'Vigência',
-      benefit_start_date: 'DIB',
-      benefit_end_date: 'DCB',
-      accident_date: 'Data acidente',
-      accident_company_name: 'Empresa acidente',
-      cat_number: 'CAT',
-      bo_number: 'BO',
-      request_type: 'Tipo solicitação',
-      initial_monthly_benefit: 'RMI',
-      total_paid: 'Total pago',
-      justification: 'Justificativa',
-      opinion: 'Parecer',
-      notes: 'Observações',
-    };
+  function isBrDateMaskField(field) {
+    return BR_DATE_MASK_FIELDS.has(String(field || '').trim());
+  }
 
-    const operatorLabelMap = {
-      contains: 'contém',
-      equals: 'igual a',
-      starts_with: 'começa com',
-      ends_with: 'termina com',
-      empty: 'está vazio',
-      not_empty: 'não está vazio',
-    };
+  function formatBrDateMask(rawValue) {
+    const digits = String(rawValue || '').replace(/\D/g, '').slice(0, 8);
+    if (digits.length <= 2) return digits;
+    if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+  }
 
-    const BR_DATE_MASK_FIELDS = new Set(['insured_date_of_birth']);
+  function convertBrDateToIso(rawValue) {
+    const value = String(rawValue || '').trim();
+    const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (!match) return '';
 
-    function isBrDateMaskField(field) {
-      return BR_DATE_MASK_FIELDS.has(String(field || '').trim());
+    const day = Number(match[1]);
+    const month = Number(match[2]);
+    const year = Number(match[3]);
+    const parsed = new Date(year, month - 1, day);
+    if (
+      Number.isNaN(parsed.getTime()) ||
+      parsed.getFullYear() !== year ||
+      parsed.getMonth() !== month - 1 ||
+      parsed.getDate() !== day
+    ) {
+      return '';
     }
 
-    function formatBrDateMask(rawValue) {
-      const digits = String(rawValue || '').replace(/\D/g, '').slice(0, 8);
-      if (digits.length <= 2) return digits;
-      if (digits.length <= 4) return `${digits.slice(0, 2)}/${digits.slice(2)}`;
-      return `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+    return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  }
+
+  function convertIsoDateToBr(rawValue) {
+    const value = String(rawValue || '').trim();
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (!match) return '';
+    return `${match[3]}/${match[2]}/${match[1]}`;
+  }
+
+  function normalizeFilterValueForField(field, rawValue) {
+    const normalized = String(rawValue || '').trim();
+    if (!isBrDateMaskField(field) || !normalized) {
+      return normalized;
     }
 
-    function convertBrDateToIso(rawValue) {
-      const value = String(rawValue || '').trim();
-      const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
-      if (!match) return '';
+    const iso = convertBrDateToIso(normalized);
+    return iso || normalized;
+  }
 
-      const day = Number(match[1]);
-      const month = Number(match[2]);
-      const year = Number(match[3]);
-      const parsed = new Date(year, month - 1, day);
-      if (
-        Number.isNaN(parsed.getTime()) ||
-        parsed.getFullYear() !== year ||
-        parsed.getMonth() !== month - 1 ||
-        parsed.getDate() !== day
-      ) {
-        return '';
+  function normalizeDisplayValueForField(field, normalizedValue) {
+    const value = String(normalizedValue || '').trim();
+    if (!isBrDateMaskField(field) || !value) {
+      if (isStatusSelectField(field) && value) {
+        return getStatusOptionLabel(field, value);
       }
-
-      return `${String(year).padStart(4, '0')}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+      return value;
     }
 
-    function convertIsoDateToBr(rawValue) {
-      const value = String(rawValue || '').trim();
-      const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
-      if (!match) return '';
-      return `${match[3]}/${match[2]}/${match[1]}`;
+    return convertIsoDateToBr(value) || value;
+  }
+
+  function getFilterValueElementForCurrentField() {
+    const field = $('#centralFilterField').val();
+    return isStatusSelectField(field) ? $('#centralFilterValueSelect') : $('#centralFilterValue');
+  }
+
+  function getCurrentFilterValue() {
+    const element = getFilterValueElementForCurrentField();
+    return String(element.val() || '').trim();
+  }
+
+  function setCurrentFilterValue(value) {
+    const field = $('#centralFilterField').val();
+    if (isStatusSelectField(field)) {
+      $('#centralFilterValueSelect').val(value || '');
+      return;
     }
+    $('#centralFilterValue').val(value || '');
+  }
 
-    function normalizeFilterValueForField(field, rawValue) {
-      const normalized = String(rawValue || '').trim();
-      if (!isBrDateMaskField(field) || !normalized) {
-        return normalized;
-      }
+  function updateFilterValueInputMask() {
+    const field = $('#centralFilterField').val();
+    const input = $('#centralFilterValue');
+    const select = $('#centralFilterValueSelect');
+    const currentValue = input.val();
+    const currentSelectValue = select.val();
 
-      const iso = convertBrDateToIso(normalized);
-      return iso || normalized;
-    }
-
-    function normalizeDisplayValueForField(field, normalizedValue) {
-      const value = String(normalizedValue || '').trim();
-      if (!isBrDateMaskField(field) || !value) {
-        return value;
-      }
-
-      return convertIsoDateToBr(value) || value;
-    }
-
-    function updateFilterValueInputMask() {
-      const field = $('#centralFilterField').val();
-      const input = $('#centralFilterValue');
-      const currentValue = input.val();
-
-      if (isBrDateMaskField(field)) {
-        input.attr('placeholder', 'DD/MM/AAAA');
-        input.attr('maxlength', '10');
-        input.attr('inputmode', 'numeric');
-        input.val(formatBrDateMask(currentValue));
-        return;
-      }
-
-      input.attr('placeholder', 'Digite um valor');
+    if (isStatusSelectField(field)) {
+      populateStatusFilterSelect(field, currentSelectValue || currentValue);
+      input.addClass('d-none');
+      select.removeClass('d-none');
       input.removeAttr('maxlength');
       input.removeAttr('inputmode');
+      input.attr('placeholder', 'Digite um valor');
+      return;
     }
 
-    function needsValue(operator) {
-      return operator !== 'empty' && operator !== 'not_empty';
+    select.addClass('d-none');
+    input.removeClass('d-none');
+
+    if (isBrDateMaskField(field)) {
+      input.attr('placeholder', 'DD/MM/AAAA');
+      input.attr('maxlength', '10');
+      input.attr('inputmode', 'numeric');
+      input.val(formatBrDateMask(currentValue));
+      return;
     }
 
-    function escapeHtml(value) {
-      return String(value || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
+    input.attr('placeholder', 'Digite um valor');
+    input.removeAttr('maxlength');
+    input.removeAttr('inputmode');
+  }
+
+  function needsValue(operator) {
+    return operator !== 'empty' && operator !== 'not_empty';
+  }
+
+  function escapeHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function escapeAttr(value) {
+    return escapeHtml(value).replace(/\n/g, ' ');
+  }
+
+  function encodeMultilineAttr(value) {
+    return escapeHtml(value).replace(/\n/g, '&#10;');
+  }
+
+  function instanceStatusBadge(status) {
+    const s = String(status || '').trim().toLowerCase();
+    if (s === 'deferido') {
+      return '<span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2" data-bs-toggle="tooltip" data-tooltip="Pedido deferido na análise administrativa." data-bs-placement="top">Deferido</span>';
     }
-
-    function escapeAttr(value) {
-      return escapeHtml(value).replace(/\n/g, ' ');
+    if (s === 'indeferido') {
+      return '<span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2" data-bs-toggle="tooltip" data-tooltip="Pedido indeferido na análise administrativa." data-bs-placement="top">Indeferido</span>';
     }
-
-    function encodeMultilineAttr(value) {
-      return escapeHtml(value).replace(/\n/g, '&#10;');
+    if (s === 'analyzing') {
+      return '<span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2" data-bs-toggle="tooltip" data-tooltip="Justificativa enviada, mas o pedido ainda não foi analisado." data-bs-placement="top">Em análise</span>';
     }
+    return '<span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3 py-2">-</span>';
+  }
 
-    function instanceStatusBadge(status) {
-      const s = String(status || '').trim().toLowerCase();
-      if (s === 'deferido') {
-        return '<span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2" data-bs-toggle="tooltip" data-tooltip="Pedido deferido na análise administrativa." data-bs-placement="top">Deferido</span>';
-      }
-      if (s === 'indeferido') {
-        return '<span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2" data-bs-toggle="tooltip" data-tooltip="Pedido indeferido na análise administrativa." data-bs-placement="top">Indeferido</span>';
-      }
-      if (s === 'analyzing') {
-        return '<span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2" data-bs-toggle="tooltip" data-tooltip="Justificativa enviada, mas o pedido ainda não foi analisado." data-bs-placement="top">Em análise</span>';
-      }
-      return '<span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3 py-2">-</span>';
-    }
+  function exportFilteredBenefitsToExcel() {
+    const order = table.order() || [[0, 'desc']];
+    const payload = {
+      search: table.search(),
+      order_column: order[0][0],
+      order_dir: order[0][1],
+      filters: filters.map((filter) => ({
+        field: filter.field,
+        operator: filter.operator,
+        value: filter.value,
+      })),
+      quick_client: ($('#quickClientFilter').val() || '').trim(),
+      quick_root: ($('#quickRootCnpjFilter').val() || '').trim(),
+      quick_cnpj: ($('#quickCnpjFilter').val() || '').trim(),
+      vigencia_id: initialVigenciaId,
+    };
 
-    function exportFilteredBenefitsToExcel() {
-      const order = table.order() || [[0, 'desc']];
-      const payload = {
-        search: table.search(),
-        order_column: order[0][0],
-        order_dir: order[0][1],
-        filters: filters.map((filter) => ({
-          field: filter.field,
-          operator: filter.operator,
-          value: filter.value,
-        })),
-        quick_client: ($('#quickClientFilter').val() || '').trim(),
-        quick_root: ($('#quickRootCnpjFilter').val() || '').trim(),
-        quick_cnpj: ($('#quickCnpjFilter').val() || '').trim(),
-        vigencia_id: initialVigenciaId,
-      };
-
-      fetch(exportUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
+    fetch(exportUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error('Falha ao gerar o arquivo de exportação.');
+        }
+        const disposition = response.headers.get('Content-Disposition') || '';
+        const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
+        const filename = filenameMatch ? filenameMatch[1] : 'beneficios_centralizados.xlsx';
+        return response.blob().then((blob) => ({ blob, filename }));
       })
-        .then((response) => {
-          if (!response.ok) {
-            throw new Error('Falha ao gerar o arquivo de exportação.');
-          }
-          const disposition = response.headers.get('Content-Disposition') || '';
-          const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
-          const filename = filenameMatch ? filenameMatch[1] : 'beneficios_centralizados.xlsx';
-          return response.blob().then((blob) => ({ blob, filename }));
-        })
-        .then(({ blob, filename }) => {
-          const url = window.URL.createObjectURL(blob);
-          const link = document.createElement('a');
-          link.href = url;
-          link.download = filename;
-          document.body.appendChild(link);
-          link.click();
-          link.remove();
-          window.URL.revokeObjectURL(url);
-        })
-        .catch((error) => {
-          alert(error.message || 'Erro inesperado ao exportar.');
-        });
+      .then(({ blob, filename }) => {
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      })
+      .catch((error) => {
+        alert(error.message || 'Erro inesperado ao exportar.');
+      });
+  }
+
+  function renderActiveFilters() {
+    const container = $('#activeCentralFilters');
+    container.empty();
+
+    if (!filters.length) {
+      container.append('<span class="text-muted small">Nenhum filtro ativo.</span>');
+      return;
     }
 
-    function renderActiveFilters() {
-      const container = $('#activeCentralFilters');
-      container.empty();
-
-      if (!filters.length) {
-        container.append('<span class="text-muted small">Nenhum filtro ativo.</span>');
-        return;
-      }
-
-      filters.forEach((filter) => {
-        const chip = $(
-          `<span class="filter-chip">
+    filters.forEach((filter) => {
+      const chip = $(
+        `<span class="filter-chip">
           <span>${filter.label}</span>
           <button type="button" class="btn-close btn-close-black remove-filter" aria-label="Remover"></button>
         </span>`
-        );
+      );
 
-        chip.find('.remove-filter').on('click', function () {
-          const idx = filters.findIndex((f) => f.id === filter.id);
-          if (idx >= 0) {
-            filters.splice(idx, 1);
-            renderActiveFilters();
-            table.ajax.reload();
-          }
-        });
-
-        container.append(chip);
+      chip.find('.remove-filter').on('click', function () {
+        const idx = filters.findIndex((f) => f.id === filter.id);
+        if (idx >= 0) {
+          filters.splice(idx, 1);
+          renderActiveFilters();
+          table.ajax.reload();
+        }
       });
+
+      container.append(chip);
+    });
+  }
+
+  $('#centralFilterOperator').on('change', function () {
+    const op = $(this).val();
+    const mustHaveValue = needsValue(op);
+    $('#centralFilterValue').prop('disabled', !mustHaveValue);
+    $('#centralFilterValueSelect').prop('disabled', !mustHaveValue);
+    if (!mustHaveValue) {
+      $('#centralFilterValue').val('');
+      $('#centralFilterValueSelect').val('');
+    }
+  });
+
+  $('#centralFilterField').on('change', function () {
+    updateFilterValueInputMask();
+  });
+
+  $('#centralFilterValue').on('input', function () {
+    const field = $('#centralFilterField').val();
+    if (!isBrDateMaskField(field)) {
+      return;
     }
 
-    $('#centralFilterOperator').on('change', function () {
-      const op = $(this).val();
-      const mustHaveValue = needsValue(op);
-      $('#centralFilterValue').prop('disabled', !mustHaveValue);
-      if (!mustHaveValue) {
-        $('#centralFilterValue').val('');
-      }
+    const maskedValue = formatBrDateMask($(this).val());
+    $(this).val(maskedValue);
+  });
+
+  $('#addCentralFilterBtn').on('click', function () {
+    const field = $('#centralFilterField').val();
+    const operator = $('#centralFilterOperator').val();
+    const rawValue = getCurrentFilterValue();
+    const value = normalizeFilterValueForField(field, rawValue);
+
+    if (needsValue(operator) && !rawValue) {
+      getFilterValueElementForCurrentField().focus();
+      return;
+    }
+
+    if (needsValue(operator) && isBrDateMaskField(field) && !convertBrDateToIso(rawValue)) {
+      alert('Informe a data no formato DD/MM/AAAA. Exemplo: 19/08/1993.');
+      $('#centralFilterValue').focus();
+      return;
+    }
+
+    const displayFilterValue = normalizeDisplayValueForField(field, value);
+    const displayValue = needsValue(operator) ? ` "${displayFilterValue}"` : '';
+    const label = `${fieldLabelMap[field]} ${operatorLabelMap[operator]}${displayValue}`;
+
+    filters.push({
+      id: Date.now() + Math.random(),
+      field,
+      operator,
+      value,
+      label,
     });
 
-    $('#centralFilterField').on('change', function () {
-      updateFilterValueInputMask();
+    setCurrentFilterValue('');
+    renderActiveFilters();
+    table.ajax.reload();
+  });
+
+  $('#clearCentralFiltersBtn').on('click', function () {
+    filters.splice(0, filters.length);
+    $('#quickClientFilter').val('');
+    $('#quickRootCnpjFilter').val('');
+    $('#quickCnpjFilter').val('').empty().append('<option value="">Todas as empresas</option>');
+    $('#quickCnpjFilterWrapper').hide();
+    $('#quickCnpjFilterSpacer').show();
+    renderActiveFilters();
+    table.search('');
+    table.ajax.reload();
+  });
+
+  $('#quickClientFilter').on('change', function () {
+    table.ajax.reload();
+  });
+
+  function populateCnpjFilter(root) {
+    const select = $('#quickCnpjFilter');
+    select.empty().append('<option value="">Todas as empresas</option>');
+    const items = cnpjByRoot[root] || [];
+    items.forEach(function (item) {
+      const label = item.company_name ? `${item.cnpj} — ${item.company_name}` : item.cnpj;
+      select.append(`<option value="${item.cnpj}">${label}</option>`);
     });
+  }
 
-    $('#centralFilterValue').on('input', function () {
-      const field = $('#centralFilterField').val();
-      if (!isBrDateMaskField(field)) {
-        return;
-      }
-
-      const maskedValue = formatBrDateMask($(this).val());
-      $(this).val(maskedValue);
-    });
-
-    $('#addCentralFilterBtn').on('click', function () {
-      const field = $('#centralFilterField').val();
-      const operator = $('#centralFilterOperator').val();
-      const rawValue = $('#centralFilterValue').val().trim();
-      const value = normalizeFilterValueForField(field, rawValue);
-
-      if (needsValue(operator) && !rawValue) {
-        $('#centralFilterValue').focus();
-        return;
-      }
-
-      if (needsValue(operator) && isBrDateMaskField(field) && !convertBrDateToIso(rawValue)) {
-        alert('Informe a data no formato DD/MM/AAAA. Exemplo: 19/08/1993.');
-        $('#centralFilterValue').focus();
-        return;
-      }
-
-      const displayFilterValue = normalizeDisplayValueForField(field, value);
-      const displayValue = needsValue(operator) ? ` "${displayFilterValue}"` : '';
-      const label = `${fieldLabelMap[field]} ${operatorLabelMap[operator]}${displayValue}`;
-
-      filters.push({
-        id: Date.now() + Math.random(),
-        field,
-        operator,
-        value,
-        label,
-      });
-
-      $('#centralFilterValue').val('');
-      renderActiveFilters();
-      table.ajax.reload();
-    });
-
-    $('#clearCentralFiltersBtn').on('click', function () {
-      filters.splice(0, filters.length);
-      $('#quickClientFilter').val('');
-      $('#quickRootCnpjFilter').val('');
+  $('#quickRootCnpjFilter').on('change', function () {
+    const root = $(this).val();
+    if (root) {
+      populateCnpjFilter(root);
+      $('#quickCnpjFilterWrapper').show();
+      $('#quickCnpjFilterSpacer').hide();
+    } else {
       $('#quickCnpjFilter').val('').empty().append('<option value="">Todas as empresas</option>');
       $('#quickCnpjFilterWrapper').hide();
       $('#quickCnpjFilterSpacer').show();
-      renderActiveFilters();
-      table.search('');
-      table.ajax.reload();
-    });
-
-    $('#quickClientFilter').on('change', function () {
-      table.ajax.reload();
-    });
-
-    function populateCnpjFilter(root) {
-      const select = $('#quickCnpjFilter');
-      select.empty().append('<option value="">Todas as empresas</option>');
-      const items = cnpjByRoot[root] || [];
-      items.forEach(function (item) {
-        const label = item.company_name ? `${item.cnpj} — ${item.company_name}` : item.cnpj;
-        select.append(`<option value="${item.cnpj}">${label}</option>`);
-      });
     }
+    table.ajax.reload();
+  });
 
-    $('#quickRootCnpjFilter').on('change', function () {
-      const root = $(this).val();
-      if (root) {
-        populateCnpjFilter(root);
-        $('#quickCnpjFilterWrapper').show();
-        $('#quickCnpjFilterSpacer').hide();
-      } else {
-        $('#quickCnpjFilter').val('').empty().append('<option value="">Todas as empresas</option>');
-        $('#quickCnpjFilterWrapper').hide();
-        $('#quickCnpjFilterSpacer').show();
-      }
-      table.ajax.reload();
-    });
+  $('#quickCnpjFilter').on('change', function () {
+    table.ajax.reload();
+  });
 
-    $('#quickCnpjFilter').on('change', function () {
-      table.ajax.reload();
-    });
+  $('#clearVigenciaFilterBtn').on('click', function () {
+    clearVigenciaFilterFromUrl();
+  });
 
-    $('#clearVigenciaFilterBtn').on('click', function () {
-      clearVigenciaFilterFromUrl();
-    });
+  applyFiltersFromUrl();
+  renderVigenciaFilterNotice();
+  renderActiveFilters();
+  if (filters.length || $('#quickClientFilter').val() || $('#quickRootCnpjFilter').val()) {
+    table.ajax.reload();
+  }
 
-    applyFiltersFromUrl();
-    renderVigenciaFilterNotice();
-    renderActiveFilters();
-    if (filters.length || $('#quickClientFilter').val() || $('#quickRootCnpjFilter').val()) {
-      table.ajax.reload();
-    }
+  $('#exportCentralBenefitsBtn').on('click', function () {
+    exportFilteredBenefitsToExcel();
+  });
 
-    $('#exportCentralBenefitsBtn').on('click', function () {
-      exportFilteredBenefitsToExcel();
-    });
-
-    updateFilterValueInputMask();
-    $('#centralFilterOperator').trigger('change');
+  updateFilterValueInputMask();
+  $('#centralFilterOperator').trigger('change');
   });
 
   function confirmDelete(url) {
