@@ -679,7 +679,49 @@ def _apply_cats_filters(query, search_value='', custom_filters=None, quick_emplo
             pass
 
     for item in custom_filters or []:
-        column = CAT_FILTER_FIELD_MAP.get(item['field'])
+        field = item['field']
+        operator = item['operator']
+        value = (item.get('value') or '').strip().lower()
+
+        # "Analyzing" for the general status field must match both stored values.
+        if operator == 'equals' and value == 'analyzing' and field == 'status':
+            query = query.filter(
+                func.lower(func.coalesce(cast(FapContestationCat.status, String), '')).in_(
+                    ['in_review', 'analyzing']
+                )
+            )
+            continue
+
+        # "Pending" for status fields must mirror the counter logic, not a simple equality check.
+        if operator == 'equals' and value == 'pending':
+            if field == 'status':
+                query = query.filter(
+                    ~func.lower(func.coalesce(cast(FapContestationCat.status, String), '')).in_(
+                        ['approved', 'in_review', 'analyzing', 'rejected']
+                    )
+                )
+                continue
+            if field == 'first_instance_status':
+                query = query.filter(
+                    ~func.lower(func.coalesce(cast(FapContestationCat.first_instance_status, String), '')).in_(
+                        ['deferido', 'indeferido', 'analyzing']
+                    )
+                )
+                continue
+            if field == 'second_instance_status':
+                query = query.filter(
+                    and_(
+                        ~func.lower(func.coalesce(cast(FapContestationCat.first_instance_status, String), '')).in_(
+                            ['deferido', 'analyzing']
+                        ),
+                        ~func.lower(func.coalesce(cast(FapContestationCat.second_instance_status, String), '')).in_(
+                            ['deferido', 'indeferido', 'analyzing']
+                        ),
+                    )
+                )
+                continue
+
+        column = CAT_FILTER_FIELD_MAP.get(field)
         if column is None:
             continue
         query = query.filter(_apply_text_operator(column, item['operator'], item.get('value')))
@@ -789,7 +831,49 @@ def _apply_payroll_mass_filters(query, search_value='', custom_filters=None, qui
             pass
 
     for item in custom_filters or []:
-        column = PAYROLL_MASS_FILTER_FIELD_MAP.get(item['field'])
+        field = item['field']
+        operator = item['operator']
+        value = (item.get('value') or '').strip().lower()
+
+        # "Analyzing" for the general status field must match both stored values.
+        if operator == 'equals' and value == 'analyzing' and field == 'status':
+            query = query.filter(
+                func.lower(func.coalesce(cast(FapContestationPayrollMass.status, String), '')).in_(
+                    ['in_review', 'analyzing']
+                )
+            )
+            continue
+
+        # "Pending" for status fields must mirror the counter logic, not a simple equality check.
+        if operator == 'equals' and value == 'pending':
+            if field == 'status':
+                query = query.filter(
+                    ~func.lower(func.coalesce(cast(FapContestationPayrollMass.status, String), '')).in_(
+                        ['approved', 'in_review', 'analyzing', 'rejected']
+                    )
+                )
+                continue
+            if field == 'first_instance_status':
+                query = query.filter(
+                    ~func.lower(func.coalesce(cast(FapContestationPayrollMass.first_instance_status, String), '')).in_(
+                        ['deferido', 'indeferido', 'analyzing']
+                    )
+                )
+                continue
+            if field == 'second_instance_status':
+                query = query.filter(
+                    and_(
+                        ~func.lower(func.coalesce(cast(FapContestationPayrollMass.first_instance_status, String), '')).in_(
+                            ['deferido', 'analyzing']
+                        ),
+                        ~func.lower(func.coalesce(cast(FapContestationPayrollMass.second_instance_status, String), '')).in_(
+                            ['deferido', 'indeferido', 'analyzing']
+                        ),
+                    )
+                )
+                continue
+
+        column = PAYROLL_MASS_FILTER_FIELD_MAP.get(field)
         if column is None:
             continue
         query = query.filter(_apply_text_operator(column, item['operator'], item.get('value')))
@@ -895,7 +979,49 @@ def _apply_employment_link_filters(query, search_value='', custom_filters=None, 
             pass
 
     for item in custom_filters or []:
-        column = EMPLOYMENT_LINK_FILTER_FIELD_MAP.get(item['field'])
+        field = item['field']
+        operator = item['operator']
+        value = (item.get('value') or '').strip().lower()
+
+        # "Analyzing" for the general status field must match both stored values.
+        if operator == 'equals' and value == 'analyzing' and field == 'status':
+            query = query.filter(
+                func.lower(func.coalesce(cast(FapContestationEmploymentLink.status, String), '')).in_(
+                    ['in_review', 'analyzing']
+                )
+            )
+            continue
+
+        # "Pending" for status fields must mirror the counter logic, not a simple equality check.
+        if operator == 'equals' and value == 'pending':
+            if field == 'status':
+                query = query.filter(
+                    ~func.lower(func.coalesce(cast(FapContestationEmploymentLink.status, String), '')).in_(
+                        ['approved', 'in_review', 'analyzing', 'rejected']
+                    )
+                )
+                continue
+            if field == 'first_instance_status':
+                query = query.filter(
+                    ~func.lower(func.coalesce(cast(FapContestationEmploymentLink.first_instance_status, String), '')).in_(
+                        ['deferido', 'indeferido', 'analyzing']
+                    )
+                )
+                continue
+            if field == 'second_instance_status':
+                query = query.filter(
+                    and_(
+                        ~func.lower(func.coalesce(cast(FapContestationEmploymentLink.first_instance_status, String), '')).in_(
+                            ['deferido', 'analyzing']
+                        ),
+                        ~func.lower(func.coalesce(cast(FapContestationEmploymentLink.second_instance_status, String), '')).in_(
+                            ['deferido', 'indeferido', 'analyzing']
+                        ),
+                    )
+                )
+                continue
+
+        column = EMPLOYMENT_LINK_FILTER_FIELD_MAP.get(field)
         if column is None:
             continue
         query = query.filter(_apply_text_operator(column, item['operator'], item.get('value')))
@@ -1005,7 +1131,49 @@ def _apply_turnover_rate_filters(query, search_value='', custom_filters=None, qu
             pass
 
     for item in custom_filters or []:
-        column = TURNOVER_RATE_FILTER_FIELD_MAP.get(item['field'])
+        field = item['field']
+        operator = item['operator']
+        value = (item.get('value') or '').strip().lower()
+
+        # "Analyzing" for the general status field must match both stored values.
+        if operator == 'equals' and value == 'analyzing' and field == 'status':
+            query = query.filter(
+                func.lower(func.coalesce(cast(FapContestationTurnoverRate.status, String), '')).in_(
+                    ['in_review', 'analyzing']
+                )
+            )
+            continue
+
+        # "Pending" for status fields must mirror the counter logic, not a simple equality check.
+        if operator == 'equals' and value == 'pending':
+            if field == 'status':
+                query = query.filter(
+                    ~func.lower(func.coalesce(cast(FapContestationTurnoverRate.status, String), '')).in_(
+                        ['approved', 'in_review', 'analyzing', 'rejected']
+                    )
+                )
+                continue
+            if field == 'first_instance_status':
+                query = query.filter(
+                    ~func.lower(func.coalesce(cast(FapContestationTurnoverRate.first_instance_status, String), '')).in_(
+                        ['deferido', 'indeferido', 'analyzing']
+                    )
+                )
+                continue
+            if field == 'second_instance_status':
+                query = query.filter(
+                    and_(
+                        ~func.lower(func.coalesce(cast(FapContestationTurnoverRate.first_instance_status, String), '')).in_(
+                            ['deferido', 'analyzing']
+                        ),
+                        ~func.lower(func.coalesce(cast(FapContestationTurnoverRate.second_instance_status, String), '')).in_(
+                            ['deferido', 'indeferido', 'analyzing']
+                        ),
+                    )
+                )
+                continue
+
+        column = TURNOVER_RATE_FILTER_FIELD_MAP.get(field)
         if column is None:
             continue
         query = query.filter(_apply_text_operator(column, item['operator'], item.get('value')))
@@ -2655,7 +2823,8 @@ def list_cats():
         ).group_by(func.lower(func.coalesce(cast(FapContestationCat.second_instance_status, String), ''))).all()
     }
     first_deferred_count = int(first_status_counts.get('deferido', 0))
-    second_total_base = max(total_count - first_deferred_count, 0)
+    first_analyzing_count = int(first_status_counts.get('analyzing', 0))
+    second_total_base = max(total_count - first_deferred_count - first_analyzing_count, 0)
     second_instance_stats = _build_instance_stats(second_total_base, second_status_counts)
 
     # Quick filter data: client names, CNPJ roots and breakdown (from Client model, same as benefits)
@@ -3029,7 +3198,8 @@ def list_payroll_masses():
         ).group_by(func.lower(func.coalesce(cast(FapContestationPayrollMass.second_instance_status, String), ''))).all()
     }
     first_deferred_count = int(first_status_counts.get('deferido', 0))
-    second_total_base = max(total_count - first_deferred_count, 0)
+    first_analyzing_count = int(first_status_counts.get('analyzing', 0))
+    second_total_base = max(total_count - first_deferred_count - first_analyzing_count, 0)
     second_instance_stats = _build_instance_stats(second_total_base, second_status_counts)
 
     cnpj_entries = (
@@ -3395,7 +3565,8 @@ def list_employment_links():
         ).group_by(func.lower(func.coalesce(cast(FapContestationEmploymentLink.second_instance_status, String), ''))).all()
     }
     first_deferred_count = int(first_status_counts.get('deferido', 0))
-    second_total_base = max(total_count - first_deferred_count, 0)
+    first_analyzing_count = int(first_status_counts.get('analyzing', 0))
+    second_total_base = max(total_count - first_deferred_count - first_analyzing_count, 0)
     second_instance_stats = _build_instance_stats(second_total_base, second_status_counts)
 
     cnpj_entries = (
@@ -3444,40 +3615,6 @@ def list_employment_links():
             del item['digits']
 
     initial_cnpj = _normalize_cnpj_digits(request.args.get('quick_cnpj', ''))
-
-    current_vigencia_filter = None
-    current_vigencia_id_raw = _normalize_text(request.args.get('vigencia_id', ''))
-    if current_vigencia_id_raw:
-        try:
-            vigencia_obj = FapVigenciaCnpj.query.filter_by(
-                id=int(current_vigencia_id_raw),
-                law_firm_id=law_firm_id,
-            ).first()
-        except (TypeError, ValueError):
-            vigencia_obj = None
-
-        if vigencia_obj is not None:
-            company_name = (
-                db.session.query(FapContestationEmploymentLink.employer_name)
-                .filter(
-                    FapContestationEmploymentLink.law_firm_id == law_firm_id,
-                    FapContestationEmploymentLink.vigencia_id == vigencia_obj.id,
-                    FapContestationEmploymentLink.employer_name.is_not(None),
-                    func.trim(FapContestationEmploymentLink.employer_name) != '',
-                )
-                .order_by(FapContestationEmploymentLink.updated_at.desc(), FapContestationEmploymentLink.id.desc())
-                .scalar()
-                or ''
-            ).strip()
-            current_vigencia_filter = {
-                'id': vigencia_obj.id,
-                'year': (vigencia_obj.vigencia_year or '').strip(),
-                'company_name': company_name,
-                'company_cnpj': _format_cnpj(vigencia_obj.employer_cnpj),
-            }
-
-    return render_template(
-        'disputes_center/employment_links.html',
         total_count=total_count,
         first_instance_stats=first_instance_stats,
         second_instance_stats=second_instance_stats,
@@ -3748,7 +3885,8 @@ def list_turnover_rates():
         ).group_by(func.lower(func.coalesce(cast(FapContestationTurnoverRate.second_instance_status, String), ''))).all()
     }
     first_deferred_count = int(first_status_counts.get('deferido', 0))
-    second_total_base = max(total_count - first_deferred_count, 0)
+    first_analyzing_count = int(first_status_counts.get('analyzing', 0))
+    second_total_base = max(total_count - first_deferred_count - first_analyzing_count, 0)
     second_instance_stats = _build_instance_stats(second_total_base, second_status_counts)
 
     cnpj_entries = (
