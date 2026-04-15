@@ -457,6 +457,7 @@
                   <select id="pmFilterField" class="form-select form-select-sm">
                     <option value="employer_cnpj">CNPJ Empregador</option>
                     <option value="competence">Competência</option>
+                    <option value="status">Status</option>
                     <option value="first_instance_status">Status 1ª instância</option>
                     <option value="first_instance_status_raw">Texto status 1ª instância</option>
                     <option value="second_instance_status">Status 2ª instância</option>
@@ -478,6 +479,9 @@
                   <label class="form-label form-label-sm mb-1 fw-semibold">Valor</label>
                   <input type="text" id="pmFilterValue" class="form-control form-control-sm"
                     placeholder="Digite um valor" />
+                  <select id="pmFilterValueSelect" class="form-select form-select-sm d-none">
+                    <option value="">Selecione um status</option>
+                  </select>
                 </div>
                 <div class="col-12 col-md-auto">
                   <button id="addPmFilterBtn" class="btn btn-sm btn-primary w-100">
@@ -691,6 +695,7 @@
     const fieldLabelMap = {
       employer_cnpj: 'CNPJ Empregador',
       competence: 'Competência',
+      status: 'Status',
       first_instance_status: 'Status 1ª instância',
       first_instance_status_raw: 'Texto status 1ª instância',
       second_instance_status: 'Status 2ª instância',
@@ -705,6 +710,46 @@
       empty: 'está vazio',
       not_empty: 'não está vazio',
     };
+
+    const STATUS_SELECT_OPTIONS = {
+      status: [
+        { value: 'approved', label: 'Deferido' },
+        { value: 'rejected', label: 'Indeferido' },
+        { value: 'analyzing', label: 'Em análise' },
+        { value: 'pending', label: 'Pendente' },
+      ],
+      first_instance_status: [
+        { value: 'deferido', label: 'Deferido' },
+        { value: 'indeferido', label: 'Indeferido' },
+        { value: 'analyzing', label: 'Em análise' },
+        { value: 'pending', label: 'Pendente' },
+      ],
+      second_instance_status: [
+        { value: 'deferido', label: 'Deferido' },
+        { value: 'indeferido', label: 'Indeferido' },
+        { value: 'analyzing', label: 'Em análise' },
+        { value: 'pending', label: 'Pendente' },
+      ],
+    };
+
+    function isStatusSelectField(field) {
+      return Object.prototype.hasOwnProperty.call(STATUS_SELECT_OPTIONS, String(field || '').trim());
+    }
+
+    function getStatusOptionLabel(field, value) {
+      const options = STATUS_SELECT_OPTIONS[String(field || '').trim()] || [];
+      const normalizedValue = String(value || '').trim().toLowerCase();
+      const found = options.find(function (item) { return item.value.toLowerCase() === normalizedValue; });
+      return found ? found.label : String(value || '').trim();
+    }
+
+    function populatePmStatusFilterSelect(field) {
+      const select = $('#pmFilterValueSelect');
+      select.empty().append('<option value="">Selecione um status</option>');
+      (STATUS_SELECT_OPTIONS[String(field || '').trim()] || []).forEach(function (option) {
+        select.append(`<option value="${option.value}">${option.label}</option>`);
+      });
+    }
 
     function escapeHtml(value) {
       return String(value || '')
@@ -908,27 +953,72 @@
     });
 
     // Filtros
+    function updatePmOperatorOptions() {
+      const field = $('#pmFilterField').val();
+      const operatorSelect = $('#pmFilterOperator');
+      const currentOp = operatorSelect.val();
+      if (isStatusSelectField(field)) {
+        operatorSelect.empty().append('<option value="equals">igual a</option>');
+      } else if (operatorSelect.find('option').length <= 1) {
+        operatorSelect.empty()
+          .append('<option value="contains">contém</option>')
+          .append('<option value="equals">igual a</option>')
+          .append('<option value="starts_with">começa com</option>')
+          .append('<option value="ends_with">termina com</option>')
+          .append('<option value="empty">está vazio</option>')
+          .append('<option value="not_empty">não está vazio</option>');
+        operatorSelect.val(currentOp || 'contains');
+      }
+      operatorSelect.trigger('change');
+    }
+
+    function updatePmFilterValueInputMask() {
+      const field = $('#pmFilterField').val();
+      if (isStatusSelectField(field)) {
+        populatePmStatusFilterSelect(field);
+        $('#pmFilterValue').addClass('d-none');
+        $('#pmFilterValueSelect').removeClass('d-none');
+      } else {
+        $('#pmFilterValueSelect').addClass('d-none');
+        $('#pmFilterValue').removeClass('d-none').attr('placeholder', 'Digite um valor');
+      }
+    }
+
+    $('#pmFilterField').on('change', function () {
+      updatePmOperatorOptions();
+      updatePmFilterValueInputMask();
+    });
+
     $('#pmFilterOperator').on('change', function () {
       const op = $(this).val();
-      $('#pmFilterValue').prop('disabled', !needsValue(op));
-      if (!needsValue(op)) $('#pmFilterValue').val('');
+      const mustHave = needsValue(op);
+      $('#pmFilterValue').prop('disabled', !mustHave);
+      $('#pmFilterValueSelect').prop('disabled', !mustHave);
+      if (!mustHave) {
+        $('#pmFilterValue').val('');
+        $('#pmFilterValueSelect').val('');
+      }
     });
 
     $('#addPmFilterBtn').on('click', function () {
       const field = $('#pmFilterField').val();
       const operator = $('#pmFilterOperator').val();
-      const value = $('#pmFilterValue').val().trim();
+      const rawValue = isStatusSelectField(field) ? $('#pmFilterValueSelect').val() : $('#pmFilterValue').val();
+      const value = (rawValue || '').trim();
 
       if (needsValue(operator) && !value) {
-        $('#pmFilterValue').focus();
+        (isStatusSelectField(field) ? $('#pmFilterValueSelect') : $('#pmFilterValue')).focus();
         return;
       }
 
-      const displayValue = needsValue(operator) ? ` "${value}"` : '';
+      const displayValue = needsValue(operator)
+        ? ` "${isStatusSelectField(field) ? getStatusOptionLabel(field, value) : value}"`
+        : '';
       const label = `${fieldLabelMap[field]} ${operatorLabelMap[operator]}${displayValue}`;
 
       filters.push({ id: Date.now() + Math.random(), field, operator, value, label });
       $('#pmFilterValue').val('');
+      $('#pmFilterValueSelect').val('');
       renderActiveFilters();
       table.ajax.reload();
     });
@@ -1006,6 +1096,9 @@
     });
 
     // Inicializa painel filtrado
+    updatePmOperatorOptions();
+    updatePmFilterValueInputMask();
+    $('#pmFilterOperator').trigger('change');
     table.ajax.reload();
 
     // Modal de decisões

@@ -326,6 +326,7 @@
                   <select id="elFilterField" class="form-select form-select-sm">
                     <option value="employer_cnpj">CNPJ Empregador</option>
                     <option value="competence">Competência</option>
+                    <option value="status">Status</option>
                     <option value="first_instance_status">Status 1ª instância</option>
                     <option value="first_instance_status_raw">Texto status 1ª instância</option>
                     <option value="second_instance_status">Status 2ª instância</option>
@@ -346,6 +347,9 @@
                 <div class="col-12 col-md-4">
                   <label class="form-label form-label-sm mb-1 fw-semibold">Valor</label>
                   <input type="text" id="elFilterValue" class="form-control form-control-sm" placeholder="Digite um valor" />
+                  <select id="elFilterValueSelect" class="form-select form-select-sm d-none">
+                    <option value="">Selecione um status</option>
+                  </select>
                 </div>
                 <div class="col-12 col-md-auto">
                   <button id="addElFilterBtn" class="btn btn-sm btn-primary w-100">
@@ -538,6 +542,7 @@
   const fieldLabelMap = {
     employer_cnpj: 'CNPJ Empregador',
     competence: 'Competência',
+    status: 'Status',
     first_instance_status: 'Status 1ª instância',
     first_instance_status_raw: 'Texto status 1ª instância',
     second_instance_status: 'Status 2ª instância',
@@ -551,6 +556,46 @@
     empty: 'está vazio',
     not_empty: 'não está vazio',
   };
+
+  const STATUS_SELECT_OPTIONS = {
+    status: [
+      { value: 'approved', label: 'Deferido' },
+      { value: 'rejected', label: 'Indeferido' },
+      { value: 'analyzing', label: 'Em análise' },
+      { value: 'pending', label: 'Pendente' },
+    ],
+    first_instance_status: [
+      { value: 'deferido', label: 'Deferido' },
+      { value: 'indeferido', label: 'Indeferido' },
+      { value: 'analyzing', label: 'Em análise' },
+      { value: 'pending', label: 'Pendente' },
+    ],
+    second_instance_status: [
+      { value: 'deferido', label: 'Deferido' },
+      { value: 'indeferido', label: 'Indeferido' },
+      { value: 'analyzing', label: 'Em análise' },
+      { value: 'pending', label: 'Pendente' },
+    ],
+  };
+
+  function isStatusSelectField(field) {
+    return Object.prototype.hasOwnProperty.call(STATUS_SELECT_OPTIONS, String(field || '').trim());
+  }
+
+  function getStatusOptionLabel(field, value) {
+    const options = STATUS_SELECT_OPTIONS[String(field || '').trim()] || [];
+    const normalizedValue = String(value || '').trim().toLowerCase();
+    const found = options.find(function (item) { return item.value.toLowerCase() === normalizedValue; });
+    return found ? found.label : String(value || '').trim();
+  }
+
+  function populateElStatusFilterSelect(field) {
+    const select = $('#elFilterValueSelect');
+    select.empty().append('<option value="">Selecione um status</option>');
+    (STATUS_SELECT_OPTIONS[String(field || '').trim()] || []).forEach(function (option) {
+      select.append(`<option value="${option.value}">${option.label}</option>`);
+    });
+  }
 
   function needsValue(op) { return !['empty', 'not_empty'].includes(op); }
 
@@ -747,21 +792,69 @@
     });
 
     // Filtros
+    function updateElOperatorOptions() {
+      const field = $('#elFilterField').val();
+      const operatorSelect = $('#elFilterOperator');
+      const currentOp = operatorSelect.val();
+      if (isStatusSelectField(field)) {
+        operatorSelect.empty().append('<option value="equals">igual a</option>');
+      } else if (operatorSelect.find('option').length <= 1) {
+        operatorSelect.empty()
+          .append('<option value="contains">contém</option>')
+          .append('<option value="equals">igual a</option>')
+          .append('<option value="starts_with">começa com</option>')
+          .append('<option value="ends_with">termina com</option>')
+          .append('<option value="empty">está vazio</option>')
+          .append('<option value="not_empty">não está vazio</option>');
+        operatorSelect.val(currentOp || 'contains');
+      }
+      operatorSelect.trigger('change');
+    }
+
+    function updateElFilterValueInputMask() {
+      const field = $('#elFilterField').val();
+      if (isStatusSelectField(field)) {
+        populateElStatusFilterSelect(field);
+        $('#elFilterValue').addClass('d-none');
+        $('#elFilterValueSelect').removeClass('d-none');
+      } else {
+        $('#elFilterValueSelect').addClass('d-none');
+        $('#elFilterValue').removeClass('d-none').attr('placeholder', 'Digite um valor');
+      }
+    }
+
+    $('#elFilterField').on('change', function () {
+      updateElOperatorOptions();
+      updateElFilterValueInputMask();
+    });
+
     $('#elFilterOperator').on('change', function () {
       const op = $(this).val();
-      $('#elFilterValue').prop('disabled', !needsValue(op));
-      if (!needsValue(op)) $('#elFilterValue').val('');
+      const mustHave = needsValue(op);
+      $('#elFilterValue').prop('disabled', !mustHave);
+      $('#elFilterValueSelect').prop('disabled', !mustHave);
+      if (!mustHave) {
+        $('#elFilterValue').val('');
+        $('#elFilterValueSelect').val('');
+      }
     });
 
     $('#addElFilterBtn').on('click', function () {
       const field = $('#elFilterField').val();
       const operator = $('#elFilterOperator').val();
-      const value = $('#elFilterValue').val().trim();
-      if (needsValue(operator) && !value) { $('#elFilterValue').focus(); return; }
-      const displayValue = needsValue(operator) ? ` "${value}"` : '';
+      const rawValue = isStatusSelectField(field) ? $('#elFilterValueSelect').val() : $('#elFilterValue').val();
+      const value = (rawValue || '').trim();
+      if (needsValue(operator) && !value) {
+        (isStatusSelectField(field) ? $('#elFilterValueSelect') : $('#elFilterValue')).focus();
+        return;
+      }
+      const displayValue = needsValue(operator)
+        ? ` "${isStatusSelectField(field) ? getStatusOptionLabel(field, value) : value}"`
+        : '';
       const label = `${fieldLabelMap[field]} ${operatorLabelMap[operator]}${displayValue}`;
       filters.push({ id: Date.now() + Math.random(), field, operator, value, label });
       $('#elFilterValue').val('');
+      $('#elFilterValueSelect').val('');
       renderActiveFilters();
       table.ajax.reload();
     });
@@ -827,6 +920,9 @@
     $('#clearVigenciaFilterBtn').on('click', function () { clearVigenciaFilterFromUrl(); });
 
     // Inicializa painel filtrado
+    updateElOperatorOptions();
+    updateElFilterValueInputMask();
+    $('#elFilterOperator').trigger('change');
     table.ajax.reload();
 
     // Modal de decisões

@@ -464,6 +464,7 @@
                     <option value="employer_cnpj_assigned">CNPJ Empregador Atribuído</option>
                     <option value="insured_nit">NIT Segurado</option>
                     <option value="cat_block">Bloqueio</option>
+                    <option value="status">Status</option>
                     <option value="first_instance_status">Status 1ª instância</option>
                     <option value="first_instance_status_raw">Texto status 1ª instância</option>
                     <option value="second_instance_status">Status 2ª instância</option>
@@ -485,6 +486,9 @@
                   <label class="form-label form-label-sm mb-1 fw-semibold">Valor</label>
                   <input type="text" id="catFilterValue" class="form-control form-control-sm"
                     placeholder="Digite um valor" />
+                  <select id="catFilterValueSelect" class="form-select form-select-sm d-none">
+                    <option value="">Selecione um status</option>
+                  </select>
                 </div>
                 <div class="col-12 col-md-auto">
                   <button id="addCatFilterBtn" class="btn btn-sm btn-primary w-100">
@@ -695,6 +699,7 @@
       employer_cnpj_assigned: 'CNPJ Empregador Atribuído',
       insured_nit: 'NIT Segurado',
       cat_block: 'Bloqueio',
+      status: 'Status',
       first_instance_status: 'Status 1ª instância',
       first_instance_status_raw: 'Texto status 1ª instância',
       second_instance_status: 'Status 2ª instância',
@@ -709,6 +714,46 @@
       empty: 'está vazio',
       not_empty: 'não está vazio',
     };
+
+    const STATUS_SELECT_OPTIONS = {
+      status: [
+        { value: 'approved', label: 'Deferido' },
+        { value: 'rejected', label: 'Indeferido' },
+        { value: 'analyzing', label: 'Em análise' },
+        { value: 'pending', label: 'Pendente' },
+      ],
+      first_instance_status: [
+        { value: 'deferido', label: 'Deferido' },
+        { value: 'indeferido', label: 'Indeferido' },
+        { value: 'analyzing', label: 'Em análise' },
+        { value: 'pending', label: 'Pendente' },
+      ],
+      second_instance_status: [
+        { value: 'deferido', label: 'Deferido' },
+        { value: 'indeferido', label: 'Indeferido' },
+        { value: 'analyzing', label: 'Em análise' },
+        { value: 'pending', label: 'Pendente' },
+      ],
+    };
+
+    function isStatusSelectField(field) {
+      return Object.prototype.hasOwnProperty.call(STATUS_SELECT_OPTIONS, String(field || '').trim());
+    }
+
+    function getStatusOptionLabel(field, value) {
+      const options = STATUS_SELECT_OPTIONS[String(field || '').trim()] || [];
+      const normalizedValue = String(value || '').trim().toLowerCase();
+      const found = options.find(function (item) { return item.value.toLowerCase() === normalizedValue; });
+      return found ? found.label : String(value || '').trim();
+    }
+
+    function populateCatStatusFilterSelect(field) {
+      const select = $('#catFilterValueSelect');
+      select.empty().append('<option value="">Selecione um status</option>');
+      (STATUS_SELECT_OPTIONS[String(field || '').trim()] || []).forEach(function (option) {
+        select.append(`<option value="${option.value}">${option.label}</option>`);
+      });
+    }
 
     function escapeHtml(value) {
       return String(value || '')
@@ -930,27 +975,72 @@
     });
 
     // Filtros
+    function updateCatOperatorOptions() {
+      const field = $('#catFilterField').val();
+      const operatorSelect = $('#catFilterOperator');
+      const currentOp = operatorSelect.val();
+      if (isStatusSelectField(field)) {
+        operatorSelect.empty().append('<option value="equals">igual a</option>');
+      } else if (operatorSelect.find('option').length <= 1) {
+        operatorSelect.empty()
+          .append('<option value="contains">contém</option>')
+          .append('<option value="equals">igual a</option>')
+          .append('<option value="starts_with">começa com</option>')
+          .append('<option value="ends_with">termina com</option>')
+          .append('<option value="empty">está vazio</option>')
+          .append('<option value="not_empty">não está vazio</option>');
+        operatorSelect.val(currentOp || 'contains');
+      }
+      operatorSelect.trigger('change');
+    }
+
+    function updateCatFilterValueInputMask() {
+      const field = $('#catFilterField').val();
+      if (isStatusSelectField(field)) {
+        populateCatStatusFilterSelect(field);
+        $('#catFilterValue').addClass('d-none');
+        $('#catFilterValueSelect').removeClass('d-none');
+      } else {
+        $('#catFilterValueSelect').addClass('d-none');
+        $('#catFilterValue').removeClass('d-none').attr('placeholder', 'Digite um valor');
+      }
+    }
+
+    $('#catFilterField').on('change', function () {
+      updateCatOperatorOptions();
+      updateCatFilterValueInputMask();
+    });
+
     $('#catFilterOperator').on('change', function () {
       const op = $(this).val();
-      $('#catFilterValue').prop('disabled', !needsValue(op));
-      if (!needsValue(op)) $('#catFilterValue').val('');
+      const mustHave = needsValue(op);
+      $('#catFilterValue').prop('disabled', !mustHave);
+      $('#catFilterValueSelect').prop('disabled', !mustHave);
+      if (!mustHave) {
+        $('#catFilterValue').val('');
+        $('#catFilterValueSelect').val('');
+      }
     });
 
     $('#addCatFilterBtn').on('click', function () {
       const field = $('#catFilterField').val();
       const operator = $('#catFilterOperator').val();
-      const value = $('#catFilterValue').val().trim();
+      const rawValue = isStatusSelectField(field) ? $('#catFilterValueSelect').val() : $('#catFilterValue').val();
+      const value = (rawValue || '').trim();
 
       if (needsValue(operator) && !value) {
-        $('#catFilterValue').focus();
+        (isStatusSelectField(field) ? $('#catFilterValueSelect') : $('#catFilterValue')).focus();
         return;
       }
 
-      const displayValue = needsValue(operator) ? ` "${value}"` : '';
+      const displayValue = needsValue(operator)
+        ? ` "${isStatusSelectField(field) ? getStatusOptionLabel(field, value) : value}"`
+        : '';
       const label = `${fieldLabelMap[field]} ${operatorLabelMap[operator]}${displayValue}`;
 
       filters.push({ id: Date.now() + Math.random(), field, operator, value, label });
       $('#catFilterValue').val('');
+      $('#catFilterValueSelect').val('');
       renderActiveFilters();
       table.ajax.reload();
     });
@@ -1051,6 +1141,9 @@
     }
 
     // Inicializa painel filtrado
+    updateCatOperatorOptions();
+    updateCatFilterValueInputMask();
+    $('#catFilterOperator').trigger('change');
     table.ajax.reload();
 
     // Modal de decisões
