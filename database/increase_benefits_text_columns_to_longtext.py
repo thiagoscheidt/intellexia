@@ -1,11 +1,11 @@
 """
-Script para ampliar colunas textuais da tabela benefits para LONGTEXT no MySQL.
+Script para ampliar campos textuais da tabela benefits para LONGTEXT no MySQL.
 
 Motivacao:
 - Evitar erro (1406) Data too long em importacoes de relatorios FAP com textos extensos.
 
 Uso:
-    uv run python database/increase_benefits_text_columns_to_longtext.py
+    uv run database/increase_benefits_text_columns_to_longtext.py
 """
 
 import sys
@@ -42,13 +42,15 @@ def increase_benefits_text_columns():
             existing = _get_existing_columns(connection, "benefits", is_mysql=True)
 
             target_columns = [
-                "notes",
+                "first_instance_status_raw",
+                "second_instance_status_raw",
+                "first_instance_justification",
+                "second_instance_justification",
+                "first_instance_opinion",
+                "second_instance_opinion",
                 "justification",
                 "opinion",
-                "first_instance_justification",
-                "first_instance_opinion",
-                "second_instance_justification",
-                "second_instance_opinion",
+                "notes",
                 "accident_summary",
             ]
 
