@@ -1194,11 +1194,13 @@
       { value: 'deferido', label: 'Deferido' },
       { value: 'indeferido', label: 'Indeferido' },
       { value: 'analyzing', label: 'Em análise' },
+      { value: 'pending', label: 'Pendente' },
     ],
     second_instance_status: [
       { value: 'deferido', label: 'Deferido' },
       { value: 'indeferido', label: 'Indeferido' },
       { value: 'analyzing', label: 'Em análise' },
+      { value: 'pending', label: 'Pendente' },
     ],
   };
 
@@ -1460,7 +1462,31 @@
     }
   });
 
+  function updateOperatorOptions() {
+    const field = $('#centralFilterField').val();
+    const operatorSelect = $('#centralFilterOperator');
+    const currentOp = operatorSelect.val();
+
+    if (isStatusSelectField(field)) {
+      operatorSelect.empty().append('<option value="equals">igual a</option>');
+    } else {
+      if (operatorSelect.find('option').length <= 1) {
+        operatorSelect.empty()
+          .append('<option value="contains">contém</option>')
+          .append('<option value="equals">igual a</option>')
+          .append('<option value="starts_with">começa com</option>')
+          .append('<option value="ends_with">termina com</option>')
+          .append('<option value="empty">está vazio</option>')
+          .append('<option value="not_empty">não está vazio</option>');
+        operatorSelect.val(currentOp || 'contains');
+      }
+    }
+
+    operatorSelect.trigger('change');
+  }
+
   $('#centralFilterField').on('change', function () {
+    updateOperatorOptions();
     updateFilterValueInputMask();
   });
 
@@ -1567,6 +1593,7 @@
     exportFilteredBenefitsToExcel();
   });
 
+  updateOperatorOptions();
   updateFilterValueInputMask();
   $('#centralFilterOperator').trigger('change');
   });

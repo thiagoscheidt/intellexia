@@ -1122,7 +1122,38 @@ def _apply_benefits_filters(query, search_value='', custom_filters=None, quick_c
             pass
 
     for item in custom_filters or []:
-        column = FILTER_FIELD_MAP.get(item['field'])
+        field = item['field']
+        operator = item['operator']
+        value = (item.get('value') or '').strip().lower()
+
+        # "Pending" for status fields must mirror the counter logic, not a simple equality check.
+        if operator == 'equals' and value == 'pending':
+            if field == 'status':
+                query = query.filter(
+                    ~func.lower(func.coalesce(cast(Benefit.status, String), '')).in_(
+                        ['approved', 'in_review', 'analyzing', 'rejected']
+                    )
+                )
+                continue
+            if field == 'first_instance_status':
+                query = query.filter(
+                    ~func.lower(func.coalesce(cast(Benefit.first_instance_status, String), '')).in_(
+                        ['deferido', 'indeferido', 'analyzing']
+                    )
+                )
+                continue
+            if field == 'second_instance_status':
+                query = query.filter(
+                    and_(
+                        func.lower(func.coalesce(cast(Benefit.first_instance_status, String), '')) != 'deferido',
+                        ~func.lower(func.coalesce(cast(Benefit.second_instance_status, String), '')).in_(
+                            ['deferido', 'indeferido', 'analyzing']
+                        ),
+                    )
+                )
+                continue
+
+        column = FILTER_FIELD_MAP.get(field)
         if column is None:
             continue
         query = query.filter(_apply_text_operator(column, item['operator'], item.get('value')))
