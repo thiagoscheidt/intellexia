@@ -3637,6 +3637,38 @@ def list_employment_links():
             del item['digits']
 
     initial_cnpj = _normalize_cnpj_digits(request.args.get('quick_cnpj', ''))
+
+    current_vigencia_filter = None
+    current_vigencia_id_raw = _normalize_text(request.args.get('vigencia_id', ''))
+    if current_vigencia_id_raw:
+        try:
+            vigencia_obj = FapVigenciaCnpj.query.filter_by(
+                id=int(current_vigencia_id_raw),
+                law_firm_id=law_firm_id,
+            ).first()
+        except (TypeError, ValueError):
+            vigencia_obj = None
+
+        if vigencia_obj is not None:
+            company_name = (
+                db.session.query(FapContestationEmploymentLink.employer_name)
+                .filter(
+                    FapContestationEmploymentLink.law_firm_id == law_firm_id,
+                    FapContestationEmploymentLink.vigencia_id == vigencia_obj.id,
+                    FapContestationEmploymentLink.employer_name.is_not(None),
+                    func.trim(FapContestationEmploymentLink.employer_name) != '',
+                )
+                .order_by(FapContestationEmploymentLink.updated_at.desc(), FapContestationEmploymentLink.id.desc())
+                .scalar()
+                or ''
+            ).strip()
+            current_vigencia_filter = {
+                'id': vigencia_obj.id,
+                'year': (vigencia_obj.vigencia_year or '').strip(),
+                'company_name': company_name,
+                'company_cnpj': _format_cnpj(vigencia_obj.employer_cnpj),
+            }
+
     return render_template(
         'disputes_center/employment_links.html',
         total_count=total_count,
