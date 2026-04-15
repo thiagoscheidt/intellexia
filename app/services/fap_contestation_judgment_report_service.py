@@ -771,6 +771,25 @@ class FapContestationJudgmentReportService:
         return value or None
 
     @staticmethod
+    def _extract_status_text(section: str) -> str | None:
+        """Extrai o texto bruto do campo Status sem confundir ocorrências em frases livres."""
+        if not section:
+            return None
+
+        status_keyword_pattern = r'(?:Indeferido|Deferido|Analyzing|Pendente|Pending)'
+
+        explicit_label_match = re.search(
+            rf'\bStatus\b\s*(?:[:\-]\s*|\s+|\n\s*)(?P<value>{status_keyword_pattern}[^\n\r]*)',
+            section,
+            flags=re.IGNORECASE,
+        )
+        if explicit_label_match:
+            value = re.sub(r'\s+', ' ', explicit_label_match.group('value')).strip(' :-\n\t')
+            return value or None
+
+        return None
+
+    @staticmethod
     def _normalize_benefit_type(raw_value: str | None) -> str | None:
         if not raw_value:
             return None
@@ -1035,31 +1054,40 @@ class FapContestationJudgmentReportService:
         if not section:
             return {'status': None, 'status_raw': None, 'justification': None, 'opinion': None}
 
+        status_label_pattern = (
+            r'\bStatus\b(?=\s*(?:[:\-]|\n|\r|Indeferido\b|Deferido\b|Analyzing\b|Pendente\b|Pending\b))'
+        )
+
         justification = self._extract_text_between_keywords(
             section,
             r'\bJustificativa\b',
-            [r'\bStatus\b', r'\bParecer\b'],
+            [status_label_pattern, r'\bParecer\b'],
         )
 
         # O status pode aparecer isolado após os rótulos "Status"/"Parecer" por quebra de layout.
-        status_match = re.search(r'\b(Indeferido|Deferido|Analyzing)\b', section, flags=re.IGNORECASE)
+        labeled_status_match = re.search(
+            r'\bStatus\b\s*(?:[:\-]\s*|\s+|\n\s*)(Indeferido|Deferido|Analyzing|Pendente|Pending)\b',
+            section,
+            flags=re.IGNORECASE,
+        )
+        status_match = labeled_status_match or re.search(
+            r'\b(Indeferido|Deferido|Analyzing|Pendente|Pending)\b',
+            section,
+            flags=re.IGNORECASE,
+        )
         fallback_status = status_match.group(1).capitalize() if status_match else None
 
-        # Texto completo do status: captura tudo após o rótulo "Status" até o próximo marcador.
-        status_raw = self._extract_text_between_keywords(
-            section,
-            r'\bStatus\b',
-            [r'\bParecer\b', r'\bSum[aá]rio\s+dos\s+Elementos\s+Contestados\b'],
-        )
+        # Texto completo do status: captura somente o valor ligado ao rótulo real "Status".
+        status_raw = self._extract_status_text(section)
         if not status_raw and status_match:
-            # Fallback: usa o valor normalizado como raw quando não há rótulo "Status" explícito.
+            # Fallback: usa o valor normalizado quando o layout vier muito quebrado.
             status_raw = status_match.group(1).capitalize()
 
         # Prioriza o valor de status_raw para reduzir falso positivo vindo de justificativa/parecer.
         status = None
         if status_raw:
             status_from_raw_match = re.search(
-                r'\b(Indeferido|Deferido|Analyzing)\b',
+                r'\b(Indeferido|Deferido|Analyzing|Pendente|Pending)\b',
                 status_raw,
                 flags=re.IGNORECASE,
             )
