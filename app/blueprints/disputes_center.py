@@ -1591,9 +1591,12 @@ def list_disputes_center():
     first_instance_deferred_count = int(first_instance_status_counts.get('deferido', 0) or 0)
     first_instance_analyzing_count = int(first_instance_status_counts.get('analyzing', 0) or 0)
     second_instance_total_base = max(int(total_count) - first_instance_deferred_count - first_instance_analyzing_count, 0)
+    second_instance_eligible_query = general_query.filter(
+        ~func.lower(func.coalesce(cast(Benefit.first_instance_status, String), '')).in_(['deferido', 'analyzing'])
+    )
     second_instance_stats = _build_instance_stats(
         second_instance_total_base,
-        _group_count_by_status(general_query, Benefit.second_instance_status),
+        _group_count_by_status(second_instance_eligible_query, Benefit.second_instance_status),
     )
 
     clients_data = (
@@ -2268,9 +2271,12 @@ def list_disputes_center_api():
     filtered_first_instance_deferred_count = int(filtered_first_instance_status_counts.get('deferido', 0) or 0)
     filtered_first_instance_analyzing_count = int(filtered_first_instance_status_counts.get('analyzing', 0) or 0)
     filtered_second_instance_total_base = max(int(records_filtered) - filtered_first_instance_deferred_count - filtered_first_instance_analyzing_count, 0)
+    filtered_second_instance_eligible_query = filtered_query.filter(
+        ~func.lower(func.coalesce(cast(Benefit.first_instance_status, String), '')).in_(['deferido', 'analyzing'])
+    )
     filtered_second_instance_stats = _build_instance_stats(
         filtered_second_instance_total_base,
-        _group_count_by_status(filtered_query, Benefit.second_instance_status),
+        _group_count_by_status(filtered_second_instance_eligible_query, Benefit.second_instance_status),
     )
 
     order_column = ORDER_COLUMN_MAP.get(payload['order_column'], Benefit.id)
@@ -2817,7 +2823,9 @@ def list_cats():
 
     second_status_counts = {
         _normalize_status_key(status): int(count or 0)
-        for status, count in base_query.with_entities(
+        for status, count in base_query.filter(
+            ~func.lower(func.coalesce(cast(FapContestationCat.first_instance_status, String), '')).in_(['deferido', 'analyzing'])
+        ).with_entities(
             func.lower(func.coalesce(cast(FapContestationCat.second_instance_status, String), '')),
             func.count(FapContestationCat.id),
         ).group_by(func.lower(func.coalesce(cast(FapContestationCat.second_instance_status, String), ''))).all()
@@ -3192,7 +3200,9 @@ def list_payroll_masses():
 
     second_status_counts = {
         _normalize_status_key(status): int(count or 0)
-        for status, count in base_query.with_entities(
+        for status, count in base_query.filter(
+            ~func.lower(func.coalesce(cast(FapContestationPayrollMass.first_instance_status, String), '')).in_(['deferido', 'analyzing'])
+        ).with_entities(
             func.lower(func.coalesce(cast(FapContestationPayrollMass.second_instance_status, String), '')),
             func.count(FapContestationPayrollMass.id),
         ).group_by(func.lower(func.coalesce(cast(FapContestationPayrollMass.second_instance_status, String), ''))).all()
@@ -3559,7 +3569,9 @@ def list_employment_links():
 
     second_status_counts = {
         _normalize_status_key(status): int(count or 0)
-        for status, count in base_query.with_entities(
+        for status, count in base_query.filter(
+            ~func.lower(func.coalesce(cast(FapContestationEmploymentLink.first_instance_status, String), '')).in_(['deferido', 'analyzing'])
+        ).with_entities(
             func.lower(func.coalesce(cast(FapContestationEmploymentLink.second_instance_status, String), '')),
             func.count(FapContestationEmploymentLink.id),
         ).group_by(func.lower(func.coalesce(cast(FapContestationEmploymentLink.second_instance_status, String), ''))).all()
@@ -3881,7 +3893,9 @@ def list_turnover_rates():
 
     second_status_counts = {
         _normalize_status_key(status): int(count or 0)
-        for status, count in base_query.with_entities(
+        for status, count in base_query.filter(
+            ~func.lower(func.coalesce(cast(FapContestationTurnoverRate.first_instance_status, String), '')).in_(['deferido', 'analyzing'])
+        ).with_entities(
             func.lower(func.coalesce(cast(FapContestationTurnoverRate.second_instance_status, String), '')),
             func.count(FapContestationTurnoverRate.id),
         ).group_by(func.lower(func.coalesce(cast(FapContestationTurnoverRate.second_instance_status, String), ''))).all()
