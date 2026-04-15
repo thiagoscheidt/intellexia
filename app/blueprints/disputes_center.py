@@ -1126,6 +1126,15 @@ def _apply_benefits_filters(query, search_value='', custom_filters=None, quick_c
         operator = item['operator']
         value = (item.get('value') or '').strip().lower()
 
+        # \"Analyzing\" for the general status field must match both stored values.
+        if operator == 'equals' and value == 'analyzing' and field == 'status':
+            query = query.filter(
+                func.lower(func.coalesce(cast(Benefit.status, String), '')).in_(
+                    ['in_review', 'analyzing']
+                )
+            )
+            continue
+
         # "Pending" for status fields must mirror the counter logic, not a simple equality check.
         if operator == 'equals' and value == 'pending':
             if field == 'status':
@@ -1145,7 +1154,9 @@ def _apply_benefits_filters(query, search_value='', custom_filters=None, quick_c
             if field == 'second_instance_status':
                 query = query.filter(
                     and_(
-                        func.lower(func.coalesce(cast(Benefit.first_instance_status, String), '')) != 'deferido',
+                        ~func.lower(func.coalesce(cast(Benefit.first_instance_status, String), '')).in_(
+                            ['deferido', 'analyzing']
+                        ),
                         ~func.lower(func.coalesce(cast(Benefit.second_instance_status, String), '')).in_(
                             ['deferido', 'indeferido', 'analyzing']
                         ),
@@ -1410,7 +1421,8 @@ def list_disputes_center():
     first_instance_status_counts = _group_count_by_status(general_query, Benefit.first_instance_status)
     first_instance_stats = _build_instance_stats(total_count, first_instance_status_counts)
     first_instance_deferred_count = int(first_instance_status_counts.get('deferido', 0) or 0)
-    second_instance_total_base = max(int(total_count) - first_instance_deferred_count, 0)
+    first_instance_analyzing_count = int(first_instance_status_counts.get('analyzing', 0) or 0)
+    second_instance_total_base = max(int(total_count) - first_instance_deferred_count - first_instance_analyzing_count, 0)
     second_instance_stats = _build_instance_stats(
         second_instance_total_base,
         _group_count_by_status(general_query, Benefit.second_instance_status),
@@ -1598,7 +1610,7 @@ def list_fap_vigencias():
                     (
                         and_(
                             Benefit.id.is_not(None),
-                            first_instance_key != 'deferido',
+                            ~first_instance_key.in_(['deferido', 'analyzing']),
                             ~second_instance_key.in_(['deferido', 'indeferido', 'analyzing']),
                         ),
                         1,
@@ -2086,7 +2098,8 @@ def list_disputes_center_api():
         filtered_first_instance_status_counts,
     )
     filtered_first_instance_deferred_count = int(filtered_first_instance_status_counts.get('deferido', 0) or 0)
-    filtered_second_instance_total_base = max(int(records_filtered) - filtered_first_instance_deferred_count, 0)
+    filtered_first_instance_analyzing_count = int(filtered_first_instance_status_counts.get('analyzing', 0) or 0)
+    filtered_second_instance_total_base = max(int(records_filtered) - filtered_first_instance_deferred_count - filtered_first_instance_analyzing_count, 0)
     filtered_second_instance_stats = _build_instance_stats(
         filtered_second_instance_total_base,
         _group_count_by_status(filtered_query, Benefit.second_instance_status),
