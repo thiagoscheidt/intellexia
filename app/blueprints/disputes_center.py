@@ -3615,6 +3615,8 @@ def list_employment_links():
             del item['digits']
 
     initial_cnpj = _normalize_cnpj_digits(request.args.get('quick_cnpj', ''))
+    return render_template(
+        'disputes_center/employment_links.html',
         total_count=total_count,
         first_instance_stats=first_instance_stats,
         second_instance_stats=second_instance_stats,
