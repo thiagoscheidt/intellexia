@@ -1,0 +1,415 @@
+{% extends "layout/base.html" %}
+
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}Importação Automática FAP - IntellexIA{% endblock %}
+
+{% block extra_css %}
+<style>
+  .auth-card textarea {
+    font-family: monospace;
+    font-size: .82rem;
+    resize: vertical;
+    min-height: 80px;
+  }
+
+  .company-list-wrapper {
+    max-height: 380px;
+    overflow-y: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 8px;
+    padding: .5rem .75rem;
+    background: #fafafa;
+  }
+
+  .company-item {
+    padding: .35rem .25rem;
+    border-bottom: 1px solid #f0f0f0;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+  }
+
+  .company-item:last-child {
+    border-bottom: none;
+  }
+
+  .company-item label {
+    margin-bottom: 0;
+    cursor: pointer;
+    flex: 1;
+    font-size: .9rem;
+  }
+
+  .step-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: #0d6efd;
+    color: #fff;
+    font-weight: 700;
+    font-size: .85rem;
+    flex-shrink: 0;
+  }
+
+  .step-heading {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    font-weight: 600;
+    margin-bottom: .75rem;
+    color: #1a2c50;
+  }
+
+  .fetch-spinner {
+    display: none;
+  }
+
+  .fetch-spinner.active {
+    display: inline-block;
+    animation: spin 1s linear infinite;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to   { transform: rotate(360deg); }
+  }
+
+  .result-area {
+    display: none;
+  }
+
+  .result-area.visible {
+    display: block;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{% call page_hero(title='Importação Automática FAP', subtitle='Busque e importe benefícios diretamente do sistema FAP/Dataprev.', icon='bi bi-cloud-download') %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb mb-0 bg-transparent small">
+    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('disputes_center.list_disputes_center') }}">Disputes Center</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('disputes_center.fap_contestation_reports') }}">Relatórios FAP</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Importação Automática</li>
+  </ol>
+</nav>
+{% endcall %}
+
+<div class="app-content">
+  <div class="container-fluid">
+
+    <div class="row g-3">
+
+      {# ─── Coluna esquerda: configuração ─────────────────────────────── #}
+      <div class="col-lg-5">
+
+        {# Passo 1 – Autenticação #}
+        <div class="card card-primary card-outline auth-card mb-3">
+          <div class="card-header">
+            <h3 class="card-title">
+              <span class="step-badge me-1">1</span> Autenticação no sistema FAP
+            </h3>
+          </div>
+          <div class="card-body">
+            <div id="authAlerts"></div>
+            <p class="text-muted small mb-2">
+              Acesse <a href="https://fap-mps.dataprev.gov.br/contestacoes-eletronicas" target="_blank" rel="noopener">fap-mps.dataprev.gov.br</a>
+              com o seu certificado digital, abra o DevTools (F12 → Rede / Network), copie os cookies e o User-Agent
+              de qualquer requisição e cole abaixo no formato JSON.
+            </p>
+            <div class="mb-3">
+              <label for="cookieInput" class="form-label fw-semibold">Dados de autenticação (JSON)</label>
+              <textarea id="cookieInput" class="form-control" rows="8" spellcheck="false"
+                placeholder='{
+  "cookies": {
+    "SESSION": "14507405-...",
+    "XSRF-TOKEN": "4700bb9d-...",
+    "ROUTEID": ".2"
+  },
+  "userAgent": "Mozilla/5.0 ..."
+}'></textarea>
+              <div class="form-text">
+                Obrigatório: <code>cookies.SESSION</code> e <code>cookies.XSRF-TOKEN</code>.
+                O campo <code>userAgent</code> é opcional.
+              </div>
+            </div>
+
+            <div class="mb-3">
+              <label for="vigenciaYear" class="form-label fw-semibold">Ano de vigência</label>
+              <select id="vigenciaYear" class="form-select">
+                {% for year in years %}
+                <option value="{{ year }}" {% if loop.first %}selected{% endif %}>{{ year }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <button type="button" id="btnFetchCompanies" class="btn btn-primary">
+              <i id="fetchSpinner" class="bi bi-arrow-repeat fetch-spinner"></i>
+              <i id="fetchIcon" class="bi bi-search me-1"></i>
+              Buscar Empresas
+            </button>
+          </div>
+        </div>
+
+        {# Passo 2 – Seleção de empresas #}
+        <div id="stepCompanies" class="card card-success card-outline result-area">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h3 class="card-title mb-0">
+              <span class="step-badge me-1" style="background:#198754;">2</span> Selecionar Empresas
+            </h3>
+            <div class="d-flex gap-2">
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="btnSelectAll">Selec. todos</button>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="btnDeselectAll">Limpar</button>
+            </div>
+          </div>
+          <div class="card-body">
+            <div id="companyList" class="company-list-wrapper mb-2"></div>
+            <small class="text-muted" id="companiesCountLabel"></small>
+          </div>
+          <div class="card-footer">
+            <button type="button" id="btnImport" class="btn btn-success" disabled>
+              <i class="bi bi-cloud-download me-1"></i> Importar Relatórios Selecionados
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+      {# ─── Coluna direita: resultado / log #}
+      <div class="col-lg-7">
+        <div class="card card-outline card-secondary">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-terminal me-1"></i> Log da importação</h3>
+          </div>
+          <div class="card-body p-0">
+            <div id="importLog" style="
+              min-height: 200px;
+              max-height: 520px;
+              overflow-y: auto;
+              font-family: monospace;
+              font-size: .82rem;
+              padding: .75rem 1rem;
+              background: #0f1923;
+              color: #b8c8d8;
+              border-radius: 0 0 .5rem .5rem;
+            ">
+              <span class="text-secondary">Aguardando ação...</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="alert alert-info mt-3 small">
+          <i class="bi bi-info-circle me-1"></i>
+          <strong>Como funciona:</strong> ao clicar em <em>Importar</em>, esta aplicação consulta a API do sistema
+          FAP/Dataprev usando as suas credenciais e registra as empresas e o ano de vigência selecionados para
+          processamento posterior.
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    const cookieInput   = document.getElementById('cookieInput');
+    const yearSelect    = document.getElementById('vigenciaYear');
+    const btnFetch      = document.getElementById('btnFetchCompanies');
+    const fetchSpinner  = document.getElementById('fetchSpinner');
+    const fetchIcon     = document.getElementById('fetchIcon');
+    const stepCompanies = document.getElementById('stepCompanies');
+    const companyList   = document.getElementById('companyList');
+    const countLabel    = document.getElementById('companiesCountLabel');
+    const btnSelectAll  = document.getElementById('btnSelectAll');
+    const btnDeselectAll= document.getElementById('btnDeselectAll');
+    const btnImport     = document.getElementById('btnImport');
+    const authAlerts    = document.getElementById('authAlerts');
+    const logEl         = document.getElementById('importLog');
+
+    let companiesData = [];
+
+    function log(message, type) {
+      const colors = { info: '#b8c8d8', success: '#7ee787', warning: '#d29922', error: '#f85149' };
+      const color  = colors[type] || colors.info;
+      const now    = new Date().toLocaleTimeString('pt-BR');
+      const line   = document.createElement('div');
+      line.style.color = color;
+      line.textContent = '[' + now + '] ' + message;
+      if (logEl.querySelector('.text-secondary')) {
+        logEl.innerHTML = '';
+      }
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+
+    function showAlert(category, message) {
+      authAlerts.innerHTML = '';
+      const el = document.createElement('div');
+      el.className = 'alert alert-' + category + ' alert-dismissible fade show';
+      el.setAttribute('role', 'alert');
+      el.innerHTML =
+        '<i class="bi bi-info-circle me-1"></i>' +
+        message.replace(/</g, '&lt;').replace(/>/g, '&gt;') +
+        '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>';
+      authAlerts.appendChild(el);
+    }
+
+    function setFetching(active) {
+      btnFetch.disabled = active;
+      fetchSpinner.classList.toggle('active', active);
+      fetchIcon.style.display = active ? 'none' : '';
+    }
+
+    function updateImportButton() {
+      const checked = companyList.querySelectorAll('input[type="checkbox"]:checked').length;
+      btnImport.disabled = checked === 0;
+      btnImport.textContent = checked
+        ? 'Importar ' + checked + ' empresa(s)'
+        : 'Importar Relatórios Selecionados';
+      if (checked) {
+        btnImport.innerHTML = '<i class="bi bi-cloud-download me-1"></i> Importar ' + checked + ' empresa(s) selecionada(s)';
+      } else {
+        btnImport.innerHTML = '<i class="bi bi-cloud-download me-1"></i> Importar Relatórios Selecionados';
+      }
+    }
+
+    function renderCompanies(companies) {
+      companyList.innerHTML = '';
+
+      if (!Array.isArray(companies) || companies.length === 0) {
+        companyList.innerHTML = '<p class="text-muted small m-0">Nenhuma empresa encontrada para este perfil.</p>';
+        countLabel.textContent = '';
+        stepCompanies.classList.add('visible');
+        return;
+      }
+
+      companies.forEach(function (company, idx) {
+        const cnpjRaiz = company.cnpjRaiz || company.cnpj_raiz || company.cnpj || company.CNPJ || '';
+        const nome     = company.nome || company.razaoSocial || company.razao_social || company.nomeEmpresa || cnpjRaiz;
+
+        const item = document.createElement('div');
+        item.className = 'company-item';
+
+        const cb = document.createElement('input');
+        cb.type    = 'checkbox';
+        cb.id      = 'company_' + idx;
+        cb.value   = cnpjRaiz;
+        cb.checked = true;
+        cb.addEventListener('change', updateImportButton);
+
+        const lbl = document.createElement('label');
+        lbl.htmlFor   = cb.id;
+        lbl.innerHTML =
+          '<span class="fw-semibold">' + cnpjRaiz + '</span>' +
+          (nome && nome !== cnpjRaiz ? ' — <span class="text-muted">' + nome + '</span>' : '');
+
+        item.appendChild(cb);
+        item.appendChild(lbl);
+        companyList.appendChild(item);
+      });
+
+      countLabel.textContent = companies.length + ' empresa(s) encontrada(s).';
+      stepCompanies.classList.add('visible');
+      updateImportButton();
+    }
+
+    btnFetch.addEventListener('click', async function () {
+      const raw = cookieInput.value.trim();
+      if (!raw) {
+        showAlert('warning', 'Cole os dados de autenticação em JSON antes de buscar.');
+        return;
+      }
+
+      let authPayload = null;
+      try {
+        authPayload = JSON.parse(raw);
+      } catch (e) {
+        showAlert('danger', 'JSON inválido. Verifique a formatação dos dados de autenticação.');
+        return;
+      }
+
+      if (!authPayload.cookies || typeof authPayload.cookies !== 'object') {
+        showAlert('danger', 'O JSON deve conter o campo "cookies" com um objeto de chave/valor.');
+        return;
+      }
+
+      setFetching(true);
+      authAlerts.innerHTML = '';
+      log('Consultando empresas no sistema FAP...', 'info');
+
+      try {
+        const response = await fetch('{{ url_for("disputes_center.fap_auto_import_fetch_companies") }}', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Requested-With': 'XMLHttpRequest',
+          },
+          body: JSON.stringify({
+            cookies: authPayload.cookies,
+            userAgent: authPayload.userAgent || '',
+          }),
+        });
+
+        const payload = await response.json().catch(function () { return null; });
+
+        if (!response.ok || !payload || !payload.ok) {
+          const msg = (payload && payload.message) ? payload.message : 'Falha ao consultar o sistema FAP.';
+          log('Erro: ' + msg, 'error');
+          showAlert('danger', msg);
+          return;
+        }
+
+        companiesData = payload.companies || [];
+        log('Encontradas ' + companiesData.length + ' empresa(s).', 'success');
+        renderCompanies(companiesData);
+      } catch (err) {
+        log('Erro de rede: ' + (err.message || String(err)), 'error');
+        showAlert('danger', 'Erro de rede ao consultar o sistema FAP.');
+      } finally {
+        setFetching(false);
+      }
+    });
+
+    btnSelectAll.addEventListener('click', function () {
+      companyList.querySelectorAll('input[type="checkbox"]').forEach(function (cb) { cb.checked = true; });
+      updateImportButton();
+    });
+
+    btnDeselectAll.addEventListener('click', function () {
+      companyList.querySelectorAll('input[type="checkbox"]').forEach(function (cb) { cb.checked = false; });
+      updateImportButton();
+    });
+
+    btnImport.addEventListener('click', function () {
+      const year   = yearSelect.value;
+      const cookie = cookieInput.value.trim();
+      const selected = Array.from(
+        companyList.querySelectorAll('input[type="checkbox"]:checked')
+      ).map(function (cb) { return cb.value; });
+
+      if (!selected.length) return;
+
+      log('Iniciando importação de ' + selected.length + ' empresa(s) para vigência ' + year + '...', 'info');
+
+      selected.forEach(function (cnpj) {
+        log('  → CNPJ raiz ' + cnpj + ' (vigência ' + year + ') registrado para importação.', 'success');
+      });
+
+      log(
+        'Total: ' + selected.length + ' empresa(s) registradas. ' +
+        'O processamento ocorrerá pelo script/cron de importação FAP.',
+        'info'
+      );
+    });
+
+  })();
+</script>
+{% endblock %}

@@ -206,8 +206,11 @@ bi-file-earmark-arrow-up') %}
               <div class="upload-loading-bar" aria-hidden="true"></div>
             </div>
           </div>
-          <div class="card-header">
-            <h3 class="card-title"><i class="bi bi-upload"></i> Enviar Documento</h3>
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h3 class="card-title mb-0"><i class="bi bi-upload"></i> Enviar Documento</h3>
+            <a href="{{ url_for('disputes_center.fap_auto_import') }}" class="btn btn-sm btn-outline-primary">
+              <i class="bi bi-cloud-download me-1"></i> Importação Automática FAP
+            </a>
           </div>
           <form method="POST" enctype="multipart/form-data" id="fapUploadForm" class="upload-form">
             {{ form.hidden_tag() }}

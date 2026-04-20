@@ -2642,6 +2642,100 @@ def delete_fap_contestation_report(report_id):
     return redirect(url_for('disputes_center.fap_contestation_reports'))
 
 
+@disputes_center_bp.route('/fap-auto-import', methods=['GET'])
+@require_law_firm
+def fap_auto_import():
+    from datetime import date
+    current_year = date.today().year
+    years = list(range(current_year, 2009, -1))
+    return render_template(
+        'disputes_center/fap_auto_import.html',
+        years=years,
+    )
+
+
+@disputes_center_bp.route('/fap-auto-import/fetch-companies', methods=['POST'])
+@require_law_firm
+def fap_auto_import_fetch_companies():
+    import ssl
+    import urllib.request
+    import urllib.error
+
+    data = request.get_json(silent=True) or {}
+    cookies_dict = data.get('cookies') or {}
+    user_agent = (data.get('userAgent') or '').strip()
+
+    if not cookies_dict or not isinstance(cookies_dict, dict):
+        return jsonify({'ok': False, 'message': 'Informe os dados de autenticação no formato JSON com o campo "cookies".'}), 400
+
+    # Build cookie string from dict: KEY=VALUE; KEY=VALUE ...
+    cookie_string = '; '.join(f'{k}={v}' for k, v in cookies_dict.items() if k and v)
+
+    if not cookie_string:
+        return jsonify({'ok': False, 'message': 'O objeto "cookies" está vazio.'}), 400
+
+    xsrf_token = cookies_dict.get('XSRF-TOKEN', '')
+
+    default_ua = (
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+        'AppleWebKit/537.36 (KHTML, like Gecko) '
+        'Chrome/147.0.0.0 Safari/537.36'
+    )
+
+    url = 'https://fap-mps.dataprev.gov.br/gateway/fap/v1/procuracoes/empresas'
+    headers = {
+        'Accept': 'application/json;charset=utf-8',
+        'Accept-Language': 'pt-BR,pt;q=0.9',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Cookie': cookie_string,
+        'DNT': '1',
+        'Pragma': 'no-cache',
+        'Referer': 'https://fap-mps.dataprev.gov.br/contestacoes-eletronicas',
+        'User-Agent': user_agent or default_ua,
+    }
+
+    if xsrf_token:
+        headers['X-XSRF-TOKEN'] = xsrf_token
+
+    ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE
+    ssl_ctx.options |= ssl.OP_NO_SSLv2 | ssl.OP_NO_SSLv3
+    ssl_ctx.set_ciphers('DEFAULT:@SECLEVEL=1')
+    ssl_ctx.options |= getattr(ssl, 'OP_LEGACY_SERVER_CONNECT', 0)
+
+    try:
+        req = urllib.request.Request(url, headers=headers, method='GET')
+        with urllib.request.urlopen(req, timeout=15, context=ssl_ctx) as resp:
+            body = resp.read().decode('utf-8')
+    except urllib.error.HTTPError as e:
+        body = e.read().decode('utf-8', errors='replace')
+        return jsonify({
+            'ok': False,
+            'message': f'Erro HTTP {e.code} ao consultar o sistema FAP.',
+            'detail': body[:500],
+        }), 502
+    except urllib.error.URLError as e:
+        return jsonify({
+            'ok': False,
+            'message': f'Falha de conexão com o sistema FAP: {e.reason}',
+        }), 502
+    except Exception as e:
+        return jsonify({'ok': False, 'message': f'Erro inesperado: {str(e)}'}), 500
+
+    try:
+        companies = json.loads(body)
+    except Exception:
+        return jsonify({
+            'ok': False,
+            'message': 'Resposta inválida do sistema FAP (não é JSON).',
+            'detail': body[:300],
+        }), 502
+
+    return jsonify({'ok': True, 'companies': companies})
+
+
 @disputes_center_bp.route('/new', methods=['GET', 'POST'])
 @require_law_firm
 def new_dispute():
