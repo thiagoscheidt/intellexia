@@ -196,8 +196,9 @@
             <div class="mb-3">
               <label for="vigenciaYear" class="form-label fw-semibold">Ano de vigência</label>
               <select id="vigenciaYear" class="form-select">
+                <option value="all">Todos os anos</option>
                 {% for year in years %}
-                <option value="{{ year }}" {% if loop.first %}selected{% endif %}>{{ year }}</option>
+                <option value="{{ year }}">{{ year }}</option>
                 {% endfor %}
               </select>
             </div>
@@ -461,6 +462,9 @@
       }
     });
 
+    // Anos disponíveis (para consulta "todos os anos")
+    const allAvailableYears = [{% for year in years %}{{ year }}{% if not loop.last %},{% endif %}{% endfor %}];
+
     // ── Resultados: estado ─────────────────────────────────────────────
     let allGroups = [];
     let currentPage = 0;
@@ -482,7 +486,7 @@
     function groupItems(items) {
       const map = {};
       for (const item of items) {
-        const key = String(item.cnpj);
+        const key = String(item.cnpj) + '_' + String(item.anoVigencia);
         if (!map[key]) {
           map[key] = {
             cnpj: item.cnpj,
@@ -610,6 +614,23 @@
     }
 
     // ── Buscar relatórios ──────────────────────────────────────────────
+    async function fetchReportsForYear(cnpj, year) {
+      const resp = await fetch('{{ url_for("disputes_center.fap_auto_import_fetch_reports") }}', {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        body: JSON.stringify({ cnpj: cnpj, year: year }),
+      });
+      const payload = await resp.json().catch(function () { return null; });
+      if (!resp.ok || !payload || !payload.ok) {
+        throw new Error((payload && payload.message) ? payload.message : 'Falha ao buscar vigência ' + year + '.');
+      }
+      // Força anoVigencia = ano consultado, pois a API pode retornar valores inconsistentes
+      const items = payload.items || [];
+      items.forEach(function (item) { item.anoVigencia = parseInt(year, 10); });
+      return items;
+    }
+
     btnFetchReports.addEventListener('click', async function () {
       const cnpj = companySelect ? companySelect.value : '';
       const year = vigenciaYear  ? vigenciaYear.value  : '';
@@ -620,37 +641,50 @@
       }
 
       btnFetchReports.disabled = true;
-      btnFetchReports.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Buscando...';
       searchAlerts.innerHTML = '';
-      log('Buscando contestações: CNPJ ' + cnpj + ' | Vigência ' + year + '...', 'info');
+
+      const isAll = year === 'all';
+      const yearsToFetch = isAll ? allAvailableYears : [year];
 
       try {
-        const resp = await fetch('{{ url_for("disputes_center.fap_auto_import_fetch_reports") }}', {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-          body: JSON.stringify({ cnpj: cnpj, year: year }),
-        });
+        let combinedItems = [];
 
-        const payload = await resp.json().catch(function () { return null; });
+        for (let i = 0; i < yearsToFetch.length; i++) {
+          const yr = yearsToFetch[i];
 
-        if (!resp.ok || !payload || !payload.ok) {
-          const msg = (payload && payload.message) ? payload.message : 'Falha ao buscar contestações.';
-          log('Erro: ' + msg, 'error');
-          showAlert(searchAlerts, 'danger', msg);
-          return;
+          if (i > 0) {
+            // Intervalo aleatório de 1 a 4 segundos entre consultas
+            const delay = Math.floor(Math.random() * 3000) + 1000;
+            log('Aguardando ' + (delay / 1000).toFixed(1) + 's antes da próxima consulta...', 'info');
+            btnFetchReports.innerHTML =
+              '<span class="spinner-border spinner-border-sm me-1"></span> Aguardando (' + (i) + '/' + yearsToFetch.length + ')...';
+            await new Promise(function (resolve) { setTimeout(resolve, delay); });
+          }
+
+          btnFetchReports.innerHTML =
+            '<span class="spinner-border spinner-border-sm me-1"></span> Buscando ' + yr
+            + (isAll ? ' (' + (i + 1) + '/' + yearsToFetch.length + ')' : '') + '...';
+          log('Buscando contestações: CNPJ ' + cnpj + ' | Vigência ' + yr + '...', 'info');
+
+          try {
+            const items = await fetchReportsForYear(cnpj, yr);
+            combinedItems = combinedItems.concat(items);
+            log(items.length + ' registro(s) recebido(s) para vigência ' + yr + '.', 'success');
+          } catch (err) {
+            log('Erro na vigência ' + yr + ': ' + (err.message || String(err)), 'error');
+          }
         }
 
-        const items = payload.items || [];
-        allGroups   = groupItems(items);
+        allGroups   = groupItems(combinedItems);
         currentPage = 0;
         pageSize    = parseInt((resultsPageSize && resultsPageSize.value) || '10', 10);
 
-        log(items.length + ' registro(s) recebido(s) → ' + allGroups.length + ' estabelecimento(s).', 'success');
+        const vigLabel = isAll ? 'Todos os anos' : year;
+        log(combinedItems.length + ' registro(s) total(is) → ' + allGroups.length + ' estabelecimento(s).', 'success');
 
         if (resultsSection) {
           resultsSection.classList.remove('d-none');
-          resultsTitle.textContent      = '— CNPJ ' + cnpj + ' / Vigência ' + year;
+          resultsTitle.textContent      = '— CNPJ ' + cnpj + ' / Vigência ' + vigLabel;
           resultsCountBadge.textContent = allGroups.length + ' estabelecimento(s)';
           renderPage();
           resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
