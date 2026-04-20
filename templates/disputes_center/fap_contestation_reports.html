@@ -302,6 +302,11 @@ bi-file-earmark-arrow-up') %}
                       <div><strong>{{ report.original_filename }}</strong></div>
                       <small class="text-muted">{{ report.file_type or '-' }}{% if report.file_size %} | {{
                         report.file_size }} bytes{% endif %}</small>
+                      {% if report.id in auto_imported_report_ids %}
+                      <div class="mt-1">
+                        <span class="badge bg-info text-dark"><i class="bi bi-cloud-arrow-up me-1"></i>Importação automática FAP</span>
+                      </div>
+                      {% endif %}
                       {% if report.error_message %}
                       <div class="small text-danger mt-1">{{ report.error_message }}</div>
                       {% endif %}
@@ -320,11 +325,17 @@ bi-file-earmark-arrow-up') %}
                     </td>
                     <td class="text-center">{{ report.uploaded_at | datetime_sp(fmt='%d/%m/%Y %H:%M') if report.uploaded_at else '-' }}</td>
                     <td class="text-center">
-                      <button type="button" class="btn btn-sm btn-danger"
-                        data-delete-url="{{ url_for('disputes_center.delete_fap_contestation_report', report_id=report.id) }}"
-                        onclick="confirmDelete(this.dataset.deleteUrl)">
-                        <i class="bi bi-trash"></i>
-                      </button>
+                      <div class="btn-group btn-group-sm" role="group">
+                        <a href="{{ url_for('disputes_center.view_fap_contestation_report', report_id=report.id) }}"
+                          target="_blank" class="btn btn-sm btn-outline-primary" title="Visualizar arquivo">
+                          <i class="bi bi-eye"></i>
+                        </a>
+                        <button type="button" class="btn btn-sm btn-danger" title="Excluir relatório"
+                          data-delete-url="{{ url_for('disputes_center.delete_fap_contestation_report', report_id=report.id) }}"
+                          onclick="confirmDelete(this.dataset.deleteUrl)">
+                          <i class="bi bi-trash"></i>
+                        </button>
+                      </div>
                     </td>
                   </tr>
                   {% endfor %}

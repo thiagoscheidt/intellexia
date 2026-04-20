@@ -2025,6 +2025,57 @@ class FapContestationTurnoverRateManualHistory(db.Model):
         return f'<FapContestationTurnoverRateManualHistory rate={self.turnover_rate_id} action={self.action}>'
 
 
+
+class FapCompany(db.Model):
+    """Tabela fap_companies - Empresas sincronizadas da API FAP/Dataprev por escritório."""
+    __tablename__ = 'fap_companies'
+    __table_args__ = (
+        db.UniqueConstraint('law_firm_id', 'cnpj', name='uq_fap_companies_law_firm_cnpj'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+
+    cnpj = db.Column(db.String(20), nullable=False, index=True)
+    nome = db.Column(db.String(500))
+    tipo_procuracao_codigo = db.Column(db.String(100))
+    tipo_procuracao_descricao = db.Column(db.String(255))
+
+    synced_at = db.Column(db.DateTime, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    law_firm = db.relationship('LawFirm')
+
+    def __repr__(self):
+        return f'<FapCompany cnpj={self.cnpj} nome={self.nome}>'
+
+
+class FapAutoImportedContestacao(db.Model):
+    """Tabela fap_auto_imported_contestacoes - Rastreia contestações importadas via importação automática FAP."""
+    __tablename__ = 'fap_auto_imported_contestacoes'
+    __table_args__ = (
+        db.UniqueConstraint('law_firm_id', 'contestacao_id', 'cnpj', name='uq_fap_auto_imported_law_firm_contestacao_cnpj'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    report_id = db.Column(db.Integer, db.ForeignKey('fap_contestation_judgment_reports.id'), nullable=False, index=True)
+
+    contestacao_id = db.Column(db.Integer, nullable=False, index=True)
+    cnpj = db.Column(db.String(20), nullable=False, index=True)
+    year = db.Column(db.Integer, nullable=False)
+    original_filename = db.Column(db.String(255))
+
+    imported_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+
+    law_firm = db.relationship('LawFirm')
+    report = db.relationship('FapContestationJudgmentReport')
+
+    def __repr__(self):
+        return f'<FapAutoImportedContestacao contestacao_id={self.contestacao_id} cnpj={self.cnpj}>'
+
+
 class JudicialProcessCitedBenefit(db.Model):
     """Tabela judicial_process_cited_benefits - Benefits mentioned in the process but not part of the action."""
     __tablename__ = 'judicial_process_cited_benefits'

@@ -6,69 +6,28 @@
 
 {% block extra_css %}
 <style>
-  .auth-card textarea {
+  .auth-textarea {
     font-family: monospace;
     font-size: .82rem;
     resize: vertical;
-    min-height: 80px;
-  }
-
-  .company-list-wrapper {
-    max-height: 380px;
-    overflow-y: auto;
-    border: 1px solid #dee2e6;
-    border-radius: 8px;
-    padding: .5rem .75rem;
-    background: #fafafa;
-  }
-
-  .company-item {
-    padding: .35rem .25rem;
-    border-bottom: 1px solid #f0f0f0;
-    display: flex;
-    align-items: center;
-    gap: .5rem;
-  }
-
-  .company-item:last-child {
-    border-bottom: none;
-  }
-
-  .company-item label {
-    margin-bottom: 0;
-    cursor: pointer;
-    flex: 1;
-    font-size: .9rem;
+    min-height: 120px;
   }
 
   .step-badge {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 28px;
-    height: 28px;
+    width: 26px;
+    height: 26px;
     border-radius: 50%;
     background: #0d6efd;
     color: #fff;
     font-weight: 700;
-    font-size: .85rem;
+    font-size: .82rem;
     flex-shrink: 0;
   }
 
-  .step-heading {
-    display: flex;
-    align-items: center;
-    gap: .6rem;
-    font-weight: 600;
-    margin-bottom: .75rem;
-    color: #1a2c50;
-  }
-
-  .fetch-spinner {
-    display: none;
-  }
-
-  .fetch-spinner.active {
+  .spin {
     display: inline-block;
     animation: spin 1s linear infinite;
   }
@@ -77,19 +36,11 @@
     from { transform: rotate(0deg); }
     to   { transform: rotate(360deg); }
   }
-
-  .result-area {
-    display: none;
-  }
-
-  .result-area.visible {
-    display: block;
-  }
 </style>
 {% endblock %}
 
 {% block content %}
-{% call page_hero(title='Importação Automática FAP', subtitle='Busque e importe benefícios diretamente do sistema FAP/Dataprev.', icon='bi bi-cloud-download') %}
+{% call page_hero(title='Importação Automática FAP', subtitle='Selecione a empresa e o ano de vigência para buscar os relatórios diretamente do sistema FAP/Dataprev.', icon='bi bi-cloud-download') %}
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb mb-0 bg-transparent small">
     <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
@@ -102,43 +53,146 @@
 
 <div class="app-content">
   <div class="container-fluid">
-
     <div class="row g-3">
 
-      {# ─── Coluna esquerda: configuração ─────────────────────────────── #}
-      <div class="col-lg-5">
-
-        {# Passo 1 – Autenticação #}
-        <div class="card card-primary card-outline auth-card mb-3">
+      {# ─── Linha completa: autenticação (full-width) ──────────────── #}
+      <div class="col-12">
+        <div class="card card-warning card-outline">
           <div class="card-header">
             <h3 class="card-title">
-              <span class="step-badge me-1">1</span> Autenticação no sistema FAP
+              <span class="step-badge me-1" style="background:#ffc107;color:#000;">1</span>
+              <i class="bi bi-key me-1"></i> Dados de autenticação
+              {% if saved_auth %}
+              <span id="authStatusBadge" class="badge bg-success ms-2" style="font-size:.75rem;font-weight:500;">
+                <i class="bi bi-check-circle me-1"></i>Sessão salva
+              </span>
+              <button type="button" id="btnCheckSession" class="btn btn-sm btn-outline-secondary ms-2 py-0" style="font-size:.75rem;" title="Checar sessão agora">
+                <i class="bi bi-shield-check me-1"></i>Checar sessão
+              </button>
+              {% endif %}
             </h3>
+            <div class="card-tools">
+              <button type="button" class="btn btn-tool"
+                data-bs-toggle="collapse" data-bs-target="#authCollapse"
+                aria-expanded="{{ 'false' if saved_auth else 'true' }}" aria-controls="authCollapse">
+                <i class="bi {{ 'bi-chevron-down' if saved_auth else 'bi-chevron-up' }}" id="authCollapseIcon"></i>
+              </button>
+            </div>
           </div>
+          <div class="collapse {{ '' if saved_auth else 'show' }}" id="authCollapse">
           <div class="card-body">
-            <div id="authAlerts"></div>
             <p class="text-muted small mb-2">
-              Acesse <a href="https://fap-mps.dataprev.gov.br/contestacoes-eletronicas" target="_blank" rel="noopener">fap-mps.dataprev.gov.br</a>
-              com o seu certificado digital, abra o DevTools (F12 → Rede / Network), copie os cookies e o User-Agent
-              de qualquer requisição e cole abaixo no formato JSON.
+              Acesse <a href="https://fap-mps.dataprev.gov.br/contestacoes-eletronicas" target="_blank" rel="noopener">fap-mps.dataprev.gov.br</a>,
+              abra o DevTools (F12 → Network), copie os cookies de qualquer requisição autenticada e cole abaixo no formato JSON.
+              Esses dados serão usados tanto para sincronizar empresas quanto para buscar relatórios.
             </p>
-            <div class="mb-3">
-              <label for="cookieInput" class="form-label fw-semibold">Dados de autenticação (JSON)</label>
-              <textarea id="cookieInput" class="form-control" rows="8" spellcheck="false"
-                placeholder='{
+            <label for="cookieInput" class="form-label fw-semibold small">Sessão (JSON)</label>
+            <textarea id="cookieInput" class="form-control auth-textarea" spellcheck="false"
+              style="min-height:180px;"
+              placeholder='{
   "cookies": {
     "SESSION": "14507405-...",
     "XSRF-TOKEN": "4700bb9d-...",
     "ROUTEID": ".2"
   },
   "userAgent": "Mozilla/5.0 ..."
-}'></textarea>
-              <div class="form-text">
-                Obrigatório: <code>cookies.SESSION</code> e <code>cookies.XSRF-TOKEN</code>.
-                O campo <code>userAgent</code> é opcional.
-              </div>
-            </div>
+}'>{{ saved_auth }}</textarea>
+            <div class="form-text mb-2">Obrigatório: <code>cookies.SESSION</code> e <code>cookies.XSRF-TOKEN</code>.</div>
+            <button type="button" id="btnSaveAuth" class="btn btn-sm {{ 'btn-success' if saved_auth else 'btn-outline-success' }}">
+              <i class="bi bi-floppy me-1"></i> {{ 'Atualizar sessão' if saved_auth else 'Salvar sessão' }}
+            </button>
+          </div>{# /card-body #}
+          </div>{# /collapse #}
+        </div>
+      </div>
 
+      {# ─── Coluna esquerda ───────────────────────────────────────────── #}
+      <div class="col-lg-5">
+
+        {# Card Empresas cadastradas #}
+        <div class="card card-primary card-outline mb-3">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h3 class="card-title mb-0">
+              <span class="step-badge me-1">2</span> Empresas cadastradas
+              {% if companies %}
+              <span class="badge bg-primary ms-1" style="font-size:.75rem;font-weight:500;">{{ companies|length }}</span>
+              {% endif %}
+            </h3>
+            <button type="button" class="btn btn-sm btn-outline-secondary"
+              data-bs-toggle="collapse" data-bs-target="#syncCollapse" aria-expanded="false">
+              <i class="bi bi-arrow-repeat me-1"></i> Sincronizar
+            </button>
+          </div>
+
+          {# Collapse de sincronização #}
+          <div class="collapse" id="syncCollapse">
+            <div class="card-body border-bottom bg-light">
+              <div id="syncAlerts"></div>
+              <button type="button" id="btnSync" class="btn btn-sm btn-primary">
+                <i id="syncSpinner" class="bi bi-arrow-repeat" style="display:none"></i>
+                <i id="syncIcon" class="bi bi-cloud-download me-1"></i>
+                Confirmar Sincronização
+              </button>
+            </div>
+          </div>
+
+          <div class="card-body">
+            {% if companies %}
+            <div class="mb-2">
+              <input type="text" id="companySearch" class="form-control form-control-sm"
+                placeholder="Buscar por CNPJ ou razão social...">
+            </div>
+            <div class="table-responsive" style="max-height:280px;overflow-y:auto;">
+              <table class="table table-sm table-hover table-bordered mb-0" id="companiesTable">
+                <thead class="table-light sticky-top">
+                  <tr>
+                    <th>CNPJ Raiz</th>
+                    <th>Razão Social</th>
+                    <th>Tipo Procuração</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for c in companies %}
+                  <tr>
+                    <td class="text-nowrap"><code>{{ c.cnpj }}</code></td>
+                    <td><small>{{ c.nome or '-' }}</small></td>
+                    <td><small>{{ c.tipo_procuracao_descricao or '-' }}</small></td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+            <div class="d-flex justify-content-between align-items-center mt-2">
+              <small class="text-muted" id="companyCountLabel">{{ companies|length }} empresa(s)</small>
+              <small class="text-muted">última sync: {{ companies[0].synced_at.strftime('%d/%m/%Y %H:%M') if companies[0].synced_at else '—' }}</small>
+            </div>
+            {% else %}
+            <div class="alert alert-warning mb-0">
+              <i class="bi bi-exclamation-triangle me-1"></i>
+              Nenhuma empresa cadastrada. Clique em <strong>Sincronizar</strong> para importar do sistema FAP.
+            </div>
+            {% endif %}
+          </div>
+        </div>
+
+        {# Card Buscar relatórios #}
+        <div class="card card-success card-outline">
+          <div class="card-header">
+            <h3 class="card-title mb-0">
+              <span class="step-badge me-1" style="background:#198754;">3</span> Buscar relatórios
+            </h3>
+          </div>
+          <div class="card-body">
+            <div id="searchAlerts"></div>
+            <div class="mb-3">
+              <label for="companySelect" class="form-label fw-semibold">Empresa</label>
+              <select id="companySelect" class="form-select">
+                <option value="">— Selecione uma empresa —</option>
+                {% for c in companies %}
+                <option value="{{ c.cnpj }}">{{ c.cnpj }} — {{ c.nome or 'Sem nome' }}</option>
+                {% endfor %}
+              </select>
+            </div>
             <div class="mb-3">
               <label for="vigenciaYear" class="form-label fw-semibold">Ano de vigência</label>
               <select id="vigenciaYear" class="form-select">
@@ -147,49 +201,29 @@
                 {% endfor %}
               </select>
             </div>
-
-            <button type="button" id="btnFetchCompanies" class="btn btn-primary">
-              <i id="fetchSpinner" class="bi bi-arrow-repeat fetch-spinner"></i>
-              <i id="fetchIcon" class="bi bi-search me-1"></i>
-              Buscar Empresas
-            </button>
-          </div>
-        </div>
-
-        {# Passo 2 – Seleção de empresas #}
-        <div id="stepCompanies" class="card card-success card-outline result-area">
-          <div class="card-header d-flex justify-content-between align-items-center">
-            <h3 class="card-title mb-0">
-              <span class="step-badge me-1" style="background:#198754;">2</span> Selecionar Empresas
-            </h3>
-            <div class="d-flex gap-2">
-              <button type="button" class="btn btn-sm btn-outline-secondary" id="btnSelectAll">Selec. todos</button>
-              <button type="button" class="btn btn-sm btn-outline-secondary" id="btnDeselectAll">Limpar</button>
-            </div>
-          </div>
-          <div class="card-body">
-            <div id="companyList" class="company-list-wrapper mb-2"></div>
-            <small class="text-muted" id="companiesCountLabel"></small>
           </div>
           <div class="card-footer">
-            <button type="button" id="btnImport" class="btn btn-success" disabled>
-              <i class="bi bi-cloud-download me-1"></i> Importar Relatórios Selecionados
+            <button type="button" id="btnFetchReports" class="btn btn-success" {% if not companies %}disabled{% endif %}>
+              <i class="bi bi-search me-1"></i> Buscar Relatórios
             </button>
+            {% if not companies %}
+            <small class="text-muted ms-2">Sincronize as empresas primeiro.</small>
+            {% endif %}
           </div>
         </div>
 
       </div>
 
-      {# ─── Coluna direita: resultado / log #}
+      {# ─── Coluna direita: log ───────────────────────────────────────── #}
       <div class="col-lg-7">
         <div class="card card-outline card-secondary">
           <div class="card-header">
-            <h3 class="card-title"><i class="bi bi-terminal me-1"></i> Log da importação</h3>
+            <h3 class="card-title"><i class="bi bi-terminal me-1"></i> Log</h3>
           </div>
           <div class="card-body p-0">
             <div id="importLog" style="
-              min-height: 200px;
-              max-height: 520px;
+              min-height: 240px;
+              max-height: 540px;
               overflow-y: auto;
               font-family: monospace;
               font-size: .82rem;
@@ -202,16 +236,57 @@
             </div>
           </div>
         </div>
+      </div>
 
-        <div class="alert alert-info mt-3 small">
-          <i class="bi bi-info-circle me-1"></i>
-          <strong>Como funciona:</strong> ao clicar em <em>Importar</em>, esta aplicação consulta a API do sistema
-          FAP/Dataprev usando as suas credenciais e registra as empresas e o ano de vigência selecionados para
-          processamento posterior.
+      {# ─── Resultados (oculto até busca) ──────────────────────────────── #}
+      <div class="col-12 d-none" id="resultsSection">
+        <div class="card card-primary card-outline">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <h3 class="card-title mb-0">
+              <i class="bi bi-table me-1"></i> Contestações e Recursos
+              <span id="resultsTitle" class="fw-normal text-muted small ms-2"></span>
+            </h3>
+            <span id="resultsCountBadge" class="badge bg-primary"></span>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-sm table-hover table-bordered mb-0" id="resultsTable">
+                <thead class="table-light">
+                  <tr>
+                    <th style="width:80px">Vigência</th>
+                    <th>Estabelecimento</th>
+                    <th>Contestações em Andamento</th>
+                    <th>Contestações Transmitidas</th>
+                    <th>Recursos em Andamento</th>
+                    <th>Recursos Transmitidos</th>
+                  </tr>
+                </thead>
+                <tbody id="resultsTbody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card-footer d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <div class="d-flex align-items-center gap-2">
+              <label class="small text-muted mb-0">Linhas por página:</label>
+              <select id="resultsPageSize" class="form-select form-select-sm" style="width:auto">
+                <option value="10" selected>10</option>
+                <option value="25">25</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+              <span id="resultsPaginationInfo" class="small text-muted"></span>
+            </div>
+            <nav id="resultsPaginationNav" aria-label="Paginação dos resultados"></nav>
+          </div>
+        </div>
+        <div class="d-flex justify-content-end mb-3">
+          <button type="button" id="btnImport" class="btn btn-primary btn-lg">
+            <i class="bi bi-cloud-download me-1"></i> Importar Contestações e Recursos
+          </button>
         </div>
       </div>
 
-    </div>
+    </div>{# /row g-3 #}
   </div>
 </div>
 {% endblock %}
@@ -219,21 +294,51 @@
 {% block extra_js %}
 <script>
   (function () {
-    const cookieInput   = document.getElementById('cookieInput');
-    const yearSelect    = document.getElementById('vigenciaYear');
-    const btnFetch      = document.getElementById('btnFetchCompanies');
-    const fetchSpinner  = document.getElementById('fetchSpinner');
-    const fetchIcon     = document.getElementById('fetchIcon');
-    const stepCompanies = document.getElementById('stepCompanies');
-    const companyList   = document.getElementById('companyList');
-    const countLabel    = document.getElementById('companiesCountLabel');
-    const btnSelectAll  = document.getElementById('btnSelectAll');
-    const btnDeselectAll= document.getElementById('btnDeselectAll');
-    const btnImport     = document.getElementById('btnImport');
-    const authAlerts    = document.getElementById('authAlerts');
-    const logEl         = document.getElementById('importLog');
+    const cookieInput     = document.getElementById('cookieInput');
+    const btnSaveAuth     = document.getElementById('btnSaveAuth');
+    const btnSync         = document.getElementById('btnSync');
+    const syncSpinner    = document.getElementById('syncSpinner');
+    const syncIcon       = document.getElementById('syncIcon');
+    const syncAlerts     = document.getElementById('syncAlerts');
+    const companySelect  = document.getElementById('companySelect');
+    const vigenciaYear   = document.getElementById('vigenciaYear');
+    const btnFetchReports= document.getElementById('btnFetchReports');
+    const searchAlerts   = document.getElementById('searchAlerts');
+    const logEl          = document.getElementById('importLog');
 
-    let companiesData = [];
+    // ── Busca na tabela de empresas ────────────────────────────────────
+    const companySearch = document.getElementById('companySearch');
+    const companiesTable = document.getElementById('companiesTable');
+    const companyCountLabel = document.getElementById('companyCountLabel');
+    if (companySearch && companiesTable) {
+      const totalRows = companiesTable.querySelectorAll('tbody tr').length;
+      companySearch.addEventListener('input', function () {
+        const term = this.value.toLowerCase().trim();
+        let visible = 0;
+        companiesTable.querySelectorAll('tbody tr').forEach(function (row) {
+          const match = !term || row.textContent.toLowerCase().includes(term);
+          row.style.display = match ? '' : 'none';
+          if (match) visible++;
+        });
+        if (companyCountLabel) {
+          companyCountLabel.textContent = term
+            ? visible + ' de ' + totalRows + ' empresa(s)'
+            : totalRows + ' empresa(s)';
+        }
+      });
+    }
+
+    // ── Ícone sanfona do card de autenticação ───────────────────────────
+    const authCollapse = document.getElementById('authCollapse');
+    const authCollapseIcon = document.getElementById('authCollapseIcon');
+    if (authCollapse && authCollapseIcon) {
+      authCollapse.addEventListener('show.bs.collapse', function () {
+        authCollapseIcon.classList.replace('bi-chevron-down', 'bi-chevron-up');
+      });
+      authCollapse.addEventListener('hide.bs.collapse', function () {
+        authCollapseIcon.classList.replace('bi-chevron-up', 'bi-chevron-down');
+      });
+    }
 
     function log(message, type) {
       const colors = { info: '#b8c8d8', success: '#7ee787', warning: '#d29922', error: '#f85149' };
@@ -242,88 +347,71 @@
       const line   = document.createElement('div');
       line.style.color = color;
       line.textContent = '[' + now + '] ' + message;
-      if (logEl.querySelector('.text-secondary')) {
-        logEl.innerHTML = '';
-      }
+      if (logEl.querySelector('.text-secondary')) logEl.innerHTML = '';
       logEl.appendChild(line);
       logEl.scrollTop = logEl.scrollHeight;
     }
 
-    function showAlert(category, message) {
-      authAlerts.innerHTML = '';
+    function showAlert(container, category, message) {
+      container.innerHTML = '';
       const el = document.createElement('div');
-      el.className = 'alert alert-' + category + ' alert-dismissible fade show';
+      el.className = 'alert alert-' + category + ' alert-dismissible fade show py-2 small';
       el.setAttribute('role', 'alert');
       el.innerHTML =
         '<i class="bi bi-info-circle me-1"></i>' +
-        message.replace(/</g, '&lt;').replace(/>/g, '&gt;') +
+        String(message).replace(/</g, '&lt;').replace(/>/g, '&gt;') +
         '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>';
-      authAlerts.appendChild(el);
+      container.appendChild(el);
     }
 
-    function setFetching(active) {
-      btnFetch.disabled = active;
-      fetchSpinner.classList.toggle('active', active);
-      fetchIcon.style.display = active ? 'none' : '';
+    function setSyncing(active) {
+      btnSync.disabled = active;
+      syncSpinner.style.display = active ? 'inline-block' : 'none';
+      syncSpinner.classList.toggle('spin', active);
+      syncIcon.style.display = active ? 'none' : '';
     }
 
-    function updateImportButton() {
-      const checked = companyList.querySelectorAll('input[type="checkbox"]:checked').length;
-      btnImport.disabled = checked === 0;
-      btnImport.textContent = checked
-        ? 'Importar ' + checked + ' empresa(s)'
-        : 'Importar Relatórios Selecionados';
-      if (checked) {
-        btnImport.innerHTML = '<i class="bi bi-cloud-download me-1"></i> Importar ' + checked + ' empresa(s) selecionada(s)';
-      } else {
-        btnImport.innerHTML = '<i class="bi bi-cloud-download me-1"></i> Importar Relatórios Selecionados';
-      }
-    }
-
-    function renderCompanies(companies) {
-      companyList.innerHTML = '';
-
-      if (!Array.isArray(companies) || companies.length === 0) {
-        companyList.innerHTML = '<p class="text-muted small m-0">Nenhuma empresa encontrada para este perfil.</p>';
-        countLabel.textContent = '';
-        stepCompanies.classList.add('visible');
-        return;
-      }
-
-      companies.forEach(function (company, idx) {
-        const cnpjRaiz = company.cnpjRaiz || company.cnpj_raiz || company.cnpj || company.CNPJ || '';
-        const nome     = company.nome || company.razaoSocial || company.razao_social || company.nomeEmpresa || cnpjRaiz;
-
-        const item = document.createElement('div');
-        item.className = 'company-item';
-
-        const cb = document.createElement('input');
-        cb.type    = 'checkbox';
-        cb.id      = 'company_' + idx;
-        cb.value   = cnpjRaiz;
-        cb.checked = true;
-        cb.addEventListener('change', updateImportButton);
-
-        const lbl = document.createElement('label');
-        lbl.htmlFor   = cb.id;
-        lbl.innerHTML =
-          '<span class="fw-semibold">' + cnpjRaiz + '</span>' +
-          (nome && nome !== cnpjRaiz ? ' — <span class="text-muted">' + nome + '</span>' : '');
-
-        item.appendChild(cb);
-        item.appendChild(lbl);
-        companyList.appendChild(item);
+    // ── Salvar autenticação na sessão ──────────────────────────────────
+    if (btnSaveAuth) {
+      btnSaveAuth.addEventListener('click', async function () {
+        const raw = cookieInput.value.trim();
+        if (!raw) {
+          log('Nenhum dado para salvar.', 'warning');
+          return;
+        }
+        try { JSON.parse(raw); } catch (e) {
+          log('JSON inválido — corrija antes de salvar.', 'error');
+          return;
+        }
+        btnSaveAuth.disabled = true;
+        try {
+          const resp = await fetch('{{ url_for("disputes_center.fap_auto_import_save_auth") }}', {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            body: JSON.stringify({ auth: raw }),
+          });
+          const payload = await resp.json().catch(() => null);
+          if (resp.ok && payload && payload.ok) {
+            log('Dados de autenticação salvos na sessão.', 'success');
+            btnSaveAuth.innerHTML = '<i class="bi bi-check-circle me-1"></i> Salvo';
+            btnSaveAuth.classList.replace('btn-outline-success', 'btn-success');
+          } else {
+            log('Erro ao salvar: ' + ((payload && payload.message) || 'falha desconhecida'), 'error');
+          }
+        } catch (err) {
+          log('Erro de rede ao salvar autenticação.', 'error');
+        } finally {
+          btnSaveAuth.disabled = false;
+        }
       });
-
-      countLabel.textContent = companies.length + ' empresa(s) encontrada(s).';
-      stepCompanies.classList.add('visible');
-      updateImportButton();
     }
 
-    btnFetch.addEventListener('click', async function () {
+    // ── Sincronização ──────────────────────────────────────────────────
+    btnSync.addEventListener('click', async function () {
       const raw = cookieInput.value.trim();
       if (!raw) {
-        showAlert('warning', 'Cole os dados de autenticação em JSON antes de buscar.');
+        showAlert(syncAlerts, 'warning', 'Cole os dados de autenticação em JSON antes de sincronizar.');
         return;
       }
 
@@ -331,84 +419,477 @@
       try {
         authPayload = JSON.parse(raw);
       } catch (e) {
-        showAlert('danger', 'JSON inválido. Verifique a formatação dos dados de autenticação.');
+        showAlert(syncAlerts, 'danger', 'JSON inválido. Verifique a formatação dos dados de autenticação.');
         return;
       }
 
       if (!authPayload.cookies || typeof authPayload.cookies !== 'object') {
-        showAlert('danger', 'O JSON deve conter o campo "cookies" com um objeto de chave/valor.');
+        showAlert(syncAlerts, 'danger', 'O JSON deve conter o campo "cookies" com um objeto de chave/valor.');
         return;
       }
 
-      setFetching(true);
-      authAlerts.innerHTML = '';
-      log('Consultando empresas no sistema FAP...', 'info');
+      setSyncing(true);
+      syncAlerts.innerHTML = '';
+      log('Consultando empresas no sistema FAP/Dataprev...', 'info');
 
       try {
-        const response = await fetch('{{ url_for("disputes_center.fap_auto_import_fetch_companies") }}', {
+        const resp = await fetch('{{ url_for("disputes_center.fap_auto_import_fetch_companies") }}', {
           method: 'POST',
           credentials: 'same-origin',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Requested-With': 'XMLHttpRequest',
-          },
-          body: JSON.stringify({
-            cookies: authPayload.cookies,
-            userAgent: authPayload.userAgent || '',
-          }),
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+          body: JSON.stringify({ cookies: authPayload.cookies, userAgent: authPayload.userAgent || '' }),
         });
 
-        const payload = await response.json().catch(function () { return null; });
+        const payload = await resp.json().catch(function () { return null; });
 
-        if (!response.ok || !payload || !payload.ok) {
+        if (!resp.ok || !payload || !payload.ok) {
           const msg = (payload && payload.message) ? payload.message : 'Falha ao consultar o sistema FAP.';
           log('Erro: ' + msg, 'error');
-          showAlert('danger', msg);
+          showAlert(syncAlerts, 'danger', msg);
           return;
         }
 
-        companiesData = payload.companies || [];
-        log('Encontradas ' + companiesData.length + ' empresa(s).', 'success');
-        renderCompanies(companiesData);
+        const count = payload.saved_count || (payload.companies || []).length;
+        log('Sincronização concluída! ' + count + ' empresa(s) salvas no banco.', 'success');
+        showAlert(syncAlerts, 'success', count + ' empresa(s) sincronizadas com sucesso. Recarregando...');
+        setTimeout(function () { window.location.reload(); }, 1200);
       } catch (err) {
         log('Erro de rede: ' + (err.message || String(err)), 'error');
-        showAlert('danger', 'Erro de rede ao consultar o sistema FAP.');
+        showAlert(syncAlerts, 'danger', 'Erro de rede ao consultar o sistema FAP.');
       } finally {
-        setFetching(false);
+        setSyncing(false);
       }
     });
 
-    btnSelectAll.addEventListener('click', function () {
-      companyList.querySelectorAll('input[type="checkbox"]').forEach(function (cb) { cb.checked = true; });
-      updateImportButton();
-    });
+    // ── Resultados: estado ─────────────────────────────────────────────
+    let allGroups = [];
+    let currentPage = 0;
+    let pageSize = 10;
 
-    btnDeselectAll.addEventListener('click', function () {
-      companyList.querySelectorAll('input[type="checkbox"]').forEach(function (cb) { cb.checked = false; });
-      updateImportButton();
-    });
+    const resultsSection    = document.getElementById('resultsSection');
+    const resultsTitle      = document.getElementById('resultsTitle');
+    const resultsCountBadge = document.getElementById('resultsCountBadge');
+    const resultsTbody      = document.getElementById('resultsTbody');
+    const resultsPageSize   = document.getElementById('resultsPageSize');
+    const paginationInfo    = document.getElementById('resultsPaginationInfo');
+    const paginationNav     = document.getElementById('resultsPaginationNav');
 
-    btnImport.addEventListener('click', function () {
-      const year   = yearSelect.value;
-      const cookie = cookieInput.value.trim();
-      const selected = Array.from(
-        companyList.querySelectorAll('input[type="checkbox"]:checked')
-      ).map(function (cb) { return cb.value; });
+    function formatCnpj(n) {
+      const s = String(n).padStart(14, '0');
+      return s.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+    }
 
-      if (!selected.length) return;
-
-      log('Iniciando importação de ' + selected.length + ' empresa(s) para vigência ' + year + '...', 'info');
-
-      selected.forEach(function (cnpj) {
-        log('  → CNPJ raiz ' + cnpj + ' (vigência ' + year + ') registrado para importação.', 'success');
+    function groupItems(items) {
+      const map = {};
+      for (const item of items) {
+        const key = String(item.cnpj);
+        if (!map[key]) {
+          map[key] = {
+            cnpj: item.cnpj,
+            anoVigencia: item.anoVigencia,
+            contestacoesAndamento: [],
+            contestacoesTransmitidas: [],
+            recursosAndamento: [],
+            recursosTransmitidos: [],
+          };
+        }
+        const g    = map[key];
+        const inst = (item.instancia || {}).codigo || '';
+        if (inst === 'ADMINISTRATIVO_PRIMEIRA_INSTANCIA') {
+          if (item.prazo1InstanciaAberto) g.contestacoesAndamento.push(item);
+          if (item.dataTransmissao)       g.contestacoesTransmitidas.push(item);
+        } else if (inst === 'ADMINISTRATIVO_SEGUNDA_INSTANCIA') {
+          if (item.prazo2InstanciaAberto) g.recursosAndamento.push(item);
+          if (item.dataTransmissao)       g.recursosTransmitidos.push(item);
+        }
+      }
+      return Object.values(map).sort(function (a, b) {
+        return String(a.cnpj).localeCompare(String(b.cnpj));
       });
+    }
 
-      log(
-        'Total: ' + selected.length + ' empresa(s) registradas. ' +
-        'O processamento ocorrerá pelo script/cron de importação FAP.',
-        'info'
-      );
+    function renderContestCell(list) {
+      if (!list.length) return '<span class="text-muted">—</span>';
+      return list.map(function (item) {
+        const sit    = (item.situacao || {}).descricao || '';
+        const proto  = item.protocolo || '';
+        const cnpj14 = String(item.cnpj).padStart(14, '0');
+        const year   = item.anoVigencia;
+        const id     = item.id;
+        const dlUrl  = '{{ url_for("disputes_center.fap_auto_import_download_contestacao", year=0, cnpj="CNPJ", contestacao_id=0) }}'
+          .replace('/0/', '/' + year + '/')
+          .replace('/CNPJ/', '/' + cnpj14 + '/')
+          .replace(/\/0$/, '/' + id);
+        const importedReportId = item._imported_report_id || null;
+        let importBtn = '';
+        if (importedReportId) {
+          const reportUrl = '{{ url_for("disputes_center.fap_contestation_reports") }}';
+          importBtn = '<a href="' + reportUrl + '" class="small text-success ms-2" title="Já importado — ver relatórios">'
+            + '<i class="bi bi-check-circle-fill me-1"></i>Importado</a>';
+        } else {
+          importBtn = '<button type="button" class="btn btn-link btn-sm p-0 ms-2 small text-warning import-btn" '
+            + 'data-year="' + year + '" data-cnpj="' + cnpj14 + '" data-id="' + id + '" '
+            + 'title="Importar contestação">'
+            + '<i class="bi bi-cloud-arrow-up me-1"></i>Importar</button>';
+        }
+        return '<div class="mb-1">'
+          + '<code class="small">' + proto + '</code>'
+          + (sit ? '<br><small class="text-muted">' + sit + '</small>' : '')
+          + '<br>'
+          + '<a href="' + dlUrl + '?inline=1" target="_blank" class="small text-secondary me-2" title="Visualizar documento">'
+          + '<i class="bi bi-eye me-1"></i>Visualizar</a>'
+          + '<a href="' + dlUrl + '" class="small text-primary" title="Baixar documento">'
+          + '<i class="bi bi-file-earmark-arrow-down me-1"></i>Baixar</a>'
+          + importBtn
+          + '</div>';
+      }).join('');
+    }
+
+    function renderPage() {
+      const start = currentPage * pageSize;
+      const slice = allGroups.slice(start, start + pageSize);
+      resultsTbody.innerHTML = '';
+      for (const g of slice) {
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+          '<td class="text-center fw-semibold">' + g.anoVigencia + '</td>' +
+          '<td class="text-nowrap"><code>' + formatCnpj(g.cnpj) + '</code></td>' +
+          '<td>' + renderContestCell(g.contestacoesAndamento)    + '</td>' +
+          '<td>' + renderContestCell(g.contestacoesTransmitidas) + '</td>' +
+          '<td>' + renderContestCell(g.recursosAndamento)        + '</td>' +
+          '<td>' + renderContestCell(g.recursosTransmitidos)     + '</td>';
+        resultsTbody.appendChild(tr);
+      }
+      const total = allGroups.length;
+      const end   = Math.min(start + pageSize, total);
+      paginationInfo.textContent = total
+        ? (start + 1) + '–' + end + ' de ' + total + ' estabelecimento(s)'
+        : '0 estabelecimentos';
+      renderPagination(total);
+    }
+
+    function renderPagination(total) {
+      const totalPages = Math.ceil(total / pageSize);
+      paginationNav.innerHTML = '';
+      if (totalPages <= 1) return;
+      const ul = document.createElement('ul');
+      ul.className = 'pagination pagination-sm mb-0';
+      function addBtn(label, page, disabled, active) {
+        const li = document.createElement('li');
+        li.className = 'page-item' + (disabled ? ' disabled' : '') + (active ? ' active' : '');
+        const a = document.createElement('a');
+        a.className = 'page-link';
+        a.href = '#';
+        a.innerHTML = label;
+        if (!disabled && !active) {
+          a.addEventListener('click', function (e) {
+            e.preventDefault();
+            currentPage = page;
+            renderPage();
+          });
+        }
+        li.appendChild(a);
+        ul.appendChild(li);
+      }
+      addBtn('&laquo;', currentPage - 1, currentPage === 0, false);
+      const rangeStart = Math.max(0, currentPage - 2);
+      const rangeEnd   = Math.min(totalPages - 1, currentPage + 2);
+      for (let p = rangeStart; p <= rangeEnd; p++) {
+        addBtn(p + 1, p, false, p === currentPage);
+      }
+      addBtn('&raquo;', currentPage + 1, currentPage >= totalPages - 1, false);
+      paginationNav.appendChild(ul);
+    }
+
+    if (resultsPageSize) {
+      resultsPageSize.addEventListener('change', function () {
+        pageSize = parseInt(this.value, 10);
+        currentPage = 0;
+        renderPage();
+      });
+    }
+
+    // ── Buscar relatórios ──────────────────────────────────────────────
+    btnFetchReports.addEventListener('click', async function () {
+      const cnpj = companySelect ? companySelect.value : '';
+      const year = vigenciaYear  ? vigenciaYear.value  : '';
+
+      if (!cnpj) {
+        showAlert(searchAlerts, 'warning', 'Selecione uma empresa antes de buscar.');
+        return;
+      }
+
+      btnFetchReports.disabled = true;
+      btnFetchReports.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Buscando...';
+      searchAlerts.innerHTML = '';
+      log('Buscando contestações: CNPJ ' + cnpj + ' | Vigência ' + year + '...', 'info');
+
+      try {
+        const resp = await fetch('{{ url_for("disputes_center.fap_auto_import_fetch_reports") }}', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+          body: JSON.stringify({ cnpj: cnpj, year: year }),
+        });
+
+        const payload = await resp.json().catch(function () { return null; });
+
+        if (!resp.ok || !payload || !payload.ok) {
+          const msg = (payload && payload.message) ? payload.message : 'Falha ao buscar contestações.';
+          log('Erro: ' + msg, 'error');
+          showAlert(searchAlerts, 'danger', msg);
+          return;
+        }
+
+        const items = payload.items || [];
+        allGroups   = groupItems(items);
+        currentPage = 0;
+        pageSize    = parseInt((resultsPageSize && resultsPageSize.value) || '10', 10);
+
+        log(items.length + ' registro(s) recebido(s) → ' + allGroups.length + ' estabelecimento(s).', 'success');
+
+        if (resultsSection) {
+          resultsSection.classList.remove('d-none');
+          resultsTitle.textContent      = '— CNPJ ' + cnpj + ' / Vigência ' + year;
+          resultsCountBadge.textContent = allGroups.length + ' estabelecimento(s)';
+          renderPage();
+          resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        }
+
+      } catch (err) {
+        log('Erro de rede: ' + (err.message || String(err)), 'error');
+        showAlert(searchAlerts, 'danger', 'Erro de rede ao buscar contestações.');
+      } finally {
+        btnFetchReports.disabled = false;
+        btnFetchReports.innerHTML = '<i class="bi bi-search me-1"></i> Buscar Relatórios';
+      }
     });
+
+    // ── Importar contestação ───────────────────────────────────────────
+    const importUrl = '{{ url_for("disputes_center.fap_auto_import_import_contestacao") }}';
+    const reportsUrl = '{{ url_for("disputes_center.fap_contestation_reports") }}';
+
+    document.addEventListener('click', async function (e) {
+      const btn = e.target.closest('.import-btn');
+      if (!btn) return;
+      if (btn.disabled) return;
+
+      const year          = btn.dataset.year;
+      const cnpj          = btn.dataset.cnpj;
+      const contestacaoId = btn.dataset.id;
+
+      btn.disabled = true;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Importando...';
+
+      try {
+        const resp = await fetch(importUrl, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+          body: JSON.stringify({ year: year, cnpj: cnpj, contestacao_id: contestacaoId }),
+        });
+
+        const payload = await resp.json().catch(function () { return null; });
+
+        if (payload && payload.already_imported) {
+          btn.outerHTML = '<a href="' + reportsUrl + '" class="small text-success ms-2">'
+            + '<i class="bi bi-check-circle-fill me-1"></i>Importado</a>';
+          log('Contestação #' + contestacaoId + ' já havia sido importada.', 'warning');
+          return;
+        }
+
+        if (!resp.ok || !payload || !payload.ok) {
+          const msg = (payload && payload.message) ? payload.message : 'Falha ao importar contestação.';
+          log('Erro ao importar #' + contestacaoId + ': ' + msg, 'error');
+          btn.disabled = false;
+          btn.innerHTML = '<i class="bi bi-cloud-arrow-up me-1"></i>Importar';
+          return;
+        }
+
+        btn.outerHTML = '<a href="' + reportsUrl + '" class="small text-success ms-2">'
+          + '<i class="bi bi-check-circle-fill me-1"></i>Importado</a>';
+        log('Contestação #' + contestacaoId + ' importada com sucesso. ' + (payload.message || ''), 'success');
+
+      } catch (err) {
+        log('Erro de rede ao importar #' + contestacaoId + ': ' + (err.message || String(err)), 'error');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="bi bi-cloud-arrow-up me-1"></i>Importar';
+      }
+    });
+
+    // ── Verificação periódica da sessão FAP ─────────────────────────
+    (function setupSessionCheck() {
+      const badge = document.getElementById('authStatusBadge');
+      if (!badge) return; // sem sessão salva, não faz nada
+
+      const TOKEN_URL = '{{ url_for("disputes_center.fap_auto_import_check_session") }}';
+
+      function setBadge(state) {
+        if (state === 'checking') {
+          badge.className = 'badge bg-warning text-dark ms-2';
+          badge.style.fontSize = '.75rem';
+          badge.style.fontWeight = '500';
+          badge.innerHTML = '<span class="spinner-border spinner-border-sm me-1" style="width:.7rem;height:.7rem;"></span>Verificando sessão...';
+        } else if (state === 'ok') {
+          badge.className = 'badge bg-success ms-2';
+          badge.innerHTML = '<i class="bi bi-check-circle me-1"></i>Sessão salva';
+        } else if (state === 'expired') {
+          badge.className = 'badge bg-danger ms-2';
+          badge.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-1"></i>Sessão expirada';
+        }
+      }
+
+      function clearSavedAuth() {
+        const textarea = document.getElementById('cookieInput');
+        if (textarea) textarea.value = '';
+        // Apaga a sessão no servidor também
+        fetch('{{ url_for("disputes_center.fap_auto_import_save_auth") }}', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+          body: JSON.stringify({ auth: '' }),
+        }).catch(function () {});
+      }
+
+      async function checkSession() {
+        setBadge('checking');
+        try {
+          const resp = await fetch(TOKEN_URL, {
+            method: 'GET',
+            credentials: 'same-origin',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            cache: 'no-store',
+          });
+          const payload = await resp.json().catch(function () { return null; });
+
+          if (resp.ok && payload && payload.ok) {
+            setBadge('ok');
+          } else {
+            setBadge('expired');
+            clearSavedAuth();
+            if (window.confirm(
+              'Atenção: a sessão do portal FAP expirou ou não é mais válida.\n\n'
+              + 'Acesse novamente o portal FAP, faça login, exporte um novo arquivo de sessão e atualize os dados de autenticação aqui.\n\n'
+              + 'Deseja abrir o portal FAP agora?'
+            )) {
+              window.open('https://fap-mps.dataprev.gov.br/contestacoes-eletronicas', '_blank', 'noopener');
+            }
+          }
+        } catch (err) {
+          setBadge('expired');
+          clearSavedAuth();
+        }
+
+        scheduleNext();
+      }
+
+      function scheduleNext() {
+        // Intervalo aleatório entre 1 e 5 minutos (60 000 ms a 300 000 ms)
+        const delay = Math.floor(Math.random() * (300000 - 60000 + 1)) + 60000;
+        setTimeout(checkSession, delay);
+      }
+
+      const btnCheckSession = document.getElementById('btnCheckSession');
+      if (btnCheckSession) {
+        btnCheckSession.addEventListener('click', function () {
+          checkSession();
+        });
+      }
+
+      // Inicia o primeiro agendamento após o carregamento
+      scheduleNext();
+    })();
+
+    // ── Botão Importar Contestações e Recursos (todos da pesquisa) ────
+    const btnImport = document.getElementById('btnImport');
+    if (btnImport) {
+      btnImport.addEventListener('click', async function () {
+        // Collect all non-imported items from allGroups
+        const toImport = [];
+        for (const g of allGroups) {
+          const lists = [
+            g.contestacoesAndamento,
+            g.contestacoesTransmitidas,
+            g.recursosAndamento,
+            g.recursosTransmitidos,
+          ];
+          for (const list of lists) {
+            for (const item of list) {
+              if (!item._imported_report_id) {
+                toImport.push({
+                  year: item.anoVigencia,
+                  cnpj: String(item.cnpj).padStart(14, '0'),
+                  contestacao_id: item.id,
+                  _item: item,
+                });
+              }
+            }
+          }
+        }
+
+        if (!toImport.length) {
+          log('Todos os itens da pesquisa já foram importados.', 'warning');
+          return;
+        }
+
+        if (!confirm('Importar ' + toImport.length + ' contestação(ões)/recurso(s) não importados desta pesquisa?')) {
+          return;
+        }
+
+        btnImport.disabled = true;
+        btnImport.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Importando ' + toImport.length + ' itens...';
+
+        let successCount = 0;
+        let skipCount    = 0;
+        let errorCount   = 0;
+
+        for (let i = 0; i < toImport.length; i++) {
+          const entry = toImport[i];
+          btnImport.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Importando ' + (i + 1) + '/' + toImport.length + '...';
+
+          try {
+            const resp = await fetch(importUrl, {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+              body: JSON.stringify({
+                year: entry.year,
+                cnpj: entry.cnpj,
+                contestacao_id: entry.contestacao_id,
+              }),
+            });
+            const payload = await resp.json().catch(function () { return null; });
+
+            if (payload && payload.already_imported) {
+              entry._item._imported_report_id = payload.report_id;
+              skipCount++;
+            } else if (resp.ok && payload && payload.ok) {
+              entry._item._imported_report_id = payload.report_id;
+              successCount++;
+              log('Importado #' + entry.contestacao_id + ' com sucesso.', 'success');
+            } else {
+              const msg = (payload && payload.message) ? payload.message : 'Erro desconhecido.';
+              errorCount++;
+              log('Falha ao importar #' + entry.contestacao_id + ': ' + msg, 'error');
+            }
+          } catch (err) {
+            errorCount++;
+            log('Erro de rede ao importar #' + entry.contestacao_id + ': ' + (err.message || String(err)), 'error');
+          }
+        }
+
+        // Re-render to reflect updated import badges
+        renderPage();
+
+        let summary = successCount + ' importado(s)';
+        if (skipCount)  summary += ', ' + skipCount + ' já importado(s)';
+        if (errorCount) summary += ', ' + errorCount + ' com erro';
+        log('Importação em lote concluída: ' + summary + '.', errorCount ? 'warning' : 'success');
+
+        btnImport.disabled = false;
+        btnImport.innerHTML = '<i class="bi bi-cloud-arrow-up me-1"></i> Importar Contestações e Recursos';
+      });
+    }
 
   })();
 </script>

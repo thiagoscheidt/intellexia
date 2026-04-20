@@ -19,6 +19,8 @@ from app.models import (
     BenefitManualHistory,
     BenefitFapSourceHistory,
     FapVigenciaCnpj,
+    FapCompany,
+    FapAutoImportedContestacao,
     Client,
     FapContestationCat,
     FapContestationCatSourceHistory,
@@ -2594,6 +2596,17 @@ def fap_contestation_reports():
         .paginate(page=page, per_page=50, error_out=False)
     )
 
+    # Build a set of report IDs that were auto-imported
+    report_ids_on_page = [r.id for r in reports.items]
+    auto_imported_report_ids = set()
+    if report_ids_on_page:
+        auto_imported_report_ids = {
+            rec.report_id
+            for rec in FapAutoImportedContestacao.query.filter(
+                FapAutoImportedContestacao.report_id.in_(report_ids_on_page)
+            ).all()
+        }
+
     processed_count = (
         FapContestationJudgmentReport.query.filter_by(
             law_firm_id=law_firm_id,
@@ -2620,6 +2633,7 @@ def fap_contestation_reports():
         processed_count=processed_count,
         not_processed_count=not_processed_count,
         processing_count=processing_count,
+        auto_imported_report_ids=auto_imported_report_ids,
     )
 
 
@@ -2646,11 +2660,465 @@ def delete_fap_contestation_report(report_id):
 @require_law_firm
 def fap_auto_import():
     from datetime import date
+    law_firm_id = get_current_law_firm_id()
     current_year = date.today().year
     years = list(range(current_year, 2009, -1))
+    companies = (
+        FapCompany.query.filter_by(law_firm_id=law_firm_id)
+        .order_by(FapCompany.nome.asc())
+        .all()
+    )
+    saved_auth = session.get('fap_auto_import_auth', '')
     return render_template(
         'disputes_center/fap_auto_import.html',
         years=years,
+        companies=companies,
+        saved_auth=saved_auth,
+    )
+
+
+@disputes_center_bp.route('/fap-auto-import/save-auth', methods=['POST'])
+@require_law_firm
+def fap_auto_import_save_auth():
+    data = request.get_json(silent=True) or {}
+    auth_json = data.get('auth', '').strip()
+    if not auth_json:
+        return jsonify({'ok': False, 'message': 'Nenhum dado enviado.'}), 400
+    session['fap_auto_import_auth'] = auth_json
+    session.modified = True
+    return jsonify({'ok': True})
+
+
+@disputes_center_bp.route('/fap-auto-import/check-session', methods=['GET'])
+@require_law_firm
+def fap_auto_import_check_session():
+    import ssl
+    import urllib.request
+    import urllib.error
+
+    saved_auth = session.get('fap_auto_import_auth', '')
+    if not saved_auth:
+        return jsonify({'ok': False, 'message': 'Sem sessão salva.'}), 400
+
+    try:
+        auth_payload = json.loads(saved_auth)
+    except Exception:
+        return jsonify({'ok': False, 'message': 'Dados de autenticação inválidos.'}), 400
+
+    cookies_dict = auth_payload.get('cookies') or {}
+    user_agent = (auth_payload.get('userAgent') or '').strip()
+    cookie_string = '; '.join(f'{k}={v}' for k, v in cookies_dict.items() if k and v)
+
+    default_ua = (
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+        'AppleWebKit/537.36 (KHTML, like Gecko) '
+        'Chrome/147.0.0.0 Safari/537.36'
+    )
+
+    headers = {
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+        'Accept-Language': 'pt-BR,pt;q=0.9',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Cookie': cookie_string,
+        'DNT': '1',
+        'Pragma': 'no-cache',
+        'Upgrade-Insecure-Requests': '1',
+        'User-Agent': user_agent or default_ua,
+    }
+
+    ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE
+    ssl_ctx.options |= ssl.OP_NO_SSLv2 | ssl.OP_NO_SSLv3
+    ssl_ctx.set_ciphers('DEFAULT:@SECLEVEL=1')
+    ssl_ctx.options |= getattr(ssl, 'OP_LEGACY_SERVER_CONNECT', 0)
+
+    try:
+        req = urllib.request.Request(
+            'https://fap-mps.dataprev.gov.br/gateway/oauth2/token',
+            headers=headers,
+            method='GET',
+        )
+        with urllib.request.urlopen(req, timeout=15, context=ssl_ctx) as resp:
+            status = resp.status
+        return jsonify({'ok': True, 'status': status})
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            return jsonify({'ok': False, 'expired': True, 'status': e.code})
+        return jsonify({'ok': False, 'status': e.code, 'message': f'HTTP {e.code}'})
+    except Exception as e:
+        return jsonify({'ok': False, 'message': str(e)}), 502
+
+
+@disputes_center_bp.route('/fap-auto-import/fetch-reports', methods=['POST'])
+@require_law_firm
+def fap_auto_import_fetch_reports():
+    import ssl
+    import urllib.request
+    import urllib.error
+
+    data = request.get_json(silent=True) or {}
+    cnpj_raiz = str(data.get('cnpj') or '').strip()
+    year = str(data.get('year') or '').strip()
+
+    if not cnpj_raiz or not year:
+        return jsonify({'ok': False, 'message': 'Informe o CNPJ e o ano de vigência.'}), 400
+
+    saved_auth = session.get('fap_auto_import_auth', '')
+    if not saved_auth:
+        return jsonify({
+            'ok': False,
+            'message': 'Dados de autenticação não encontrados na sessão. Salve os dados de autenticação antes de buscar.',
+        }), 400
+
+    try:
+        auth_payload = json.loads(saved_auth)
+    except Exception:
+        return jsonify({'ok': False, 'message': 'Dados de autenticação inválidos na sessão. Atualize e salve novamente.'}), 400
+
+    cookies_dict = auth_payload.get('cookies') or {}
+    user_agent = (auth_payload.get('userAgent') or '').strip()
+    cookie_string = '; '.join(f'{k}={v}' for k, v in cookies_dict.items() if k and v)
+    xsrf_token = cookies_dict.get('XSRF-TOKEN', '')
+
+    default_ua = (
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+        'AppleWebKit/537.36 (KHTML, like Gecko) '
+        'Chrome/147.0.0.0 Safari/537.36'
+    )
+
+    url = f'https://fap-mps.dataprev.gov.br/gateway/fap/v1/vigencias/{year}/empresa/{cnpj_raiz}/contestacoes'
+
+    headers = {
+        'Accept': 'application/json;charset=utf-8',
+        'Accept-Language': 'pt-BR,pt;q=0.9',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Cookie': cookie_string,
+        'DNT': '1',
+        'Pragma': 'no-cache',
+        'Referer': 'https://fap-mps.dataprev.gov.br/contestacoes-eletronicas',
+        'User-Agent': user_agent or default_ua,
+    }
+    if xsrf_token:
+        headers['X-XSRF-TOKEN'] = xsrf_token
+
+    ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE
+    ssl_ctx.options |= ssl.OP_NO_SSLv2 | ssl.OP_NO_SSLv3
+    ssl_ctx.set_ciphers('DEFAULT:@SECLEVEL=1')
+    ssl_ctx.options |= getattr(ssl, 'OP_LEGACY_SERVER_CONNECT', 0)
+
+    try:
+        req = urllib.request.Request(url, headers=headers, method='GET')
+        with urllib.request.urlopen(req, timeout=30, context=ssl_ctx) as resp:
+            body = resp.read().decode('utf-8')
+    except urllib.error.HTTPError as e:
+        body = e.read().decode('utf-8', errors='replace')
+        if e.code in (401, 403):
+            msg = (
+                f'Sessão expirada ou não autorizada (HTTP {e.code}). '
+                'Acesse o portal FAP, faça login, exporte um novo arquivo de sessão e atualize os dados de autenticação.'
+            )
+        else:
+            msg = f'Erro HTTP {e.code} ao consultar contestações.'
+        return jsonify({
+            'ok': False,
+            'message': msg,
+            'detail': body[:500],
+        }), 502
+    except urllib.error.URLError as e:
+        return jsonify({'ok': False, 'message': f'Falha de conexão: {e.reason}'}), 502
+    except Exception as e:
+        return jsonify({'ok': False, 'message': f'Erro inesperado: {str(e)}'}), 500
+
+    try:
+        items = json.loads(body)
+    except Exception:
+        return jsonify({
+            'ok': False,
+            'message': 'Resposta inválida do sistema FAP (não é JSON).',
+            'detail': body[:300],
+        }), 502
+
+    if not isinstance(items, list):
+        return jsonify({
+            'ok': False,
+            'message': 'Formato de resposta inesperado.',
+            'detail': str(items)[:300],
+        }), 502
+
+    # Annotate items with import status
+    law_firm_id = get_current_law_firm_id()
+    item_ids = [item.get('id') for item in items if item.get('id')]
+    imported_map = {}
+    if item_ids:
+        imported_records = FapAutoImportedContestacao.query.filter(
+            FapAutoImportedContestacao.law_firm_id == law_firm_id,
+            FapAutoImportedContestacao.contestacao_id.in_(item_ids),
+        ).all()
+        for rec in imported_records:
+            imported_map[rec.contestacao_id] = rec.report_id
+    for item in items:
+        item_id = item.get('id')
+        if item_id and item_id in imported_map:
+            item['_imported_report_id'] = imported_map[item_id]
+        else:
+            item['_imported_report_id'] = None
+
+    return jsonify({'ok': True, 'items': items, 'total': len(items)})
+
+
+@disputes_center_bp.route('/fap-auto-import/import-contestacao', methods=['POST'])
+@require_law_firm
+def fap_auto_import_import_contestacao():
+    import ssl
+    import urllib.request
+    import urllib.error
+    import base64 as _base64
+
+    law_firm_id = get_current_law_firm_id()
+    current_user_id = session.get('user_id')
+
+    data = request.get_json(silent=True) or {}
+    year = data.get('year')
+    cnpj = str(data.get('cnpj') or '').strip()
+    contestacao_id = data.get('contestacao_id')
+
+    if not year or not cnpj or not contestacao_id:
+        return jsonify({'ok': False, 'message': 'Parâmetros inválidos.'}), 400
+
+    # Check already imported
+    existing = FapAutoImportedContestacao.query.filter_by(
+        law_firm_id=law_firm_id,
+        contestacao_id=int(contestacao_id),
+        cnpj=cnpj,
+    ).first()
+    if existing:
+        return jsonify({
+            'ok': False,
+            'already_imported': True,
+            'report_id': existing.report_id,
+            'message': 'Esta contestação já foi importada anteriormente.',
+        })
+
+    saved_auth = session.get('fap_auto_import_auth', '')
+    if not saved_auth:
+        return jsonify({'ok': False, 'message': 'Dados de autenticação não encontrados na sessão.'}), 400
+
+    try:
+        auth_payload = json.loads(saved_auth)
+    except Exception:
+        return jsonify({'ok': False, 'message': 'Dados de autenticação inválidos na sessão.'}), 400
+
+    cookies_dict = auth_payload.get('cookies') or {}
+    user_agent = (auth_payload.get('userAgent') or '').strip()
+    cookie_string = '; '.join(f'{k}={v}' for k, v in cookies_dict.items() if k and v)
+    xsrf_token = cookies_dict.get('XSRF-TOKEN', '')
+
+    default_ua = (
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+        'AppleWebKit/537.36 (KHTML, like Gecko) '
+        'Chrome/147.0.0.0 Safari/537.36'
+    )
+
+    api_url = (
+        f'https://fap-mps.dataprev.gov.br/gateway/fap/v1'
+        f'/vigencias/{year}/empresa/{cnpj}/contestacoes/{contestacao_id}/imprimir'
+    )
+
+    headers = {
+        'Accept': 'application/json;charset=utf-8',
+        'Accept-Language': 'pt-BR,pt;q=0.9',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Cookie': cookie_string,
+        'DNT': '1',
+        'Pragma': 'no-cache',
+        'Referer': 'https://fap-mps.dataprev.gov.br/contestacoes-eletronicas',
+        'User-Agent': user_agent or default_ua,
+    }
+    if xsrf_token:
+        headers['X-XSRF-TOKEN'] = xsrf_token
+
+    ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE
+    ssl_ctx.options |= ssl.OP_NO_SSLv2 | ssl.OP_NO_SSLv3
+    ssl_ctx.set_ciphers('DEFAULT:@SECLEVEL=1')
+    ssl_ctx.options |= getattr(ssl, 'OP_LEGACY_SERVER_CONNECT', 0)
+
+    try:
+        req = urllib.request.Request(api_url, headers=headers, method='GET')
+        with urllib.request.urlopen(req, timeout=30, context=ssl_ctx) as resp:
+            body = resp.read()
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            return jsonify({'ok': False, 'message': 'Sessão expirada ou não autorizada. Atualize os dados de autenticação.'}), 401
+        return jsonify({'ok': False, 'message': f'Erro HTTP {e.code} ao buscar documento.'}), 502
+    except urllib.error.URLError as e:
+        return jsonify({'ok': False, 'message': f'Falha de conexão: {e.reason}'}), 502
+    except Exception as e:
+        return jsonify({'ok': False, 'message': f'Erro inesperado: {str(e)}'}), 500
+
+    try:
+        api_data = json.loads(body)
+        filename = api_data.get('nome') or f'contestacao_{contestacao_id}.pdf'
+        pdf_bytes = _base64.b64decode(api_data['base64'])
+    except Exception as e:
+        return jsonify({'ok': False, 'message': f'Erro ao processar resposta do servidor: {str(e)}'}), 502
+
+    upload_dir = os.path.abspath(
+        os.path.join(current_app.root_path, '..', 'uploads', 'fap_contestation_reports')
+    )
+    os.makedirs(upload_dir, exist_ok=True)
+
+    try:
+        from app.utils.timezone import now_sp
+        timestamp = now_sp().strftime('%Y%m%d_%H%M%S_%f')
+        safe_filename = secure_filename(filename)
+        unique_filename = f'{timestamp}_{safe_filename}'
+        file_path = os.path.join(upload_dir, unique_filename)
+        with open(file_path, 'wb') as fh:
+            fh.write(pdf_bytes)
+
+        file_size = len(pdf_bytes)
+        file_type = 'PDF'
+
+        report = FapContestationJudgmentReport(
+            user_id=current_user_id,
+            law_firm_id=law_firm_id,
+            original_filename=filename,
+            file_path=file_path,
+            file_size=file_size,
+            file_type=file_type,
+            status='pending',
+        )
+        db.session.add(report)
+        db.session.flush()
+
+        knowledge_file = _ensure_fap_report_in_knowledge_base(
+            law_firm_id=law_firm_id,
+            user_id=current_user_id,
+            filename=filename,
+            file_path=file_path,
+            file_size=file_size,
+            file_type=file_type,
+        )
+        report.knowledge_base_id = knowledge_file.id
+        db.session.flush()
+
+        imported = FapAutoImportedContestacao(
+            law_firm_id=law_firm_id,
+            report_id=report.id,
+            contestacao_id=int(contestacao_id),
+            cnpj=cnpj,
+            year=int(year),
+            original_filename=filename,
+        )
+        db.session.add(imported)
+        db.session.commit()
+
+        return jsonify({
+            'ok': True,
+            'report_id': report.id,
+            'message': f'Contestação importada com sucesso como "{filename}".',
+        })
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception('Erro ao importar contestação FAP %s', contestacao_id)
+        return jsonify({'ok': False, 'message': f'Erro ao salvar importação: {str(e)}'}), 500
+
+
+@disputes_center_bp.route('/fap-auto-import/download-contestacao/<int:year>/<cnpj>/<int:contestacao_id>', methods=['GET'])
+@require_law_firm
+def fap_auto_import_download_contestacao(year, cnpj, contestacao_id):
+    import ssl
+    import urllib.request
+    import urllib.error
+
+    saved_auth = session.get('fap_auto_import_auth', '')
+    if not saved_auth:
+        return 'Dados de autenticação não encontrados na sessão.', 400
+
+    try:
+        auth_payload = json.loads(saved_auth)
+    except Exception:
+        return 'Dados de autenticação inválidos na sessão.', 400
+
+    cookies_dict = auth_payload.get('cookies') or {}
+    user_agent   = (auth_payload.get('userAgent') or '').strip()
+    cookie_string = '; '.join(f'{k}={v}' for k, v in cookies_dict.items() if k and v)
+    xsrf_token   = cookies_dict.get('XSRF-TOKEN', '')
+
+    default_ua = (
+        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+        'AppleWebKit/537.36 (KHTML, like Gecko) '
+        'Chrome/147.0.0.0 Safari/537.36'
+    )
+
+    url = (
+        f'https://fap-mps.dataprev.gov.br/gateway/fap/v1'
+        f'/vigencias/{year}/empresa/{cnpj}/contestacoes/{contestacao_id}/imprimir'
+    )
+
+    headers = {
+        'Accept': 'application/json;charset=utf-8',
+        'Accept-Language': 'pt-BR,pt;q=0.9',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
+        'Cookie': cookie_string,
+        'DNT': '1',
+        'Pragma': 'no-cache',
+        'Referer': 'https://fap-mps.dataprev.gov.br/contestacoes-eletronicas',
+        'User-Agent': user_agent or default_ua,
+    }
+    if xsrf_token:
+        headers['X-XSRF-TOKEN'] = xsrf_token
+
+    ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
+    ssl_ctx.check_hostname = False
+    ssl_ctx.verify_mode = ssl.CERT_NONE
+    ssl_ctx.options |= ssl.OP_NO_SSLv2 | ssl.OP_NO_SSLv3
+    ssl_ctx.set_ciphers('DEFAULT:@SECLEVEL=1')
+    ssl_ctx.options |= getattr(ssl, 'OP_LEGACY_SERVER_CONNECT', 0)
+
+    try:
+        req = urllib.request.Request(url, headers=headers, method='GET')
+        with urllib.request.urlopen(req, timeout=30, context=ssl_ctx) as resp:
+            body = resp.read()
+    except urllib.error.HTTPError as e:
+        if e.code in (401, 403):
+            return (
+                'Sessão expirada ou não autorizada. '
+                'Atualize os dados de autenticação e tente novamente.'
+            ), 401
+        return f'Erro HTTP {e.code} ao baixar o documento.', 502
+    except urllib.error.URLError as e:
+        return f'Falha de conexão: {e.reason}', 502
+    except Exception as e:
+        return f'Erro inesperado: {str(e)}', 500
+
+    import base64 as _base64
+    try:
+        data = json.loads(body)
+        filename = data.get('nome') or f'contestacao_{contestacao_id}.pdf'
+        pdf_bytes = _base64.b64decode(data['base64'])
+    except Exception as e:
+        return f'Erro ao processar resposta do servidor: {str(e)}', 502
+
+    inline = request.args.get('inline') == '1'
+    disposition = f'inline; filename="{filename}"' if inline else f'attachment; filename="{filename}"'
+    from flask import Response
+    return Response(
+        pdf_bytes,
+        status=200,
+        headers={
+            'Content-Type': 'application/pdf',
+            'Content-Disposition': disposition,
+        },
     )
 
 
@@ -2661,6 +3129,7 @@ def fap_auto_import_fetch_companies():
     import urllib.request
     import urllib.error
 
+    law_firm_id = get_current_law_firm_id()
     data = request.get_json(silent=True) or {}
     cookies_dict = data.get('cookies') or {}
     user_agent = (data.get('userAgent') or '').strip()
@@ -2733,7 +3202,47 @@ def fap_auto_import_fetch_companies():
             'detail': body[:300],
         }), 502
 
-    return jsonify({'ok': True, 'companies': companies})
+    # Upsert companies into DB
+    try:
+        from datetime import datetime as _dt
+        now = _dt.utcnow()
+        seen_cnpjs = set()
+        for item in (companies if isinstance(companies, list) else []):
+            cnpj = str(item.get('cnpj') or '').strip()
+            if not cnpj:
+                continue
+            seen_cnpjs.add(cnpj)
+            tipo = item.get('tipoProcuracao') or {}
+            nome = (item.get('nome') or '').strip()
+            rec = FapCompany.query.filter_by(law_firm_id=law_firm_id, cnpj=cnpj).first()
+            if rec:
+                rec.nome = nome
+                rec.tipo_procuracao_codigo = tipo.get('codigo')
+                rec.tipo_procuracao_descricao = tipo.get('descricao')
+                rec.synced_at = now
+            else:
+                rec = FapCompany(
+                    law_firm_id=law_firm_id,
+                    cnpj=cnpj,
+                    nome=nome,
+                    tipo_procuracao_codigo=tipo.get('codigo'),
+                    tipo_procuracao_descricao=tipo.get('descricao'),
+                    synced_at=now,
+                )
+                db.session.add(rec)
+        # Remove companies no longer returned by the API
+        if seen_cnpjs:
+            FapCompany.query.filter(
+                FapCompany.law_firm_id == law_firm_id,
+                FapCompany.cnpj.notin_(seen_cnpjs),
+            ).delete(synchronize_session='fetch')
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception('Erro ao salvar empresas FAP no banco')
+        return jsonify({'ok': False, 'message': f'Empresas recebidas mas falha ao salvar no banco: {str(e)}'}), 500
+
+    return jsonify({'ok': True, 'companies': companies, 'saved_count': len(seen_cnpjs)})
 
 
 @disputes_center_bp.route('/new', methods=['GET', 'POST'])

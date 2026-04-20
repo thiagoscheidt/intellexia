@@ -29,5 +29,6 @@ TRUNCATE TABLE fap_contestation_payroll_masses;
 TRUNCATE TABLE fap_contestation_employment_links;
 TRUNCATE TABLE fap_contestation_turnover_rates;
 TRUNCATE TABLE fap_vigencia_cnpjs;
+TRUNCATE TABLE fap_auto_imported_contestacoes;
 
 SET FOREIGN_KEY_CHECKS = 1;
