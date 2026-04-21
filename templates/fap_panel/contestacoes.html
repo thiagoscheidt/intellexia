@@ -2,30 +2,28 @@
 
 {% from "partials/page_hero.html" import page_hero %}
 
-{# ── Macro: renderiza uma célula de contestação ─────────────────────────── #}
+{# ── Macro: renderiza uma célula de contestação (layout compacto) ───────── #}
 {% macro _render_cell(c) %}
 {%- set cnpj14 = c.cnpj.zfill(14) if c.cnpj else '' -%}
 {%- set dl_base = url_for('disputes_center.fap_auto_import_download_contestacao', year=c.ano_vigencia, cnpj=cnpj14, contestacao_id=c.contestacao_id) -%}
 {%- set imported_report_id = imported_map.get(c.contestacao_id) -%}
 <div class="contestacao-cell">
-  <span class="protocolo-code">{{ c.protocolo or '—' }}</span>
-  <span class="situacao-text">{{ c.situacao_descricao or '' }}</span>
+  <div class="cell-row">
+    <span class="protocolo-code">{{ c.protocolo or '—' }}</span>
+    <span class="situacao-text">{{ c.situacao_descricao or '' }}</span>
+  </div>
   <div class="cell-actions">
-    <a href="{{ dl_base }}?inline=1" target="_blank" class="text-secondary" title="Visualizar documento">
-      <i class="bi bi-eye me-1"></i>Visualizar
-    </a>
-    <span class="text-muted">·</span>
-    <a href="{{ dl_base }}" class="text-primary" title="Baixar documento">
-      <i class="bi bi-file-earmark-arrow-down me-1"></i>Baixar
-    </a>
-    <span class="text-muted">·</span>
+    <a href="{{ dl_base }}?inline=1" target="_blank" class="btn-cell btn-cell-view" title="Visualizar"><i class="bi bi-eye"></i></a>
+    <a href="{{ dl_base }}" class="btn-cell btn-cell-download" title="Baixar"><i class="bi bi-file-earmark-arrow-down"></i></a>
     {% if imported_report_id %}
-    <a href="{{ url_for('disputes_center.fap_contestation_reports') }}" class="text-success" title="Já importado — ver relatórios">
-      <i class="bi bi-check-circle-fill me-1"></i>Importado
-    </a>
+    <a href="{{ url_for('disputes_center.fap_contestation_reports') }}" class="btn-cell btn-cell-imported" title="Importado"><i class="bi bi-check-circle-fill"></i> Importado</a>
     {% else %}
-    <span class="text-warning" title="Ainda não importado">
-      <i class="bi bi-cloud-arrow-up me-1"></i>Importar
+    <span class="btn-cell btn-cell-pending import-pending-btn"
+          data-year="{{ c.ano_vigencia }}"
+          data-cnpj="{{ cnpj14 }}"
+          data-id="{{ c.contestacao_id }}"
+          title="Não importado — clique em Importar Filtrados para importar em lote">
+      <i class="bi bi-cloud-arrow-up"></i> Importar
     </span>
     {% endif %}
   </div>
@@ -37,107 +35,295 @@
 {% block extra_css %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
 <style>
-  /* ── Tabela estilo portal FAP ────────────────────────────────────── */
-  .fap-table thead th {
-    background: #f4f4f4;
-    font-size: .78rem;
-    font-weight: 600;
-    text-transform: uppercase;
-    letter-spacing: .02em;
-    border-bottom: 2px solid #dee2e6;
-    vertical-align: middle;
-    text-align: center;
-    white-space: nowrap;
+  :root {
+    --fap-blue: #0d6efd;
+    --fap-blue-soft: rgba(13,110,253,.10);
+    --fap-card-radius: 1rem;
+    --fap-shadow: 0 8px 28px rgba(15,23,42,.07);
   }
-  .fap-table tbody td {
-    vertical-align: middle;
-    text-align: center;
-    font-size: .84rem;
-    border-right: 1px solid #ececec;
+
+  /* ── Filtros ─────────────────────────────────────────────────────── */
+  .filter-shell {
+    background: linear-gradient(160deg,#f8faff 0%,#fff 55%,#f5f8ff 100%);
+    border: 1px solid rgba(13,110,253,.10);
+    border-radius: var(--fap-card-radius);
+    box-shadow: var(--fap-shadow);
   }
-  .fap-table tbody td.td-cnpj {
-    font-family: monospace;
-    font-size: .82rem;
-    text-align: center;
-  }
-  .fap-table tbody tr:hover {
-    background: #f0f6ff;
-  }
-  .contestacao-cell {
-    line-height: 1.3;
-    padding: 4px 4px;
-  }
-  .contestacao-cell .protocolo-code {
-    font-family: monospace;
-    font-size: .8rem;
-    font-weight: 700;
-    color: #0d6efd;
-    display: block;
-  }
-  .contestacao-cell .situacao-text {
-    font-size: .72rem;
-    color: #555;
-    display: block;
-    margin-top: 1px;
-    margin-bottom: 3px;
-  }
-  .contestacao-cell .cell-actions {
+  .filter-shell .filter-header {
     display: flex;
-    justify-content: center;
     align-items: center;
-    flex-wrap: wrap;
-    gap: 4px;
-    font-size: .72rem;
+    gap: .6rem;
+    padding: .85rem 1.25rem;
+    border-bottom: 1px solid rgba(15,23,42,.06);
   }
-  .contestacao-cell .cell-actions a,
-  .contestacao-cell .cell-actions button {
-    font-size: .72rem;
-    padding: 0;
-    border: none;
-    background: none;
-    text-decoration: none;
-    cursor: pointer;
+  .filter-shell .filter-header h6 {
+    margin: 0;
+    font-size: .85rem;
+    font-weight: 700;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+    color: #3d5080;
   }
-  .contestacao-cell + .contestacao-cell {
-    margin-top: 6px;
-    padding-top: 6px;
-    border-top: 1px dashed #dee2e6;
+  .filter-shell .filter-body {
+    padding: 1rem 1.25rem 1.1rem;
   }
-  .fap-section-header {
-    background: #e9ecef;
-    font-size: .75rem;
+  .filter-shell .form-label {
+    font-size: .76rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: #5d6b82;
+    margin-bottom: .28rem;
+  }
+  .filter-active-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .25rem .65rem;
+    background: rgba(13,110,253,.10);
+    color: #0b4cb3;
+    border-radius: 999px;
+    font-size: .71rem;
+    font-weight: 700;
+  }
+
+  /* ── Stats cards ─────────────────────────────────────────────────── */
+  .stat-cards {
+    display: grid;
+    grid-template-columns: repeat(4,1fr);
+    gap: .85rem;
+  }
+  @media (max-width: 900px) { .stat-cards { grid-template-columns: repeat(2,1fr); } }
+  @media (max-width: 500px) { .stat-cards { grid-template-columns: 1fr; } }
+  .stat-card {
+    position: relative;
+    overflow: hidden;
+    background: #fff;
+    border: 1px solid rgba(15,23,42,.07);
+    border-radius: var(--fap-card-radius);
+    box-shadow: var(--fap-shadow);
+    padding: 1rem 1.1rem 1rem 1.3rem;
+  }
+  .stat-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 5px;
+    background: var(--sc-color, var(--fap-blue));
+    border-radius: 4px 0 0 4px;
+  }
+  .stat-card .sc-icon {
+    width: 2.3rem; height: 2.3rem;
+    background: var(--sc-soft, var(--fap-blue-soft));
+    color: var(--sc-color, var(--fap-blue));
+    border-radius: .65rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+  }
+  .stat-card .sc-label {
+    font-size: .71rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: #6c7a8d;
+    margin-bottom: .12rem;
+  }
+  .stat-card .sc-value {
+    font-size: 1.6rem;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--bs-emphasis-color);
+  }
+
+  /* ── Tabela ──────────────────────────────────────────────────────── */
+  .table-shell {
+    background: #fff;
+    border: 1px solid rgba(15,23,42,.07);
+    border-radius: var(--fap-card-radius);
+    box-shadow: var(--fap-shadow);
+    overflow: hidden;
+  }
+  .table-shell .table-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+    padding: .85rem 1.1rem;
+    border-bottom: 1px solid rgba(15,23,42,.06);
+    background: linear-gradient(180deg,#f8fafe,#fff 60%);
+  }
+  .table-shell .table-toolbar h6 {
+    margin: 0;
+    font-size: .88rem;
+    font-weight: 700;
+    color: var(--bs-emphasis-color);
+  }
+  .fap-table { margin: 0; border-collapse: separate; border-spacing: 0; }
+  .fap-table thead tr:first-child th {
+    background: #f1f5fb;
+    font-size: .73rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: .04em;
+    color: #4a5568;
+    border-bottom: 2px solid #d4dae8;
+    vertical-align: middle;
     text-align: center;
-    color: #495057;
+    white-space: nowrap;
+    padding: .6rem .75rem;
   }
-  /* grupo de cabeçalho da 2ª instância */
-  .th-recurso {
-    background: #eef4ff;
-  }
-  .td-empty {
-    color: #bbb;
-  }
-  /* badge de ano */
-  .badge-year {
-    background: #0d6efd;
-    color: #fff;
-    font-size: .8rem;
+  .fap-table thead tr:last-child th {
+    background: #f7f9fc;
+    font-size: .71rem;
     font-weight: 700;
-    padding: .2em .55em;
-    border-radius: .35em;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: #5a6579;
+    border-bottom: 2px solid #d4dae8;
+    padding: .5rem .7rem;
+    text-align: center;
+    white-space: nowrap;
   }
-  /* Filtros card */
-  .filter-card .form-label {
-    font-size: .8rem;
+  .fap-table thead th.th-inst1     { background: #eef4fd; color: #0b4cb3; }
+  .fap-table thead th.th-inst2     { background: #edfaf2; color: #0a5c34; }
+  .fap-table thead th.th-inst1-sub { background: #f4f8ff; }
+  .fap-table thead th.th-inst2-sub { background: #f2fbf6; }
+  .fap-table tbody td {
+    vertical-align: top;
+    border-color: rgba(15,23,42,.06);
+    font-size: .83rem;
+    padding: .6rem .75rem;
+  }
+  .fap-table tbody td.td-year  { vertical-align: middle; text-align: center; }
+  .fap-table tbody td.td-cnpj  { vertical-align: middle; text-align: left; }
+  .fap-table tbody td.td-cells { text-align: left; min-width: 160px; }
+  .fap-table tbody td.td-empty-cell { text-align: center; color: #c8cedb; vertical-align: middle; font-size: .8rem; }
+  .fap-table tbody tr:hover td { background: rgba(13,110,253,.025); }
+
+  /* ── Year pill ───────────────────────────────────────────────────── */
+  .year-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: .3rem .8rem;
+    background: var(--fap-blue);
+    color: #fff;
+    border-radius: 999px;
+    font-size: .82rem;
+    font-weight: 800;
+  }
+
+  /* ── CNPJ cell ───────────────────────────────────────────────────── */
+  .cnpj-cell .cnpj-fmt {
+    font-family: var(--bs-font-monospace);
+    font-size: .82rem;
     font-weight: 600;
-    margin-bottom: .2rem;
-    color: #495057;
+    color: var(--bs-emphasis-color);
+    white-space: nowrap;
   }
-  .filter-card .form-control,
-  .filter-card .form-select {
-    font-size: .84rem;
+  .cnpj-cell .cnpj-name {
+    font-size: .73rem;
+    color: #6c7a8d;
+    margin-top: .15rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 200px;
+  }
+
+  /* ── Contestação cell ────────────────────────────────────────────── */
+  .contestacao-cell {
+    padding: 5px 4px;
+    line-height: 1.35;
+  }
+  .contestacao-cell .cell-row {
+    display: flex;
+    align-items: baseline;
+    gap: .4rem;
+    flex-wrap: wrap;
+    margin-bottom: 4px;
+  }
+  .contestacao-cell .protocolo-code {
+    font-family: var(--bs-font-monospace);
+    font-size: .75rem;
+    font-weight: 700;
+    color: var(--fap-blue);
+    white-space: nowrap;
+  }
+  .contestacao-cell .situacao-text {
+    font-size: .68rem;
+    color: #6c7a8d;
+    line-height: 1.2;
+  }
+  .contestacao-cell .cell-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px;
+  }
+  .btn-cell {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: .65rem;
+    font-weight: 600;
+    padding: 1px 5px;
+    border-radius: .25rem;
+    text-decoration: none;
+    border: 1px solid transparent;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .btn-cell-view     { background: #e9ecef; color: #495057; border-color: #ced4da; }
+  .btn-cell-view:hover { background: #d4dae3; color: #212529; }
+  .btn-cell-download { background: #dbeafe; color: #1e40af; border-color: #bfdbfe; }
+  .btn-cell-download:hover { background: #bfdbfe; color: #1e40af; }
+  .btn-cell-imported { background: #d1fae5; color: #065f46; border-color: #a7f3d0; }
+  .btn-cell-imported:hover { background: #a7f3d0; color: #065f46; }
+  .btn-cell-pending  { background: #fef3c7; color: #92400e; border-color: #fde68a; cursor: default; }
+  .contestacao-cell + .contestacao-cell {
+    margin-top: 7px;
+    padding-top: 7px;
+    border-top: 1px dashed #e2e8f0;
+  }
+
+  /* ── Paginação client-side ──────────────────────────────────────── */
+  .pagination-shell {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: .6rem;
+    padding: .65rem 1.1rem;
+    border-top: 1px solid rgba(15,23,42,.06);
+    background: #f8fafe;
+  }
+  .pagination-shell .pg-info {
+    font-size: .78rem;
+    color: #6c7a8d;
+  }
+  .pagination-shell .page-size-select {
+    font-size: .78rem;
+    padding: .2rem .5rem;
+    border-radius: .35rem;
+    border: 1px solid #d0d7e3;
+    background: #fff;
+    color: #3d5080;
+    cursor: pointer;
+  }
+
+  /* ── Rodapé ──────────────────────────────────────────────────────── */
+  .table-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: .6rem 1.1rem;
+    border-top: 1px solid rgba(15,23,42,.06);
+    background: #f8fafe;
+    font-size: .77rem;
+    color: #6c7a8d;
   }
 </style>
 {% endblock %}
@@ -153,19 +339,76 @@
 </nav>
 {% endcall %}
 
+{# Dados para JS ─────────────────────────────────────────────────────────── #}
+<script id="cnpjsByRaizData" type="application/json">{{ cnpjs_by_raiz | tojson }}</script>
+
 <div class="app-content">
   <div class="container-fluid">
 
-    {# ── Card de filtros ─────────────────────────────────────────────────── #}
-    <div class="card filter-card mb-3">
-      <div class="card-body pb-2">
+    {# ── Stats cards ─────────────────────────────────────────────────── #}
+    {% set cnt_and1 = namespace(v=0) %}
+    {% set cnt_tra1 = namespace(v=0) %}
+    {% set cnt_and2 = namespace(v=0) %}
+    {% set cnt_tra2 = namespace(v=0) %}
+    {% for row in table_rows %}
+      {% set cnt_and1.v = cnt_and1.v + row.c_and1|length %}
+      {% set cnt_tra1.v = cnt_tra1.v + row.c_tra1|length %}
+      {% set cnt_and2.v = cnt_and2.v + row.c_and2|length %}
+      {% set cnt_tra2.v = cnt_tra2.v + row.c_tra2|length %}
+    {% endfor %}
+    <div class="stat-cards mb-3">
+      <div class="stat-card" style="--sc-color:#0d6efd;--sc-soft:rgba(13,110,253,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-list-ul"></i></span>
+          <span class="sc-label">Total</span>
+        </div>
+        <div class="sc-value">{{ total }}</div>
+      </div>
+      <div class="stat-card" style="--sc-color:#f59e0b;--sc-soft:rgba(245,158,11,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-hourglass-split"></i></span>
+          <span class="sc-label">1ª Inst. em Andamento</span>
+        </div>
+        <div class="sc-value">{{ cnt_and1.v }}</div>
+      </div>
+      <div class="stat-card" style="--sc-color:#198754;--sc-soft:rgba(25,135,84,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-send-check"></i></span>
+          <span class="sc-label">1ª Inst. Transmitidas</span>
+        </div>
+        <div class="sc-value">{{ cnt_tra1.v }}</div>
+      </div>
+      <div class="stat-card" style="--sc-color:#6f42c1;--sc-soft:rgba(111,66,193,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-arrow-repeat"></i></span>
+          <span class="sc-label">Recursos</span>
+        </div>
+        <div class="sc-value">{{ cnt_and2.v + cnt_tra2.v }}</div>
+      </div>
+    </div>
+
+    {# ── Filtros ─────────────────────────────────────────────────────── #}
+    <div class="filter-shell mb-3">
+      <div class="filter-header">
+        <i class="bi bi-funnel-fill text-primary" style="font-size:.88rem;"></i>
+        <h6>Filtros</h6>
+        {% if f_year or f_cnpj_raiz or f_cnpj or f_instancia or f_situacao or f_protocolo or f_prazo2 %}
+        <span class="filter-active-badge ms-auto">
+          <i class="bi bi-funnel-fill"></i> Filtros ativos
+        </span>
+        <a href="{{ url_for('fap_panel.contestacoes_page') }}" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-1" title="Limpar filtros">
+          <i class="bi bi-x-lg"></i> Limpar
+        </a>
+        {% endif %}
+      </div>
+      <div class="filter-body">
         <form method="get" action="{{ url_for('fap_panel.contestacoes_page') }}" id="filterForm">
           <div class="row g-2 align-items-end">
 
             {# Vigência #}
-            <div class="col-sm-2">
-              <label class="form-label">Vigência:</label>
-              <select name="ano_vigencia" class="form-select" id="selectYear">
+            <div class="col-sm-2 col-6">
+              <label class="form-label">Vigência</label>
+              <select name="ano_vigencia" class="form-select form-select-sm" id="selectYear">
                 <option value="">Todas</option>
                 {% for y in years %}
                 <option value="{{ y }}" {{ 'selected' if f_year == y|string }}>{{ y }}</option>
@@ -174,10 +417,10 @@
             </div>
 
             {# CNPJ Raiz #}
-            <div class="col-sm-4">
-              <label class="form-label">CNPJ Raiz:</label>
-              <select name="cnpj_raiz" class="form-select" id="selectCnpj">
-                <option value="">Todos os CNPJs</option>
+            <div class="col-sm-3 col-6">
+              <label class="form-label">CNPJ Raiz</label>
+              <select name="cnpj_raiz" class="form-select form-select-sm" id="selectRaiz">
+                <option value="">Todos</option>
                 {% for c in companies %}
                 <option value="{{ c.cnpj }}" {{ 'selected' if f_cnpj_raiz == c.cnpj }}>
                   {{ c.cnpj }} — {{ c.nome or 'sem nome' }}
@@ -186,10 +429,24 @@
               </select>
             </div>
 
+            {# Estabelecimento (14 dígitos, carregado via JS) #}
+            <div class="col-sm-3 col-6">
+              <label class="form-label">Estabelecimento</label>
+              <select name="cnpj" class="form-select form-select-sm" id="selectEstab"
+                {{ 'disabled' if not f_cnpj_raiz and not f_cnpj }}>
+                <option value="">Todos os estabelecimentos</option>
+                {% if f_cnpj %}
+                <option value="{{ f_cnpj }}" selected>
+                  {{ f_cnpj[:2] }}.{{ f_cnpj[2:5] }}.{{ f_cnpj[5:8] }}/{{ f_cnpj[8:12] }}-{{ f_cnpj[12:14] }}
+                </option>
+                {% endif %}
+              </select>
+            </div>
+
             {# Instância #}
-            <div class="col-sm-2">
-              <label class="form-label">Instância:</label>
-              <select name="instancia" class="form-select" id="selectInstancia">
+            <div class="col-sm-2 col-6">
+              <label class="form-label">Instância</label>
+              <select name="instancia" class="form-select form-select-sm" id="selectInstancia">
                 <option value="">Todas</option>
                 {% for cod, desc in instancias %}
                 <option value="{{ cod }}" {{ 'selected' if f_instancia == cod }}>{{ desc or cod }}</option>
@@ -198,9 +455,9 @@
             </div>
 
             {# Situação #}
-            <div class="col-sm-2">
-              <label class="form-label">Situação:</label>
-              <select name="situacao" class="form-select" id="selectSituacao">
+            <div class="col-sm-2 col-6">
+              <label class="form-label">Situação</label>
+              <select name="situacao" class="form-select form-select-sm" id="selectSituacao">
                 <option value="">Todas</option>
                 {% for cod, desc in situacoes %}
                 <option value="{{ cod }}" {{ 'selected' if f_situacao == cod }}>{{ desc or cod }}</option>
@@ -209,31 +466,24 @@
             </div>
 
             {# Protocolo #}
-            <div class="col-sm-2">
-              <label class="form-label">Protocolo:</label>
-              <input type="text" name="protocolo" class="form-control" placeholder=""
-                value="{{ f_protocolo }}" inputmode="numeric">
+            <div class="col-sm-2 col-6">
+              <label class="form-label">Protocolo</label>
+              <input type="text" name="protocolo" class="form-control form-control-sm"
+                placeholder="Nº protocolo" value="{{ f_protocolo }}" inputmode="numeric">
             </div>
 
-            {# Prazo Aberto 2ª Instância #}
-            <div class="col-auto d-flex align-items-end gap-2">
-              <div class="form-check mb-0" style="white-space:nowrap;">
+            {# Prazo 2ª instância + Consultar #}
+            <div class="col-12 d-flex align-items-center justify-content-between mt-1">
+              <div class="form-check mb-0">
                 <input class="form-check-input" type="checkbox" name="prazo_2_instancia" value="1"
                   id="chkPrazo2" {{ 'checked' if f_prazo2 }}>
-                <label class="form-check-label small" for="chkPrazo2">Prazo Aberto 2ª Inst.</label>
+                <label class="form-check-label small fw-semibold" for="chkPrazo2">
+                  Prazo Aberto 2ª Instância
+                </label>
               </div>
-            </div>
-
-            {# Botão consultar #}
-            <div class="col-auto ms-auto d-flex align-items-end">
-              <button type="submit" class="btn btn-primary">
+              <button type="submit" class="btn btn-primary btn-sm px-4">
                 <i class="bi bi-search me-1"></i> Consultar
               </button>
-              {% if f_year or f_cnpj_raiz or f_instancia or f_situacao or f_protocolo or f_prazo2 %}
-              <a href="{{ url_for('fap_panel.contestacoes_page') }}" class="btn btn-outline-secondary ms-2" title="Limpar filtros">
-                <i class="bi bi-x-lg"></i>
-              </a>
-              {% endif %}
             </div>
 
           </div>
@@ -241,101 +491,188 @@
       </div>
     </div>
 
-    {# ── Cabeçalho da tabela ─────────────────────────────────────────────── #}
-    <div class="d-flex justify-content-between align-items-center mb-2">
-      <h6 class="mb-0 fw-bold">
-        <i class="bi bi-table me-1 text-primary"></i> Contestações
-        <span class="badge bg-secondary ms-1" style="font-size:.75rem;font-weight:500;">
-          {{ total }} registro(s)
-        </span>
-        {% if f_year or f_cnpj_raiz or f_instancia or f_situacao or f_protocolo %}
-        <span class="badge bg-warning text-dark ms-1" style="font-size:.72rem;">filtrado</span>
-        {% endif %}
-      </h6>
-      <div class="d-flex gap-2">
-        <a href="{{ url_for('fap_panel.sync_page') }}" class="btn btn-sm btn-outline-primary">
-          <i class="bi bi-arrow-repeat me-1"></i> Sincronizar
-        </a>
-      </div>
-    </div>
-
-    {# ── Tabela ─────────────────────────────────────────────────────────── #}
+    {# ── Tabela ─────────────────────────────────────────────────────── #}
     {% if table_rows %}
-    <div class="card mb-4">
-      <div class="card-body p-0">
-        <div class="table-responsive">
-          <table class="table table-bordered table-hover fap-table mb-0" id="fapTable">
-            <thead>
-              {# Linha de grupo #}
-              <tr>
-                <th rowspan="2" class="align-middle" style="width:80px;">Vigência</th>
-                <th rowspan="2" class="align-middle" style="width:165px;">Estabelecimento</th>
-                <th colspan="2" class="fap-section-header" style="background:#eef3fc;">Contestações (1ª Instância)</th>
-                <th colspan="2" class="fap-section-header th-recurso" style="background:#f0f8ee;">Recursos (2ª Instância)</th>
-              </tr>
-              <tr>
-                <th style="width:155px;">Em Andamento</th>
-                <th style="width:155px;">Transmitidas</th>
-                <th class="th-recurso" style="width:155px;">Em Andamento</th>
-                <th class="th-recurso" style="width:155px;">Transmitidos</th>
-              </tr>
-            </thead>
-            <tbody id="fapTbody">
-              {% for row in table_rows %}
-              <tr>
-                <td><span class="badge-year">{{ row.ano_vigencia }}</span></td>
-                <td class="td-cnpj">{{ row.cnpj_fmt }}</td>
-
-                {# Contestações em Andamento (1ª inst) #}
-                <td>
-                  {% if row.c_and1 %}
-                  {% for c in row.c_and1 %}{{ _render_cell(c) }}{% endfor %}
-                  {% else %}<span class="td-empty">—</span>{% endif %}
-                </td>
-
-                {# Contestações Transmitidas (1ª inst) #}
-                <td>
-                  {% if row.c_tra1 %}
-                  {% for c in row.c_tra1 %}{{ _render_cell(c) }}{% endfor %}
-                  {% else %}<span class="td-empty">—</span>{% endif %}
-                </td>
-
-                {# Recursos em Andamento (2ª inst) #}
-                <td>
-                  {% if row.c_and2 %}
-                  {% for c in row.c_and2 %}{{ _render_cell(c) }}{% endfor %}
-                  {% else %}<span class="td-empty">—</span>{% endif %}
-                </td>
-
-                {# Recursos Transmitidos (2ª inst) #}
-                <td>
-                  {% if row.c_tra2 %}
-                  {% for c in row.c_tra2 %}{{ _render_cell(c) }}{% endfor %}
-                  {% else %}<span class="td-empty">—</span>{% endif %}
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+    <div class="table-shell mb-4">
+      <div class="table-toolbar">
+        <h6>
+          <i class="bi bi-table me-1 text-primary"></i> Resultado
+          <span class="badge bg-secondary ms-1" style="font-size:.72rem;font-weight:500;">
+            {{ table_rows|length }} linha(s) · {{ total }} contestação(ões)
+          </span>
+          {% if f_year or f_cnpj_raiz or f_cnpj or f_instancia or f_situacao or f_protocolo %}
+          <span class="badge bg-warning text-dark ms-1" style="font-size:.7rem;">filtrado</span>
+          {% endif %}
+        </h6>
+        <div class="d-flex gap-2 align-items-center">
+          <input type="text" id="localFilter" class="form-control form-control-sm" style="width:175px;"
+            placeholder="Buscar na página…">
+          {%- set _qs = {
+              'ano_vigencia': f_year or '',
+              'cnpj_raiz':    f_cnpj_raiz or '',
+              'cnpj':         f_cnpj or '',
+              'instancia':    f_instancia or '',
+              'situacao':     f_situacao or '',
+              'protocolo':    f_protocolo or ''
+          } -%}
+          <button type="button" id="btnImportAll" class="btn btn-sm btn-warning"
+                  title="Importar todas as contestações não importadas do filtro atual">
+            <i class="bi bi-cloud-arrow-up me-1"></i> Importar Filtrados
+          </button>
+          <div class="btn-group" role="group">
+            <a href="{{ url_for('fap_panel.contestacoes_export_excel', **_qs) }}"
+               class="btn btn-sm btn-success"
+               title="Exportar por contestação (uma linha por contestação)"
+               data-bs-toggle="tooltip" data-bs-placement="top">
+              <i class="bi bi-file-earmark-excel me-1"></i> Por Contestação
+            </a>
+            <button type="button"
+                    class="btn btn-sm btn-success dropdown-toggle dropdown-toggle-split"
+                    data-bs-toggle="dropdown" aria-expanded="false">
+              <span class="visually-hidden">Mais opções</span>
+            </button>
+            <ul class="dropdown-menu dropdown-menu-end shadow-sm">
+              <li>
+                <a class="dropdown-item"
+                   href="{{ url_for('fap_panel.contestacoes_export_excel', **_qs) }}">
+                  <i class="bi bi-list-ul me-2 text-success"></i>
+                  <strong>Por Contestação</strong>
+                  <div class="text-muted" style="font-size:.75rem;">Uma linha por contestação</div>
+                </a>
+              </li>
+              <li><hr class="dropdown-divider"></li>
+              <li>
+                <a class="dropdown-item"
+                   href="{{ url_for('fap_panel.contestacoes_export_excel_agrupado', **_qs) }}">
+                  <i class="bi bi-table me-2 text-primary"></i>
+                  <strong>Conforme a Listagem</strong>
+                  <div class="text-muted" style="font-size:.75rem;">Agrupado por vigência + CNPJ</div>
+                </a>
+              </li>
+            </ul>
+          </div>
+          <a href="{{ url_for('fap_panel.sync_page') }}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-arrow-repeat me-1"></i> Sincronizar
+          </a>
         </div>
       </div>
-      {# Rodapé com contagem #}
-      <div class="card-footer py-2 d-flex justify-content-between align-items-center">
-        <small class="text-muted">
-          {{ table_rows|length }} linha(s) exibida(s), {{ total }} contestação(ões) no total.
-        </small>
-        <small class="text-muted">
-          Última sincronização: via
-          <a href="{{ url_for('fap_panel.sync_page') }}" class="text-decoration-none">Sincronização FAP</a>
-        </small>
+
+      <div id="importStatsSummary" class="px-3 py-2 border-bottom border-top d-flex flex-wrap gap-3 align-items-center" style="font-size:.85rem;background:#f8f9fa;">
+        <span><i class="bi bi-check-circle-fill text-success me-1"></i><span id="statsImported" class="fw-semibold">0</span> já importados</span>
+        <span class="text-muted">|</span>
+        <span><i class="bi bi-clock-fill text-warning me-1"></i><span id="statsPending" class="fw-semibold">0</span> não importados</span>
+        <span class="text-muted">|</span>
+        <span class="text-muted"><span id="statsTotal" class="fw-semibold">0</span> no total</span>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-bordered fap-table" id="fapTable">
+          <thead>
+            <tr>
+              <th rowspan="2" class="align-middle" style="width:78px;">Vigência</th>
+              <th rowspan="2" class="align-middle" style="min-width:165px;">Estabelecimento</th>
+              <th colspan="2" class="th-inst1" style="text-align:center;">
+                <i class="bi bi-1-circle-fill me-1"></i> Contestações — 1ª Instância
+              </th>
+              <th colspan="2" class="th-inst2" style="text-align:center;">
+                <i class="bi bi-2-circle-fill me-1"></i> Recursos — 2ª Instância
+              </th>
+            </tr>
+            <tr>
+              <th class="th-inst1-sub" style="width:175px;">
+                <i class="bi bi-hourglass-split me-1 text-warning"></i>Em Andamento
+              </th>
+              <th class="th-inst1-sub" style="width:175px;">
+                <i class="bi bi-send-check me-1 text-success"></i>Transmitidas
+              </th>
+              <th class="th-inst2-sub" style="width:175px;">
+                <i class="bi bi-hourglass-split me-1 text-warning"></i>Em Andamento
+              </th>
+              <th class="th-inst2-sub" style="width:175px;">
+                <i class="bi bi-send-check me-1 text-success"></i>Transmitidos
+              </th>
+            </tr>
+          </thead>
+          <tbody id="fapTbody">
+            {% for row in table_rows %}
+            <tr>
+              <td class="td-year">
+                <span class="year-pill">{{ row.ano_vigencia }}</span>
+              </td>
+              <td class="td-cnpj">
+                <div class="cnpj-cell">
+                  <span class="cnpj-fmt">{{ row.cnpj_fmt }}</span>
+                  {% set raiz = row.cnpj_raw[:8] if row.cnpj_raw else '' %}
+                  {% for c in companies if c.cnpj == raiz %}
+                  <div class="cnpj-name" title="{{ c.nome }}">{{ c.nome or '' }}</div>
+                  {% endfor %}
+                </div>
+              </td>
+
+              {# 1ª inst · Em Andamento #}
+              <td class="{{ 'td-cells' if row.c_and1 else 'td-empty-cell' }}">
+                {% if row.c_and1 %}
+                  {% for c in row.c_and1 %}{{ _render_cell(c) }}{% endfor %}
+                {% else %}<span>—</span>{% endif %}
+              </td>
+
+              {# 1ª inst · Transmitidas #}
+              <td class="{{ 'td-cells' if row.c_tra1 else 'td-empty-cell' }}">
+                {% if row.c_tra1 %}
+                  {% for c in row.c_tra1 %}{{ _render_cell(c) }}{% endfor %}
+                {% else %}<span>—</span>{% endif %}
+              </td>
+
+              {# 2ª inst · Em Andamento #}
+              <td class="{{ 'td-cells' if row.c_and2 else 'td-empty-cell' }}">
+                {% if row.c_and2 %}
+                  {% for c in row.c_and2 %}{{ _render_cell(c) }}{% endfor %}
+                {% else %}<span>—</span>{% endif %}
+              </td>
+
+              {# 2ª inst · Transmitidos #}
+              <td class="{{ 'td-cells' if row.c_tra2 else 'td-empty-cell' }}">
+                {% if row.c_tra2 %}
+                  {% for c in row.c_tra2 %}{{ _render_cell(c) }}{% endfor %}
+                {% else %}<span>—</span>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pagination-shell" id="paginationShell">
+        <div class="d-flex align-items-center gap-2">
+          <span class="pg-info" id="pgInfo"></span>
+          <select class="page-size-select" id="pgSize" title="Linhas por página">
+            <option value="10">10 por página</option>
+            <option value="20" selected>20 por página</option>
+            <option value="50">50 por página</option>
+            <option value="100">100 por página</option>
+            <option value="9999">Todas</option>
+          </select>
+        </div>
+        <nav aria-label="Paginação">
+          <ul class="pagination pagination-sm mb-0" id="pgControls"></ul>
+        </nav>
+      </div>
+
+      <div class="table-footer">
+        <span>
+          <i class="bi bi-table me-1"></i>
+          {{ table_rows|length }} linha(s) · {{ total }} contestação(ões) no total
+        </span>
+        <span>
+          Atualizado via <a href="{{ url_for('fap_panel.sync_page') }}" class="text-decoration-none">Sincronização FAP</a>
+        </span>
       </div>
     </div>
 
     {% else %}
-    {# Estado vazio #}
-    <div class="card">
+    <div class="table-shell mb-4">
       <div class="card-body text-center py-5">
-        {% if total == 0 and not (f_year or f_cnpj_raiz or f_instancia or f_situacao or f_protocolo) %}
+        {% if total == 0 and not (f_year or f_cnpj_raiz or f_cnpj or f_instancia or f_situacao or f_protocolo) %}
         <i class="bi bi-database-x text-muted" style="font-size:3rem;"></i>
         <h5 class="mt-3 text-muted">Nenhuma contestação sincronizada</h5>
         <p class="text-muted mb-3">
@@ -363,15 +700,72 @@
 {% block extra_js %}
 <script>
 (function () {
-  // Select2 nos filtros
+  /* ── Dados de CNPJ por raiz ─────────────────────────────────────────── */
+  var cnpjsByRaiz = JSON.parse(document.getElementById('cnpjsByRaizData').textContent || '{}');
+
+  /* ── Formata CNPJ 14 dígitos ────────────────────────────────────────── */
+  function fmtCnpj(d) {
+    if (!d || d.length !== 14) return d;
+    return d.slice(0,2)+'.'+d.slice(2,5)+'.'+d.slice(5,8)+'/'+d.slice(8,12)+'-'+d.slice(12);
+  }
+
+  /* ── Popula select de estabelecimento com base na raiz ───────────────── */
+  var selectRaiz  = document.getElementById('selectRaiz');
+  var selectEstab = document.getElementById('selectEstab');
+  var currentCnpj = '{{ f_cnpj | e }}';
+  var currentRaiz = '{{ f_cnpj_raiz | e }}';
+
+  function populateEstab(raiz, selectedCnpj) {
+    selectEstab.innerHTML = '<option value="">Todos os estabelecimentos</option>';
+    if (!raiz) {
+      selectEstab.disabled = true;
+    } else {
+      var list = cnpjsByRaiz[raiz] || [];
+      list.forEach(function(cnpj) {
+        var opt = document.createElement('option');
+        opt.value = cnpj;
+        opt.textContent = fmtCnpj(cnpj);
+        if (cnpj === selectedCnpj) opt.selected = true;
+        selectEstab.appendChild(opt);
+      });
+      selectEstab.disabled = list.length === 0;
+    }
+    // Re-inicializa Select2 se disponível
+    if (typeof $.fn !== 'undefined' && $.fn.select2) {
+      $('#selectEstab').trigger('change');
+    }
+  }
+
+  /* Inicializa se já havia raiz filtrada */
+  if (currentRaiz) {
+    populateEstab(currentRaiz, currentCnpj);
+  }
+
+  /* Listener nativo (para Select2 usamos evento adicional abaixo) */
+  selectRaiz.addEventListener('change', function() {
+    populateEstab(this.value, '');
+  });
+
+  /* ── Select2 ─────────────────────────────────────────────────────────── */
   if (typeof $.fn !== 'undefined' && $.fn.select2) {
     $('#selectYear').select2({ theme: 'bootstrap-5', minimumResultsForSearch: 5, width: '100%' });
-    $('#selectCnpj').select2({
+    $('#selectRaiz').select2({
       theme: 'bootstrap-5',
-      placeholder: 'Todos os CNPJs',
       allowClear: true,
+      placeholder: 'Todos os CNPJs raiz',
       width: '100%',
       language: { noResults: function () { return 'Nenhuma empresa encontrada.'; } },
+    });
+    /* Select2 dispara evento jQuery; precisamos sincronizar com populateEstab */
+    $('#selectRaiz').on('select2:select select2:unselect select2:clear', function() {
+      populateEstab(this.value, '');
+    });
+    $('#selectEstab').select2({
+      theme: 'bootstrap-5',
+      allowClear: true,
+      placeholder: 'Todos os estabelecimentos',
+      width: '100%',
+      language: { noResults: function () { return 'Nenhum estabelecimento encontrado.'; } },
     });
     $('#selectInstancia').select2({ theme: 'bootstrap-5', allowClear: true, placeholder: 'Todas', width: '100%' });
     $('#selectSituacao').select2({
@@ -383,16 +777,239 @@
     });
   }
 
-  // Filtro local por texto nas linhas visíveis
-  var filterInput = document.getElementById('localFilter');
-  if (filterInput) {
-    filterInput.addEventListener('input', function () {
-      var term = this.value.toLowerCase().trim();
-      document.querySelectorAll('#fapTbody tr').forEach(function (row) {
-        row.style.display = (!term || row.textContent.toLowerCase().includes(term)) ? '' : 'none';
+  /* ── Paginação client-side ──────────────────────────────────────────── */
+  var allRows      = Array.from(document.querySelectorAll('#fapTbody tr'));
+  var localFilter  = document.getElementById('localFilter');
+  var filteredRows = allRows.slice(); // cópia que reflete o filtro local
+  var currentPage  = 1;
+  var pageSize     = 20;
+
+  var pgInfo     = document.getElementById('pgInfo');
+  var pgControls = document.getElementById('pgControls');
+  var pgSize     = document.getElementById('pgSize');
+
+  function renderPage() {
+    var total = filteredRows.length;
+    var pages = Math.max(1, Math.ceil(total / pageSize));
+    if (currentPage > pages) currentPage = pages;
+
+    var start = (currentPage - 1) * pageSize;
+    var end   = Math.min(start + pageSize, total);
+
+    // Esconde/exibe linhas
+    allRows.forEach(function(r) { r.style.display = 'none'; });
+    filteredRows.forEach(function(r, i) {
+      r.style.display = (i >= start && i < end) ? '' : 'none';
+    });
+
+    // Info textual
+    pgInfo.textContent = total === 0
+      ? 'Nenhuma linha'
+      : 'Exibindo ' + (start + 1) + '–' + end + ' de ' + total + ' linha(s)';
+
+    // Controles de página
+    pgControls.innerHTML = '';
+
+    function makeBtn(label, page, disabled, active) {
+      var li  = document.createElement('li');
+      li.className = 'page-item' + (disabled ? ' disabled' : '') + (active ? ' active' : '');
+      var a = document.createElement('a');
+      a.className = 'page-link';
+      a.href = '#';
+      a.innerHTML = label;
+      a.addEventListener('click', function(e) {
+        e.preventDefault();
+        if (!disabled) { currentPage = page; renderPage(); }
       });
+      li.appendChild(a);
+      pgControls.appendChild(li);
+    }
+
+    makeBtn('&laquo;', 1,            currentPage === 1,     false);
+    makeBtn('&lsaquo;', currentPage - 1, currentPage === 1, false);
+
+    // Janela de páginas: máx 7 botões
+    var window_size = 7;
+    var half = Math.floor(window_size / 2);
+    var pStart = Math.max(1, currentPage - half);
+    var pEnd   = Math.min(pages, pStart + window_size - 1);
+    if (pEnd - pStart < window_size - 1) pStart = Math.max(1, pEnd - window_size + 1);
+
+    if (pStart > 1) {
+      makeBtn('1', 1, false, false);
+      if (pStart > 2) {
+        var sp = document.createElement('li');
+        sp.className = 'page-item disabled';
+        sp.innerHTML = '<span class="page-link">…</span>';
+        pgControls.appendChild(sp);
+      }
+    }
+    for (var p = pStart; p <= pEnd; p++) {
+      makeBtn(p, p, false, p === currentPage);
+    }
+    if (pEnd < pages) {
+      if (pEnd < pages - 1) {
+        var sp2 = document.createElement('li');
+        sp2.className = 'page-item disabled';
+        sp2.innerHTML = '<span class="page-link">…</span>';
+        pgControls.appendChild(sp2);
+      }
+      makeBtn(pages, pages, false, false);
+    }
+
+    makeBtn('&rsaquo;', currentPage + 1, currentPage === pages, false);
+    makeBtn('&raquo;', pages,            currentPage === pages, false);
+  }
+
+  pgSize.addEventListener('change', function() {
+    pageSize = parseInt(this.value, 10);
+    currentPage = 1;
+    renderPage();
+  });
+
+  // Sobrescreve o filtro local para também atualizar filteredRows
+  if (localFilter) {
+    localFilter.addEventListener('input', function () {
+      var term = this.value.toLowerCase().trim();
+      filteredRows = allRows.filter(function(row) {
+        return !term || row.textContent.toLowerCase().includes(term);
+      });
+      currentPage = 1;
+      renderPage();
+      updateImportAllBtnLabel();
     });
   }
+
+  /* ── Importação em lote dos filtrados ──────────────────────────────── */
+  var importUrl    = '{{ url_for("disputes_center.fap_auto_import_import_contestacao") }}';
+  var reportsUrl   = '{{ url_for("disputes_center.fap_contestation_reports") }}';
+  var btnImportAll = document.getElementById('btnImportAll');
+
+  function collectPendingFromFiltered() {
+    var pending = [];
+    filteredRows.forEach(function(row) {
+      row.querySelectorAll('.import-pending-btn').forEach(function(btn) {
+        pending.push({
+          year: btn.dataset.year,
+          cnpj: btn.dataset.cnpj,
+          id:   btn.dataset.id,
+          btn:  btn,
+        });
+      });
+    });
+    return pending;
+  }
+
+  function updateImportStats() {
+    var allCells    = document.querySelectorAll('#fapTbody .contestacao-cell');
+    var importedEl  = document.getElementById('statsImported');
+    var pendingEl   = document.getElementById('statsPending');
+    var totalEl     = document.getElementById('statsTotal');
+    var imported = 0, pending = 0;
+    allCells.forEach(function(cell) {
+      if (cell.querySelector('.btn-cell-imported')) imported++;
+      else if (cell.querySelector('.import-pending-btn')) pending++;
+    });
+    if (importedEl) importedEl.textContent = imported;
+    if (pendingEl)  pendingEl.textContent  = pending;
+    if (totalEl)    totalEl.textContent    = imported + pending;
+  }
+
+  function updateImportAllBtnLabel() {
+    if (!btnImportAll) return;
+    var count = collectPendingFromFiltered().length;
+    if (count === 0) {
+      btnImportAll.disabled = true;
+      btnImportAll.innerHTML = '<i class="bi bi-check-all me-1"></i> Tudo Importado';
+    } else {
+      btnImportAll.disabled = false;
+      btnImportAll.innerHTML = '<i class="bi bi-cloud-arrow-up me-1"></i> Importar Filtrados'
+        + ' <span class="badge bg-dark ms-1">' + count + '</span>';
+    }
+  }
+
+  if (btnImportAll) {
+    btnImportAll.addEventListener('click', async function() {
+      var pending = collectPendingFromFiltered();
+      if (!pending.length) {
+        alert('Não há contestações pendentes de importação no filtro atual.');
+        return;
+      }
+      if (!confirm('Importar ' + pending.length + ' contestação(ões) não importada(s)?\n\nNota: é necessário ter uma sessão FAP ativa na página de Importação Automática.')) {
+        return;
+      }
+
+      btnImportAll.disabled = true;
+      btnImportAll.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Importando...';
+
+      var successCount = 0, skipCount = 0, errorCount = 0;
+
+      for (var i = 0; i < pending.length; i++) {
+        var item = pending[i];
+        btnImportAll.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> '
+          + (i + 1) + '/' + pending.length + ' — Importando...';
+
+        try {
+          var resp = await fetch(importUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: JSON.stringify({
+              year:           item.year,
+              cnpj:           item.cnpj,
+              contestacao_id: item.id,
+            }),
+          });
+
+          var payload = null;
+          try { payload = await resp.json(); } catch(e) {}
+
+          if (payload && payload.already_imported) {
+            skipCount++;
+            item.btn.outerHTML =
+              '<a href="' + reportsUrl + '" class="btn-cell btn-cell-imported">'
+              + '<i class="bi bi-check-circle-fill"></i> Importado</a>';
+          } else if (!resp.ok || !payload || !payload.ok) {
+            errorCount++;
+            console.warn('Falha ao importar #' + item.id + ':', payload && payload.message);
+          } else {
+            successCount++;
+            item.btn.outerHTML =
+              '<a href="' + reportsUrl + '" class="btn-cell btn-cell-imported">'
+              + '<i class="bi bi-check-circle-fill"></i> Importado</a>';
+          }
+        } catch(err) {
+          errorCount++;
+          console.error('Erro de rede ao importar #' + item.id, err);
+        }
+      }
+
+      var parts = [];
+      if (successCount) parts.push(successCount + ' importada(s)');
+      if (skipCount)    parts.push(skipCount + ' já importada(s)');
+      if (errorCount)   parts.push(errorCount + ' com erro');
+
+      var msg = parts.join(', ');
+      if (errorCount) {
+        alert('Importação concluída com erros: ' + msg
+          + '.\n\nVerifique se a sessão FAP está ativa na página de Importação Automática.');
+      } else {
+        alert('Importação concluída: ' + msg + '.');
+      }
+
+      updateImportAllBtnLabel();
+      updateImportStats();
+    });
+  }
+
+  renderPage();
+  updateImportAllBtnLabel();
+  updateImportStats();
 })();
 </script>
 {% endblock %}
+
+
