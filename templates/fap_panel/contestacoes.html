@@ -314,6 +314,28 @@
     cursor: pointer;
   }
 
+  /* ── Loading overlay ───────────────────────────────────────────── */
+  /* Esconde linhas antes do JS rodar: evita flash de tabela enorme */
+  #fapTbody tr { display: none; }
+
+  #tableLoadingOverlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(255,255,255,.82);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: .75rem;
+    z-index: 10;
+    border-radius: var(--fap-card-radius);
+    backdrop-filter: blur(2px);
+    font-size: .85rem;
+    color: #3d5080;
+    font-weight: 600;
+  }
+  .table-shell { position: relative; }
+
   /* ── Rodapé ──────────────────────────────────────────────────────── */
   .table-footer {
     display: flex;
@@ -516,8 +538,8 @@
               'protocolo':    f_protocolo or ''
           } -%}
           <button type="button" id="btnImportAll" class="btn btn-sm btn-warning"
-                  title="Importar todas as contestações não importadas do filtro atual">
-            <i class="bi bi-cloud-arrow-up me-1"></i> Importar Filtrados
+                  title="Baixa e importa as contestações do filtro atual para o painel de Relatórios FAP">
+            <i class="bi bi-cloud-arrow-up me-1"></i> Importar p/ Relatórios
           </button>
           <div class="btn-group" role="group">
             <a href="{{ url_for('fap_panel.contestacoes_export_excel', **_qs) }}"
@@ -554,6 +576,12 @@
           <a href="{{ url_for('fap_panel.sync_page') }}" class="btn btn-sm btn-outline-primary">
             <i class="bi bi-arrow-repeat me-1"></i> Sincronizar
           </a>
+        </div>
+      </div>
+
+      <div id="tableLoadingOverlay">
+        <div class="spinner-border text-primary" style="width:2.2rem;height:2.2rem;" role="status">
+          <span class="visually-hidden">Carregando...</span>
         </div>
       </div>
 
@@ -799,7 +827,7 @@
     // Esconde/exibe linhas
     allRows.forEach(function(r) { r.style.display = 'none'; });
     filteredRows.forEach(function(r, i) {
-      r.style.display = (i >= start && i < end) ? '' : 'none';
+      r.style.display = (i >= start && i < end) ? 'table-row' : 'none';
     });
 
     // Info textual
@@ -923,7 +951,7 @@
       btnImportAll.innerHTML = '<i class="bi bi-check-all me-1"></i> Tudo Importado';
     } else {
       btnImportAll.disabled = false;
-      btnImportAll.innerHTML = '<i class="bi bi-cloud-arrow-up me-1"></i> Importar Filtrados'
+      btnImportAll.innerHTML = '<i class="bi bi-cloud-arrow-up me-1"></i> Importar p/ Relatórios'
         + ' <span class="badge bg-dark ms-1">' + count + '</span>';
     }
   }
@@ -1005,9 +1033,14 @@
     });
   }
 
-  renderPage();
-  updateImportAllBtnLabel();
-  updateImportStats();
+  var loadingOverlay = document.getElementById('tableLoadingOverlay');
+
+  requestAnimationFrame(function() {
+    renderPage();
+    updateImportAllBtnLabel();
+    updateImportStats();
+    if (loadingOverlay) loadingOverlay.style.display = 'none';
+  });
 })();
 </script>
 {% endblock %}
