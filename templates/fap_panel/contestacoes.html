@@ -541,6 +541,11 @@
                   title="Baixa e importa as contestações do filtro atual para o painel de Relatórios FAP">
             <i class="bi bi-cloud-arrow-up me-1"></i> Importar p/ Relatórios
           </button>
+          <button type="button" id="btnCancelImport" class="btn btn-sm btn-danger d-none"
+                  title="Cancelar importação — interrompe a fila; a contestação em andamento ainda termina"
+                  data-bs-toggle="tooltip" data-bs-placement="top">
+            <i class="bi bi-x-circle"></i>
+          </button>
           <div class="btn-group" role="group">
             <a href="{{ url_for('fap_panel.contestacoes_export_excel', **_qs) }}"
                class="btn btn-sm btn-success"
@@ -911,7 +916,17 @@
   /* ── Importação em lote dos filtrados ──────────────────────────────── */
   var importUrl    = '{{ url_for("disputes_center.fap_auto_import_import_contestacao") }}';
   var reportsUrl   = '{{ url_for("disputes_center.fap_contestation_reports") }}';
-  var btnImportAll = document.getElementById('btnImportAll');
+  var btnImportAll   = document.getElementById('btnImportAll');
+  var btnCancelImport = document.getElementById('btnCancelImport');
+  var _importCancelled = false;
+
+  if (btnCancelImport) {
+    btnCancelImport.addEventListener('click', function() {
+      _importCancelled = true;
+      btnCancelImport.disabled = true;
+      btnCancelImport.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    });
+  }
 
   function collectPendingFromFiltered() {
     var pending = [];
@@ -969,59 +984,75 @@
 
       btnImportAll.disabled = true;
       btnImportAll.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Importando...';
+      _importCancelled = false;
+      if (btnCancelImport) { btnCancelImport.classList.remove('d-none'); btnCancelImport.disabled = false; btnCancelImport.innerHTML = '<i class="bi bi-x-circle"></i>'; }
 
-      var successCount = 0, skipCount = 0, errorCount = 0;
+      var successCount = 0, skipCount = 0, errorCount = 0, processed = 0;
+      var BATCH_SIZE = 20;
 
-      for (var i = 0; i < pending.length; i++) {
-        var item = pending[i];
-        btnImportAll.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> '
-          + (i + 1) + '/' + pending.length + ' — Importando...';
-
+      var importOne = async function(item) {
         try {
-          var resp = await fetch(importUrl, {
+          var r = await fetch(importUrl, {
             method: 'POST',
             credentials: 'same-origin',
-            headers: {
-              'Content-Type': 'application/json',
-              'X-Requested-With': 'XMLHttpRequest',
-            },
-            body: JSON.stringify({
-              year:           item.year,
-              cnpj:           item.cnpj,
-              contestacao_id: item.id,
-            }),
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            body: JSON.stringify({ year: item.year, cnpj: item.cnpj, contestacao_id: item.id }),
           });
+          var p = null;
+          try { p = await r.json(); } catch(e) {}
+          return { item: item, resp: r, payload: p };
+        } catch(err) {
+          return { item: item, err: err };
+        }
+      };
 
-          var payload = null;
-          try { payload = await resp.json(); } catch(e) {}
+      for (var batchStart = 0; batchStart < pending.length; batchStart += BATCH_SIZE) {
+        if (_importCancelled) break;
 
-          if (payload && payload.already_imported) {
+        var batch = pending.slice(batchStart, batchStart + BATCH_SIZE);
+        var batchNum    = Math.floor(batchStart / BATCH_SIZE) + 1;
+        var totalBatches = Math.ceil(pending.length / BATCH_SIZE);
+
+        btnImportAll.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> '
+          + 'Lote ' + batchNum + '/' + totalBatches
+          + ' — ' + processed + '/' + pending.length + ' processados...';
+
+        var results = await Promise.all(batch.map(importOne));
+
+        results.forEach(function(r) {
+          processed++;
+          if (r.err) {
+            errorCount++;
+            console.error('Erro de rede ao importar #' + r.item.id, r.err);
+          } else if (r.payload && r.payload.already_imported) {
             skipCount++;
-            item.btn.outerHTML =
+            r.item.btn.outerHTML =
               '<a href="' + reportsUrl + '" class="btn-cell btn-cell-imported">'
               + '<i class="bi bi-check-circle-fill"></i> Importado</a>';
-          } else if (!resp.ok || !payload || !payload.ok) {
+          } else if (!r.resp.ok || !r.payload || !r.payload.ok) {
             errorCount++;
-            console.warn('Falha ao importar #' + item.id + ':', payload && payload.message);
+            console.warn('Falha ao importar #' + r.item.id + ':', r.payload && r.payload.message);
           } else {
             successCount++;
-            item.btn.outerHTML =
+            r.item.btn.outerHTML =
               '<a href="' + reportsUrl + '" class="btn-cell btn-cell-imported">'
               + '<i class="bi bi-check-circle-fill"></i> Importado</a>';
           }
-        } catch(err) {
-          errorCount++;
-          console.error('Erro de rede ao importar #' + item.id, err);
-        }
+        });
       }
 
+      if (btnCancelImport) btnCancelImport.classList.add('d-none');
+
       var parts = [];
+      if (_importCancelled) parts.push('cancelado (' + (pending.length - processed) + ' na fila ignorada(s))');
       if (successCount) parts.push(successCount + ' importada(s)');
       if (skipCount)    parts.push(skipCount + ' já importada(s)');
       if (errorCount)   parts.push(errorCount + ' com erro');
 
       var msg = parts.join(', ');
-      if (errorCount) {
+      if (_importCancelled) {
+        alert('Importação cancelada. ' + msg + '.');
+      } else if (errorCount) {
         alert('Importação concluída com erros: ' + msg
           + '.\n\nVerifique se a sessão FAP está ativa na página de Importação Automática.');
       } else {
