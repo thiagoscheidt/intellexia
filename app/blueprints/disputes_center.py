@@ -2952,7 +2952,7 @@ def fap_auto_import_import_contestacao():
 
     try:
         req = urllib.request.Request(api_url, headers=headers, method='GET')
-        with urllib.request.urlopen(req, timeout=30, context=ssl_ctx) as resp:
+        with urllib.request.urlopen(req, timeout=60, context=ssl_ctx) as resp:
             body = resp.read()
     except urllib.error.HTTPError as e:
         if e.code in (401, 403):

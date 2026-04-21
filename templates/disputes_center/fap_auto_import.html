@@ -5,6 +5,7 @@
 {% block title %}Importação Automática FAP - IntellexIA{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
 <style>
   .auth-textarea {
     font-family: monospace;
@@ -196,7 +197,7 @@
             <div id="searchAlerts"></div>
             <div class="mb-3">
               <label for="companySelect" class="form-label fw-semibold">Empresa</label>
-              <select id="companySelect" class="form-select">
+              <select id="companySelect" class="form-select" style="width:100%">
                 <option value="">— Selecione uma empresa —</option>
                 {% for c in companies %}
                 <option value="{{ c.cnpj }}">{{ c.cnpj }} — {{ c.nome or 'Sem nome' }}</option>
@@ -259,6 +260,13 @@
             </h3>
             <span id="resultsCountBadge" class="badge bg-primary"></span>
           </div>
+          <div id="importStatsSummary" class="px-3 py-2 border-bottom d-flex flex-wrap gap-3 align-items-center d-none" style="font-size:.85rem;background:#f8f9fa;">
+            <span><i class="bi bi-check-circle-fill text-success me-1"></i><span id="statsImported" class="fw-semibold">0</span> já importados</span>
+            <span class="text-muted">|</span>
+            <span><i class="bi bi-clock-fill text-warning me-1"></i><span id="statsPending" class="fw-semibold">0</span> não importados</span>
+            <span class="text-muted">|</span>
+            <span class="text-muted"><span id="statsTotal" class="fw-semibold">0</span> no total</span>
+          </div>
           <div class="card-body p-0">
             <div class="table-responsive">
               <table class="table table-sm table-hover table-bordered mb-0" id="resultsTable">
@@ -312,6 +320,15 @@
     const syncIcon       = document.getElementById('syncIcon');
     const syncAlerts     = document.getElementById('syncAlerts');
     const companySelect  = document.getElementById('companySelect');
+    if (companySelect && typeof $.fn !== 'undefined' && $.fn.select2) {
+      $(companySelect).select2({
+        theme: 'bootstrap-5',
+        placeholder: '— Selecione uma empresa —',
+        allowClear: true,
+        width: '100%',
+        language: { noResults: function () { return 'Nenhuma empresa encontrada.'; } },
+      });
+    }
     const vigenciaYear   = document.getElementById('vigenciaYear');
     const btnFetchReports= document.getElementById('btnFetchReports');
     const searchAlerts   = document.getElementById('searchAlerts');
@@ -559,6 +576,28 @@
       }).join('');
     }
 
+    function updateImportStats() {
+      const statsBar      = document.getElementById('importStatsSummary');
+      const statsImported = document.getElementById('statsImported');
+      const statsPending  = document.getElementById('statsPending');
+      const statsTotal    = document.getElementById('statsTotal');
+      if (!statsBar) return;
+      let imported = 0, pending = 0;
+      for (const g of allGroups) {
+        const lists = [g.contestacoesAndamento, g.contestacoesTransmitidas, g.recursosAndamento, g.recursosTransmitidos];
+        for (const list of lists) {
+          for (const item of list) {
+            if (item._imported_report_id) imported++; else pending++;
+          }
+        }
+      }
+      const total = imported + pending;
+      if (statsImported) statsImported.textContent = imported;
+      if (statsPending)  statsPending.textContent  = pending;
+      if (statsTotal)    statsTotal.textContent    = total;
+      statsBar.classList.toggle('d-none', total === 0);
+    }
+
     function renderPage() {
       const start = currentPage * pageSize;
       const slice = allGroups.slice(start, start + pageSize);
@@ -642,7 +681,7 @@
     }
 
     btnFetchReports.addEventListener('click', async function () {
-      const cnpj = companySelect ? companySelect.value : '';
+      const cnpj = companySelect ? ($(companySelect).val() || companySelect.value) : '';
       const year = vigenciaYear  ? vigenciaYear.value  : '';
 
       if (!cnpj) {
@@ -688,6 +727,7 @@
         allGroups   = groupItems(combinedItems);
         currentPage = 0;
         pageSize    = parseInt((resultsPageSize && resultsPageSize.value) || '10', 10);
+        updateImportStats();
 
         const vigLabel = isAll ? 'Todos os anos' : year;
         log(combinedItems.length + ' registro(s) total(is) → ' + allGroups.length + ' estabelecimento(s).', 'success');
@@ -945,6 +985,7 @@
         }
 
         // Re-render to reflect updated import badges
+        updateImportStats();
         renderPage();
 
         let summary = successCount + ' importado(s)';
