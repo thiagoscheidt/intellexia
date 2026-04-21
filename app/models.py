@@ -2099,3 +2099,66 @@ class JudicialProcessCitedBenefit(db.Model):
 
     def __repr__(self):
         return f'<JudicialProcessCitedBenefit {self.benefit_number} - Process {self.process_id}>'
+
+
+class FapWebContestacao(db.Model):
+    """Tabela fap_web_contestacoes — Contestações sincronizadas do portal FAP/Dataprev.
+
+    Armazena cada contestação (primeira ou segunda instância) retornada pela API FAP,
+    vinculada a um estabelecimento (CNPJ) e ano de vigência. Serve de base para o
+    Painel FAP sem depender do fluxo de importação manual de PDFs.
+    """
+    __tablename__ = 'fap_web_contestacoes'
+    __table_args__ = (
+        db.UniqueConstraint(
+            'law_firm_id', 'contestacao_id',
+            name='uq_fap_web_contestacoes_law_firm_contestacao',
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    fap_company_id = db.Column(db.Integer, db.ForeignKey('fap_companies.id'), nullable=True, index=True)
+
+    # ── Identificação da contestação ──────────────────────────────────
+    contestacao_id = db.Column(db.Integer, nullable=False, index=True)   # id retornado pela API FAP
+    cnpj           = db.Column(db.String(20), nullable=False, index=True) # CNPJ do estabelecimento (14 dígitos)
+    cnpj_raiz      = db.Column(db.String(10), nullable=False, index=True) # 8 primeiros dígitos (CNPJ raiz)
+    ano_vigencia   = db.Column(db.Integer, nullable=False, index=True)
+
+    # ── Instância ────────────────────────────────────────────────────
+    # Exemplos: ADMINISTRATIVO_PRIMEIRA_INSTANCIA / ADMINISTRATIVO_SEGUNDA_INSTANCIA
+    instancia_codigo    = db.Column(db.String(100))
+    instancia_descricao = db.Column(db.String(255))
+
+    # ── Situação / status ────────────────────────────────────────────
+    situacao_codigo    = db.Column(db.String(100), index=True)
+    situacao_descricao = db.Column(db.String(255))
+
+    # ── Protocolo e transmissão ───────────────────────────────────────
+    protocolo       = db.Column(db.String(100), index=True)
+    data_transmissao = db.Column(db.DateTime)
+
+    # ── Vínculo com relatório importado (opcional) ────────────────────
+    report_id = db.Column(
+        db.Integer,
+        db.ForeignKey('fap_contestation_judgment_reports.id'),
+        nullable=True,
+        index=True,
+    )
+
+    # ── Dados brutos da API ───────────────────────────────────────────
+    raw_data = db.Column(db.Text)  # JSON completo retornado pela API FAP
+
+    # ── Controle ─────────────────────────────────────────────────────
+    last_synced_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at     = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at     = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # ── Relacionamentos ───────────────────────────────────────────────
+    law_firm    = db.relationship('LawFirm')
+    fap_company = db.relationship('FapCompany')
+    report      = db.relationship('FapContestationJudgmentReport')
+
+    def __repr__(self):
+        return f'<FapWebContestacao id={self.contestacao_id} cnpj={self.cnpj} ano={self.ano_vigencia}>'

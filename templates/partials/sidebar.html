@@ -159,6 +159,37 @@
           </ul>
         </li>
 
+        {# ── Painel FAP ────────────────────────────────────────────────── #}
+        <li
+          class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('fap_panel.') else '' }}">
+          <a href="#"
+            class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('fap_panel.') else '' }}">
+            <i class="nav-icon bi bi-shield-check"></i>
+            <p>
+              Painel FAP
+              <i class="nav-arrow bi bi-chevron-right"></i>
+            </p>
+          </a>
+          <ul class="nav nav-treeview" style="background-color: rgba(0,0,0,0.1);">
+              <li class="nav-item">
+              <a href="{{ url_for('fap_panel.contestacoes_page') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'fap_panel.contestacoes_page' else '' }}"
+                style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-table" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Contestações</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('fap_panel.sync_page') }}"
+                class="nav-link {{ 'active' if request.endpoint in ['fap_panel.sync_page', 'fap_panel.sync_run_year', 'fap_panel.sync_summary'] else '' }}"
+                style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-arrow-repeat" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Sincronização</p>
+              </a>
+            </li>
+          </ul>
+        </li>
+
         <li
           class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint.startswith('cases.') or request.endpoint.startswith('benefits.') or request.endpoint.startswith('documents.') or request.endpoint.startswith('petitions.') or request.endpoint.startswith('fap_reasons.')) else '' }}">
           <a href="#"
