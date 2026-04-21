@@ -55,6 +55,16 @@
   <div class="container-fluid">
     <div class="row g-3">
 
+      {# ─── Alert de status de conexão FAP ────────────────────────── #}
+      {% if saved_auth %}
+      <div class="col-12" id="fapConnectionAlertWrapper">
+        <div id="fapConnectionAlert" class="alert alert-secondary d-flex align-items-center gap-2 mb-0 py-2" role="alert" style="font-size:.875rem;">
+          <span class="spinner-border spinner-border-sm text-secondary" style="width:.9rem;height:.9rem;" id="fapAlertSpinner"></span>
+          <span id="fapAlertText">Verificando conexão com o FAP Web...</span>
+        </div>
+      </div>
+      {% endif %}
+
       {# ─── Linha completa: autenticação (full-width) ──────────────── #}
       <div class="col-12">
         <div class="card card-warning card-outline">
@@ -64,7 +74,7 @@
               <i class="bi bi-key me-1"></i> Dados de autenticação
               {% if saved_auth %}
               <span id="authStatusBadge" class="badge bg-success ms-2" style="font-size:.75rem;font-weight:500;">
-                <i class="bi bi-check-circle me-1"></i>Sessão salva
+                <i class="bi bi-wifi me-1"></i>Conectado ao FAP Web
               </span>
               <button type="button" id="btnCheckSession" class="btn btn-sm btn-outline-secondary ms-2 py-0" style="font-size:.75rem;" title="Checar sessão agora">
                 <i class="bi bi-shield-check me-1"></i>Checar sessão
@@ -653,8 +663,8 @@
           const yr = yearsToFetch[i];
 
           if (i > 0) {
-            // Intervalo aleatório de 1 a 4 segundos entre consultas
-            const delay = Math.floor(Math.random() * 3000) + 1000;
+            // Intervalo aleatório de 0 a 2 segundos entre consultas
+            const delay = Math.floor(Math.random() * 1000);
             log('Aguardando ' + (delay / 1000).toFixed(1) + 's antes da próxima consulta...', 'info');
             btnFetchReports.innerHTML =
               '<span class="spinner-border spinner-border-sm me-1"></span> Aguardando (' + (i) + '/' + yearsToFetch.length + ')...';
@@ -758,6 +768,27 @@
 
       const TOKEN_URL = '{{ url_for("disputes_center.fap_auto_import_check_session") }}';
 
+      const fapAlert     = document.getElementById('fapConnectionAlert');
+      const fapAlertText = document.getElementById('fapAlertText');
+      const fapAlertSpinner = document.getElementById('fapAlertSpinner');
+
+      function setConnectionAlert(state) {
+        if (!fapAlert) return;
+        if (state === 'checking') {
+          fapAlert.className = 'alert alert-secondary d-flex align-items-center gap-2 mb-0 py-2';
+          if (fapAlertSpinner) fapAlertSpinner.style.display = '';
+          if (fapAlertText) fapAlertText.textContent = 'Verificando conexão com o FAP Web...';
+        } else if (state === 'ok') {
+          fapAlert.className = 'alert alert-success d-flex align-items-center gap-2 mb-0 py-2';
+          if (fapAlertSpinner) fapAlertSpinner.style.display = 'none';
+          if (fapAlertText) fapAlertText.innerHTML = '<i class="bi bi-wifi me-1"></i><strong>IntellexIA conectado ao FAP Web</strong> — sessão ativa e funcionando.';
+        } else if (state === 'expired') {
+          fapAlert.className = 'alert alert-danger d-flex align-items-center gap-2 mb-0 py-2';
+          if (fapAlertSpinner) fapAlertSpinner.style.display = 'none';
+          if (fapAlertText) fapAlertText.innerHTML = '<i class="bi bi-wifi-off me-1"></i><strong>Desconectado do FAP Web</strong> — a sessão expirou. Atualize os dados de autenticação.';
+        }
+      }
+
       function setBadge(state) {
         if (state === 'checking') {
           badge.className = 'badge bg-warning text-dark ms-2';
@@ -766,11 +797,12 @@
           badge.innerHTML = '<span class="spinner-border spinner-border-sm me-1" style="width:.7rem;height:.7rem;"></span>Verificando sessão...';
         } else if (state === 'ok') {
           badge.className = 'badge bg-success ms-2';
-          badge.innerHTML = '<i class="bi bi-check-circle me-1"></i>Sessão salva';
+          badge.innerHTML = '<i class="bi bi-wifi me-1"></i>Conectado ao FAP Web';
         } else if (state === 'expired') {
           badge.className = 'badge bg-danger ms-2';
           badge.innerHTML = '<i class="bi bi-exclamation-triangle-fill me-1"></i>Sessão expirada';
         }
+        setConnectionAlert(state);
       }
 
       function clearSavedAuth() {
@@ -830,8 +862,8 @@
         });
       }
 
-      // Inicia o primeiro agendamento após o carregamento
-      scheduleNext();
+      // Inicia verificação imediata ao carregar, depois agenda periodicamente
+      checkSession();
     })();
 
     // ── Botão Importar Contestações e Recursos (todos da pesquisa) ────
