@@ -6,6 +6,8 @@ import hashlib
 import json
 import os
 
+from app.services.fap_web_service import FapWebAuthPayload, FapWebService
+
 from app.utils.timezone import now_sp
 
 from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session, url_for, send_file
@@ -2692,72 +2694,26 @@ def fap_auto_import_save_auth():
 @disputes_center_bp.route('/fap-auto-import/check-session', methods=['GET'])
 @require_law_firm
 def fap_auto_import_check_session():
-    import ssl
-    import urllib.request
-    import urllib.error
-
     saved_auth = session.get('fap_auto_import_auth', '')
     if not saved_auth:
         return jsonify({'ok': False, 'message': 'Sem sessão salva.'}), 400
 
     try:
-        auth_payload = json.loads(saved_auth)
+        auth = FapWebAuthPayload.from_json(saved_auth)
     except Exception:
         return jsonify({'ok': False, 'message': 'Dados de autenticação inválidos.'}), 400
 
-    cookies_dict = auth_payload.get('cookies') or {}
-    user_agent = (auth_payload.get('userAgent') or '').strip()
-    cookie_string = '; '.join(f'{k}={v}' for k, v in cookies_dict.items() if k and v)
-
-    default_ua = (
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-        'AppleWebKit/537.36 (KHTML, like Gecko) '
-        'Chrome/147.0.0.0 Safari/537.36'
-    )
-
-    headers = {
-        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-        'Accept-Language': 'pt-BR,pt;q=0.9',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'Cookie': cookie_string,
-        'DNT': '1',
-        'Pragma': 'no-cache',
-        'Upgrade-Insecure-Requests': '1',
-        'User-Agent': user_agent or default_ua,
-    }
-
-    ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    ssl_ctx.check_hostname = False
-    ssl_ctx.verify_mode = ssl.CERT_NONE
-    ssl_ctx.options |= ssl.OP_NO_SSLv2 | ssl.OP_NO_SSLv3
-    ssl_ctx.set_ciphers('DEFAULT:@SECLEVEL=1')
-    ssl_ctx.options |= getattr(ssl, 'OP_LEGACY_SERVER_CONNECT', 0)
-
-    try:
-        req = urllib.request.Request(
-            'https://fap-mps.dataprev.gov.br/gateway/oauth2/token',
-            headers=headers,
-            method='GET',
-        )
-        with urllib.request.urlopen(req, timeout=15, context=ssl_ctx) as resp:
-            status = resp.status
-        return jsonify({'ok': True, 'status': status})
-    except urllib.error.HTTPError as e:
-        if e.code in (401, 403):
-            return jsonify({'ok': False, 'expired': True, 'status': e.code})
-        return jsonify({'ok': False, 'status': e.code, 'message': f'HTTP {e.code}'})
-    except Exception as e:
-        return jsonify({'ok': False, 'message': str(e)}), 502
+    result = FapWebService(auth).check_session()
+    if result.ok:
+        return jsonify({'ok': True, 'status': result.status_code})
+    if result.expired:
+        return jsonify({'ok': False, 'expired': True, 'status': result.status_code})
+    return jsonify({'ok': False, 'status': result.status_code, 'message': result.message}), 502
 
 
 @disputes_center_bp.route('/fap-auto-import/fetch-reports', methods=['POST'])
 @require_law_firm
 def fap_auto_import_fetch_reports():
-    import ssl
-    import urllib.request
-    import urllib.error
-
     data = request.get_json(silent=True) or {}
     cnpj_raiz = str(data.get('cnpj') or '').strip()
     year = str(data.get('year') or '').strip()
@@ -2773,84 +2729,21 @@ def fap_auto_import_fetch_reports():
         }), 400
 
     try:
-        auth_payload = json.loads(saved_auth)
+        auth = FapWebAuthPayload.from_json(saved_auth)
     except Exception:
         return jsonify({'ok': False, 'message': 'Dados de autenticação inválidos na sessão. Atualize e salve novamente.'}), 400
 
-    cookies_dict = auth_payload.get('cookies') or {}
-    user_agent = (auth_payload.get('userAgent') or '').strip()
-    cookie_string = '; '.join(f'{k}={v}' for k, v in cookies_dict.items() if k and v)
-    xsrf_token = cookies_dict.get('XSRF-TOKEN', '')
+    result = FapWebService(auth).fetch_contestacoes(cnpj=cnpj_raiz, year=year)
+    if not result.ok:
+        detail = (result.data or {}).get('detail', '') if result.data else ''
+        payload = {'ok': False, 'message': result.message}
+        if detail:
+            payload['detail'] = detail
+        return jsonify(payload), 502
 
-    default_ua = (
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-        'AppleWebKit/537.36 (KHTML, like Gecko) '
-        'Chrome/147.0.0.0 Safari/537.36'
-    )
+    items = result.data
 
-    url = f'https://fap-mps.dataprev.gov.br/gateway/fap/v1/vigencias/{year}/empresa/{cnpj_raiz}/contestacoes'
-
-    headers = {
-        'Accept': 'application/json;charset=utf-8',
-        'Accept-Language': 'pt-BR,pt;q=0.9',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'Cookie': cookie_string,
-        'DNT': '1',
-        'Pragma': 'no-cache',
-        'Referer': 'https://fap-mps.dataprev.gov.br/contestacoes-eletronicas',
-        'User-Agent': user_agent or default_ua,
-    }
-    if xsrf_token:
-        headers['X-XSRF-TOKEN'] = xsrf_token
-
-    ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    ssl_ctx.check_hostname = False
-    ssl_ctx.verify_mode = ssl.CERT_NONE
-    ssl_ctx.options |= ssl.OP_NO_SSLv2 | ssl.OP_NO_SSLv3
-    ssl_ctx.set_ciphers('DEFAULT:@SECLEVEL=1')
-    ssl_ctx.options |= getattr(ssl, 'OP_LEGACY_SERVER_CONNECT', 0)
-
-    try:
-        req = urllib.request.Request(url, headers=headers, method='GET')
-        with urllib.request.urlopen(req, timeout=30, context=ssl_ctx) as resp:
-            body = resp.read().decode('utf-8')
-    except urllib.error.HTTPError as e:
-        body = e.read().decode('utf-8', errors='replace')
-        if e.code in (401, 403):
-            msg = (
-                f'Sessão expirada ou não autorizada (HTTP {e.code}). '
-                'Acesse o portal FAP, faça login, exporte um novo arquivo de sessão e atualize os dados de autenticação.'
-            )
-        else:
-            msg = f'Erro HTTP {e.code} ao consultar contestações.'
-        return jsonify({
-            'ok': False,
-            'message': msg,
-            'detail': body[:500],
-        }), 502
-    except urllib.error.URLError as e:
-        return jsonify({'ok': False, 'message': f'Falha de conexão: {e.reason}'}), 502
-    except Exception as e:
-        return jsonify({'ok': False, 'message': f'Erro inesperado: {str(e)}'}), 500
-
-    try:
-        items = json.loads(body)
-    except Exception:
-        return jsonify({
-            'ok': False,
-            'message': 'Resposta inválida do sistema FAP (não é JSON).',
-            'detail': body[:300],
-        }), 502
-
-    if not isinstance(items, list):
-        return jsonify({
-            'ok': False,
-            'message': 'Formato de resposta inesperado.',
-            'detail': str(items)[:300],
-        }), 502
-
-    # Annotate items with import status
+    # Anotações de status de importação
     law_firm_id = get_current_law_firm_id()
     item_ids = [item.get('id') for item in items if item.get('id')]
     imported_map = {}
@@ -2863,10 +2756,7 @@ def fap_auto_import_fetch_reports():
             imported_map[rec.contestacao_id] = rec.report_id
     for item in items:
         item_id = item.get('id')
-        if item_id and item_id in imported_map:
-            item['_imported_report_id'] = imported_map[item_id]
-        else:
-            item['_imported_report_id'] = None
+        item['_imported_report_id'] = imported_map.get(item_id) if item_id else None
 
     return jsonify({'ok': True, 'items': items, 'total': len(items)})
 
@@ -2874,11 +2764,6 @@ def fap_auto_import_fetch_reports():
 @disputes_center_bp.route('/fap-auto-import/import-contestacao', methods=['POST'])
 @require_law_firm
 def fap_auto_import_import_contestacao():
-    import ssl
-    import urllib.request
-    import urllib.error
-    import base64 as _base64
-
     law_firm_id = get_current_law_firm_id()
     current_user_id = session.get('user_id')
 
@@ -2890,7 +2775,7 @@ def fap_auto_import_import_contestacao():
     if not year or not cnpj or not contestacao_id:
         return jsonify({'ok': False, 'message': 'Parâmetros inválidos.'}), 400
 
-    # Check already imported
+    # Verificar se já foi importada
     existing = FapAutoImportedContestacao.query.filter_by(
         law_firm_id=law_firm_id,
         contestacao_id=int(contestacao_id),
@@ -2909,66 +2794,17 @@ def fap_auto_import_import_contestacao():
         return jsonify({'ok': False, 'message': 'Dados de autenticação não encontrados na sessão.'}), 400
 
     try:
-        auth_payload = json.loads(saved_auth)
+        auth = FapWebAuthPayload.from_json(saved_auth)
     except Exception:
         return jsonify({'ok': False, 'message': 'Dados de autenticação inválidos na sessão.'}), 400
 
-    cookies_dict = auth_payload.get('cookies') or {}
-    user_agent = (auth_payload.get('userAgent') or '').strip()
-    cookie_string = '; '.join(f'{k}={v}' for k, v in cookies_dict.items() if k and v)
-    xsrf_token = cookies_dict.get('XSRF-TOKEN', '')
+    result = FapWebService(auth).download_contestacao(year=year, cnpj=cnpj, contestacao_id=contestacao_id)
+    if not result.ok:
+        status_code = 401 if result.expired else 502
+        return jsonify({'ok': False, 'message': result.message}), status_code
 
-    default_ua = (
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-        'AppleWebKit/537.36 (KHTML, like Gecko) '
-        'Chrome/147.0.0.0 Safari/537.36'
-    )
-
-    api_url = (
-        f'https://fap-mps.dataprev.gov.br/gateway/fap/v1'
-        f'/vigencias/{year}/empresa/{cnpj}/contestacoes/{contestacao_id}/imprimir'
-    )
-
-    headers = {
-        'Accept': 'application/json;charset=utf-8',
-        'Accept-Language': 'pt-BR,pt;q=0.9',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'Cookie': cookie_string,
-        'DNT': '1',
-        'Pragma': 'no-cache',
-        'Referer': 'https://fap-mps.dataprev.gov.br/contestacoes-eletronicas',
-        'User-Agent': user_agent or default_ua,
-    }
-    if xsrf_token:
-        headers['X-XSRF-TOKEN'] = xsrf_token
-
-    ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    ssl_ctx.check_hostname = False
-    ssl_ctx.verify_mode = ssl.CERT_NONE
-    ssl_ctx.options |= ssl.OP_NO_SSLv2 | ssl.OP_NO_SSLv3
-    ssl_ctx.set_ciphers('DEFAULT:@SECLEVEL=1')
-    ssl_ctx.options |= getattr(ssl, 'OP_LEGACY_SERVER_CONNECT', 0)
-
-    try:
-        req = urllib.request.Request(api_url, headers=headers, method='GET')
-        with urllib.request.urlopen(req, timeout=60, context=ssl_ctx) as resp:
-            body = resp.read()
-    except urllib.error.HTTPError as e:
-        if e.code in (401, 403):
-            return jsonify({'ok': False, 'message': 'Sessão expirada ou não autorizada. Atualize os dados de autenticação.'}), 401
-        return jsonify({'ok': False, 'message': f'Erro HTTP {e.code} ao buscar documento.'}), 502
-    except urllib.error.URLError as e:
-        return jsonify({'ok': False, 'message': f'Falha de conexão: {e.reason}'}), 502
-    except Exception as e:
-        return jsonify({'ok': False, 'message': f'Erro inesperado: {str(e)}'}), 500
-
-    try:
-        api_data = json.loads(body)
-        filename = api_data.get('nome') or f'contestacao_{contestacao_id}.pdf'
-        pdf_bytes = _base64.b64decode(api_data['base64'])
-    except Exception as e:
-        return jsonify({'ok': False, 'message': f'Erro ao processar resposta do servidor: {str(e)}'}), 502
+    pdf_bytes = result.data['pdf_bytes']
+    filename  = result.data['filename']
 
     upload_dir = os.path.abspath(
         os.path.join(current_app.root_path, '..', 'uploads', 'fap_contestation_reports')
@@ -3035,79 +2871,23 @@ def fap_auto_import_import_contestacao():
 @disputes_center_bp.route('/fap-auto-import/download-contestacao/<int:year>/<cnpj>/<int:contestacao_id>', methods=['GET'])
 @require_law_firm
 def fap_auto_import_download_contestacao(year, cnpj, contestacao_id):
-    import ssl
-    import urllib.request
-    import urllib.error
-
     saved_auth = session.get('fap_auto_import_auth', '')
     if not saved_auth:
         return 'Dados de autenticação não encontrados na sessão.', 400
 
     try:
-        auth_payload = json.loads(saved_auth)
+        auth = FapWebAuthPayload.from_json(saved_auth)
     except Exception:
         return 'Dados de autenticação inválidos na sessão.', 400
 
-    cookies_dict = auth_payload.get('cookies') or {}
-    user_agent   = (auth_payload.get('userAgent') or '').strip()
-    cookie_string = '; '.join(f'{k}={v}' for k, v in cookies_dict.items() if k and v)
-    xsrf_token   = cookies_dict.get('XSRF-TOKEN', '')
+    result = FapWebService(auth).download_contestacao(year=year, cnpj=cnpj, contestacao_id=contestacao_id)
+    if not result.ok:
+        if result.expired:
+            return 'Sessão expirada ou não autorizada. Atualize os dados de autenticação e tente novamente.', 401
+        return result.message, result.status_code or 502
 
-    default_ua = (
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-        'AppleWebKit/537.36 (KHTML, like Gecko) '
-        'Chrome/147.0.0.0 Safari/537.36'
-    )
-
-    url = (
-        f'https://fap-mps.dataprev.gov.br/gateway/fap/v1'
-        f'/vigencias/{year}/empresa/{cnpj}/contestacoes/{contestacao_id}/imprimir'
-    )
-
-    headers = {
-        'Accept': 'application/json;charset=utf-8',
-        'Accept-Language': 'pt-BR,pt;q=0.9',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'Cookie': cookie_string,
-        'DNT': '1',
-        'Pragma': 'no-cache',
-        'Referer': 'https://fap-mps.dataprev.gov.br/contestacoes-eletronicas',
-        'User-Agent': user_agent or default_ua,
-    }
-    if xsrf_token:
-        headers['X-XSRF-TOKEN'] = xsrf_token
-
-    ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    ssl_ctx.check_hostname = False
-    ssl_ctx.verify_mode = ssl.CERT_NONE
-    ssl_ctx.options |= ssl.OP_NO_SSLv2 | ssl.OP_NO_SSLv3
-    ssl_ctx.set_ciphers('DEFAULT:@SECLEVEL=1')
-    ssl_ctx.options |= getattr(ssl, 'OP_LEGACY_SERVER_CONNECT', 0)
-
-    try:
-        req = urllib.request.Request(url, headers=headers, method='GET')
-        with urllib.request.urlopen(req, timeout=30, context=ssl_ctx) as resp:
-            body = resp.read()
-    except urllib.error.HTTPError as e:
-        if e.code in (401, 403):
-            return (
-                'Sessão expirada ou não autorizada. '
-                'Atualize os dados de autenticação e tente novamente.'
-            ), 401
-        return f'Erro HTTP {e.code} ao baixar o documento.', 502
-    except urllib.error.URLError as e:
-        return f'Falha de conexão: {e.reason}', 502
-    except Exception as e:
-        return f'Erro inesperado: {str(e)}', 500
-
-    import base64 as _base64
-    try:
-        data = json.loads(body)
-        filename = data.get('nome') or f'contestacao_{contestacao_id}.pdf'
-        pdf_bytes = _base64.b64decode(data['base64'])
-    except Exception as e:
-        return f'Erro ao processar resposta do servidor: {str(e)}', 502
+    pdf_bytes = result.data['pdf_bytes']
+    filename  = result.data['filename']
 
     inline = request.args.get('inline') == '1'
     disposition = f'inline; filename="{filename}"' if inline else f'attachment; filename="{filename}"'
@@ -3125,82 +2905,26 @@ def fap_auto_import_download_contestacao(year, cnpj, contestacao_id):
 @disputes_center_bp.route('/fap-auto-import/fetch-companies', methods=['POST'])
 @require_law_firm
 def fap_auto_import_fetch_companies():
-    import ssl
-    import urllib.request
-    import urllib.error
-
     law_firm_id = get_current_law_firm_id()
     data = request.get_json(silent=True) or {}
     cookies_dict = data.get('cookies') or {}
-    user_agent = (data.get('userAgent') or '').strip()
 
     if not cookies_dict or not isinstance(cookies_dict, dict):
         return jsonify({'ok': False, 'message': 'Informe os dados de autenticação no formato JSON com o campo "cookies".'}), 400
 
-    # Build cookie string from dict: KEY=VALUE; KEY=VALUE ...
-    cookie_string = '; '.join(f'{k}={v}' for k, v in cookies_dict.items() if k and v)
-
-    if not cookie_string:
+    if not any(v for v in cookies_dict.values()):
         return jsonify({'ok': False, 'message': 'O objeto "cookies" está vazio.'}), 400
 
-    xsrf_token = cookies_dict.get('XSRF-TOKEN', '')
+    auth = FapWebAuthPayload.from_dict(data)
+    result = FapWebService(auth).fetch_companies()
+    if not result.ok:
+        detail = (result.data or {}).get('detail', '') if result.data else ''
+        payload = {'ok': False, 'message': result.message}
+        if detail:
+            payload['detail'] = detail
+        return jsonify(payload), 502
 
-    default_ua = (
-        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
-        'AppleWebKit/537.36 (KHTML, like Gecko) '
-        'Chrome/147.0.0.0 Safari/537.36'
-    )
-
-    url = 'https://fap-mps.dataprev.gov.br/gateway/fap/v1/procuracoes/empresas'
-    headers = {
-        'Accept': 'application/json;charset=utf-8',
-        'Accept-Language': 'pt-BR,pt;q=0.9',
-        'Cache-Control': 'no-cache',
-        'Connection': 'keep-alive',
-        'Cookie': cookie_string,
-        'DNT': '1',
-        'Pragma': 'no-cache',
-        'Referer': 'https://fap-mps.dataprev.gov.br/contestacoes-eletronicas',
-        'User-Agent': user_agent or default_ua,
-    }
-
-    if xsrf_token:
-        headers['X-XSRF-TOKEN'] = xsrf_token
-
-    ssl_ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
-    ssl_ctx.check_hostname = False
-    ssl_ctx.verify_mode = ssl.CERT_NONE
-    ssl_ctx.options |= ssl.OP_NO_SSLv2 | ssl.OP_NO_SSLv3
-    ssl_ctx.set_ciphers('DEFAULT:@SECLEVEL=1')
-    ssl_ctx.options |= getattr(ssl, 'OP_LEGACY_SERVER_CONNECT', 0)
-
-    try:
-        req = urllib.request.Request(url, headers=headers, method='GET')
-        with urllib.request.urlopen(req, timeout=15, context=ssl_ctx) as resp:
-            body = resp.read().decode('utf-8')
-    except urllib.error.HTTPError as e:
-        body = e.read().decode('utf-8', errors='replace')
-        return jsonify({
-            'ok': False,
-            'message': f'Erro HTTP {e.code} ao consultar o sistema FAP.',
-            'detail': body[:500],
-        }), 502
-    except urllib.error.URLError as e:
-        return jsonify({
-            'ok': False,
-            'message': f'Falha de conexão com o sistema FAP: {e.reason}',
-        }), 502
-    except Exception as e:
-        return jsonify({'ok': False, 'message': f'Erro inesperado: {str(e)}'}), 500
-
-    try:
-        companies = json.loads(body)
-    except Exception:
-        return jsonify({
-            'ok': False,
-            'message': 'Resposta inválida do sistema FAP (não é JSON).',
-            'detail': body[:300],
-        }), 502
+    companies = result.data
 
     # Upsert companies into DB
     try:
