@@ -1,0 +1,646 @@
+{% extends "layout/base.html" %}
+
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}Procurações FAP - IntellexIA{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
+<style>
+  :root {
+    --fap-card-radius: 1rem;
+    --fap-shadow: 0 8px 28px rgba(15,23,42,.07);
+  }
+
+  /* ── Filtros ─────────────────────────────────────────────────────── */
+  .filter-shell {
+    background: linear-gradient(160deg,#f8faff 0%,#fff 55%,#f5f8ff 100%);
+    border: 1px solid rgba(13,110,253,.10);
+    border-radius: var(--fap-card-radius);
+    box-shadow: var(--fap-shadow);
+  }
+  .filter-shell .filter-header {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    padding: .85rem 1.25rem;
+    border-bottom: 1px solid rgba(15,23,42,.06);
+  }
+  .filter-shell .filter-header h6 {
+    margin: 0;
+    font-size: .85rem;
+    font-weight: 700;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+    color: #3d5080;
+  }
+  .filter-shell .filter-body {
+    padding: 1rem 1.25rem 1.1rem;
+  }
+  .filter-shell .form-label {
+    font-size: .76rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: #5d6b82;
+    margin-bottom: .28rem;
+  }
+  .filter-active-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: .4rem;
+    padding: .25rem .65rem;
+    background: rgba(13,110,253,.10);
+    color: #0b4cb3;
+    border-radius: 999px;
+    font-size: .71rem;
+    font-weight: 700;
+  }
+
+  /* ── Stats cards ─────────────────────────────────────────────────── */
+  .stat-cards {
+    display: grid;
+    grid-template-columns: repeat(4,1fr);
+    gap: .85rem;
+  }
+  @media (max-width: 900px) { .stat-cards { grid-template-columns: repeat(2,1fr); } }
+  @media (max-width: 500px) { .stat-cards { grid-template-columns: 1fr; } }
+  .stat-card {
+    position: relative;
+    overflow: hidden;
+    background: #fff;
+    border: 1px solid rgba(15,23,42,.07);
+    border-radius: var(--fap-card-radius);
+    box-shadow: var(--fap-shadow);
+    padding: 1rem 1.1rem 1rem 1.3rem;
+  }
+  .stat-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 5px;
+    background: var(--sc-color, #0d6efd);
+    border-radius: 4px 0 0 4px;
+  }
+  .stat-card .sc-icon {
+    width: 2.3rem; height: 2.3rem;
+    background: var(--sc-soft, rgba(13,110,253,.10));
+    color: var(--sc-color, #0d6efd);
+    border-radius: .65rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    flex-shrink: 0;
+  }
+  .stat-card .sc-label {
+    font-size: .71rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    color: #6c7a8d;
+    margin-bottom: .12rem;
+  }
+  .stat-card .sc-value {
+    font-size: 1.6rem;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--bs-emphasis-color);
+  }
+
+  /* ── Tabela ──────────────────────────────────────────────────────── */
+  .table-shell {
+    background: #fff;
+    border: 1px solid rgba(15,23,42,.07);
+    border-radius: var(--fap-card-radius);
+    box-shadow: var(--fap-shadow);
+    overflow: hidden;
+  }
+  .table-shell .table-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+    padding: .85rem 1.1rem;
+    border-bottom: 1px solid rgba(15,23,42,.06);
+    background: linear-gradient(180deg,#f8fafe,#fff 60%);
+  }
+  .table-shell .table-toolbar h6 {
+    margin: 0;
+    font-size: .88rem;
+    font-weight: 700;
+    color: var(--bs-emphasis-color);
+  }
+  .proc-table { margin: 0; }
+  .proc-table thead th {
+    background: #f1f5fb;
+    font-size: .73rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #4a5568;
+    border-bottom: 2px solid #d4dae8;
+    vertical-align: middle;
+    white-space: nowrap;
+    padding: .6rem .8rem;
+  }
+  .proc-table tbody td {
+    vertical-align: middle;
+    font-size: .83rem;
+    padding: .55rem .8rem;
+    border-color: rgba(15,23,42,.06);
+  }
+  .proc-table tbody tr:hover td { background: rgba(13,110,253,.025); }
+
+  /* ── Badges de situação ──────────────────────────────────────────── */
+  .badge-situacao-DEFERIDA    { background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0; }
+  .badge-situacao-EXCLUIDA    { background: #f3f4f6; color: #374151; border: 1px solid #d1d5db; }
+  .badge-situacao-INDEFERIDA  { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+  .badge-situacao-PENDENTE    { background: #fef3c7; color: #92400e; border: 1px solid #fde68a; }
+  .badge-situacao-default     { background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; }
+
+  /* ── Paginação ───────────────────────────────────────────────────── */
+  .pagination-shell {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: .6rem;
+    padding: .65rem 1.1rem;
+    border-top: 1px solid rgba(15,23,42,.06);
+    background: #f8fafe;
+  }
+  .pagination-shell .pg-info {
+    font-size: .78rem;
+    color: #6c7a8d;
+  }
+  .pagination-shell .page-size-select {
+    font-size: .78rem;
+    padding: .2rem .5rem;
+    border-radius: .35rem;
+    border: 1px solid #d0d7e3;
+    background: #fff;
+    color: #3d5080;
+    cursor: pointer;
+  }
+
+  /* ── Rodapé ──────────────────────────────────────────────────────── */
+  .table-footer {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: .6rem 1.1rem;
+    border-top: 1px solid rgba(15,23,42,.06);
+    background: #f8fafe;
+    font-size: .77rem;
+    color: #6c7a8d;
+  }
+
+  /* Monospace CNPJ */
+  .mono { font-family: var(--bs-font-monospace); font-size: .82rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+{% call page_hero(title='Procurações FAP', subtitle='Visualize e filtre as procurações eletrônicas sincronizadas do portal FAP por situação, tipo e empresa.', icon='bi bi-file-earmark-person') %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb mb-0 bg-transparent small">
+    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('fap_panel.sync_page') }}">Painel FAP</a></li>
+    <li class="breadcrumb-item active" aria-current="page">Procurações</li>
+  </ol>
+</nav>
+{% endcall %}
+
+<div class="app-content">
+  <div class="container-fluid">
+
+    {# ── Stats cards ─────────────────────────────────────────────────── #}
+    {% set cnt_deferidas  = rows | selectattr('situacao_codigo', 'equalto', 'DEFERIDA')   | list | length %}
+    {% set cnt_excluidas  = rows | selectattr('situacao_codigo', 'equalto', 'EXCLUIDA')   | list | length %}
+    {% set cnt_indefer    = rows | selectattr('situacao_codigo', 'equalto', 'INDEFERIDA') | list | length %}
+    {# Vencendo nos próximos 30 dias: DEFERIDA + data_fim entre hoje e hoje+30 #}
+    {% set cnt_venc30 = namespace(v=0) %}
+    {% for r in rows %}
+      {% if r.situacao_codigo == 'DEFERIDA' and r.data_fim %}
+        {% set delta = (r.data_fim - today).days %}
+        {% if delta >= 0 and delta <= 30 %}
+          {% set cnt_venc30.v = cnt_venc30.v + 1 %}
+        {% endif %}
+      {% endif %}
+    {% endfor %}
+    <div class="stat-cards mb-3" style="grid-template-columns: repeat(5,1fr);">
+      <style>@media (max-width:900px){.stat-cards{grid-template-columns:repeat(3,1fr)!important;}}@media (max-width:500px){.stat-cards{grid-template-columns:1fr!important;}}</style>
+      <div class="stat-card" style="--sc-color:#0d6efd;--sc-soft:rgba(13,110,253,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-file-earmark-person"></i></span>
+          <span class="sc-label">Total filtrado</span>
+        </div>
+        <div class="sc-value">{{ rows|length }}</div>
+      </div>
+      <div class="stat-card" style="--sc-color:#059669;--sc-soft:rgba(5,150,105,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-check-circle"></i></span>
+          <span class="sc-label">Deferidas</span>
+        </div>
+        <div class="sc-value">{{ cnt_deferidas }}</div>
+      </div>
+      <div class="stat-card" style="--sc-color:#6b7280;--sc-soft:rgba(107,114,128,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-slash-circle"></i></span>
+          <span class="sc-label">Excluídas</span>
+        </div>
+        <div class="sc-value">{{ cnt_excluidas }}</div>
+      </div>
+      <div class="stat-card" style="--sc-color:#dc2626;--sc-soft:rgba(220,38,38,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-x-circle"></i></span>
+          <span class="sc-label">Indeferidas</span>
+        </div>
+        <div class="sc-value">{{ cnt_indefer }}</div>
+      </div>
+      <a href="{{ url_for('fap_panel.procuracoes_page', vencendo_em=30) }}"
+         class="stat-card text-decoration-none {% if f_vencendo_em == '30' %}ring-warning{% endif %}"
+         style="--sc-color:#d97706;--sc-soft:rgba(217,119,6,.12);{% if f_vencendo_em == '30' %}outline:2px solid #f59e0b;{% endif %}">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-alarm"></i></span>
+          <span class="sc-label">Vencem em 30 dias</span>
+        </div>
+        <div class="sc-value {% if cnt_venc30.v > 0 %}text-warning{% endif %}">{{ cnt_venc30.v }}</div>
+      </a>
+    </div>
+
+    {# ── Atalhos de vencimento ────────────────────────────────────────── #}
+    {% if total > 0 %}
+    <div class="d-flex align-items-center gap-2 flex-wrap mb-3">
+      <span class="text-muted small fw-semibold"><i class="bi bi-alarm me-1 text-warning"></i>Vencendo em:</span>
+      {% for days, label in [(7,'7 dias'),(15,'15 dias'),(30,'30 dias'),(60,'60 dias'),(90,'90 dias')] %}
+      <a href="{{ url_for('fap_panel.procuracoes_page', vencendo_em=days) }}"
+         class="btn btn-sm {% if f_vencendo_em == days|string %}btn-warning{% else %}btn-outline-warning{% endif %}"
+         style="font-size:.75rem;padding:.2rem .65rem;">
+        {{ label }}
+      </a>
+      {% endfor %}
+      {% if f_vencendo_em %}
+      <a href="{{ url_for('fap_panel.procuracoes_page') }}" class="btn btn-sm btn-outline-secondary" style="font-size:.75rem;padding:.2rem .65rem;">
+        <i class="bi bi-x-lg me-1"></i>Limpar
+      </a>
+      {% endif %}
+    </div>
+    {% endif %}
+
+    {# ── Filtros ─────────────────────────────────────────────────────── #}
+    <div class="filter-shell mb-3">
+      <div class="filter-header">
+        <i class="bi bi-funnel-fill text-primary" style="font-size:.88rem;"></i>
+        <h6>Filtros</h6>
+        {% if f_situacao or f_tipo or f_outorgante or f_protocolo or f_vigencia_ini or f_vigencia_fim or f_vencendo_em %}
+        <span class="filter-active-badge ms-auto">
+          <i class="bi bi-funnel-fill"></i> Filtros ativos
+        </span>
+        <a href="{{ url_for('fap_panel.procuracoes_page') }}" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-1" title="Limpar filtros">
+          <i class="bi bi-x-lg"></i> Limpar
+        </a>
+        {% endif %}
+      </div>
+      <div class="filter-body">
+        <form method="get" action="{{ url_for('fap_panel.procuracoes_page') }}" id="filterForm">
+          <div class="row g-2 align-items-end">
+
+            {# Protocolo #}
+            <div class="col-sm-6 col-md-3 col-lg-2">
+              <label for="inputProtocolo" class="form-label">Protocolo</label>
+              <input type="text" id="inputProtocolo" name="protocolo"
+                class="form-control form-control-sm"
+                value="{{ f_protocolo }}" placeholder="Ex.: 403385">
+            </div>
+
+            {# Situação #}
+            <div class="col-sm-6 col-md-3 col-lg-2">
+              <label for="selectSituacao" class="form-label">Situação</label>
+              <select id="selectSituacao" name="situacao" class="form-select form-select-sm" style="width:100%">
+                <option value="">Todas</option>
+                {% for cod, desc in all_situacoes %}
+                <option value="{{ cod }}" {% if f_situacao == cod %}selected{% endif %}>{{ desc or cod }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            {# Tipo #}
+            <div class="col-sm-6 col-md-3 col-lg-2">
+              <label for="selectTipo" class="form-label">Tipo</label>
+              <select id="selectTipo" name="tipo" class="form-select form-select-sm" style="width:100%">
+                <option value="">Todos</option>
+                {% for cod, desc in all_tipos %}
+                <option value="{{ cod }}" {% if f_tipo == cod %}selected{% endif %}>{{ desc or cod }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            {# Outorgante #}
+            <div class="col-sm-6 col-md-3 col-lg-3">
+              <label for="inputOutorgante" class="form-label">Empresa outorgante</label>
+              <input type="text" id="inputOutorgante" name="outorgante"
+                class="form-control form-control-sm"
+                value="{{ f_outorgante }}" placeholder="Nome ou CNPJ raiz">
+            </div>
+
+            {# Vigência início #}
+            <div class="col-sm-6 col-md-3 col-lg-2">
+              <label for="inputVigIni" class="form-label">Vigente a partir de</label>
+              <input type="date" id="inputVigIni" name="vigencia_ini"
+                class="form-control form-control-sm"
+                value="{{ f_vigencia_ini }}">
+            </div>
+
+            {# Vigência fim #}
+            <div class="col-sm-6 col-md-3 col-lg-2">
+              <label for="inputVigFim" class="form-label">Vigente até</label>
+              <input type="date" id="inputVigFim" name="vigencia_fim"
+                class="form-control form-control-sm"
+                value="{{ f_vigencia_fim }}">
+            </div>
+
+            {# Vencimento próximo #}
+            <div class="col-sm-6 col-md-3 col-lg-2">
+              <label for="selectVencendo" class="form-label">
+                <i class="bi bi-alarm me-1 text-warning"></i>Vencendo em
+              </label>
+              <select id="selectVencendo" name="vencendo_em" class="form-select form-select-sm">
+                <option value="">Qualquer prazo</option>
+                <option value="7"  {% if f_vencendo_em == '7'  %}selected{% endif %}>Próximos 7 dias</option>
+                <option value="15" {% if f_vencendo_em == '15' %}selected{% endif %}>Próximos 15 dias</option>
+                <option value="30" {% if f_vencendo_em == '30' %}selected{% endif %}>Próximos 30 dias</option>
+                <option value="60" {% if f_vencendo_em == '60' %}selected{% endif %}>Próximos 60 dias</option>
+                <option value="90" {% if f_vencendo_em == '90' %}selected{% endif %}>Próximos 90 dias</option>
+              </select>
+            </div>
+
+            {# Botões #}
+            <div class="col-sm-12 col-lg-auto d-flex gap-2 align-items-end">
+              <button type="submit" class="btn btn-primary btn-sm">
+                <i class="bi bi-search me-1"></i> Filtrar
+              </button>
+              {% if f_situacao or f_tipo or f_outorgante or f_protocolo or f_vigencia_ini or f_vigencia_fim or f_vencendo_em %}
+              <a href="{{ url_for('fap_panel.procuracoes_page') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-x-lg me-1"></i> Limpar
+              </a>
+              {% endif %}
+            </div>
+
+          </div>
+        </form>
+      </div>
+    </div>
+
+    {# ── Tabela ─────────────────────────────────────────────────────── #}
+    {% if rows %}
+    <div class="table-shell mb-4">
+      <div class="table-toolbar">
+        <h6>
+          <i class="bi bi-file-earmark-person me-1 text-info"></i> Procurações
+          <span class="badge bg-secondary ms-1" style="font-size:.72rem;font-weight:500;">
+            {{ rows|length }} de {{ total }}
+          </span>
+          {% if f_situacao or f_tipo or f_outorgante or f_protocolo or f_vigencia_ini or f_vigencia_fim or f_vencendo_em %}
+          <span class="badge bg-warning text-dark ms-1" style="font-size:.7rem;">filtrado</span>
+          {% endif %}
+        </h6>
+        <div class="d-flex gap-2 align-items-center">
+          <input type="text" id="localFilter" class="form-control form-control-sm" style="width:175px;"
+            placeholder="Buscar na página…">
+          <a href="{{ url_for('fap_panel.sync_page') }}" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-arrow-repeat me-1"></i> Sincronizar
+          </a>
+        </div>
+      </div>
+
+      <div class="table-responsive">
+        <table class="table table-bordered proc-table" id="procTable">
+          <thead>
+            <tr>
+              <th>Protocolo</th>
+              <th>Tipo</th>
+              <th>Situação</th>
+              <th>Empresa outorgante</th>
+              <th>CNPJ raiz</th>
+              <th>Outorgado</th>
+              <th>Vigência início</th>
+              <th>Vigência fim</th>
+              <th>Data cadastro</th>
+            </tr>
+          </thead>
+          <tbody id="procTbody">
+            {% for r in rows %}
+            {% set sit_cls = {
+              'DEFERIDA':   'badge-situacao-DEFERIDA',
+              'EXCLUIDA':   'badge-situacao-EXCLUIDA',
+              'INDEFERIDA': 'badge-situacao-INDEFERIDA',
+              'PENDENTE':   'badge-situacao-PENDENTE',
+            }.get(r.situacao_codigo, 'badge-situacao-default') %}
+            <tr>
+              <td><span class="mono fw-bold text-primary">{{ r.protocolo }}</span></td>
+              <td class="small">{{ r.tipo_procuracao_descricao or r.tipo_procuracao_codigo or '—' }}</td>
+              <td>
+                <span class="badge {{ sit_cls }}" style="font-size:.75rem;font-weight:600;">
+                  {{ r.situacao_descricao or r.situacao_codigo or '—' }}
+                </span>
+              </td>
+              <td class="small" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="{{ r.nome_empresa_outorgante or '' }}">
+                {{ r.nome_empresa_outorgante or '—' }}
+              </td>
+              <td><span class="mono">{{ r.cnpj_raiz_outorgante or '—' }}</span></td>
+              <td class="mono small">
+                {% if r.cpf_outorgado %}
+                  <span class="text-muted" style="font-size:.72rem;">CPF</span> {{ r.cpf_outorgado }}
+                {% elif r.cnpj_raiz_outorgado %}
+                  <span class="text-muted" style="font-size:.72rem;">CNPJ</span> {{ r.cnpj_raiz_outorgado }}
+                {% else %}—{% endif %}
+              </td>
+              <td class="small text-nowrap">
+                {% if r.data_inicio %}{{ r.data_inicio.strftime('%d/%m/%Y') }}{% else %}—{% endif %}
+              </td>
+              <td class="small text-nowrap">
+                {% if r.data_fim %}
+                  {%- set delta_days = (r.data_fim - today).days -%}
+                  <span class="{% if r.situacao_codigo == 'DEFERIDA' %}{{ 'text-danger fw-bold' if delta_days < 0 else ('text-warning fw-semibold' if delta_days <= 30 else '') }}{% endif %}">
+                    {{ r.data_fim.strftime('%d/%m/%Y') }}
+                    {% if r.situacao_codigo == 'DEFERIDA' and delta_days < 0 %}
+                    <i class="bi bi-exclamation-triangle-fill ms-1" title="Vencida"></i>
+                    {% elif r.situacao_codigo == 'DEFERIDA' and delta_days <= 30 %}
+                    <i class="bi bi-clock-fill ms-1" title="Vence em {{ delta_days }} dia(s)"></i>
+                    {% endif %}
+                  </span>
+                {% else %}—{% endif %}
+              </td>
+              <td class="small text-nowrap">
+                {% if r.data_cadastro %}{{ r.data_cadastro.strftime('%d/%m/%Y %H:%M') }}{% else %}—{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pagination-shell" id="paginationShell">
+        <div class="d-flex align-items-center gap-2">
+          <span class="pg-info" id="pgInfo"></span>
+          <select class="page-size-select" id="pgSize" title="Linhas por página">
+            <option value="25" selected>25 por pág.</option>
+            <option value="50">50 por pág.</option>
+            <option value="100">100 por pág.</option>
+            <option value="999999">Tudo</option>
+          </select>
+        </div>
+        <nav aria-label="Paginação">
+          <ul class="pagination pagination-sm mb-0" id="pgControls"></ul>
+        </nav>
+      </div>
+
+      <div class="table-footer">
+        <span>
+          <i class="bi bi-file-earmark-person me-1"></i>
+          {{ rows|length }} procuração(ões) exibida(s) · {{ total }} no banco
+        </span>
+        <span>
+          Atualizado via <a href="{{ url_for('fap_panel.sync_page') }}" class="text-decoration-none">Sincronização FAP</a>
+        </span>
+      </div>
+    </div>
+
+    {% else %}
+    <div class="table-shell mb-4">
+      <div class="card-body text-center py-5">
+        {% if total == 0 %}
+        <i class="bi bi-file-earmark-x text-muted" style="font-size:3rem;"></i>
+        <h5 class="mt-3 text-muted">Nenhuma procuração sincronizada</h5>
+        <p class="text-muted mb-3">
+          Use a <a href="{{ url_for('fap_panel.sync_page') }}">Sincronização FAP</a>
+          para buscar as procurações eletrônicas do portal.
+        </p>
+        <a href="{{ url_for('fap_panel.sync_page') }}" class="btn btn-primary">
+          <i class="bi bi-arrow-repeat me-1"></i> Ir para Sincronização
+        </a>
+        {% else %}
+        <i class="bi bi-search text-muted" style="font-size:3rem;"></i>
+        <h5 class="mt-3 text-muted">Nenhum resultado para os filtros aplicados</h5>
+        <a href="{{ url_for('fap_panel.procuracoes_page') }}" class="btn btn-outline-secondary mt-2">
+          <i class="bi bi-x-circle me-1"></i> Limpar filtros
+        </a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  /* ── Select2 ─────────────────────────────────────────────────────────── */
+  if (typeof $.fn !== 'undefined' && $.fn.select2) {
+    $('#selectSituacao').select2({ theme: 'bootstrap-5', allowClear: true, placeholder: 'Todas', width: '100%' });
+    $('#selectTipo').select2({ theme: 'bootstrap-5', allowClear: true, placeholder: 'Todos', width: '100%' });
+  }
+
+  /* ── Filtro local na página ──────────────────────────────────────────── */
+  var allRows     = Array.from(document.querySelectorAll('#procTbody tr'));
+  var filteredRows = allRows.slice();
+  var currentPage = 1;
+  var pageSize    = 25;
+
+  var pgInfo     = document.getElementById('pgInfo');
+  var pgControls = document.getElementById('pgControls');
+  var pgSize     = document.getElementById('pgSize');
+  var localFilter= document.getElementById('localFilter');
+
+  function renderPage() {
+    var total = filteredRows.length;
+    var pages = Math.max(1, Math.ceil(total / pageSize));
+    if (currentPage > pages) currentPage = pages;
+
+    var start = (currentPage - 1) * pageSize;
+    var end   = Math.min(start + pageSize, total);
+
+    allRows.forEach(function(r) { r.style.display = 'none'; });
+    filteredRows.forEach(function(r, i) {
+      r.style.display = (i >= start && i < end) ? '' : 'none';
+    });
+
+    pgInfo.textContent = total === 0
+      ? 'Nenhuma linha'
+      : 'Exibindo ' + (start + 1) + '–' + end + ' de ' + total + ' linha(s)';
+
+    pgControls.innerHTML = '';
+    function makeBtn(label, page, disabled, active) {
+      var li = document.createElement('li');
+      li.className = 'page-item' + (disabled ? ' disabled' : '') + (active ? ' active' : '');
+      var a = document.createElement('a');
+      a.className = 'page-link';
+      a.href = '#';
+      a.innerHTML = label;
+      a.addEventListener('click', function(e) {
+        e.preventDefault();
+        if (!disabled) { currentPage = page; renderPage(); }
+      });
+      li.appendChild(a);
+      pgControls.appendChild(li);
+    }
+
+    makeBtn('&laquo;', 1, currentPage === 1, false);
+    makeBtn('&lsaquo;', currentPage - 1, currentPage === 1, false);
+
+    var ws = 7, half = Math.floor(ws / 2);
+    var pStart = Math.max(1, currentPage - half);
+    var pEnd   = Math.min(pages, pStart + ws - 1);
+    if (pEnd - pStart < ws - 1) pStart = Math.max(1, pEnd - ws + 1);
+
+    if (pStart > 1) {
+      makeBtn('1', 1, false, false);
+      if (pStart > 2) {
+        var sp = document.createElement('li');
+        sp.className = 'page-item disabled';
+        sp.innerHTML = '<span class="page-link">…</span>';
+        pgControls.appendChild(sp);
+      }
+    }
+    for (var p = pStart; p <= pEnd; p++) makeBtn(p, p, false, p === currentPage);
+    if (pEnd < pages) {
+      if (pEnd < pages - 1) {
+        var sp2 = document.createElement('li');
+        sp2.className = 'page-item disabled';
+        sp2.innerHTML = '<span class="page-link">…</span>';
+        pgControls.appendChild(sp2);
+      }
+      makeBtn(pages, pages, false, false);
+    }
+
+    makeBtn('&rsaquo;', currentPage + 1, currentPage === pages, false);
+    makeBtn('&raquo;', pages, currentPage === pages, false);
+  }
+
+  if (pgSize) {
+    pgSize.addEventListener('change', function() {
+      pageSize = parseInt(this.value, 10);
+      currentPage = 1;
+      renderPage();
+    });
+  }
+
+  if (localFilter) {
+    localFilter.addEventListener('input', function() {
+      var term = this.value.toLowerCase().trim();
+      filteredRows = allRows.filter(function(r) {
+        return !term || r.textContent.toLowerCase().includes(term);
+      });
+      currentPage = 1;
+      renderPage();
+    });
+  }
+
+  renderPage();
+})();
+</script>
+{% endblock %}

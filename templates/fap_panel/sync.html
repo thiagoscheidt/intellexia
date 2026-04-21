@@ -166,11 +166,36 @@
           </div>
         </div>
 
-        {# Card Sincronizar #}
+        {# Card Procurações #}
+        <div class="card card-info card-outline mb-3">
+          <div class="card-header">
+            <h3 class="card-title mb-0">
+              <span class="step-badge me-1" style="background:#0dcaf0;color:#000;">3</span>
+              <i class="bi bi-file-earmark-person me-1"></i> Sincronizar procurações
+            </h3>
+          </div>
+          <div class="card-body py-2">
+            <p class="text-muted small mb-2">
+              Busca todas as procurações eletrônicas vinculadas a esta conta e salva no banco.
+              <span id="procTotalBadge" class="badge bg-info text-dark ms-1" style="font-size:.72rem;"></span>
+            </p>
+            <div id="procAlerts"></div>
+          </div>
+          <div class="card-footer d-flex align-items-center gap-2">
+            <button type="button" id="btnSyncProc" class="btn btn-info btn-sm">
+              <span id="procSpinner" class="spinner-border spinner-border-sm me-1 d-none"></span>
+              <i class="bi bi-arrow-repeat me-1" id="procIcon"></i>
+              Sincronizar procurações
+            </button>
+            <span id="procLastSync" class="text-muted small ms-auto"></span>
+          </div>
+        </div>
+
+        {# Card Sincronizar contestações #}
         <div class="card card-success card-outline">
           <div class="card-header">
             <h3 class="card-title mb-0">
-              <span class="step-badge me-1" style="background:#198754;">3</span> Sincronizar contestações
+              <span class="step-badge me-1" style="background:#198754;">4</span> Sincronizar contestações
             </h3>
           </div>
           <div class="card-body">
@@ -658,6 +683,80 @@
       log('Erro ao carregar tabela de resultados: ' + (err.message || String(err)), 'warning');
     }
   }
+
+  // ── Sincronização de procurações ──────────────────────────────────────
+  (function setupProcSync() {
+    const btnSyncProc     = document.getElementById('btnSyncProc');
+    const procSpinner     = document.getElementById('procSpinner');
+    const procIcon        = document.getElementById('procIcon');
+    const procAlerts      = document.getElementById('procAlerts');
+    const procTotalBadge  = document.getElementById('procTotalBadge');
+    const procLastSync    = document.getElementById('procLastSync');
+
+
+    const syncProcUrl  = '{{ url_for("fap_panel.sync_procuracoes") }}';
+    const listProcUrl  = '{{ url_for("fap_panel.sync_procuracoes_list") }}';
+
+    function setProcSyncing(active) {
+      btnSyncProc.disabled = active;
+      procSpinner.classList.toggle('d-none', !active);
+      procIcon.style.display = active ? 'none' : '';
+    }
+
+    const situacaoColor = {
+      'DEFERIDA': 'bg-success',
+      'EXCLUIDA': 'bg-secondary',
+      'INDEFERIDA': 'bg-danger',
+    };
+
+    async function loadProcuracoes() {
+      try {
+        const resp    = await fetch(listProcUrl, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        const payload = await resp.json().catch(() => null);
+        if (!payload || !payload.ok || !payload.total) return;
+
+        procTotalBadge.textContent = payload.total + ' no banco';
+      } catch (err) {
+        log('Erro ao carregar procurações: ' + (err.message || String(err)), 'warning');
+      }
+    }
+
+    btnSyncProc.addEventListener('click', async function () {
+      procAlerts.innerHTML = '';
+      setProcSyncing(true);
+      log('Buscando procurações eletrônicas...', 'info');
+
+      try {
+        const resp    = await fetch(syncProcUrl, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+          body: JSON.stringify({}),
+        });
+        const payload = await resp.json().catch(() => null);
+
+        if (!resp.ok || !payload || !payload.ok) {
+          const msg = (payload && payload.message) || 'Erro desconhecido';
+          log('Erro ao sincronizar procurações: ' + msg, 'error');
+          showAlert(procAlerts, 'danger', msg);
+        } else {
+          const msg = 'Procurações sincronizadas: ' + payload.total + ' total, ' +
+            payload.created + ' novo(s), ' + payload.updated + ' atualizado(s).';
+          log(msg, 'success');
+          showAlert(procAlerts, 'success', msg);
+          procLastSync.textContent = 'última sync: agora';
+          await loadProcuracoes();
+        }
+      } catch (err) {
+        log('Erro de rede ao sincronizar procurações: ' + (err.message || String(err)), 'error');
+      } finally {
+        setProcSyncing(false);
+      }
+    });
+
+    // Carrega procurações já salvas ao abrir a página
+    loadProcuracoes();
+  })();
 
 })();
 </script>

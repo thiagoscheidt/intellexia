@@ -115,7 +115,11 @@ class FapWebService:
 
     # ── Construção de headers ─────────────────────────────────────────────
 
-    def _base_headers(self, accept: str = 'application/json;charset=utf-8') -> dict:
+    def _base_headers(
+        self,
+        accept: str = 'application/json;charset=utf-8',
+        referer: str = 'https://fap-mps.dataprev.gov.br/contestacoes-eletronicas',
+    ) -> dict:
         headers = {
             'Accept': accept,
             'Accept-Language': 'pt-BR,pt;q=0.9',
@@ -124,7 +128,7 @@ class FapWebService:
             'Cookie': self.auth.cookie_string,
             'DNT': '1',
             'Pragma': 'no-cache',
-            'Referer': 'https://fap-mps.dataprev.gov.br/contestacoes-eletronicas',
+            'Referer': referer,
             'User-Agent': self.auth.effective_user_agent,
         }
         if self.auth.xsrf_token:
@@ -133,11 +137,16 @@ class FapWebService:
 
     # ── Execução de requisição ────────────────────────────────────────────
 
-    def _get(self, url: str, timeout: int = 30) -> tuple[bytes, int]:
+    def _get(
+        self,
+        url: str,
+        timeout: int = 30,
+        referer: str = 'https://fap-mps.dataprev.gov.br/contestacoes-eletronicas',
+    ) -> tuple[bytes, int]:
         """Faz um GET e retorna (body_bytes, http_status).
         Lança urllib.error.HTTPError / URLError em caso de falha.
         """
-        req = urllib.request.Request(url, headers=self._base_headers(), method='GET')
+        req = urllib.request.Request(url, headers=self._base_headers(referer=referer), method='GET')
         with urllib.request.urlopen(req, timeout=timeout, context=self._ssl_ctx) as resp:
             return resp.read(), resp.status
 
@@ -198,6 +207,45 @@ class FapWebService:
             )
 
         return FapWebResult(ok=True, data=companies)
+
+    # ── Listar procurações eletrônicas ─────────────────────────────────────
+
+    def fetch_procuracoes(self) -> FapWebResult:
+        """Busca as procurações eletrônicas cadastradas no FAP.
+
+        Returns:
+            FapWebResult com data=list[dict] em caso de sucesso.
+        """
+        url = f'{_BASE_URL}/gateway/fap/v1/procuracoes'
+        try:
+            body, _ = self._get(
+                url,
+                timeout=15,
+                referer='https://fap-mps.dataprev.gov.br/procuracoes',
+            )
+        except urllib.error.HTTPError as e:
+            detail = e.read().decode('utf-8', errors='replace')
+            return FapWebResult(
+                ok=False,
+                status_code=e.code,
+                message=f'Erro HTTP {e.code} ao consultar procurações eletrônicas.',
+                data={'detail': detail[:500]},
+            )
+        except urllib.error.URLError as e:
+            return FapWebResult(ok=False, message=f'Falha de conexão com o sistema FAP: {e.reason}')
+        except Exception as e:
+            return FapWebResult(ok=False, message=f'Erro inesperado: {str(e)}')
+
+        try:
+            procuracoes = json.loads(body.decode('utf-8'))
+        except Exception:
+            return FapWebResult(
+                ok=False,
+                message='Resposta inválida do sistema FAP (não é JSON).',
+                data={'detail': body[:300].decode('utf-8', errors='replace')},
+            )
+
+        return FapWebResult(ok=True, data=procuracoes)
 
     # ── Listar contestações de uma empresa/vigência ───────────────────────
 

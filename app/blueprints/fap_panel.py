@@ -36,7 +36,7 @@ from openpyxl.styles import (
 )
 from openpyxl.utils import get_column_letter
 
-from app.models import FapAutoImportedContestacao, FapCompany, FapWebContestacao, db
+from app.models import FapAutoImportedContestacao, FapCompany, FapWebContestacao, FapWebProcuracao, db
 from app.services.fap_web_service import FapWebAuthPayload, FapWebService
 
 fap_panel_bp = Blueprint('fap_panel', __name__, url_prefix='/fap-panel')
@@ -97,6 +97,7 @@ def sync_page():
 
     # Resumo rápido de contestações já sincronizadas
     total_synced = FapWebContestacao.query.filter_by(law_firm_id=law_firm_id).count()
+    total_procuracoes = FapWebProcuracao.query.filter_by(law_firm_id=law_firm_id).count()
 
     return render_template(
         'fap_panel/sync.html',
@@ -104,6 +105,7 @@ def sync_page():
         years=FAP_AVAILABLE_YEARS,
         saved_auth=saved_auth,
         total_synced=total_synced,
+        total_procuracoes=total_procuracoes,
     )
 
 
@@ -1017,3 +1019,247 @@ def sync_summary():
     ]
 
     return jsonify({'ok': True, 'items': items, 'total': len(items)})
+
+
+@fap_panel_bp.route('/sync/procuracoes', methods=['POST'])
+@require_law_firm
+def sync_procuracoes():
+    """AJAX — Busca as procurações eletrônicas do portal FAP e persiste no banco.
+
+    Response JSON:
+        { "ok": true, "total": 42, "created": 10, "updated": 32 }
+    """
+    law_firm_id = get_current_law_firm_id()
+
+    saved_auth = session.get('fap_auto_import_auth', '')
+    if not saved_auth:
+        return jsonify({
+            'ok': False,
+            'message': 'Dados de autenticação não encontrados. Salve a sessão FAP primeiro.',
+        }), 400
+
+    try:
+        auth = FapWebAuthPayload.from_json(saved_auth)
+    except Exception:
+        return jsonify({'ok': False, 'message': 'Dados de autenticação inválidos na sessão.'}), 400
+
+    result = FapWebService(auth).fetch_procuracoes()
+    if not result.ok:
+        expired = getattr(result, 'expired', False)
+        payload = {'ok': False, 'message': result.message}
+        if expired:
+            payload['expired'] = True
+        return jsonify(payload), 502
+
+    items = result.data if isinstance(result.data, list) else []
+    now = datetime.utcnow()
+    created = 0
+    updated = 0
+
+    try:
+        for item in items:
+            protocolo = str(item.get('protocolo') or '').strip()
+            if not protocolo:
+                continue
+
+            tipo   = item.get('tipoProcuracao') or {}
+            sit    = item.get('situacao') or {}
+
+            # Datas
+            from datetime import date as _date
+            def _parse_date(s):
+                if not s:
+                    return None
+                try:
+                    return _date.fromisoformat(s[:10])
+                except Exception:
+                    return None
+
+            def _parse_datetime(s):
+                if not s:
+                    return None
+                try:
+                    return datetime.fromisoformat(s.replace('Z', '+00:00').split('+')[0])
+                except Exception:
+                    return None
+
+            existing = FapWebProcuracao.query.filter_by(
+                law_firm_id=law_firm_id,
+                protocolo=protocolo,
+            ).first()
+
+            fields = dict(
+                tipo_procuracao_codigo    = tipo.get('codigo'),
+                tipo_procuracao_descricao = tipo.get('descricao'),
+                situacao_codigo           = sit.get('codigo'),
+                situacao_descricao        = sit.get('descricao'),
+                data_inicio               = _parse_date(item.get('dataInicio')),
+                data_fim                  = _parse_date(item.get('dataFim')),
+                cnpj_raiz_outorgante      = str(item['cnpjRaizOutorgante']) if item.get('cnpjRaizOutorgante') is not None else None,
+                nome_empresa_outorgante   = item.get('nomeEmpresaOutorgante'),
+                cpf_outorgado             = str(item['cpfOutorgado']) if item.get('cpfOutorgado') is not None else None,
+                cnpj_raiz_outorgado       = str(item['cnpjRaizOutorgado']) if item.get('cnpjRaizOutorgado') is not None else None,
+                data_cadastro             = _parse_datetime(item.get('dataCadastro')),
+                raw_data                  = json.dumps(item, ensure_ascii=False),
+                last_synced_at            = now,
+            )
+
+            if existing:
+                for k, v in fields.items():
+                    setattr(existing, k, v)
+                updated += 1
+            else:
+                rec = FapWebProcuracao(
+                    law_firm_id=law_firm_id,
+                    protocolo=protocolo,
+                    **fields,
+                )
+                db.session.add(rec)
+                created += 1
+
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'ok': False, 'message': f'Erro ao salvar no banco: {str(e)}'}), 500
+
+    return jsonify({'ok': True, 'total': len(items), 'created': created, 'updated': updated})
+
+
+@fap_panel_bp.route('/sync/procuracoes/list', methods=['GET'])
+@require_law_firm
+def sync_procuracoes_list():
+    """AJAX — Retorna as procurações salvas no banco para o escritório atual."""
+    law_firm_id = get_current_law_firm_id()
+
+    rows = (
+        FapWebProcuracao.query
+        .filter_by(law_firm_id=law_firm_id)
+        .order_by(FapWebProcuracao.data_cadastro.desc())
+        .all()
+    )
+
+    items = [
+        {
+            'id':                       r.id,
+            'protocolo':                r.protocolo,
+            'tipo_procuracao_codigo':   r.tipo_procuracao_codigo or '',
+            'tipo_procuracao_descricao':r.tipo_procuracao_descricao or '',
+            'situacao_codigo':          r.situacao_codigo or '',
+            'situacao_descricao':       r.situacao_descricao or '',
+            'data_inicio':              r.data_inicio.strftime('%d/%m/%Y') if r.data_inicio else '',
+            'data_fim':                 r.data_fim.strftime('%d/%m/%Y') if r.data_fim else '',
+            'cnpj_raiz_outorgante':     r.cnpj_raiz_outorgante or '',
+            'nome_empresa_outorgante':  r.nome_empresa_outorgante or '',
+            'cpf_outorgado':            r.cpf_outorgado or '',
+            'cnpj_raiz_outorgado':      r.cnpj_raiz_outorgado or '',
+            'data_cadastro':            r.data_cadastro.strftime('%d/%m/%Y %H:%M') if r.data_cadastro else '',
+            'last_synced_at':           r.last_synced_at.strftime('%d/%m/%Y %H:%M') if r.last_synced_at else '',
+        }
+        for r in rows
+    ]
+
+    return jsonify({'ok': True, 'items': items, 'total': len(items)})
+
+
+# ---------------------------------------------------------------------------
+# Página de listagem de procurações
+# ---------------------------------------------------------------------------
+
+@fap_panel_bp.route('/procuracoes')
+@require_law_firm
+def procuracoes_page():
+    """Página de visualização das procurações eletrônicas sincronizadas."""
+    law_firm_id = get_current_law_firm_id()
+
+    # Filtros
+    f_situacao     = request.args.get('situacao', '').strip()
+    f_tipo         = request.args.get('tipo', '').strip()
+    f_outorgante   = request.args.get('outorgante', '').strip()
+    f_protocolo    = request.args.get('protocolo', '').strip()
+    f_vigencia_ini = request.args.get('vigencia_ini', '').strip()
+    f_vigencia_fim = request.args.get('vigencia_fim', '').strip()
+    f_vencendo_em  = request.args.get('vencendo_em', '').strip()   # '7','15','30','60','90'
+
+    query = FapWebProcuracao.query.filter_by(law_firm_id=law_firm_id)
+
+    if f_situacao:
+        query = query.filter(FapWebProcuracao.situacao_codigo == f_situacao)
+    if f_tipo:
+        query = query.filter(FapWebProcuracao.tipo_procuracao_codigo == f_tipo)
+    if f_outorgante:
+        like = f'%{f_outorgante}%'
+        query = query.filter(
+            (FapWebProcuracao.nome_empresa_outorgante.ilike(like)) |
+            (FapWebProcuracao.cnpj_raiz_outorgante.ilike(like))
+        )
+    if f_protocolo:
+        query = query.filter(FapWebProcuracao.protocolo.ilike(f'%{f_protocolo}%'))
+    if f_vigencia_ini:
+        try:
+            from datetime import date as _date
+            di = _date.fromisoformat(f_vigencia_ini)
+            query = query.filter(FapWebProcuracao.data_fim >= di)
+        except Exception:
+            pass
+    if f_vigencia_fim:
+        try:
+            from datetime import date as _date
+            df = _date.fromisoformat(f_vigencia_fim)
+            query = query.filter(FapWebProcuracao.data_inicio <= df)
+        except Exception:
+            pass
+    if f_vencendo_em:
+        try:
+            from datetime import date as _date, timedelta
+            days = int(f_vencendo_em)
+            hoje = _date.today()
+            limite = hoje + timedelta(days=days)
+            query = query.filter(
+                FapWebProcuracao.data_fim >= hoje,
+                FapWebProcuracao.data_fim <= limite,
+            )
+        except Exception:
+            pass
+
+    rows = query.order_by(FapWebProcuracao.data_cadastro.desc()).all()
+
+    # Valores únicos para os filtros
+    all_situacoes = (
+        db.session.query(
+            FapWebProcuracao.situacao_codigo,
+            FapWebProcuracao.situacao_descricao,
+        )
+        .filter_by(law_firm_id=law_firm_id)
+        .distinct()
+        .order_by(FapWebProcuracao.situacao_descricao)
+        .all()
+    )
+    all_tipos = (
+        db.session.query(
+            FapWebProcuracao.tipo_procuracao_codigo,
+            FapWebProcuracao.tipo_procuracao_descricao,
+        )
+        .filter_by(law_firm_id=law_firm_id)
+        .distinct()
+        .order_by(FapWebProcuracao.tipo_procuracao_descricao)
+        .all()
+    )
+
+    total = FapWebProcuracao.query.filter_by(law_firm_id=law_firm_id).count()
+
+    from datetime import date as _date
+    return render_template(
+        'fap_panel/procuracoes.html',
+        rows=rows,
+        total=total,
+        today=_date.today(),
+        f_situacao=f_situacao,
+        f_tipo=f_tipo,
+        f_outorgante=f_outorgante,
+        f_protocolo=f_protocolo,
+        f_vigencia_ini=f_vigencia_ini,
+        f_vigencia_fim=f_vigencia_fim,
+        f_vencendo_em=f_vencendo_em,
+        all_situacoes=all_situacoes,
+        all_tipos=all_tipos,
+    )

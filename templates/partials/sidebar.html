@@ -180,6 +180,14 @@
               </a>
             </li>
             <li class="nav-item">
+              <a href="{{ url_for('fap_panel.procuracoes_page') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'fap_panel.procuracoes_page' else '' }}"
+                style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-file-earmark-person" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Procurações</p>
+              </a>
+            </li>
+            <li class="nav-item">
               <a href="{{ url_for('fap_panel.sync_page') }}"
                 class="nav-link {{ 'active' if request.endpoint in ['fap_panel.sync_page', 'fap_panel.sync_run_year', 'fap_panel.sync_summary'] else '' }}"
                 style="font-size: 0.9em;">

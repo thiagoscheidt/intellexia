@@ -2162,3 +2162,60 @@ class FapWebContestacao(db.Model):
 
     def __repr__(self):
         return f'<FapWebContestacao id={self.contestacao_id} cnpj={self.cnpj} ano={self.ano_vigencia}>'
+
+
+class FapWebProcuracao(db.Model):
+    """Tabela fap_web_procuracoes — Procurações eletrônicas sincronizadas do portal FAP/Dataprev.
+
+    Armazena cada procuração retornada pela API /gateway/fap/v1/procuracoes,
+    identificada pelo número de protocolo por escritório.
+    """
+    __tablename__ = 'fap_web_procuracoes'
+    __table_args__ = (
+        db.UniqueConstraint(
+            'law_firm_id', 'protocolo',
+            name='uq_fap_web_procuracoes_law_firm_protocolo',
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+
+    # ── Identificação ────────────────────────────────────────────────
+    protocolo = db.Column(db.String(50), nullable=False, index=True)
+
+    # ── Tipo de procuração ────────────────────────────────────────────
+    tipo_procuracao_codigo    = db.Column(db.String(100))
+    tipo_procuracao_descricao = db.Column(db.String(255))
+
+    # ── Situação ──────────────────────────────────────────────────────
+    situacao_codigo    = db.Column(db.String(100), index=True)
+    situacao_descricao = db.Column(db.String(255))
+
+    # ── Vigência ──────────────────────────────────────────────────────
+    data_inicio = db.Column(db.Date)
+    data_fim    = db.Column(db.Date)
+
+    # ── Outorgante ────────────────────────────────────────────────────
+    cnpj_raiz_outorgante   = db.Column(db.String(20), index=True)
+    nome_empresa_outorgante = db.Column(db.String(500))
+
+    # ── Outorgado (CPF ou CNPJ raiz) ──────────────────────────────────
+    cpf_outorgado        = db.Column(db.String(20), index=True)   # presente quando pessoa física
+    cnpj_raiz_outorgado  = db.Column(db.String(20), index=True)   # presente quando pessoa jurídica
+
+    # ── Data de cadastro na API ────────────────────────────────────────
+    data_cadastro = db.Column(db.DateTime)
+
+    # ── Dados brutos ───────────────────────────────────────────────────
+    raw_data = db.Column(db.Text)
+
+    # ── Controle ──────────────────────────────────────────────────────
+    last_synced_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at     = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at     = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    law_firm = db.relationship('LawFirm')
+
+    def __repr__(self):
+        return f'<FapWebProcuracao protocolo={self.protocolo} outorgante={self.cnpj_raiz_outorgante}>'
