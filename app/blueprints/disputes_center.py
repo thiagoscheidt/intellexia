@@ -23,6 +23,7 @@ from app.models import (
     FapVigenciaCnpj,
     FapCompany,
     FapAutoImportedContestacao,
+    FapWebContestacao,
     Client,
     FapContestationCat,
     FapContestationCatSourceHistory,
@@ -2789,22 +2790,39 @@ def fap_auto_import_import_contestacao():
             'message': 'Esta contestação já foi importada anteriormente.',
         })
 
-    saved_auth = session.get('fap_auto_import_auth', '')
-    if not saved_auth:
-        return jsonify({'ok': False, 'message': 'Dados de autenticação não encontrados na sessão.'}), 400
+    # Tenta usar arquivo local (fap_web_contestacoes) antes de buscar no portal FAP
+    pdf_bytes = None
+    filename  = None
+    rec_id = data.get('rec_id')
+    if rec_id:
+        fap_rec = FapWebContestacao.query.filter_by(id=int(rec_id), law_firm_id=law_firm_id).first()
+        if fap_rec and fap_rec.file_path:
+            abs_path = os.path.abspath(os.path.join(current_app.root_path, '..', fap_rec.file_path))
+            if os.path.isfile(abs_path):
+                with open(abs_path, 'rb') as _fh:
+                    pdf_bytes = _fh.read()
+                base = os.path.basename(abs_path)
+                # Remove o prefixo {contestacao_id}_ adicionado no download
+                parts = base.split('_', 1)
+                filename = parts[1] if len(parts) == 2 and parts[0].isdigit() else base
 
-    try:
-        auth = FapWebAuthPayload.from_json(saved_auth)
-    except Exception:
-        return jsonify({'ok': False, 'message': 'Dados de autenticação inválidos na sessão.'}), 400
+    if pdf_bytes is None:
+        saved_auth = session.get('fap_auto_import_auth', '')
+        if not saved_auth:
+            return jsonify({'ok': False, 'message': 'Dados de autenticação não encontrados na sessão.'}), 400
 
-    result = FapWebService(auth).download_contestacao(year=year, cnpj=cnpj, contestacao_id=contestacao_id)
-    if not result.ok:
-        status_code = 401 if result.expired else 502
-        return jsonify({'ok': False, 'message': result.message}), status_code
+        try:
+            auth = FapWebAuthPayload.from_json(saved_auth)
+        except Exception:
+            return jsonify({'ok': False, 'message': 'Dados de autenticação inválidos na sessão.'}), 400
 
-    pdf_bytes = result.data['pdf_bytes']
-    filename  = result.data['filename']
+        result = FapWebService(auth).download_contestacao(year=year, cnpj=cnpj, contestacao_id=contestacao_id)
+        if not result.ok:
+            status_code = 401 if result.expired else 502
+            return jsonify({'ok': False, 'message': result.message}), status_code
+
+        pdf_bytes = result.data['pdf_bytes']
+        filename  = result.data['filename']
 
     upload_dir = os.path.abspath(
         os.path.join(current_app.root_path, '..', 'uploads', 'fap_contestation_reports')

@@ -221,6 +221,12 @@
               <i class="bi bi-arrow-repeat me-1" id="syncIcon"></i>
               Sincronizar todos os anos
             </button>
+            <button type="button" id="btnDownloadFiles" class="btn btn-outline-secondary d-none" {% if not companies %}disabled{% endif %}
+                    title="Baixa os PDFs das contestações sincronizadas para esta empresa">
+              <span id="dlSpinner" class="spinner-border spinner-border-sm me-1 d-none"></span>
+              <i class="bi bi-file-earmark-arrow-down me-1" id="dlIcon"></i>
+              Baixar PDFs
+            </button>
             {% if not companies %}
             <small class="text-muted">Sincronize as empresas primeiro.</small>
             {% endif %}
@@ -359,8 +365,9 @@
   // URLs
   const saveAuthUrl   = '{{ url_for("disputes_center.fap_auto_import_save_auth") }}';
   const checkUrl      = '{{ url_for("disputes_center.fap_auto_import_check_session") }}';
-  const syncYearUrl   = '{{ url_for("fap_panel.sync_run_year") }}';
-  const summaryUrl    = '{{ url_for("fap_panel.sync_summary") }}';
+  const syncYearUrl     = '{{ url_for("fap_panel.sync_run_year") }}';
+  const downloadYearUrl = '{{ url_for("fap_panel.sync_download_year") }}';
+  const summaryUrl      = '{{ url_for("fap_panel.sync_summary") }}';
 
   // ── Log ──────────────────────────────────────────────────────────────
   function log(msg, type) {
@@ -517,6 +524,10 @@
   })();
 
   // ── Sincronização ────────────────────────────────────────────────────
+  const btnDownloadFiles = document.getElementById('btnDownloadFiles');
+  const dlSpinner        = document.getElementById('dlSpinner');
+  const dlIcon           = document.getElementById('dlIcon');
+
   function setSyncing(active) {
     btnSync.disabled = active;
     syncSpinner.classList.toggle('d-none', !active);
@@ -624,6 +635,8 @@
 
     if (totalItems > 0) {
       showAlert(syncAlerts, errors ? 'warning' : 'success', summaryMsg);
+      // Mostra botão de download de PDFs
+      if (btnDownloadFiles) btnDownloadFiles.classList.remove('d-none');
       // Carrega tabela de resultados
       await loadResults(cnpj);
     } else if (!errors) {
@@ -635,6 +648,48 @@
     setSyncing(false);
     btnSync.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i> Sincronizar todos os anos';
   });
+
+  // ── Download de PDFs por ano ────────────────────────────────────────
+  if (btnDownloadFiles) {
+    btnDownloadFiles.addEventListener('click', async function () {
+      const cnpj = companySelect ? ($(companySelect).val() || companySelect.value) : '';
+      if (!cnpj) {
+        showAlert(syncAlerts, 'warning', 'Selecione uma empresa.');
+        return;
+      }
+
+      btnDownloadFiles.disabled = true;
+      dlSpinner.classList.remove('d-none');
+      dlIcon.style.display = 'none';
+      log('Enfileirando downloads de PDFs para todos os anos...', 'info');
+
+      try {
+        const resp = await fetch(downloadYearUrl, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+          body: JSON.stringify({ cnpj: cnpj }),
+        });
+        const payload = await resp.json().catch(() => null);
+        if (resp.ok && payload && payload.ok) {
+          if (payload.queued === 0) {
+            log('Nenhum PDF pendente — todos já foram baixados anteriormente.', 'info');
+          } else {
+            log(payload.queued + ' PDF(s) sendo baixado(s) em segundo plano. Os arquivos estarão disponíveis em instantes.', 'success');
+          }
+        } else {
+          const msg = (payload && payload.message) || 'Erro desconhecido';
+          log('Erro ao iniciar download: ' + msg, 'error');
+        }
+      } catch (err) {
+        log('Erro de rede: ' + (err.message || String(err)), 'error');
+      }
+
+      btnDownloadFiles.disabled = false;
+      dlSpinner.classList.add('d-none');
+      dlIcon.style.display = '';
+    });
+  }
 
   // ── Carrega tabela de resultados via API ─────────────────────────────
   async function loadResults(cnpj) {

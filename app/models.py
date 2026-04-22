@@ -2150,6 +2150,9 @@ class FapWebContestacao(db.Model):
     # ── Dados brutos da API ───────────────────────────────────────────
     raw_data = db.Column(db.Text)  # JSON completo retornado pela API FAP
 
+    # ── Arquivo baixado ───────────────────────────────────────────────
+    file_path = db.Column(db.String(500))  # Caminho relativo do PDF baixado em uploads/
+
     # ── Controle ─────────────────────────────────────────────────────
     last_synced_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     created_at     = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)

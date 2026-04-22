@@ -6,15 +6,22 @@
 {% macro _render_cell(c) %}
 {%- set cnpj14 = c.cnpj.zfill(14) if c.cnpj else '' -%}
 {%- set dl_base = url_for('disputes_center.fap_auto_import_download_contestacao', year=c.ano_vigencia, cnpj=cnpj14, contestacao_id=c.contestacao_id) -%}
+{%- set local_url = url_for('fap_panel.serve_contestacao_file', rec_id=c.id) if c.file_path else None -%}
 {%- set imported_report_id = imported_map.get(c.contestacao_id) -%}
 <div class="contestacao-cell">
   <div class="cell-row">
     <span class="protocolo-code">{{ c.protocolo or '—' }}</span>
     <span class="situacao-text">{{ c.situacao_descricao or '' }}</span>
+    {% if c.file_path %}<span class="badge bg-success-subtle text-success ms-1" style="font-size:.6rem;vertical-align:middle;" title="Arquivo PDF salvo localmente"><i class="bi bi-hdd-fill"></i> Local</span>{% endif %}
   </div>
   <div class="cell-actions">
+    {% if local_url %}
+    <a href="{{ local_url }}?inline=1" target="_blank" class="btn-cell btn-cell-view" title="Visualizar (arquivo local)"><i class="bi bi-eye"></i></a>
+    <a href="{{ local_url }}" class="btn-cell btn-cell-download" title="Baixar (arquivo local)"><i class="bi bi-hdd-fill"></i></a>
+    {% else %}
     <a href="{{ dl_base }}?inline=1" target="_blank" class="btn-cell btn-cell-view" title="Visualizar"><i class="bi bi-eye"></i></a>
     <a href="{{ dl_base }}" class="btn-cell btn-cell-download" title="Baixar"><i class="bi bi-file-earmark-arrow-down"></i></a>
+    {% endif %}
     {% if imported_report_id %}
     <a href="{{ url_for('disputes_center.fap_contestation_reports') }}" class="btn-cell btn-cell-imported" title="Importado"><i class="bi bi-check-circle-fill"></i> Importado</a>
     {% else %}
@@ -22,6 +29,7 @@
           data-year="{{ c.ano_vigencia }}"
           data-cnpj="{{ cnpj14 }}"
           data-id="{{ c.contestacao_id }}"
+          data-rec-id="{{ c.id }}"
           title="Não importado — clique em Importar Filtrados para importar em lote">
       <i class="bi bi-cloud-arrow-up"></i> Importar
     </span>
@@ -933,10 +941,11 @@
     filteredRows.forEach(function(row) {
       row.querySelectorAll('.import-pending-btn').forEach(function(btn) {
         pending.push({
-          year: btn.dataset.year,
-          cnpj: btn.dataset.cnpj,
-          id:   btn.dataset.id,
-          btn:  btn,
+          year:  btn.dataset.year,
+          cnpj:  btn.dataset.cnpj,
+          id:    btn.dataset.id,
+          recId: btn.dataset.recId || null,
+          btn:   btn,
         });
       });
     });
@@ -996,7 +1005,7 @@
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-            body: JSON.stringify({ year: item.year, cnpj: item.cnpj, contestacao_id: item.id }),
+            body: JSON.stringify({ year: item.year, cnpj: item.cnpj, contestacao_id: item.id, rec_id: item.recId ? parseInt(item.recId) : null }),
           });
           var p = null;
           try { p = await r.json(); } catch(e) {}
