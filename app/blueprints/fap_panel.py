@@ -202,6 +202,7 @@ def sync_run_year():
             existing = FapWebContestacao.query.filter_by(
                 law_firm_id=law_firm_id,
                 contestacao_id=int(cid),
+                cnpj_raiz=cnpj_digits[:8],
             ).first()
 
             if existing:
@@ -252,74 +253,27 @@ def sync_run_year():
     })
 
 
-@fap_panel_bp.route('/sync/download-year', methods=['POST'])
+@fap_panel_bp.route('/sync/download-batch', methods=['POST'])
 @require_law_firm
-def sync_download_year():
-    """AJAX — Retorna a lista de registros pendentes de download (sem file_path).
+def sync_download_batch():
+    """AJAX — Consulta o banco e baixa o próximo lote de PDFs sem file_path para um CNPJ.
 
     Body JSON:
-        { "cnpj": "12345678" }          → todos os anos
-        { "cnpj": "12345678", "year": 2023 }
+        { "cnpj": "12345678" }
 
     Response JSON:
-        { "ok": true, "total": 12, "pending": [{id, contestacao_id, cnpj, ano_vigencia}, ...] }
+        { "ok": true, "total": 50, "remaining": 20, "processed": 30,
+          "results": [{rec_id, ok, filename?, error?}, ...] }
+
+    Chamar em loop até remaining == 0 ou processed == 0.
     """
     law_firm_id = get_current_law_firm_id()
 
     data = request.get_json(silent=True) or {}
     cnpj_raiz = str(data.get('cnpj') or '').strip()
-    year = data.get('year')
 
     if not cnpj_raiz:
         return jsonify({'ok': False, 'message': 'Informe o CNPJ.'}), 400
-
-    q = (
-        FapWebContestacao.query
-        .filter_by(law_firm_id=law_firm_id)
-        .filter(FapWebContestacao.file_path.is_(None))
-    )
-    if year:
-        q = q.filter_by(ano_vigencia=int(year))
-
-    pending = q.with_entities(
-        FapWebContestacao.id,
-        FapWebContestacao.contestacao_id,
-        FapWebContestacao.cnpj,
-        FapWebContestacao.ano_vigencia,
-    ).all()
-
-    return jsonify({
-        'ok': True,
-        'total': len(pending),
-        'pending': [
-            {'id': r.id, 'contestacao_id': r.contestacao_id,
-             'cnpj': r.cnpj, 'ano_vigencia': r.ano_vigencia}
-            for r in pending
-        ],
-    })
-
-
-@fap_panel_bp.route('/sync/download-batch', methods=['POST'])
-@require_law_firm
-def sync_download_batch():
-    """AJAX — Baixa um lote de PDFs de forma síncrona (máx. 10 por chamada).
-
-    Body JSON:
-        { "rec_ids": [1, 2, 3, ...] }
-
-    Response JSON:
-        { "ok": true, "results": [{rec_id, ok, filename?, error?}, ...] }
-    """
-    law_firm_id = get_current_law_firm_id()
-
-    data = request.get_json(silent=True) or {}
-    rec_ids = [int(x) for x in (data.get('rec_ids') or []) if x]
-
-    if not rec_ids:
-        return jsonify({'ok': False, 'message': 'Nenhum rec_id informado.'}), 400
-
-    if len(rec_ids) > 10:
-        rec_ids = rec_ids[:10]
 
     saved_auth = session.get('fap_auto_import_auth', '')
     if not saved_auth:
@@ -330,25 +284,33 @@ def sync_download_batch():
     except Exception:
         return jsonify({'ok': False, 'message': 'Dados de autenticação inválidos.'}), 400
 
-    recs = (
+    pending_q = (
         FapWebContestacao.query
-        .filter(
-            FapWebContestacao.id.in_(rec_ids),
-            FapWebContestacao.law_firm_id == law_firm_id,
-        )
+        .filter_by(law_firm_id=law_firm_id)
+        .filter(FapWebContestacao.file_path.is_(None))
+        .filter(FapWebContestacao.cnpj.like(cnpj_raiz + '%'))
+    )
+
+    total_before = pending_q.count()
+
+    if total_before == 0:
+        return jsonify({'ok': True, 'total': 0, 'remaining': 0, 'processed': 0, 'results': []})
+
+    recs = (
+        pending_q
         .with_entities(
             FapWebContestacao.id,
             FapWebContestacao.contestacao_id,
             FapWebContestacao.cnpj,
             FapWebContestacao.ano_vigencia,
         )
+        .limit(30)
         .all()
     )
 
     upload_root = os.path.join(current_app.root_path, 'uploads', 'fap_web_contestacoes', str(law_firm_id))
     flask_app = current_app._get_current_object()
 
-    # Cada thread abre seu próprio app_context + instância de FapWebService.
     def _download_one(rec):
         svc = FapWebService(auth)
         try:
@@ -389,12 +351,20 @@ def sync_download_batch():
             return {'rec_id': rec.id, 'ok': False, 'error': str(e)}
 
     results = []
-    with ThreadPoolExecutor(max_workers=min(len(recs), 10)) as pool:
+    with ThreadPoolExecutor(max_workers=min(len(recs), 20)) as pool:
         futures = {pool.submit(_download_one, r): r for r in recs}
         for fut in as_completed(futures):
             results.append(fut.result())
 
-    return jsonify({'ok': True, 'results': results})
+    remaining = pending_q.count()
+
+    return jsonify({
+        'ok': True,
+        'total': total_before,
+        'remaining': remaining,
+        'processed': len(recs),
+        'results': results,
+    })
 
 
 @fap_panel_bp.route('/contestacoes/<int:rec_id>/file')
