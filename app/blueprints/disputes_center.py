@@ -2791,22 +2791,21 @@ def fap_auto_import_import_contestacao():
         })
 
     # Tenta usar arquivo local (fap_web_contestacoes) antes de buscar no portal FAP
-    pdf_bytes = None
-    filename  = None
+    pdf_bytes   = None
+    filename    = None
+    local_path  = None   # abs_path do arquivo já salvo — se preenchido, não duplica no disco
     rec_id = data.get('rec_id')
     if rec_id:
         fap_rec = FapWebContestacao.query.filter_by(id=int(rec_id), law_firm_id=law_firm_id).first()
         if fap_rec and fap_rec.file_path:
             abs_path = os.path.abspath(os.path.join(current_app.root_path, fap_rec.file_path))
             if os.path.isfile(abs_path):
-                with open(abs_path, 'rb') as _fh:
-                    pdf_bytes = _fh.read()
+                local_path = abs_path
                 base = os.path.basename(abs_path)
-                # Remove o prefixo {contestacao_id}_ adicionado no download
                 parts = base.split('_', 1)
                 filename = parts[1] if len(parts) == 2 and parts[0].isdigit() else base
 
-    if pdf_bytes is None:
+    if local_path is None:
         saved_auth = session.get('fap_auto_import_auth', '')
         if not saved_auth:
             return jsonify({'ok': False, 'message': 'Dados de autenticação não encontrados na sessão.'}), 400
@@ -2833,12 +2832,18 @@ def fap_auto_import_import_contestacao():
         from app.utils.timezone import now_sp
         timestamp = now_sp().strftime('%Y%m%d_%H%M%S_%f')
         safe_filename = secure_filename(filename)
-        unique_filename = f'{timestamp}_{safe_filename}'
-        file_path = os.path.join(upload_dir, unique_filename)
-        with open(file_path, 'wb') as fh:
-            fh.write(pdf_bytes)
 
-        file_size = len(pdf_bytes)
+        if local_path:
+            # Arquivo já existe localmente — aponta direto, sem copiar
+            file_path = local_path
+            file_size = os.path.getsize(file_path)
+        else:
+            # Arquivo veio da API — salva em fap_contestation_reports
+            unique_filename = f'{timestamp}_{safe_filename}'
+            file_path = os.path.join(upload_dir, unique_filename)
+            with open(file_path, 'wb') as fh:
+                fh.write(pdf_bytes)
+            file_size = len(pdf_bytes)
         file_type = 'PDF'
 
         report = FapContestationJudgmentReport(

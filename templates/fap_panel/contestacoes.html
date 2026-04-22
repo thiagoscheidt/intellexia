@@ -290,7 +290,8 @@
   .btn-cell-download:hover { background: #bfdbfe; color: #1e40af; }
   .btn-cell-imported { background: #d1fae5; color: #065f46; border-color: #a7f3d0; }
   .btn-cell-imported:hover { background: #a7f3d0; color: #065f46; }
-  .btn-cell-pending  { background: #fef3c7; color: #92400e; border-color: #fde68a; cursor: default; }
+  .btn-cell-pending  { background: #fef3c7; color: #92400e; border-color: #fde68a; cursor: pointer; }
+  .btn-cell-pending:hover { background: #fde68a; color: #78350f; }
   .contestacao-cell + .contestacao-cell {
     margin-top: 7px;
     padding-top: 7px;
@@ -928,6 +929,45 @@
   var btnCancelImport = document.getElementById('btnCancelImport');
   var _importCancelled = false;
 
+  /* ── Importação individual (clique no botão da célula) ─────────────── */
+  document.addEventListener('click', async function(e) {
+    var btn = e.target.closest('.import-pending-btn');
+    if (!btn) return;
+    if (btn.dataset._importing) return;
+    btn.dataset._importing = '1';
+    var origHtml = btn.innerHTML;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+    try {
+      var r = await fetch(importUrl, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+        body: JSON.stringify({
+          year: btn.dataset.year,
+          cnpj: btn.dataset.cnpj,
+          contestacao_id: btn.dataset.id,
+          rec_id: btn.dataset.recId ? parseInt(btn.dataset.recId) : null,
+        }),
+      });
+      var p = null;
+      try { p = await r.json(); } catch(_) {}
+      if (p && (p.ok || p.already_imported)) {
+        btn.outerHTML = '<a href="' + reportsUrl + '" class="btn-cell btn-cell-imported">'
+          + '<i class="bi bi-check-circle-fill"></i> Importado</a>';
+        updateImportStats();
+        updateImportAllBtnLabel();
+      } else {
+        alert('Erro ao importar: ' + ((p && p.message) || 'Falha desconhecida'));
+        btn.innerHTML = origHtml;
+        delete btn.dataset._importing;
+      }
+    } catch(err) {
+      alert('Erro de rede: ' + err);
+      btn.innerHTML = origHtml;
+      delete btn.dataset._importing;
+    }
+  });
+
   if (btnCancelImport) {
     btnCancelImport.addEventListener('click', function() {
       _importCancelled = true;
@@ -987,7 +1027,9 @@
         alert('Não há contestações pendentes de importação no filtro atual.');
         return;
       }
-      if (!confirm('Importar ' + pending.length + ' contestação(ões) não importada(s)?\n\nNota: é necessário ter uma sessão FAP ativa na página de Importação Automática.')) {
+      var hasLocal = pending.every(function(i) { return !!i.recId; });
+      var note = hasLocal ? '' : '\n\nNota: contestações sem arquivo local exigem sessão FAP ativa.';
+      if (!confirm('Importar ' + pending.length + ' contestação(ões) não importada(s)?' + note)) {
         return;
       }
 

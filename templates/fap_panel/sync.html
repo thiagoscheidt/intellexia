@@ -822,7 +822,8 @@
           });
 
           const done = total - payload.remaining;
-          dlProgressLabel.textContent = 'Lote ' + batchNum + ' — ' + done + '/' + total;
+          const totalBatches = Math.ceil(total / 30);
+          dlProgressLabel.textContent = 'Lote ' + batchNum + '/' + totalBatches + ' — ' + done + ' de ' + total + ' arquivos';
           setDlProgress(done, total, ok, err);
 
           if (payload.remaining === 0) break;
