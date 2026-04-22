@@ -2797,7 +2797,7 @@ def fap_auto_import_import_contestacao():
     if rec_id:
         fap_rec = FapWebContestacao.query.filter_by(id=int(rec_id), law_firm_id=law_firm_id).first()
         if fap_rec and fap_rec.file_path:
-            abs_path = os.path.abspath(os.path.join(current_app.root_path, '..', fap_rec.file_path))
+            abs_path = os.path.abspath(os.path.join(current_app.root_path, fap_rec.file_path))
             if os.path.isfile(abs_path):
                 with open(abs_path, 'rb') as _fh:
                     pdf_bytes = _fh.read()

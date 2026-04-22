@@ -305,7 +305,7 @@ def sync_download_year():
     record_data = [(r.id, r.contestacao_id, r.cnpj, r.ano_vigencia) for r in pending]
 
     app = current_app._get_current_object()
-    upload_root = os.path.join(app.root_path, '..', 'uploads', 'fap_web_contestacoes', str(law_firm_id))
+    upload_root = os.path.join(app.root_path, 'uploads', 'fap_web_contestacoes', str(law_firm_id))
 
     def _download_bg():
         fap_service = FapWebService(auth)
@@ -362,7 +362,7 @@ def serve_contestacao_file(rec_id):
     if not rec.file_path:
         abort(404)
 
-    abs_path = os.path.abspath(os.path.join(current_app.root_path, '..', rec.file_path))
+    abs_path = os.path.abspath(os.path.join(current_app.root_path, rec.file_path))
     if not os.path.isfile(abs_path):
         abort(404)
 
