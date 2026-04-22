@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import json
 import os
-import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from functools import wraps
@@ -256,34 +255,24 @@ def sync_run_year():
 @fap_panel_bp.route('/sync/download-year', methods=['POST'])
 @require_law_firm
 def sync_download_year():
-    """AJAX — Enfileira o download em background dos PDFs pendentes para um ou todos os anos.
+    """AJAX — Retorna a lista de registros pendentes de download (sem file_path).
 
     Body JSON:
-        { "cnpj": "12345678", "year": 2023 }   → baixa só aquele ano
-        { "cnpj": "12345678" }                 → baixa todos os anos pendentes
+        { "cnpj": "12345678" }          → todos os anos
+        { "cnpj": "12345678", "year": 2023 }
 
-    Response JSON (imediato):
-        { "ok": true, "queued": 12 }
+    Response JSON:
+        { "ok": true, "total": 12, "pending": [{id, contestacao_id, cnpj, ano_vigencia}, ...] }
     """
     law_firm_id = get_current_law_firm_id()
 
     data = request.get_json(silent=True) or {}
     cnpj_raiz = str(data.get('cnpj') or '').strip()
-    year = data.get('year')  # opcional
+    year = data.get('year')
 
     if not cnpj_raiz:
         return jsonify({'ok': False, 'message': 'Informe o CNPJ.'}), 400
 
-    saved_auth = session.get('fap_auto_import_auth', '')
-    if not saved_auth:
-        return jsonify({'ok': False, 'message': 'Dados de autenticação não encontrados.'}), 400
-
-    try:
-        auth = FapWebAuthPayload.from_json(saved_auth)
-    except Exception:
-        return jsonify({'ok': False, 'message': 'Dados de autenticação inválidos.'}), 400
-
-    # Coleta todos os registros pendentes (sem file_path) de uma vez
     q = (
         FapWebContestacao.query
         .filter_by(law_firm_id=law_firm_id)
@@ -299,55 +288,113 @@ def sync_download_year():
         FapWebContestacao.ano_vigencia,
     ).all()
 
-    if not pending:
-        return jsonify({'ok': True, 'queued': 0})
+    return jsonify({
+        'ok': True,
+        'total': len(pending),
+        'pending': [
+            {'id': r.id, 'contestacao_id': r.contestacao_id,
+             'cnpj': r.cnpj, 'ano_vigencia': r.ano_vigencia}
+            for r in pending
+        ],
+    })
 
-    record_data = [(r.id, r.contestacao_id, r.cnpj, r.ano_vigencia) for r in pending]
 
-    app = current_app._get_current_object()
-    upload_root = os.path.join(app.root_path, 'uploads', 'fap_web_contestacoes', str(law_firm_id))
+@fap_panel_bp.route('/sync/download-batch', methods=['POST'])
+@require_law_firm
+def sync_download_batch():
+    """AJAX — Baixa um lote de PDFs de forma síncrona (máx. 10 por chamada).
 
-    def _download_bg():
-        fap_service = FapWebService(auth)
+    Body JSON:
+        { "rec_ids": [1, 2, 3, ...] }
 
-        def _download_one(rec_id, contestacao_id, cnpj, ano_vigencia):
+    Response JSON:
+        { "ok": true, "results": [{rec_id, ok, filename?, error?}, ...] }
+    """
+    law_firm_id = get_current_law_firm_id()
+
+    data = request.get_json(silent=True) or {}
+    rec_ids = [int(x) for x in (data.get('rec_ids') or []) if x]
+
+    if not rec_ids:
+        return jsonify({'ok': False, 'message': 'Nenhum rec_id informado.'}), 400
+
+    if len(rec_ids) > 10:
+        rec_ids = rec_ids[:10]
+
+    saved_auth = session.get('fap_auto_import_auth', '')
+    if not saved_auth:
+        return jsonify({'ok': False, 'message': 'Dados de autenticação não encontrados.'}), 400
+
+    try:
+        auth = FapWebAuthPayload.from_json(saved_auth)
+    except Exception:
+        return jsonify({'ok': False, 'message': 'Dados de autenticação inválidos.'}), 400
+
+    recs = (
+        FapWebContestacao.query
+        .filter(
+            FapWebContestacao.id.in_(rec_ids),
+            FapWebContestacao.law_firm_id == law_firm_id,
+        )
+        .with_entities(
+            FapWebContestacao.id,
+            FapWebContestacao.contestacao_id,
+            FapWebContestacao.cnpj,
+            FapWebContestacao.ano_vigencia,
+        )
+        .all()
+    )
+
+    upload_root = os.path.join(current_app.root_path, 'uploads', 'fap_web_contestacoes', str(law_firm_id))
+    flask_app = current_app._get_current_object()
+
+    # Cada thread abre seu próprio app_context + instância de FapWebService.
+    def _download_one(rec):
+        svc = FapWebService(auth)
+        try:
+            dl = svc.download_contestacao(
+                year=rec.ano_vigencia,
+                cnpj=rec.cnpj,
+                contestacao_id=rec.contestacao_id,
+            )
+            if not dl.ok:
+                return {'rec_id': rec.id, 'ok': False, 'error': dl.message}
+
+            pdf_bytes = dl.data['pdf_bytes']
+            filename  = f"{rec.contestacao_id}_{dl.data['filename']}"
+            save_dir  = os.path.join(upload_root, str(rec.ano_vigencia), rec.cnpj)
+            os.makedirs(save_dir, exist_ok=True)
+
+            with open(os.path.join(save_dir, filename), 'wb') as f:
+                f.write(pdf_bytes)
+
+            rel_path = '/'.join([
+                'uploads', 'fap_web_contestacoes',
+                str(law_firm_id), str(rec.ano_vigencia), rec.cnpj, filename,
+            ])
+
+            with flask_app.app_context():
+                db_rec = db.session.get(FapWebContestacao, rec.id)
+                if db_rec:
+                    db_rec.file_path = rel_path
+                    db.session.commit()
+
+            return {'rec_id': rec.id, 'ok': True, 'filename': filename}
+        except Exception as e:
             try:
-                dl = fap_service.download_contestacao(
-                    year=ano_vigencia,
-                    cnpj=cnpj,
-                    contestacao_id=contestacao_id,
-                )
-                if not dl.ok:
-                    return
-
-                pdf_bytes = dl.data['pdf_bytes']
-                filename  = f"{contestacao_id}_{dl.data['filename']}"
-                save_dir  = os.path.join(upload_root, str(ano_vigencia), cnpj)
-                os.makedirs(save_dir, exist_ok=True)
-
-                with open(os.path.join(save_dir, filename), 'wb') as f:
-                    f.write(pdf_bytes)
-
-                with app.app_context():
-                    rec = db.session.get(FapWebContestacao, rec_id)
-                    if rec:
-                        rec.file_path = '/'.join([
-                            'uploads', 'fap_web_contestacoes',
-                            str(law_firm_id), str(ano_vigencia), cnpj, filename,
-                        ])
-                        db.session.commit()
-            except Exception:
-                with app.app_context():
+                with flask_app.app_context():
                     db.session.rollback()
+            except Exception:
+                pass
+            return {'rec_id': rec.id, 'ok': False, 'error': str(e)}
 
-        with ThreadPoolExecutor(max_workers=3) as pool:
-            futures = [pool.submit(_download_one, *row) for row in record_data]
-            for f in as_completed(futures):
-                f.result()  # propaga exceções silenciadas
+    results = []
+    with ThreadPoolExecutor(max_workers=min(len(recs), 10)) as pool:
+        futures = {pool.submit(_download_one, r): r for r in recs}
+        for fut in as_completed(futures):
+            results.append(fut.result())
 
-    threading.Thread(target=_download_bg, daemon=True).start()
-
-    return jsonify({'ok': True, 'queued': len(record_data)})
+    return jsonify({'ok': True, 'results': results})
 
 
 @fap_panel_bp.route('/contestacoes/<int:rec_id>/file')

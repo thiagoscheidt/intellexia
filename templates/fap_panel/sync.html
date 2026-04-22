@@ -227,6 +227,10 @@
               <i class="bi bi-file-earmark-arrow-down me-1" id="dlIcon"></i>
               Baixar PDFs
             </button>
+            <button type="button" id="btnCancelDownload" class="btn btn-outline-danger d-none btn-sm"
+                    title="Cancelar download — aguarda o lote atual terminar">
+              <i class="bi bi-x-circle me-1"></i> Cancelar
+            </button>
             {% if not companies %}
             <small class="text-muted">Sincronize as empresas primeiro.</small>
             {% endif %}
@@ -236,6 +240,25 @@
               </span>
             </div>
           </div>
+
+          {# ── Progress bar de download ─────────────────────────── #}
+          <div id="dlProgressWrap" class="d-none px-3 pb-3 pt-1">
+            <div class="d-flex justify-content-between align-items-center mb-1">
+              <small class="fw-semibold text-secondary" id="dlProgressLabel">Preparando...</small>
+              <small class="text-muted" id="dlProgressCount"></small>
+            </div>
+            <div class="progress" style="height:14px;border-radius:.4rem;">
+              <div id="dlProgressBar"
+                   class="progress-bar progress-bar-striped progress-bar-animated"
+                   role="progressbar" style="width:0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+              </div>
+            </div>
+            <div class="d-flex gap-3 mt-1" style="font-size:.75rem;">
+              <span class="text-success"><i class="bi bi-check-circle me-1"></i><span id="dlCountOk">0</span> ok</span>
+              <span class="text-danger"><i class="bi bi-x-circle me-1"></i><span id="dlCountErr">0</span> erro(s)</span>
+            </div>
+          </div>
+
         </div>
 
       </div>
@@ -363,10 +386,11 @@
   const allYears = [{% for year in years %}{{ year }}{% if not loop.last %},{% endif %}{% endfor %}];
 
   // URLs
-  const saveAuthUrl   = '{{ url_for("disputes_center.fap_auto_import_save_auth") }}';
-  const checkUrl      = '{{ url_for("disputes_center.fap_auto_import_check_session") }}';
+  const saveAuthUrl     = '{{ url_for("disputes_center.fap_auto_import_save_auth") }}';
+  const checkUrl        = '{{ url_for("disputes_center.fap_auto_import_check_session") }}';
   const syncYearUrl     = '{{ url_for("fap_panel.sync_run_year") }}';
   const downloadYearUrl = '{{ url_for("fap_panel.sync_download_year") }}';
+  const downloadBatchUrl = '{{ url_for("fap_panel.sync_download_batch") }}';
   const summaryUrl      = '{{ url_for("fap_panel.sync_summary") }}';
 
   // ── Log ──────────────────────────────────────────────────────────────
@@ -649,8 +673,40 @@
     btnSync.innerHTML = '<i class="bi bi-arrow-repeat me-1"></i> Sincronizar todos os anos';
   });
 
-  // ── Download de PDFs por ano ────────────────────────────────────────
+  // ── Download de PDFs com progress bar ──────────────────────────────
   if (btnDownloadFiles) {
+    const dlProgressWrap  = document.getElementById('dlProgressWrap');
+    const dlProgressBar   = document.getElementById('dlProgressBar');
+    const dlProgressLabel = document.getElementById('dlProgressLabel');
+    const dlProgressCount = document.getElementById('dlProgressCount');
+    const dlCountOk       = document.getElementById('dlCountOk');
+    const dlCountErr      = document.getElementById('dlCountErr');
+    const btnCancelDl     = document.getElementById('btnCancelDownload');
+
+    let _dlCancelled = false;
+
+    function setDlProgress(done, total, ok, err) {
+      const pct = total ? Math.round((done / total) * 100) : 0;
+      dlProgressBar.style.width = pct + '%';
+      dlProgressBar.setAttribute('aria-valuenow', pct);
+      dlProgressBar.textContent = pct + '%';
+      dlProgressCount.textContent = done + ' / ' + total;
+      dlCountOk.textContent  = ok;
+      dlCountErr.textContent = err;
+      if (err > 0) {
+        dlProgressBar.classList.add('bg-warning');
+      }
+    }
+
+    if (btnCancelDl) {
+      btnCancelDl.addEventListener('click', function () {
+        _dlCancelled = true;
+        btnCancelDl.disabled = true;
+        btnCancelDl.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Cancelando...';
+        log('Cancelamento solicitado — aguardando lote atual terminar...', 'warning');
+      });
+    }
+
     btnDownloadFiles.addEventListener('click', async function () {
       const cnpj = companySelect ? ($(companySelect).val() || companySelect.value) : '';
       if (!cnpj) {
@@ -658,11 +714,24 @@
         return;
       }
 
+      // Reseta estado
+      _dlCancelled = false;
+      dlProgressBar.classList.remove('bg-warning');
+      dlProgressBar.style.width = '0%';
+      dlCountOk.textContent  = '0';
+      dlCountErr.textContent = '0';
+      dlProgressLabel.textContent = 'Buscando registros pendentes...';
+      dlProgressCount.textContent = '';
+      dlProgressWrap.classList.remove('d-none');
+
       btnDownloadFiles.disabled = true;
       dlSpinner.classList.remove('d-none');
       dlIcon.style.display = 'none';
-      log('Enfileirando downloads de PDFs para todos os anos...', 'info');
+      if (btnCancelDl) { btnCancelDl.classList.remove('d-none'); btnCancelDl.disabled = false; btnCancelDl.innerHTML = '<i class="bi bi-x-circle me-1"></i> Cancelar'; }
 
+      log('Consultando PDFs pendentes para ' + cnpj + '...', 'info');
+
+      let pending = [];
       try {
         const resp = await fetch(downloadYearUrl, {
           method: 'POST',
@@ -671,24 +740,92 @@
           body: JSON.stringify({ cnpj: cnpj }),
         });
         const payload = await resp.json().catch(() => null);
-        if (resp.ok && payload && payload.ok) {
-          if (payload.queued === 0) {
-            log('Nenhum PDF pendente — todos já foram baixados anteriormente.', 'info');
-          } else {
-            log(payload.queued + ' PDF(s) sendo baixado(s) em segundo plano. Os arquivos estarão disponíveis em instantes.', 'success');
-          }
-        } else {
-          const msg = (payload && payload.message) || 'Erro desconhecido';
-          log('Erro ao iniciar download: ' + msg, 'error');
+        if (!resp.ok || !payload || !payload.ok) {
+          log('Erro ao buscar pendentes: ' + ((payload && payload.message) || 'Desconhecido'), 'error');
+          resetDlBtn();
+          return;
         }
+        pending = payload.pending || [];
       } catch (err) {
         log('Erro de rede: ' + (err.message || String(err)), 'error');
+        resetDlBtn();
+        return;
       }
 
+      if (pending.length === 0) {
+        log('Nenhum PDF pendente — todos já foram baixados.', 'info');
+        dlProgressLabel.textContent = 'Tudo baixado!';
+        dlProgressBar.style.width = '100%';
+        dlProgressBar.classList.add('bg-success');
+        dlProgressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+        resetDlBtn();
+        return;
+      }
+
+      const total = pending.length;
+      const BATCH = 10;
+      let done = 0, ok = 0, err = 0;
+
+      log('Total de PDFs a baixar: ' + total + '. Processando em lotes de ' + BATCH + '...', 'info');
+      dlProgressLabel.textContent = 'Baixando PDFs...';
+
+      for (let i = 0; i < pending.length; i += BATCH) {
+        if (_dlCancelled) {
+          log('Download cancelado após ' + done + ' de ' + total + '.', 'warning');
+          break;
+        }
+
+        const batch    = pending.slice(i, i + BATCH);
+        const batchNum = Math.floor(i / BATCH) + 1;
+        const totalB   = Math.ceil(total / BATCH);
+        dlProgressLabel.textContent = 'Lote ' + batchNum + '/' + totalB + '...';
+
+        try {
+          const resp = await fetch(downloadBatchUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            body: JSON.stringify({ rec_ids: batch.map(function (r) { return r.id; }) }),
+          });
+          const payload = await resp.json().catch(() => null);
+          if (resp.ok && payload && payload.ok) {
+            (payload.results || []).forEach(function (r) {
+              done++;
+              if (r.ok) { ok++; log('PDF #' + r.rec_id + ' salvo: ' + (r.filename || ''), 'success'); }
+              else { err++; log('PDF #' + r.rec_id + ' falhou: ' + (r.error || 'erro'), 'error'); }
+            });
+          } else {
+            // lote inteiro falhou
+            done += batch.length;
+            err  += batch.length;
+            log('Lote ' + batchNum + ' falhou: ' + ((payload && payload.message) || 'erro de servidor'), 'error');
+          }
+        } catch (e) {
+          done += batch.length;
+          err  += batch.length;
+          log('Lote ' + batchNum + ': erro de rede — ' + (e.message || String(e)), 'error');
+        }
+
+        setDlProgress(done, total, ok, err);
+      }
+
+      const finalMsg = _dlCancelled
+        ? 'Download cancelado: ' + ok + ' baixado(s), ' + err + ' erro(s).'
+        : 'Download concluído: ' + ok + ' baixado(s)' + (err ? ', ' + err + ' erro(s)' : '') + '.';
+      log(finalMsg, err ? 'warning' : 'success');
+      dlProgressLabel.textContent = _dlCancelled ? 'Cancelado.' : 'Concluído!';
+      dlProgressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+      if (!err && !_dlCancelled) dlProgressBar.classList.add('bg-success');
+
+      if (btnCancelDl) btnCancelDl.classList.add('d-none');
+      resetDlBtn();
+    });
+
+    function resetDlBtn() {
       btnDownloadFiles.disabled = false;
       dlSpinner.classList.add('d-none');
       dlIcon.style.display = '';
-    });
+    }
   }
 
   // ── Carrega tabela de resultados via API ─────────────────────────────
