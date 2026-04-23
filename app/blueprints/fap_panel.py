@@ -304,7 +304,7 @@ def sync_download_batch():
             FapWebContestacao.cnpj,
             FapWebContestacao.ano_vigencia,
         )
-        .limit(30)
+        .limit(60)
         .all()
     )
 
@@ -351,7 +351,7 @@ def sync_download_batch():
             return {'rec_id': rec.id, 'ok': False, 'error': str(e)}
 
     results = []
-    with ThreadPoolExecutor(max_workers=min(len(recs), 20)) as pool:
+    with ThreadPoolExecutor(max_workers=min(len(recs), 30)) as pool:
         futures = {pool.submit(_download_one, r): r for r in recs}
         for fut in as_completed(futures):
             results.append(fut.result())
@@ -370,8 +370,8 @@ def sync_download_batch():
 @fap_panel_bp.route('/contestacoes/<int:rec_id>/file')
 @require_law_firm
 def serve_contestacao_file(rec_id):
-    """Serve o arquivo PDF local de uma contestação sincronizada."""
-    from flask import abort, send_file as _send_file
+    """Serve o arquivo PDF local — download direto ou redireciona para URL amigável (inline)."""
+    from flask import abort
 
     law_firm_id = get_current_law_firm_id()
     rec = FapWebContestacao.query.filter_by(id=rec_id, law_firm_id=law_firm_id).first_or_404()
@@ -383,18 +383,42 @@ def serve_contestacao_file(rec_id):
     if not os.path.isfile(abs_path):
         abort(404)
 
-    inline = request.args.get('inline') == '1'
     filename = os.path.basename(abs_path)
-    # Remove o prefixo {contestacao_id}_ para nome amigável no download
     parts = filename.split('_', 1)
-    display_name = parts[1] if len(parts) == 2 and parts[0].isdigit() else filename
+    raw_name = parts[1] if len(parts) == 2 and parts[0].isdigit() else filename
+    ext = os.path.splitext(raw_name)[1] or '.pdf'
+    display_name = f'FAP_{rec.protocolo}{ext}' if rec.protocolo else f'FAP_{rec.contestacao_id}{ext}'
 
-    return _send_file(
-        abs_path,
-        mimetype='application/pdf',
-        as_attachment=not inline,
-        download_name=display_name,
-    )
+    inline = request.args.get('inline') == '1'
+    if inline:
+        # Redireciona para URL cujo path termina com o nome amigável.
+        # O browser usa o último segmento da URL como título da aba.
+        return redirect(url_for(
+            'fap_panel.view_contestacao_file',
+            rec_id=rec_id,
+            display_filename=display_name,
+        ))
+
+    return send_file(abs_path, mimetype='application/pdf', as_attachment=True, download_name=display_name)
+
+
+@fap_panel_bp.route('/contestacoes/<int:rec_id>/view/<path:display_filename>')
+@require_law_firm
+def view_contestacao_file(rec_id, display_filename):
+    """Serve o PDF inline via URL com nome amigável — browser exibe display_filename como título."""
+    from flask import abort
+
+    law_firm_id = get_current_law_firm_id()
+    rec = FapWebContestacao.query.filter_by(id=rec_id, law_firm_id=law_firm_id).first_or_404()
+
+    if not rec.file_path:
+        abort(404)
+
+    abs_path = os.path.abspath(os.path.join(current_app.root_path, rec.file_path))
+    if not os.path.isfile(abs_path):
+        abort(404)
+
+    return send_file(abs_path, mimetype='application/pdf', as_attachment=False, download_name=display_filename)
 
 
 @fap_panel_bp.route('/contestacoes')
@@ -1410,4 +1434,237 @@ def procuracoes_page():
         f_vencendo_em=f_vencendo_em,
         all_situacoes=all_situacoes,
         all_tipos=all_tipos,
+    )
+
+
+@fap_panel_bp.route('/procuracoes/export-excel')
+@require_law_firm
+def procuracoes_export_excel():
+    """Exporta as procurações filtradas para Excel."""
+    law_firm_id = get_current_law_firm_id()
+
+    f_situacao     = request.args.get('situacao', '').strip()
+    f_tipo         = request.args.get('tipo', '').strip()
+    f_outorgante   = request.args.get('outorgante', '').strip()
+    f_protocolo    = request.args.get('protocolo', '').strip()
+    f_vigencia_ini = request.args.get('vigencia_ini', '').strip()
+    f_vigencia_fim = request.args.get('vigencia_fim', '').strip()
+    f_vencendo_em  = request.args.get('vencendo_em', '').strip()
+
+    query = FapWebProcuracao.query.filter_by(law_firm_id=law_firm_id)
+    if f_situacao:
+        query = query.filter(FapWebProcuracao.situacao_codigo == f_situacao)
+    if f_tipo:
+        query = query.filter(FapWebProcuracao.tipo_procuracao_codigo == f_tipo)
+    if f_outorgante:
+        like = f'%{f_outorgante}%'
+        query = query.filter(
+            (FapWebProcuracao.nome_empresa_outorgante.ilike(like)) |
+            (FapWebProcuracao.cnpj_raiz_outorgante.ilike(like))
+        )
+    if f_protocolo:
+        query = query.filter(FapWebProcuracao.protocolo.ilike(f'%{f_protocolo}%'))
+    if f_vigencia_ini:
+        try:
+            from datetime import date as _date
+            query = query.filter(FapWebProcuracao.data_fim >= _date.fromisoformat(f_vigencia_ini))
+        except Exception:
+            pass
+    if f_vigencia_fim:
+        try:
+            from datetime import date as _date
+            query = query.filter(FapWebProcuracao.data_inicio <= _date.fromisoformat(f_vigencia_fim))
+        except Exception:
+            pass
+    if f_vencendo_em:
+        try:
+            from datetime import date as _date, timedelta
+            hoje = _date.today()
+            limite = hoje + timedelta(days=int(f_vencendo_em))
+            query = query.filter(
+                FapWebProcuracao.data_fim >= hoje,
+                FapWebProcuracao.data_fim <= limite,
+            )
+        except Exception:
+            pass
+
+    rows = query.order_by(FapWebProcuracao.data_cadastro.desc()).all()
+
+    from datetime import date as _date
+    hoje = _date.today()
+
+    # ── Estilos ──────────────────────────────────────────────────────────
+    thin = Side(style='thin', color='B0BEC5')
+    cell_border = Border(left=thin, right=thin, top=thin, bottom=thin)
+
+    title_font  = Font(name='Calibri', size=14, bold=True, color='FFFFFF')
+    title_fill  = PatternFill('solid', fgColor='0D47A1')
+    title_align = Alignment(horizontal='center', vertical='center')
+
+    filter_label_font = Font(name='Calibri', size=10, bold=True, color='1A237E')
+    filter_val_font   = Font(name='Calibri', size=10, color='1A237E')
+    filter_fill_style = PatternFill('solid', fgColor='E8EAF6')
+
+    col_header_font  = Font(name='Calibri', size=10, bold=True, color='FFFFFF')
+    col_header_fill  = PatternFill('solid', fgColor='1976D2')
+    col_header_align = Alignment(horizontal='center', vertical='center', wrap_text=True)
+
+    data_font      = Font(name='Calibri', size=10)
+    data_align_ctr = Alignment(horizontal='center', vertical='center')
+    data_align_lft = Alignment(horizontal='left', vertical='center')
+    data_fill_even = PatternFill('solid', fgColor='FAFAFA')
+    data_fill_odd  = PatternFill('solid', fgColor='EEF2FF')
+
+    sit_fills = {
+        'DEFERIDA':   (PatternFill('solid', fgColor='D1FAE5'), Font(name='Calibri', size=10, bold=True, color='065F46')),
+        'INDEFERIDA': (PatternFill('solid', fgColor='FEE2E2'), Font(name='Calibri', size=10, bold=True, color='991B1B')),
+        'EXCLUIDA':   (PatternFill('solid', fgColor='F3F4F6'), Font(name='Calibri', size=10, bold=True, color='374151')),
+        'PENDENTE':   (PatternFill('solid', fgColor='FEF3C7'), Font(name='Calibri', size=10, bold=True, color='92400E')),
+    }
+    sit_default = (PatternFill('solid', fgColor='E0E7FF'), Font(name='Calibri', size=10, bold=True, color='3730A3'))
+
+    venc_font_ok  = Font(name='Calibri', size=10, color='1B5E20')
+    venc_font_30  = Font(name='Calibri', size=10, bold=True, color='B45309')
+    venc_font_exp = Font(name='Calibri', size=10, bold=True, color='B91C1C')
+
+    total_fill = PatternFill('solid', fgColor='E3F2FD')
+    total_font = Font(name='Calibri', size=10, bold=True, color='0D47A1')
+
+    num_cols = 11
+
+    # ── Workbook ─────────────────────────────────────────────────────────
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = 'Procurações FAP'
+
+    # Título
+    sheet.merge_cells(start_row=1, start_column=1, end_row=1, end_column=num_cols)
+    tc = sheet.cell(row=1, column=1,
+                    value=f'Procurações FAP — Exportado em {datetime.now().strftime("%d/%m/%Y %H:%M")}')
+    tc.font = title_font; tc.fill = title_fill; tc.alignment = title_align
+    sheet.row_dimensions[1].height = 28
+
+    # Filtros
+    filter_pairs = [
+        ('Protocolo',    f_protocolo  or 'Todos'),
+        ('Situação',     f_situacao   or 'Todas'),
+        ('Tipo',         f_tipo       or 'Todos'),
+        ('Outorgante',   f_outorgante or 'Todos'),
+        ('Vigência ini', f_vigencia_ini or '—'),
+        ('Vigência fim', f_vigencia_fim or '—'),
+        ('Vencendo em',  f'{f_vencendo_em} dias' if f_vencendo_em else '—'),
+        ('Total linhas', str(len(rows))),
+    ]
+    pairs_per_row = 4
+    filter_start_row = 2
+    for pair_idx, (lbl, val) in enumerate(filter_pairs):
+        frow = filter_start_row + (pair_idx // pairs_per_row)
+        fcol = 1 + (pair_idx % pairs_per_row) * 2
+        lc = sheet.cell(row=frow, column=fcol, value=lbl + ':')
+        lc.font = filter_label_font; lc.fill = filter_fill_style
+        lc.alignment = Alignment(horizontal='right', vertical='center'); lc.border = cell_border
+        vc = sheet.cell(row=frow, column=fcol + 1, value=val)
+        vc.font = filter_val_font; vc.fill = filter_fill_style
+        vc.alignment = Alignment(horizontal='left', vertical='center'); vc.border = cell_border
+
+    filter_end_row = filter_start_row + (len(filter_pairs) - 1) // pairs_per_row
+    for frow in range(filter_start_row, filter_end_row + 1):
+        for fcol in range(pairs_per_row * 2 + 1, num_cols + 1):
+            c = sheet.cell(row=frow, column=fcol)
+            c.fill = filter_fill_style; c.border = cell_border
+        sheet.row_dimensions[frow].height = 18
+
+    sep_row = filter_end_row + 1
+    for col in range(1, num_cols + 1):
+        sheet.cell(row=sep_row, column=col).fill = PatternFill('solid', fgColor='BBDEFB')
+    sheet.row_dimensions[sep_row].height = 6
+
+    # Cabeçalho
+    header_row = sep_row + 1
+    headers = [
+        'Protocolo', 'Tipo', 'Situação',
+        'Empresa outorgante', 'CNPJ raiz\noutorgante',
+        'CPF outorgado', 'CNPJ raiz\noutorgado',
+        'Vigência\ninício', 'Vigência\nfim',
+        'Data\ncadastro', 'Última\nsincronização',
+    ]
+    for col_idx, h in enumerate(headers, 1):
+        c = sheet.cell(row=header_row, column=col_idx, value=h)
+        c.font = col_header_font; c.fill = col_header_fill
+        c.alignment = col_header_align; c.border = cell_border
+    sheet.row_dimensions[header_row].height = 32
+
+    # Dados
+    data_start_row = header_row + 1
+    for row_idx, r in enumerate(rows):
+        xrow = data_start_row + row_idx
+        dfill = data_fill_odd if row_idx % 2 else data_fill_even
+
+        # Cor da vigência fim
+        if r.data_fim and r.situacao_codigo == 'DEFERIDA':
+            delta = (r.data_fim - hoje).days
+            vfont = venc_font_exp if delta < 0 else (venc_font_30 if delta <= 30 else venc_font_ok)
+        else:
+            vfont = data_font
+
+        sit_fill, sit_font = sit_fills.get(r.situacao_codigo, sit_default)
+
+        row_values = [
+            r.protocolo or '',
+            r.tipo_procuracao_descricao or r.tipo_procuracao_codigo or '',
+            r.situacao_descricao or r.situacao_codigo or '',
+            r.nome_empresa_outorgante or '',
+            r.cnpj_raiz_outorgante or '',
+            r.cpf_outorgado or '',
+            r.cnpj_raiz_outorgado or '',
+            r.data_inicio.strftime('%d/%m/%Y') if r.data_inicio else '',
+            r.data_fim.strftime('%d/%m/%Y')    if r.data_fim    else '',
+            r.data_cadastro.strftime('%d/%m/%Y %H:%M')   if r.data_cadastro   else '',
+            r.last_synced_at.strftime('%d/%m/%Y %H:%M')  if r.last_synced_at  else '',
+        ]
+        for col_idx, val in enumerate(row_values, 1):
+            c = sheet.cell(row=xrow, column=col_idx, value=val)
+            c.border = cell_border
+            if col_idx == 3:   # situação
+                c.font = sit_font; c.fill = sit_fill; c.alignment = data_align_ctr
+            elif col_idx in (8, 9):  # datas de vigência
+                c.font = vfont if col_idx == 9 else data_font
+                c.fill = dfill; c.alignment = data_align_ctr
+            elif col_idx in (1, 5, 6, 7, 10, 11):
+                c.font = data_font; c.fill = dfill; c.alignment = data_align_ctr
+            else:
+                c.font = data_font; c.fill = dfill; c.alignment = data_align_lft
+        sheet.row_dimensions[xrow].height = 18
+
+    sheet.auto_filter.ref = (
+        f'A{header_row}:{get_column_letter(num_cols)}{header_row + len(rows)}'
+    )
+    sheet.freeze_panes = f'A{data_start_row}'
+
+    col_widths = [18, 34, 22, 40, 18, 18, 18, 16, 16, 22, 22]
+    for idx, width in enumerate(col_widths, 1):
+        sheet.column_dimensions[get_column_letter(idx)].width = width
+
+    # Totais
+    total_row = data_start_row + len(rows)
+    sheet.merge_cells(start_row=total_row, start_column=1, end_row=total_row, end_column=num_cols)
+    tl = sheet.cell(row=total_row, column=1,
+                    value=f'Total: {len(rows)} procuração(ões) exportada(s)')
+    tl.font = total_font; tl.fill = total_fill
+    tl.alignment = Alignment(horizontal='center', vertical='center'); tl.border = cell_border
+    for col in range(2, num_cols + 1):
+        c = sheet.cell(row=total_row, column=col)
+        c.fill = total_fill; c.border = cell_border
+    sheet.row_dimensions[total_row].height = 18
+
+    stream = BytesIO()
+    workbook.save(stream)
+    stream.seek(0)
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    return send_file(
+        stream,
+        as_attachment=True,
+        download_name=f'procuracoes_fap_{timestamp}.xlsx',
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
     )

@@ -98,11 +98,12 @@
   /* ── Stats cards ─────────────────────────────────────────────────── */
   .stat-cards {
     display: grid;
-    grid-template-columns: repeat(4,1fr);
+    grid-template-columns: repeat(6,1fr);
     gap: .85rem;
   }
-  @media (max-width: 900px) { .stat-cards { grid-template-columns: repeat(2,1fr); } }
-  @media (max-width: 500px) { .stat-cards { grid-template-columns: 1fr; } }
+  @media (max-width: 1100px) { .stat-cards { grid-template-columns: repeat(3,1fr); } }
+  @media (max-width: 700px)  { .stat-cards { grid-template-columns: repeat(2,1fr); } }
+  @media (max-width: 420px)  { .stat-cards { grid-template-columns: 1fr; } }
   .stat-card {
     position: relative;
     overflow: hidden;
@@ -377,15 +378,24 @@
   <div class="container-fluid">
 
     {# ── Stats cards ─────────────────────────────────────────────────── #}
-    {% set cnt_and1 = namespace(v=0) %}
-    {% set cnt_tra1 = namespace(v=0) %}
-    {% set cnt_and2 = namespace(v=0) %}
-    {% set cnt_tra2 = namespace(v=0) %}
+    {% set cnt_and1   = namespace(v=0) %}
+    {% set cnt_tra1   = namespace(v=0) %}
+    {% set cnt_and2   = namespace(v=0) %}
+    {% set cnt_tra2   = namespace(v=0) %}
+    {% set cnt_local  = namespace(v=0) %}
+    {% set cnt_nlocal = namespace(v=0) %}
     {% for row in table_rows %}
       {% set cnt_and1.v = cnt_and1.v + row.c_and1|length %}
       {% set cnt_tra1.v = cnt_tra1.v + row.c_tra1|length %}
       {% set cnt_and2.v = cnt_and2.v + row.c_and2|length %}
       {% set cnt_tra2.v = cnt_tra2.v + row.c_tra2|length %}
+      {% for cell_list in [row.c_and1, row.c_tra1, row.c_and2, row.c_tra2] %}
+        {% for c in cell_list %}
+          {% if c.file_path %}{% set cnt_local.v  = cnt_local.v  + 1 %}
+          {% else            %}{% set cnt_nlocal.v = cnt_nlocal.v + 1 %}
+          {% endif %}
+        {% endfor %}
+      {% endfor %}
     {% endfor %}
     <div class="stat-cards mb-3">
       <div class="stat-card" style="--sc-color:#0d6efd;--sc-soft:rgba(13,110,253,.10);">
@@ -415,6 +425,22 @@
           <span class="sc-label">Recursos</span>
         </div>
         <div class="sc-value">{{ cnt_and2.v + cnt_tra2.v }}</div>
+      </div>
+      <div class="stat-card" style="--sc-color:#0d9488;--sc-soft:rgba(13,148,136,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-hdd-fill"></i></span>
+          <span class="sc-label">Arq. Local</span>
+        </div>
+        <div class="sc-value">{{ cnt_local.v }}</div>
+        <div style="font-size:.68rem;color:#6c7a8d;margin-top:.2rem;">PDF salvo</div>
+      </div>
+      <div class="stat-card" style="--sc-color:#dc2626;--sc-soft:rgba(220,38,38,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-cloud-slash"></i></span>
+          <span class="sc-label">Sem Arq. Local</span>
+        </div>
+        <div class="sc-value">{{ cnt_nlocal.v }}</div>
+        <div style="font-size:.68rem;color:#6c7a8d;margin-top:.2rem;">Sem PDF salvo</div>
       </div>
     </div>
 

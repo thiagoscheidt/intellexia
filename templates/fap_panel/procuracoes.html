@@ -409,6 +409,13 @@
         <div class="d-flex gap-2 align-items-center">
           <input type="text" id="localFilter" class="form-control form-control-sm" style="width:175px;"
             placeholder="Buscar na página…">
+          <a href="{{ url_for('fap_panel.procuracoes_export_excel',
+                situacao=f_situacao, tipo=f_tipo, outorgante=f_outorgante,
+                protocolo=f_protocolo, vigencia_ini=f_vigencia_ini,
+                vigencia_fim=f_vigencia_fim, vencendo_em=f_vencendo_em) }}"
+             class="btn btn-sm btn-success">
+            <i class="bi bi-file-earmark-excel me-1"></i> Exportar Excel
+          </a>
           <a href="{{ url_for('fap_panel.sync_page') }}" class="btn btn-sm btn-outline-primary">
             <i class="bi bi-arrow-repeat me-1"></i> Sincronizar
           </a>

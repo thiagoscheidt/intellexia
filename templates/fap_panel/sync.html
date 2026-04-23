@@ -810,7 +810,7 @@
               dlProgressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
               break;
             }
-            log('Total de PDFs a baixar: ' + total + '. Processando em lotes de 30...', 'info');
+            log('Total de PDFs a baixar: ' + total + '. Processando em lotes de 60...', 'info');
           }
 
           // Nenhum registro processado = todos falharam, evita loop infinito
@@ -822,7 +822,7 @@
           });
 
           const done = total - payload.remaining;
-          const totalBatches = Math.ceil(total / 30);
+          const totalBatches = Math.ceil(total / 60);
           dlProgressLabel.textContent = 'Lote ' + batchNum + '/' + totalBatches + ' — ' + done + ' de ' + total + ' arquivos';
           setDlProgress(done, total, ok, err);
 
