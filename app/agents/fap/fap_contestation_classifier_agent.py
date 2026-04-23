@@ -204,15 +204,13 @@ class FAPContestationClassifierAgent:
         Returns:
             Dict no formato:
             {
-              "topic": "NOME DO TOPICO",
-              "reason": "explicacao curta e objetiva"
+              "topic": "NOME DO TOPICO"
             }
         """
         cleaned_text = (text or "").strip()
         if not cleaned_text:
             return {
                 "topic": "OUTROS ARGUMENTOS",
-                "reason": "Texto vazio para classificacao",
             }
 
         system_prompt = (
@@ -288,27 +286,22 @@ class FAPContestationClassifierAgent:
             if not parsed:
                 return {
                     "topic": "OUTROS ARGUMENTOS",
-                    "reason": "Erro ao interpretar resposta",
                 }
 
             topic_slug = str(parsed.get("topic") or "").strip().lower()
-            reason = str(parsed.get("reason") or "").strip() or "Classificacao realizada"
 
             if topic_slug not in self.VALID_SLUGS:
                 fallback_slug = self._fallback_slug(cleaned_text)
                 return {
                     "topic": self.SLUG_TO_TOPIC[fallback_slug],
-                    "reason": "Slug invalido retornado pela IA",
                 }
 
             return {
                 "topic": self.SLUG_TO_TOPIC[topic_slug],
-                "reason": reason,
             }
 
         except Exception as exc:
             logger.exception("Erro ao classificar justificativa FAP: %s", exc)
             return {
                 "topic": "OUTROS ARGUMENTOS",
-                "reason": "Erro ao interpretar resposta",
             }
