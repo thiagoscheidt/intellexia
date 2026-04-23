@@ -89,7 +89,7 @@
             <div class="card-body">
               <p class="text-muted small mb-2">
                 Mesma sessão usada na
-                <a href="{{ url_for('disputes_center.fap_auto_import') }}">Importação Automática</a>.
+                <a href="{{ url_for('fap_panel.import_page') }}">Importação Automática</a>.
                 Se já salvou por lá, não é necessário salvar novamente.
               </p>
               <label for="cookieInput" class="form-label fw-semibold small">Sessão (JSON)</label>
@@ -123,11 +123,13 @@
               <span class="badge bg-primary ms-1" style="font-size:.75rem;font-weight:500;">{{ companies|length }}</span>
               {% endif %}
             </h3>
-            <a href="{{ url_for('disputes_center.fap_auto_import') }}" class="btn btn-sm btn-outline-secondary" title="Sincronizar empresas na página de Importação">
-              <i class="bi bi-arrow-repeat me-1"></i> Sincronizar empresas
-            </a>
+            <button type="button" id="btnSyncCompanies" class="btn btn-sm btn-outline-secondary" title="Sincronizar empresas agora">
+              <span id="syncCompaniesSpinner" class="spinner-border spinner-border-sm me-1 d-none"></span>
+              <i class="bi bi-arrow-repeat me-1" id="syncCompaniesIcon"></i> Sincronizar empresas
+            </button>
           </div>
           <div class="card-body">
+            <div id="companySyncAlerts" class="mb-2"></div>
             {% if companies %}
             <div class="mb-2">
               <input type="text" id="companySearch" class="form-control form-control-sm"
@@ -158,9 +160,12 @@
             {% else %}
             <div class="alert alert-warning mb-0">
               <i class="bi bi-exclamation-triangle me-1"></i>
-              Nenhuma empresa cadastrada. Use a
-              <a href="{{ url_for('disputes_center.fap_auto_import') }}">Importação Automática</a>
-              para sincronizar primeiro.
+              Nenhuma empresa cadastrada.
+              <button type="button" id="btnSyncCompaniesEmpty" class="btn btn-sm btn-warning ms-2">
+                <span id="syncCompaniesEmptySpinner" class="spinner-border spinner-border-sm me-1 d-none"></span>
+                <i class="bi bi-arrow-repeat me-1" id="syncCompaniesEmptyIcon"></i>
+                Sincronizar agora
+              </button>
             </div>
             {% endif %}
           </div>
@@ -431,8 +436,9 @@
   const allYears = [{% for year in years %}{{ year }}{% if not loop.last %},{% endif %}{% endfor %}];
 
   // URLs
-  const saveAuthUrl      = '{{ url_for("disputes_center.fap_auto_import_save_auth") }}';
-  const checkUrl         = '{{ url_for("disputes_center.fap_auto_import_check_session") }}';
+  const saveAuthUrl      = '{{ url_for("fap_panel.sync_save_auth") }}';
+  const checkUrl         = '{{ url_for("fap_panel.sync_check_session") }}';
+  const syncCompaniesUrl = '{{ url_for("fap_panel.sync_fetch_companies") }}';
   const syncYearUrl      = '{{ url_for("fap_panel.sync_run_year") }}';
   const downloadBatchUrl = '{{ url_for("fap_panel.sync_download_batch") }}';
   const summaryUrl       = '{{ url_for("fap_panel.sync_summary") }}';
@@ -527,6 +533,80 @@
       }
     });
   }
+
+  // ── Sincronizar empresas (mesmo fluxo do fap-auto-import) ─────────────
+  (function setupCompanySync() {
+    const btnPrimary = document.getElementById('btnSyncCompanies');
+    const btnEmpty   = document.getElementById('btnSyncCompaniesEmpty');
+    const spinner1   = document.getElementById('syncCompaniesSpinner');
+    const spinner2   = document.getElementById('syncCompaniesEmptySpinner');
+    const icon1      = document.getElementById('syncCompaniesIcon');
+    const icon2      = document.getElementById('syncCompaniesEmptyIcon');
+    const alertsBox  = document.getElementById('companySyncAlerts') || syncAlerts;
+
+    function setSyncing(active) {
+      [btnPrimary, btnEmpty].forEach(function (b) { if (b) b.disabled = active; });
+      [spinner1, spinner2].forEach(function (s) { if (s) s.classList.toggle('d-none', !active); });
+      [icon1, icon2].forEach(function (i) { if (i) i.style.display = active ? 'none' : ''; });
+    }
+
+    async function syncCompaniesNow() {
+      const raw = cookieInput ? cookieInput.value.trim() : '';
+      if (!raw) {
+        showAlert(alertsBox, 'warning', 'Cole os dados de autenticação em JSON antes de sincronizar empresas.');
+        return;
+      }
+
+      let authPayload = null;
+      try {
+        authPayload = JSON.parse(raw);
+      } catch (e) {
+        showAlert(alertsBox, 'danger', 'JSON inválido. Verifique a formatação dos dados de autenticação.');
+        return;
+      }
+
+      if (!authPayload.cookies || typeof authPayload.cookies !== 'object') {
+        showAlert(alertsBox, 'danger', 'O JSON deve conter o campo "cookies" com um objeto de chave/valor.');
+        return;
+      }
+
+      setSyncing(true);
+      alertsBox.innerHTML = '';
+      log('Consultando empresas no sistema FAP/Dataprev...', 'info');
+
+      try {
+        const resp = await fetch(syncCompaniesUrl, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+          body: JSON.stringify({ cookies: authPayload.cookies, userAgent: authPayload.userAgent || '' }),
+        });
+
+        const payload = await resp.json().catch(function () { return null; });
+
+        if (!resp.ok || !payload || !payload.ok) {
+          const msg = (payload && payload.message) ? payload.message : 'Falha ao consultar o sistema FAP.';
+          log('Erro ao sincronizar empresas: ' + msg, 'error');
+          showAlert(alertsBox, 'danger', msg);
+          return;
+        }
+
+        const count = payload.saved_count || (payload.companies || []).length;
+        const msg = count + ' empresa(s) sincronizadas com sucesso. Recarregando...';
+        log('Sincronização de empresas concluída: ' + count + ' empresa(s).', 'success');
+        showAlert(alertsBox, 'success', msg);
+        setTimeout(function () { window.location.reload(); }, 1200);
+      } catch (err) {
+        log('Erro de rede ao sincronizar empresas: ' + (err.message || String(err)), 'error');
+        showAlert(alertsBox, 'danger', 'Erro de rede ao consultar o sistema FAP.');
+      } finally {
+        setSyncing(false);
+      }
+    }
+
+    if (btnPrimary) btnPrimary.addEventListener('click', syncCompaniesNow);
+    if (btnEmpty) btnEmpty.addEventListener('click', syncCompaniesNow);
+  })();
 
   // ── Verificação periódica da sessão FAP ─────────────────────────────
   (function setupSessionCheck() {

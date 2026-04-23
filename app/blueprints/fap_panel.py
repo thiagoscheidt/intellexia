@@ -112,6 +112,114 @@ def sync_page():
     )
 
 
+@fap_panel_bp.route('/sync/save-auth', methods=['POST'])
+@require_law_firm
+def sync_save_auth():
+    """AJAX — Salva o JSON de autenticação FAP para uso no painel de sincronização."""
+    data = request.get_json(silent=True) or {}
+    auth_json = data.get('auth', '').strip()
+    if not auth_json:
+        return jsonify({'ok': False, 'message': 'Nenhum dado enviado.'}), 400
+
+    session['fap_auto_import_auth'] = auth_json
+    session.modified = True
+    return jsonify({'ok': True})
+
+
+@fap_panel_bp.route('/sync/check-session', methods=['GET'])
+@require_law_firm
+def sync_check_session():
+    """AJAX — Verifica se a sessão FAP salva está ativa."""
+    saved_auth = session.get('fap_auto_import_auth', '')
+    if not saved_auth:
+        return jsonify({'ok': False, 'message': 'Sem sessão salva.'}), 400
+
+    try:
+        auth = FapWebAuthPayload.from_json(saved_auth)
+    except Exception:
+        return jsonify({'ok': False, 'message': 'Dados de autenticação inválidos.'}), 400
+
+    result = FapWebService(auth).check_session()
+    if result.ok:
+        return jsonify({'ok': True, 'status': result.status_code})
+    if result.expired:
+        return jsonify({'ok': False, 'expired': True, 'status': result.status_code})
+    return jsonify({'ok': False, 'status': result.status_code, 'message': result.message}), 502
+
+
+@fap_panel_bp.route('/sync/fetch-companies', methods=['POST'])
+@require_law_firm
+def sync_fetch_companies():
+    """AJAX — Sincroniza empresas do FAP Web para a base local do escritório atual."""
+    law_firm_id = get_current_law_firm_id()
+    data = request.get_json(silent=True) or {}
+    cookies_dict = data.get('cookies') or {}
+
+    if not cookies_dict or not isinstance(cookies_dict, dict):
+        return jsonify({
+            'ok': False,
+            'message': 'Informe os dados de autenticação no formato JSON com o campo "cookies".',
+        }), 400
+
+    if not any(v for v in cookies_dict.values()):
+        return jsonify({'ok': False, 'message': 'O objeto "cookies" está vazio.'}), 400
+
+    auth = FapWebAuthPayload.from_dict(data)
+    result = FapWebService(auth).fetch_companies()
+    if not result.ok:
+        detail = (result.data or {}).get('detail', '') if result.data else ''
+        payload = {'ok': False, 'message': result.message}
+        if detail:
+            payload['detail'] = detail
+        return jsonify(payload), 502
+
+    companies = result.data
+
+    # Upsert companies into DB
+    try:
+        from datetime import datetime as _dt
+        now = _dt.utcnow()
+        seen_cnpjs = set()
+        for item in (companies if isinstance(companies, list) else []):
+            cnpj = str(item.get('cnpj') or '').strip()
+            if not cnpj:
+                continue
+            seen_cnpjs.add(cnpj)
+            tipo = item.get('tipoProcuracao') or {}
+            nome = (item.get('nome') or '').strip()
+            rec = FapCompany.query.filter_by(law_firm_id=law_firm_id, cnpj=cnpj).first()
+            if rec:
+                rec.nome = nome
+                rec.tipo_procuracao_codigo = tipo.get('codigo')
+                rec.tipo_procuracao_descricao = tipo.get('descricao')
+                rec.synced_at = now
+            else:
+                rec = FapCompany(
+                    law_firm_id=law_firm_id,
+                    cnpj=cnpj,
+                    nome=nome,
+                    tipo_procuracao_codigo=tipo.get('codigo'),
+                    tipo_procuracao_descricao=tipo.get('descricao'),
+                    synced_at=now,
+                )
+                db.session.add(rec)
+
+        # Remove companies no longer returned by the API
+        if seen_cnpjs:
+            FapCompany.query.filter(
+                FapCompany.law_firm_id == law_firm_id,
+                FapCompany.cnpj.notin_(seen_cnpjs),
+            ).delete(synchronize_session='fetch')
+
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        current_app.logger.exception('Erro ao salvar empresas FAP no banco')
+        return jsonify({'ok': False, 'message': f'Empresas recebidas mas falha ao salvar no banco: {str(e)}'}), 500
+
+    return jsonify({'ok': True, 'companies': companies, 'saved_count': len(seen_cnpjs)})
+
+
 @fap_panel_bp.route('/sync/run-year', methods=['POST'])
 @require_law_firm
 def sync_run_year():
