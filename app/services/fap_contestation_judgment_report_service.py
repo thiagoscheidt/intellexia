@@ -11,6 +11,7 @@ from sqlalchemy.dialects.mysql import insert as mysql_insert
 from app.agents.fap.fap_contestation_judgment_metadata_agent import (
     FapContestationJudgmentMetadataAgent,
 )
+from app.agents.fap.fap_contestation_classifier_agent import FAPContestationClassifierAgent
 from app.models import (
     Benefit,
     BenefitFapSourceHistory,
@@ -39,7 +40,111 @@ class FapContestationJudgmentReportService:
     def __init__(self, flask_app):
         self.app = flask_app
         self.metadata_agent = FapContestationJudgmentMetadataAgent()
+        self.classifier_agent = FAPContestationClassifierAgent()
         self.open_cnpj_service = OpenCNPJService()
+
+    @staticmethod
+    def _build_benefit_classification_text(benefit: Benefit) -> str:
+        """Monta o texto base para classificação do benefício."""
+        candidate_fields = [
+            benefit.second_instance_justification,
+            benefit.first_instance_justification,
+            benefit.justification,
+            benefit.second_instance_opinion,
+            benefit.first_instance_opinion,
+            benefit.opinion,
+            benefit.notes,
+        ]
+        parts = [str(value).strip() for value in candidate_fields if value and str(value).strip()]
+        return "\n\n".join(parts)
+
+    def classify_benefits_contestation_topics(
+        self,
+        *,
+        batch_size: int = 200,
+        benefit_id: int | None = None,
+        law_firm_id: int | None = None,
+        force_reclassify: bool = False,
+    ) -> dict[str, int]:
+        """Classifica benefícios em lote e persiste o tópico de contestação FAP."""
+        with self.app.app_context():
+            effective_batch_size = max(1, int(batch_size))
+            query = Benefit.query
+
+            if benefit_id is not None:
+                query = query.filter(Benefit.id == benefit_id)
+
+            if law_firm_id is not None:
+                query = query.filter(Benefit.law_firm_id == law_firm_id)
+
+            if not force_reclassify:
+                query = query.filter(
+                    (Benefit.fap_contestation_topic.is_(None))
+                    | (Benefit.fap_contestation_topic == '')
+                )
+
+            benefits = query.order_by(Benefit.id.asc()).all()
+            if not benefits:
+                print('Nenhum benefício elegível para classificação.')
+                return {
+                    'total': 0,
+                    'classified': 0,
+                    'errors': 0,
+                    'updated': 0,
+                }
+
+            total = len(benefits)
+            classified = 0
+            errors = 0
+            updated = 0
+
+            for index, benefit in enumerate(benefits, start=1):
+                classification_text = self._build_benefit_classification_text(benefit)
+                try:
+                    result = self.classifier_agent.classify(classification_text)
+                    topic = str(result.get('topic') or '').strip() or 'OUTROS ARGUMENTOS'
+
+                    if benefit.fap_contestation_topic != topic:
+                        benefit.fap_contestation_topic = topic
+                        benefit.updated_at = datetime.utcnow()
+                        updated += 1
+
+                    classified += 1
+                except Exception as exc:
+                    errors += 1
+                    print(f'Erro ao classificar benefício #{benefit.id}: {exc}')
+
+                if index % effective_batch_size == 0:
+                    try:
+                        db.session.commit()
+                    except Exception as commit_exc:
+                        db.session.rollback()
+                        print(f'Erro ao salvar lote na classificação de benefícios: {commit_exc}')
+                        raise
+
+                    print(
+                        f'Classificação de benefícios: {index}/{total} '
+                        f'(classificados={classified}, atualizados={updated}, erros={errors})'
+                    )
+
+            try:
+                db.session.commit()
+            except Exception as commit_exc:
+                db.session.rollback()
+                print(f'Erro ao salvar classificação final de benefícios: {commit_exc}')
+                raise
+
+            print(
+                'Classificação concluída: '
+                f'total={total}, classificados={classified}, atualizados={updated}, erros={errors}'
+            )
+
+            return {
+                'total': total,
+                'classified': classified,
+                'errors': errors,
+                'updated': updated,
+            }
 
     @staticmethod
     def _normalize_cnpj(cnpj: str | None) -> str:

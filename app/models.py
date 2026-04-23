@@ -1391,6 +1391,7 @@ class Benefit(db.Model):
     second_instance_status_raw = db.Column(db.String(255))
     second_instance_justification = db.Column(db.Text)
     second_instance_opinion = db.Column(db.Text)
+    fap_contestation_topic = db.Column(db.String(120), index=True)
     justification = db.Column(db.Text)
     status = db.Column(db.String(30), default='pending', index=True)
     opinion = db.Column(db.Text)
