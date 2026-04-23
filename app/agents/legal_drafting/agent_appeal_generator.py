@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 
 load_dotenv()
+from app.agents.config import DEFAULT_MODEL
 
 
 # ==================== Modelos Pydantic ====================
@@ -89,8 +90,8 @@ class AgentAppealGenerator:
     
     model_name = None
 
-    def __init__(self, model_name: str = "gpt-5-mini"):
-        self.model_name = model_name
+    def __init__(self, model_name: str | None = None):
+        self.model_name = model_name or DEFAULT_MODEL
 
     def generate_appeal(
         self,

@@ -14,6 +14,7 @@ from langchain.agents.structured_output import ToolStrategy
 from langchain_openai import ChatOpenAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from app.services.token_usage_service import TokenUsageService
+from app.agents.config import DEFAULT_MODEL_MINI
 
 
 load_dotenv()
@@ -84,7 +85,7 @@ class AgentDocumentExtractor:
 
     def __init__(
         self,
-        model_name: str = "gpt-5-mini",
+        model_name: str | None = None,
         model_provider: str | None = None,
         chunk_size: int = 1800,
         chunk_overlap: int = 150,
@@ -94,7 +95,7 @@ class AgentDocumentExtractor:
         document_data: Any | None = None,
         document_faiss_vector: Any | None = None,
     ):
-        self.model_name = model_name
+        self.model_name = model_name or DEFAULT_MODEL_MINI
         self.model_provider = model_provider or os.getenv("DOCUMENT_EXTRACTOR_MODEL_PROVIDER", "openai")
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
@@ -1031,7 +1032,7 @@ class AgentDocumentExtractor:
         if not table_text.strip():
             return []
 
-        model_name = os.getenv("QUERY_MODEL", "gpt-4o-mini")
+        model_name = os.getenv("QUERY_MODEL") or DEFAULT_MODEL_MINI
         llm = ChatOpenAI(model=model_name, temperature=0).with_structured_output(BenefitsRequestsExtractionResult)
 
         system_prompt = (

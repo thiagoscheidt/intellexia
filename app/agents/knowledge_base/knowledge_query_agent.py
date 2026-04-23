@@ -27,6 +27,7 @@ from app.agents.knowledge_base.context_retrieval_routing_agent import (
 from app.agents.knowledge_base.keyword_extraction_agent import KeywordExtractionAgent
 from app.agents.knowledge_base.tools import KnowledgeQueryTools
 from app.services.token_usage_service import TokenUsageService
+from app.agents.config import DEFAULT_MODEL_MINI, DEFAULT_MODEL_NANO
 
 
 load_dotenv()
@@ -38,8 +39,8 @@ QDRANT_HOST = os.getenv("QDRANT_HOST", "localhost")
 QDRANT_PORT = int(os.getenv("QDRANT_PORT", "6333"))
 MEILISEARCH_HOST = os.getenv("MEILISEARCH_HOST", "http://localhost:7700")
 MEILISEARCH_API_KEY = os.getenv("MEILISEARCH_API_KEY")
-QUERY_MODEL = os.getenv("KB_QUERY_MODEL", "gpt-4o-mini")
-ROUTER_MODEL = os.getenv("KB_ROUTER_MODEL", "gpt-5-nano")
+QUERY_MODEL = os.getenv("KB_QUERY_MODEL") or DEFAULT_MODEL_MINI
+ROUTER_MODEL = os.getenv("KB_ROUTER_MODEL") or DEFAULT_MODEL_NANO
 KB_AGENT_DEBUG = os.getenv("KB_AGENT_DEBUG", "false").strip().lower() in {"1", "true", "yes", "on"}
 KB_MAX_HISTORY_MESSAGES = int(os.getenv("KB_MAX_HISTORY_MESSAGES", "10"))
 KB_MAX_HISTORY_CHARS = int(os.getenv("KB_MAX_HISTORY_CHARS", "12000"))

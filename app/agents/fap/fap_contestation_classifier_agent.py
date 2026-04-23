@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import re
 import time
 from typing import Any
@@ -9,6 +10,7 @@ from typing import Any
 from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
 
+from app.agents.config import DEFAULT_MODEL_MINI
 from app.services.token_usage_service import TokenUsageService
 
 
@@ -77,8 +79,8 @@ class FAPContestationClassifierAgent:
         "incapacidade",
     )
 
-    def __init__(self, model_name: str = "gpt-5-mini", temperature: float = 0.1):
-        self.model_name = model_name
+    def __init__(self, model_name: str | None = None, temperature: float = 0.1):
+        self.model_name = model_name or os.environ.get("FAP_CLASSIFIER_MODEL") or DEFAULT_MODEL_MINI
         self.temperature = temperature
         self.llm = ChatOpenAI(model=self.model_name, temperature=self.temperature)
         self.token_usage_service = TokenUsageService()

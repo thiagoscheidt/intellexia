@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ToolStrategy
+from app.agents.config import DEFAULT_MODEL_NANO
 from app.services.token_usage_service import TokenUsageService
 
 
@@ -21,7 +22,7 @@ class ContextRetrievalRoutingAgent:
     """Decide se deve buscar contexto e qual tipo de busca (semantic ou full_text) usar."""
 
     def __init__(self, model_name: str | None = None):
-        self.model_name = model_name or os.getenv("KB_ROUTER_MODEL", "gpt-5-nano")
+        self.model_name = model_name or os.getenv("KB_ROUTER_MODEL") or DEFAULT_MODEL_NANO
         self.llm = ChatOpenAI(model=self.model_name, temperature=0)
         self.token_usage_service = TokenUsageService()
 

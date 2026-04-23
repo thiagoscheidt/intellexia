@@ -10,6 +10,7 @@ from langchain_openai import ChatOpenAI
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
+from app.agents.config import DEFAULT_MODEL_MINI
 from app.agents.core.file_agent import FileAgent
 
 load_dotenv()
@@ -134,8 +135,8 @@ class BenefitsRequestsExtractionResult(BaseModel):
 class AgentInitialPetitionAnalysis:
     model_name = None
 
-    def __init__(self, model_name: str = "gpt-5-mini"):
-        self.model_name = model_name
+    def __init__(self, model_name: str | None = None):
+        self.model_name = model_name or DEFAULT_MODEL_MINI
 
     def extract_petition_requests(self, file_path: Optional[str] = None, text_content: Optional[str] = None) -> dict:
         """

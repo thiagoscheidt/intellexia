@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import os
 import re
 
 from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
+from app.agents.config import DEFAULT_MODEL_NANO
 
 
 class FapContestationJudgmentMetadata(BaseModel):
@@ -32,8 +34,8 @@ class FapContestationJudgmentMetadataAgent:
         'transmission_datetime',
     )
 
-    def __init__(self, model_name: str = 'gpt-5.4-nano'):
-        self.model_name = model_name
+    def __init__(self, model_name: str | None = None):
+        self.model_name = model_name or DEFAULT_MODEL_NANO
 
     def _extract_first_page_section(self, markdown_content: str, max_chars: int = 2500) -> str:
         """Tenta isolar a primeira página do markdown usando marcadores comuns."""

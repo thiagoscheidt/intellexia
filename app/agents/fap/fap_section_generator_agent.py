@@ -9,6 +9,7 @@ from typing import Optional, List, Dict
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
+from app.agents.config import DEFAULT_MODEL_MINI
 from docx import Document
 
 # Adicionar o diretório raiz ao path para imports do app
@@ -25,7 +26,7 @@ class DocumentMappingSchema(BaseModel):
 class FapSectionGeneratorAgent:
     def __init__(self):
         self.llm = ChatOpenAI(
-            model="gpt-5-mini",
+            model=DEFAULT_MODEL_MINI,
             temperature=0
         )
         # Nota: Vamos processar a resposta JSON manualmente ao invés de usar structured_output

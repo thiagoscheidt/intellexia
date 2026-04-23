@@ -8,6 +8,7 @@ from langchain.agents import create_agent
 from langchain.agents.structured_output import ToolStrategy
 from langchain_openai import ChatOpenAI
 from app.services.token_usage_service import TokenUsageService
+from app.agents.config import DEFAULT_MODEL_MINI
 from rich import print
 
 load_dotenv()
@@ -140,10 +141,10 @@ _SYSTEM_PROMPT = (
 
 class AgentSentenceSummary:
 
-    def __init__(self, model_name: str = "gpt-5-mini"):
-        self.model_name = model_name
+    def __init__(self, model_name: str | None = None):
+        self.model_name = model_name or DEFAULT_MODEL_MINI
         self.model_provider = os.getenv("SENTENCE_SUMMARY_MODEL_PROVIDER", "openai")
-        self.chat_model = ChatOpenAI(model=model_name, temperature=0.2)
+        self.chat_model = ChatOpenAI(model=self.model_name, temperature=0.2)
         self.token_usage_service = TokenUsageService()
 
     # ------------------------------------------------------------------
@@ -299,10 +300,10 @@ _ERRORS_SYSTEM_PROMPT = (
 
 class AgentSentenceErrorsAnalysis:
 
-    def __init__(self, model_name: str = "gpt-5-mini"):
-        self.model_name = model_name
+    def __init__(self, model_name: str | None = None):
+        self.model_name = model_name or DEFAULT_MODEL_MINI
         self.model_provider = os.getenv("SENTENCE_SUMMARY_MODEL_PROVIDER", "openai")
-        self.chat_model = ChatOpenAI(model=model_name, temperature=0.1)
+        self.chat_model = ChatOpenAI(model=self.model_name, temperature=0.1)
         self.token_usage_service = TokenUsageService()
 
     def _build_benefits_context(self, benefits: str | dict | None) -> str:

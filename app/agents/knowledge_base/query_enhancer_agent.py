@@ -3,6 +3,7 @@ import time
 
 from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
+from app.agents.config import DEFAULT_MODEL_MINI
 from app.services.token_usage_service import TokenUsageService
 
 
@@ -10,7 +11,7 @@ class QueryEnhancerAgent:
     """Melhora perguntas para busca semântica na base vetorial."""
 
     def __init__(self, model_name: str | None = None):
-        self.model_name = model_name or os.getenv("QUERY_ENHANCER_MODEL", "gpt-4o-mini")
+        self.model_name = model_name or os.getenv("QUERY_ENHANCER_MODEL") or DEFAULT_MODEL_MINI
         self.llm = ChatOpenAI(model=self.model_name, temperature=0)
         self.token_usage_service = TokenUsageService()
 

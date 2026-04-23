@@ -3,6 +3,7 @@ from openai import OpenAI
 from app.prompts.document_reader_prompt import DocumentReaderPrompt
 from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
+from app.agents.config import DEFAULT_MODEL_MINI
 
 _ = load_dotenv()
 
@@ -11,8 +12,8 @@ class AgentDocumentReader:
     model = None
     prompt = None
 
-    def __init__(self, model_name="gpt-5-mini"):
-        self.model = ChatOpenAI(model=model_name)
+    def __init__(self, model_name: str | None = None):
+        self.model = ChatOpenAI(model=model_name or DEFAULT_MODEL_MINI)
         self.prompt = DocumentReaderPrompt()
 
     def analyze_document(self, file_id=None, text_content=None):

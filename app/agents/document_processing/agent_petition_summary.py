@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 from markitdown import MarkItDown
 from langchain_openai import ChatOpenAI
 from app.agents.core.file_agent import FileAgent
+from app.agents.config import DEFAULT_MODEL_MINI
 
 load_dotenv()
 
@@ -81,8 +82,8 @@ class PetitionSummary(BaseModel):
 class AgentPetitionSummary:
     model_name = None
 
-    def __init__(self, model_name: str = "gpt-5-mini"):
-        self.model_name = model_name
+    def __init__(self, model_name: str | None = None):
+        self.model_name = model_name or DEFAULT_MODEL_MINI
 
     def summarizePetition(self, file_path: Optional[str] = None, text_content: Optional[str] = None) -> dict:
         """

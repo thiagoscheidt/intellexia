@@ -16,6 +16,7 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_openai import ChatOpenAI
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ToolStrategy
+from app.agents.config import DEFAULT_MODEL_MINI
 from docling.document_converter import DocumentConverter
 from pydantic import BaseModel, Field
 from app.services.token_usage_service import TokenUsageService
@@ -302,7 +303,7 @@ class CaseKnowledgeIngestor:
         start_time = time.time()
 
         # Usar LLM com create_agent para gerar resposta baseada no contexto
-        llm = ChatOpenAI(model="gpt-5-mini", temperature=0)
+        llm = ChatOpenAI(model=DEFAULT_MODEL_MINI, temperature=0)
         token_usage_service = TokenUsageService()
 
         # Mensagem de sistema com instruções
@@ -344,7 +345,7 @@ class CaseKnowledgeIngestor:
             agent_name="CaseKnowledgeIngestor",
             action_name="ask_with_llm",
             print_prefix="[CaseKnowledgeIngestor][tokens]",
-            model_name="gpt-5-mini",
+            model_name=DEFAULT_MODEL_MINI,
             model_provider="openai",
             latency_ms=latency_ms,
             status="success",

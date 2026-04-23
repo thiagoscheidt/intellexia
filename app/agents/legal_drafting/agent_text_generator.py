@@ -4,6 +4,7 @@ from langchain_openai import ChatOpenAI
 from dotenv import load_dotenv
 import json
 import os
+from app.agents.config import DEFAULT_MODEL
 
 _ = load_dotenv()
 
@@ -13,8 +14,9 @@ class AgentTextGenerator:
     Agent para geração de textos jurídicos baseado em modelos de arquivo
     """
     
-    def __init__(self, model_name="gpt-5-mini"):
-        self.model = ChatOpenAI(model=model_name, temperature=0.3)
+    def __init__(self, model_name: str | None = None):
+        self.model_name = model_name or DEFAULT_MODEL
+        self.model = ChatOpenAI(model=self.model_name, temperature=0.3)
         self.openai_client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self.template_file_id = None
         self.case_context = None
@@ -121,7 +123,7 @@ Gere o texto completo seguindo exatamente a estrutura e formato do modelo, subst
             assistant = self.openai_client.beta.assistants.create(
                 name="Gerador de Petições",
                 instructions=system_prompt,
-                model="gpt-5-mini",
+                model=self.model_name,
                 tools=[{"type": "file_search"}],
                 tool_resources={
                     "file_search": {
@@ -191,7 +193,7 @@ Gere o texto completo seguindo exatamente a estrutura e formato do modelo, subst
         ]
         
         response = self.openai_client.chat.completions.create(
-            model="gpt-5-mini",
+            model=self.model_name,
             messages=messages,
             temperature=0.3
         )
