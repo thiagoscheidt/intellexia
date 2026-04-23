@@ -160,6 +160,9 @@ class TokenUsageService:
         output_tokens: int,
     ) -> Decimal:
         name = (model_name or "").strip().lower()
+        # Strip provider prefix from OpenRouter-style names (e.g. "openai/gpt-4o-mini" -> "gpt-4o-mini")
+        if "/" in name:
+            name = name.rsplit("/", 1)[-1]
 
         configured_input = os.getenv(f"TOKEN_PRICE_INPUT_1K_{name.upper().replace('-', '_')}") if name else None
         configured_output = os.getenv(f"TOKEN_PRICE_OUTPUT_1K_{name.upper().replace('-', '_')}") if name else None

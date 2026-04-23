@@ -56,18 +56,82 @@
     vertical-align: middle;
   }
 
-  .stats-card {
-    border-left: 4px solid var(--bs-primary);
+  /* ── Stat cards (estilo contestações) ───────────────────────────── */
+  .stat-cards {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: .75rem;
   }
-
-  .stats-card .card-body {
-    display: flex;
+  @media (max-width: 1400px) { .stat-cards { grid-template-columns: repeat(4, 1fr); } }
+  @media (max-width: 900px)  { .stat-cards { grid-template-columns: repeat(3, 1fr); } }
+  @media (max-width: 560px)  { .stat-cards { grid-template-columns: repeat(2, 1fr); } }
+  .stat-card {
+    position: relative;
+    overflow: hidden;
+    background: var(--bs-body-bg);
+    border: 1px solid rgba(15, 23, 42, .07);
+    border-radius: .85rem;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, .06);
+    padding: .85rem 1rem .85rem 1.2rem;
+  }
+  .stat-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 5px;
+    background: var(--sc-color, #0d6efd);
+    border-radius: 4px 0 0 4px;
+  }
+  .stat-card .sc-icon {
+    width: 2.1rem; height: 2.1rem;
+    background: var(--sc-soft, rgba(13, 110, 253, .10));
+    color: var(--sc-color, #0d6efd);
+    border-radius: .55rem;
+    display: inline-flex;
     align-items: center;
     justify-content: center;
+    font-size: .9rem;
+    flex-shrink: 0;
   }
-
-  .stats-card .card-body>.d-flex {
-    width: 100%;
+  .stat-card .sc-label {
+    font-size: .68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #6c7a8d;
+    margin-bottom: .1rem;
+  }
+  .stat-card .sc-value {
+    font-size: 1.55rem;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--bs-emphasis-color);
+  }
+  .stat-card .sc-sub {
+    display: flex;
+    gap: .6rem;
+    margin-top: .3rem;
+    flex-wrap: wrap;
+  }
+  .sc-sub-item {
+    display: inline-flex;
+    flex-direction: column;
+  }
+  .sc-sub-label {
+    font-size: .6rem;
+    color: #9aa5b4;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+  }
+  .sc-sub-value {
+    font-size: .8rem;
+    font-weight: 700;
+    color: var(--sc-color, #0d6efd);
+  }
+  .sc-note {
+    font-size: .68rem;
+    color: #6c7a8d;
+    margin-top: .2rem;
   }
 
   .disputes-center-card {
@@ -174,59 +238,29 @@
   .stats-panel-header {
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.35rem;
+    gap: .5rem;
+    margin-bottom: .4rem;
+    font-size: .75rem;
     font-weight: 700;
-    color: var(--bs-emphasis-color);
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: #3d5080;
   }
 
   .stats-panel-note {
-    border: 1px solid var(--bs-border-color-translucent);
-    border-left: 4px solid var(--bs-primary);
-    border-radius: 0.75rem;
-    background: var(--bs-tertiary-bg);
-    color: var(--bs-secondary-color);
-    font-size: 0.85rem;
-    padding: 0.55rem 0.8rem;
-    margin-bottom: 0.9rem;
+    border: 1px solid rgba(13, 110, 253, .10);
+    border-left: 4px solid #0d6efd;
+    border-radius: .6rem;
+    background: rgba(13, 110, 253, .04);
+    color: #5d6b82;
+    font-size: .8rem;
+    padding: .45rem .75rem;
+    margin-bottom: .85rem;
   }
 
   .stats-panels-separator {
-    border-top: 1px dashed var(--bs-border-color);
-    margin: 0.25rem 0 1rem;
-  }
-
-  .stats-instance-split {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.6rem;
-    margin-top: 0.55rem;
-    text-align: left;
-  }
-
-  .stats-instance-item {
-    border-radius: 0.7rem;
-    background: rgba(255, 255, 255, 0.55);
-    padding: 0.45rem 0.55rem;
-  }
-
-  .stats-instance-label {
-    display: block;
-    font-size: 0.72rem;
-    color: var(--bs-secondary-color);
-    margin-bottom: 0.1rem;
-  }
-
-  .stats-instance-value {
-    font-size: 1.05rem;
-    font-weight: 700;
-    line-height: 1.1;
-  }
-
-  @media (max-width: 1399.98px) {
-    .stats-instance-split {
-      grid-template-columns: 1fr;
-    }
+    border-top: 1px dashed rgba(15, 23, 42, .12);
+    margin: .5rem 0 1rem;
   }
 </style>
 {% endblock %}
@@ -268,118 +302,77 @@
       Este painel mostra o consolidado completo da base de benefícios, independentemente dos filtros da tabela.
     </div>
 
-    <div class="row row-cols-1 row-cols-md-2 row-cols-xl-5 g-3 mb-4">
-      <div class="col">
-        <div class="card stats-card h-100">
-          <div class="card-body text-center">
-            <div class="d-flex align-items-center justify-content-center">
-              <div class="icon-wrapper me-3">
-                <i class="bi bi-list-ul text-primary" style="font-size: 2rem;"></i>
-              </div>
-              <div>
-                <h3 class="mb-0">{{ total_count|default(0) }}</h3>
-                <p class="text-muted mb-0">Benefícios</p>
-              </div>
-            </div>
-          </div>
+    <div class="stat-cards mb-3">
+      <div class="stat-card" style="--sc-color:#0d6efd;--sc-soft:rgba(13,110,253,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-collection"></i></span>
+          <span class="sc-label">Total</span>
+        </div>
+        <div class="sc-value">{{ total_count|default(0) }}</div>
+      </div>
+      <div class="stat-card" style="--sc-color:#198754;--sc-soft:rgba(25,135,84,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-check-circle"></i></span>
+          <span class="sc-label">Deferidos</span>
+        </div>
+        <div class="sc-value">{{ approved_count }}</div>
+        <div class="sc-sub">
+          <span class="sc-sub-item"><span class="sc-sub-label">1ª inst.</span><span class="sc-sub-value">{{ first_instance_stats.approved }}</span></span>
+          <span class="sc-sub-item"><span class="sc-sub-label">2ª inst.</span><span class="sc-sub-value">{{ second_instance_stats.approved }}</span></span>
         </div>
       </div>
-      <div class="col">
-        <div class="card stats-card h-100" style="border-left-color: var(--bs-success);">
-          <div class="card-body text-center">
-            <div class="d-flex align-items-center justify-content-center">
-              <div class="icon-wrapper me-3">
-                <i class="bi bi-check-circle text-success" style="font-size: 2rem;"></i>
-              </div>
-              <div>
-                <p class="text-muted mb-0">Deferidos</p>
-                <div class="stats-instance-split">
-                  <div class="stats-instance-item">
-                    <span class="stats-instance-label">1ª instância</span>
-                    <div class="stats-instance-value text-success">{{ first_instance_stats.approved }}</div>
-                  </div>
-                  <div class="stats-instance-item">
-                    <span class="stats-instance-label">2ª instância</span>
-                    <div class="stats-instance-value text-success">{{ second_instance_stats.approved }}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+      <div class="stat-card" style="--sc-color:#dc3545;--sc-soft:rgba(220,53,69,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-x-circle"></i></span>
+          <span class="sc-label">Indeferidos</span>
+        </div>
+        <div class="sc-value">{{ rejected_count }}</div>
+        <div class="sc-sub">
+          <span class="sc-sub-item"><span class="sc-sub-label">1ª inst.</span><span class="sc-sub-value">{{ first_instance_stats.rejected }}</span></span>
+          <span class="sc-sub-item"><span class="sc-sub-label">2ª inst.</span><span class="sc-sub-value">{{ second_instance_stats.rejected }}</span></span>
         </div>
       </div>
-      <div class="col">
-        <div class="card stats-card h-100" style="border-left-color: var(--bs-danger);">
-          <div class="card-body text-center">
-            <div class="d-flex align-items-center justify-content-center">
-              <div class="icon-wrapper me-3">
-                <i class="bi bi-x-circle text-danger" style="font-size: 2rem;"></i>
-              </div>
-              <div>
-                <p class="text-muted mb-0">Indeferidos</p>
-                <div class="stats-instance-split">
-                  <div class="stats-instance-item">
-                    <span class="stats-instance-label">1ª instância</span>
-                    <div class="stats-instance-value text-danger">{{ first_instance_stats.rejected }}</div>
-                  </div>
-                  <div class="stats-instance-item">
-                    <span class="stats-instance-label">2ª instância</span>
-                    <div class="stats-instance-value text-danger">{{ second_instance_stats.rejected }}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+      <div class="stat-card" style="--sc-color:#f59e0b;--sc-soft:rgba(245,158,11,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-hourglass-split"></i></span>
+          <span class="sc-label">Em análise</span>
+        </div>
+        <div class="sc-value">{{ in_review_count }}</div>
+        <div class="sc-sub">
+          <span class="sc-sub-item"><span class="sc-sub-label">1ª inst.</span><span class="sc-sub-value">{{ first_instance_stats.analyzing }}</span></span>
+          <span class="sc-sub-item"><span class="sc-sub-label">2ª inst.</span><span class="sc-sub-value">{{ second_instance_stats.analyzing }}</span></span>
         </div>
       </div>
-      <div class="col">
-        <div class="card stats-card h-100" style="border-left-color: var(--bs-warning);">
-          <div class="card-body text-center">
-            <div class="d-flex align-items-center justify-content-center">
-              <div class="icon-wrapper me-3">
-                <i class="bi bi-hourglass-split text-warning" style="font-size: 2rem;"></i>
-              </div>
-              <div>
-                <h3 class="mb-0 text-warning">{{ in_review_count }}</h3>
-                <p class="text-muted mb-0">Em análise</p>
-                <div class="stats-instance-split">
-                  <div class="stats-instance-item">
-                    <span class="stats-instance-label">1ª instância</span>
-                    <div class="stats-instance-value text-warning">{{ first_instance_stats.analyzing }}</div>
-                  </div>
-                  <div class="stats-instance-item">
-                    <span class="stats-instance-label">2ª instância</span>
-                    <div class="stats-instance-value text-warning">{{ second_instance_stats.analyzing }}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+      <div class="stat-card" style="--sc-color:#6c757d;--sc-soft:rgba(108,117,125,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-clock"></i></span>
+          <span class="sc-label">Pendentes</span>
+        </div>
+        <div class="sc-value">{{ pending_count }}</div>
+        <div class="sc-sub">
+          <span class="sc-sub-item"><span class="sc-sub-label">1ª inst.</span><span class="sc-sub-value">{{ first_instance_stats.pending }}</span></span>
+          <span class="sc-sub-item"><span class="sc-sub-label">2ª inst.</span><span class="sc-sub-value">{{ second_instance_stats.pending }}</span></span>
         </div>
       </div>
-      <div class="col">
-        <div class="card stats-card h-100" style="border-left-color: var(--bs-secondary);">
-          <div class="card-body text-center">
-            <div class="d-flex align-items-center justify-content-center">
-              <div class="icon-wrapper me-3">
-                <i class="bi bi-clock text-secondary" style="font-size: 2rem;"></i>
-              </div>
-              <div>
-                <p class="text-muted mb-0">Pendentes</p>
-                <div class="stats-instance-split">
-                  <div class="stats-instance-item">
-                    <span class="stats-instance-label">1ª instância</span>
-                    <div class="stats-instance-value text-secondary">{{ first_instance_stats.pending }}</div>
-                  </div>
-                  <div class="stats-instance-item">
-                    <span class="stats-instance-label">2ª instância</span>
-                    <div class="stats-instance-value text-secondary">{{ second_instance_stats.pending }}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+      <div class="stat-card" style="--sc-color:#6f42c1;--sc-soft:rgba(111,66,193,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-tags"></i></span>
+          <span class="sc-label">Categorizados</span>
         </div>
+        <div class="sc-value">{{ categorized_count|default(0) }}</div>
+        {% if total_count and total_count > 0 %}
+        <div class="sc-note">{{ ((categorized_count|default(0)) / total_count * 100)|round(1) }}% do total</div>
+        {% endif %}
+      </div>
+      <div class="stat-card" style="--sc-color:#fd7e14;--sc-soft:rgba(253,126,20,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-tag"></i></span>
+          <span class="sc-label">Sem categoria</span>
+        </div>
+        <div class="sc-value">{{ uncategorized_count|default(0) }}</div>
+        {% if total_count and total_count > 0 %}
+        <div class="sc-note">{{ ((uncategorized_count|default(0)) / total_count * 100)|round(1) }}% do total</div>
+        {% endif %}
       </div>
     </div>
 
@@ -393,126 +386,73 @@
       Este painel reflete somente os resultados atuais após busca, filtros e combinações aplicadas.
     </div>
 
-    <div class="row row-cols-1 row-cols-md-2 row-cols-xl-5 g-3 mb-4" id="filteredStatsPanel">
-      <div class="col">
-        <div class="card stats-card h-100 border-primary-subtle">
-          <div class="card-body text-center">
-            <div class="d-flex align-items-center justify-content-center">
-              <div class="icon-wrapper me-3">
-                <i class="bi bi-funnel text-primary" style="font-size: 2rem;"></i>
-              </div>
-              <div>
-                <h3 id="filteredTotalCount" class="mb-0">{{ total_count|default(0) }}</h3>
-                <p class="text-muted mb-0">Benefícios</p>
-              </div>
-            </div>
-          </div>
+    <div class="stat-cards mb-3" id="filteredStatsPanel">
+      <div class="stat-card" style="--sc-color:#0d6efd;--sc-soft:rgba(13,110,253,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-funnel"></i></span>
+          <span class="sc-label">Total</span>
+        </div>
+        <div id="filteredTotalCount" class="sc-value">{{ total_count|default(0) }}</div>
+      </div>
+      <div class="stat-card" style="--sc-color:#198754;--sc-soft:rgba(25,135,84,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-check-circle"></i></span>
+          <span class="sc-label">Deferidos</span>
+        </div>
+        <div id="filteredApprovedCount" class="sc-value">{{ approved_count }}</div>
+        <div class="sc-sub">
+          <span class="sc-sub-item"><span class="sc-sub-label">1ª inst.</span><span id="filteredApprovedFirstInstanceCount" class="sc-sub-value">{{ first_instance_stats.approved }}</span></span>
+          <span class="sc-sub-item"><span class="sc-sub-label">2ª inst.</span><span id="filteredApprovedSecondInstanceCount" class="sc-sub-value">{{ second_instance_stats.approved }}</span></span>
         </div>
       </div>
-      <div class="col">
-        <div class="card stats-card h-100 border-success-subtle" style="border-left-color: var(--bs-success);">
-          <div class="card-body text-center">
-            <div class="d-flex align-items-center justify-content-center">
-              <div class="icon-wrapper me-3">
-                <i class="bi bi-check-circle text-success" style="font-size: 2rem;"></i>
-              </div>
-              <div>
-                <p class="text-muted mb-0">Deferidos</p>
-                <div class="stats-instance-split">
-                  <div class="stats-instance-item">
-                    <span class="stats-instance-label">1ª instância</span>
-                    <div id="filteredApprovedFirstInstanceCount" class="stats-instance-value text-success">{{
-                      first_instance_stats.approved }}</div>
-                  </div>
-                  <div class="stats-instance-item">
-                    <span class="stats-instance-label">2ª instância</span>
-                    <div id="filteredApprovedSecondInstanceCount" class="stats-instance-value text-success">{{
-                      second_instance_stats.approved }}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+      <div class="stat-card" style="--sc-color:#dc3545;--sc-soft:rgba(220,53,69,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-x-circle"></i></span>
+          <span class="sc-label">Indeferidos</span>
+        </div>
+        <div id="filteredRejectedCount" class="sc-value">{{ rejected_count }}</div>
+        <div class="sc-sub">
+          <span class="sc-sub-item"><span class="sc-sub-label">1ª inst.</span><span id="filteredRejectedFirstInstanceCount" class="sc-sub-value">{{ first_instance_stats.rejected }}</span></span>
+          <span class="sc-sub-item"><span class="sc-sub-label">2ª inst.</span><span id="filteredRejectedSecondInstanceCount" class="sc-sub-value">{{ second_instance_stats.rejected }}</span></span>
         </div>
       </div>
-      <div class="col">
-        <div class="card stats-card h-100 border-danger-subtle" style="border-left-color: var(--bs-danger);">
-          <div class="card-body text-center">
-            <div class="d-flex align-items-center justify-content-center">
-              <div class="icon-wrapper me-3">
-                <i class="bi bi-x-circle text-danger" style="font-size: 2rem;"></i>
-              </div>
-              <div>
-                <p class="text-muted mb-0">Indeferidos</p>
-                <div class="stats-instance-split">
-                  <div class="stats-instance-item">
-                    <span class="stats-instance-label">1ª instância</span>
-                    <div id="filteredRejectedFirstInstanceCount" class="stats-instance-value text-danger">{{
-                      first_instance_stats.rejected }}</div>
-                  </div>
-                  <div class="stats-instance-item">
-                    <span class="stats-instance-label">2ª instância</span>
-                    <div id="filteredRejectedSecondInstanceCount" class="stats-instance-value text-danger">{{
-                      second_instance_stats.rejected }}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+      <div class="stat-card" style="--sc-color:#f59e0b;--sc-soft:rgba(245,158,11,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-hourglass-split"></i></span>
+          <span class="sc-label">Em análise</span>
+        </div>
+        <div id="filteredInReviewCount" class="sc-value">{{ in_review_count }}</div>
+        <div class="sc-sub">
+          <span class="sc-sub-item"><span class="sc-sub-label">1ª inst.</span><span id="filteredAnalyzingFirstInstanceCount" class="sc-sub-value">{{ first_instance_stats.analyzing }}</span></span>
+          <span class="sc-sub-item"><span class="sc-sub-label">2ª inst.</span><span id="filteredAnalyzingSecondInstanceCount" class="sc-sub-value">{{ second_instance_stats.analyzing }}</span></span>
         </div>
       </div>
-      <div class="col">
-        <div class="card stats-card h-100 border-warning-subtle" style="border-left-color: var(--bs-warning);">
-          <div class="card-body text-center">
-            <div class="d-flex align-items-center justify-content-center">
-              <div class="icon-wrapper me-3">
-                <i class="bi bi-hourglass-split text-warning" style="font-size: 2rem;"></i>
-              </div>
-              <div>
-                <h3 id="filteredInReviewCount" class="mb-0 text-warning">{{ in_review_count }}</h3>
-                <p class="text-muted mb-0">Em análise</p>
-                <div class="stats-instance-split">
-                  <div class="stats-instance-item">
-                    <span class="stats-instance-label">1ª instância</span>
-                    <div id="filteredAnalyzingFirstInstanceCount" class="stats-instance-value text-warning">{{
-                      first_instance_stats.analyzing }}</div>
-                  </div>
-                  <div class="stats-instance-item">
-                    <span class="stats-instance-label">2ª instância</span>
-                    <div id="filteredAnalyzingSecondInstanceCount" class="stats-instance-value text-warning">{{
-                      second_instance_stats.analyzing }}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+      <div class="stat-card" style="--sc-color:#6c757d;--sc-soft:rgba(108,117,125,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-clock"></i></span>
+          <span class="sc-label">Pendentes</span>
+        </div>
+        <div id="filteredPendingCount" class="sc-value">{{ pending_count }}</div>
+        <div class="sc-sub">
+          <span class="sc-sub-item"><span class="sc-sub-label">1ª inst.</span><span id="filteredPendingFirstInstanceCount" class="sc-sub-value">{{ first_instance_stats.pending }}</span></span>
+          <span class="sc-sub-item"><span class="sc-sub-label">2ª inst.</span><span id="filteredPendingSecondInstanceCount" class="sc-sub-value">{{ second_instance_stats.pending }}</span></span>
         </div>
       </div>
-      <div class="col">
-        <div class="card stats-card h-100 border-secondary-subtle" style="border-left-color: var(--bs-secondary);">
-          <div class="card-body text-center">
-            <div class="d-flex align-items-center justify-content-center">
-              <div class="icon-wrapper me-3">
-                <i class="bi bi-clock text-secondary" style="font-size: 2rem;"></i>
-              </div>
-              <div>
-                <p class="text-muted mb-0">Pendentes</p>
-                <div class="stats-instance-split">
-                  <div class="stats-instance-item">
-                    <span class="stats-instance-label">1ª instância</span>
-                    <div id="filteredPendingFirstInstanceCount" class="stats-instance-value text-secondary">{{
-                      first_instance_stats.pending }}</div>
-                  </div>
-                  <div class="stats-instance-item">
-                    <span class="stats-instance-label">2ª instância</span>
-                    <div id="filteredPendingSecondInstanceCount" class="stats-instance-value text-secondary">{{
-                      second_instance_stats.pending }}</div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+      <div class="stat-card" style="--sc-color:#6f42c1;--sc-soft:rgba(111,66,193,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-tags"></i></span>
+          <span class="sc-label">Categorizados</span>
         </div>
+        <div id="filteredCategorizedCount" class="sc-value">{{ categorized_count|default(0) }}</div>
+        <div class="sc-note"><span id="filteredCategorizedPct">0%</span> do total</div>
+      </div>
+      <div class="stat-card" style="--sc-color:#fd7e14;--sc-soft:rgba(253,126,20,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-tag"></i></span>
+          <span class="sc-label">Sem categoria</span>
+        </div>
+        <div id="filteredUncategorizedCount" class="sc-value">{{ uncategorized_count|default(0) }}</div>
+        <div class="sc-note"><span id="filteredUncategorizedPct">0%</span> do total</div>
       </div>
     </div>
 
@@ -600,6 +540,7 @@
                     <option value="second_instance_status">Status 2ª instância</option>
                     <option value="second_instance_status_raw">Texto status 2ª instância</option>
                     <option value="fap_vigencia_years">Vigência</option>
+                    <option value="fap_contestation_topic">Categoria FAP</option>
                     <option value="benefit_start_date">DIB</option>
                     <option value="benefit_end_date">DCB</option>
                     <option value="accident_date">Data acidente</option>
@@ -690,6 +631,7 @@
                     <th style="width: 170px;" class="text-center">Status 1ª instância</th>
                     <th style="width: 170px;" class="text-center">Status 2ª instância</th>
                     <th style="width: 150px;">Vigência FAP</th>
+                    <th style="width: 160px;">Categoria FAP</th>
                     <th style="width: 180px;">DIB / DCB</th>
                     <th style="width: 230px;" class="text-center">Ações</th>
                   </tr>
@@ -958,6 +900,18 @@
     $('#filteredAnalyzingSecondInstanceCount').text(safeSecond.analyzing ?? 0);
     $('#filteredPendingFirstInstanceCount').text(safeFirst.pending ?? 0);
     $('#filteredPendingSecondInstanceCount').text(safeSecond.pending ?? 0);
+
+    const total = safeStats.total ?? 0;
+    const categorized = safeStats.categorized ?? 0;
+    const uncategorized = safeStats.uncategorized ?? 0;
+    $('#filteredCategorizedCount').text(categorized);
+    $('#filteredUncategorizedCount').text(uncategorized);
+    const catPct = total > 0 ? Math.round((categorized / total) * 1000) / 10 : 0;
+    const uncatPct = total > 0 ? Math.round((uncategorized / total) * 1000) / 10 : 0;
+    $('#filteredCategorizedBar').css('width', catPct + '%');
+    $('#filteredUncategorizedBar').css('width', uncatPct + '%');
+    $('#filteredCategorizedPct').text(catPct + '%');
+    $('#filteredUncategorizedPct').text(uncatPct + '%');
   }
 
   const table = $('#centralBenefitsTable').DataTable({
@@ -1073,6 +1027,15 @@
         }
       },
       {
+        data: 'fap_contestation_topic',
+        render: function (data) {
+          if (!data) {
+            return '<span class="text-muted">-</span>';
+          }
+          return `<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle" style="white-space:normal;text-align:left;">${escapeHtml(data)}</span>`;
+        }
+      },
+      {
         data: null,
         render: function (_, __, row) {
           const dib = row.benefit_start_date || '-';
@@ -1164,6 +1127,7 @@
     second_instance_status: 'Status 2ª instância',
     second_instance_status_raw: 'Texto status 2ª instância',
     fap_vigencia_years: 'Vigência',
+    fap_contestation_topic: 'Categoria FAP',
     benefit_start_date: 'DIB',
     benefit_end_date: 'DCB',
     accident_date: 'Data acidente',
@@ -1206,6 +1170,28 @@
       { value: 'indeferido', label: 'Indeferido' },
       { value: 'analyzing', label: 'Em análise' },
       { value: 'pending', label: 'Pendente' },
+    ],
+    fap_contestation_topic: [
+      { value: 'NEXO TÉCNICO PREVIDENCIÁRIO PENDENTE DE JULGAMENTO', label: 'Nexo Técnico Previdenciário Pendente de Julgamento' },
+      { value: 'ACIDENTE DE TRAJETO', label: 'Acidente de Trajeto' },
+      { value: 'ACIDENTE DE TRAJETO SEM CAT – AÇÃO JUDICIAL', label: 'Acidente de Trajeto sem CAT – Ação Judicial' },
+      { value: 'RESTABELECIMENTO DE BENEFÍCIO – B91 60 DIAS', label: 'Restabelecimento de Benefício – B91 60 Dias' },
+      { value: 'AUXÍLIO-DOENÇA PREVIDENCIÁRIO – B31', label: 'Auxílio-Doença Previdenciário – B31' },
+      { value: 'ERRO DE ESTABELECIMENTO', label: 'Erro de Estabelecimento' },
+      { value: 'PRÉ-FAP', label: 'Pré-FAP' },
+      { value: 'OUTRA EMPRESA – CAT VINCULADA', label: 'Outra Empresa – CAT Vinculada' },
+      { value: 'OUTRA EMPRESA – NUNCA FOI EMPREGADO', label: 'Outra Empresa – Nunca Foi Empregado' },
+      { value: 'OUTRA EMPRESA – APÓS A RESCISÃO CONTRATUAL', label: 'Outra Empresa – Após a Rescisão Contratual' },
+      { value: 'OUTRA EMPRESA – DID ANTERIOR À ADMISSÃO NA EMPRESA', label: 'Outra Empresa – DID Anterior à Admissão na Empresa' },
+      { value: 'NEXO AFASTADO', label: 'Nexo Afastado' },
+      { value: 'BENEFÍCIO CONCEDIDO NA JUSTIÇA FEDERAL', label: 'Benefício Concedido na Justiça Federal' },
+      { value: 'CONCOMITANTE – AUXÍLIO-DOENÇA (B91) COM APOSENTADORIA', label: 'Concomitante – Auxílio-Doença (B91) com Aposentadoria' },
+      { value: 'CONCESSÃO CONCOMITANTE DE DOIS AUXÍLIO-DOENÇA', label: 'Concessão Concomitante de Dois Auxílio-Doença' },
+      { value: 'CONCESSÃO - AUXÍLIO-ACIDENTE (B94) COM APOSENTADORIA', label: 'Concessão – Auxílio-Acidente (B94) com Aposentadoria' },
+      { value: 'AUXÍLIO-ACIDENTE (B94) DUPLICADO', label: 'Auxílio-Acidente (B94) Duplicado' },
+      { value: 'AUXÍLIO-DOENÇA (B94) SEM CUSTO', label: 'Auxílio-Doença (B94) sem Custo' },
+      { value: 'DISCUSSÃO MÉDICA / OUTROS ARGUMENTOS', label: 'Discussão Médica / Outros Argumentos' },
+      { value: 'OUTROS ARGUMENTOS', label: 'Outros Argumentos' },
     ],
   };
 

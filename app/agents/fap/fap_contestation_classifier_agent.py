@@ -199,7 +199,7 @@ class FAPContestationClassifierAgent:
 
         return str(last_message or "").strip()
 
-    def classify(self, text: str) -> dict[str, str]:
+    def classify(self, text: str, *, law_firm_id: int | None = None) -> dict[str, str]:
         """
         Classifica um texto de justificativa FAP em tópico padronizado.
 
@@ -272,7 +272,7 @@ class FAPContestationClassifierAgent:
                 model_name=self.model_name,
                 model_provider="openai",
                 user_id=None,
-                law_firm_id=None,
+                law_firm_id=law_firm_id,
                 chat_session_id=None,
                 latency_ms=latency_ms,
                 status="success",

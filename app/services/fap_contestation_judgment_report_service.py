@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 import re
@@ -65,10 +66,20 @@ class FapContestationJudgmentReportService:
         benefit_id: int | None = None,
         law_firm_id: int | None = None,
         force_reclassify: bool = False,
+        parallel_workers: int = 1,
     ) -> dict[str, int]:
-        """Classifica benefícios em lote e persiste o tópico de contestação FAP."""
+        """Classifica benefícios em lote e persiste o tópico de contestação FAP.
+
+        Args:
+            batch_size: Quantos benefícios processar antes de cada commit.
+            benefit_id: Se informado, classifica apenas esse benefício.
+            law_firm_id: Se informado, restringe ao escritório.
+            force_reclassify: Se True, reclassifica mesmo os que já têm tópico.
+            parallel_workers: Número de chamadas LLM simultâneas (default=1, sequencial).
+        """
         with self.app.app_context():
             effective_batch_size = max(1, int(batch_size))
+            effective_workers = max(1, int(parallel_workers))
             query = Benefit.query
 
             if benefit_id is not None:
@@ -98,34 +109,53 @@ class FapContestationJudgmentReportService:
             errors = 0
             updated = 0
 
-            for index, benefit in enumerate(benefits, start=1):
-                classification_text = self._build_benefit_classification_text(benefit)
-                try:
-                    result = self.classifier_agent.classify(classification_text)
-                    topic = str(result.get('topic') or '').strip() or 'OUTROS ARGUMENTOS'
+            # Extrai textos na thread principal para não passar objetos SQLAlchemy às threads.
+            tasks = [
+                (benefit, self._build_benefit_classification_text(benefit), benefit.law_firm_id)
+                for benefit in benefits
+            ]
 
-                    if benefit.fap_contestation_topic != topic:
-                        benefit.fap_contestation_topic = topic
-                        benefit.updated_at = datetime.utcnow()
-                        updated += 1
+            def _classify_text(text: str, benefit_law_firm_id: int | None) -> str:
+                # Cada thread precisa do próprio app context — Flask-SQLAlchemy usa
+                # sessões thread-local vinculadas ao contexto da aplicação.
+                with self.app.app_context():
+                    result = self.classifier_agent.classify(text, law_firm_id=benefit_law_firm_id)
+                return str(result.get('topic') or '').strip() or 'OUTROS ARGUMENTOS'
 
-                    classified += 1
-                except Exception as exc:
-                    errors += 1
-                    print(f'Erro ao classificar benefício #{benefit.id}: {exc}')
+            completed = 0
+            with ThreadPoolExecutor(max_workers=effective_workers) as executor:
+                future_to_benefit = {
+                    executor.submit(_classify_text, text, benefit_law_firm_id): benefit
+                    for benefit, text, benefit_law_firm_id in tasks
+                }
 
-                if index % effective_batch_size == 0:
+                for future in as_completed(future_to_benefit):
+                    benefit = future_to_benefit[future]
+                    completed += 1
+
                     try:
-                        db.session.commit()
-                    except Exception as commit_exc:
-                        db.session.rollback()
-                        print(f'Erro ao salvar lote na classificação de benefícios: {commit_exc}')
-                        raise
+                        topic = future.result()
+                        if benefit.fap_contestation_topic != topic:
+                            benefit.fap_contestation_topic = topic
+                            benefit.updated_at = datetime.utcnow()
+                            updated += 1
+                        classified += 1
+                    except Exception as exc:
+                        errors += 1
+                        print(f'Erro ao classificar benefício #{benefit.id}: {exc}')
 
-                    print(
-                        f'Classificação de benefícios: {index}/{total} '
-                        f'(classificados={classified}, atualizados={updated}, erros={errors})'
-                    )
+                    if completed % effective_batch_size == 0:
+                        try:
+                            db.session.commit()
+                        except Exception as commit_exc:
+                            db.session.rollback()
+                            print(f'Erro ao salvar lote na classificação de benefícios: {commit_exc}')
+                            raise
+
+                        print(
+                            f'Classificação de benefícios: {completed}/{total} '
+                            f'(classificados={classified}, atualizados={updated}, erros={errors})'
+                        )
 
             try:
                 db.session.commit()

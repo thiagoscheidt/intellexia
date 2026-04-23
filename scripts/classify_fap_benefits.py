@@ -7,6 +7,7 @@ Uso:
   uv run python scripts/classify_fap_benefits.py --law-firm-id 1
   uv run python scripts/classify_fap_benefits.py --benefit-id 123
   uv run python scripts/classify_fap_benefits.py --force-reclassify
+  uv run python scripts/classify_fap_benefits.py --workers 10
 """
 
 import argparse
@@ -35,6 +36,12 @@ def parse_args():
         action='store_true',
         help='Reclassifica também benefícios que já possuem tópico salvo',
     )
+    parser.add_argument(
+        '--workers',
+        type=int,
+        default=1,
+        help='Número de chamadas LLM simultâneas (default=1). Recomendado: 5-10.',
+    )
     return parser.parse_args()
 
 
@@ -47,6 +54,7 @@ if __name__ == '__main__':
         benefit_id=args.benefit_id,
         law_firm_id=args.law_firm_id,
         force_reclassify=args.force_reclassify,
+        parallel_workers=args.workers,
     )
 
     print(

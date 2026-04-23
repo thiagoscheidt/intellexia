@@ -29,15 +29,19 @@
     vertical-align: middle;
   }
 
-  .stats-card {
-    border-left: 4px solid var(--bs-primary);
-  }
-
-  .stats-card .card-body {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
+  .stat-cards { display:grid; grid-template-columns:repeat(5,1fr); gap:.75rem; }
+  @media (max-width:1200px) { .stat-cards { grid-template-columns:repeat(3,1fr); } }
+  @media (max-width:768px)  { .stat-cards { grid-template-columns:repeat(2,1fr); } }
+  @media (max-width:480px)  { .stat-cards { grid-template-columns:1fr; } }
+  .stat-card { position:relative; overflow:hidden; background:var(--bs-body-bg); border:1px solid rgba(15,23,42,.07); border-radius:.85rem; box-shadow:0 4px 16px rgba(15,23,42,.06); padding:.85rem 1rem .85rem 1.2rem; }
+  .stat-card::before { content:""; position:absolute; inset:0 auto 0 0; width:5px; background:var(--sc-color,#0d6efd); border-radius:4px 0 0 4px; }
+  .stat-card .sc-icon { width:2.1rem; height:2.1rem; background:var(--sc-soft,rgba(13,110,253,.10)); color:var(--sc-color,#0d6efd); border-radius:.55rem; display:inline-flex; align-items:center; justify-content:center; font-size:.9rem; flex-shrink:0; }
+  .stat-card .sc-label { font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#6c7a8d; margin-bottom:.1rem; }
+  .stat-card .sc-value { font-size:1.55rem; font-weight:800; line-height:1; color:var(--bs-emphasis-color); }
+  .stat-card .sc-sub { display:flex; gap:.6rem; margin-top:.3rem; flex-wrap:wrap; }
+  .sc-sub-item { display:inline-flex; flex-direction:column; }
+  .sc-sub-label { font-size:.6rem; color:#9aa5b4; text-transform:uppercase; letter-spacing:.03em; }
+  .sc-sub-value { font-size:.8rem; font-weight:700; color:var(--sc-color,#0d6efd); }
 
   .cats-card {
     overflow: hidden;
@@ -86,57 +90,9 @@
     padding: 0.2rem;
   }
 
-  .stats-panel-header {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    margin-bottom: 0.35rem;
-    font-weight: 700;
-    color: var(--bs-emphasis-color);
-  }
-
-  .stats-panel-note {
-    border: 1px solid var(--bs-border-color-translucent);
-    border-left: 4px solid var(--bs-primary);
-    border-radius: 0.75rem;
-    background: var(--bs-tertiary-bg);
-    color: var(--bs-secondary-color);
-    font-size: 0.85rem;
-    padding: 0.55rem 0.8rem;
-    margin-bottom: 0.9rem;
-  }
-
-  .stats-panels-separator {
-    border-top: 1px dashed var(--bs-border-color);
-    margin: 0.25rem 0 1rem;
-  }
-
-  .stats-instance-split {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 0.6rem;
-    margin-top: 0.55rem;
-    text-align: left;
-  }
-
-  .stats-instance-item {
-    border-radius: 0.7rem;
-    background: rgba(255, 255, 255, 0.55);
-    padding: 0.45rem 0.55rem;
-  }
-
-  .stats-instance-label {
-    display: block;
-    font-size: 0.72rem;
-    color: var(--bs-secondary-color);
-    margin-bottom: 0.1rem;
-  }
-
-  .stats-instance-value {
-    font-size: 1.05rem;
-    font-weight: 700;
-    line-height: 1.1;
-  }
+  .stats-panel-header { display:flex; align-items:center; gap:.5rem; margin-bottom:.4rem; font-size:.75rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#3d5080; }
+  .stats-panel-note { border:1px solid rgba(13,110,253,.10); border-left:4px solid #0d6efd; border-radius:.6rem; background:rgba(13,110,253,.04); color:#5d6b82; font-size:.8rem; padding:.45rem .75rem; margin-bottom:.85rem; }
+  .stats-panels-separator { border-top:1px dashed rgba(15,23,42,.12); margin:.5rem 0 1rem; }
 
   .vigencia-filter-notice {
     display: flex;
@@ -177,11 +133,7 @@
     .vigencia-filter-notice { flex-direction: column; align-items: stretch; }
   }
 
-  @media (max-width: 1399.98px) {
-    .stats-instance-split {
-      grid-template-columns: 1fr;
-    }
-  }
+
 </style>
 {% endblock %}
 
@@ -222,111 +174,53 @@
       Este painel mostra o consolidado completo das CATs cadastradas, independentemente dos filtros da tabela.
     </div>
 
-    <div class="row row-cols-1 row-cols-md-2 row-cols-xl-5 g-3 mb-4">
-      <div class="col">
-        <div class="card stats-card h-100">
-          <div class="card-body text-center">
-            <div class="d-flex align-items-center justify-content-center">
-              <div class="me-3">
-                <i class="bi bi-exclamation-circle-fill text-primary" style="font-size: 2rem;"></i>
-              </div>
-              <div>
-                <div class="fw-bold fs-4">{{ total_count }}</div>
-                <div class="text-muted small">Total de CATs</div>
-              </div>
-            </div>
-          </div>
+    <div class="stat-cards mb-3">
+      <div class="stat-card" style="--sc-color:#0d6efd;--sc-soft:rgba(13,110,253,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-exclamation-circle"></i></span>
+          <span class="sc-label">Total de CATs</span>
+        </div>
+        <div class="sc-value">{{ total_count }}</div>
+      </div>
+      <div class="stat-card" style="--sc-color:#198754;--sc-soft:rgba(25,135,84,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-check-circle"></i></span>
+          <span class="sc-label">Deferidas</span>
+        </div>
+        <div class="sc-value">{{ first_instance_stats.approved }}</div>
+        <div class="sc-sub">
+          <span class="sc-sub-item"><span class="sc-sub-label">1ª inst.</span><span class="sc-sub-value">{{ first_instance_stats.approved }}</span></span>
+          <span class="sc-sub-item"><span class="sc-sub-label">2ª inst.</span><span class="sc-sub-value">{{ second_instance_stats.approved }}</span></span>
         </div>
       </div>
-      <div class="col">
-        <div class="card stats-card h-100" style="border-left-color: var(--bs-success);">
-          <div class="card-body text-center">
-            <div class="d-flex align-items-center justify-content-center">
-              <div class="me-3">
-                <i class="bi bi-check-circle-fill text-success" style="font-size: 2rem;"></i>
-              </div>
-              <div class="text-start">
-                <div class="fw-bold fs-4">{{ first_instance_stats.approved }}</div>
-                <div class="text-muted small">Deferidas</div>
-                <div class="stats-instance-split">
-                  <div class="stats-instance-item">
-                    <span class="stats-instance-label">1ª instância</span>
-                    <span class="stats-instance-value text-success">{{ first_instance_stats.approved }}</span>
-                  </div>
-                  <div class="stats-instance-item">
-                    <span class="stats-instance-label">2ª instância</span>
-                    <span class="stats-instance-value text-success">{{ second_instance_stats.approved }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+      <div class="stat-card" style="--sc-color:#dc3545;--sc-soft:rgba(220,53,69,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-x-circle"></i></span>
+          <span class="sc-label">Indeferidas</span>
+        </div>
+        <div class="sc-value">{{ first_instance_stats.rejected }}</div>
+        <div class="sc-sub">
+          <span class="sc-sub-item"><span class="sc-sub-label">1ª inst.</span><span class="sc-sub-value">{{ first_instance_stats.rejected }}</span></span>
+          <span class="sc-sub-item"><span class="sc-sub-label">2ª inst.</span><span class="sc-sub-value">{{ second_instance_stats.rejected }}</span></span>
         </div>
       </div>
-      <div class="col">
-        <div class="card stats-card h-100" style="border-left-color: var(--bs-danger);">
-          <div class="card-body text-center">
-            <div class="d-flex align-items-center justify-content-center">
-              <div class="me-3">
-                <i class="bi bi-x-circle-fill text-danger" style="font-size: 2rem;"></i>
-              </div>
-              <div class="text-start">
-                <div class="fw-bold fs-4">{{ first_instance_stats.rejected }}</div>
-                <div class="text-muted small">Indeferidas</div>
-                <div class="stats-instance-split">
-                  <div class="stats-instance-item">
-                    <span class="stats-instance-label">1ª instância</span>
-                    <span class="stats-instance-value text-danger">{{ first_instance_stats.rejected }}</span>
-                  </div>
-                  <div class="stats-instance-item">
-                    <span class="stats-instance-label">2ª instância</span>
-                    <span class="stats-instance-value text-danger">{{ second_instance_stats.rejected }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+      <div class="stat-card" style="--sc-color:#f59e0b;--sc-soft:rgba(245,158,11,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-hourglass-split"></i></span>
+          <span class="sc-label">Em análise</span>
+        </div>
+        <div class="sc-value">{{ first_instance_stats.analyzing }}</div>
+        <div class="sc-sub">
+          <span class="sc-sub-item"><span class="sc-sub-label">1ª inst.</span><span class="sc-sub-value">{{ first_instance_stats.analyzing }}</span></span>
+          <span class="sc-sub-item"><span class="sc-sub-label">2ª inst.</span><span class="sc-sub-value">{{ second_instance_stats.analyzing }}</span></span>
         </div>
       </div>
-      <div class="col">
-        <div class="card stats-card h-100" style="border-left-color: var(--bs-warning);">
-          <div class="card-body text-center">
-            <div class="d-flex align-items-center justify-content-center">
-              <div class="me-3">
-                <i class="bi bi-hourglass-split text-warning" style="font-size: 2rem;"></i>
-              </div>
-              <div class="text-start">
-                <div class="fw-bold fs-4">{{ first_instance_stats.analyzing }}</div>
-                <div class="text-muted small">Em análise</div>
-                <div class="stats-instance-split">
-                  <div class="stats-instance-item">
-                    <span class="stats-instance-label">1ª instância</span>
-                    <span class="stats-instance-value text-warning">{{ first_instance_stats.analyzing }}</span>
-                  </div>
-                  <div class="stats-instance-item">
-                    <span class="stats-instance-label">2ª instância</span>
-                    <span class="stats-instance-value text-warning">{{ second_instance_stats.analyzing }}</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
+      <div class="stat-card" style="--sc-color:#6c757d;--sc-soft:rgba(108,117,125,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-clock"></i></span>
+          <span class="sc-label">Pendentes</span>
         </div>
-      </div>
-      <div class="col">
-        <div class="card stats-card h-100" style="border-left-color: var(--bs-secondary);">
-          <div class="card-body text-center">
-            <div class="d-flex align-items-center justify-content-center">
-              <div class="me-3">
-                <i class="bi bi-clock-fill text-secondary" style="font-size: 2rem;"></i>
-              </div>
-              <div>
-                <div class="fw-bold fs-4">{{ first_instance_stats.pending }}</div>
-                <div class="text-muted small">Pendentes</div>
-              </div>
-            </div>
-          </div>
-        </div>
+        <div class="sc-value">{{ first_instance_stats.pending }}</div>
       </div>
     </div>
 
@@ -341,81 +235,41 @@
       Este painel reflete somente os resultados atuais após busca e filtros aplicados.
     </div>
 
-    <div class="row row-cols-1 row-cols-md-2 row-cols-xl-5 g-3 mb-4" id="filteredStatsPanel">
-      <div class="col">
-        <div class="card stats-card h-100 border-primary-subtle">
-          <div class="card-body text-center">
-            <div class="d-flex align-items-center justify-content-center">
-              <div class="me-3">
-                <i class="bi bi-exclamation-circle text-primary" style="font-size: 2rem;"></i>
-              </div>
-              <div>
-                <div class="fw-bold fs-4" id="filteredTotalCount">-</div>
-                <div class="text-muted small">Total filtrado</div>
-              </div>
-            </div>
-          </div>
+    <div class="stat-cards mb-3" id="filteredStatsPanel">
+      <div class="stat-card" style="--sc-color:#0d6efd;--sc-soft:rgba(13,110,253,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-funnel"></i></span>
+          <span class="sc-label">Total</span>
         </div>
+        <div id="filteredTotalCount" class="sc-value">-</div>
       </div>
-      <div class="col">
-        <div class="card stats-card h-100 border-success-subtle" style="border-left-color: var(--bs-success);">
-          <div class="card-body text-center">
-            <div class="d-flex align-items-center justify-content-center">
-              <div class="me-3">
-                <i class="bi bi-check-circle text-success" style="font-size: 2rem;"></i>
-              </div>
-              <div>
-                <div class="fw-bold fs-4" id="filteredApprovedCount">-</div>
-                <div class="text-muted small">Deferidas</div>
-              </div>
-            </div>
-          </div>
+      <div class="stat-card" style="--sc-color:#198754;--sc-soft:rgba(25,135,84,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-check-circle"></i></span>
+          <span class="sc-label">Deferidas</span>
         </div>
+        <div id="filteredApprovedCount" class="sc-value">-</div>
       </div>
-      <div class="col">
-        <div class="card stats-card h-100 border-danger-subtle" style="border-left-color: var(--bs-danger);">
-          <div class="card-body text-center">
-            <div class="d-flex align-items-center justify-content-center">
-              <div class="me-3">
-                <i class="bi bi-x-circle text-danger" style="font-size: 2rem;"></i>
-              </div>
-              <div>
-                <div class="fw-bold fs-4" id="filteredRejectedCount">-</div>
-                <div class="text-muted small">Indeferidas</div>
-              </div>
-            </div>
-          </div>
+      <div class="stat-card" style="--sc-color:#dc3545;--sc-soft:rgba(220,53,69,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-x-circle"></i></span>
+          <span class="sc-label">Indeferidas</span>
         </div>
+        <div id="filteredRejectedCount" class="sc-value">-</div>
       </div>
-      <div class="col">
-        <div class="card stats-card h-100 border-warning-subtle" style="border-left-color: var(--bs-warning);">
-          <div class="card-body text-center">
-            <div class="d-flex align-items-center justify-content-center">
-              <div class="me-3">
-                <i class="bi bi-hourglass text-warning" style="font-size: 2rem;"></i>
-              </div>
-              <div>
-                <div class="fw-bold fs-4" id="filteredInReviewCount">-</div>
-                <div class="text-muted small">Em análise</div>
-              </div>
-            </div>
-          </div>
+      <div class="stat-card" style="--sc-color:#f59e0b;--sc-soft:rgba(245,158,11,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-hourglass-split"></i></span>
+          <span class="sc-label">Em análise</span>
         </div>
+        <div id="filteredInReviewCount" class="sc-value">-</div>
       </div>
-      <div class="col">
-        <div class="card stats-card h-100 border-secondary-subtle" style="border-left-color: var(--bs-secondary);">
-          <div class="card-body text-center">
-            <div class="d-flex align-items-center justify-content-center">
-              <div class="me-3">
-                <i class="bi bi-clock text-secondary" style="font-size: 2rem;"></i>
-              </div>
-              <div>
-                <div class="fw-bold fs-4" id="filteredPendingCount">-</div>
-                <div class="text-muted small">Pendentes</div>
-              </div>
-            </div>
-          </div>
+      <div class="stat-card" style="--sc-color:#6c757d;--sc-soft:rgba(108,117,125,.10);">
+        <div class="d-flex align-items-center gap-2 mb-1">
+          <span class="sc-icon"><i class="bi bi-clock"></i></span>
+          <span class="sc-label">Pendentes</span>
         </div>
+        <div id="filteredPendingCount" class="sc-value">-</div>
       </div>
     </div>
 

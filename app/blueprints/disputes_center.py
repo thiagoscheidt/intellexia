@@ -63,6 +63,7 @@ FILTER_FIELD_MAP = {
     'second_instance_status': Benefit.second_instance_status,
     'second_instance_status_raw': Benefit.second_instance_status_raw,
     'fap_vigencia_years': Benefit.fap_vigencia_years,
+    'fap_contestation_topic': Benefit.fap_contestation_topic,
     'benefit_start_date': Benefit.benefit_start_date,
     'benefit_end_date': Benefit.benefit_end_date,
     'accident_date': Benefit.accident_date,
@@ -86,7 +87,8 @@ ORDER_COLUMN_MAP = {
     4: Benefit.first_instance_status,
     5: Benefit.second_instance_status,
     6: Benefit.fap_vigencia_years,
-    7: Benefit.benefit_start_date,
+    7: Benefit.fap_contestation_topic,
+    8: Benefit.benefit_start_date,
 }
 
 
@@ -1377,6 +1379,7 @@ def _serialize_benefit_row(benefit, client_name):
         'second_instance_justification': benefit.second_instance_justification or '',
         'second_instance_opinion': benefit.second_instance_opinion or '',
         'fap_vigencia_years': benefit.fap_vigencia_years or '',
+        'fap_contestation_topic': benefit.fap_contestation_topic or '',
         'benefit_start_date': _format_date(benefit.benefit_start_date),
         'benefit_end_date': _format_date(benefit.benefit_end_date),
         'accident_date': _format_date(benefit.accident_date),
@@ -1599,6 +1602,12 @@ def list_disputes_center():
     ).count()
     rejected_count = Benefit.query.filter_by(law_firm_id=law_firm_id, status='rejected').count()
     pending_count = max(total_count - approved_count - in_review_count - rejected_count, 0)
+    categorized_count = Benefit.query.filter(
+        Benefit.law_firm_id == law_firm_id,
+        Benefit.fap_contestation_topic.isnot(None),
+        func.trim(cast(Benefit.fap_contestation_topic, String)) != '',
+    ).count()
+    uncategorized_count = max(total_count - categorized_count, 0)
 
     general_query = _base_benefits_query(law_firm_id)
     first_instance_status_counts = _group_count_by_status(general_query, Benefit.first_instance_status)
@@ -1714,6 +1723,8 @@ def list_disputes_center():
         in_review_count=in_review_count,
         rejected_count=rejected_count,
         pending_count=pending_count,
+        categorized_count=categorized_count,
+        uncategorized_count=uncategorized_count,
         first_instance_stats=first_instance_stats,
         second_instance_stats=second_instance_stats,
         cnpj_roots=cnpj_roots,
@@ -2278,6 +2289,16 @@ def list_disputes_center_api():
     in_review_filtered = int(status_counts.get('in_review', 0) or 0) + int(status_counts.get('analyzing', 0) or 0)
     rejected_filtered = int(status_counts.get('rejected', 0) or 0)
     pending_filtered = max(int(records_filtered) - approved_filtered - in_review_filtered - rejected_filtered, 0)
+    categorized_filtered = (
+        filtered_query.filter(
+            Benefit.fap_contestation_topic.isnot(None),
+            func.trim(cast(Benefit.fap_contestation_topic, String)) != '',
+        )
+        .with_entities(func.count(Benefit.id))
+        .scalar()
+        or 0
+    )
+    uncategorized_filtered = max(int(records_filtered) - int(categorized_filtered), 0)
     filtered_first_instance_status_counts = _group_count_by_status(filtered_query, Benefit.first_instance_status)
     filtered_first_instance_stats = _build_instance_stats(
         records_filtered,
@@ -2320,6 +2341,8 @@ def list_disputes_center_api():
                 'rejected': rejected_filtered,
                 'in_review': in_review_filtered,
                 'pending': pending_filtered,
+                'categorized': int(categorized_filtered),
+                'uncategorized': uncategorized_filtered,
                 'first_instance': filtered_first_instance_stats,
                 'second_instance': filtered_second_instance_stats,
             },
@@ -2377,6 +2400,7 @@ def export_disputes_center_excel():
         'Justificativa 2ª instância',
         'Parecer 2ª instância',
         'Vigência FAP',
+        'Categoria FAP',
         'DIB',
         'DCB',
         'Data acidente',
@@ -2423,6 +2447,7 @@ def export_disputes_center_excel():
                 benefit.second_instance_justification or '',
                 benefit.second_instance_opinion or '',
                 benefit.fap_vigencia_years or '',
+                benefit.fap_contestation_topic or '',
                 _format_date(benefit.benefit_start_date),
                 _format_date(benefit.benefit_end_date),
                 _format_date(benefit.accident_date),
