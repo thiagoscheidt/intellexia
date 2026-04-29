@@ -633,8 +633,7 @@
 
               <div class="row g-2 align-items-end mt-1 pt-2 border-top">
                 <div class="col-md-4">
-                  <label for="quickClientFilter" class="form-label mb-1 small text-muted">Filtro adicional:
-                    cliente</label>
+                  <label for="quickClientFilter" class="form-label mb-1 small text-muted">Cliente</label>
                   <select id="quickClientFilter" class="form-select form-select-sm">
                     <option value="">Todos os clientes</option>
                     {% for name in client_options or [] %}
@@ -643,8 +642,7 @@
                   </select>
                 </div>
                 <div class="col-md-3">
-                  <label for="quickRootCnpjFilter" class="form-label mb-1 small text-muted">Filtro adicional: CNPJ
-                    raiz</label>
+                  <label for="quickRootCnpjFilter" class="form-label mb-1 small text-muted">CNPJ raiz</label>
                   <select id="quickRootCnpjFilter" class="form-select form-select-sm">
                     <option value="">Todos os CNPJ raiz</option>
                     {% for item in cnpj_roots or [] %}
@@ -654,7 +652,7 @@
                   </select>
                 </div>
                 <div class="col-md-4" id="quickCnpjFilterWrapper" style="display:none;">
-                  <label for="quickCnpjFilter" class="form-label mb-1 small text-muted">Empresa / CNPJ</label>
+                  <label for="quickCnpjFilter" class="form-label mb-1 small text-muted">Empresa ou CNPJ completo</label>
                   <select id="quickCnpjFilter" class="form-select form-select-sm">
                     <option value="">Todas as empresas</option>
                   </select>
@@ -664,11 +662,12 @@
 
               <div class="row g-2 align-items-end mt-2">
                 <div class="col-md-4 col-lg-3">
-                  <label for="quickCategoryModeFilter" class="form-label mb-1 small text-muted">Categoria FAP</label>
+                  <label for="quickCategoryModeFilter" class="form-label mb-1 small text-muted">Filtro de categoria
+                    FAP</label>
                   <select id="quickCategoryModeFilter" class="form-select form-select-sm">
-                    <option value="all">Tudo</option>
-                    <option value="without">Sem categoria</option>
-                    <option value="with">Com categoria</option>
+                    <option value="all">Todos os registros</option>
+                    <option value="without">Apenas sem categoria</option>
+                    <option value="with">Apenas com categoria</option>
                   </select>
                 </div>
               </div>

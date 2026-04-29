@@ -271,6 +271,43 @@ class FapContestationJudgmentReportService:
 
         return record
 
+    @staticmethod
+    def _parse_vigencia_years(raw_value: str | None) -> set[str]:
+        if not raw_value:
+            return set()
+        return {
+            year.strip()
+            for year in str(raw_value).split(',')
+            if year and str(year).strip()
+        }
+
+    def _find_existing_benefit_for_report(
+        self,
+        *,
+        law_firm_id: int,
+        benefit_number: str,
+        validity_year: str | None,
+    ) -> Benefit | None:
+        candidates = (
+            Benefit.query
+            .filter_by(law_firm_id=law_firm_id, benefit_number=benefit_number)
+            .order_by(Benefit.id.asc())
+            .all()
+        )
+        if not candidates:
+            return None
+
+        normalized_validity_year = str(validity_year or '').strip() or None
+        if not normalized_validity_year:
+            return candidates[0]
+
+        for candidate in candidates:
+            candidate_years = self._parse_vigencia_years(candidate.fap_vigencia_years)
+            if normalized_validity_year in candidate_years:
+                return candidate
+
+        return None
+
     def _extract_typed_blocks_with_pdfplumber(self, file_path: str | Path) -> list[tuple[str, str]]:
         """Extrai texto do PDF uma única vez e retorna blocos tipados."""
         path = Path(file_path)
@@ -1938,14 +1975,14 @@ class FapContestationJudgmentReportService:
         )
         publication_dt = datetime.combine(publication_date, datetime.min.time()) if publication_date else None
         reference_dt = publication_dt or transmission_dt
+        validity_year = str(getattr(metadata, 'validity_year', '') or '').strip() or None
 
         if metadata is not None:
             metadata_cnpj = employer_cnpj_formatted or getattr(metadata, 'establishment_cnpj', None)
-            metadata_vigencia = getattr(metadata, 'validity_year', None)
             employer_vigencia_record = self._upsert_benefit_vigencia_cnpj(
                 law_firm_id=report.law_firm_id,
                 employer_cnpj_raw=metadata_cnpj,
-                vigencia_year_raw=metadata_vigencia,
+                vigencia_year_raw=validity_year,
             )
 
         for item in extracted_benefits:
@@ -1954,10 +1991,11 @@ class FapContestationJudgmentReportService:
                 continue
 
             is_new_benefit = False
-            benefit = Benefit.query.filter_by(
+            benefit = self._find_existing_benefit_for_report(
                 law_firm_id=report.law_firm_id,
                 benefit_number=benefit_number,
-            ).first()
+                validity_year=validity_year,
+            )
 
             if benefit is None:
                 is_new_benefit = True
