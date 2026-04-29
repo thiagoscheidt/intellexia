@@ -24,6 +24,35 @@ def _get_existing_columns(connection, table_name: str, is_mysql: bool = False) -
     return {row[1] for row in result.fetchall()}
 
 
+def _index_exists(connection, table_name: str, index_name: str, is_mysql: bool = False) -> bool:
+    if is_mysql:
+        result = connection.execute(
+            db.text(
+                """
+                SELECT COUNT(*)
+                FROM information_schema.STATISTICS
+                WHERE TABLE_SCHEMA = DATABASE()
+                  AND TABLE_NAME = :table_name
+                  AND INDEX_NAME = :index_name
+                """
+            ),
+            {"table_name": table_name, "index_name": index_name},
+        )
+        return int(result.scalar() or 0) > 0
+
+    result = connection.execute(
+        db.text(
+            """
+            SELECT name
+            FROM sqlite_master
+            WHERE type='index' AND name = :index_name
+            """
+        ),
+        {"index_name": index_name},
+    )
+    return result.fetchone() is not None
+
+
 def add_missing_columns():
     with app.app_context():
         db_uri = app.config.get("SQLALCHEMY_DATABASE_URI", "")
@@ -43,17 +72,24 @@ def add_missing_columns():
                     db.text("ALTER TABLE benefits ADD COLUMN fap_contestation_topic VARCHAR(120)")
                 )
 
-            if is_mysql:
-                connection.execute(
-                    db.text("CREATE INDEX ix_benefits_fap_contestation_topic ON benefits (fap_contestation_topic)")
-                )
+            index_name = "ix_benefits_fap_contestation_topic"
+            if _index_exists(connection, "benefits", index_name, is_mysql):
+                print(f"- indice ja existe: {index_name}")
             else:
-                connection.execute(
-                    db.text(
-                        "CREATE INDEX IF NOT EXISTS ix_benefits_fap_contestation_topic "
-                        "ON benefits (fap_contestation_topic)"
+                if is_mysql:
+                    connection.execute(
+                        db.text(
+                            "CREATE INDEX ix_benefits_fap_contestation_topic "
+                            "ON benefits (fap_contestation_topic)"
+                        )
                     )
-                )
+                else:
+                    connection.execute(
+                        db.text(
+                            "CREATE INDEX IF NOT EXISTS ix_benefits_fap_contestation_topic "
+                            "ON benefits (fap_contestation_topic)"
+                        )
+                    )
 
             transaction.commit()
             print("Migracao concluida com sucesso.")

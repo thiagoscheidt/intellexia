@@ -1247,7 +1247,16 @@ def _build_instance_stats(total_count, status_counts):
     }
 
 
-def _apply_benefits_filters(query, search_value='', custom_filters=None, quick_client='', quick_root='', quick_cnpj='', vigencia_id=None):
+def _apply_benefits_filters(
+    query,
+    search_value='',
+    custom_filters=None,
+    quick_client='',
+    quick_root='',
+    quick_cnpj='',
+    vigencia_id=None,
+    quick_category_mode='',
+):
     search_text = (search_value or '').strip().lower()
     if search_text:
         like_term = f'%{search_text}%'
@@ -1303,6 +1312,20 @@ def _apply_benefits_filters(query, search_value='', custom_filters=None, quick_c
             query = query.filter(Benefit.fap_vigencia_cnpj_id == int(vigencia_id))
         except (TypeError, ValueError):
             pass
+
+    category_filled = and_(
+        Benefit.fap_contestation_topic.isnot(None),
+        func.trim(cast(Benefit.fap_contestation_topic, String)) != '',
+    )
+    category_empty = or_(
+        Benefit.fap_contestation_topic.is_(None),
+        func.trim(cast(Benefit.fap_contestation_topic, String)) == '',
+    )
+    category_mode = _normalize_text(quick_category_mode).lower()
+    if category_mode == 'with':
+        query = query.filter(category_filled)
+    elif category_mode == 'without':
+        query = query.filter(category_empty)
 
     for item in custom_filters or []:
         field = item['field']
@@ -1412,6 +1435,7 @@ def _collect_listing_payload(default_length=25):
             'quick_client': _normalize_text(payload.get('quick_client', '')),
             'quick_root': _normalize_text(payload.get('quick_root', '')),
             'quick_cnpj': _normalize_text(payload.get('quick_cnpj', '')),
+            'quick_category_mode': _normalize_text(payload.get('quick_category_mode', 'all')).lower(),
             'vigencia_id': payload.get('vigencia_id'),
         }
 
@@ -1426,6 +1450,7 @@ def _collect_listing_payload(default_length=25):
     quick_client = _normalize_text(request.args.get('quick_client', ''))
     quick_root = _normalize_text(request.args.get('quick_root', ''))
     quick_cnpj = _normalize_text(request.args.get('quick_cnpj', ''))
+    quick_category_mode = _normalize_text(request.args.get('quick_category_mode', 'all')).lower()
 
     return {
         'draw': draw,
@@ -1438,6 +1463,7 @@ def _collect_listing_payload(default_length=25):
         'quick_client': quick_client,
         'quick_root': quick_root,
         'quick_cnpj': quick_cnpj,
+        'quick_category_mode': quick_category_mode,
         'vigencia_id': request.args.get('vigencia_id'),
     }
 
@@ -2279,6 +2305,7 @@ def list_disputes_center_api():
         quick_client=payload['quick_client'],
         quick_root=payload['quick_root'],
         quick_cnpj=payload.get('quick_cnpj', ''),
+        quick_category_mode=payload.get('quick_category_mode', 'all'),
         vigencia_id=payload.get('vigencia_id'),
     )
 
@@ -2364,6 +2391,7 @@ def export_disputes_center_excel():
         quick_client=payload['quick_client'],
         quick_root=payload['quick_root'],
         quick_cnpj=payload.get('quick_cnpj', ''),
+        quick_category_mode=payload.get('quick_category_mode', 'all'),
         vigencia_id=payload.get('vigencia_id'),
     )
 
