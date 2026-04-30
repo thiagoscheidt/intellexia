@@ -102,7 +102,9 @@ class FAPContestationClassifierAgent:
         "outro estabelecimento",
         "outra empresa",
         "nao relacionado a este estabelecimento",
+        "nao esta relacionado a este estabelecimento",
         "não relacionado a este estabelecimento",
+        "não está relacionado a este estabelecimento",
         "nunca foi empregado",
         "apos a rescisao",
         "após a rescisão",
@@ -224,11 +226,63 @@ class FAPContestationClassifierAgent:
         return False
 
     def _has_other_company_evidence(self, normalized_text: str) -> bool:
-        return any(term.upper() in normalized_text for term in self.OTHER_COMPANY_TERMS)
+        if any(term.upper() in normalized_text for term in self.OTHER_COMPANY_TERMS):
+            return True
+
+        # Cobrir variacoes frasais comuns em justificativas de erro de estabelecimento.
+        if re.search(
+            r"NAO\s+(?:ESTA\s+)?RELACIONAD[OA]\s+A\s+ESTE\s+ESTABELECIMENTO",
+            normalized_text,
+        ):
+            return True
+
+        # Quando ha mencao de CNPJ diferente em contexto de estabelecimento, tambem e forte indicio.
+        if "CNPJ" in normalized_text and "ESTABELECIMENTO" in normalized_text and "NAO" in normalized_text:
+            return True
+
+        return False
+
+    def _detect_critical_regex_slugs(self, normalized_text: str) -> list[str]:
+        detected: list[str] = []
+
+        has_ntp = bool(re.search(r"\bNTP\b|NEXO TECNICO PREVIDENCIARIO", normalized_text))
+        has_pending_signal = bool(
+            re.search(
+                r"PENDENT[EA]|PENDENTE DE JULGAMENTO|AGUARDANDO JULGAMENTO|EFEITO SUSPENSIVO",
+                normalized_text,
+            )
+        )
+        has_contestation = bool(re.search(r"CONTESTACAO|CONTESTAR", normalized_text))
+        if has_ntp and (has_pending_signal or has_contestation):
+            detected.append("nexo_pendente")
+
+        has_trajeto = bool(re.search(r"ACIDENTE DE TRAJETO", normalized_text))
+        has_judicial_signal = bool(
+            re.search(r"ACAO JUDICIAL|PROCESSO|AUTOS|SENTENCA|DECISAO JUDICIAL", normalized_text)
+        )
+        has_sem_cat_signal = bool(re.search(r"SEM CAT|AUSENCIA DE CAT|INEXISTENCIA DE CAT", normalized_text))
+        has_cat_number = bool(re.search(r"CAT\s*(?:N|NO|N\s*O|N\s*º|NUMERO)?\s*[\d./-]{4,}", normalized_text))
+        if has_trajeto and (has_sem_cat_signal or (has_judicial_signal and not has_cat_number)):
+            detected.append("acidente_trajeto_sem_cat")
+
+        has_justica_federal = bool(re.search(r"\bJUSTICA\s+FEDERAL\b", normalized_text))
+        has_legal_basis = bool(re.search(r"SUMULA\s*235|ART\.?\s*109", normalized_text))
+        has_previdenciario_basis = bool(re.search(r"NATUREZA\s+PREVIDENCIARIA|BENEFICIO\s+PREVIDENCIARIO", normalized_text))
+        if has_justica_federal and (has_legal_basis or has_previdenciario_basis):
+            detected.append("beneficio_justica_federal")
+
+        return detected
+
+    def _has_justica_federal_evidence(self, normalized_text: str) -> bool:
+        has_justica_federal = bool(re.search(r"\bJUSTICA\s+FEDERAL\b", normalized_text))
+        has_legal_basis = bool(re.search(r"SUMULA\s*235|ART\.?\s*109", normalized_text))
+        has_previdenciario_basis = bool(re.search(r"NATUREZA\s+PREVIDENCIARIA|BENEFICIO\s+PREVIDENCIARIO", normalized_text))
+        return has_justica_federal and (has_legal_basis or has_previdenciario_basis)
 
     def _apply_rule_based_guards(self, text: str, topics_slugs: list[str]) -> list[str]:
         normalized_text = self._normalize_text_for_match(text)
         guarded_topics = topics_slugs.copy()
+        critical_slugs = self._detect_critical_regex_slugs(normalized_text)
 
         other_company_slugs = {
             "erro_estabelecimento",
@@ -240,13 +294,32 @@ class FAPContestationClassifierAgent:
 
         has_pre_fap = self._has_pre_fap_evidence(normalized_text)
         has_other_company = self._has_other_company_evidence(normalized_text)
+        has_justica_federal = self._has_justica_federal_evidence(normalized_text)
+
+        for slug in reversed(critical_slugs):
+            guarded_topics = [item for item in guarded_topics if item != slug]
+            guarded_topics.insert(0, slug)
+
+        if "acidente_trajeto_sem_cat" in guarded_topics:
+            guarded_topics = [slug for slug in guarded_topics if slug != "acidente_trajeto"]
+
+        if not has_justica_federal:
+            guarded_topics = [slug for slug in guarded_topics if slug != "beneficio_justica_federal"]
 
         if has_pre_fap:
             guarded_topics = [slug for slug in guarded_topics if slug != "pre_fap"]
             guarded_topics.insert(0, "pre_fap")
 
-        if not has_other_company:
+        if has_other_company:
+            has_other_company_topic = any(slug in other_company_slugs for slug in guarded_topics)
+            if not has_other_company_topic:
+                guarded_topics.insert(0, "erro_estabelecimento")
+            guarded_topics = [slug for slug in guarded_topics if slug != "discussao_medica"]
+        else:
             guarded_topics = [slug for slug in guarded_topics if slug not in other_company_slugs]
+
+        if critical_slugs:
+            guarded_topics = [slug for slug in guarded_topics if slug != "discussao_medica"]
 
         deduped: list[str] = []
         for slug in guarded_topics:
@@ -301,6 +374,7 @@ class FAPContestationClassifierAgent:
             "Voce e um especialista juridico em FAP. "
             "Classifique o texto em ATE 3 topicos e retorne JSON valido. "
             "Ordene por relevancia, com o principal na primeira posicao. "
+            "Quando houver cabecalho literal com nome de categoria, trate isso como evidencia forte. "
             "DISCUSSAO MEDICA / OUTROS ARGUMENTOS so pode ser usada quando nenhum outro topico especifico se aplicar. "
             "Prefira sempre topicos juridicos especificos quando houver evidencia textual suficiente. "
             "Evite falso positivo: nunca retorne PRE-FAP, B31 ou NEXO PENDENTE sem evidencia textual explicita. "
@@ -360,6 +434,28 @@ class FAPContestationClassifierAgent:
             "- 'evento acidentario anterior a 1o de abril de 2007'\n"
             "- 'DID 2002'\n"
             "- 'acidente/doenca antes da vigencia do FAP'\n\n"
+            "Sinais juridicos fortes por categoria (use para desempate e prioridade):\n"
+            "- nexo_pendente: mencao a NTP/nexo tecnico com contestacao pendente de julgamento e pedido de efeito suspensivo\n"
+            "- acidente_trajeto: mencao expressa de acidente de trajeto com CAT comprovando o evento\n"
+            "- acidente_trajeto_sem_cat: acidente de trajeto comprovado por acao judicial, sem CAT\n"
+            "- restabelecimento_b91_60: mencao a restabelecimento em menos de 60 dias (DCB->novo beneficio)\n"
+            "- b31_previdenciario: mencao expressa de especie previdenciaria/B31 e exclusao por nao ser acidentario\n"
+            "- erro_estabelecimento: beneficio imputado ao estabelecimento/CNPJ errado\n"
+            "- pre_fap: evento anterior a abril/2007, art. 202-A, decreto 6.957/2009, irretroatividade\n"
+            "- outra_empresa_cat: CAT vincula acidente a outra empresa\n"
+            "- outra_empresa_nunca_empregado: ausencia de vinculo empregaticio historico com a empresa\n"
+            "- outra_empresa_pos_rescisao: DIB/evento posterior a rescisao contratual\n"
+            "- outra_empresa_did_anterior: DID anterior a admissao na empresa\n"
+            "- nexo_afastado: pericia/sentenca afasta nexo causal ou concausalidade laboral\n"
+            "- beneficio_justica_federal: concessao judicial na Justica Federal indicando natureza previdenciaria\n"
+            "- concomitante_b91_aposentadoria: B91 concedido com aposentadoria ativa\n"
+            "- concomitante_dois_b91: concessao concomitante de dois auxilios-doenca\n"
+            "- concomitante_b94_aposentadoria: B94 acumulado com aposentadoria\n"
+            "- b94_duplicado: dois B94 para mesmo fato gerador\n"
+            "- b94_sem_custo: DIB=DCB/beneficio sem custo juridico efetivo\n"
+            "- discussao_medica: debate clinico/pericial sem enquadramento juridico FAP especifico\n\n"
+            "Regra de estruturacao:\n"
+            "- Se o texto trouxer mais de um bloco justificativo com fundamentos distintos, retorne multiplos slugs (ate 3), sem inventar.\n"
             "Formato:\n"
             '{"topics":["slug1","slug2"],"confidence":0.0,"reason":"explicacao curta ou vazio"}\n\n'
             f"Texto:\n{cleaned_text}"
