@@ -862,6 +862,7 @@
   $(document).ready(function () {
     const apiListUrl = "{{ url_for('disputes_center.list_disputes_center_api') }}";
     const exportUrl = "{{ url_for('disputes_center.export_disputes_center_excel') }}";
+    const classifyTopicUrlTemplate = "{{ url_for('disputes_center.classify_single_benefit_topic_api', benefit_id=0) }}";
     const filters = [];
     const urlParams = new URLSearchParams(window.location.search);
     const initialVigenciaId = (urlParams.get('vigencia_id') || '').trim();
@@ -1092,9 +1093,18 @@
       },
       {
         data: 'fap_contestation_topic',
-        render: function (data) {
+        render: function (data, __, row) {
           if (!data) {
-            return '<span class="text-muted">-</span>';
+            return `
+              <div class="d-flex flex-column align-items-start gap-1">
+                <button type="button"
+                  class="btn btn-sm badge rounded-pill bg-primary-subtle text-primary-emphasis border border-primary-subtle btn-classify-topic"
+                  data-benefit-id="${escapeAttr(row.id)}"
+                  title="Classificar benefício"
+                  aria-label="Classificar benefício">
+                  <i class="bi bi-magic me-1"></i>Classificar
+                </button>
+              </div>`;
           }
           return `<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle" style="white-space:normal;text-align:left;">${escapeHtml(data)}</span>`;
         }
@@ -1172,6 +1182,39 @@
         }
       });
     },
+  });
+
+  $('#centralBenefitsTable').on('click', '.btn-classify-topic', function () {
+    const btn = $(this);
+    const benefitId = String(btn.data('benefit-id') || '').trim();
+    if (!benefitId) {
+      return;
+    }
+
+    const url = classifyTopicUrlTemplate.replace('/0/classify-topic', `/${encodeURIComponent(benefitId)}/classify-topic`);
+    const originalHtml = btn.html();
+
+    btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Classificando...');
+
+    fetch(url, {
+      method: 'POST',
+      headers: {
+        'X-Requested-With': 'XMLHttpRequest',
+      },
+    })
+      .then(async (response) => {
+        const payload = await response.json().catch(() => ({}));
+        if (!response.ok || !payload.ok) {
+          throw new Error(payload.message || 'Não foi possível classificar o benefício.');
+        }
+        table.ajax.reload(null, false);
+      })
+      .catch((error) => {
+        alert(error.message || 'Erro inesperado ao classificar benefício.');
+      })
+      .finally(() => {
+        btn.prop('disabled', false).html(originalHtml);
+      });
   });
 
   const fieldLabelMap = {

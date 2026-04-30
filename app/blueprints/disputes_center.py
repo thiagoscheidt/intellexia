@@ -7,6 +7,7 @@ import json
 import os
 
 from app.services.fap_web_service import FapWebAuthPayload, FapWebService
+from app.services.fap_contestation_judgment_report_service import FapContestationJudgmentReportService
 
 from app.utils.timezone import now_sp
 
@@ -2374,6 +2375,50 @@ def list_disputes_center_api():
                 'second_instance': filtered_second_instance_stats,
             },
             'data': data,
+        }
+    )
+
+
+@disputes_center_bp.route('/api/benefits/<int:benefit_id>/classify-topic', methods=['POST'])
+@require_law_firm
+def classify_single_benefit_topic_api(benefit_id):
+    law_firm_id = get_current_law_firm_id()
+
+    benefit = Benefit.query.filter_by(id=benefit_id, law_firm_id=law_firm_id).first()
+    if benefit is None:
+        return jsonify({'ok': False, 'message': 'Benefício não encontrado.'}), 404
+
+    existing_topic = _normalize_text(benefit.fap_contestation_topic)
+    if existing_topic:
+        return jsonify(
+            {
+                'ok': True,
+                'benefit_id': benefit.id,
+                'topic': existing_topic,
+                'already_classified': True,
+            }
+        )
+
+    service = FapContestationJudgmentReportService(current_app._get_current_object())
+
+    try:
+        topic = service.classify_single_benefit_contestation_topic(
+            benefit=benefit,
+            law_firm_id=law_firm_id,
+            force_reclassify=False,
+        )
+        db.session.commit()
+    except Exception as exc:
+        db.session.rollback()
+        current_app.logger.exception('Erro ao classificar tópico FAP do benefício %s', benefit_id)
+        return jsonify({'ok': False, 'message': f'Erro ao classificar benefício: {str(exc)}'}), 500
+
+    return jsonify(
+        {
+            'ok': True,
+            'benefit_id': benefit.id,
+            'topic': topic,
+            'already_classified': False,
         }
     )
 

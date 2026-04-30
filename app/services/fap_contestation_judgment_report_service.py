@@ -59,6 +59,37 @@ class FapContestationJudgmentReportService:
         parts = [str(value).strip() for value in candidate_fields if value and str(value).strip()]
         return "\n\n".join(parts)
 
+    def classify_single_benefit_contestation_topic(
+        self,
+        *,
+        benefit: Benefit,
+        law_firm_id: int | None = None,
+        force_reclassify: bool = False,
+    ) -> str:
+        """Classifica um único benefício e persiste o tópico de contestação FAP.
+
+        Args:
+            benefit: Benefício já carregado da base.
+            law_firm_id: Escopo opcional de escritório para a chamada do classificador.
+            force_reclassify: Se False, mantém tópico existente quando já preenchido.
+        """
+        existing_topic = str(benefit.fap_contestation_topic or '').strip()
+        if existing_topic and not force_reclassify:
+            return existing_topic
+
+        text = self._build_benefit_classification_text(benefit)
+        result = self.classifier_agent.classify(
+            text,
+            law_firm_id=law_firm_id if law_firm_id is not None else benefit.law_firm_id,
+        )
+        topic = str(result.get('topic') or '').strip() or 'OUTROS ARGUMENTOS'
+
+        if benefit.fap_contestation_topic != topic:
+            benefit.fap_contestation_topic = topic
+            benefit.updated_at = datetime.utcnow()
+
+        return topic
+
     def classify_benefits_contestation_topics(
         self,
         *,
