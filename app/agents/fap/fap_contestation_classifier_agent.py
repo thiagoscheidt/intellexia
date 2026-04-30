@@ -199,31 +199,38 @@ class FAPContestationClassifierAgent:
 
         return str(last_message or "").strip()
 
-    def classify(self, text: str, *, law_firm_id: int | None = None) -> dict[str, str]:
+    def classify(self, text: str, *, law_firm_id: int | None = None) -> dict[str, Any]:
         """
         Classifica um texto de justificativa FAP em tópico padronizado.
 
         Returns:
             Dict no formato:
             {
-              "topic": "NOME DO TOPICO"
+              "topic": "TOPICO PRINCIPAL",
+              "topics": ["TOPICO 1", "TOPICO 2", ...]
             }
         """
         cleaned_text = (text or "").strip()
         if not cleaned_text:
             return {
                 "topic": "OUTROS ARGUMENTOS",
+                "topics": ["OUTROS ARGUMENTOS"],
             }
 
         system_prompt = (
             "Voce e um especialista juridico em FAP. "
-            "Classifique o texto em UM topico e retorne JSON valido. "
+            "Classifique o texto em ATE 3 topicos e retorne JSON valido. "
+            "Ordene por relevancia, com o principal na primeira posicao. "
+            "DISCUSSAO MEDICA / OUTROS ARGUMENTOS so pode ser usada quando nenhum outro topico especifico se aplicar. "
+            "Prefira sempre topicos juridicos especificos quando houver evidencia textual suficiente. "
+            "Evite falso positivo: nunca retorne PRE-FAP, B31 ou NEXO PENDENTE sem evidencia textual explicita. "
+            "Quando houver indicio de acidente vinculado a outro CNPJ/estabelecimento, priorize categorias de OUTRA EMPRESA e/ou ERRO DE ESTABELECIMENTO. "
             "Priorize interpretacao juridica. "
             "Nunca invente categorias."
         )
 
         user_prompt = (
-            "Classifique o texto e retorne o SLUG correspondente.\n\n"
+            "Classifique o texto e retorne uma lista de SLUGS (de 1 a 3).\n\n"
             "Topicos:\n"
             "NEXO TECNICO PREVIDENCIARIO PENDENTE DE JULGAMENTO -> nexo_pendente\n"
             "ACIDENTE DE TRAJETO -> acidente_trajeto\n"
@@ -246,12 +253,27 @@ class FAPContestationClassifierAgent:
             "DISCUSSAO MEDICA -> discussao_medica\n"
             "OUTROS -> outros_argumentos\n\n"
             "Regras:\n"
-            "- Retorne apenas um slug valido\n"
+            "- Retorne de 1 a 3 slugs validos, sem duplicidade\n"
+            "- O primeiro slug deve ser o tema principal\n"
+            "- So use discussao_medica quando NAO houver enquadramento claro em nenhum outro topico especifico\n"
+            "- Se houver ao menos um topico especifico aplicavel, NAO inclua discussao_medica\n"
+            "- Nao retorne pre_fap, b31_previdenciario ou nexo_pendente sem mencao textual clara e direta\n"
+            "- Se o texto indicar outro CNPJ, outro estabelecimento, ou ausencia de nexo com este estabelecimento, priorize uma das categorias abaixo:\n"
+            "  - outra_empresa_cat\n"
+            "  - outra_empresa_nunca_empregado\n"
+            "  - outra_empresa_pos_rescisao\n"
+            "  - outra_empresa_did_anterior\n"
+            "  - erro_estabelecimento\n"
+            "- Informe reason apenas quando confidence >= 0.80; caso contrario, reason deve ser string vazia\n"
             "- Se nao houver encaixe:\n"
             "  - Se houver termos medicos -> discussao_medica\n"
             "  - Caso contrario -> outros_argumentos\n\n"
+            "Exemplos de sinal forte para OUTRA EMPRESA/ERRO DE ESTABELECIMENTO:\n"
+            "- 'nao relacionado a este estabelecimento'\n"
+            "- 'acidente vinculado a outro CNPJ'\n"
+            "- 'requer exclusao da base de calculo FAP deste estabelecimento por vinculo a outro estabelecimento'\n\n"
             "Formato:\n"
-            '{"topic":"slug","reason":"explicacao curta"}\n\n'
+            '{"topics":["slug1","slug2"],"confidence":0.0,"reason":"explicacao curta ou vazio"}\n\n'
             f"Texto:\n{cleaned_text}"
         )
 
@@ -288,22 +310,43 @@ class FAPContestationClassifierAgent:
             if not parsed:
                 return {
                     "topic": "OUTROS ARGUMENTOS",
+                    "topics": ["OUTROS ARGUMENTOS"],
                 }
 
-            topic_slug = str(parsed.get("topic") or "").strip().lower()
+            raw_topics = parsed.get("topics")
+            topics_slugs: list[str] = []
 
-            if topic_slug not in self.VALID_SLUGS:
+            if isinstance(raw_topics, list):
+                for item in raw_topics:
+                    slug = str(item or "").strip().lower()
+                    if slug in self.VALID_SLUGS and slug not in topics_slugs:
+                        topics_slugs.append(slug)
+                    if len(topics_slugs) >= 3:
+                        break
+
+            # Compatibilidade com formato antigo: {"topic":"slug"}
+            if not topics_slugs:
+                topic_slug = str(parsed.get("topic") or "").strip().lower()
+                if topic_slug in self.VALID_SLUGS:
+                    topics_slugs = [topic_slug]
+
+            if not topics_slugs:
                 fallback_slug = self._fallback_slug(cleaned_text)
                 return {
                     "topic": self.SLUG_TO_TOPIC[fallback_slug],
+                    "topics": [self.SLUG_TO_TOPIC[fallback_slug]],
                 }
 
+            topics = [self.SLUG_TO_TOPIC[slug] for slug in topics_slugs]
+
             return {
-                "topic": self.SLUG_TO_TOPIC[topic_slug],
+                "topic": topics[0],
+                "topics": topics,
             }
 
         except Exception as exc:
             logger.exception("Erro ao classificar justificativa FAP: %s", exc)
             return {
                 "topic": "OUTROS ARGUMENTOS",
+                "topics": ["OUTROS ARGUMENTOS"],
             }

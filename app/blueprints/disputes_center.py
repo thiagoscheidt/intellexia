@@ -215,6 +215,33 @@ def _normalize_optional_status(value):
     return normalized or None
 
 
+def _parse_benefit_topics(benefit: Benefit) -> list[str]:
+    topics: list[str] = []
+
+    raw_json = _normalize_text(getattr(benefit, 'fap_contestation_topics_json', ''))
+    if raw_json:
+        try:
+            parsed = json.loads(raw_json)
+            if isinstance(parsed, list):
+                for item in parsed:
+                    topic = _normalize_text(item)
+                    if topic and topic not in topics:
+                        topics.append(topic)
+        except Exception:
+            # Mantém fallback para campo legado quando JSON estiver inválido.
+            pass
+
+    legacy_topic = _normalize_text(getattr(benefit, 'fap_contestation_topic', ''))
+    if legacy_topic and legacy_topic not in topics:
+        topics.insert(0, legacy_topic)
+
+    return topics
+
+
+def _benefit_topics_text(benefit: Benefit) -> str:
+    return ', '.join(_parse_benefit_topics(benefit))
+
+
 STATUS_LABEL_PT_MAP = {
     'analyzing': 'Em análise',
     'in_review': 'Em análise',
@@ -1314,13 +1341,26 @@ def _apply_benefits_filters(
         except (TypeError, ValueError):
             pass
 
-    category_filled = and_(
+    legacy_filled = and_(
         Benefit.fap_contestation_topic.isnot(None),
         func.trim(cast(Benefit.fap_contestation_topic, String)) != '',
     )
-    category_empty = or_(
-        Benefit.fap_contestation_topic.is_(None),
-        func.trim(cast(Benefit.fap_contestation_topic, String)) == '',
+    json_filled = and_(
+        Benefit.fap_contestation_topics_json.isnot(None),
+        func.trim(cast(Benefit.fap_contestation_topics_json, String)) != '',
+        func.trim(cast(Benefit.fap_contestation_topics_json, String)) != '[]',
+    )
+    category_filled = or_(legacy_filled, json_filled)
+    category_empty = and_(
+        or_(
+            Benefit.fap_contestation_topic.is_(None),
+            func.trim(cast(Benefit.fap_contestation_topic, String)) == '',
+        ),
+        or_(
+            Benefit.fap_contestation_topics_json.is_(None),
+            func.trim(cast(Benefit.fap_contestation_topics_json, String)) == '',
+            func.trim(cast(Benefit.fap_contestation_topics_json, String)) == '[]',
+        ),
     )
     category_mode = _normalize_text(quick_category_mode).lower()
     if category_mode == 'with':
@@ -1373,6 +1413,20 @@ def _apply_benefits_filters(
                 )
                 continue
 
+        if operator == 'equals' and field == 'fap_contestation_topic':
+            raw_value = _normalize_text(item.get('value'))
+            if raw_value:
+                lowered = raw_value.lower()
+                query = query.filter(
+                    or_(
+                        func.lower(func.coalesce(cast(Benefit.fap_contestation_topic, String), '')) == lowered,
+                        func.lower(func.coalesce(cast(Benefit.fap_contestation_topics_json, String), '')).like(
+                            f'%"{lowered}"%'
+                        ),
+                    )
+                )
+            continue
+
         column = FILTER_FIELD_MAP.get(field)
         if column is None:
             continue
@@ -1382,6 +1436,7 @@ def _apply_benefits_filters(
 
 
 def _serialize_benefit_row(benefit, client_name):
+    topics_text = _benefit_topics_text(benefit)
     return {
         'id': benefit.id,
         'benefit_number': benefit.benefit_number or '',
@@ -1403,7 +1458,7 @@ def _serialize_benefit_row(benefit, client_name):
         'second_instance_justification': benefit.second_instance_justification or '',
         'second_instance_opinion': benefit.second_instance_opinion or '',
         'fap_vigencia_years': benefit.fap_vigencia_years or '',
-        'fap_contestation_topic': benefit.fap_contestation_topic or '',
+        'fap_contestation_topic': topics_text,
         'benefit_start_date': _format_date(benefit.benefit_start_date),
         'benefit_end_date': _format_date(benefit.benefit_end_date),
         'accident_date': _format_date(benefit.accident_date),
@@ -1631,8 +1686,17 @@ def list_disputes_center():
     pending_count = max(total_count - approved_count - in_review_count - rejected_count, 0)
     categorized_count = Benefit.query.filter(
         Benefit.law_firm_id == law_firm_id,
-        Benefit.fap_contestation_topic.isnot(None),
-        func.trim(cast(Benefit.fap_contestation_topic, String)) != '',
+        or_(
+            and_(
+                Benefit.fap_contestation_topic.isnot(None),
+                func.trim(cast(Benefit.fap_contestation_topic, String)) != '',
+            ),
+            and_(
+                Benefit.fap_contestation_topics_json.isnot(None),
+                func.trim(cast(Benefit.fap_contestation_topics_json, String)) != '',
+                func.trim(cast(Benefit.fap_contestation_topics_json, String)) != '[]',
+            ),
+        ),
     ).count()
     uncategorized_count = max(total_count - categorized_count, 0)
 
@@ -2319,8 +2383,17 @@ def list_disputes_center_api():
     pending_filtered = max(int(records_filtered) - approved_filtered - in_review_filtered - rejected_filtered, 0)
     categorized_filtered = (
         filtered_query.filter(
-            Benefit.fap_contestation_topic.isnot(None),
-            func.trim(cast(Benefit.fap_contestation_topic, String)) != '',
+            or_(
+                and_(
+                    Benefit.fap_contestation_topic.isnot(None),
+                    func.trim(cast(Benefit.fap_contestation_topic, String)) != '',
+                ),
+                and_(
+                    Benefit.fap_contestation_topics_json.isnot(None),
+                    func.trim(cast(Benefit.fap_contestation_topics_json, String)) != '',
+                    func.trim(cast(Benefit.fap_contestation_topics_json, String)) != '[]',
+                ),
+            )
         )
         .with_entities(func.count(Benefit.id))
         .scalar()
@@ -2383,18 +2456,21 @@ def list_disputes_center_api():
 @require_law_firm
 def classify_single_benefit_topic_api(benefit_id):
     law_firm_id = get_current_law_firm_id()
+    payload = request.get_json(silent=True) or {}
+    force_reclassify_raw = payload.get('force_reclassify', request.args.get('force_reclassify', 'false'))
+    force_reclassify = str(force_reclassify_raw).strip().lower() in ('1', 'true', 'yes', 'on')
 
     benefit = Benefit.query.filter_by(id=benefit_id, law_firm_id=law_firm_id).first()
     if benefit is None:
         return jsonify({'ok': False, 'message': 'Benefício não encontrado.'}), 404
 
-    existing_topic = _normalize_text(benefit.fap_contestation_topic)
-    if existing_topic:
+    existing_topics = _parse_benefit_topics(benefit)
+    if existing_topics and not force_reclassify:
         return jsonify(
             {
                 'ok': True,
                 'benefit_id': benefit.id,
-                'topic': existing_topic,
+                'topic': ', '.join(existing_topics),
                 'already_classified': True,
             }
         )
@@ -2405,7 +2481,7 @@ def classify_single_benefit_topic_api(benefit_id):
         topic = service.classify_single_benefit_contestation_topic(
             benefit=benefit,
             law_firm_id=law_firm_id,
-            force_reclassify=False,
+            force_reclassify=force_reclassify,
         )
         db.session.commit()
     except Exception as exc:
@@ -2418,7 +2494,9 @@ def classify_single_benefit_topic_api(benefit_id):
             'ok': True,
             'benefit_id': benefit.id,
             'topic': topic,
+            'topics': _parse_benefit_topics(benefit),
             'already_classified': False,
+            'reclassified': force_reclassify,
         }
     )
 
@@ -2520,7 +2598,7 @@ def export_disputes_center_excel():
                 benefit.second_instance_justification or '',
                 benefit.second_instance_opinion or '',
                 benefit.fap_vigencia_years or '',
-                benefit.fap_contestation_topic or '',
+                _benefit_topics_text(benefit),
                 _format_date(benefit.benefit_start_date),
                 _format_date(benefit.benefit_end_date),
                 _format_date(benefit.accident_date),

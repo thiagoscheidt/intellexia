@@ -3,6 +3,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
+import json
 import re
 from time import perf_counter
 
@@ -59,6 +60,83 @@ class FapContestationJudgmentReportService:
         parts = [str(value).strip() for value in candidate_fields if value and str(value).strip()]
         return "\n\n".join(parts)
 
+    @staticmethod
+    def _parse_benefit_topics(benefit: Benefit) -> list[str]:
+        """Retorna lista de tópicos com fallback para o campo legado."""
+        topics: list[str] = []
+
+        raw_json = str(getattr(benefit, 'fap_contestation_topics_json', '') or '').strip()
+        if raw_json:
+            try:
+                parsed = json.loads(raw_json)
+                if isinstance(parsed, list):
+                    for item in parsed:
+                        topic = str(item or '').strip()
+                        if topic and topic not in topics:
+                            topics.append(topic)
+            except Exception:
+                # Mantém fallback para campo legado quando JSON estiver inválido.
+                pass
+
+        legacy_topic = str(getattr(benefit, 'fap_contestation_topic', '') or '').strip()
+        if legacy_topic and legacy_topic not in topics:
+            topics.insert(0, legacy_topic)
+
+        return topics
+
+    @staticmethod
+    def _persist_benefit_topics(benefit: Benefit, topics: list[str]) -> bool:
+        """Persiste lista de tópicos no JSON e mantém campo legado sincronizado."""
+        unique_topics: list[str] = []
+        for topic in topics:
+            normalized = str(topic or '').strip()
+            if normalized and normalized not in unique_topics:
+                unique_topics.append(normalized)
+
+        json_value = json.dumps(unique_topics, ensure_ascii=False) if unique_topics else None
+        legacy_value = unique_topics[0] if unique_topics else None
+
+        changed = False
+        if getattr(benefit, 'fap_contestation_topics_json', None) != json_value:
+            benefit.fap_contestation_topics_json = json_value
+            changed = True
+        if getattr(benefit, 'fap_contestation_topic', None) != legacy_value:
+            benefit.fap_contestation_topic = legacy_value
+            changed = True
+
+        if changed:
+            benefit.updated_at = datetime.utcnow()
+
+        return changed
+
+    @staticmethod
+    def _extract_topics_from_classifier_result(result: dict | None) -> list[str]:
+        """Normaliza retorno do classificador para lista de tópicos.
+
+        Compatível com:
+        - {"topics": ["TOPICO A", "TOPICO B"]}
+        - {"topic": "TOPICO A"}
+        """
+        topics: list[str] = []
+        payload = result or {}
+
+        raw_topics = payload.get('topics') if isinstance(payload, dict) else None
+        if isinstance(raw_topics, list):
+            for item in raw_topics:
+                topic = str(item or '').strip()
+                if topic and topic not in topics:
+                    topics.append(topic)
+
+        if not topics and isinstance(payload, dict):
+            single_topic = str(payload.get('topic') or '').strip()
+            if single_topic:
+                topics.append(single_topic)
+
+        if not topics:
+            topics.append('OUTROS ARGUMENTOS')
+
+        return topics
+
     def classify_single_benefit_contestation_topic(
         self,
         *,
@@ -73,22 +151,27 @@ class FapContestationJudgmentReportService:
             law_firm_id: Escopo opcional de escritório para a chamada do classificador.
             force_reclassify: Se False, mantém tópico existente quando já preenchido.
         """
-        existing_topic = str(benefit.fap_contestation_topic or '').strip()
-        if existing_topic and not force_reclassify:
-            return existing_topic
+        existing_topics = self._parse_benefit_topics(benefit)
+        if existing_topics and not force_reclassify:
+            return existing_topics[0]
 
         text = self._build_benefit_classification_text(benefit)
         result = self.classifier_agent.classify(
             text,
             law_firm_id=law_firm_id if law_firm_id is not None else benefit.law_firm_id,
         )
-        topic = str(result.get('topic') or '').strip() or 'OUTROS ARGUMENTOS'
+        classified_topics = self._extract_topics_from_classifier_result(result)
 
-        if benefit.fap_contestation_topic != topic:
-            benefit.fap_contestation_topic = topic
-            benefit.updated_at = datetime.utcnow()
+        if force_reclassify:
+            self._persist_benefit_topics(benefit, classified_topics)
+        else:
+            merged_topics = existing_topics.copy()
+            for topic in classified_topics:
+                if topic not in merged_topics:
+                    merged_topics.append(topic)
+            self._persist_benefit_topics(benefit, merged_topics)
 
-        return topic
+        return classified_topics[0]
 
     def classify_benefits_contestation_topics(
         self,
@@ -121,8 +204,14 @@ class FapContestationJudgmentReportService:
 
             if not force_reclassify:
                 query = query.filter(
-                    (Benefit.fap_contestation_topic.is_(None))
-                    | (Benefit.fap_contestation_topic == '')
+                    (
+                        (Benefit.fap_contestation_topic.is_(None))
+                        | (Benefit.fap_contestation_topic == '')
+                    )
+                    & (
+                        (Benefit.fap_contestation_topics_json.is_(None))
+                        | (Benefit.fap_contestation_topics_json == '')
+                    )
                 )
 
             benefits = query.order_by(Benefit.id.asc()).all()
@@ -146,12 +235,12 @@ class FapContestationJudgmentReportService:
                 for benefit in benefits
             ]
 
-            def _classify_text(text: str, benefit_law_firm_id: int | None) -> str:
+            def _classify_text(text: str, benefit_law_firm_id: int | None) -> list[str]:
                 # Cada thread precisa do próprio app context — Flask-SQLAlchemy usa
                 # sessões thread-local vinculadas ao contexto da aplicação.
                 with self.app.app_context():
                     result = self.classifier_agent.classify(text, law_firm_id=benefit_law_firm_id)
-                return str(result.get('topic') or '').strip() or 'OUTROS ARGUMENTOS'
+                return self._extract_topics_from_classifier_result(result)
 
             completed = 0
             with ThreadPoolExecutor(max_workers=effective_workers) as executor:
@@ -165,10 +254,16 @@ class FapContestationJudgmentReportService:
                     completed += 1
 
                     try:
-                        topic = future.result()
-                        if benefit.fap_contestation_topic != topic:
-                            benefit.fap_contestation_topic = topic
-                            benefit.updated_at = datetime.utcnow()
+                        classified_topics = future.result()
+                        if force_reclassify:
+                            topics_to_persist = classified_topics
+                        else:
+                            existing_topics = self._parse_benefit_topics(benefit)
+                            topics_to_persist = existing_topics.copy()
+                            for topic in classified_topics:
+                                if topic not in topics_to_persist:
+                                    topics_to_persist.append(topic)
+                        if self._persist_benefit_topics(benefit, topics_to_persist):
                             updated += 1
                         classified += 1
                     except Exception as exc:

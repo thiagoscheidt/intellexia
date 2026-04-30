@@ -1100,13 +1100,38 @@
                 <button type="button"
                   class="btn btn-sm badge rounded-pill bg-primary-subtle text-primary-emphasis border border-primary-subtle btn-classify-topic"
                   data-benefit-id="${escapeAttr(row.id)}"
+                  data-force-reclassify="0"
                   title="Classificar benefício"
                   aria-label="Classificar benefício">
                   <i class="bi bi-magic me-1"></i>Classificar
                 </button>
               </div>`;
           }
-          return `<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle" style="white-space:normal;text-align:left;">${escapeHtml(data)}</span>`;
+          const topics = String(data)
+            .split(',')
+            .map((item) => item.trim())
+            .filter(Boolean);
+
+          if (!topics.length) {
+            return '<span class="text-muted">-</span>';
+          }
+
+          const badges = topics
+            .map((topic) => `<span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle" style="white-space:normal;text-align:left;">${escapeHtml(topic)}</span>`)
+            .join(' ');
+
+          return `
+            <div class="d-flex flex-column align-items-start gap-1">
+              <div class="d-flex flex-wrap gap-1">${badges}</div>
+              <button type="button"
+                class="btn btn-sm badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle btn-classify-topic"
+                data-benefit-id="${escapeAttr(row.id)}"
+                data-force-reclassify="1"
+                title="Reclassificar benefício"
+                aria-label="Reclassificar benefício">
+                <i class="bi bi-arrow-repeat me-1"></i>Reclassificar
+              </button>
+            </div>`;
         }
       },
       {
@@ -1187,20 +1212,31 @@
   $('#centralBenefitsTable').on('click', '.btn-classify-topic', function () {
     const btn = $(this);
     const benefitId = String(btn.data('benefit-id') || '').trim();
+    const forceReclassify = String(btn.data('force-reclassify') || '0').trim() === '1';
     if (!benefitId) {
       return;
     }
 
+    if (forceReclassify) {
+      const confirmed = window.confirm('A classificação atual será apagada e substituída por uma nova. Deseja continuar?');
+      if (!confirmed) {
+        return;
+      }
+    }
+
     const url = classifyTopicUrlTemplate.replace('/0/classify-topic', `/${encodeURIComponent(benefitId)}/classify-topic`);
     const originalHtml = btn.html();
+    const loadingLabel = forceReclassify ? 'Reclassificando...' : 'Classificando...';
 
-    btn.prop('disabled', true).html('<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Classificando...');
+    btn.prop('disabled', true).html(`<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>${loadingLabel}`);
 
     fetch(url, {
       method: 'POST',
       headers: {
+        'Content-Type': 'application/json',
         'X-Requested-With': 'XMLHttpRequest',
       },
+      body: JSON.stringify({ force_reclassify: forceReclassify }),
     })
       .then(async (response) => {
         const payload = await response.json().catch(() => ({}));

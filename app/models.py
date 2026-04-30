@@ -1391,7 +1391,10 @@ class Benefit(db.Model):
     second_instance_status_raw = db.Column(db.String(255))
     second_instance_justification = db.Column(db.Text)
     second_instance_opinion = db.Column(db.Text)
+    # Mantém compatibilidade com o campo legado (primeira categoria).
     fap_contestation_topic = db.Column(db.String(120), index=True)
+    # Armazena todas as categorias do benefício em JSON (lista de strings).
+    fap_contestation_topics_json = db.Column(db.Text)
     justification = db.Column(db.Text)
     status = db.Column(db.String(30), default='pending', index=True)
     opinion = db.Column(db.Text)
