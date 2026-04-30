@@ -329,6 +329,12 @@ class FAPContestationClassifierAgent:
         if critical_slugs:
             guarded_topics = [slug for slug in guarded_topics if slug != "discussao_medica"]
 
+        # Remove outros_argumentos e discussao_medica quando há tópico específico
+        GENERIC_SLUGS = {"outros_argumentos", "discussao_medica"}
+        specific_topics = [s for s in guarded_topics if s not in GENERIC_SLUGS]
+        if specific_topics:
+            guarded_topics = specific_topics
+
         deduped: list[str] = []
         for slug in guarded_topics:
             if slug in self.VALID_SLUGS and slug not in deduped:
@@ -420,7 +426,8 @@ class FAPContestationClassifierAgent:
             "- Retorne de 1 a 3 slugs validos, sem duplicidade\n"
             "- O primeiro slug deve ser o tema principal\n"
             "- So use discussao_medica quando NAO houver enquadramento claro em nenhum outro topico especifico\n"
-            "- Se houver ao menos um topico especifico aplicavel, NAO inclua discussao_medica\n"
+            "- So use outros_argumentos quando NAO houver enquadramento claro em nenhum outro topico especifico\n"
+            "- Se houver ao menos um topico especifico aplicavel, NAO inclua discussao_medica nem outros_argumentos\n"
             "- Nao retorne pre_fap, b31_previdenciario ou nexo_pendente sem mencao textual clara e direta\n"
             "- Se o texto mencionar numero de CAT (ex: 'CAT no XXXX', 'CAT 2018...'), use acidente_trajeto, NUNCA acidente_trajeto_sem_cat\n"
             "- acidente_trajeto_sem_cat SOMENTE quando o texto diz explicitamente que NAO ha CAT emitida\n"
