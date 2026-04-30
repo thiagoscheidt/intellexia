@@ -79,6 +79,38 @@ class FAPContestationClassifierAgent:
         "incapacidade",
     )
 
+    PRE_FAP_TERMS: tuple[str, ...] = (
+        "pre fap",
+        "pre-fap",
+        "art. 202-a",
+        "art 202-a",
+        "decreto 6.957",
+        "decreto nº 6.957",
+        "decreto n 6.957",
+        "abril de 2007",
+        "1º de abril de 2007",
+        "1 de abril de 2007",
+        "antes de abril de 2007",
+        "anterior a abril de 2007",
+        "antes de 2007",
+        "did 200",
+        "did 19",
+    )
+
+    OTHER_COMPANY_TERMS: tuple[str, ...] = (
+        "outro cnpj",
+        "outro estabelecimento",
+        "outra empresa",
+        "nao relacionado a este estabelecimento",
+        "não relacionado a este estabelecimento",
+        "nunca foi empregado",
+        "apos a rescisao",
+        "após a rescisão",
+        "did anterior a admissao",
+        "did anterior à admissão",
+        "cat vinculada",
+    )
+
     def __init__(self, model_name: str | None = None, temperature: float = 0.1):
         self.model_name = model_name or os.environ.get("FAP_CLASSIFIER_MODEL") or DEFAULT_MODEL_MINI
         self.temperature = temperature
@@ -180,6 +212,54 @@ class FAPContestationClassifierAgent:
             return "discussao_medica"
         return "outros_argumentos"
 
+    def _has_pre_fap_evidence(self, normalized_text: str) -> bool:
+        if any(term.upper() in normalized_text for term in self.PRE_FAP_TERMS):
+            return True
+
+        year_matches = re.findall(r"\b(19\d{2}|20\d{2})\b", normalized_text)
+        if year_matches and any(int(year) < 2007 for year in year_matches):
+            if "DID" in normalized_text or "ACIDENT" in normalized_text:
+                return True
+
+        return False
+
+    def _has_other_company_evidence(self, normalized_text: str) -> bool:
+        return any(term.upper() in normalized_text for term in self.OTHER_COMPANY_TERMS)
+
+    def _apply_rule_based_guards(self, text: str, topics_slugs: list[str]) -> list[str]:
+        normalized_text = self._normalize_text_for_match(text)
+        guarded_topics = topics_slugs.copy()
+
+        other_company_slugs = {
+            "erro_estabelecimento",
+            "outra_empresa_cat",
+            "outra_empresa_nunca_empregado",
+            "outra_empresa_pos_rescisao",
+            "outra_empresa_did_anterior",
+        }
+
+        has_pre_fap = self._has_pre_fap_evidence(normalized_text)
+        has_other_company = self._has_other_company_evidence(normalized_text)
+
+        if has_pre_fap:
+            guarded_topics = [slug for slug in guarded_topics if slug != "pre_fap"]
+            guarded_topics.insert(0, "pre_fap")
+
+        if not has_other_company:
+            guarded_topics = [slug for slug in guarded_topics if slug not in other_company_slugs]
+
+        deduped: list[str] = []
+        for slug in guarded_topics:
+            if slug in self.VALID_SLUGS and slug not in deduped:
+                deduped.append(slug)
+            if len(deduped) >= 3:
+                break
+
+        if not deduped:
+            deduped = [self._fallback_slug(text)]
+
+        return deduped
+
     @staticmethod
     def _extract_last_message_content(response_payload: dict[str, Any] | None) -> str:
         if not isinstance(response_payload, dict):
@@ -224,6 +304,8 @@ class FAPContestationClassifierAgent:
             "DISCUSSAO MEDICA / OUTROS ARGUMENTOS so pode ser usada quando nenhum outro topico especifico se aplicar. "
             "Prefira sempre topicos juridicos especificos quando houver evidencia textual suficiente. "
             "Evite falso positivo: nunca retorne PRE-FAP, B31 ou NEXO PENDENTE sem evidencia textual explicita. "
+            "Quando houver evidencia de evento anterior a abril de 2007/pre-FAP, PRE-FAP deve ser o topico principal. "
+            "Nao use categorias de OUTRA EMPRESA ou ERRO DE ESTABELECIMENTO sem indicios textuais explicitos de outro CNPJ/estabelecimento/vinculo empregaticio diverso. "
             "Quando houver indicio de acidente vinculado a outro CNPJ/estabelecimento, priorize categorias de OUTRA EMPRESA e/ou ERRO DE ESTABELECIMENTO. "
             "Priorize interpretacao juridica. "
             "Nunca invente categorias."
@@ -258,12 +340,14 @@ class FAPContestationClassifierAgent:
             "- So use discussao_medica quando NAO houver enquadramento claro em nenhum outro topico especifico\n"
             "- Se houver ao menos um topico especifico aplicavel, NAO inclua discussao_medica\n"
             "- Nao retorne pre_fap, b31_previdenciario ou nexo_pendente sem mencao textual clara e direta\n"
+            "- Quando houver mencao a evento/DID anterior a abril de 2007, pre_fap deve ser o primeiro slug\n"
             "- Se o texto indicar outro CNPJ, outro estabelecimento, ou ausencia de nexo com este estabelecimento, priorize uma das categorias abaixo:\n"
             "  - outra_empresa_cat\n"
             "  - outra_empresa_nunca_empregado\n"
             "  - outra_empresa_pos_rescisao\n"
             "  - outra_empresa_did_anterior\n"
             "  - erro_estabelecimento\n"
+            "- Nao use categorias de outra_empresa_* nem erro_estabelecimento sem expressao textual explicita de outro CNPJ/estabelecimento/empresa\n"
             "- Informe reason apenas quando confidence >= 0.80; caso contrario, reason deve ser string vazia\n"
             "- Se nao houver encaixe:\n"
             "  - Se houver termos medicos -> discussao_medica\n"
@@ -272,6 +356,10 @@ class FAPContestationClassifierAgent:
             "- 'nao relacionado a este estabelecimento'\n"
             "- 'acidente vinculado a outro CNPJ'\n"
             "- 'requer exclusao da base de calculo FAP deste estabelecimento por vinculo a outro estabelecimento'\n\n"
+            "Exemplos de sinal forte para PRE-FAP:\n"
+            "- 'evento acidentario anterior a 1o de abril de 2007'\n"
+            "- 'DID 2002'\n"
+            "- 'acidente/doenca antes da vigencia do FAP'\n\n"
             "Formato:\n"
             '{"topics":["slug1","slug2"],"confidence":0.0,"reason":"explicacao curta ou vazio"}\n\n'
             f"Texto:\n{cleaned_text}"
@@ -336,6 +424,8 @@ class FAPContestationClassifierAgent:
                     "topic": self.SLUG_TO_TOPIC[fallback_slug],
                     "topics": [self.SLUG_TO_TOPIC[fallback_slug]],
                 }
+
+            topics_slugs = self._apply_rule_based_guards(cleaned_text, topics_slugs)
 
             topics = [self.SLUG_TO_TOPIC[slug] for slug in topics_slugs]
 
