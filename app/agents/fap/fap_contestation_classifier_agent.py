@@ -303,6 +303,14 @@ class FAPContestationClassifierAgent:
         if "acidente_trajeto_sem_cat" in guarded_topics:
             guarded_topics = [slug for slug in guarded_topics if slug != "acidente_trajeto"]
 
+        # Se há CAT numerada explícita no texto, é ACIDENTE DE TRAJETO (com CAT), não sem_cat.
+        has_trajeto_text = bool(re.search(r"ACIDENTE DE TRAJETO", normalized_text))
+        has_cat_number = bool(re.search(r"CAT\s*(?:N|NO|N\s*O|N\s*º|NUMERO)?\s*[\d./ ]{4,}", normalized_text))
+        if has_trajeto_text and has_cat_number:
+            guarded_topics = [slug for slug in guarded_topics if slug != "acidente_trajeto_sem_cat"]
+            if "acidente_trajeto" not in guarded_topics:
+                guarded_topics.insert(0, "acidente_trajeto")
+
         if not has_justica_federal:
             guarded_topics = [slug for slug in guarded_topics if slug != "beneficio_justica_federal"]
 
@@ -414,6 +422,8 @@ class FAPContestationClassifierAgent:
             "- So use discussao_medica quando NAO houver enquadramento claro em nenhum outro topico especifico\n"
             "- Se houver ao menos um topico especifico aplicavel, NAO inclua discussao_medica\n"
             "- Nao retorne pre_fap, b31_previdenciario ou nexo_pendente sem mencao textual clara e direta\n"
+            "- Se o texto mencionar numero de CAT (ex: 'CAT no XXXX', 'CAT 2018...'), use acidente_trajeto, NUNCA acidente_trajeto_sem_cat\n"
+            "- acidente_trajeto_sem_cat SOMENTE quando o texto diz explicitamente que NAO ha CAT emitida\n"
             "- Quando houver mencao a evento/DID anterior a abril de 2007, pre_fap deve ser o primeiro slug\n"
             "- Se o texto indicar outro CNPJ, outro estabelecimento, ou ausencia de nexo com este estabelecimento, priorize uma das categorias abaixo:\n"
             "  - outra_empresa_cat\n"
