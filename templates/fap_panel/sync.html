@@ -384,6 +384,7 @@ anos de vigência e salva no banco de dados.', icon='bi bi-arrow-repeat') %}
     </div>{# /row #}
   </div>
 </div>
+<script id="years-data" type="application/json">{{ years | tojson }}</script>
 {% endblock %}
 
 {% block extra_js %}
@@ -461,642 +462,643 @@ anos de vigência e salva no banco de dados.', icon='bi bi-arrow-repeat') %}
     }
 
     // Anos disponíveis
-    const allYears = [{% for year in years %}{ { year } } {% if not loop.last %}, {% endif %} {% endfor %}];
+    const yearsDataEl = document.getElementById('years-data');
+    const allYears = JSON.parse((yearsDataEl && yearsDataEl.textContent) || '[]');
 
-  // URLs
-  const saveAuthUrl = '{{ url_for("fap_panel.sync_save_auth") }}';
-  const checkUrl = '{{ url_for("fap_panel.sync_check_session") }}';
-  const syncCompaniesUrl = '{{ url_for("fap_panel.sync_fetch_companies") }}';
-  const syncYearUrl = '{{ url_for("fap_panel.sync_run_year") }}';
-  const downloadBatchUrl = '{{ url_for("fap_panel.sync_download_batch") }}';
-  const summaryUrl = '{{ url_for("fap_panel.sync_summary") }}';
+    // URLs
+    const saveAuthUrl = '{{ url_for("fap_panel.sync_save_auth") }}';
+    const checkUrl = '{{ url_for("fap_panel.sync_check_session") }}';
+    const syncCompaniesUrl = '{{ url_for("fap_panel.sync_fetch_companies") }}';
+    const syncYearUrl = '{{ url_for("fap_panel.sync_run_year") }}';
+    const downloadBatchUrl = '{{ url_for("fap_panel.sync_download_batch") }}';
+    const summaryUrl = '{{ url_for("fap_panel.sync_summary") }}';
 
-  // ── Log ──────────────────────────────────────────────────────────────
-  function log(msg, type) {
-    const colors = { info: '#b8c8d8', success: '#7ee787', warning: '#d29922', error: '#f85149' };
-    const color = colors[type] || colors.info;
-    const now = new Date().toLocaleTimeString('pt-BR');
-    const line = document.createElement('div');
-    line.style.color = color;
-    line.textContent = '[' + now + '] ' + msg;
-    if (logEl.querySelector('.text-secondary')) logEl.innerHTML = '';
-    logEl.appendChild(line);
-    logEl.scrollTop = logEl.scrollHeight;
-  }
-
-  btnClearLog.addEventListener('click', function () {
-    logEl.innerHTML = '<span class="text-secondary">Log limpo.</span>';
-  });
-
-  // ── Alerts ───────────────────────────────────────────────────────────
-  function showAlert(container, cat, msg) {
-    container.innerHTML = '';
-    const el = document.createElement('div');
-    el.className = 'alert alert-' + cat + ' alert-dismissible fade show py-2 small';
-    el.setAttribute('role', 'alert');
-    el.innerHTML =
-      '<i class="bi bi-info-circle me-1"></i>' +
-      String(msg).replace(/</g, '&lt;').replace(/>/g, '&gt;') +
-      '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>';
-    container.appendChild(el);
-  }
-
-  // ── Filtro de tabela de empresas ─────────────────────────────────────
-  const companySearch = document.getElementById('companySearch');
-  const companiesTable = document.getElementById('companiesTable');
-  const companyCountLabel = document.getElementById('companyCountLabel');
-  if (companySearch && companiesTable) {
-    const totalRows = companiesTable.querySelectorAll('tbody tr').length;
-    companySearch.addEventListener('input', function () {
-      const term = this.value.toLowerCase().trim();
-      let visible = 0;
-      companiesTable.querySelectorAll('tbody tr').forEach(function (row) {
-        const match = !term || row.textContent.toLowerCase().includes(term);
-        row.style.display = match ? '' : 'none';
-        if (match) visible++;
-      });
-      if (companyCountLabel) {
-        companyCountLabel.textContent = (term ? visible + ' de ' + totalRows : totalRows) + ' empresa(s)';
-      }
-    });
-  }
-
-  // ── Ícone sanfona auth ────────────────────────────────────────────────
-  const authCollapse = document.getElementById('authCollapse');
-  const authCollapseIcon = document.getElementById('authCollapseIcon');
-  if (authCollapse && authCollapseIcon) {
-    authCollapse.addEventListener('show.bs.collapse', function () {
-      authCollapseIcon.classList.replace('bi-chevron-down', 'bi-chevron-up');
-    });
-    authCollapse.addEventListener('hide.bs.collapse', function () {
-      authCollapseIcon.classList.replace('bi-chevron-up', 'bi-chevron-down');
-    });
-  }
-
-  // ── Salvar autenticação ───────────────────────────────────────────────
-  if (btnSaveAuth) {
-    btnSaveAuth.addEventListener('click', async function () {
-      const raw = cookieInput ? cookieInput.value.trim() : '';
-      if (!raw) { showAlert(syncAlerts, 'warning', 'Cole os dados de autenticação em JSON.'); return; }
-      try { JSON.parse(raw); } catch (e) { showAlert(syncAlerts, 'danger', 'JSON inválido.'); return; }
-      btnSaveAuth.disabled = true;
-      try {
-        const resp = await fetch(saveAuthUrl, {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-          body: JSON.stringify({ auth: raw }),
-        });
-        const payload = await resp.json().catch(() => null);
-        if (!resp.ok || !payload || !payload.ok) {
-          showAlert(syncAlerts, 'danger', (payload && payload.message) || 'Erro ao salvar.');
-        } else {
-          showAlert(syncAlerts, 'success', 'Sessão salva com sucesso.');
-          log('Dados de autenticação salvos.', 'success');
-        }
-      } catch (err) {
-        log('Erro de rede ao salvar autenticação.', 'error');
-      } finally {
-        btnSaveAuth.disabled = false;
-      }
-    });
-  }
-
-  // ── Sincronizar empresas (mesmo fluxo do fap-auto-import) ─────────────
-  (function setupCompanySync() {
-    const btnPrimary = document.getElementById('btnSyncCompanies');
-    const btnEmpty = document.getElementById('btnSyncCompaniesEmpty');
-    const spinner1 = document.getElementById('syncCompaniesSpinner');
-    const spinner2 = document.getElementById('syncCompaniesEmptySpinner');
-    const icon1 = document.getElementById('syncCompaniesIcon');
-    const icon2 = document.getElementById('syncCompaniesEmptyIcon');
-    const alertsBox = document.getElementById('companySyncAlerts') || syncAlerts;
-
-    function setSyncing(active) {
-      [btnPrimary, btnEmpty].forEach(function (b) { if (b) b.disabled = active; });
-      [spinner1, spinner2].forEach(function (s) { if (s) s.classList.toggle('d-none', !active); });
-      [icon1, icon2].forEach(function (i) { if (i) i.style.display = active ? 'none' : ''; });
+    // ── Log ──────────────────────────────────────────────────────────────
+    function log(msg, type) {
+      const colors = { info: '#b8c8d8', success: '#7ee787', warning: '#d29922', error: '#f85149' };
+      const color = colors[type] || colors.info;
+      const now = new Date().toLocaleTimeString('pt-BR');
+      const line = document.createElement('div');
+      line.style.color = color;
+      line.textContent = '[' + now + '] ' + msg;
+      if (logEl.querySelector('.text-secondary')) logEl.innerHTML = '';
+      logEl.appendChild(line);
+      logEl.scrollTop = logEl.scrollHeight;
     }
 
-    async function syncCompaniesNow() {
-      const raw = cookieInput ? cookieInput.value.trim() : '';
-      if (!raw) {
-        showAlert(alertsBox, 'warning', 'Cole os dados de autenticação em JSON antes de sincronizar empresas.');
-        return;
+    btnClearLog.addEventListener('click', function () {
+      logEl.innerHTML = '<span class="text-secondary">Log limpo.</span>';
+    });
+
+    // ── Alerts ───────────────────────────────────────────────────────────
+    function showAlert(container, cat, msg) {
+      container.innerHTML = '';
+      const el = document.createElement('div');
+      el.className = 'alert alert-' + cat + ' alert-dismissible fade show py-2 small';
+      el.setAttribute('role', 'alert');
+      el.innerHTML =
+        '<i class="bi bi-info-circle me-1"></i>' +
+        String(msg).replace(/</g, '&lt;').replace(/>/g, '&gt;') +
+        '<button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>';
+      container.appendChild(el);
+    }
+
+    // ── Filtro de tabela de empresas ─────────────────────────────────────
+    const companySearch = document.getElementById('companySearch');
+    const companiesTable = document.getElementById('companiesTable');
+    const companyCountLabel = document.getElementById('companyCountLabel');
+    if (companySearch && companiesTable) {
+      const totalRows = companiesTable.querySelectorAll('tbody tr').length;
+      companySearch.addEventListener('input', function () {
+        const term = this.value.toLowerCase().trim();
+        let visible = 0;
+        companiesTable.querySelectorAll('tbody tr').forEach(function (row) {
+          const match = !term || row.textContent.toLowerCase().includes(term);
+          row.style.display = match ? '' : 'none';
+          if (match) visible++;
+        });
+        if (companyCountLabel) {
+          companyCountLabel.textContent = (term ? visible + ' de ' + totalRows : totalRows) + ' empresa(s)';
+        }
+      });
+    }
+
+    // ── Ícone sanfona auth ────────────────────────────────────────────────
+    const authCollapse = document.getElementById('authCollapse');
+    const authCollapseIcon = document.getElementById('authCollapseIcon');
+    if (authCollapse && authCollapseIcon) {
+      authCollapse.addEventListener('show.bs.collapse', function () {
+        authCollapseIcon.classList.replace('bi-chevron-down', 'bi-chevron-up');
+      });
+      authCollapse.addEventListener('hide.bs.collapse', function () {
+        authCollapseIcon.classList.replace('bi-chevron-up', 'bi-chevron-down');
+      });
+    }
+
+    // ── Salvar autenticação ───────────────────────────────────────────────
+    if (btnSaveAuth) {
+      btnSaveAuth.addEventListener('click', async function () {
+        const raw = cookieInput ? cookieInput.value.trim() : '';
+        if (!raw) { showAlert(syncAlerts, 'warning', 'Cole os dados de autenticação em JSON.'); return; }
+        try { JSON.parse(raw); } catch (e) { showAlert(syncAlerts, 'danger', 'JSON inválido.'); return; }
+        btnSaveAuth.disabled = true;
+        try {
+          const resp = await fetch(saveAuthUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            body: JSON.stringify({ auth: raw }),
+          });
+          const payload = await resp.json().catch(() => null);
+          if (!resp.ok || !payload || !payload.ok) {
+            showAlert(syncAlerts, 'danger', (payload && payload.message) || 'Erro ao salvar.');
+          } else {
+            showAlert(syncAlerts, 'success', 'Sessão salva com sucesso.');
+            log('Dados de autenticação salvos.', 'success');
+          }
+        } catch (err) {
+          log('Erro de rede ao salvar autenticação.', 'error');
+        } finally {
+          btnSaveAuth.disabled = false;
+        }
+      });
+    }
+
+    // ── Sincronizar empresas (mesmo fluxo do fap-auto-import) ─────────────
+    (function setupCompanySync() {
+      const btnPrimary = document.getElementById('btnSyncCompanies');
+      const btnEmpty = document.getElementById('btnSyncCompaniesEmpty');
+      const spinner1 = document.getElementById('syncCompaniesSpinner');
+      const spinner2 = document.getElementById('syncCompaniesEmptySpinner');
+      const icon1 = document.getElementById('syncCompaniesIcon');
+      const icon2 = document.getElementById('syncCompaniesEmptyIcon');
+      const alertsBox = document.getElementById('companySyncAlerts') || syncAlerts;
+
+      function setSyncing(active) {
+        [btnPrimary, btnEmpty].forEach(function (b) { if (b) b.disabled = active; });
+        [spinner1, spinner2].forEach(function (s) { if (s) s.classList.toggle('d-none', !active); });
+        [icon1, icon2].forEach(function (i) { if (i) i.style.display = active ? 'none' : ''; });
       }
 
-      let authPayload = null;
-      try {
-        authPayload = JSON.parse(raw);
-      } catch (e) {
-        showAlert(alertsBox, 'danger', 'JSON inválido. Verifique a formatação dos dados de autenticação.');
-        return;
+      async function syncCompaniesNow() {
+        const raw = cookieInput ? cookieInput.value.trim() : '';
+        if (!raw) {
+          showAlert(alertsBox, 'warning', 'Cole os dados de autenticação em JSON antes de sincronizar empresas.');
+          return;
+        }
+
+        let authPayload = null;
+        try {
+          authPayload = JSON.parse(raw);
+        } catch (e) {
+          showAlert(alertsBox, 'danger', 'JSON inválido. Verifique a formatação dos dados de autenticação.');
+          return;
+        }
+
+        if (!authPayload.cookies || typeof authPayload.cookies !== 'object') {
+          showAlert(alertsBox, 'danger', 'O JSON deve conter o campo "cookies" com um objeto de chave/valor.');
+          return;
+        }
+
+        setSyncing(true);
+        alertsBox.innerHTML = '';
+        log('Consultando empresas no sistema FAP/Dataprev...', 'info');
+
+        try {
+          const resp = await fetch(syncCompaniesUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            body: JSON.stringify({ cookies: authPayload.cookies, userAgent: authPayload.userAgent || '' }),
+          });
+
+          const payload = await resp.json().catch(function () { return null; });
+
+          if (!resp.ok || !payload || !payload.ok) {
+            const msg = (payload && payload.message) ? payload.message : 'Falha ao consultar o sistema FAP.';
+            log('Erro ao sincronizar empresas: ' + msg, 'error');
+            showAlert(alertsBox, 'danger', msg);
+            return;
+          }
+
+          const count = payload.saved_count || (payload.companies || []).length;
+          const msg = count + ' empresa(s) sincronizadas com sucesso. Recarregando...';
+          log('Sincronização de empresas concluída: ' + count + ' empresa(s).', 'success');
+          showAlert(alertsBox, 'success', msg);
+          setTimeout(function () { window.location.reload(); }, 1200);
+        } catch (err) {
+          log('Erro de rede ao sincronizar empresas: ' + (err.message || String(err)), 'error');
+          showAlert(alertsBox, 'danger', 'Erro de rede ao consultar o sistema FAP.');
+        } finally {
+          setSyncing(false);
+        }
       }
 
-      if (!authPayload.cookies || typeof authPayload.cookies !== 'object') {
-        showAlert(alertsBox, 'danger', 'O JSON deve conter o campo "cookies" com um objeto de chave/valor.');
+      if (btnPrimary) btnPrimary.addEventListener('click', syncCompaniesNow);
+      if (btnEmpty) btnEmpty.addEventListener('click', syncCompaniesNow);
+    })();
+
+    // ── Verificação periódica da sessão FAP ─────────────────────────────
+    (function setupSessionCheck() {
+      const badge = document.getElementById('authStatusBadge');
+      if (!badge) return;
+
+      const fapAlert = document.getElementById('fapConnectionAlert');
+      const fapAlertText = document.getElementById('fapAlertText');
+      const fapAlertSpinner = document.getElementById('fapAlertSpinner');
+
+      function setConnectionAlert(state) {
+        if (!fapAlert) return;
+        if (state === 'checking') {
+          fapAlert.className = 'alert alert-secondary d-flex align-items-center gap-2 mb-0 py-2';
+          if (fapAlertSpinner) { fapAlertSpinner.style.display = ''; fapAlertSpinner.className = 'spinner-border spinner-border-sm text-secondary'; }
+          if (fapAlertText) fapAlertText.textContent = 'Verificando conexão com o FAP Web...';
+        } else if (state === 'ok') {
+          fapAlert.className = 'alert alert-success d-flex align-items-center gap-2 mb-0 py-2';
+          if (fapAlertSpinner) fapAlertSpinner.style.display = 'none';
+          if (fapAlertText) fapAlertText.innerHTML = '<i class="bi bi-wifi me-1"></i><strong>IntellexIA conectado ao FAP Web</strong> — sessão ativa e funcionando.';
+        } else {
+          fapAlert.className = 'alert alert-danger d-flex align-items-center gap-2 mb-0 py-2';
+          if (fapAlertSpinner) fapAlertSpinner.style.display = 'none';
+          if (fapAlertText) fapAlertText.innerHTML = '<i class="bi bi-wifi-off me-1"></i><strong>Sessão FAP expirada</strong> — atualize os dados de autenticação.';
+        }
+      }
+
+      function setBadge(state) {
+        if (state === 'checking') {
+          badge.className = 'badge bg-secondary ms-2';
+          badge.innerHTML = '<span class="spinner-border spinner-border-sm me-1" style="width:.7rem;height:.7rem;"></span>Verificando sessão...';
+        } else if (state === 'ok') {
+          badge.className = 'badge bg-success ms-2';
+          badge.innerHTML = '<i class="bi bi-wifi me-1"></i>Conectado ao FAP Web';
+        } else {
+          badge.className = 'badge bg-danger ms-2';
+          badge.innerHTML = '<i class="bi bi-wifi-off me-1"></i>Sessão expirada';
+        }
+        setConnectionAlert(state);
+      }
+
+      async function checkSession() {
+        setBadge('checking');
+        try {
+          const resp = await fetch(checkUrl, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+          const payload = await resp.json().catch(() => null);
+          setBadge((payload && payload.ok) ? 'ok' : 'expired');
+        } catch (err) {
+          setBadge('expired');
+        }
+        scheduleNext();
+      }
+
+      function scheduleNext() {
+        const delay = Math.floor(Math.random() * (300000 - 60000 + 1)) + 60000;
+        setTimeout(checkSession, delay);
+      }
+
+      const btnCheck = document.getElementById('btnCheckSession');
+      if (btnCheck) btnCheck.addEventListener('click', checkSession);
+
+      checkSession();
+    })();
+
+    // ── Sincronização ────────────────────────────────────────────────────
+    const btnDownloadFiles = document.getElementById('btnDownloadFiles');
+    const dlSpinner = document.getElementById('dlSpinner');
+    const dlIcon = document.getElementById('dlIcon');
+    const BTN_SYNC_LABEL = '<i class="bi bi-arrow-repeat me-1"></i> Sincronizar';
+
+    function setSyncing(active) {
+      btnSync.disabled = active;
+      syncSpinner.classList.toggle('d-none', !active);
+      syncIcon.style.display = active ? 'none' : '';
+    }
+
+    function formatCnpj(digits) {
+      const s = String(digits).padStart(14, '0');
+      return s.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
+    }
+
+    async function runSync(yearsToProcess) {
+      const cnpj = companySelect ? ($(companySelect).val() || companySelect.value) : '';
+      if (!cnpj) {
+        showAlert(syncAlerts, 'warning', 'Selecione uma empresa antes de sincronizar.');
         return;
       }
 
       setSyncing(true);
-      alertsBox.innerHTML = '';
-      log('Consultando empresas no sistema FAP/Dataprev...', 'info');
+      syncAlerts.innerHTML = '';
+      summaryCard.classList.add('d-none');
+      resultsCard.classList.add('d-none');
+      resultsTbody.innerHTML = '';
 
-      try {
-        const resp = await fetch(syncCompaniesUrl, {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-          body: JSON.stringify({ cookies: authPayload.cookies, userAgent: authPayload.userAgent || '' }),
-        });
+      let totalYears = 0;
+      let totalCreated = 0;
+      let totalUpdated = 0;
+      let totalItems = 0;
+      let errors = 0;
 
-        const payload = await resp.json().catch(function () { return null; });
+      log('Iniciando sincronização de ' + yearsToProcess.length + ' ano(s) para CNPJ ' + cnpj + '...', 'info');
 
-        if (!resp.ok || !payload || !payload.ok) {
-          const msg = (payload && payload.message) ? payload.message : 'Falha ao consultar o sistema FAP.';
-          log('Erro ao sincronizar empresas: ' + msg, 'error');
-          showAlert(alertsBox, 'danger', msg);
-          return;
-        }
+      // Delay aleatório entre anos para não sobrecarregar a API
+      function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
 
-        const count = payload.saved_count || (payload.companies || []).length;
-        const msg = count + ' empresa(s) sincronizadas com sucesso. Recarregando...';
-        log('Sincronização de empresas concluída: ' + count + ' empresa(s).', 'success');
-        showAlert(alertsBox, 'success', msg);
-        setTimeout(function () { window.location.reload(); }, 1200);
-      } catch (err) {
-        log('Erro de rede ao sincronizar empresas: ' + (err.message || String(err)), 'error');
-        showAlert(alertsBox, 'danger', 'Erro de rede ao consultar o sistema FAP.');
-      } finally {
-        setSyncing(false);
-      }
-    }
+      for (let i = 0; i < yearsToProcess.length; i++) {
+        const year = yearsToProcess[i];
+        log('Consultando vigência ' + year + '...', 'info');
+        btnSync.innerHTML =
+          '<span class="spinner-border spinner-border-sm me-1"></span>' +
+          'Ano ' + year + ' (' + (i + 1) + '/' + yearsToProcess.length + ')';
 
-    if (btnPrimary) btnPrimary.addEventListener('click', syncCompaniesNow);
-    if (btnEmpty) btnEmpty.addEventListener('click', syncCompaniesNow);
-  })();
-
-  // ── Verificação periódica da sessão FAP ─────────────────────────────
-  (function setupSessionCheck() {
-    const badge = document.getElementById('authStatusBadge');
-    if (!badge) return;
-
-    const fapAlert = document.getElementById('fapConnectionAlert');
-    const fapAlertText = document.getElementById('fapAlertText');
-    const fapAlertSpinner = document.getElementById('fapAlertSpinner');
-
-    function setConnectionAlert(state) {
-      if (!fapAlert) return;
-      if (state === 'checking') {
-        fapAlert.className = 'alert alert-secondary d-flex align-items-center gap-2 mb-0 py-2';
-        if (fapAlertSpinner) { fapAlertSpinner.style.display = ''; fapAlertSpinner.className = 'spinner-border spinner-border-sm text-secondary'; }
-        if (fapAlertText) fapAlertText.textContent = 'Verificando conexão com o FAP Web...';
-      } else if (state === 'ok') {
-        fapAlert.className = 'alert alert-success d-flex align-items-center gap-2 mb-0 py-2';
-        if (fapAlertSpinner) fapAlertSpinner.style.display = 'none';
-        if (fapAlertText) fapAlertText.innerHTML = '<i class="bi bi-wifi me-1"></i><strong>IntellexIA conectado ao FAP Web</strong> — sessão ativa e funcionando.';
-      } else {
-        fapAlert.className = 'alert alert-danger d-flex align-items-center gap-2 mb-0 py-2';
-        if (fapAlertSpinner) fapAlertSpinner.style.display = 'none';
-        if (fapAlertText) fapAlertText.innerHTML = '<i class="bi bi-wifi-off me-1"></i><strong>Sessão FAP expirada</strong> — atualize os dados de autenticação.';
-      }
-    }
-
-    function setBadge(state) {
-      if (state === 'checking') {
-        badge.className = 'badge bg-secondary ms-2';
-        badge.innerHTML = '<span class="spinner-border spinner-border-sm me-1" style="width:.7rem;height:.7rem;"></span>Verificando sessão...';
-      } else if (state === 'ok') {
-        badge.className = 'badge bg-success ms-2';
-        badge.innerHTML = '<i class="bi bi-wifi me-1"></i>Conectado ao FAP Web';
-      } else {
-        badge.className = 'badge bg-danger ms-2';
-        badge.innerHTML = '<i class="bi bi-wifi-off me-1"></i>Sessão expirada';
-      }
-      setConnectionAlert(state);
-    }
-
-    async function checkSession() {
-      setBadge('checking');
-      try {
-        const resp = await fetch(checkUrl, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-        const payload = await resp.json().catch(() => null);
-        setBadge((payload && payload.ok) ? 'ok' : 'expired');
-      } catch (err) {
-        setBadge('expired');
-      }
-      scheduleNext();
-    }
-
-    function scheduleNext() {
-      const delay = Math.floor(Math.random() * (300000 - 60000 + 1)) + 60000;
-      setTimeout(checkSession, delay);
-    }
-
-    const btnCheck = document.getElementById('btnCheckSession');
-    if (btnCheck) btnCheck.addEventListener('click', checkSession);
-
-    checkSession();
-  })();
-
-  // ── Sincronização ────────────────────────────────────────────────────
-  const btnDownloadFiles = document.getElementById('btnDownloadFiles');
-  const dlSpinner = document.getElementById('dlSpinner');
-  const dlIcon = document.getElementById('dlIcon');
-  const BTN_SYNC_LABEL = '<i class="bi bi-arrow-repeat me-1"></i> Sincronizar';
-
-  function setSyncing(active) {
-    btnSync.disabled = active;
-    syncSpinner.classList.toggle('d-none', !active);
-    syncIcon.style.display = active ? 'none' : '';
-  }
-
-  function formatCnpj(digits) {
-    const s = String(digits).padStart(14, '0');
-    return s.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5');
-  }
-
-  async function runSync(yearsToProcess) {
-    const cnpj = companySelect ? ($(companySelect).val() || companySelect.value) : '';
-    if (!cnpj) {
-      showAlert(syncAlerts, 'warning', 'Selecione uma empresa antes de sincronizar.');
-      return;
-    }
-
-    setSyncing(true);
-    syncAlerts.innerHTML = '';
-    summaryCard.classList.add('d-none');
-    resultsCard.classList.add('d-none');
-    resultsTbody.innerHTML = '';
-
-    let totalYears = 0;
-    let totalCreated = 0;
-    let totalUpdated = 0;
-    let totalItems = 0;
-    let errors = 0;
-
-    log('Iniciando sincronização de ' + yearsToProcess.length + ' ano(s) para CNPJ ' + cnpj + '...', 'info');
-
-    // Delay aleatório entre anos para não sobrecarregar a API
-    function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
-
-    for (let i = 0; i < yearsToProcess.length; i++) {
-      const year = yearsToProcess[i];
-      log('Consultando vigência ' + year + '...', 'info');
-      btnSync.innerHTML =
-        '<span class="spinner-border spinner-border-sm me-1"></span>' +
-        'Ano ' + year + ' (' + (i + 1) + '/' + yearsToProcess.length + ')';
-
-      try {
-        const resp = await fetch(syncYearUrl, {
-          method: 'POST',
-          credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-          body: JSON.stringify({ cnpj: cnpj, year: year }),
-        });
-        const payload = await resp.json().catch(() => null);
-
-        if (!resp.ok || !payload || !payload.ok) {
-          const msg = (payload && payload.message) || 'Erro desconhecido';
-          // 502 com expiração
-          if (resp.status === 502 && payload && payload.message && payload.message.includes('expirada')) {
-            log('Sessão expirada durante sincronização. Atualize a autenticação.', 'error');
-            errors++;
-            break;
-          }
-          log('Vigência ' + year + ': ' + msg, 'warning');
-          errors++;
-        } else {
-          if (payload.total === 0) {
-            log('Vigência ' + year + ': nenhum registro encontrado.', 'info');
-          } else {
-            log(
-              'Vigência ' + year + ': ' + payload.total + ' registro(s) — ' +
-              payload.created + ' novo(s), ' + payload.updated + ' atualizado(s).',
-              'success',
-            );
-            totalYears++;
-            totalCreated += payload.created;
-            totalUpdated += payload.updated;
-            totalItems += payload.total;
-          }
-        }
-      } catch (err) {
-        log('Vigência ' + year + ': erro de rede — ' + (err.message || String(err)), 'error');
-        errors++;
-      }
-
-      // Pausa entre requisições (0–1 s)
-      if (i < yearsToProcess.length - 1) {
-        await sleep(Math.floor(Math.random() * 1000));
-      }
-    }
-
-    // Resumo
-    const summaryMsg =
-      'Sincronização concluída! ' +
-      totalYears + ' ano(s) com dados, ' +
-      totalCreated + ' novo(s), ' +
-      totalUpdated + ' atualizado(s)' +
-      (errors ? ', ' + errors + ' erro(s)' : '') + '.';
-    log(summaryMsg, errors ? 'warning' : 'success');
-
-    document.getElementById('summaryYears').textContent = totalYears;
-    document.getElementById('summaryCreated').textContent = totalCreated;
-    document.getElementById('summaryUpdated').textContent = totalUpdated;
-    summaryCard.classList.remove('d-none');
-
-    // Atualiza badge do banco
-    const badge = document.getElementById('totalSyncedBadge');
-    if (badge) badge.innerHTML = '<i class="bi bi-database me-1"></i>banco atualizado';
-
-    if (totalItems > 0) {
-      showAlert(syncAlerts, errors ? 'warning' : 'success', summaryMsg);
-      // Mostra botão de download de PDFs
-      if (btnDownloadFiles) btnDownloadFiles.classList.remove('d-none');
-      // Carrega tabela de resultados
-      await loadResults(cnpj);
-    } else if (!errors) {
-      showAlert(syncAlerts, 'info', 'Nenhum registro encontrado para este CNPJ em nenhum ano de vigência.');
-    } else {
-      showAlert(syncAlerts, 'danger', 'Sincronização concluída com erros. Verifique o log.');
-    }
-
-    setSyncing(false);
-    btnSync.innerHTML = BTN_SYNC_LABEL;
-  }
-
-  btnSync.addEventListener('click', async function () {
-    const selectedYear = singleYearSelect ? String(singleYearSelect.value || '').trim() : '';
-    const yearsToProcess = selectedYear ? [Number(selectedYear)] : allYears;
-    await runSync(yearsToProcess);
-  });
-
-  // ── Download de PDFs com progress bar ──────────────────────────────
-  if (btnDownloadFiles) {
-    const dlProgressWrap = document.getElementById('dlProgressWrap');
-    const dlProgressBar = document.getElementById('dlProgressBar');
-    const dlProgressLabel = document.getElementById('dlProgressLabel');
-    const dlProgressCount = document.getElementById('dlProgressCount');
-    const dlCountOk = document.getElementById('dlCountOk');
-    const dlCountErr = document.getElementById('dlCountErr');
-    const btnCancelDl = document.getElementById('btnCancelDownload');
-
-    let _dlCancelled = false;
-
-    function setDlProgress(done, total, ok, err) {
-      const pct = total ? Math.round((done / total) * 100) : 0;
-      dlProgressBar.style.width = pct + '%';
-      dlProgressBar.setAttribute('aria-valuenow', pct);
-      dlProgressBar.textContent = pct + '%';
-      dlProgressCount.textContent = done + ' / ' + total;
-      dlCountOk.textContent = ok;
-      dlCountErr.textContent = err;
-      if (err > 0) {
-        dlProgressBar.classList.add('bg-warning');
-      }
-    }
-
-    if (btnCancelDl) {
-      btnCancelDl.addEventListener('click', function () {
-        _dlCancelled = true;
-        btnCancelDl.disabled = true;
-        btnCancelDl.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Cancelando...';
-        log('Cancelamento solicitado — aguardando lote atual terminar...', 'warning');
-      });
-    }
-
-    btnDownloadFiles.addEventListener('click', async function () {
-      const cnpj = companySelect ? ($(companySelect).val() || companySelect.value) : '';
-      if (!cnpj) {
-        showAlert(syncAlerts, 'warning', 'Selecione uma empresa.');
-        return;
-      }
-
-      // Reseta estado
-      _dlCancelled = false;
-      dlProgressBar.classList.remove('bg-warning', 'bg-success');
-      dlProgressBar.classList.add('progress-bar-animated', 'progress-bar-striped');
-      dlProgressBar.style.width = '0%';
-      dlCountOk.textContent = '0';
-      dlCountErr.textContent = '0';
-      dlProgressLabel.textContent = 'Consultando registros pendentes...';
-      dlProgressCount.textContent = '';
-      dlProgressWrap.classList.remove('d-none');
-
-      btnDownloadFiles.disabled = true;
-      dlSpinner.classList.remove('d-none');
-      dlIcon.style.display = 'none';
-      if (btnCancelDl) { btnCancelDl.classList.remove('d-none'); btnCancelDl.disabled = false; btnCancelDl.innerHTML = '<i class="bi bi-x-circle me-1"></i> Cancelar'; }
-
-      let total = null;
-      let ok = 0, err = 0;
-      let batchNum = 0;
-
-      while (true) {
-        if (_dlCancelled) {
-          log('Download cancelado.', 'warning');
-          break;
-        }
-
-        batchNum++;
         try {
-          const resp = await fetch(downloadBatchUrl, {
+          const resp = await fetch(syncYearUrl, {
             method: 'POST',
             credentials: 'same-origin',
             headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-            body: JSON.stringify({ cnpj: cnpj }),
+            body: JSON.stringify({ cnpj: cnpj, year: year }),
           });
           const payload = await resp.json().catch(() => null);
 
           if (!resp.ok || !payload || !payload.ok) {
-            log('Erro: ' + ((payload && payload.message) || 'erro de servidor'), 'error');
-            break;
-          }
-
-          // Primeira chamada: captura o total
-          if (total === null) {
-            total = payload.total;
-            if (total === 0) {
-              log('Nenhum PDF pendente — todos já foram baixados.', 'info');
-              dlProgressLabel.textContent = 'Tudo baixado!';
-              dlProgressBar.style.width = '100%';
-              dlProgressBar.classList.add('bg-success');
-              dlProgressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+            const msg = (payload && payload.message) || 'Erro desconhecido';
+            // 502 com expiração
+            if (resp.status === 502 && payload && payload.message && payload.message.includes('expirada')) {
+              log('Sessão expirada durante sincronização. Atualize a autenticação.', 'error');
+              errors++;
               break;
             }
-            log('Total de PDFs a baixar: ' + total + '. Processando em lotes de 60...', 'info');
+            log('Vigência ' + year + ': ' + msg, 'warning');
+            errors++;
+          } else {
+            if (payload.total === 0) {
+              log('Vigência ' + year + ': nenhum registro encontrado.', 'info');
+            } else {
+              log(
+                'Vigência ' + year + ': ' + payload.total + ' registro(s) — ' +
+                payload.created + ' novo(s), ' + payload.updated + ' atualizado(s).',
+                'success',
+              );
+              totalYears++;
+              totalCreated += payload.created;
+              totalUpdated += payload.updated;
+              totalItems += payload.total;
+            }
           }
+        } catch (err) {
+          log('Vigência ' + year + ': erro de rede — ' + (err.message || String(err)), 'error');
+          errors++;
+        }
 
-          // Nenhum registro processado = todos falharam, evita loop infinito
-          if (payload.processed === 0) break;
+        // Pausa entre requisições (0–1 s)
+        if (i < yearsToProcess.length - 1) {
+          await sleep(Math.floor(Math.random() * 1000));
+        }
+      }
 
-          (payload.results || []).forEach(function (r) {
-            if (r.ok) { ok++; log('PDF #' + r.rec_id + ' salvo: ' + (r.filename || ''), 'success'); }
-            else { err++; log('PDF #' + r.rec_id + ' falhou: ' + (r.error || 'erro'), 'error'); }
-          });
+      // Resumo
+      const summaryMsg =
+        'Sincronização concluída! ' +
+        totalYears + ' ano(s) com dados, ' +
+        totalCreated + ' novo(s), ' +
+        totalUpdated + ' atualizado(s)' +
+        (errors ? ', ' + errors + ' erro(s)' : '') + '.';
+      log(summaryMsg, errors ? 'warning' : 'success');
 
-          const done = total - payload.remaining;
-          const totalBatches = Math.ceil(total / 60);
-          dlProgressLabel.textContent = 'Lote ' + batchNum + '/' + totalBatches + ' — ' + done + ' de ' + total + ' arquivos';
-          setDlProgress(done, total, ok, err);
+      document.getElementById('summaryYears').textContent = totalYears;
+      document.getElementById('summaryCreated').textContent = totalCreated;
+      document.getElementById('summaryUpdated').textContent = totalUpdated;
+      summaryCard.classList.remove('d-none');
 
-          if (payload.remaining === 0) break;
+      // Atualiza badge do banco
+      const badge = document.getElementById('totalSyncedBadge');
+      if (badge) badge.innerHTML = '<i class="bi bi-database me-1"></i>banco atualizado';
 
-          // Se nenhum foi baixado com sucesso neste lote, não tem sentido continuar
-          const batchOk = (payload.results || []).filter(function (r) { return r.ok; }).length;
-          if (batchOk === 0) {
-            log('Nenhum arquivo baixado neste lote — interrompendo para evitar loop.', 'warning');
+      if (totalItems > 0) {
+        showAlert(syncAlerts, errors ? 'warning' : 'success', summaryMsg);
+        // Mostra botão de download de PDFs
+        if (btnDownloadFiles) btnDownloadFiles.classList.remove('d-none');
+        // Carrega tabela de resultados
+        await loadResults(cnpj);
+      } else if (!errors) {
+        showAlert(syncAlerts, 'info', 'Nenhum registro encontrado para este CNPJ em nenhum ano de vigência.');
+      } else {
+        showAlert(syncAlerts, 'danger', 'Sincronização concluída com erros. Verifique o log.');
+      }
+
+      setSyncing(false);
+      btnSync.innerHTML = BTN_SYNC_LABEL;
+    }
+
+    btnSync.addEventListener('click', async function () {
+      const selectedYear = singleYearSelect ? String(singleYearSelect.value || '').trim() : '';
+      const yearsToProcess = selectedYear ? [Number(selectedYear)] : allYears;
+      await runSync(yearsToProcess);
+    });
+
+    // ── Download de PDFs com progress bar ──────────────────────────────
+    if (btnDownloadFiles) {
+      const dlProgressWrap = document.getElementById('dlProgressWrap');
+      const dlProgressBar = document.getElementById('dlProgressBar');
+      const dlProgressLabel = document.getElementById('dlProgressLabel');
+      const dlProgressCount = document.getElementById('dlProgressCount');
+      const dlCountOk = document.getElementById('dlCountOk');
+      const dlCountErr = document.getElementById('dlCountErr');
+      const btnCancelDl = document.getElementById('btnCancelDownload');
+
+      let _dlCancelled = false;
+
+      function setDlProgress(done, total, ok, err) {
+        const pct = total ? Math.round((done / total) * 100) : 0;
+        dlProgressBar.style.width = pct + '%';
+        dlProgressBar.setAttribute('aria-valuenow', pct);
+        dlProgressBar.textContent = pct + '%';
+        dlProgressCount.textContent = done + ' / ' + total;
+        dlCountOk.textContent = ok;
+        dlCountErr.textContent = err;
+        if (err > 0) {
+          dlProgressBar.classList.add('bg-warning');
+        }
+      }
+
+      if (btnCancelDl) {
+        btnCancelDl.addEventListener('click', function () {
+          _dlCancelled = true;
+          btnCancelDl.disabled = true;
+          btnCancelDl.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Cancelando...';
+          log('Cancelamento solicitado — aguardando lote atual terminar...', 'warning');
+        });
+      }
+
+      btnDownloadFiles.addEventListener('click', async function () {
+        const cnpj = companySelect ? ($(companySelect).val() || companySelect.value) : '';
+        if (!cnpj) {
+          showAlert(syncAlerts, 'warning', 'Selecione uma empresa.');
+          return;
+        }
+
+        // Reseta estado
+        _dlCancelled = false;
+        dlProgressBar.classList.remove('bg-warning', 'bg-success');
+        dlProgressBar.classList.add('progress-bar-animated', 'progress-bar-striped');
+        dlProgressBar.style.width = '0%';
+        dlCountOk.textContent = '0';
+        dlCountErr.textContent = '0';
+        dlProgressLabel.textContent = 'Consultando registros pendentes...';
+        dlProgressCount.textContent = '';
+        dlProgressWrap.classList.remove('d-none');
+
+        btnDownloadFiles.disabled = true;
+        dlSpinner.classList.remove('d-none');
+        dlIcon.style.display = 'none';
+        if (btnCancelDl) { btnCancelDl.classList.remove('d-none'); btnCancelDl.disabled = false; btnCancelDl.innerHTML = '<i class="bi bi-x-circle me-1"></i> Cancelar'; }
+
+        let total = null;
+        let ok = 0, err = 0;
+        let batchNum = 0;
+
+        while (true) {
+          if (_dlCancelled) {
+            log('Download cancelado.', 'warning');
             break;
           }
 
-        } catch (e) {
-          log('Erro de rede: ' + (e.message || String(e)), 'error');
-          break;
+          batchNum++;
+          try {
+            const resp = await fetch(downloadBatchUrl, {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+              body: JSON.stringify({ cnpj: cnpj }),
+            });
+            const payload = await resp.json().catch(() => null);
+
+            if (!resp.ok || !payload || !payload.ok) {
+              log('Erro: ' + ((payload && payload.message) || 'erro de servidor'), 'error');
+              break;
+            }
+
+            // Primeira chamada: captura o total
+            if (total === null) {
+              total = payload.total;
+              if (total === 0) {
+                log('Nenhum PDF pendente — todos já foram baixados.', 'info');
+                dlProgressLabel.textContent = 'Tudo baixado!';
+                dlProgressBar.style.width = '100%';
+                dlProgressBar.classList.add('bg-success');
+                dlProgressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+                break;
+              }
+              log('Total de PDFs a baixar: ' + total + '. Processando em lotes de 60...', 'info');
+            }
+
+            // Nenhum registro processado = todos falharam, evita loop infinito
+            if (payload.processed === 0) break;
+
+            (payload.results || []).forEach(function (r) {
+              if (r.ok) { ok++; log('PDF #' + r.rec_id + ' salvo: ' + (r.filename || ''), 'success'); }
+              else { err++; log('PDF #' + r.rec_id + ' falhou: ' + (r.error || 'erro'), 'error'); }
+            });
+
+            const done = total - payload.remaining;
+            const totalBatches = Math.ceil(total / 60);
+            dlProgressLabel.textContent = 'Lote ' + batchNum + '/' + totalBatches + ' — ' + done + ' de ' + total + ' arquivos';
+            setDlProgress(done, total, ok, err);
+
+            if (payload.remaining === 0) break;
+
+            // Se nenhum foi baixado com sucesso neste lote, não tem sentido continuar
+            const batchOk = (payload.results || []).filter(function (r) { return r.ok; }).length;
+            if (batchOk === 0) {
+              log('Nenhum arquivo baixado neste lote — interrompendo para evitar loop.', 'warning');
+              break;
+            }
+
+          } catch (e) {
+            log('Erro de rede: ' + (e.message || String(e)), 'error');
+            break;
+          }
         }
-      }
 
-      const finalMsg = _dlCancelled
-        ? 'Download cancelado: ' + ok + ' baixado(s), ' + err + ' erro(s).'
-        : 'Download concluído: ' + ok + ' baixado(s)' + (err ? ', ' + err + ' erro(s)' : '') + '.';
-      log(finalMsg, err ? 'warning' : 'success');
-      dlProgressLabel.textContent = _dlCancelled ? 'Cancelado.' : 'Concluído!';
-      dlProgressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
-      if (!err && !_dlCancelled) dlProgressBar.classList.add('bg-success');
+        const finalMsg = _dlCancelled
+          ? 'Download cancelado: ' + ok + ' baixado(s), ' + err + ' erro(s).'
+          : 'Download concluído: ' + ok + ' baixado(s)' + (err ? ', ' + err + ' erro(s)' : '') + '.';
+        log(finalMsg, err ? 'warning' : 'success');
+        dlProgressLabel.textContent = _dlCancelled ? 'Cancelado.' : 'Concluído!';
+        dlProgressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+        if (!err && !_dlCancelled) dlProgressBar.classList.add('bg-success');
 
-      if (btnCancelDl) btnCancelDl.classList.add('d-none');
-      resetDlBtn();
-    });
-
-    function resetDlBtn() {
-      btnDownloadFiles.disabled = false;
-      dlSpinner.classList.add('d-none');
-      dlIcon.style.display = '';
-    }
-  }
-
-  // ── Carrega tabela de resultados via API ─────────────────────────────
-  async function loadResults(cnpj) {
-    try {
-      const resp = await fetch(summaryUrl + '?cnpj=' + encodeURIComponent(cnpj), {
-        credentials: 'same-origin',
-        headers: { 'X-Requested-With': 'XMLHttpRequest' },
-      });
-      const payload = await resp.json().catch(() => null);
-      if (!payload || !payload.ok) return;
-
-      document.getElementById('resultsTitle').textContent =
-        '— CNPJ ' + cnpj;
-      document.getElementById('resultsCount').textContent =
-        payload.total + ' registro(s)';
-
-      const instanciaLabel = {
-        'ADMINISTRATIVO_PRIMEIRA_INSTANCIA': '1ª Instância',
-        'ADMINISTRATIVO_SEGUNDA_INSTANCIA': '2ª Instância',
-      };
-
-      resultsTbody.innerHTML = '';
-      payload.items.forEach(function (item) {
-        const tr = document.createElement('tr');
-        const cnpjFmt = item.cnpj ? item.cnpj.padStart(14, '0').replace(
-          /^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : item.cnpj;
-        const inst = instanciaLabel[item.instancia_codigo] || (item.instancia_codigo || '—');
-        const sit = item.situacao_descricao || item.situacao_codigo || '—';
-        const imported = item.report_id
-          ? '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Importado</span>'
-          : '<span class="badge bg-light text-dark border">Pendente</span>';
-        tr.innerHTML =
-          '<td class="text-center">' + item.ano_vigencia + '</td>' +
-          '<td class="font-monospace small">' + (cnpjFmt || '—') + '</td>' +
-          '<td><span class="badge ' +
-          (item.instancia_codigo && item.instancia_codigo.includes('SEGUNDA') ? 'bg-info text-dark' : 'bg-primary') +
-          '">' + inst + '</span></td>' +
-          '<td class="small">' + sit + '</td>' +
-          '<td class="font-monospace small">' + (item.protocolo || '—') + '</td>' +
-          '<td class="small">' + (item.data_transmissao || '—') + '</td>';
-        resultsTbody.appendChild(tr);
+        if (btnCancelDl) btnCancelDl.classList.add('d-none');
+        resetDlBtn();
       });
 
-      resultsCard.classList.remove('d-none');
-    } catch (err) {
-      log('Erro ao carregar tabela de resultados: ' + (err.message || String(err)), 'warning');
-    }
-  }
-
-  // ── Sincronização de procurações ──────────────────────────────────────
-  (function setupProcSync() {
-    const btnSyncProc = document.getElementById('btnSyncProc');
-    const procSpinner = document.getElementById('procSpinner');
-    const procIcon = document.getElementById('procIcon');
-    const procAlerts = document.getElementById('procAlerts');
-    const procTotalBadge = document.getElementById('procTotalBadge');
-    const procLastSync = document.getElementById('procLastSync');
-
-
-    const syncProcUrl = '{{ url_for("fap_panel.sync_procuracoes") }}';
-    const listProcUrl = '{{ url_for("fap_panel.sync_procuracoes_list") }}';
-
-    function setProcSyncing(active) {
-      btnSyncProc.disabled = active;
-      procSpinner.classList.toggle('d-none', !active);
-      procIcon.style.display = active ? 'none' : '';
-    }
-
-    const situacaoColor = {
-      'DEFERIDA': 'bg-success',
-      'EXCLUIDA': 'bg-secondary',
-      'INDEFERIDA': 'bg-danger',
-    };
-
-    async function loadProcuracoes() {
-      try {
-        const resp = await fetch(listProcUrl, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
-        const payload = await resp.json().catch(() => null);
-        if (!payload || !payload.ok || !payload.total) return;
-
-        procTotalBadge.textContent = payload.total + ' no banco';
-      } catch (err) {
-        log('Erro ao carregar procurações: ' + (err.message || String(err)), 'warning');
+      function resetDlBtn() {
+        btnDownloadFiles.disabled = false;
+        dlSpinner.classList.add('d-none');
+        dlIcon.style.display = '';
       }
     }
 
-    btnSyncProc.addEventListener('click', async function () {
-      procAlerts.innerHTML = '';
-      setProcSyncing(true);
-      log('Buscando procurações eletrônicas...', 'info');
-
+    // ── Carrega tabela de resultados via API ─────────────────────────────
+    async function loadResults(cnpj) {
       try {
-        const resp = await fetch(syncProcUrl, {
-          method: 'POST',
+        const resp = await fetch(summaryUrl + '?cnpj=' + encodeURIComponent(cnpj), {
           credentials: 'same-origin',
-          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-          body: JSON.stringify({}),
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
         });
         const payload = await resp.json().catch(() => null);
+        if (!payload || !payload.ok) return;
 
-        if (!resp.ok || !payload || !payload.ok) {
-          const msg = (payload && payload.message) || 'Erro desconhecido';
-          log('Erro ao sincronizar procurações: ' + msg, 'error');
-          showAlert(procAlerts, 'danger', msg);
-        } else {
-          const msg = 'Procurações sincronizadas: ' + payload.total + ' total, ' +
-            payload.created + ' novo(s), ' + payload.updated + ' atualizado(s).';
-          log(msg, 'success');
-          showAlert(procAlerts, 'success', msg);
-          procLastSync.textContent = 'última sync: agora';
-          await loadProcuracoes();
-        }
+        document.getElementById('resultsTitle').textContent =
+          '— CNPJ ' + cnpj;
+        document.getElementById('resultsCount').textContent =
+          payload.total + ' registro(s)';
+
+        const instanciaLabel = {
+          'ADMINISTRATIVO_PRIMEIRA_INSTANCIA': '1ª Instância',
+          'ADMINISTRATIVO_SEGUNDA_INSTANCIA': '2ª Instância',
+        };
+
+        resultsTbody.innerHTML = '';
+        payload.items.forEach(function (item) {
+          const tr = document.createElement('tr');
+          const cnpjFmt = item.cnpj ? item.cnpj.padStart(14, '0').replace(
+            /^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})$/, '$1.$2.$3/$4-$5') : item.cnpj;
+          const inst = instanciaLabel[item.instancia_codigo] || (item.instancia_codigo || '—');
+          const sit = item.situacao_descricao || item.situacao_codigo || '—';
+          const imported = item.report_id
+            ? '<span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Importado</span>'
+            : '<span class="badge bg-light text-dark border">Pendente</span>';
+          tr.innerHTML =
+            '<td class="text-center">' + item.ano_vigencia + '</td>' +
+            '<td class="font-monospace small">' + (cnpjFmt || '—') + '</td>' +
+            '<td><span class="badge ' +
+            (item.instancia_codigo && item.instancia_codigo.includes('SEGUNDA') ? 'bg-info text-dark' : 'bg-primary') +
+            '">' + inst + '</span></td>' +
+            '<td class="small">' + sit + '</td>' +
+            '<td class="font-monospace small">' + (item.protocolo || '—') + '</td>' +
+            '<td class="small">' + (item.data_transmissao || '—') + '</td>';
+          resultsTbody.appendChild(tr);
+        });
+
+        resultsCard.classList.remove('d-none');
       } catch (err) {
-        log('Erro de rede ao sincronizar procurações: ' + (err.message || String(err)), 'error');
-      } finally {
-        setProcSyncing(false);
+        log('Erro ao carregar tabela de resultados: ' + (err.message || String(err)), 'warning');
       }
-    });
+    }
 
-    // Carrega procurações já salvas ao abrir a página
-    loadProcuracoes();
+    // ── Sincronização de procurações ──────────────────────────────────────
+    (function setupProcSync() {
+      const btnSyncProc = document.getElementById('btnSyncProc');
+      const procSpinner = document.getElementById('procSpinner');
+      const procIcon = document.getElementById('procIcon');
+      const procAlerts = document.getElementById('procAlerts');
+      const procTotalBadge = document.getElementById('procTotalBadge');
+      const procLastSync = document.getElementById('procLastSync');
+
+
+      const syncProcUrl = '{{ url_for("fap_panel.sync_procuracoes") }}';
+      const listProcUrl = '{{ url_for("fap_panel.sync_procuracoes_list") }}';
+
+      function setProcSyncing(active) {
+        btnSyncProc.disabled = active;
+        procSpinner.classList.toggle('d-none', !active);
+        procIcon.style.display = active ? 'none' : '';
+      }
+
+      const situacaoColor = {
+        'DEFERIDA': 'bg-success',
+        'EXCLUIDA': 'bg-secondary',
+        'INDEFERIDA': 'bg-danger',
+      };
+
+      async function loadProcuracoes() {
+        try {
+          const resp = await fetch(listProcUrl, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+          const payload = await resp.json().catch(() => null);
+          if (!payload || !payload.ok || !payload.total) return;
+
+          procTotalBadge.textContent = payload.total + ' no banco';
+        } catch (err) {
+          log('Erro ao carregar procurações: ' + (err.message || String(err)), 'warning');
+        }
+      }
+
+      btnSyncProc.addEventListener('click', async function () {
+        procAlerts.innerHTML = '';
+        setProcSyncing(true);
+        log('Buscando procurações eletrônicas...', 'info');
+
+        try {
+          const resp = await fetch(syncProcUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            body: JSON.stringify({}),
+          });
+          const payload = await resp.json().catch(() => null);
+
+          if (!resp.ok || !payload || !payload.ok) {
+            const msg = (payload && payload.message) || 'Erro desconhecido';
+            log('Erro ao sincronizar procurações: ' + msg, 'error');
+            showAlert(procAlerts, 'danger', msg);
+          } else {
+            const msg = 'Procurações sincronizadas: ' + payload.total + ' total, ' +
+              payload.created + ' novo(s), ' + payload.updated + ' atualizado(s).';
+            log(msg, 'success');
+            showAlert(procAlerts, 'success', msg);
+            procLastSync.textContent = 'última sync: agora';
+            await loadProcuracoes();
+          }
+        } catch (err) {
+          log('Erro de rede ao sincronizar procurações: ' + (err.message || String(err)), 'error');
+        } finally {
+          setProcSyncing(false);
+        }
+      });
+
+      // Carrega procurações já salvas ao abrir a página
+      loadProcuracoes();
+    })();
+
   })();
-
-}) ();
 </script>
 {% endblock %}
