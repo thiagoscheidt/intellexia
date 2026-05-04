@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime
+from datetime import datetime, timedelta
 from functools import wraps
 from io import BytesIO
 
@@ -413,6 +413,35 @@ def sync_run_year():
                     last_synced_at      = now,
                 )
                 db.session.add(rec)
+                db.session.flush()
+
+                created_values = {
+                    'cnpj': cnpj_full_14,
+                    'cnpj_raiz': cnpj_raiz_14[:8],
+                    'ano_vigencia': year_int,
+                    'fap_company_id': fap_company_id,
+                    'instancia_codigo': instancia.get('codigo'),
+                    'instancia_descricao': instancia.get('descricao'),
+                    'situacao_codigo': situacao.get('codigo'),
+                    'situacao_descricao': situacao.get('descricao'),
+                    'protocolo': item.get('protocolo'),
+                    'data_transmissao': data_transmissao,
+                }
+
+                history_row = FapWebContestacaoChangeHistory(
+                    law_firm_id=law_firm_id,
+                    contestacao_db_id=rec.id,
+                    contestacao_id=rec.contestacao_id,
+                    cnpj=cnpj_full_14,
+                    cnpj_raiz=cnpj_raiz_14[:8],
+                    ano_vigencia=year_int,
+                    change_type='created',
+                    changed_fields=json.dumps(sorted(created_values.keys()), ensure_ascii=False),
+                    old_values=json.dumps({}, ensure_ascii=False),
+                    new_values=json.dumps(created_values, ensure_ascii=False, default=str),
+                    synced_at=now,
+                )
+                db.session.add(history_row)
                 created += 1
 
         db.session.commit()
@@ -650,6 +679,131 @@ def contestacao_history(rec_id):
             'cnpj': rec.cnpj or '',
             'ano_vigencia': rec.ano_vigencia,
         },
+        'items': items,
+        'total': len(items),
+    })
+
+
+@fap_panel_bp.route('/contestacoes/recent-updates', methods=['GET'])
+@require_law_firm
+def contestacoes_recent_updates():
+    """AJAX — Retorna feed recente de contestações criadas/atualizadas."""
+    law_firm_id = get_current_law_firm_id()
+
+    try:
+        limit = int(request.args.get('limit', 20) or 20)
+    except (TypeError, ValueError):
+        limit = 20
+    limit = max(1, min(limit, 100))
+
+    try:
+        days = int(request.args.get('days', 7) or 7)
+    except (TypeError, ValueError):
+        days = 7
+    days = max(1, min(days, 365))
+
+    since_dt = datetime.utcnow() - timedelta(days=days)
+
+    field_labels = {
+        'cnpj': 'CNPJ',
+        'cnpj_raiz': 'CNPJ raiz',
+        'ano_vigencia': 'Ano de vigência',
+        'fap_company_id': 'Empresa vinculada',
+        'instancia_codigo': 'Código da instância',
+        'instancia_descricao': 'Instância',
+        'situacao_codigo': 'Código da situação',
+        'situacao_descricao': 'Situação',
+        'protocolo': 'Protocolo',
+        'data_transmissao': 'Data de transmissão',
+    }
+
+    def _fmt_cnpj(value):
+        digits = ''.join(ch for ch in str(value or '') if ch.isdigit())
+        if len(digits) != 14:
+            return value or ''
+        return f'{digits[:2]}.{digits[2:5]}.{digits[5:8]}/{digits[8:12]}-{digits[12:]}'
+
+    history_rows = (
+        FapWebContestacaoChangeHistory.query
+        .filter(
+            FapWebContestacaoChangeHistory.law_firm_id == law_firm_id,
+            FapWebContestacaoChangeHistory.synced_at >= since_dt,
+        )
+        .order_by(FapWebContestacaoChangeHistory.synced_at.desc(), FapWebContestacaoChangeHistory.id.desc())
+        .limit(limit * 4)
+        .all()
+    )
+
+    synthetic_created_rows = (
+        FapWebContestacao.query
+        .filter(
+            FapWebContestacao.law_firm_id == law_firm_id,
+            FapWebContestacao.created_at >= since_dt,
+            ~FapWebContestacao.change_history.any(FapWebContestacaoChangeHistory.change_type == 'created'),
+        )
+        .order_by(FapWebContestacao.created_at.desc(), FapWebContestacao.id.desc())
+        .limit(limit * 2)
+        .all()
+    )
+
+    items = []
+
+    for row in history_rows:
+        contestacao = row.contestacao
+        try:
+            changed_fields = json.loads(row.changed_fields) if row.changed_fields else []
+        except Exception:
+            changed_fields = []
+
+        items.append({
+            'event_id': row.id,
+            'rec_id': row.contestacao_db_id,
+            'contestacao_id': row.contestacao_id,
+            'change_type': row.change_type,
+            'change_type_label': 'Adicionada' if row.change_type == 'created' else 'Atualizada',
+            'cnpj': contestacao.cnpj if contestacao else row.cnpj,
+            'cnpj_formatted': _fmt_cnpj(contestacao.cnpj if contestacao else row.cnpj),
+            'company_name': ((contestacao.fap_company.nome if contestacao and contestacao.fap_company else '') or '').strip(),
+            'ano_vigencia': contestacao.ano_vigencia if contestacao else row.ano_vigencia,
+            'protocolo': (contestacao.protocolo if contestacao else None) or '',
+            'instancia_descricao': (contestacao.instancia_descricao if contestacao else None) or '',
+            'situacao_descricao': (contestacao.situacao_descricao if contestacao else None) or '',
+            'changed_fields': changed_fields,
+            'changed_fields_labels': [field_labels.get(field, field) for field in changed_fields],
+            'synced_at': row.synced_at.strftime('%d/%m/%Y %H:%M:%S') if row.synced_at else '',
+            'sort_datetime': row.synced_at or row.created_at,
+        })
+
+    for rec in synthetic_created_rows:
+        items.append({
+            'event_id': f'synthetic-created-{rec.id}',
+            'rec_id': rec.id,
+            'contestacao_id': rec.contestacao_id,
+            'change_type': 'created',
+            'change_type_label': 'Adicionada',
+            'cnpj': rec.cnpj or '',
+            'cnpj_formatted': _fmt_cnpj(rec.cnpj),
+            'company_name': ((rec.fap_company.nome if rec.fap_company else '') or '').strip(),
+            'ano_vigencia': rec.ano_vigencia,
+            'protocolo': rec.protocolo or '',
+            'instancia_descricao': rec.instancia_descricao or '',
+            'situacao_descricao': rec.situacao_descricao or '',
+            'changed_fields': [],
+            'changed_fields_labels': [],
+            'synced_at': rec.created_at.strftime('%d/%m/%Y %H:%M:%S') if rec.created_at else '',
+            'sort_datetime': rec.created_at,
+        })
+
+    items.sort(key=lambda item: item.get('sort_datetime') or datetime.min, reverse=True)
+    items = items[:limit]
+
+    for item in items:
+        item.pop('sort_datetime', None)
+
+    return jsonify({
+        'ok': True,
+        'days': days,
+        'limit': limit,
         'items': items,
         'total': len(items),
     })

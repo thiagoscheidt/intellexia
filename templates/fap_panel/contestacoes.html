@@ -624,15 +624,20 @@ vigência, empresa e instância.', icon='bi bi-table') %}
       <div class="filter-header">
         <i class="bi bi-funnel-fill text-primary" style="font-size:.88rem;"></i>
         <h6>Filtros</h6>
-        {% if f_year or f_cnpj_raiz or f_cnpj or f_instancia or f_situacao or f_protocolo or f_prazo2 %}
-        <span class="filter-active-badge ms-auto">
-          <i class="bi bi-funnel-fill"></i> Filtros ativos
-        </span>
-        <a href="{{ url_for('fap_panel.contestacoes_page') }}" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-1"
-          title="Limpar filtros">
-          <i class="bi bi-x-lg"></i> Limpar
-        </a>
-        {% endif %}
+        <div class="ms-auto d-flex align-items-center gap-2">
+          <button type="button" id="btnRecentUpdates" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-clock-history me-1"></i> Últimas atualizações
+          </button>
+          {% if f_year or f_cnpj_raiz or f_cnpj or f_instancia or f_situacao or f_protocolo or f_prazo2 %}
+          <span class="filter-active-badge">
+            <i class="bi bi-funnel-fill"></i> Filtros ativos
+          </span>
+          <a href="{{ url_for('fap_panel.contestacoes_page') }}" class="btn btn-sm btn-outline-secondary py-0 px-2"
+            title="Limpar filtros">
+            <i class="bi bi-x-lg"></i> Limpar
+          </a>
+          {% endif %}
+        </div>
       </div>
       <div class="filter-body">
         <form method="get" action="{{ url_for('fap_panel.contestacoes_page') }}" id="filterForm">
@@ -953,6 +958,37 @@ vigência, empresa e instância.', icon='bi bi-table') %}
     </div>
   </div>
 </div>
+
+<div class="modal fade" id="recentUpdatesModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="recentUpdatesModalTitle">Últimas atualizações das contestações</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+          <div class="d-flex align-items-center gap-2">
+            <label for="recentUpdatesDays" class="small text-muted mb-0">Período</label>
+            <select id="recentUpdatesDays" class="form-select form-select-sm" style="width:auto;">
+              <option value="1">Hoje</option>
+              <option value="7" selected>7 dias</option>
+              <option value="30">30 dias</option>
+              <option value="90">90 dias</option>
+            </select>
+            <button type="button" id="refreshRecentUpdatesBtn" class="btn btn-sm btn-outline-secondary">
+              <i class="bi bi-arrow-repeat me-1"></i> Atualizar
+            </button>
+          </div>
+          <small class="text-muted" id="recentUpdatesMeta"></small>
+        </div>
+        <div id="recentUpdatesBody">
+          <div class="text-muted">Carregando...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -1142,12 +1178,21 @@ vigência, empresa e instância.', icon='bi bi-table') %}
     var importUrl = '{{ url_for("disputes_center.fap_auto_import_import_contestacao") }}';
     var reportsUrl = '{{ url_for("disputes_center.fap_contestation_reports") }}';
     var historyUrlTemplate = '{{ url_for("fap_panel.contestacao_history", rec_id=0) }}';
+    var recentUpdatesUrl = '{{ url_for("fap_panel.contestacoes_recent_updates") }}';
     var btnImportAll = document.getElementById('btnImportAll');
     var btnCancelImport = document.getElementById('btnCancelImport');
+    var btnRecentUpdates = document.getElementById('btnRecentUpdates');
     var _importCancelled = false;
 
     function getHistoryUrl(recId) {
       return historyUrlTemplate.replace('/0/history', '/' + recId + '/history');
+    }
+
+    function getRecentUpdatesRequestUrl(days) {
+      var url = new URL(recentUpdatesUrl, window.location.origin);
+      url.searchParams.set('days', String(days || 7));
+      url.searchParams.set('limit', '30');
+      return url.toString();
     }
 
     function escapeHtml(value) {
@@ -1233,8 +1278,115 @@ vigência, empresa e instância.', icon='bi bi-table') %}
       }
     }
 
+    function renderRecentUpdates(items) {
+      var body = document.getElementById('recentUpdatesBody');
+      if (!body) return;
+
+      if (!items || items.length === 0) {
+        body.innerHTML = '<div class="text-muted">Nenhuma atualização encontrada para o período selecionado.</div>';
+        return;
+      }
+
+      body.innerHTML = items.map(function (item) {
+        var changeClass = item.change_type === 'created' ? 'success' : 'primary';
+        var labels = (item.changed_fields_labels || []).map(function (label) {
+          return '<span class="badge bg-light text-dark border me-1 mb-1">' + escapeHtml(label) + '</span>';
+        }).join('');
+
+        var summary = [
+          item.protocolo ? 'Protocolo ' + item.protocolo : '',
+          item.instancia_descricao || '',
+          item.situacao_descricao || ''
+        ].filter(Boolean).join(' · ');
+
+        return ''
+          + '<div class="border rounded p-3 mb-3">'
+          + '  <div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-2">'
+          + '    <div>'
+          + '      <div class="d-flex flex-wrap align-items-center gap-2 mb-1">'
+          + '        <span class="badge text-bg-' + changeClass + '">' + escapeHtml(item.change_type_label || '') + '</span>'
+          + '        <strong>Contestação #' + escapeHtml(item.contestacao_id || '') + '</strong>'
+          + '      </div>'
+          + '      <div class="small text-muted">'
+          + escapeHtml(item.cnpj_formatted || item.cnpj || '') + ' · Vigência ' + escapeHtml(item.ano_vigencia || '')
+          + '      </div>'
+          + (item.company_name ? '      <div class="small text-muted mt-1"><i class="bi bi-building me-1"></i>' + escapeHtml(item.company_name) + '</div>' : '')
+          + (summary ? '      <div class="small text-muted mt-1">' + escapeHtml(summary) + '</div>' : '')
+          + '    </div>'
+          + '    <div class="text-end">'
+          + '      <div class="small text-muted">' + escapeHtml(item.synced_at || '') + '</div>'
+          + '      <button type="button" class="btn btn-sm btn-outline-secondary mt-2 recent-open-history-btn"'
+          + '        data-rec-id="' + escapeHtml(item.rec_id || '') + '"'
+          + '        data-contestacao-id="' + escapeHtml(item.contestacao_id || '') + '">'
+          + '        <i class="bi bi-search me-1"></i>Ver histórico'
+          + '      </button>'
+          + '    </div>'
+          + '  </div>'
+          + (labels ? '  <div>' + labels + '</div>' : '  <div class="small text-muted">Sem detalhes adicionais de campos.</div>')
+          + '</div>';
+      }).join('');
+    }
+
+    async function loadRecentUpdates() {
+      var body = document.getElementById('recentUpdatesBody');
+      var meta = document.getElementById('recentUpdatesMeta');
+      var daysSelect = document.getElementById('recentUpdatesDays');
+      var days = daysSelect ? parseInt(daysSelect.value || '7', 10) : 7;
+
+      if (body) body.innerHTML = '<div class="text-muted">Carregando...</div>';
+      if (meta) meta.textContent = '';
+
+      try {
+        var response = await fetch(getRecentUpdatesRequestUrl(days), {
+          method: 'GET',
+          credentials: 'same-origin',
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        var payload = null;
+        try { payload = await response.json(); } catch (_) { }
+
+        if (!response.ok || !payload || !payload.ok) {
+          if (body) {
+            body.innerHTML = '<div class="alert alert-danger mb-0">'
+              + escapeHtml((payload && payload.message) || 'Falha ao carregar atualizações recentes.')
+              + '</div>';
+          }
+          return;
+        }
+
+        renderRecentUpdates(payload.items || []);
+        if (meta) {
+          meta.textContent = (payload.total || 0) + ' atualização(ões) exibida(s)';
+        }
+      } catch (err) {
+        if (body) {
+          body.innerHTML = '<div class="alert alert-danger mb-0">Erro de rede: ' + escapeHtml(err) + '</div>';
+        }
+      }
+    }
+
+    function openRecentUpdatesModal() {
+      var modalEl = document.getElementById('recentUpdatesModal');
+      if (!modalEl) return;
+      var modal = (typeof bootstrap !== 'undefined' && bootstrap.Modal)
+        ? new bootstrap.Modal(modalEl)
+        : null;
+      if (modal) modal.show();
+      loadRecentUpdates();
+    }
+
     /* ── Importação individual (clique no botão da célula) ─────────────── */
     document.addEventListener('click', async function (e) {
+      var recentHistoryBtn = e.target.closest('.recent-open-history-btn');
+      if (recentHistoryBtn) {
+        var recentRecId = parseInt(recentHistoryBtn.dataset.recId, 10);
+        var recentContestacaoId = recentHistoryBtn.dataset.contestacaoId || '';
+        if (recentRecId) {
+          openHistoryModal(recentRecId, recentContestacaoId);
+        }
+        return;
+      }
+
       var historyBtn = e.target.closest('.history-btn');
       if (historyBtn) {
         var recId = parseInt(historyBtn.dataset.recId, 10);
@@ -1282,6 +1434,19 @@ vigência, empresa e instância.', icon='bi bi-table') %}
         delete btn.dataset._importing;
       }
     });
+
+    if (btnRecentUpdates) {
+      btnRecentUpdates.addEventListener('click', function () {
+        openRecentUpdatesModal();
+      });
+    }
+
+    var refreshRecentUpdatesBtn = document.getElementById('refreshRecentUpdatesBtn');
+    if (refreshRecentUpdatesBtn) {
+      refreshRecentUpdatesBtn.addEventListener('click', function () {
+        loadRecentUpdates();
+      });
+    }
 
     if (btnCancelImport) {
       btnCancelImport.addEventListener('click', function () {
