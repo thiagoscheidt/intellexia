@@ -989,7 +989,7 @@ def contestacoes_export_excel():
     f_protocolo = request.args.get('protocolo', '').strip()
 
     query = FapWebContestacao.query.filter_by(law_firm_id=law_firm_id)
-    if f_year:
+    if f_year and f_year != '__all__':
         query = query.filter(FapWebContestacao.ano_vigencia == int(f_year))
     if f_cnpj_raiz:
         query = query.filter(FapWebContestacao.cnpj_raiz == f_cnpj_raiz)
@@ -1270,7 +1270,7 @@ def contestacoes_export_excel_agrupado():
     f_protocolo = request.args.get('protocolo', '').strip()
 
     query = FapWebContestacao.query.filter_by(law_firm_id=law_firm_id)
-    if f_year:
+    if f_year and f_year != '__all__':
         query = query.filter(FapWebContestacao.ano_vigencia == int(f_year))
     if f_cnpj_raiz:
         query = query.filter(FapWebContestacao.cnpj_raiz == f_cnpj_raiz)

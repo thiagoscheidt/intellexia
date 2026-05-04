@@ -51,39 +51,40 @@
           </ul>
         </li>
 
+        {# ── Painel FAP ────────────────────────────────────────────────── #}
         <li
-          class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('process_panel.') else '' }}">
+          class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('fap_panel.') else '' }}">
           <a href="#"
-            class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('process_panel.') else '' }}">
-            <i class="nav-icon bi bi-diagram-3-fill"></i>
+            class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('fap_panel.') else '' }}">
+            <i class="nav-icon bi bi-shield-check"></i>
             <p>
-              Painel de Processos
+              Painel FAP
               <i class="nav-arrow bi bi-chevron-right"></i>
             </p>
           </a>
           <ul class="nav nav-treeview" style="background-color: rgba(0,0,0,0.1);">
             <li class="nav-item">
-              <a href="{{ url_for('process_panel.list_processes') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'process_panel.list_processes' else '' }}"
+              <a href="{{ url_for('fap_panel.contestacoes_page') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'fap_panel.contestacoes_page' else '' }}"
                 style="font-size: 0.9em;">
-                <i class="nav-icon bi bi-list" style="margin-right: 8px; color: #6c757d;"></i>
-                <p style="margin-left: 15px;">Meus Processos</p>
+                <i class="nav-icon bi bi-table" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Contestações</p>
               </a>
             </li>
             <li class="nav-item">
-              <a href="{{ url_for('process_panel.new_process') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'process_panel.new_process' else '' }}"
+              <a href="{{ url_for('fap_panel.procuracoes_page') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'fap_panel.procuracoes_page' else '' }}"
                 style="font-size: 0.9em;">
-                <i class="nav-icon bi bi-plus-square" style="margin-right: 8px; color: #6c757d;"></i>
-                <p style="margin-left: 15px;">Novo Processo</p>
+                <i class="nav-icon bi bi-file-earmark-person" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Procurações</p>
               </a>
             </li>
             <li class="nav-item">
-              <a href="{{ url_for('process_panel.list_all_benefits') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'process_panel.list_all_benefits' else '' }}"
+              <a href="{{ url_for('fap_panel.sync_page') }}"
+                class="nav-link {{ 'active' if request.endpoint in ['fap_panel.sync_page', 'fap_panel.sync_run_year', 'fap_panel.sync_summary'] else '' }}"
                 style="font-size: 0.9em;">
-                <i class="nav-icon bi bi-card-list" style="margin-right: 8px; color: #6c757d;"></i>
-                <p style="margin-left: 15px;">Benefícios dos Processos</p>
+                <i class="nav-icon bi bi-arrow-repeat" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Sincronização</p>
               </a>
             </li>
           </ul>
@@ -159,40 +160,39 @@
           </ul>
         </li>
 
-        {# ── Painel FAP ────────────────────────────────────────────────── #}
         <li
-          class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('fap_panel.') else '' }}">
+          class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('process_panel.') else '' }}">
           <a href="#"
-            class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('fap_panel.') else '' }}">
-            <i class="nav-icon bi bi-shield-check"></i>
+            class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('process_panel.') else '' }}">
+            <i class="nav-icon bi bi-diagram-3-fill"></i>
             <p>
-              Painel FAP
+              Painel de Processos
               <i class="nav-arrow bi bi-chevron-right"></i>
             </p>
           </a>
           <ul class="nav nav-treeview" style="background-color: rgba(0,0,0,0.1);">
-              <li class="nav-item">
-              <a href="{{ url_for('fap_panel.contestacoes_page') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'fap_panel.contestacoes_page' else '' }}"
+            <li class="nav-item">
+              <a href="{{ url_for('process_panel.list_processes') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'process_panel.list_processes' else '' }}"
                 style="font-size: 0.9em;">
-                <i class="nav-icon bi bi-table" style="margin-right: 8px; color: #6c757d;"></i>
-                <p style="margin-left: 15px;">Contestações</p>
+                <i class="nav-icon bi bi-list" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Meus Processos</p>
               </a>
             </li>
             <li class="nav-item">
-              <a href="{{ url_for('fap_panel.procuracoes_page') }}"
-                class="nav-link {{ 'active' if request.endpoint == 'fap_panel.procuracoes_page' else '' }}"
+              <a href="{{ url_for('process_panel.new_process') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'process_panel.new_process' else '' }}"
                 style="font-size: 0.9em;">
-                <i class="nav-icon bi bi-file-earmark-person" style="margin-right: 8px; color: #6c757d;"></i>
-                <p style="margin-left: 15px;">Procurações</p>
+                <i class="nav-icon bi bi-plus-square" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Novo Processo</p>
               </a>
             </li>
             <li class="nav-item">
-              <a href="{{ url_for('fap_panel.sync_page') }}"
-                class="nav-link {{ 'active' if request.endpoint in ['fap_panel.sync_page', 'fap_panel.sync_run_year', 'fap_panel.sync_summary'] else '' }}"
+              <a href="{{ url_for('process_panel.list_all_benefits') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'process_panel.list_all_benefits' else '' }}"
                 style="font-size: 0.9em;">
-                <i class="nav-icon bi bi-arrow-repeat" style="margin-right: 8px; color: #6c757d;"></i>
-                <p style="margin-left: 15px;">Sincronização</p>
+                <i class="nav-icon bi bi-card-list" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Benefícios dos Processos</p>
               </a>
             </li>
           </ul>
