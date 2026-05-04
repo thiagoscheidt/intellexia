@@ -291,6 +291,8 @@ def sync_run_year():
             # Garante string com 14 dígitos
             cnpj_digits = ''.join(ch for ch in cnpj_full if ch.isdigit())
             cnpj_full_14 = cnpj_digits.zfill(14) if len(cnpj_digits) <= 14 else cnpj_digits
+            # cnpj_raiz deve ser derivado do CNPJ já com zeros à esquerda
+            cnpj_raiz_14 = cnpj_full_14
 
             instancia   = item.get('instancia') or {}
             situacao    = item.get('situacao') or {}
@@ -315,7 +317,7 @@ def sync_run_year():
 
             if existing:
                 existing.cnpj                = cnpj_full_14
-                existing.cnpj_raiz           = cnpj_digits[:8]
+                existing.cnpj_raiz           = cnpj_raiz_14[:8]
                 existing.ano_vigencia        = year_int
                 existing.fap_company_id      = fap_company_id
                 existing.instancia_codigo    = instancia.get('codigo')
@@ -333,7 +335,7 @@ def sync_run_year():
                     fap_company_id      = fap_company_id,
                     contestacao_id      = int(cid),
                     cnpj                = cnpj_full_14,
-                    cnpj_raiz           = cnpj_digits[:8],
+                    cnpj_raiz           = cnpj_raiz_14[:8],
                     ano_vigencia        = year_int,
                     instancia_codigo    = instancia.get('codigo'),
                     instancia_descricao = instancia.get('descricao'),

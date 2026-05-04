@@ -5,33 +5,37 @@
 {# ── Macro: renderiza uma célula de contestação (layout compacto) ───────── #}
 {% macro _render_cell(c) %}
 {%- set cnpj14 = c.cnpj.zfill(14) if c.cnpj else '' -%}
-{%- set dl_base = url_for('disputes_center.fap_auto_import_download_contestacao', year=c.ano_vigencia, cnpj=cnpj14, contestacao_id=c.contestacao_id) -%}
+{%- set dl_base = url_for('disputes_center.fap_auto_import_download_contestacao', year=c.ano_vigencia, cnpj=cnpj14,
+contestacao_id=c.contestacao_id) -%}
 {%- set local_url = url_for('fap_panel.serve_contestacao_file', rec_id=c.id) if c.file_path else None -%}
 {%- set imported_report_id = imported_map.get(c.contestacao_id) -%}
 <div class="contestacao-cell">
   <div class="cell-row">
     <span class="protocolo-code">{{ c.protocolo or '—' }}</span>
     <span class="situacao-text">{{ c.situacao_descricao or '' }}</span>
-    {% if c.file_path %}<span class="badge bg-success-subtle text-success ms-1" style="font-size:.6rem;vertical-align:middle;" title="Arquivo PDF salvo localmente"><i class="bi bi-hdd-fill"></i> Local</span>{% endif %}
+    {% if c.file_path %}<span class="badge bg-success-subtle text-success ms-1"
+      style="font-size:.6rem;vertical-align:middle;" title="Arquivo PDF salvo localmente"><i class="bi bi-hdd-fill"></i>
+      Local</span>{% endif %}
   </div>
   <div class="cell-actions">
     {% if local_url %}
-    <a href="{{ local_url }}?inline=1" target="_blank" class="btn-cell btn-cell-view" title="Visualizar (arquivo local)"><i class="bi bi-eye"></i></a>
-    <a href="{{ local_url }}" class="btn-cell btn-cell-download" title="Baixar (arquivo local)"><i class="bi bi-hdd-fill"></i></a>
+    <a href="{{ local_url }}?inline=1" target="_blank" class="btn-cell btn-cell-view"
+      title="Visualizar (arquivo local)"><i class="bi bi-eye"></i></a>
+    <a href="{{ local_url }}" class="btn-cell btn-cell-download" title="Baixar (arquivo local)"><i
+        class="bi bi-hdd-fill"></i></a>
     {% else %}
-    <a href="{{ dl_base }}?inline=1" target="_blank" class="btn-cell btn-cell-view" title="Visualizar"><i class="bi bi-eye"></i></a>
-    <a href="{{ dl_base }}" class="btn-cell btn-cell-download" title="Baixar"><i class="bi bi-file-earmark-arrow-down"></i></a>
+    <a href="{{ dl_base }}?inline=1" target="_blank" class="btn-cell btn-cell-view" title="Visualizar"><i
+        class="bi bi-eye"></i></a>
+    <a href="{{ dl_base }}" class="btn-cell btn-cell-download" title="Baixar"><i
+        class="bi bi-file-earmark-arrow-down"></i></a>
     {% endif %}
     {% if imported_report_id %}
-    <a href="{{ url_for('disputes_center.fap_contestation_reports') }}" class="btn-cell btn-cell-imported" title="Importado"><i class="bi bi-check-circle-fill"></i> Importado</a>
+    <a href="{{ url_for('disputes_center.fap_contestation_reports') }}" class="btn-cell btn-cell-imported"
+      title="Benefícios processados"><i class="bi bi-check-circle-fill"></i> Processado</a>
     {% else %}
-    <span class="btn-cell btn-cell-pending import-pending-btn"
-          data-year="{{ c.ano_vigencia }}"
-          data-cnpj="{{ cnpj14 }}"
-          data-id="{{ c.contestacao_id }}"
-          data-rec-id="{{ c.id }}"
-          title="Não importado — clique em Importar Filtrados para importar em lote">
-      <i class="bi bi-cloud-arrow-up"></i> Importar
+    <span class="btn-cell btn-cell-pending import-pending-btn" data-year="{{ c.ano_vigencia }}" data-cnpj="{{ cnpj14 }}"
+      data-id="{{ c.contestacao_id }}" data-rec-id="{{ c.id }}" title="Processar os benefícios desta contestação">
+      <i class="bi bi-cpu"></i> Processar Benefícios
     </span>
     {% endif %}
   </div>
@@ -41,29 +45,32 @@
 {% block title %}Contestações FAP - IntellexIA{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
 <style>
   :root {
     --fap-blue: #0d6efd;
-    --fap-blue-soft: rgba(13,110,253,.10);
+    --fap-blue-soft: rgba(13, 110, 253, .10);
     --fap-card-radius: 1rem;
-    --fap-shadow: 0 8px 28px rgba(15,23,42,.07);
+    --fap-shadow: 0 8px 28px rgba(15, 23, 42, .07);
   }
 
   /* ── Filtros ─────────────────────────────────────────────────────── */
   .filter-shell {
-    background: linear-gradient(160deg,#f8faff 0%,#fff 55%,#f5f8ff 100%);
-    border: 1px solid rgba(13,110,253,.10);
+    background: linear-gradient(160deg, #f8faff 0%, #fff 55%, #f5f8ff 100%);
+    border: 1px solid rgba(13, 110, 253, .10);
     border-radius: var(--fap-card-radius);
     box-shadow: var(--fap-shadow);
   }
+
   .filter-shell .filter-header {
     display: flex;
     align-items: center;
     gap: .6rem;
     padding: .85rem 1.25rem;
-    border-bottom: 1px solid rgba(15,23,42,.06);
+    border-bottom: 1px solid rgba(15, 23, 42, .06);
   }
+
   .filter-shell .filter-header h6 {
     margin: 0;
     font-size: .85rem;
@@ -72,9 +79,11 @@
     text-transform: uppercase;
     color: #3d5080;
   }
+
   .filter-shell .filter-body {
     padding: 1rem 1.25rem 1.1rem;
   }
+
   .filter-shell .form-label {
     font-size: .76rem;
     font-weight: 700;
@@ -83,12 +92,13 @@
     color: #5d6b82;
     margin-bottom: .28rem;
   }
+
   .filter-active-badge {
     display: inline-flex;
     align-items: center;
     gap: .4rem;
     padding: .25rem .65rem;
-    background: rgba(13,110,253,.10);
+    background: rgba(13, 110, 253, .10);
     color: #0b4cb3;
     border-radius: 999px;
     font-size: .71rem;
@@ -98,21 +108,38 @@
   /* ── Stats cards ─────────────────────────────────────────────────── */
   .stat-cards {
     display: grid;
-    grid-template-columns: repeat(6,1fr);
+    grid-template-columns: repeat(6, 1fr);
     gap: .85rem;
   }
-  @media (max-width: 1100px) { .stat-cards { grid-template-columns: repeat(3,1fr); } }
-  @media (max-width: 700px)  { .stat-cards { grid-template-columns: repeat(2,1fr); } }
-  @media (max-width: 420px)  { .stat-cards { grid-template-columns: 1fr; } }
+
+  @media (max-width: 1100px) {
+    .stat-cards {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  @media (max-width: 700px) {
+    .stat-cards {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width: 420px) {
+    .stat-cards {
+      grid-template-columns: 1fr;
+    }
+  }
+
   .stat-card {
     position: relative;
     overflow: hidden;
     background: #fff;
-    border: 1px solid rgba(15,23,42,.07);
+    border: 1px solid rgba(15, 23, 42, .07);
     border-radius: var(--fap-card-radius);
     box-shadow: var(--fap-shadow);
     padding: 1rem 1.1rem 1rem 1.3rem;
   }
+
   .stat-card::before {
     content: "";
     position: absolute;
@@ -121,8 +148,10 @@
     background: var(--sc-color, var(--fap-blue));
     border-radius: 4px 0 0 4px;
   }
+
   .stat-card .sc-icon {
-    width: 2.3rem; height: 2.3rem;
+    width: 2.3rem;
+    height: 2.3rem;
     background: var(--sc-soft, var(--fap-blue-soft));
     color: var(--sc-color, var(--fap-blue));
     border-radius: .65rem;
@@ -132,6 +161,7 @@
     font-size: 1rem;
     flex-shrink: 0;
   }
+
   .stat-card .sc-label {
     font-size: .71rem;
     font-weight: 700;
@@ -140,6 +170,7 @@
     color: #6c7a8d;
     margin-bottom: .12rem;
   }
+
   .stat-card .sc-value {
     font-size: 1.6rem;
     font-weight: 800;
@@ -150,27 +181,35 @@
   /* ── Tabela ──────────────────────────────────────────────────────── */
   .table-shell {
     background: #fff;
-    border: 1px solid rgba(15,23,42,.07);
+    border: 1px solid rgba(15, 23, 42, .07);
     border-radius: var(--fap-card-radius);
     box-shadow: var(--fap-shadow);
     overflow: hidden;
   }
+
   .table-shell .table-toolbar {
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: .75rem;
     padding: .85rem 1.1rem;
-    border-bottom: 1px solid rgba(15,23,42,.06);
-    background: linear-gradient(180deg,#f8fafe,#fff 60%);
+    border-bottom: 1px solid rgba(15, 23, 42, .06);
+    background: linear-gradient(180deg, #f8fafe, #fff 60%);
   }
+
   .table-shell .table-toolbar h6 {
     margin: 0;
     font-size: .88rem;
     font-weight: 700;
     color: var(--bs-emphasis-color);
   }
-  .fap-table { margin: 0; border-collapse: separate; border-spacing: 0; }
+
+  .fap-table {
+    margin: 0;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
   .fap-table thead tr:first-child th {
     background: #f1f5fb;
     font-size: .73rem;
@@ -184,6 +223,7 @@
     white-space: nowrap;
     padding: .6rem .75rem;
   }
+
   .fap-table thead tr:last-child th {
     background: #f7f9fc;
     font-size: .71rem;
@@ -196,21 +236,57 @@
     text-align: center;
     white-space: nowrap;
   }
-  .fap-table thead th.th-inst1     { background: #eef4fd; color: #0b4cb3; }
-  .fap-table thead th.th-inst2     { background: #edfaf2; color: #0a5c34; }
-  .fap-table thead th.th-inst1-sub { background: #f4f8ff; }
-  .fap-table thead th.th-inst2-sub { background: #f2fbf6; }
+
+  .fap-table thead th.th-inst1 {
+    background: #eef4fd;
+    color: #0b4cb3;
+  }
+
+  .fap-table thead th.th-inst2 {
+    background: #edfaf2;
+    color: #0a5c34;
+  }
+
+  .fap-table thead th.th-inst1-sub {
+    background: #f4f8ff;
+  }
+
+  .fap-table thead th.th-inst2-sub {
+    background: #f2fbf6;
+  }
+
   .fap-table tbody td {
     vertical-align: top;
-    border-color: rgba(15,23,42,.06);
+    border-color: rgba(15, 23, 42, .06);
     font-size: .83rem;
     padding: .6rem .75rem;
   }
-  .fap-table tbody td.td-year  { vertical-align: middle; text-align: center; }
-  .fap-table tbody td.td-cnpj  { vertical-align: middle; text-align: left; }
-  .fap-table tbody td.td-cells { text-align: left; min-width: 160px; }
-  .fap-table tbody td.td-empty-cell { text-align: center; color: #c8cedb; vertical-align: middle; font-size: .8rem; }
-  .fap-table tbody tr:hover td { background: rgba(13,110,253,.025); }
+
+  .fap-table tbody td.td-year {
+    vertical-align: middle;
+    text-align: center;
+  }
+
+  .fap-table tbody td.td-cnpj {
+    vertical-align: middle;
+    text-align: left;
+  }
+
+  .fap-table tbody td.td-cells {
+    text-align: left;
+    min-width: 160px;
+  }
+
+  .fap-table tbody td.td-empty-cell {
+    text-align: center;
+    color: #c8cedb;
+    vertical-align: middle;
+    font-size: .8rem;
+  }
+
+  .fap-table tbody tr:hover td {
+    background: rgba(13, 110, 253, .025);
+  }
 
   /* ── Year pill ───────────────────────────────────────────────────── */
   .year-pill {
@@ -233,6 +309,7 @@
     color: var(--bs-emphasis-color);
     white-space: nowrap;
   }
+
   .cnpj-cell .cnpj-name {
     font-size: .73rem;
     color: #6c7a8d;
@@ -248,6 +325,7 @@
     padding: 5px 4px;
     line-height: 1.35;
   }
+
   .contestacao-cell .cell-row {
     display: flex;
     align-items: baseline;
@@ -255,6 +333,7 @@
     flex-wrap: wrap;
     margin-bottom: 4px;
   }
+
   .contestacao-cell .protocolo-code {
     font-family: var(--bs-font-monospace);
     font-size: .75rem;
@@ -262,16 +341,19 @@
     color: var(--fap-blue);
     white-space: nowrap;
   }
+
   .contestacao-cell .situacao-text {
     font-size: .68rem;
     color: #6c7a8d;
     line-height: 1.2;
   }
+
   .contestacao-cell .cell-actions {
     display: flex;
     flex-wrap: wrap;
     gap: 2px;
   }
+
   .btn-cell {
     display: inline-flex;
     align-items: center;
@@ -285,15 +367,53 @@
     cursor: pointer;
     white-space: nowrap;
   }
-  .btn-cell-view     { background: #e9ecef; color: #495057; border-color: #ced4da; }
-  .btn-cell-view:hover { background: #d4dae3; color: #212529; }
-  .btn-cell-download { background: #dbeafe; color: #1e40af; border-color: #bfdbfe; }
-  .btn-cell-download:hover { background: #bfdbfe; color: #1e40af; }
-  .btn-cell-imported { background: #d1fae5; color: #065f46; border-color: #a7f3d0; }
-  .btn-cell-imported:hover { background: #a7f3d0; color: #065f46; }
-  .btn-cell-pending  { background: #fef3c7; color: #92400e; border-color: #fde68a; cursor: pointer; }
-  .btn-cell-pending:hover { background: #fde68a; color: #78350f; }
-  .contestacao-cell + .contestacao-cell {
+
+  .btn-cell-view {
+    background: #e9ecef;
+    color: #495057;
+    border-color: #ced4da;
+  }
+
+  .btn-cell-view:hover {
+    background: #d4dae3;
+    color: #212529;
+  }
+
+  .btn-cell-download {
+    background: #dbeafe;
+    color: #1e40af;
+    border-color: #bfdbfe;
+  }
+
+  .btn-cell-download:hover {
+    background: #bfdbfe;
+    color: #1e40af;
+  }
+
+  .btn-cell-imported {
+    background: #d1fae5;
+    color: #065f46;
+    border-color: #a7f3d0;
+  }
+
+  .btn-cell-imported:hover {
+    background: #a7f3d0;
+    color: #065f46;
+  }
+
+  .btn-cell-pending {
+    background: #fef3c7;
+    color: #92400e;
+    border-color: #fde68a;
+    cursor: pointer;
+  }
+
+  .btn-cell-pending:hover {
+    background: #fde68a;
+    color: #78350f;
+  }
+
+  .contestacao-cell+.contestacao-cell {
     margin-top: 7px;
     padding-top: 7px;
     border-top: 1px dashed #e2e8f0;
@@ -307,13 +427,15 @@
     flex-wrap: wrap;
     gap: .6rem;
     padding: .65rem 1.1rem;
-    border-top: 1px solid rgba(15,23,42,.06);
+    border-top: 1px solid rgba(15, 23, 42, .06);
     background: #f8fafe;
   }
+
   .pagination-shell .pg-info {
     font-size: .78rem;
     color: #6c7a8d;
   }
+
   .pagination-shell .page-size-select {
     font-size: .78rem;
     padding: .2rem .5rem;
@@ -326,12 +448,14 @@
 
   /* ── Loading overlay ───────────────────────────────────────────── */
   /* Esconde linhas antes do JS rodar: evita flash de tabela enorme */
-  #fapTbody tr { display: none; }
+  #fapTbody tr {
+    display: none;
+  }
 
   #tableLoadingOverlay {
     position: absolute;
     inset: 0;
-    background: rgba(255,255,255,.82);
+    background: rgba(255, 255, 255, .82);
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -344,7 +468,10 @@
     color: #3d5080;
     font-weight: 600;
   }
-  .table-shell { position: relative; }
+
+  .table-shell {
+    position: relative;
+  }
 
   /* ── Rodapé ──────────────────────────────────────────────────────── */
   .table-footer {
@@ -352,7 +479,7 @@
     align-items: center;
     justify-content: space-between;
     padding: .6rem 1.1rem;
-    border-top: 1px solid rgba(15,23,42,.06);
+    border-top: 1px solid rgba(15, 23, 42, .06);
     background: #f8fafe;
     font-size: .77rem;
     color: #6c7a8d;
@@ -361,7 +488,8 @@
 {% endblock %}
 
 {% block content %}
-{% call page_hero(title='Contestações FAP', subtitle='Visualize e filtre as contestações sincronizadas do portal FAP por vigência, empresa e instância.', icon='bi bi-table') %}
+{% call page_hero(title='Contestações FAP', subtitle='Visualize e filtre as contestações sincronizadas do portal FAP por
+vigência, empresa e instância.', icon='bi bi-table') %}
 <nav aria-label="breadcrumb">
   <ol class="breadcrumb mb-0 bg-transparent small">
     <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
@@ -378,24 +506,24 @@
   <div class="container-fluid">
 
     {# ── Stats cards ─────────────────────────────────────────────────── #}
-    {% set cnt_and1   = namespace(v=0) %}
-    {% set cnt_tra1   = namespace(v=0) %}
-    {% set cnt_and2   = namespace(v=0) %}
-    {% set cnt_tra2   = namespace(v=0) %}
-    {% set cnt_local  = namespace(v=0) %}
+    {% set cnt_and1 = namespace(v=0) %}
+    {% set cnt_tra1 = namespace(v=0) %}
+    {% set cnt_and2 = namespace(v=0) %}
+    {% set cnt_tra2 = namespace(v=0) %}
+    {% set cnt_local = namespace(v=0) %}
     {% set cnt_nlocal = namespace(v=0) %}
     {% for row in table_rows %}
-      {% set cnt_and1.v = cnt_and1.v + row.c_and1|length %}
-      {% set cnt_tra1.v = cnt_tra1.v + row.c_tra1|length %}
-      {% set cnt_and2.v = cnt_and2.v + row.c_and2|length %}
-      {% set cnt_tra2.v = cnt_tra2.v + row.c_tra2|length %}
-      {% for cell_list in [row.c_and1, row.c_tra1, row.c_and2, row.c_tra2] %}
-        {% for c in cell_list %}
-          {% if c.file_path %}{% set cnt_local.v  = cnt_local.v  + 1 %}
-          {% else            %}{% set cnt_nlocal.v = cnt_nlocal.v + 1 %}
-          {% endif %}
-        {% endfor %}
-      {% endfor %}
+    {% set cnt_and1.v = cnt_and1.v + row.c_and1|length %}
+    {% set cnt_tra1.v = cnt_tra1.v + row.c_tra1|length %}
+    {% set cnt_and2.v = cnt_and2.v + row.c_and2|length %}
+    {% set cnt_tra2.v = cnt_tra2.v + row.c_tra2|length %}
+    {% for cell_list in [row.c_and1, row.c_tra1, row.c_and2, row.c_tra2] %}
+    {% for c in cell_list %}
+    {% if c.file_path %}{% set cnt_local.v = cnt_local.v + 1 %}
+    {% else %}{% set cnt_nlocal.v = cnt_nlocal.v + 1 %}
+    {% endif %}
+    {% endfor %}
+    {% endfor %}
     {% endfor %}
     <div class="stat-cards mb-3">
       <div class="stat-card" style="--sc-color:#0d6efd;--sc-soft:rgba(13,110,253,.10);">
@@ -453,7 +581,8 @@
         <span class="filter-active-badge ms-auto">
           <i class="bi bi-funnel-fill"></i> Filtros ativos
         </span>
-        <a href="{{ url_for('fap_panel.contestacoes_page') }}" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-1" title="Limpar filtros">
+        <a href="{{ url_for('fap_panel.contestacoes_page') }}" class="btn btn-sm btn-outline-secondary py-0 px-2 ms-1"
+          title="Limpar filtros">
           <i class="bi bi-x-lg"></i> Limpar
         </a>
         {% endif %}
@@ -468,7 +597,7 @@
               <select name="ano_vigencia" class="form-select form-select-sm" id="selectYear">
                 <option value="">Todas</option>
                 {% for y in years %}
-                <option value="{{ y }}" {{ 'selected' if f_year == y|string }}>{{ y }}</option>
+                <option value="{{ y }}" {{ 'selected' if f_year==y|string }}>{{ y }}</option>
                 {% endfor %}
               </select>
             </div>
@@ -479,7 +608,7 @@
               <select name="cnpj_raiz" class="form-select form-select-sm" id="selectRaiz">
                 <option value="">Todos</option>
                 {% for c in companies %}
-                <option value="{{ c.cnpj }}" {{ 'selected' if f_cnpj_raiz == c.cnpj }}>
+                <option value="{{ c.cnpj }}" {{ 'selected' if f_cnpj_raiz==c.cnpj }}>
                   {{ c.cnpj }} — {{ c.nome or 'sem nome' }}
                 </option>
                 {% endfor %}
@@ -489,8 +618,8 @@
             {# Estabelecimento (14 dígitos, carregado via JS) #}
             <div class="col-sm-3 col-6">
               <label class="form-label">Estabelecimento</label>
-              <select name="cnpj" class="form-select form-select-sm" id="selectEstab"
-                {{ 'disabled' if not f_cnpj_raiz and not f_cnpj }}>
+              <select name="cnpj" class="form-select form-select-sm" id="selectEstab" {{ 'disabled' if not f_cnpj_raiz
+                and not f_cnpj }}>
                 <option value="">Todos os estabelecimentos</option>
                 {% if f_cnpj %}
                 <option value="{{ f_cnpj }}" selected>
@@ -506,7 +635,7 @@
               <select name="instancia" class="form-select form-select-sm" id="selectInstancia">
                 <option value="">Todas</option>
                 {% for cod, desc in instancias %}
-                <option value="{{ cod }}" {{ 'selected' if f_instancia == cod }}>{{ desc or cod }}</option>
+                <option value="{{ cod }}" {{ 'selected' if f_instancia==cod }}>{{ desc or cod }}</option>
                 {% endfor %}
               </select>
             </div>
@@ -517,7 +646,7 @@
               <select name="situacao" class="form-select form-select-sm" id="selectSituacao">
                 <option value="">Todas</option>
                 {% for cod, desc in situacoes %}
-                <option value="{{ cod }}" {{ 'selected' if f_situacao == cod }}>{{ desc or cod }}</option>
+                <option value="{{ cod }}" {{ 'selected' if f_situacao==cod }}>{{ desc or cod }}</option>
                 {% endfor %}
               </select>
             </div>
@@ -525,15 +654,15 @@
             {# Protocolo #}
             <div class="col-sm-2 col-6">
               <label class="form-label">Protocolo</label>
-              <input type="text" name="protocolo" class="form-control form-control-sm"
-                placeholder="Nº protocolo" value="{{ f_protocolo }}" inputmode="numeric">
+              <input type="text" name="protocolo" class="form-control form-control-sm" placeholder="Nº protocolo"
+                value="{{ f_protocolo }}" inputmode="numeric">
             </div>
 
             {# Prazo 2ª instância + Consultar #}
             <div class="col-12 d-flex align-items-center justify-content-between mt-1">
               <div class="form-check mb-0">
-                <input class="form-check-input" type="checkbox" name="prazo_2_instancia" value="1"
-                  id="chkPrazo2" {{ 'checked' if f_prazo2 }}>
+                <input class="form-check-input" type="checkbox" name="prazo_2_instancia" value="1" id="chkPrazo2"
+                  {{ 'checked' if f_prazo2 }}>
                 <label class="form-check-label small fw-semibold" for="chkPrazo2">
                   Prazo Aberto 2ª Instância
                 </label>
@@ -565,47 +694,45 @@
           <input type="text" id="localFilter" class="form-control form-control-sm" style="width:175px;"
             placeholder="Buscar na página…">
           {%- set _qs = {
-              'ano_vigencia': f_year or '',
-              'cnpj_raiz':    f_cnpj_raiz or '',
-              'cnpj':         f_cnpj or '',
-              'instancia':    f_instancia or '',
-              'situacao':     f_situacao or '',
-              'protocolo':    f_protocolo or ''
+          'ano_vigencia': f_year or '',
+          'cnpj_raiz': f_cnpj_raiz or '',
+          'cnpj': f_cnpj or '',
+          'instancia': f_instancia or '',
+          'situacao': f_situacao or '',
+          'protocolo': f_protocolo or ''
           } -%}
           <button type="button" id="btnImportAll" class="btn btn-sm btn-warning"
-                  title="Baixa e importa as contestações do filtro atual para o painel de Relatórios FAP">
-            <i class="bi bi-cloud-arrow-up me-1"></i> Importar p/ Relatórios
+            title="Processa os benefícios das contestações do filtro atual">
+            <i class="bi bi-cpu me-1"></i> Processar Benefícios
           </button>
           <button type="button" id="btnCancelImport" class="btn btn-sm btn-danger d-none"
-                  title="Cancelar importação — interrompe a fila; a contestação em andamento ainda termina"
-                  data-bs-toggle="tooltip" data-bs-placement="top">
+            title="Cancelar importação — interrompe a fila; a contestação em andamento ainda termina"
+            data-bs-toggle="tooltip" data-bs-placement="top">
             <i class="bi bi-x-circle"></i>
           </button>
           <div class="btn-group" role="group">
-            <a href="{{ url_for('fap_panel.contestacoes_export_excel', **_qs) }}"
-               class="btn btn-sm btn-success"
-               title="Exportar por contestação (uma linha por contestação)"
-               data-bs-toggle="tooltip" data-bs-placement="top">
+            <a href="{{ url_for('fap_panel.contestacoes_export_excel', **_qs) }}" class="btn btn-sm btn-success"
+              title="Exportar por contestação (uma linha por contestação)" data-bs-toggle="tooltip"
+              data-bs-placement="top">
               <i class="bi bi-file-earmark-excel me-1"></i> Por Contestação
             </a>
-            <button type="button"
-                    class="btn btn-sm btn-success dropdown-toggle dropdown-toggle-split"
-                    data-bs-toggle="dropdown" aria-expanded="false">
+            <button type="button" class="btn btn-sm btn-success dropdown-toggle dropdown-toggle-split"
+              data-bs-toggle="dropdown" aria-expanded="false">
               <span class="visually-hidden">Mais opções</span>
             </button>
             <ul class="dropdown-menu dropdown-menu-end shadow-sm">
               <li>
-                <a class="dropdown-item"
-                   href="{{ url_for('fap_panel.contestacoes_export_excel', **_qs) }}">
+                <a class="dropdown-item" href="{{ url_for('fap_panel.contestacoes_export_excel', **_qs) }}">
                   <i class="bi bi-list-ul me-2 text-success"></i>
                   <strong>Por Contestação</strong>
                   <div class="text-muted" style="font-size:.75rem;">Uma linha por contestação</div>
                 </a>
               </li>
-              <li><hr class="dropdown-divider"></li>
               <li>
-                <a class="dropdown-item"
-                   href="{{ url_for('fap_panel.contestacoes_export_excel_agrupado', **_qs) }}">
+                <hr class="dropdown-divider">
+              </li>
+              <li>
+                <a class="dropdown-item" href="{{ url_for('fap_panel.contestacoes_export_excel_agrupado', **_qs) }}">
                   <i class="bi bi-table me-2 text-primary"></i>
                   <strong>Conforme a Listagem</strong>
                   <div class="text-muted" style="font-size:.75rem;">Agrupado por vigência + CNPJ</div>
@@ -625,10 +752,13 @@
         </div>
       </div>
 
-      <div id="importStatsSummary" class="px-3 py-2 border-bottom border-top d-flex flex-wrap gap-3 align-items-center" style="font-size:.85rem;background:#f8f9fa;">
-        <span><i class="bi bi-check-circle-fill text-success me-1"></i><span id="statsImported" class="fw-semibold">0</span> já importados</span>
+      <div id="importStatsSummary" class="px-3 py-2 border-bottom border-top d-flex flex-wrap gap-3 align-items-center"
+        style="font-size:.85rem;background:#f8f9fa;">
+        <span><i class="bi bi-check-circle-fill text-success me-1"></i><span id="statsImported"
+            class="fw-semibold">0</span> benefícios processados</span>
         <span class="text-muted">|</span>
-        <span><i class="bi bi-clock-fill text-warning me-1"></i><span id="statsPending" class="fw-semibold">0</span> não importados</span>
+        <span><i class="bi bi-clock-fill text-warning me-1"></i><span id="statsPending" class="fw-semibold">0</span> não
+          pendentes</span>
         <span class="text-muted">|</span>
         <span class="text-muted"><span id="statsTotal" class="fw-semibold">0</span> no total</span>
       </div>
@@ -680,28 +810,28 @@
               {# 1ª inst · Em Andamento #}
               <td class="{{ 'td-cells' if row.c_and1 else 'td-empty-cell' }}">
                 {% if row.c_and1 %}
-                  {% for c in row.c_and1 %}{{ _render_cell(c) }}{% endfor %}
+                {% for c in row.c_and1 %}{{ _render_cell(c) }}{% endfor %}
                 {% else %}<span>—</span>{% endif %}
               </td>
 
               {# 1ª inst · Transmitidas #}
               <td class="{{ 'td-cells' if row.c_tra1 else 'td-empty-cell' }}">
                 {% if row.c_tra1 %}
-                  {% for c in row.c_tra1 %}{{ _render_cell(c) }}{% endfor %}
+                {% for c in row.c_tra1 %}{{ _render_cell(c) }}{% endfor %}
                 {% else %}<span>—</span>{% endif %}
               </td>
 
               {# 2ª inst · Em Andamento #}
               <td class="{{ 'td-cells' if row.c_and2 else 'td-empty-cell' }}">
                 {% if row.c_and2 %}
-                  {% for c in row.c_and2 %}{{ _render_cell(c) }}{% endfor %}
+                {% for c in row.c_and2 %}{{ _render_cell(c) }}{% endfor %}
                 {% else %}<span>—</span>{% endif %}
               </td>
 
               {# 2ª inst · Transmitidos #}
               <td class="{{ 'td-cells' if row.c_tra2 else 'td-empty-cell' }}">
                 {% if row.c_tra2 %}
-                  {% for c in row.c_tra2 %}{{ _render_cell(c) }}{% endfor %}
+                {% for c in row.c_tra2 %}{{ _render_cell(c) }}{% endfor %}
                 {% else %}<span>—</span>{% endif %}
               </td>
             </tr>
@@ -732,7 +862,8 @@
           {{ table_rows|length }} linha(s) · {{ total }} contestação(ões) no total
         </span>
         <span>
-          Atualizado via <a href="{{ url_for('fap_panel.sync_page') }}" class="text-decoration-none">Sincronização FAP</a>
+          Atualizado via <a href="{{ url_for('fap_panel.sync_page') }}" class="text-decoration-none">Sincronização
+            FAP</a>
         </span>
       </div>
     </div>
@@ -767,390 +898,388 @@
 
 {% block extra_js %}
 <script>
-(function () {
-  /* ── Dados de CNPJ por raiz ─────────────────────────────────────────── */
-  var cnpjsByRaiz = JSON.parse(document.getElementById('cnpjsByRaizData').textContent || '{}');
+  (function () {
+    /* ── Dados de CNPJ por raiz ─────────────────────────────────────────── */
+    var cnpjsByRaiz = JSON.parse(document.getElementById('cnpjsByRaizData').textContent || '{}');
 
-  /* ── Formata CNPJ 14 dígitos ────────────────────────────────────────── */
-  function fmtCnpj(d) {
-    if (!d || d.length !== 14) return d;
-    return d.slice(0,2)+'.'+d.slice(2,5)+'.'+d.slice(5,8)+'/'+d.slice(8,12)+'-'+d.slice(12);
-  }
-
-  /* ── Popula select de estabelecimento com base na raiz ───────────────── */
-  var selectRaiz  = document.getElementById('selectRaiz');
-  var selectEstab = document.getElementById('selectEstab');
-  var currentCnpj = '{{ f_cnpj | e }}';
-  var currentRaiz = '{{ f_cnpj_raiz | e }}';
-
-  function populateEstab(raiz, selectedCnpj) {
-    selectEstab.innerHTML = '<option value="">Todos os estabelecimentos</option>';
-    if (!raiz) {
-      selectEstab.disabled = true;
-    } else {
-      var list = cnpjsByRaiz[raiz] || [];
-      list.forEach(function(cnpj) {
-        var opt = document.createElement('option');
-        opt.value = cnpj;
-        opt.textContent = fmtCnpj(cnpj);
-        if (cnpj === selectedCnpj) opt.selected = true;
-        selectEstab.appendChild(opt);
-      });
-      selectEstab.disabled = list.length === 0;
+    /* ── Formata CNPJ 14 dígitos ────────────────────────────────────────── */
+    function fmtCnpj(d) {
+      if (!d || d.length !== 14) return d;
+      return d.slice(0, 2) + '.' + d.slice(2, 5) + '.' + d.slice(5, 8) + '/' + d.slice(8, 12) + '-' + d.slice(12);
     }
-    // Re-inicializa Select2 se disponível
-    if (typeof $.fn !== 'undefined' && $.fn.select2) {
-      $('#selectEstab').trigger('change');
+
+    /* ── Popula select de estabelecimento com base na raiz ───────────────── */
+    var selectRaiz = document.getElementById('selectRaiz');
+    var selectEstab = document.getElementById('selectEstab');
+    var currentCnpj = '{{ f_cnpj | e }}';
+    var currentRaiz = '{{ f_cnpj_raiz | e }}';
+
+    function populateEstab(raiz, selectedCnpj) {
+      selectEstab.innerHTML = '<option value="">Todos os estabelecimentos</option>';
+      if (!raiz) {
+        selectEstab.disabled = true;
+      } else {
+        var list = cnpjsByRaiz[raiz] || [];
+        list.forEach(function (cnpj) {
+          var opt = document.createElement('option');
+          opt.value = cnpj;
+          opt.textContent = fmtCnpj(cnpj);
+          if (cnpj === selectedCnpj) opt.selected = true;
+          selectEstab.appendChild(opt);
+        });
+        selectEstab.disabled = list.length === 0;
+      }
+      // Re-inicializa Select2 se disponível
+      if (typeof $.fn !== 'undefined' && $.fn.select2) {
+        $('#selectEstab').trigger('change');
+      }
     }
-  }
 
-  /* Inicializa se já havia raiz filtrada */
-  if (currentRaiz) {
-    populateEstab(currentRaiz, currentCnpj);
-  }
+    /* Inicializa se já havia raiz filtrada */
+    if (currentRaiz) {
+      populateEstab(currentRaiz, currentCnpj);
+    }
 
-  /* Listener nativo (para Select2 usamos evento adicional abaixo) */
-  selectRaiz.addEventListener('change', function() {
-    populateEstab(this.value, '');
-  });
-
-  /* ── Select2 ─────────────────────────────────────────────────────────── */
-  if (typeof $.fn !== 'undefined' && $.fn.select2) {
-    $('#selectYear').select2({ theme: 'bootstrap-5', minimumResultsForSearch: 5, width: '100%' });
-    $('#selectRaiz').select2({
-      theme: 'bootstrap-5',
-      allowClear: true,
-      placeholder: 'Todos os CNPJs raiz',
-      width: '100%',
-      language: { noResults: function () { return 'Nenhuma empresa encontrada.'; } },
-    });
-    /* Select2 dispara evento jQuery; precisamos sincronizar com populateEstab */
-    $('#selectRaiz').on('select2:select select2:unselect select2:clear', function() {
+    /* Listener nativo (para Select2 usamos evento adicional abaixo) */
+    selectRaiz.addEventListener('change', function () {
       populateEstab(this.value, '');
     });
-    $('#selectEstab').select2({
-      theme: 'bootstrap-5',
-      allowClear: true,
-      placeholder: 'Todos os estabelecimentos',
-      width: '100%',
-      language: { noResults: function () { return 'Nenhum estabelecimento encontrado.'; } },
-    });
-    $('#selectInstancia').select2({ theme: 'bootstrap-5', allowClear: true, placeholder: 'Todas', width: '100%' });
-    $('#selectSituacao').select2({
-      theme: 'bootstrap-5',
-      allowClear: true,
-      placeholder: 'Todas',
-      width: '100%',
-      language: { noResults: function () { return 'Nenhuma situação encontrada.'; } },
-    });
-  }
 
-  /* ── Paginação client-side ──────────────────────────────────────────── */
-  var allRows      = Array.from(document.querySelectorAll('#fapTbody tr'));
-  var localFilter  = document.getElementById('localFilter');
-  var filteredRows = allRows.slice(); // cópia que reflete o filtro local
-  var currentPage  = 1;
-  var pageSize     = 20;
-
-  var pgInfo     = document.getElementById('pgInfo');
-  var pgControls = document.getElementById('pgControls');
-  var pgSize     = document.getElementById('pgSize');
-
-  function renderPage() {
-    var total = filteredRows.length;
-    var pages = Math.max(1, Math.ceil(total / pageSize));
-    if (currentPage > pages) currentPage = pages;
-
-    var start = (currentPage - 1) * pageSize;
-    var end   = Math.min(start + pageSize, total);
-
-    // Esconde/exibe linhas
-    allRows.forEach(function(r) { r.style.display = 'none'; });
-    filteredRows.forEach(function(r, i) {
-      r.style.display = (i >= start && i < end) ? 'table-row' : 'none';
-    });
-
-    // Info textual
-    pgInfo.textContent = total === 0
-      ? 'Nenhuma linha'
-      : 'Exibindo ' + (start + 1) + '–' + end + ' de ' + total + ' linha(s)';
-
-    // Controles de página
-    pgControls.innerHTML = '';
-
-    function makeBtn(label, page, disabled, active) {
-      var li  = document.createElement('li');
-      li.className = 'page-item' + (disabled ? ' disabled' : '') + (active ? ' active' : '');
-      var a = document.createElement('a');
-      a.className = 'page-link';
-      a.href = '#';
-      a.innerHTML = label;
-      a.addEventListener('click', function(e) {
-        e.preventDefault();
-        if (!disabled) { currentPage = page; renderPage(); }
+    /* ── Select2 ─────────────────────────────────────────────────────────── */
+    if (typeof $.fn !== 'undefined' && $.fn.select2) {
+      $('#selectYear').select2({ theme: 'bootstrap-5', minimumResultsForSearch: 5, width: '100%' });
+      $('#selectRaiz').select2({
+        theme: 'bootstrap-5',
+        allowClear: true,
+        placeholder: 'Todos os CNPJs raiz',
+        width: '100%',
+        language: { noResults: function () { return 'Nenhuma empresa encontrada.'; } },
       });
-      li.appendChild(a);
-      pgControls.appendChild(li);
-    }
-
-    makeBtn('&laquo;', 1,            currentPage === 1,     false);
-    makeBtn('&lsaquo;', currentPage - 1, currentPage === 1, false);
-
-    // Janela de páginas: máx 7 botões
-    var window_size = 7;
-    var half = Math.floor(window_size / 2);
-    var pStart = Math.max(1, currentPage - half);
-    var pEnd   = Math.min(pages, pStart + window_size - 1);
-    if (pEnd - pStart < window_size - 1) pStart = Math.max(1, pEnd - window_size + 1);
-
-    if (pStart > 1) {
-      makeBtn('1', 1, false, false);
-      if (pStart > 2) {
-        var sp = document.createElement('li');
-        sp.className = 'page-item disabled';
-        sp.innerHTML = '<span class="page-link">…</span>';
-        pgControls.appendChild(sp);
-      }
-    }
-    for (var p = pStart; p <= pEnd; p++) {
-      makeBtn(p, p, false, p === currentPage);
-    }
-    if (pEnd < pages) {
-      if (pEnd < pages - 1) {
-        var sp2 = document.createElement('li');
-        sp2.className = 'page-item disabled';
-        sp2.innerHTML = '<span class="page-link">…</span>';
-        pgControls.appendChild(sp2);
-      }
-      makeBtn(pages, pages, false, false);
-    }
-
-    makeBtn('&rsaquo;', currentPage + 1, currentPage === pages, false);
-    makeBtn('&raquo;', pages,            currentPage === pages, false);
-  }
-
-  pgSize.addEventListener('change', function() {
-    pageSize = parseInt(this.value, 10);
-    currentPage = 1;
-    renderPage();
-  });
-
-  // Sobrescreve o filtro local para também atualizar filteredRows
-  if (localFilter) {
-    localFilter.addEventListener('input', function () {
-      var term = this.value.toLowerCase().trim();
-      filteredRows = allRows.filter(function(row) {
-        return !term || row.textContent.toLowerCase().includes(term);
+      /* Select2 dispara evento jQuery; precisamos sincronizar com populateEstab */
+      $('#selectRaiz').on('select2:select select2:unselect select2:clear', function () {
+        populateEstab(this.value, '');
       });
+      $('#selectEstab').select2({
+        theme: 'bootstrap-5',
+        allowClear: true,
+        placeholder: 'Todos os estabelecimentos',
+        width: '100%',
+        language: { noResults: function () { return 'Nenhum estabelecimento encontrado.'; } },
+      });
+      $('#selectInstancia').select2({ theme: 'bootstrap-5', allowClear: true, placeholder: 'Todas', width: '100%' });
+      $('#selectSituacao').select2({
+        theme: 'bootstrap-5',
+        allowClear: true,
+        placeholder: 'Todas',
+        width: '100%',
+        language: { noResults: function () { return 'Nenhuma situação encontrada.'; } },
+      });
+    }
+
+    /* ── Paginação client-side ──────────────────────────────────────────── */
+    var allRows = Array.from(document.querySelectorAll('#fapTbody tr'));
+    var localFilter = document.getElementById('localFilter');
+    var filteredRows = allRows.slice(); // cópia que reflete o filtro local
+    var currentPage = 1;
+    var pageSize = 20;
+
+    var pgInfo = document.getElementById('pgInfo');
+    var pgControls = document.getElementById('pgControls');
+    var pgSize = document.getElementById('pgSize');
+
+    function renderPage() {
+      var total = filteredRows.length;
+      var pages = Math.max(1, Math.ceil(total / pageSize));
+      if (currentPage > pages) currentPage = pages;
+
+      var start = (currentPage - 1) * pageSize;
+      var end = Math.min(start + pageSize, total);
+
+      // Esconde/exibe linhas
+      allRows.forEach(function (r) { r.style.display = 'none'; });
+      filteredRows.forEach(function (r, i) {
+        r.style.display = (i >= start && i < end) ? 'table-row' : 'none';
+      });
+
+      // Info textual
+      pgInfo.textContent = total === 0
+        ? 'Nenhuma linha'
+        : 'Exibindo ' + (start + 1) + '–' + end + ' de ' + total + ' linha(s)';
+
+      // Controles de página
+      pgControls.innerHTML = '';
+
+      function makeBtn(label, page, disabled, active) {
+        var li = document.createElement('li');
+        li.className = 'page-item' + (disabled ? ' disabled' : '') + (active ? ' active' : '');
+        var a = document.createElement('a');
+        a.className = 'page-link';
+        a.href = '#';
+        a.innerHTML = label;
+        a.addEventListener('click', function (e) {
+          e.preventDefault();
+          if (!disabled) { currentPage = page; renderPage(); }
+        });
+        li.appendChild(a);
+        pgControls.appendChild(li);
+      }
+
+      makeBtn('&laquo;', 1, currentPage === 1, false);
+      makeBtn('&lsaquo;', currentPage - 1, currentPage === 1, false);
+
+      // Janela de páginas: máx 7 botões
+      var window_size = 7;
+      var half = Math.floor(window_size / 2);
+      var pStart = Math.max(1, currentPage - half);
+      var pEnd = Math.min(pages, pStart + window_size - 1);
+      if (pEnd - pStart < window_size - 1) pStart = Math.max(1, pEnd - window_size + 1);
+
+      if (pStart > 1) {
+        makeBtn('1', 1, false, false);
+        if (pStart > 2) {
+          var sp = document.createElement('li');
+          sp.className = 'page-item disabled';
+          sp.innerHTML = '<span class="page-link">…</span>';
+          pgControls.appendChild(sp);
+        }
+      }
+      for (var p = pStart; p <= pEnd; p++) {
+        makeBtn(p, p, false, p === currentPage);
+      }
+      if (pEnd < pages) {
+        if (pEnd < pages - 1) {
+          var sp2 = document.createElement('li');
+          sp2.className = 'page-item disabled';
+          sp2.innerHTML = '<span class="page-link">…</span>';
+          pgControls.appendChild(sp2);
+        }
+        makeBtn(pages, pages, false, false);
+      }
+
+      makeBtn('&rsaquo;', currentPage + 1, currentPage === pages, false);
+      makeBtn('&raquo;', pages, currentPage === pages, false);
+    }
+
+    pgSize.addEventListener('change', function () {
+      pageSize = parseInt(this.value, 10);
       currentPage = 1;
       renderPage();
-      updateImportAllBtnLabel();
     });
-  }
 
-  /* ── Importação em lote dos filtrados ──────────────────────────────── */
-  var importUrl    = '{{ url_for("disputes_center.fap_auto_import_import_contestacao") }}';
-  var reportsUrl   = '{{ url_for("disputes_center.fap_contestation_reports") }}';
-  var btnImportAll   = document.getElementById('btnImportAll');
-  var btnCancelImport = document.getElementById('btnCancelImport');
-  var _importCancelled = false;
-
-  /* ── Importação individual (clique no botão da célula) ─────────────── */
-  document.addEventListener('click', async function(e) {
-    var btn = e.target.closest('.import-pending-btn');
-    if (!btn) return;
-    if (btn.dataset._importing) return;
-    btn.dataset._importing = '1';
-    var origHtml = btn.innerHTML;
-    btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
-    try {
-      var r = await fetch(importUrl, {
-        method: 'POST',
-        credentials: 'same-origin',
-        headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-        body: JSON.stringify({
-          year: btn.dataset.year,
-          cnpj: btn.dataset.cnpj,
-          contestacao_id: btn.dataset.id,
-          rec_id: btn.dataset.recId ? parseInt(btn.dataset.recId) : null,
-        }),
-      });
-      var p = null;
-      try { p = await r.json(); } catch(_) {}
-      if (p && (p.ok || p.already_imported)) {
-        btn.outerHTML = '<a href="' + reportsUrl + '" class="btn-cell btn-cell-imported">'
-          + '<i class="bi bi-check-circle-fill"></i> Importado</a>';
-        updateImportStats();
+    // Sobrescreve o filtro local para também atualizar filteredRows
+    if (localFilter) {
+      localFilter.addEventListener('input', function () {
+        var term = this.value.toLowerCase().trim();
+        filteredRows = allRows.filter(function (row) {
+          return !term || row.textContent.toLowerCase().includes(term);
+        });
+        currentPage = 1;
+        renderPage();
         updateImportAllBtnLabel();
-      } else {
-        alert('Erro ao importar: ' + ((p && p.message) || 'Falha desconhecida'));
+      });
+    }
+
+    /* ── Importação em lote dos filtrados ──────────────────────────────── */
+    var importUrl = '{{ url_for("disputes_center.fap_auto_import_import_contestacao") }}';
+    var reportsUrl = '{{ url_for("disputes_center.fap_contestation_reports") }}';
+    var btnImportAll = document.getElementById('btnImportAll');
+    var btnCancelImport = document.getElementById('btnCancelImport');
+    var _importCancelled = false;
+
+    /* ── Importação individual (clique no botão da célula) ─────────────── */
+    document.addEventListener('click', async function (e) {
+      var btn = e.target.closest('.import-pending-btn');
+      if (!btn) return;
+      if (btn.dataset._importing) return;
+      btn.dataset._importing = '1';
+      var origHtml = btn.innerHTML;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+      try {
+        var r = await fetch(importUrl, {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+          body: JSON.stringify({
+            year: btn.dataset.year,
+            cnpj: btn.dataset.cnpj,
+            contestacao_id: btn.dataset.id,
+            rec_id: btn.dataset.recId ? parseInt(btn.dataset.recId) : null,
+          }),
+        });
+        var p = null;
+        try { p = await r.json(); } catch (_) { }
+        if (p && (p.ok || p.already_imported)) {
+          btn.outerHTML = '<a href="' + reportsUrl + '" class="btn-cell btn-cell-imported">'
+            + '<i class="bi bi-check-circle-fill"></i> Processado</a>';
+          updateImportStats();
+          updateImportAllBtnLabel();
+        } else {
+          alert('Erro ao importar: ' + ((p && p.message) || 'Falha desconhecida'));
+          btn.innerHTML = origHtml;
+          delete btn.dataset._importing;
+        }
+      } catch (err) {
+        alert('Erro de rede: ' + err);
         btn.innerHTML = origHtml;
         delete btn.dataset._importing;
       }
-    } catch(err) {
-      alert('Erro de rede: ' + err);
-      btn.innerHTML = origHtml;
-      delete btn.dataset._importing;
-    }
-  });
-
-  if (btnCancelImport) {
-    btnCancelImport.addEventListener('click', function() {
-      _importCancelled = true;
-      btnCancelImport.disabled = true;
-      btnCancelImport.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
     });
-  }
 
-  function collectPendingFromFiltered() {
-    var pending = [];
-    filteredRows.forEach(function(row) {
-      row.querySelectorAll('.import-pending-btn').forEach(function(btn) {
-        pending.push({
-          year:  btn.dataset.year,
-          cnpj:  btn.dataset.cnpj,
-          id:    btn.dataset.id,
-          recId: btn.dataset.recId || null,
-          btn:   btn,
+    if (btnCancelImport) {
+      btnCancelImport.addEventListener('click', function () {
+        _importCancelled = true;
+        btnCancelImport.disabled = true;
+        btnCancelImport.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+      });
+    }
+
+    function collectPendingFromFiltered() {
+      var pending = [];
+      filteredRows.forEach(function (row) {
+        row.querySelectorAll('.import-pending-btn').forEach(function (btn) {
+          pending.push({
+            year: btn.dataset.year,
+            cnpj: btn.dataset.cnpj,
+            id: btn.dataset.id,
+            recId: btn.dataset.recId || null,
+            btn: btn,
+          });
         });
       });
-    });
-    return pending;
-  }
-
-  function updateImportStats() {
-    var allCells    = document.querySelectorAll('#fapTbody .contestacao-cell');
-    var importedEl  = document.getElementById('statsImported');
-    var pendingEl   = document.getElementById('statsPending');
-    var totalEl     = document.getElementById('statsTotal');
-    var imported = 0, pending = 0;
-    allCells.forEach(function(cell) {
-      if (cell.querySelector('.btn-cell-imported')) imported++;
-      else if (cell.querySelector('.import-pending-btn')) pending++;
-    });
-    if (importedEl) importedEl.textContent = imported;
-    if (pendingEl)  pendingEl.textContent  = pending;
-    if (totalEl)    totalEl.textContent    = imported + pending;
-  }
-
-  function updateImportAllBtnLabel() {
-    if (!btnImportAll) return;
-    var count = collectPendingFromFiltered().length;
-    if (count === 0) {
-      btnImportAll.disabled = true;
-      btnImportAll.innerHTML = '<i class="bi bi-check-all me-1"></i> Tudo Importado';
-    } else {
-      btnImportAll.disabled = false;
-      btnImportAll.innerHTML = '<i class="bi bi-cloud-arrow-up me-1"></i> Importar p/ Relatórios'
-        + ' <span class="badge bg-dark ms-1">' + count + '</span>';
+      return pending;
     }
-  }
 
-  if (btnImportAll) {
-    btnImportAll.addEventListener('click', async function() {
-      var pending = collectPendingFromFiltered();
-      if (!pending.length) {
-        alert('Não há contestações pendentes de importação no filtro atual.');
-        return;
-      }
-      var hasLocal = pending.every(function(i) { return !!i.recId; });
-      var note = hasLocal ? '' : '\n\nNota: contestações sem arquivo local exigem sessão FAP ativa.';
-      if (!confirm('Importar ' + pending.length + ' contestação(ões) não importada(s)?' + note)) {
-        return;
-      }
+    function updateImportStats() {
+      var allCells = document.querySelectorAll('#fapTbody .contestacao-cell');
+      var importedEl = document.getElementById('statsImported');
+      var pendingEl = document.getElementById('statsPending');
+      var totalEl = document.getElementById('statsTotal');
+      var imported = 0, pending = 0;
+      allCells.forEach(function (cell) {
+        if (cell.querySelector('.btn-cell-imported')) imported++;
+        else if (cell.querySelector('.import-pending-btn')) pending++;
+      });
+      if (importedEl) importedEl.textContent = imported;
+      if (pendingEl) pendingEl.textContent = pending;
+      if (totalEl) totalEl.textContent = imported + pending;
+    }
 
-      btnImportAll.disabled = true;
-      btnImportAll.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Importando...';
-      _importCancelled = false;
-      if (btnCancelImport) { btnCancelImport.classList.remove('d-none'); btnCancelImport.disabled = false; btnCancelImport.innerHTML = '<i class="bi bi-x-circle"></i>'; }
-
-      var successCount = 0, skipCount = 0, errorCount = 0, processed = 0;
-      var BATCH_SIZE = 20;
-
-      var importOne = async function(item) {
-        try {
-          var r = await fetch(importUrl, {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-            body: JSON.stringify({ year: item.year, cnpj: item.cnpj, contestacao_id: item.id, rec_id: item.recId ? parseInt(item.recId) : null }),
-          });
-          var p = null;
-          try { p = await r.json(); } catch(e) {}
-          return { item: item, resp: r, payload: p };
-        } catch(err) {
-          return { item: item, err: err };
-        }
-      };
-
-      for (var batchStart = 0; batchStart < pending.length; batchStart += BATCH_SIZE) {
-        if (_importCancelled) break;
-
-        var batch = pending.slice(batchStart, batchStart + BATCH_SIZE);
-        var batchNum    = Math.floor(batchStart / BATCH_SIZE) + 1;
-        var totalBatches = Math.ceil(pending.length / BATCH_SIZE);
-
-        btnImportAll.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> '
-          + 'Lote ' + batchNum + '/' + totalBatches
-          + ' — ' + processed + '/' + pending.length + ' processados...';
-
-        var results = await Promise.all(batch.map(importOne));
-
-        results.forEach(function(r) {
-          processed++;
-          if (r.err) {
-            errorCount++;
-            console.error('Erro de rede ao importar #' + r.item.id, r.err);
-          } else if (r.payload && r.payload.already_imported) {
-            skipCount++;
-            r.item.btn.outerHTML =
-              '<a href="' + reportsUrl + '" class="btn-cell btn-cell-imported">'
-              + '<i class="bi bi-check-circle-fill"></i> Importado</a>';
-          } else if (!r.resp.ok || !r.payload || !r.payload.ok) {
-            errorCount++;
-            console.warn('Falha ao importar #' + r.item.id + ':', r.payload && r.payload.message);
-          } else {
-            successCount++;
-            r.item.btn.outerHTML =
-              '<a href="' + reportsUrl + '" class="btn-cell btn-cell-imported">'
-              + '<i class="bi bi-check-circle-fill"></i> Importado</a>';
-          }
-        });
-      }
-
-      if (btnCancelImport) btnCancelImport.classList.add('d-none');
-
-      var parts = [];
-      if (_importCancelled) parts.push('cancelado (' + (pending.length - processed) + ' na fila ignorada(s))');
-      if (successCount) parts.push(successCount + ' importada(s)');
-      if (skipCount)    parts.push(skipCount + ' já importada(s)');
-      if (errorCount)   parts.push(errorCount + ' com erro');
-
-      var msg = parts.join(', ');
-      if (_importCancelled) {
-        alert('Importação cancelada. ' + msg + '.');
-      } else if (errorCount) {
-        alert('Importação concluída com erros: ' + msg
-          + '.\n\nVerifique se a sessão FAP está ativa na página de Importação Automática.');
+    function updateImportAllBtnLabel() {
+      if (!btnImportAll) return;
+      var count = collectPendingFromFiltered().length;
+      if (count === 0) {
+        btnImportAll.disabled = true;
+        btnImportAll.innerHTML = '<i class="bi bi-check-all me-1"></i> Todos Processados';
       } else {
-        alert('Importação concluída: ' + msg + '.');
+        btnImportAll.disabled = false;
+        btnImportAll.innerHTML = '<i class="bi bi-cpu me-1"></i> Processar Benefícios'
+          + ' <span class="badge bg-dark ms-1">' + count + '</span>';
       }
+    }
 
+    if (btnImportAll) {
+      btnImportAll.addEventListener('click', async function () {
+        var pending = collectPendingFromFiltered();
+        if (!pending.length) {
+          alert('Não há contestações pendentes de importação no filtro atual.');
+          return;
+        }
+        var hasLocal = pending.every(function (i) { return !!i.recId; });
+        var note = hasLocal ? '' : '\n\nNota: contestações sem arquivo local exigem sessão FAP ativa.';
+        if (!confirm('Processar benefícios de ' + pending.length + ' contestação(ões)?' + note)) {
+          return;
+        }
+
+        btnImportAll.disabled = true;
+        btnImportAll.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Processando...';
+        _importCancelled = false;
+        if (btnCancelImport) { btnCancelImport.classList.remove('d-none'); btnCancelImport.disabled = false; btnCancelImport.innerHTML = '<i class="bi bi-x-circle"></i>'; }
+
+        var successCount = 0, skipCount = 0, errorCount = 0, processed = 0;
+        var BATCH_SIZE = 20;
+
+        var importOne = async function (item) {
+          try {
+            var r = await fetch(importUrl, {
+              method: 'POST',
+              credentials: 'same-origin',
+              headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+              body: JSON.stringify({ year: item.year, cnpj: item.cnpj, contestacao_id: item.id, rec_id: item.recId ? parseInt(item.recId) : null }),
+            });
+            var p = null;
+            try { p = await r.json(); } catch (e) { }
+            return { item: item, resp: r, payload: p };
+          } catch (err) {
+            return { item: item, err: err };
+          }
+        };
+
+        for (var batchStart = 0; batchStart < pending.length; batchStart += BATCH_SIZE) {
+          if (_importCancelled) break;
+
+          var batch = pending.slice(batchStart, batchStart + BATCH_SIZE);
+          var batchNum = Math.floor(batchStart / BATCH_SIZE) + 1;
+          var totalBatches = Math.ceil(pending.length / BATCH_SIZE);
+
+          btnImportAll.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> '
+            + 'Lote ' + batchNum + '/' + totalBatches
+            + ' — ' + processed + '/' + pending.length + ' processados...';
+
+          var results = await Promise.all(batch.map(importOne));
+
+          results.forEach(function (r) {
+            processed++;
+            if (r.err) {
+              errorCount++;
+              console.error('Erro de rede ao importar #' + r.item.id, r.err);
+            } else if (r.payload && r.payload.already_imported) {
+              skipCount++;
+              r.item.btn.outerHTML =
+                '<a href="' + reportsUrl + '" class="btn-cell btn-cell-imported">'
+                + '<i class="bi bi-check-circle-fill"></i> Processado</a>';
+            } else if (!r.resp.ok || !r.payload || !r.payload.ok) {
+              errorCount++;
+              console.warn('Falha ao importar #' + r.item.id + ':', r.payload && r.payload.message);
+            } else {
+              successCount++;
+              r.item.btn.outerHTML =
+                '<a href="' + reportsUrl + '" class="btn-cell btn-cell-imported">'
+                + '<i class="bi bi-check-circle-fill"></i> Importado</a>';
+            }
+          });
+        }
+
+        if (btnCancelImport) btnCancelImport.classList.add('d-none');
+
+        var parts = [];
+        if (_importCancelled) parts.push('cancelado (' + (pending.length - processed) + ' na fila ignorada(s))');
+        if (successCount) parts.push(successCount + ' processada(s)');
+        if (skipCount) parts.push(skipCount + ' já processada(s)');
+        if (errorCount) parts.push(errorCount + ' com erro');
+
+        var msg = parts.join(', ');
+        if (_importCancelled) {
+          alert('Processamento cancelado. ' + msg + '.');
+        } else if (errorCount) {
+          alert('Processamento concluído com erros: ' + msg
+            + '.\n\nVerifique se a sessão FAP está ativa na página de Importação Automática.');
+        } else {
+          alert('Processamento concluído: ' + msg + '.');
+        }
+
+        updateImportAllBtnLabel();
+        updateImportStats();
+      });
+    }
+
+    var loadingOverlay = document.getElementById('tableLoadingOverlay');
+
+    requestAnimationFrame(function () {
+      renderPage();
       updateImportAllBtnLabel();
       updateImportStats();
+      if (loadingOverlay) loadingOverlay.style.display = 'none';
     });
-  }
-
-  var loadingOverlay = document.getElementById('tableLoadingOverlay');
-
-  requestAnimationFrame(function() {
-    renderPage();
-    updateImportAllBtnLabel();
-    updateImportStats();
-    if (loadingOverlay) loadingOverlay.style.display = 'none';
-  });
-})();
+  })();
 </script>
 {% endblock %}
-
-
