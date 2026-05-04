@@ -374,6 +374,14 @@ def sync_run_year():
                     )
                     db.session.add(history_row)
 
+                    imported_link = FapAutoImportedContestacao.query.filter_by(
+                        law_firm_id=law_firm_id,
+                        contestacao_id=existing.contestacao_id,
+                        cnpj=cnpj_full_14,
+                    ).first()
+                    if imported_link:
+                        existing.needs_reprocess = True
+
                 existing.cnpj = next_values['cnpj']
                 existing.cnpj_raiz = next_values['cnpj_raiz']
                 existing.ano_vigencia = next_values['ano_vigencia']
@@ -587,6 +595,64 @@ def view_contestacao_file(rec_id, display_filename):
         abort(404)
 
     return send_file(abs_path, mimetype='application/pdf', as_attachment=False, download_name=display_filename)
+
+
+@fap_panel_bp.route('/contestacoes/<int:rec_id>/history', methods=['GET'])
+@require_law_firm
+def contestacao_history(rec_id):
+    """AJAX — Retorna o histórico de mudanças de uma contestação sincronizada."""
+    law_firm_id = get_current_law_firm_id()
+
+    rec = FapWebContestacao.query.filter_by(id=rec_id, law_firm_id=law_firm_id).first()
+    if not rec:
+        return jsonify({'ok': False, 'message': 'Contestação não encontrada.'}), 404
+
+    history_rows = (
+        FapWebContestacaoChangeHistory.query
+        .filter_by(law_firm_id=law_firm_id, contestacao_db_id=rec_id)
+        .order_by(FapWebContestacaoChangeHistory.synced_at.desc(), FapWebContestacaoChangeHistory.id.desc())
+        .all()
+    )
+
+    items = []
+    for row in history_rows:
+        try:
+            changed_fields = json.loads(row.changed_fields) if row.changed_fields else []
+        except Exception:
+            changed_fields = []
+
+        try:
+            old_values = json.loads(row.old_values) if row.old_values else {}
+        except Exception:
+            old_values = {}
+
+        try:
+            new_values = json.loads(row.new_values) if row.new_values else {}
+        except Exception:
+            new_values = {}
+
+        items.append({
+            'id': row.id,
+            'change_type': row.change_type,
+            'changed_fields': changed_fields,
+            'old_values': old_values,
+            'new_values': new_values,
+            'synced_at': row.synced_at.strftime('%d/%m/%Y %H:%M:%S') if row.synced_at else '',
+            'created_at': row.created_at.strftime('%d/%m/%Y %H:%M:%S') if row.created_at else '',
+        })
+
+    return jsonify({
+        'ok': True,
+        'contestacao': {
+            'rec_id': rec.id,
+            'contestacao_id': rec.contestacao_id,
+            'protocolo': rec.protocolo or '',
+            'cnpj': rec.cnpj or '',
+            'ano_vigencia': rec.ano_vigencia,
+        },
+        'items': items,
+        'total': len(items),
+    })
 
 
 @fap_panel_bp.route('/contestacoes')

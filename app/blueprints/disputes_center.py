@@ -2973,6 +2973,7 @@ def fap_auto_import_import_contestacao():
     cnpj = str(data.get('cnpj') or '').strip()
     contestacao_id = data.get('contestacao_id')
     force_process = bool(data.get('force_process', False))
+    force_reimport = bool(data.get('force_reimport', False))
 
     if not year or not cnpj or not contestacao_id:
         return jsonify({'ok': False, 'message': 'Parâmetros inválidos.'}), 400
@@ -2983,7 +2984,7 @@ def fap_auto_import_import_contestacao():
         contestacao_id=int(contestacao_id),
         cnpj=cnpj,
     ).first()
-    if existing:
+    if existing and not force_reimport:
         return jsonify({
             'ok': False,
             'already_imported': True,
@@ -3075,15 +3076,36 @@ def fap_auto_import_import_contestacao():
         report.knowledge_base_id = knowledge_file.id
         db.session.flush()
 
-        imported = FapAutoImportedContestacao(
-            law_firm_id=law_firm_id,
-            report_id=report.id,
-            contestacao_id=int(contestacao_id),
-            cnpj=cnpj,
-            year=int(year),
-            original_filename=filename,
-        )
-        db.session.add(imported)
+        if existing and force_reimport:
+            imported = existing
+            imported.report_id = report.id
+            imported.year = int(year)
+            imported.original_filename = filename
+            imported.imported_at = datetime.utcnow()
+        else:
+            imported = FapAutoImportedContestacao(
+                law_firm_id=law_firm_id,
+                report_id=report.id,
+                contestacao_id=int(contestacao_id),
+                cnpj=cnpj,
+                year=int(year),
+                original_filename=filename,
+            )
+            db.session.add(imported)
+
+        if rec_id:
+            fap_rec_for_flag = FapWebContestacao.query.filter_by(id=int(rec_id), law_firm_id=law_firm_id).first()
+        else:
+            fap_rec_for_flag = FapWebContestacao.query.filter_by(
+                law_firm_id=law_firm_id,
+                contestacao_id=int(contestacao_id),
+                cnpj=cnpj,
+            ).first()
+
+        if fap_rec_for_flag:
+            fap_rec_for_flag.needs_reprocess = False
+            fap_rec_for_flag.report_id = report.id
+
         db.session.commit()
 
         if force_process:
@@ -3103,6 +3125,7 @@ def fap_auto_import_import_contestacao():
                 'report_id': report.id,
                 'queued': True,
                 'processed': True,
+                'reimported': bool(existing and force_reimport),
                 'imported_count': imported_count,
                 'message': f'Contestação importada e processada com sucesso como "{filename}".',
             })
@@ -3110,6 +3133,7 @@ def fap_auto_import_import_contestacao():
         return jsonify({
             'ok': True,
             'report_id': report.id,
+            'reimported': bool(existing and force_reimport),
             'message': f'Contestação importada com sucesso como "{filename}".',
         })
     except Exception as e:

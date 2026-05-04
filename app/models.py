@@ -2157,6 +2157,9 @@ class FapWebContestacao(db.Model):
     # ── Arquivo baixado ───────────────────────────────────────────────
     file_path = db.Column(db.String(500))  # Caminho relativo do PDF baixado em uploads/
 
+    # ── Controle de reprocessamento ───────────────────────────────────
+    needs_reprocess = db.Column(db.Boolean, nullable=False, default=False, index=True)
+
     # ── Controle ─────────────────────────────────────────────────────
     last_synced_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
     created_at     = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)

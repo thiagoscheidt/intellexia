@@ -31,4 +31,9 @@ TRUNCATE TABLE fap_contestation_turnover_rates;
 TRUNCATE TABLE fap_vigencia_cnpjs;
 TRUNCATE TABLE fap_auto_imported_contestacoes;
 
+TRUNCATE TABLE fap_web_contestacao_change_history;
+TRUNCATE TABLE fap_web_contestacoes;
+TRUNCATE TABLE fap_web_procuracoes;
+TRUNCATE TABLE fap_companies;
+
 SET FOREIGN_KEY_CHECKS = 1;

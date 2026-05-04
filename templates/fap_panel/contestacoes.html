@@ -18,17 +18,25 @@ contestacao_id=c.contestacao_id) -%}
       Local</span>{% endif %}
   </div>
   <div class="cell-actions">
-    {% if local_url %}
-    <a href="{{ local_url }}?inline=1" target="_blank" class="btn-cell btn-cell-view"
-      title="Visualizar (arquivo local)"><i class="bi bi-eye"></i></a>
-    <a href="{{ local_url }}" class="btn-cell btn-cell-download" title="Baixar (arquivo local)"><i
-        class="bi bi-hdd-fill"></i></a>
-    {% else %}
-    <a href="{{ dl_base }}?inline=1" target="_blank" class="btn-cell btn-cell-view" title="Visualizar"><i
-        class="bi bi-eye"></i></a>
-    <a href="{{ dl_base }}" class="btn-cell btn-cell-download" title="Baixar"><i
-        class="bi bi-file-earmark-arrow-down"></i></a>
-    {% endif %}
+    <div class="cell-icons" role="group" aria-label="Ações de arquivo e histórico">
+      {% if local_url %}
+      <a href="{{ local_url }}?inline=1" target="_blank" class="btn-cell btn-cell-icon btn-cell-view"
+        title="Visualizar (arquivo local)"><i class="bi bi-eye"></i></a>
+      <a href="{{ local_url }}" class="btn-cell btn-cell-icon btn-cell-download" title="Baixar (arquivo local)"><i
+          class="bi bi-hdd-fill"></i></a>
+      {% else %}
+      <a href="{{ dl_base }}?inline=1" target="_blank" class="btn-cell btn-cell-icon btn-cell-view"
+        title="Visualizar"><i class="bi bi-eye"></i></a>
+      <a href="{{ dl_base }}" class="btn-cell btn-cell-icon btn-cell-download" title="Baixar"><i
+          class="bi bi-file-earmark-arrow-down"></i></a>
+      {% endif %}
+      <button type="button" class="btn-cell btn-cell-icon btn-cell-history history-btn" data-rec-id="{{ c.id }}"
+        data-contestacao-id="{{ c.contestacao_id }}" title="Ver histórico de mudanças da contestação"
+        aria-label="Histórico da contestação {{ c.contestacao_id }}">
+        <i class="bi bi-clock-history"></i>
+      </button>
+    </div>
+
     {% if imported_report_id %}
     <a href="{{ url_for('disputes_center.fap_contestation_reports') }}" class="btn-cell btn-cell-imported"
       title="Benefícios processados"><i class="bi bi-check-circle-fill"></i> Processado</a>
@@ -350,8 +358,18 @@ contestacao_id=c.contestacao_id) -%}
 
   .contestacao-cell .cell-actions {
     display: flex;
+    align-items: center;
     flex-wrap: wrap;
-    gap: 2px;
+    gap: 4px;
+  }
+
+  .contestacao-cell .cell-icons {
+    display: inline-flex;
+    align-items: center;
+    gap: 3px;
+    padding-right: 3px;
+    margin-right: 1px;
+    border-right: 1px solid #e2e8f0;
   }
 
   .btn-cell {
@@ -366,6 +384,16 @@ contestacao_id=c.contestacao_id) -%}
     border: 1px solid transparent;
     cursor: pointer;
     white-space: nowrap;
+  }
+
+  .btn-cell-icon {
+    width: 24px;
+    height: 24px;
+    justify-content: center;
+    padding: 0;
+    gap: 0;
+    border-radius: .35rem;
+    font-size: .76rem;
   }
 
   .btn-cell-view {
@@ -411,6 +439,17 @@ contestacao_id=c.contestacao_id) -%}
   .btn-cell-pending:hover {
     background: #fde68a;
     color: #78350f;
+  }
+
+  .btn-cell-history {
+    background: #e0f2fe;
+    color: #075985;
+    border-color: #bae6fd;
+  }
+
+  .btn-cell-history:hover {
+    background: #bae6fd;
+    color: #0c4a6e;
   }
 
   .contestacao-cell+.contestacao-cell {
@@ -894,6 +933,20 @@ vigência, empresa e instância.', icon='bi bi-table') %}
 
   </div>
 </div>
+
+<div class="modal fade" id="historyModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="historyModalTitle">Histórico da contestação</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body" id="historyModalBody">
+        <div class="text-muted">Carregando...</div>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -1082,12 +1135,110 @@ vigência, empresa e instância.', icon='bi bi-table') %}
     /* ── Importação em lote dos filtrados ──────────────────────────────── */
     var importUrl = '{{ url_for("disputes_center.fap_auto_import_import_contestacao") }}';
     var reportsUrl = '{{ url_for("disputes_center.fap_contestation_reports") }}';
+    var historyUrlTemplate = '{{ url_for("fap_panel.contestacao_history", rec_id=0) }}';
     var btnImportAll = document.getElementById('btnImportAll');
     var btnCancelImport = document.getElementById('btnCancelImport');
     var _importCancelled = false;
 
+    function getHistoryUrl(recId) {
+      return historyUrlTemplate.replace('/0/history', '/' + recId + '/history');
+    }
+
+    function escapeHtml(value) {
+      return String(value == null ? '' : value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    async function openHistoryModal(recId, contestacaoId) {
+      var body = document.getElementById('historyModalBody');
+      var title = document.getElementById('historyModalTitle');
+      if (!body || !title) return;
+
+      title.textContent = 'Histórico da contestação #' + contestacaoId;
+      body.innerHTML = '<div class="text-muted">Carregando...</div>';
+
+      var modalEl = document.getElementById('historyModal');
+      var modal = (typeof bootstrap !== 'undefined' && bootstrap.Modal)
+        ? new bootstrap.Modal(modalEl)
+        : null;
+      if (modal) modal.show();
+
+      try {
+        var r = await fetch(getHistoryUrl(recId), {
+          method: 'GET',
+          credentials: 'same-origin',
+          headers: { 'X-Requested-With': 'XMLHttpRequest' },
+        });
+        var p = null;
+        try { p = await r.json(); } catch (_) { }
+
+        if (!r.ok || !p || !p.ok) {
+          body.innerHTML = '<div class="alert alert-danger mb-0">'
+            + escapeHtml((p && p.message) || 'Falha ao carregar histórico.')
+            + '</div>';
+          return;
+        }
+
+        if (!p.items || p.items.length === 0) {
+          body.innerHTML = '<div class="text-muted">Nenhuma mudança registrada para esta contestação.</div>';
+          return;
+        }
+
+        var blocks = p.items.map(function (item) {
+          var fields = (item.changed_fields || []).map(function (f) {
+            return '<span class="badge bg-primary-subtle text-primary me-1 mb-1">' + escapeHtml(f) + '</span>';
+          }).join('');
+
+          var detailRows = (item.changed_fields || []).map(function (f) {
+            var oldV = item.old_values && Object.prototype.hasOwnProperty.call(item.old_values, f)
+              ? item.old_values[f]
+              : '';
+            var newV = item.new_values && Object.prototype.hasOwnProperty.call(item.new_values, f)
+              ? item.new_values[f]
+              : '';
+            return '<tr>'
+              + '<td style="width:26%;"><code>' + escapeHtml(f) + '</code></td>'
+              + '<td style="width:37%;"><span class="text-danger">' + escapeHtml(oldV) + '</span></td>'
+              + '<td style="width:37%;"><span class="text-success">' + escapeHtml(newV) + '</span></td>'
+              + '</tr>';
+          }).join('');
+
+          return '<div class="border rounded p-2 mb-3">'
+            + '<div class="d-flex justify-content-between align-items-center mb-2">'
+            + '<div>' + fields + '</div>'
+            + '<small class="text-muted">Sync: ' + escapeHtml(item.synced_at || '') + '</small>'
+            + '</div>'
+            + '<div class="table-responsive">'
+            + '<table class="table table-sm table-bordered mb-0">'
+            + '<thead><tr><th>Campo</th><th>Valor anterior</th><th>Valor novo</th></tr></thead>'
+            + '<tbody>' + detailRows + '</tbody>'
+            + '</table>'
+            + '</div>'
+            + '</div>';
+        }).join('');
+
+        body.innerHTML = blocks;
+      } catch (err) {
+        body.innerHTML = '<div class="alert alert-danger mb-0">Erro de rede: ' + escapeHtml(err) + '</div>';
+      }
+    }
+
     /* ── Importação individual (clique no botão da célula) ─────────────── */
     document.addEventListener('click', async function (e) {
+      var historyBtn = e.target.closest('.history-btn');
+      if (historyBtn) {
+        var recId = parseInt(historyBtn.dataset.recId, 10);
+        var contestacaoId = historyBtn.dataset.contestacaoId || '';
+        if (recId) {
+          openHistoryModal(recId, contestacaoId);
+        }
+        return;
+      }
+
       var btn = e.target.closest('.import-pending-btn');
       if (!btn) return;
       if (btn.dataset._importing) return;
