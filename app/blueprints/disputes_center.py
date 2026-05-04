@@ -1659,6 +1659,30 @@ def view_fap_contestation_report(report_id):
         flash('Arquivo não encontrado no servidor.', 'error')
         return redirect(url_for('disputes_center.fap_contestation_reports'))
 
+    raw_name = (report.original_filename or '').strip() or os.path.basename(resolved_path)
+    safe_name = secure_filename(raw_name) or f'relatorio_{report.id}.pdf'
+
+    return redirect(url_for(
+        'disputes_center.view_fap_contestation_report_named',
+        report_id=report_id,
+        display_filename=safe_name,
+    ))
+
+
+@disputes_center_bp.route('/fap-contestation-reports/<int:report_id>/view/<path:display_filename>', methods=['GET'])
+@require_law_firm
+def view_fap_contestation_report_named(report_id, display_filename):
+    law_firm_id = get_current_law_firm_id()
+    report = FapContestationJudgmentReport.query.filter_by(
+        id=report_id,
+        law_firm_id=law_firm_id,
+    ).first_or_404()
+
+    resolved_path = _resolve_existing_file_path(report.file_path)
+    if not resolved_path:
+        flash('Arquivo não encontrado no servidor.', 'error')
+        return redirect(url_for('disputes_center.fap_contestation_reports'))
+
     mimetype = 'application/pdf'
     ext = (report.file_type or '').strip().lower()
     if ext in {'doc', 'docx'}:
@@ -1668,7 +1692,7 @@ def view_fap_contestation_report(report_id):
     elif ext == 'txt':
         mimetype = 'text/plain'
 
-    return send_file(resolved_path, as_attachment=False, mimetype=mimetype)
+    return send_file(resolved_path, as_attachment=False, mimetype=mimetype, download_name=display_filename)
 
 
 @disputes_center_bp.route('/')

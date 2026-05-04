@@ -554,10 +554,21 @@ def contestacoes_page():
     f_situacao  = request.args.get('situacao', '').strip()
     f_protocolo = request.args.get('protocolo', '').strip()
     f_prazo2    = request.args.get('prazo_2_instancia') == '1'
+    f_year_all  = f_year == '__all__'
+
+    has_active_filters = any([
+        f_year,
+        f_cnpj_raiz,
+        f_cnpj,
+        f_instancia,
+        f_situacao,
+        f_protocolo,
+        f_prazo2,
+    ])
 
     query = FapWebContestacao.query.filter_by(law_firm_id=law_firm_id)
 
-    if f_year:
+    if f_year and not f_year_all:
         query = query.filter(FapWebContestacao.ano_vigencia == int(f_year))
     if f_cnpj_raiz:
         query = query.filter(FapWebContestacao.cnpj_raiz == f_cnpj_raiz)
@@ -587,10 +598,12 @@ def contestacoes_page():
     for raiz in cnpjs_by_raiz:
         cnpjs_by_raiz[raiz].sort()
 
-    all_rows = query.order_by(
-        FapWebContestacao.ano_vigencia.desc(),
-        FapWebContestacao.cnpj.asc(),
-    ).all()
+    all_rows = []
+    if has_active_filters:
+        all_rows = query.order_by(
+            FapWebContestacao.ano_vigencia.desc(),
+            FapWebContestacao.cnpj.asc(),
+        ).all()
 
     # ── Mapa de contestações já importadas (contestacao_id → report_id) ──
     contestacao_ids = [r.contestacao_id for r in all_rows]
@@ -672,6 +685,7 @@ def contestacoes_page():
         situacoes=sorted(situacoes),
         imported_map=imported_map,
         cnpjs_by_raiz=cnpjs_by_raiz,
+        has_active_filters=has_active_filters,
         # filtros ativos (para repreencher o form)
         f_year=f_year,
         f_cnpj_raiz=f_cnpj_raiz,
