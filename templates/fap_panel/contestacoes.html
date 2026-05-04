@@ -576,16 +576,22 @@ vigência, empresa e instância.', icon='bi bi-table') %}
       <div class="stat-card" style="--sc-color:#f59e0b;--sc-soft:rgba(245,158,11,.10);">
         <div class="d-flex align-items-center gap-2 mb-1">
           <span class="sc-icon"><i class="bi bi-hourglass-split"></i></span>
-          <span class="sc-label">1ª Inst. em Andamento</span>
+          <span class="sc-label">Inst. em Andamento</span>
         </div>
-        <div class="sc-value">{{ cnt_and1.v }}</div>
+        <div class="d-flex align-items-center gap-2">
+          <span class="badge text-bg-warning">1ª: {{ cnt_and1.v }}</span>
+          <span class="badge text-bg-secondary">2ª: {{ cnt_and2.v }}</span>
+        </div>
       </div>
       <div class="stat-card" style="--sc-color:#198754;--sc-soft:rgba(25,135,84,.10);">
         <div class="d-flex align-items-center gap-2 mb-1">
           <span class="sc-icon"><i class="bi bi-send-check"></i></span>
-          <span class="sc-label">1ª Inst. Transmitidas</span>
+          <span class="sc-label">Inst. Transmitidas</span>
         </div>
-        <div class="sc-value">{{ cnt_tra1.v }}</div>
+        <div class="d-flex align-items-center gap-2">
+          <span class="badge text-bg-success">1ª: {{ cnt_tra1.v }}</span>
+          <span class="badge text-bg-secondary">2ª: {{ cnt_tra2.v }}</span>
+        </div>
       </div>
       <div class="stat-card" style="--sc-color:#6f42c1;--sc-soft:rgba(111,66,193,.10);">
         <div class="d-flex align-items-center gap-2 mb-1">
@@ -1348,7 +1354,6 @@ vigência, empresa e instância.', icon='bi bi-table') %}
         if (btnCancelImport) { btnCancelImport.classList.remove('d-none'); btnCancelImport.disabled = false; btnCancelImport.innerHTML = '<i class="bi bi-x-circle"></i>'; }
 
         var successCount = 0, skipCount = 0, errorCount = 0, processed = 0;
-        var BATCH_SIZE = 20;
 
         var importOne = async function (item) {
           try {
@@ -1372,18 +1377,22 @@ vigência, empresa e instância.', icon='bi bi-table') %}
           }
         };
 
-        for (var batchStart = 0; batchStart < pending.length; batchStart += BATCH_SIZE) {
+        for (var batchStart = 0; batchStart < pending.length; batchStart += 1) {
           if (_importCancelled) break;
 
-          var batch = pending.slice(batchStart, batchStart + BATCH_SIZE);
-          var batchNum = Math.floor(batchStart / BATCH_SIZE) + 1;
-          var totalBatches = Math.ceil(pending.length / BATCH_SIZE);
+          var batch = pending.slice(batchStart, batchStart + 1);
+          var batchNum = batchStart + 1;
+          var totalBatches = pending.length;
 
           btnImportAll.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> '
             + 'Lote ' + batchNum + '/' + totalBatches
             + ' — ' + processed + '/' + pending.length + ' processados...';
 
-          var results = await Promise.all(batch.map(importOne));
+          var results = [];
+          for (var i = 0; i < batch.length; i++) {
+            if (_importCancelled) break;
+            results.push(await importOne(batch[i]));
+          }
 
           results.forEach(function (r) {
             processed++;

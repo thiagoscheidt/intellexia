@@ -847,11 +847,13 @@ anos de vigência e salva no banco de dados.', icon='bi bi-arrow-repeat') %}
       let _dlCancelled = false;
 
       function setDlProgress(done, total, ok, err) {
-        const pct = total ? Math.round((done / total) * 100) : 0;
+        const safeTotal = Math.max(Number(total || 0), Number(ok || 0) + Number(err || 0));
+        const safeDone = Math.min(Number(done || 0), safeTotal);
+        const pct = safeTotal ? Math.round((safeDone / safeTotal) * 100) : 0;
         dlProgressBar.style.width = pct + '%';
         dlProgressBar.setAttribute('aria-valuenow', pct);
         dlProgressBar.textContent = pct + '%';
-        dlProgressCount.textContent = done + ' / ' + total;
+        dlProgressCount.textContent = safeDone + ' / ' + safeTotal;
         dlCountOk.textContent = ok;
         dlCountErr.textContent = err;
         if (err > 0) {
@@ -938,7 +940,7 @@ anos de vigência e salva no banco de dados.', icon='bi bi-arrow-repeat') %}
               else { err++; log('PDF #' + r.rec_id + ' falhou: ' + (r.error || 'erro'), 'error'); }
             });
 
-            const done = total - payload.remaining;
+            const done = ok + err;
             const totalBatches = Math.ceil(total / 60);
             dlProgressLabel.textContent = 'Lote ' + batchNum + '/' + totalBatches + ' — ' + done + ' de ' + total + ' arquivos';
             setDlProgress(done, total, ok, err);
@@ -964,6 +966,10 @@ anos de vigência e salva no banco de dados.', icon='bi bi-arrow-repeat') %}
         log(finalMsg, err ? 'warning' : 'success');
         dlProgressLabel.textContent = _dlCancelled ? 'Cancelado.' : 'Concluído!';
         dlProgressBar.classList.remove('progress-bar-animated', 'progress-bar-striped');
+        if (!_dlCancelled) {
+          const finalTotal = Math.max(Number(total || 0), ok + err);
+          setDlProgress(finalTotal, finalTotal, ok, err);
+        }
         if (!err && !_dlCancelled) dlProgressBar.classList.add('bg-success');
 
         if (btnCancelDl) btnCancelDl.classList.add('d-none');
