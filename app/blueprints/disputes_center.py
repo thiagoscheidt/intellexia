@@ -2948,6 +2948,7 @@ def fap_auto_import_import_contestacao():
     year = data.get('year')
     cnpj = str(data.get('cnpj') or '').strip()
     contestacao_id = data.get('contestacao_id')
+    force_process = bool(data.get('force_process', False))
 
     if not year or not cnpj or not contestacao_id:
         return jsonify({'ok': False, 'message': 'Parâmetros inválidos.'}), 400
@@ -2971,6 +2972,7 @@ def fap_auto_import_import_contestacao():
     filename    = None
     local_path  = None   # abs_path do arquivo já salvo — se preenchido, não duplica no disco
     rec_id = data.get('rec_id')
+    fap_rec = None
     if rec_id:
         fap_rec = FapWebContestacao.query.filter_by(id=int(rec_id), law_firm_id=law_firm_id).first()
         if fap_rec and fap_rec.file_path:
@@ -2998,6 +3000,10 @@ def fap_auto_import_import_contestacao():
 
         pdf_bytes = result.data['pdf_bytes']
         filename  = result.data['filename']
+
+    # Mantém o mesmo padrão de nome amigável usado no visualizador das contestações.
+    if fap_rec:
+        filename = f'FAP_{fap_rec.protocolo}.pdf' if fap_rec.protocolo else f'FAP_{fap_rec.contestacao_id}.pdf'
 
     upload_dir = os.path.abspath(
         os.path.join(current_app.root_path, '..', 'uploads', 'fap_contestation_reports')
@@ -3055,6 +3061,27 @@ def fap_auto_import_import_contestacao():
         )
         db.session.add(imported)
         db.session.commit()
+
+        if force_process:
+            service = FapContestationJudgmentReportService(current_app._get_current_object())
+            success, imported_count, err_message = service.process_single_report(report.id)
+            if not success:
+                return jsonify({
+                    'ok': False,
+                    'report_id': report.id,
+                    'queued': True,
+                    'processed': False,
+                    'message': f'Relatório enfileirado, mas falhou ao processar agora: {err_message}',
+                }), 500
+
+            return jsonify({
+                'ok': True,
+                'report_id': report.id,
+                'queued': True,
+                'processed': True,
+                'imported_count': imported_count,
+                'message': f'Contestação importada e processada com sucesso como "{filename}".',
+            })
 
         return jsonify({
             'ok': True,

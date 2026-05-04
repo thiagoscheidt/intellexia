@@ -1104,6 +1104,7 @@ vigência, empresa e instância.', icon='bi bi-table') %}
             cnpj: btn.dataset.cnpj,
             contestacao_id: btn.dataset.id,
             rec_id: btn.dataset.recId ? parseInt(btn.dataset.recId) : null,
+            force_process: true,
           }),
         });
         var p = null;
@@ -1244,7 +1245,7 @@ vigência, empresa e instância.', icon='bi bi-table') %}
               successCount++;
               r.item.btn.outerHTML =
                 '<a href="' + reportsUrl + '" class="btn-cell btn-cell-imported">'
-                + '<i class="bi bi-check-circle-fill"></i> Importado</a>';
+                + '<i class="bi bi-check-circle-fill"></i> Processado</a>';
             }
           });
         }
