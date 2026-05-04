@@ -242,6 +242,39 @@ def _benefit_topics_text(benefit: Benefit) -> str:
     return ', '.join(_parse_benefit_topics(benefit))
 
 
+def _get_fap_classifier_topics() -> list[str]:
+    """Retorna os tópicos permitidos pelo classificador IA."""
+    try:
+        from app.agents.fap.fap_contestation_classifier_agent import FAPContestationClassifierAgent
+
+        topics = list(getattr(FAPContestationClassifierAgent, 'ALLOWED_TOPICS', ()) or ())
+    except Exception:
+        topics = []
+
+    seen = set()
+    unique_topics: list[str] = []
+    for topic in topics:
+        normalized = _normalize_text(topic)
+        if not normalized or normalized in seen:
+            continue
+        seen.add(normalized)
+        unique_topics.append(normalized)
+
+    return unique_topics
+
+
+def _sanitize_selected_topics(selected_topics, allowed_topics: list[str]) -> list[str]:
+    """Garante tópicos válidos, sem duplicidade e na ordem original do usuário."""
+    allowed = set(allowed_topics)
+    cleaned: list[str] = []
+    for topic in selected_topics or []:
+        normalized = _normalize_text(topic)
+        if not normalized or normalized not in allowed or normalized in cleaned:
+            continue
+        cleaned.append(normalized)
+    return cleaned
+
+
 STATUS_LABEL_PT_MAP = {
     'analyzing': 'Em análise',
     'in_review': 'Em análise',
@@ -3257,8 +3290,11 @@ def new_dispute():
         .all()
     )
     form.client_id.choices = [('', 'Sem cliente vinculado')] + [(c.id, c.name) for c in clients]
+    classifier_topics = _get_fap_classifier_topics()
+    form.fap_contestation_topics.choices = [(topic, topic) for topic in classifier_topics]
 
     if form.validate_on_submit():
+        selected_topics = _sanitize_selected_topics(form.fap_contestation_topics.data, classifier_topics)
         benefit = Benefit(
             law_firm_id=law_firm_id,
             client_id=form.client_id.data,
@@ -3280,6 +3316,8 @@ def new_dispute():
             cat_number=form.cat_number.data,
             bo_number=form.bo_number.data,
             fap_vigencia_years=form.fap_vigencia_years.data,
+            fap_contestation_topic=selected_topics[0] if selected_topics else None,
+            fap_contestation_topics_json=json.dumps(selected_topics, ensure_ascii=False) if selected_topics else None,
             request_type=form.request_type.data or None,
             status=form.status.data,
             first_instance_status=form.first_instance_status.data or None,
@@ -3320,14 +3358,18 @@ def edit_dispute(benefit_id):
         .all()
     )
     form.client_id.choices = [('', 'Sem cliente vinculado')] + [(c.id, c.name) for c in clients]
+    classifier_topics = _get_fap_classifier_topics()
+    form.fap_contestation_topics.choices = [(topic, topic) for topic in classifier_topics]
 
     if request.method == 'GET':
         form.client_id.data = benefit.client_id
+        form.fap_contestation_topics.data = _parse_benefit_topics(benefit)
 
     if form.validate_on_submit():
         user_id = session.get('user_id')
         old_first_instance_status = _normalize_optional_status(benefit.first_instance_status)
         new_first_instance_status = _normalize_optional_status(form.first_instance_status.data)
+        selected_topics = _sanitize_selected_topics(form.fap_contestation_topics.data, classifier_topics)
 
         benefit.client_id = form.client_id.data
         benefit.benefit_number = form.benefit_number.data
@@ -3348,6 +3390,8 @@ def edit_dispute(benefit_id):
         benefit.cat_number = form.cat_number.data
         benefit.bo_number = form.bo_number.data
         benefit.fap_vigencia_years = form.fap_vigencia_years.data
+        benefit.fap_contestation_topic = selected_topics[0] if selected_topics else None
+        benefit.fap_contestation_topics_json = json.dumps(selected_topics, ensure_ascii=False) if selected_topics else None
         benefit.request_type = form.request_type.data or None
         benefit.status = form.status.data
         benefit.first_instance_status = form.first_instance_status.data or None
@@ -3389,7 +3433,7 @@ def edit_dispute(benefit_id):
     return render_template(
         'disputes_center/form.html',
         form=form,
-        title='Editar Registro de Disputa',
+        title='Editar Benefício',
         benefit_id=benefit_id,
         clients_data=_json.dumps(clients_data),
     )
@@ -3605,6 +3649,114 @@ def list_cats_api():
         },
         'data': data,
     })
+
+
+@disputes_center_bp.route('/cats/export-excel', methods=['POST'])
+@require_law_firm
+def export_cats_excel():
+    law_firm_id = get_current_law_firm_id()
+    payload = _collect_listing_payload(default_length=1000)
+    raw_filters = (request.get_json(silent=True) or {}).get('filters') if request.is_json else request.args.get('custom_filters', '[]')
+    cat_filters = _parse_cat_custom_filters(raw_filters)
+
+    filtered_query = _apply_cats_filters(
+        _base_cats_query(law_firm_id),
+        search_value=payload['search'],
+        custom_filters=cat_filters,
+        quick_employer_name=payload['quick_client'],
+        quick_root=payload['quick_root'],
+        quick_cnpj=payload['quick_cnpj'],
+        vigencia_id=payload['vigencia_id'],
+    )
+
+    order_column = CAT_ORDER_COLUMN_MAP.get(payload['order_column'], FapContestationCat.id)
+    if payload['order_dir'] == 'asc':
+        filtered_query = filtered_query.order_by(order_column.asc(), FapContestationCat.id.asc())
+    else:
+        filtered_query = filtered_query.order_by(order_column.desc(), FapContestationCat.id.desc())
+
+    rows = filtered_query.all()
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = 'CATs'
+
+    headers = [
+        'ID',
+        'Número da CAT',
+        'Vigência',
+        'CNPJ Empregador',
+        'CNPJ Empregador Atribuído',
+        'Nome empregador',
+        'NIT segurado',
+        'Data nascimento segurado',
+        'Data óbito segurado',
+        'Data acidente',
+        'Data registro CAT',
+        'Bloqueio CAT',
+        'Status geral',
+        'Status 1ª instância',
+        'Texto status 1ª instância',
+        'Justificativa 1ª instância',
+        'Parecer 1ª instância',
+        'Status 2ª instância',
+        'Texto status 2ª instância',
+        'Justificativa 2ª instância',
+        'Parecer 2ª instância',
+    ]
+    sheet.append(headers)
+
+    for cat in rows:
+        general_status_value = _resolve_general_status_excel_value(
+            cat.first_instance_status,
+            cat.second_instance_status,
+            cat.first_instance_status_raw,
+            cat.second_instance_status_raw,
+            cat.status,
+        )
+
+        sheet.append(
+            [
+                cat.id,
+                cat.cat_number or '',
+                cat.vigencia_year or '',
+                cat.employer_cnpj or '',
+                cat.employer_cnpj_assigned or '',
+                cat.employer_name or '',
+                cat.insured_nit or '',
+                _format_date(cat.insured_date_of_birth),
+                _format_date(cat.insured_death_date),
+                _format_date(cat.accident_date),
+                _format_date(cat.cat_registration_date),
+                cat.cat_block or '',
+                general_status_value,
+                _status_label_pt(cat.first_instance_status),
+                cat.first_instance_status_raw or '',
+                cat.first_instance_justification or '',
+                cat.first_instance_opinion or '',
+                _status_label_pt(cat.second_instance_status),
+                cat.second_instance_status_raw or '',
+                cat.second_instance_justification or '',
+                cat.second_instance_opinion or '',
+            ]
+        )
+
+    for idx, _ in enumerate(headers, start=1):
+        sheet.column_dimensions[get_column_letter(idx)].width = 22
+
+    stream = BytesIO()
+    workbook.save(stream)
+    stream.seek(0)
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f'cats_{timestamp}.xlsx'
+
+    return send_file(
+        stream,
+        as_attachment=True,
+        download_name=filename,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
 
 
 @disputes_center_bp.route('/cats/<int:cat_id>/edit', methods=['GET', 'POST'])
@@ -3976,6 +4128,105 @@ def list_payroll_masses_api():
     })
 
 
+@disputes_center_bp.route('/payroll-masses/export-excel', methods=['POST'])
+@require_law_firm
+def export_payroll_masses_excel():
+    law_firm_id = get_current_law_firm_id()
+    payload = _collect_listing_payload(default_length=1000)
+    raw_filters = (request.get_json(silent=True) or {}).get('filters') if request.is_json else request.args.get('custom_filters', '[]')
+    pm_filters = _parse_payroll_mass_custom_filters(raw_filters)
+
+    filtered_query = _apply_payroll_mass_filters(
+        _base_payroll_masses_query(law_firm_id),
+        search_value=payload['search'],
+        custom_filters=pm_filters,
+        quick_root=payload['quick_root'],
+        quick_cnpj=payload['quick_cnpj'],
+        vigencia_id=payload['vigencia_id'],
+    )
+
+    order_column = PAYROLL_MASS_ORDER_COLUMN_MAP.get(payload['order_column'], FapContestationPayrollMass.id)
+    if payload['order_dir'] == 'asc':
+        filtered_query = filtered_query.order_by(order_column.asc(), FapContestationPayrollMass.id.asc())
+    else:
+        filtered_query = filtered_query.order_by(order_column.desc(), FapContestationPayrollMass.id.desc())
+
+    rows = filtered_query.all()
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = 'Massa Salarial'
+
+    headers = [
+        'ID',
+        'Vigência',
+        'CNPJ Empregador',
+        'Nome empregador',
+        'Competência',
+        'Remuneração total',
+        'Valor solicitado 1ª instância',
+        'Valor solicitado 2ª instância',
+        'Status geral',
+        'Status 1ª instância',
+        'Texto status 1ª instância',
+        'Justificativa 1ª instância',
+        'Parecer 1ª instância',
+        'Status 2ª instância',
+        'Texto status 2ª instância',
+        'Justificativa 2ª instância',
+        'Parecer 2ª instância',
+    ]
+    sheet.append(headers)
+
+    for pm in rows:
+        general_status_value = _resolve_general_status_excel_value(
+            pm.first_instance_status,
+            pm.second_instance_status,
+            pm.first_instance_status_raw,
+            pm.second_instance_status_raw,
+            pm.status,
+        )
+
+        sheet.append(
+            [
+                pm.id,
+                pm.vigencia_year or '',
+                pm.employer_cnpj or '',
+                pm.employer_name or '',
+                pm.competence or '',
+                _format_decimal(pm.total_remuneration),
+                _format_decimal(pm.first_instance_requested_value),
+                _format_decimal(pm.second_instance_requested_value),
+                general_status_value,
+                _status_label_pt(pm.first_instance_status),
+                pm.first_instance_status_raw or '',
+                pm.first_instance_justification or '',
+                pm.first_instance_opinion or '',
+                _status_label_pt(pm.second_instance_status),
+                pm.second_instance_status_raw or '',
+                pm.second_instance_justification or '',
+                pm.second_instance_opinion or '',
+            ]
+        )
+
+    for idx, _ in enumerate(headers, start=1):
+        sheet.column_dimensions[get_column_letter(idx)].width = 22
+
+    stream = BytesIO()
+    workbook.save(stream)
+    stream.seek(0)
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f'massa_salarial_{timestamp}.xlsx'
+
+    return send_file(
+        stream,
+        as_attachment=True,
+        download_name=filename,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+
+
 @disputes_center_bp.route('/payroll-masses/<int:payroll_mass_id>/edit', methods=['GET', 'POST'])
 @require_law_firm
 def edit_payroll_mass(payroll_mass_id):
@@ -4345,6 +4596,105 @@ def list_employment_links_api():
     })
 
 
+@disputes_center_bp.route('/employment-links/export-excel', methods=['POST'])
+@require_law_firm
+def export_employment_links_excel():
+    law_firm_id = get_current_law_firm_id()
+    payload = _collect_listing_payload(default_length=1000)
+    raw_filters = (request.get_json(silent=True) or {}).get('filters') if request.is_json else request.args.get('custom_filters', '[]')
+    el_filters = _parse_employment_link_custom_filters(raw_filters)
+
+    filtered_query = _apply_employment_link_filters(
+        _base_employment_links_query(law_firm_id),
+        search_value=payload['search'],
+        custom_filters=el_filters,
+        quick_root=payload['quick_root'],
+        quick_cnpj=payload['quick_cnpj'],
+        vigencia_id=payload['vigencia_id'],
+    )
+
+    order_column = EMPLOYMENT_LINK_ORDER_COLUMN_MAP.get(payload['order_column'], FapContestationEmploymentLink.id)
+    if payload['order_dir'] == 'asc':
+        filtered_query = filtered_query.order_by(order_column.asc(), FapContestationEmploymentLink.id.asc())
+    else:
+        filtered_query = filtered_query.order_by(order_column.desc(), FapContestationEmploymentLink.id.desc())
+
+    rows = filtered_query.all()
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = 'Vinculos Medios'
+
+    headers = [
+        'ID',
+        'Vigência',
+        'CNPJ Empregador',
+        'Nome empregador',
+        'Competência',
+        'Quantidade',
+        'Quantidade solicitada 1ª instância',
+        'Quantidade solicitada 2ª instância',
+        'Status geral',
+        'Status 1ª instância',
+        'Texto status 1ª instância',
+        'Justificativa 1ª instância',
+        'Parecer 1ª instância',
+        'Status 2ª instância',
+        'Texto status 2ª instância',
+        'Justificativa 2ª instância',
+        'Parecer 2ª instância',
+    ]
+    sheet.append(headers)
+
+    for el in rows:
+        general_status_value = _resolve_general_status_excel_value(
+            el.first_instance_status,
+            el.second_instance_status,
+            el.first_instance_status_raw,
+            el.second_instance_status_raw,
+            el.status,
+        )
+
+        sheet.append(
+            [
+                el.id,
+                el.vigencia_year or '',
+                el.employer_cnpj or '',
+                el.employer_name or '',
+                el.competence or '',
+                el.quantity if el.quantity is not None else '',
+                el.first_instance_requested_quantity if el.first_instance_requested_quantity is not None else '',
+                el.second_instance_requested_quantity if el.second_instance_requested_quantity is not None else '',
+                general_status_value,
+                _status_label_pt(el.first_instance_status),
+                el.first_instance_status_raw or '',
+                el.first_instance_justification or '',
+                el.first_instance_opinion or '',
+                _status_label_pt(el.second_instance_status),
+                el.second_instance_status_raw or '',
+                el.second_instance_justification or '',
+                el.second_instance_opinion or '',
+            ]
+        )
+
+    for idx, _ in enumerate(headers, start=1):
+        sheet.column_dimensions[get_column_letter(idx)].width = 22
+
+    stream = BytesIO()
+    workbook.save(stream)
+    stream.seek(0)
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f'vinculos_medios_{timestamp}.xlsx'
+
+    return send_file(
+        stream,
+        as_attachment=True,
+        download_name=filename,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
+
+
 @disputes_center_bp.route('/employment-links/<int:employment_link_id>/edit', methods=['GET', 'POST'])
 @require_law_firm
 def edit_employment_link(employment_link_id):
@@ -4699,6 +5049,119 @@ def list_turnover_rates_api():
         },
         'data': data,
     })
+
+
+@disputes_center_bp.route('/turnover-rates/export-excel', methods=['POST'])
+@require_law_firm
+def export_turnover_rates_excel():
+    law_firm_id = get_current_law_firm_id()
+    payload = _collect_listing_payload(default_length=1000)
+    raw_filters = (request.get_json(silent=True) or {}).get('filters') if request.is_json else request.args.get('custom_filters', '[]')
+    tr_filters = _parse_turnover_rate_custom_filters(raw_filters)
+
+    filtered_query = _apply_turnover_rate_filters(
+        _base_turnover_rates_query(law_firm_id),
+        search_value=payload['search'],
+        custom_filters=tr_filters,
+        quick_root=payload['quick_root'],
+        quick_cnpj=payload['quick_cnpj'],
+        vigencia_id=payload['vigencia_id'],
+    )
+
+    order_column = TURNOVER_RATE_ORDER_COLUMN_MAP.get(payload['order_column'], FapContestationTurnoverRate.id)
+    if payload['order_dir'] == 'asc':
+        filtered_query = filtered_query.order_by(order_column.asc(), FapContestationTurnoverRate.id.asc())
+    else:
+        filtered_query = filtered_query.order_by(order_column.desc(), FapContestationTurnoverRate.id.desc())
+
+    rows = filtered_query.all()
+
+    workbook = Workbook()
+    sheet = workbook.active
+    sheet.title = 'Taxa Rotatividade'
+
+    headers = [
+        'ID',
+        'Vigência',
+        'CNPJ Empregador',
+        'Nome empregador',
+        'Ano',
+        'Taxa de rotatividade',
+        'Admissões',
+        'Demissões',
+        'Quantidade inicial de vínculos',
+        'Admissões solicitadas 1ª instância',
+        'Demissões solicitadas 1ª instância',
+        'Vínculos iniciais solicitados 1ª instância',
+        'Admissões solicitadas 2ª instância',
+        'Demissões solicitadas 2ª instância',
+        'Vínculos iniciais solicitados 2ª instância',
+        'Status geral',
+        'Status 1ª instância',
+        'Texto status 1ª instância',
+        'Justificativa 1ª instância',
+        'Parecer 1ª instância',
+        'Status 2ª instância',
+        'Texto status 2ª instância',
+        'Justificativa 2ª instância',
+        'Parecer 2ª instância',
+    ]
+    sheet.append(headers)
+
+    for tr in rows:
+        general_status_value = _resolve_general_status_excel_value(
+            tr.first_instance_status,
+            tr.second_instance_status,
+            tr.first_instance_status_raw,
+            tr.second_instance_status_raw,
+            tr.status,
+        )
+
+        sheet.append(
+            [
+                tr.id,
+                tr.vigencia_year or '',
+                tr.employer_cnpj or '',
+                tr.employer_name or '',
+                tr.year or '',
+                _format_decimal(tr.turnover_rate),
+                tr.admissions if tr.admissions is not None else '',
+                tr.dismissals if tr.dismissals is not None else '',
+                tr.initial_links_count if tr.initial_links_count is not None else '',
+                tr.first_instance_requested_admissions if tr.first_instance_requested_admissions is not None else '',
+                tr.first_instance_requested_dismissals if tr.first_instance_requested_dismissals is not None else '',
+                tr.first_instance_requested_initial_links if tr.first_instance_requested_initial_links is not None else '',
+                tr.second_instance_requested_admissions if tr.second_instance_requested_admissions is not None else '',
+                tr.second_instance_requested_dismissals if tr.second_instance_requested_dismissals is not None else '',
+                tr.second_instance_requested_initial_links if tr.second_instance_requested_initial_links is not None else '',
+                general_status_value,
+                _status_label_pt(tr.first_instance_status),
+                tr.first_instance_status_raw or '',
+                tr.first_instance_justification or '',
+                tr.first_instance_opinion or '',
+                _status_label_pt(tr.second_instance_status),
+                tr.second_instance_status_raw or '',
+                tr.second_instance_justification or '',
+                tr.second_instance_opinion or '',
+            ]
+        )
+
+    for idx, _ in enumerate(headers, start=1):
+        sheet.column_dimensions[get_column_letter(idx)].width = 22
+
+    stream = BytesIO()
+    workbook.save(stream)
+    stream.seek(0)
+
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    filename = f'taxa_rotatividade_{timestamp}.xlsx'
+
+    return send_file(
+        stream,
+        as_attachment=True,
+        download_name=filename,
+        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    )
 
 
 @disputes_center_bp.route('/turnover-rates/<int:turnover_rate_id>/edit', methods=['GET', 'POST'])

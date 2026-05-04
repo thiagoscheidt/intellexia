@@ -7,13 +7,17 @@
 {% macro instance_status_badge(status) %}
 {% set s = (status or '')|lower %}
 {% if s == 'deferido' %}
-<span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2">Deferido</span>
+<span
+  class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2">Deferido</span>
 {% elif s == 'indeferido' %}
-<span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2">Indeferido</span>
+<span
+  class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2">Indeferido</span>
 {% elif s == 'analyzing' %}
-<span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2">Em análise</span>
+<span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2">Em
+  análise</span>
 {% else %}
-<span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3 py-2">-</span>
+<span
+  class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3 py-2">-</span>
 {% endif %}
 {% endmacro %}
 
@@ -29,19 +33,102 @@
     vertical-align: middle;
   }
 
-  .stat-cards { display:grid; grid-template-columns:repeat(5,1fr); gap:.75rem; }
-  @media (max-width:1200px) { .stat-cards { grid-template-columns:repeat(3,1fr); } }
-  @media (max-width:768px)  { .stat-cards { grid-template-columns:repeat(2,1fr); } }
-  @media (max-width:480px)  { .stat-cards { grid-template-columns:1fr; } }
-  .stat-card { position:relative; overflow:hidden; background:var(--bs-body-bg); border:1px solid rgba(15,23,42,.07); border-radius:.85rem; box-shadow:0 4px 16px rgba(15,23,42,.06); padding:.85rem 1rem .85rem 1.2rem; }
-  .stat-card::before { content:""; position:absolute; inset:0 auto 0 0; width:5px; background:var(--sc-color,#0d6efd); border-radius:4px 0 0 4px; }
-  .stat-card .sc-icon { width:2.1rem; height:2.1rem; background:var(--sc-soft,rgba(13,110,253,.10)); color:var(--sc-color,#0d6efd); border-radius:.55rem; display:inline-flex; align-items:center; justify-content:center; font-size:.9rem; flex-shrink:0; }
-  .stat-card .sc-label { font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#6c7a8d; margin-bottom:.1rem; }
-  .stat-card .sc-value { font-size:1.55rem; font-weight:800; line-height:1; color:var(--bs-emphasis-color); }
-  .stat-card .sc-sub { display:flex; gap:.6rem; margin-top:.3rem; flex-wrap:wrap; }
-  .sc-sub-item { display:inline-flex; flex-direction:column; }
-  .sc-sub-label { font-size:.6rem; color:#9aa5b4; text-transform:uppercase; letter-spacing:.03em; }
-  .sc-sub-value { font-size:.8rem; font-weight:700; color:var(--sc-color,#0d6efd); }
+  .stat-cards {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: .75rem;
+  }
+
+  @media (max-width:1200px) {
+    .stat-cards {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  @media (max-width:768px) {
+    .stat-cards {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width:480px) {
+    .stat-cards {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .stat-card {
+    position: relative;
+    overflow: hidden;
+    background: var(--bs-body-bg);
+    border: 1px solid rgba(15, 23, 42, .07);
+    border-radius: .85rem;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, .06);
+    padding: .85rem 1rem .85rem 1.2rem;
+  }
+
+  .stat-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 5px;
+    background: var(--sc-color, #0d6efd);
+    border-radius: 4px 0 0 4px;
+  }
+
+  .stat-card .sc-icon {
+    width: 2.1rem;
+    height: 2.1rem;
+    background: var(--sc-soft, rgba(13, 110, 253, .10));
+    color: var(--sc-color, #0d6efd);
+    border-radius: .55rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: .9rem;
+    flex-shrink: 0;
+  }
+
+  .stat-card .sc-label {
+    font-size: .68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #6c7a8d;
+    margin-bottom: .1rem;
+  }
+
+  .stat-card .sc-value {
+    font-size: 1.55rem;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--bs-emphasis-color);
+  }
+
+  .stat-card .sc-sub {
+    display: flex;
+    gap: .6rem;
+    margin-top: .3rem;
+    flex-wrap: wrap;
+  }
+
+  .sc-sub-item {
+    display: inline-flex;
+    flex-direction: column;
+  }
+
+  .sc-sub-label {
+    font-size: .6rem;
+    color: #9aa5b4;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+  }
+
+  .sc-sub-value {
+    font-size: .8rem;
+    font-weight: 700;
+    color: var(--sc-color, #0d6efd);
+  }
 
   .cats-card {
     overflow: hidden;
@@ -90,9 +177,33 @@
     padding: 0.2rem;
   }
 
-  .stats-panel-header { display:flex; align-items:center; gap:.5rem; margin-bottom:.4rem; font-size:.75rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#3d5080; }
-  .stats-panel-note { border:1px solid rgba(13,110,253,.10); border-left:4px solid #0d6efd; border-radius:.6rem; background:rgba(13,110,253,.04); color:#5d6b82; font-size:.8rem; padding:.45rem .75rem; margin-bottom:.85rem; }
-  .stats-panels-separator { border-top:1px dashed rgba(15,23,42,.12); margin:.5rem 0 1rem; }
+  .stats-panel-header {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin-bottom: .4rem;
+    font-size: .75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: #3d5080;
+  }
+
+  .stats-panel-note {
+    border: 1px solid rgba(13, 110, 253, .10);
+    border-left: 4px solid #0d6efd;
+    border-radius: .6rem;
+    background: rgba(13, 110, 253, .04);
+    color: #5d6b82;
+    font-size: .8rem;
+    padding: .45rem .75rem;
+    margin-bottom: .85rem;
+  }
+
+  .stats-panels-separator {
+    border-top: 1px dashed rgba(15, 23, 42, .12);
+    margin: .5rem 0 1rem;
+  }
 
   .vigencia-filter-notice {
     display: flex;
@@ -106,6 +217,7 @@
     padding: 0.85rem 1rem;
     margin-bottom: 1rem;
   }
+
   .vigencia-filter-notice-title {
     display: flex;
     align-items: center;
@@ -113,37 +225,44 @@
     font-weight: 700;
     margin-bottom: 0.15rem;
   }
+
   .vigencia-filter-notice-text {
     font-size: 0.88rem;
     color: var(--bs-secondary-color);
   }
+
   .vigencia-filter-badge {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
     border-radius: 999px;
-    background: rgba(255,255,255,0.72);
-    border: 1px solid rgba(13,202,240,0.3);
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid rgba(13, 202, 240, 0.3);
     padding: 0.35rem 0.6rem;
     font-family: var(--bs-font-monospace);
     font-size: 0.82rem;
     color: var(--bs-emphasis-color);
   }
+
   @media (max-width: 767.98px) {
-    .vigencia-filter-notice { flex-direction: column; align-items: stretch; }
+    .vigencia-filter-notice {
+      flex-direction: column;
+      align-items: stretch;
+    }
   }
-
-
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="cats-list-page">
-  {% call page_hero(title=page_title, subtitle='Comunicações de Acidente de Trabalho extraídas dos relatórios de contestação do FAP', icon='bi bi-exclamation-triangle') %}
+  {% call page_hero(title=page_title, subtitle='Comunicações de Acidente de Trabalho extraídas dos relatórios de
+  contestação do FAP', icon='bi bi-exclamation-triangle') %}
   <nav aria-label="breadcrumb">
     <ol class="breadcrumb mb-0 bg-transparent small">
-      <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
-      <li class="breadcrumb-item"><a href="{{ url_for('disputes_center.list_disputes_center') }}">Painel de Contestações</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a>
+      </li>
+      <li class="breadcrumb-item"><a href="{{ url_for('disputes_center.list_disputes_center') }}">Painel de
+          Contestações</a></li>
       <li class="breadcrumb-item active" aria-current="page">CATs</li>
     </ol>
   </nav>
@@ -189,8 +308,10 @@
         </div>
         <div class="sc-value">{{ first_instance_stats.approved }}</div>
         <div class="sc-sub">
-          <span class="sc-sub-item"><span class="sc-sub-label">1ª inst.</span><span class="sc-sub-value">{{ first_instance_stats.approved }}</span></span>
-          <span class="sc-sub-item"><span class="sc-sub-label">2ª inst.</span><span class="sc-sub-value">{{ second_instance_stats.approved }}</span></span>
+          <span class="sc-sub-item"><span class="sc-sub-label">1ª inst.</span><span class="sc-sub-value">{{
+              first_instance_stats.approved }}</span></span>
+          <span class="sc-sub-item"><span class="sc-sub-label">2ª inst.</span><span class="sc-sub-value">{{
+              second_instance_stats.approved }}</span></span>
         </div>
       </div>
       <div class="stat-card" style="--sc-color:#dc3545;--sc-soft:rgba(220,53,69,.10);">
@@ -200,8 +321,10 @@
         </div>
         <div class="sc-value">{{ first_instance_stats.rejected }}</div>
         <div class="sc-sub">
-          <span class="sc-sub-item"><span class="sc-sub-label">1ª inst.</span><span class="sc-sub-value">{{ first_instance_stats.rejected }}</span></span>
-          <span class="sc-sub-item"><span class="sc-sub-label">2ª inst.</span><span class="sc-sub-value">{{ second_instance_stats.rejected }}</span></span>
+          <span class="sc-sub-item"><span class="sc-sub-label">1ª inst.</span><span class="sc-sub-value">{{
+              first_instance_stats.rejected }}</span></span>
+          <span class="sc-sub-item"><span class="sc-sub-label">2ª inst.</span><span class="sc-sub-value">{{
+              second_instance_stats.rejected }}</span></span>
         </div>
       </div>
       <div class="stat-card" style="--sc-color:#f59e0b;--sc-soft:rgba(245,158,11,.10);">
@@ -211,8 +334,10 @@
         </div>
         <div class="sc-value">{{ first_instance_stats.analyzing }}</div>
         <div class="sc-sub">
-          <span class="sc-sub-item"><span class="sc-sub-label">1ª inst.</span><span class="sc-sub-value">{{ first_instance_stats.analyzing }}</span></span>
-          <span class="sc-sub-item"><span class="sc-sub-label">2ª inst.</span><span class="sc-sub-value">{{ second_instance_stats.analyzing }}</span></span>
+          <span class="sc-sub-item"><span class="sc-sub-label">1ª inst.</span><span class="sc-sub-value">{{
+              first_instance_stats.analyzing }}</span></span>
+          <span class="sc-sub-item"><span class="sc-sub-label">2ª inst.</span><span class="sc-sub-value">{{
+              second_instance_stats.analyzing }}</span></span>
         </div>
       </div>
       <div class="stat-card" style="--sc-color:#6c757d;--sc-soft:rgba(108,117,125,.10);">
@@ -282,6 +407,14 @@
               <h5 class="card-title mb-0 fw-semibold">
                 <i class="bi bi-list-ul me-2 text-primary"></i>CATs cadastradas
               </h5>
+              <div class="d-flex flex-wrap gap-2">
+                <span class="badge bg-info align-self-center px-3 py-2">{{ total_count|default(0) }} registro{{ 's' if
+                  total_count|default(0) != 1 else '' }}</span>
+                <button id="exportCatsBtn" type="button" class="btn btn-outline-success btn-sm"
+                  data-tooltip="Exportar resultado filtrado para Excel" data-bs-placement="top">
+                  <i class="bi bi-file-earmark-excel me-1"></i>Exportar Excel
+                </button>
+              </div>
             </div>
           </div>
           <div class="card-body pt-0">
@@ -290,8 +423,7 @@
             <div class="filters-card p-3 mb-3">
 
               {% set _vf = current_vigencia_filter %}
-              <div id="vigenciaFilterNotice"
-                class="vigencia-filter-notice {{ 'd-none' if not _vf else '' }}"
+              <div id="vigenciaFilterNotice" class="vigencia-filter-notice {{ 'd-none' if not _vf else '' }}"
                 data-vigencia-label="{% if _vf %}Vigência {{ _vf.year }}{% if _vf.company_name %} - {{ _vf.company_name }}{% elif _vf.company_cnpj %} - {{ _vf.company_cnpj }}{% endif %}{% endif %}">
                 <div>
                   <div class="vigencia-filter-notice-title">
@@ -300,7 +432,9 @@
                   </div>
                   <div class="vigencia-filter-notice-text">
                     A listagem abaixo está restrita às CATs vinculadas à vigência selecionada.
-                    <span class="vigencia-filter-badge ms-1">{% if _vf %}Vigência {{ _vf.year }}{% if _vf.company_name %} - {{ _vf.company_name }}{% elif _vf.company_cnpj %} - {{ _vf.company_cnpj }}{% endif %}{% endif %}</span>
+                    <span class="vigencia-filter-badge ms-1">{% if _vf %}Vigência {{ _vf.year }}{% if _vf.company_name
+                      %} - {{ _vf.company_name }}{% elif _vf.company_cnpj %} - {{ _vf.company_cnpj }}{% endif %}{% endif
+                      %}</span>
                   </div>
                 </div>
                 <div class="d-flex flex-wrap gap-2">
@@ -536,265 +670,313 @@
 <script>
   $(document).ready(function () {
     const apiUrl = "{{ url_for('disputes_center.list_cats_api') }}";
+    const exportUrl = "{{ url_for('disputes_center.export_cats_excel') }}";
     const filters = [];
-    const cnpjByRoot = {{ cnpj_by_root | tojson }};
-    const initialCnpjFilter = "{{ initial_cnpj | default('') | e }}";
-    const initialVigenciaId = (new URLSearchParams(window.location.search).get('vigencia_id') || '').trim();
+    const cnpjByRoot = {{ cnpj_by_root | tojson
+  }};
+  const initialCnpjFilter = "{{ initial_cnpj | default('') | e }}";
+  const initialVigenciaId = (new URLSearchParams(window.location.search).get('vigencia_id') || '').trim();
 
-    function clearVigenciaFilterFromUrl() {
-      const nextUrl = new URL(window.location.href);
-      nextUrl.searchParams.delete('vigencia_id');
-      window.location.href = nextUrl.toString();
+  function clearVigenciaFilterFromUrl() {
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.delete('vigencia_id');
+    window.location.href = nextUrl.toString();
+  }
+
+  const fieldLabelMap = {
+    cat_number: 'Número da CAT',
+    employer_cnpj: 'CNPJ Empregador (CAT)',
+    employer_cnpj_assigned: 'CNPJ Empregador Atribuído',
+    insured_nit: 'NIT Segurado',
+    cat_block: 'Bloqueio',
+    status: 'Status geral',
+    first_instance_status: 'Status 1ª instância',
+    first_instance_status_raw: 'Texto status 1ª instância',
+    second_instance_status: 'Status 2ª instância',
+    second_instance_status_raw: 'Texto status 2ª instância',
+  };
+
+  const operatorLabelMap = {
+    contains: 'contém',
+    equals: 'igual a',
+    starts_with: 'começa com',
+    ends_with: 'termina com',
+    empty: 'está vazio',
+    not_empty: 'não está vazio',
+  };
+
+  const STATUS_SELECT_OPTIONS = {
+    status: [
+      { value: 'deferido', label: 'Deferido' },
+      { value: 'indeferido', label: 'Indeferido' },
+      { value: 'analyzing', label: 'Em análise' },
+      { value: 'pending', label: 'Pendente' },
+    ],
+    first_instance_status: [
+      { value: 'deferido', label: 'Deferido' },
+      { value: 'indeferido', label: 'Indeferido' },
+      { value: 'analyzing', label: 'Em análise' },
+      { value: 'pending', label: 'Pendente' },
+    ],
+    second_instance_status: [
+      { value: 'deferido', label: 'Deferido' },
+      { value: 'indeferido', label: 'Indeferido' },
+      { value: 'analyzing', label: 'Em análise' },
+      { value: 'pending', label: 'Pendente' },
+    ],
+  };
+
+  function isStatusSelectField(field) {
+    return Object.prototype.hasOwnProperty.call(STATUS_SELECT_OPTIONS, String(field || '').trim());
+  }
+
+  function getStatusOptionLabel(field, value) {
+    const options = STATUS_SELECT_OPTIONS[String(field || '').trim()] || [];
+    const normalizedValue = String(value || '').trim().toLowerCase();
+    const found = options.find(function (item) { return item.value.toLowerCase() === normalizedValue; });
+    return found ? found.label : String(value || '').trim();
+  }
+
+  function populateCatStatusFilterSelect(field) {
+    const select = $('#catFilterValueSelect');
+    select.empty().append('<option value="">Selecione um status</option>');
+    (STATUS_SELECT_OPTIONS[String(field || '').trim()] || []).forEach(function (option) {
+      select.append(`<option value="${option.value}">${option.label}</option>`);
+    });
+  }
+
+  function escapeHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function encodeMultilineAttr(value) {
+    return escapeHtml(value).replace(/\n/g, '&#10;');
+  }
+
+  function needsValue(operator) {
+    return operator !== 'empty' && operator !== 'not_empty';
+  }
+
+  function instanceStatusBadge(status) {
+    const s = String(status || '').trim().toLowerCase();
+    if (s === 'deferido') {
+      return '<span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2">Deferido</span>';
     }
+    if (s === 'indeferido') {
+      return '<span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2">Indeferido</span>';
+    }
+    if (s === 'analyzing') {
+      return '<span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2">Em análise</span>';
+    }
+    if (s === 'pending') {
+      return '<span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3 py-2">Pendente</span>';
+    }
+    return '<span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3 py-2">-</span>';
+  }
 
-    const fieldLabelMap = {
-      cat_number: 'Número da CAT',
-      employer_cnpj: 'CNPJ Empregador (CAT)',
-      employer_cnpj_assigned: 'CNPJ Empregador Atribuído',
-      insured_nit: 'NIT Segurado',
-      cat_block: 'Bloqueio',
-      status: 'Status geral',
-      first_instance_status: 'Status 1ª instância',
-      first_instance_status_raw: 'Texto status 1ª instância',
-      second_instance_status: 'Status 2ª instância',
-      second_instance_status_raw: 'Texto status 2ª instância',
+  function updateFilteredStats(stats) {
+    const s = stats || {};
+    $('#filteredTotalCount').text(s.total ?? 0);
+    $('#filteredApprovedCount').text(s.approved ?? 0);
+    $('#filteredRejectedCount').text(s.rejected ?? 0);
+    $('#filteredInReviewCount').text(s.in_review ?? 0);
+    $('#filteredPendingCount').text(s.pending ?? 0);
+  }
+
+  function exportFilteredCatsToExcel() {
+    const order = table.order() || [[0, 'desc']];
+    const payload = {
+      search: table.search(),
+      order_column: order[0][0],
+      order_dir: order[0][1],
+      filters: filters.map((filter) => ({
+        field: filter.field,
+        operator: filter.operator,
+        value: filter.value,
+      })),
+      quick_client: ($('#quickEmployerFilter').val() || '').trim(),
+      quick_root: ($('#quickRootCnpjFilter').val() || '').trim(),
+      quick_cnpj: ($('#quickCnpjFilter').val() || '').trim(),
+      vigencia_id: initialVigenciaId,
     };
 
-    const operatorLabelMap = {
-      contains: 'contém',
-      equals: 'igual a',
-      starts_with: 'começa com',
-      ends_with: 'termina com',
-      empty: 'está vazio',
-      not_empty: 'não está vazio',
-    };
-
-    const STATUS_SELECT_OPTIONS = {
-      status: [
-        { value: 'deferido', label: 'Deferido' },
-        { value: 'indeferido', label: 'Indeferido' },
-        { value: 'analyzing', label: 'Em análise' },
-        { value: 'pending', label: 'Pendente' },
-      ],
-      first_instance_status: [
-        { value: 'deferido', label: 'Deferido' },
-        { value: 'indeferido', label: 'Indeferido' },
-        { value: 'analyzing', label: 'Em análise' },
-        { value: 'pending', label: 'Pendente' },
-      ],
-      second_instance_status: [
-        { value: 'deferido', label: 'Deferido' },
-        { value: 'indeferido', label: 'Indeferido' },
-        { value: 'analyzing', label: 'Em análise' },
-        { value: 'pending', label: 'Pendente' },
-      ],
-    };
-
-    function isStatusSelectField(field) {
-      return Object.prototype.hasOwnProperty.call(STATUS_SELECT_OPTIONS, String(field || '').trim());
-    }
-
-    function getStatusOptionLabel(field, value) {
-      const options = STATUS_SELECT_OPTIONS[String(field || '').trim()] || [];
-      const normalizedValue = String(value || '').trim().toLowerCase();
-      const found = options.find(function (item) { return item.value.toLowerCase() === normalizedValue; });
-      return found ? found.label : String(value || '').trim();
-    }
-
-    function populateCatStatusFilterSelect(field) {
-      const select = $('#catFilterValueSelect');
-      select.empty().append('<option value="">Selecione um status</option>');
-      (STATUS_SELECT_OPTIONS[String(field || '').trim()] || []).forEach(function (option) {
-        select.append(`<option value="${option.value}">${option.label}</option>`);
+    fetch(exportUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error('Falha ao gerar o arquivo de exportação.');
+        }
+        const disposition = response.headers.get('Content-Disposition') || '';
+        const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
+        const filename = filenameMatch ? filenameMatch[1] : 'cats.xlsx';
+        return response.blob().then((blob) => ({ blob, filename }));
+      })
+      .then(({ blob, filename }) => {
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      })
+      .catch((error) => {
+        alert(error.message || 'Erro inesperado ao exportar.');
       });
-    }
+  }
 
-    function escapeHtml(value) {
-      return String(value || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-    }
-
-    function encodeMultilineAttr(value) {
-      return escapeHtml(value).replace(/\n/g, '&#10;');
-    }
-
-    function needsValue(operator) {
-      return operator !== 'empty' && operator !== 'not_empty';
-    }
-
-    function instanceStatusBadge(status) {
-      const s = String(status || '').trim().toLowerCase();
-      if (s === 'deferido') {
-        return '<span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2">Deferido</span>';
-      }
-      if (s === 'indeferido') {
-        return '<span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2">Indeferido</span>';
-      }
-      if (s === 'analyzing') {
-        return '<span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2">Em análise</span>';
-      }
-      if (s === 'pending') {
-        return '<span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3 py-2">Pendente</span>';
-      }
-      return '<span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3 py-2">-</span>';
-    }
-
-    function updateFilteredStats(stats) {
-      const s = stats || {};
-      $('#filteredTotalCount').text(s.total ?? 0);
-      $('#filteredApprovedCount').text(s.approved ?? 0);
-      $('#filteredRejectedCount').text(s.rejected ?? 0);
-      $('#filteredInReviewCount').text(s.in_review ?? 0);
-      $('#filteredPendingCount').text(s.pending ?? 0);
-    }
-
-    const table = $('#catsTable').DataTable({
-      processing: true,
-      serverSide: true,
-      searchDelay: 350,
-      deferRender: true,
-      ajax: {
-        url: apiUrl,
-        type: 'GET',
-        data: function (d) {
-          d.custom_filters = JSON.stringify(filters.map(f => ({
-            field: f.field,
-            operator: f.operator,
-            value: f.value,
-          })));
-          d.quick_client = ($('#quickEmployerFilter').val() || '').trim();
-          d.quick_root = ($('#quickRootCnpjFilter').val() || '').trim();
-          d.quick_cnpj = ($('#quickCnpjFilter').val() || '').trim();
-          if (initialVigenciaId) d.vigencia_id = initialVigenciaId;
-        },
-        dataSrc: function (json) {
-          updateFilteredStats(json.filtered_stats);
-          return json.data || [];
+  const table = $('#catsTable').DataTable({
+    processing: true,
+    serverSide: true,
+    searchDelay: 350,
+    deferRender: true,
+    ajax: {
+      url: apiUrl,
+      type: 'GET',
+      data: function (d) {
+        d.custom_filters = JSON.stringify(filters.map(f => ({
+          field: f.field,
+          operator: f.operator,
+          value: f.value,
+        })));
+        d.quick_client = ($('#quickEmployerFilter').val() || '').trim();
+        d.quick_root = ($('#quickRootCnpjFilter').val() || '').trim();
+        d.quick_cnpj = ($('#quickCnpjFilter').val() || '').trim();
+        if (initialVigenciaId) d.vigencia_id = initialVigenciaId;
+      },
+      dataSrc: function (json) {
+        updateFilteredStats(json.filtered_stats);
+        return json.data || [];
+      },
+    },
+    language: { url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json' },
+    pageLength: 25,
+    order: [[0, 'desc']],
+    columnDefs: [{ orderable: false, targets: 9 }],
+    columns: [
+      {
+        data: 'id',
+        render: function (data) {
+          return `<strong>${data}</strong>`;
         },
       },
-      language: { url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json' },
-      pageLength: 25,
-      order: [[0, 'desc']],
-      columnDefs: [{ orderable: false, targets: 9 }],
-      columns: [
-        {
-          data: 'id',
-          render: function (data) {
-            return `<strong>${data}</strong>`;
-          },
+      {
+        data: null,
+        render: function (_, __, row) {
+          const cat = row.cat_number
+            ? `<span class="cat-number-pill fw-bold text-primary">${escapeHtml(row.cat_number)}</span>`
+            : '<span class="text-muted">—</span>';
+          return `<div>${cat}</div>`;
         },
-        {
-          data: null,
-          render: function (_, __, row) {
-            const cat = row.cat_number
-              ? `<span class="cat-number-pill fw-bold text-primary">${escapeHtml(row.cat_number)}</span>`
-              : '<span class="text-muted">—</span>';
-            return `<div>${cat}</div>`;
-          },
+      },
+      {
+        data: 'vigencia_year',
+        render: function (data) {
+          return data
+            ? `<span class="badge rounded-pill" style="background:rgba(15,95,215,.12);color:#0b4cb3;font-weight:700;">${escapeHtml(data)}</span>`
+            : '<span class="text-muted">—</span>';
         },
-        {
-          data: 'vigencia_year',
-          render: function (data) {
-            return data
-              ? `<span class="badge rounded-pill" style="background:rgba(15,95,215,.12);color:#0b4cb3;font-weight:700;">${escapeHtml(data)}</span>`
-              : '<span class="text-muted">—</span>';
-          },
+      },
+      {
+        data: null,
+        render: function (_, __, row) {
+          const cnpj = row.employer_cnpj ? `<span class="font-monospace">${escapeHtml(row.employer_cnpj)}</span>` : '<span class="text-muted">-</span>';
+          const name = row.employer_name ? `<small class="text-muted">${escapeHtml(row.employer_name)}</small>` : '<small class="text-muted">Não informado</small>';
+          const cnpjAssigned = row.employer_cnpj_assigned
+            ? `<small class="font-monospace text-muted d-block">Atrib.: ${escapeHtml(row.employer_cnpj_assigned)}</small>`
+            : '';
+          return `<div class="d-flex flex-column gap-1">${cnpj}${name}${cnpjAssigned}</div>`;
         },
-        {
-          data: null,
-          render: function (_, __, row) {
-            const cnpj = row.employer_cnpj ? `<span class="font-monospace">${escapeHtml(row.employer_cnpj)}</span>` : '<span class="text-muted">-</span>';
-            const name = row.employer_name ? `<small class="text-muted">${escapeHtml(row.employer_name)}</small>` : '<small class="text-muted">Não informado</small>';
-            const cnpjAssigned = row.employer_cnpj_assigned
-              ? `<small class="font-monospace text-muted d-block">Atrib.: ${escapeHtml(row.employer_cnpj_assigned)}</small>`
-              : '';
-            return `<div class="d-flex flex-column gap-1">${cnpj}${name}${cnpjAssigned}</div>`;
-          },
+      },
+      {
+        data: null,
+        render: function (_, __, row) {
+          const nit = row.insured_nit
+            ? `<span class="font-monospace small">NIT: ${escapeHtml(row.insured_nit)}</span>`
+            : '<span class="text-muted small">—</span>';
+          const birth = row.insured_date_of_birth
+            ? `<small class="text-muted">Nasc.: ${escapeHtml(row.insured_date_of_birth)}</small>`
+            : '';
+          const death = row.insured_death_date
+            ? `<small class="text-danger">Óbito: ${escapeHtml(row.insured_death_date)}</small>`
+            : '';
+          return `<div class="d-flex flex-column gap-1">${nit}${birth}${death}</div>`;
         },
-        {
-          data: null,
-          render: function (_, __, row) {
-            const nit = row.insured_nit
-              ? `<span class="font-monospace small">NIT: ${escapeHtml(row.insured_nit)}</span>`
-              : '<span class="text-muted small">—</span>';
-            const birth = row.insured_date_of_birth
-              ? `<small class="text-muted">Nasc.: ${escapeHtml(row.insured_date_of_birth)}</small>`
-              : '';
-            const death = row.insured_death_date
-              ? `<small class="text-danger">Óbito: ${escapeHtml(row.insured_death_date)}</small>`
-              : '';
-            return `<div class="d-flex flex-column gap-1">${nit}${birth}${death}</div>`;
-          },
+      },
+      {
+        data: null,
+        render: function (_, __, row) {
+          const acc = row.accident_date
+            ? `<span class="small">Acidente: <strong>${escapeHtml(row.accident_date)}</strong></span>`
+            : '<span class="text-muted small">—</span>';
+          const reg = row.cat_registration_date
+            ? `<small class="text-muted">Cadastro CAT: ${escapeHtml(row.cat_registration_date)}</small>`
+            : '';
+          return `<div class="d-flex flex-column gap-1">${acc}${reg}</div>`;
         },
-        {
-          data: null,
-          render: function (_, __, row) {
-            const acc = row.accident_date
-              ? `<span class="small">Acidente: <strong>${escapeHtml(row.accident_date)}</strong></span>`
-              : '<span class="text-muted small">—</span>';
-            const reg = row.cat_registration_date
-              ? `<small class="text-muted">Cadastro CAT: ${escapeHtml(row.cat_registration_date)}</small>`
-              : '';
-            return `<div class="d-flex flex-column gap-1">${acc}${reg}</div>`;
-          },
+      },
+      {
+        data: null,
+        className: 'text-center',
+        render: function (_, __, row) {
+          const s1 = String(row.first_instance_status || '').trim().toLowerCase();
+          const known = ['deferido', 'indeferido', 'analyzing'];
+          const badge = instanceStatusBadge(known.includes(s1) ? s1 : 'pending');
+          const raw = (row.first_instance_status_raw || '').trim();
+          const rawHtml = raw
+            ? `<div class="text-muted" style="font-size:0.72rem;margin-top:0.3rem;line-height:1.2;">${escapeHtml(raw)}</div>`
+            : '';
+          return badge + rawHtml;
         },
-        {
-          data: null,
-          className: 'text-center',
-          render: function (_, __, row) {
-            const s1 = String(row.first_instance_status || '').trim().toLowerCase();
-            const known = ['deferido', 'indeferido', 'analyzing'];
-            const badge = instanceStatusBadge(known.includes(s1) ? s1 : 'pending');
-            const raw = (row.first_instance_status_raw || '').trim();
-            const rawHtml = raw
-              ? `<div class="text-muted" style="font-size:0.72rem;margin-top:0.3rem;line-height:1.2;">${escapeHtml(raw)}</div>`
-              : '';
-            return badge + rawHtml;
-          },
+      },
+      {
+        data: null,
+        className: 'text-center',
+        render: function (_, __, row) {
+          const s2 = String(row.second_instance_status || '').trim().toLowerCase();
+          const s1 = String(row.first_instance_status || '').trim().toLowerCase();
+          const known = ['deferido', 'indeferido', 'analyzing'];
+          const effectiveS2 = known.includes(s2) ? s2 : (!['deferido', 'analyzing'].includes(s1) ? 'pending' : '');
+          const badge = instanceStatusBadge(effectiveS2);
+          const raw = (row.second_instance_status_raw || '').trim();
+          const rawHtml = raw
+            ? `<div class="text-muted" style="font-size:0.72rem;margin-top:0.3rem;line-height:1.2;">${escapeHtml(raw)}</div>`
+            : '';
+          return badge + rawHtml;
         },
-        {
-          data: null,
-          className: 'text-center',
-          render: function (_, __, row) {
-            const s2 = String(row.second_instance_status || '').trim().toLowerCase();
-            const s1 = String(row.first_instance_status || '').trim().toLowerCase();
-            const known = ['deferido', 'indeferido', 'analyzing'];
-            const effectiveS2 = known.includes(s2) ? s2 : (!['deferido', 'analyzing'].includes(s1) ? 'pending' : '');
-            const badge = instanceStatusBadge(effectiveS2);
-            const raw = (row.second_instance_status_raw || '').trim();
-            const rawHtml = raw
-              ? `<div class="text-muted" style="font-size:0.72rem;margin-top:0.3rem;line-height:1.2;">${escapeHtml(raw)}</div>`
-              : '';
-            return badge + rawHtml;
-          },
+      },
+      {
+        data: 'cat_block',
+        className: 'text-center',
+        render: function (data) {
+          const v = (data || '').trim().toLowerCase();
+          if (v === 'sim') {
+            return '<span class="badge bg-danger-subtle text-danger-emphasis border border-danger-subtle">Sim</span>';
+          }
+          if (v === 'não' || v === 'nao') {
+            return '<span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">Não</span>';
+          }
+          return data ? `<span class="badge bg-secondary-subtle text-secondary-emphasis">${escapeHtml(data)}</span>` : '<span class="text-muted">—</span>';
         },
-        {
-          data: 'cat_block',
-          className: 'text-center',
-          render: function (data) {
-            const v = (data || '').trim().toLowerCase();
-            if (v === 'sim') {
-              return '<span class="badge bg-danger-subtle text-danger-emphasis border border-danger-subtle">Sim</span>';
-            }
-            if (v === 'não' || v === 'nao') {
-              return '<span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">Não</span>';
-            }
-            return data ? `<span class="badge bg-secondary-subtle text-secondary-emphasis">${escapeHtml(data)}</span>` : '<span class="text-muted">—</span>';
-          },
-        },
-        {
-          data: null,
-          className: 'text-center',
-          render: function (_, __, row) {
-            const firstJustification = encodeMultilineAttr(row.first_instance_justification || '');
-            const firstOpinion = encodeMultilineAttr(row.first_instance_opinion || '');
-            const secondJustification = encodeMultilineAttr(row.second_instance_justification || '');
-            const secondOpinion = encodeMultilineAttr(row.second_instance_opinion || '');
-            return `
+      },
+      {
+        data: null,
+        className: 'text-center',
+        render: function (_, __, row) {
+          const firstJustification = encodeMultilineAttr(row.first_instance_justification || '');
+          const firstOpinion = encodeMultilineAttr(row.first_instance_opinion || '');
+          const secondJustification = encodeMultilineAttr(row.second_instance_justification || '');
+          const secondOpinion = encodeMultilineAttr(row.second_instance_opinion || '');
+          return `
               <div class="d-flex gap-2 justify-content-center">
                 <button type="button" class="btn btn-sm btn-outline-primary"
                   data-bs-toggle="modal" data-bs-target="#catDecisionModal"
@@ -827,252 +1009,256 @@
                   <i class="bi bi-file-earmark-text"></i>
                 </a>
               </div>`;
-          },
         },
-      ],
-      drawCallback: function () {
-        document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function (el) {
-          if (!bootstrap.Tooltip.getInstance(el)) new bootstrap.Tooltip(el);
-        });
       },
-    });
+    ],
+    drawCallback: function () {
+      document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function (el) {
+        if (!bootstrap.Tooltip.getInstance(el)) new bootstrap.Tooltip(el);
+      });
+    },
+  });
 
-    // Filtros
-    function updateCatOperatorOptions() {
-      const field = $('#catFilterField').val();
-      const operatorSelect = $('#catFilterOperator');
-      const currentOp = operatorSelect.val();
-      if (isStatusSelectField(field)) {
-        operatorSelect.empty().append('<option value="equals">igual a</option>');
-      } else if (operatorSelect.find('option').length <= 1) {
-        operatorSelect.empty()
-          .append('<option value="contains">contém</option>')
-          .append('<option value="equals">igual a</option>')
-          .append('<option value="starts_with">começa com</option>')
-          .append('<option value="ends_with">termina com</option>')
-          .append('<option value="empty">está vazio</option>')
-          .append('<option value="not_empty">não está vazio</option>');
-        operatorSelect.val(currentOp || 'contains');
-      }
-      operatorSelect.trigger('change');
+  // Filtros
+  function updateCatOperatorOptions() {
+    const field = $('#catFilterField').val();
+    const operatorSelect = $('#catFilterOperator');
+    const currentOp = operatorSelect.val();
+    if (isStatusSelectField(field)) {
+      operatorSelect.empty().append('<option value="equals">igual a</option>');
+    } else if (operatorSelect.find('option').length <= 1) {
+      operatorSelect.empty()
+        .append('<option value="contains">contém</option>')
+        .append('<option value="equals">igual a</option>')
+        .append('<option value="starts_with">começa com</option>')
+        .append('<option value="ends_with">termina com</option>')
+        .append('<option value="empty">está vazio</option>')
+        .append('<option value="not_empty">não está vazio</option>');
+      operatorSelect.val(currentOp || 'contains');
     }
+    operatorSelect.trigger('change');
+  }
 
-    function updateCatFilterValueInputMask() {
-      const field = $('#catFilterField').val();
-      if (isStatusSelectField(field)) {
-        populateCatStatusFilterSelect(field);
-        $('#catFilterValue').addClass('d-none');
-        $('#catFilterValueSelect').removeClass('d-none');
-      } else {
-        $('#catFilterValueSelect').addClass('d-none');
-        $('#catFilterValue').removeClass('d-none').attr('placeholder', 'Digite um valor');
-      }
+  function updateCatFilterValueInputMask() {
+    const field = $('#catFilterField').val();
+    if (isStatusSelectField(field)) {
+      populateCatStatusFilterSelect(field);
+      $('#catFilterValue').addClass('d-none');
+      $('#catFilterValueSelect').removeClass('d-none');
+    } else {
+      $('#catFilterValueSelect').addClass('d-none');
+      $('#catFilterValue').removeClass('d-none').attr('placeholder', 'Digite um valor');
     }
+  }
 
-    $('#catFilterField').on('change', function () {
-      updateCatOperatorOptions();
-      updateCatFilterValueInputMask();
-    });
+  $('#catFilterField').on('change', function () {
+    updateCatOperatorOptions();
+    updateCatFilterValueInputMask();
+  });
 
-    $('#catFilterOperator').on('change', function () {
-      const op = $(this).val();
-      const mustHave = needsValue(op);
-      $('#catFilterValue').prop('disabled', !mustHave);
-      $('#catFilterValueSelect').prop('disabled', !mustHave);
-      if (!mustHave) {
-        $('#catFilterValue').val('');
-        $('#catFilterValueSelect').val('');
-      }
-    });
-
-    $('#addCatFilterBtn').on('click', function () {
-      const field = $('#catFilterField').val();
-      const operator = $('#catFilterOperator').val();
-      const rawValue = isStatusSelectField(field) ? $('#catFilterValueSelect').val() : $('#catFilterValue').val();
-      const value = (rawValue || '').trim();
-
-      if (needsValue(operator) && !value) {
-        (isStatusSelectField(field) ? $('#catFilterValueSelect') : $('#catFilterValue')).focus();
-        return;
-      }
-
-      const displayValue = needsValue(operator)
-        ? ` "${isStatusSelectField(field) ? getStatusOptionLabel(field, value) : value}"`
-        : '';
-      const label = `${fieldLabelMap[field]} ${operatorLabelMap[operator]}${displayValue}`;
-
-      filters.push({ id: Date.now() + Math.random(), field, operator, value, label });
+  $('#catFilterOperator').on('change', function () {
+    const op = $(this).val();
+    const mustHave = needsValue(op);
+    $('#catFilterValue').prop('disabled', !mustHave);
+    $('#catFilterValueSelect').prop('disabled', !mustHave);
+    if (!mustHave) {
       $('#catFilterValue').val('');
       $('#catFilterValueSelect').val('');
-      renderActiveFilters();
-      table.ajax.reload();
-    });
+    }
+  });
 
-    $('#clearCatFiltersBtn').on('click', function () {
-      filters.splice(0, filters.length);
-      $('#quickEmployerFilter').val('');
-      $('#quickRootCnpjFilter').val('');
+  $('#addCatFilterBtn').on('click', function () {
+    const field = $('#catFilterField').val();
+    const operator = $('#catFilterOperator').val();
+    const rawValue = isStatusSelectField(field) ? $('#catFilterValueSelect').val() : $('#catFilterValue').val();
+    const value = (rawValue || '').trim();
+
+    if (needsValue(operator) && !value) {
+      (isStatusSelectField(field) ? $('#catFilterValueSelect') : $('#catFilterValue')).focus();
+      return;
+    }
+
+    const displayValue = needsValue(operator)
+      ? ` "${isStatusSelectField(field) ? getStatusOptionLabel(field, value) : value}"`
+      : '';
+    const label = `${fieldLabelMap[field]} ${operatorLabelMap[operator]}${displayValue}`;
+
+    filters.push({ id: Date.now() + Math.random(), field, operator, value, label });
+    $('#catFilterValue').val('');
+    $('#catFilterValueSelect').val('');
+    renderActiveFilters();
+    table.ajax.reload();
+  });
+
+  $('#clearCatFiltersBtn').on('click', function () {
+    filters.splice(0, filters.length);
+    $('#quickEmployerFilter').val('');
+    $('#quickRootCnpjFilter').val('');
+    $('#quickCnpjFilter').val('').empty().append('<option value="">Todas as empresas</option>');
+    $('#quickCnpjFilterWrapper').hide();
+    $('#quickCnpjFilterSpacer').show();
+    renderActiveFilters();
+    table.search('');
+    table.ajax.reload();
+  });
+
+  $('#quickEmployerFilter').on('change', function () {
+    table.ajax.reload();
+  });
+
+  function populateCnpjFilter(root) {
+    const select = $('#quickCnpjFilter');
+    select.empty().append('<option value="">Todas as empresas</option>');
+    const items = cnpjByRoot[root] || [];
+    items.forEach(function (item) {
+      const label = item.company_name ? `${item.cnpj} — ${item.company_name}` : item.cnpj;
+      select.append(`<option value="${item.cnpj}">${label}</option>`);
+    });
+  }
+
+  $('#quickRootCnpjFilter').on('change', function () {
+    const root = $(this).val();
+    if (root) {
+      populateCnpjFilter(root);
+      $('#quickCnpjFilterWrapper').show();
+      $('#quickCnpjFilterSpacer').hide();
+    } else {
       $('#quickCnpjFilter').val('').empty().append('<option value="">Todas as empresas</option>');
       $('#quickCnpjFilterWrapper').hide();
       $('#quickCnpjFilterSpacer').show();
-      renderActiveFilters();
-      table.search('');
-      table.ajax.reload();
-    });
+    }
+    table.ajax.reload();
+  });
 
-    $('#quickEmployerFilter').on('change', function () {
-      table.ajax.reload();
-    });
+  $('#quickCnpjFilter').on('change', function () {
+    table.ajax.reload();
+  });
 
-    function populateCnpjFilter(root) {
-      const select = $('#quickCnpjFilter');
-      select.empty().append('<option value="">Todas as empresas</option>');
-      const items = cnpjByRoot[root] || [];
-      items.forEach(function (item) {
-        const label = item.company_name ? `${item.cnpj} — ${item.company_name}` : item.cnpj;
-        select.append(`<option value="${item.cnpj}">${label}</option>`);
-      });
+  function renderActiveFilters() {
+    const container = $('#activeCatFilters');
+    container.empty();
+
+    if (!filters.length) {
+      container.append('<span class="text-muted small">Nenhum filtro ativo.</span>');
+      return;
     }
 
-    $('#quickRootCnpjFilter').on('change', function () {
-      const root = $(this).val();
-      if (root) {
-        populateCnpjFilter(root);
-        $('#quickCnpjFilterWrapper').show();
-        $('#quickCnpjFilterSpacer').hide();
-      } else {
-        $('#quickCnpjFilter').val('').empty().append('<option value="">Todas as empresas</option>');
-        $('#quickCnpjFilterWrapper').hide();
-        $('#quickCnpjFilterSpacer').show();
-      }
-      table.ajax.reload();
-    });
-
-    $('#quickCnpjFilter').on('change', function () {
-      table.ajax.reload();
-    });
-
-    function renderActiveFilters() {
-      const container = $('#activeCatFilters');
-      container.empty();
-
-      if (!filters.length) {
-        container.append('<span class="text-muted small">Nenhum filtro ativo.</span>');
-        return;
-      }
-
-      filters.forEach(function (filter) {
-        const chip = $(`
+    filters.forEach(function (filter) {
+      const chip = $(`
           <span class="filter-chip">
             <span>${filter.label}</span>
             <button type="button" class="btn-close btn-close-black remove-filter" aria-label="Remover"></button>
           </span>`);
 
-        chip.find('.remove-filter').on('click', function () {
-          const idx = filters.findIndex(f => f.id === filter.id);
-          if (idx >= 0) {
-            filters.splice(idx, 1);
-            renderActiveFilters();
-            table.ajax.reload();
-          }
-        });
-
-        container.append(chip);
-      });
-    }
-
-    $('#clearVigenciaFilterBtn').on('click', function () {
-      clearVigenciaFilterFromUrl();
-    });
-
-    // Pré-filtragem por CNPJ (vinda de link externo)
-    if (initialCnpjFilter) {
-      const root = initialCnpjFilter.substring(0, 8);
-      $('#quickRootCnpjFilter').val(root);
-      if (cnpjByRoot[root]) {
-        populateCnpjFilter(root);
-        $('#quickCnpjFilterWrapper').show();
-        $('#quickCnpjFilterSpacer').hide();
-        const items = cnpjByRoot[root] || [];
-        const match = items.find(function (item) {
-          return item.cnpj.replace(/\D/g, '') === initialCnpjFilter;
-        });
-        if (match) {
-          $('#quickCnpjFilter').val(match.cnpj);
+      chip.find('.remove-filter').on('click', function () {
+        const idx = filters.findIndex(f => f.id === filter.id);
+        if (idx >= 0) {
+          filters.splice(idx, 1);
+          renderActiveFilters();
+          table.ajax.reload();
         }
+      });
+
+      container.append(chip);
+    });
+  }
+
+  $('#clearVigenciaFilterBtn').on('click', function () {
+    clearVigenciaFilterFromUrl();
+  });
+
+  $('#exportCatsBtn').on('click', function () {
+    exportFilteredCatsToExcel();
+  });
+
+  // Pré-filtragem por CNPJ (vinda de link externo)
+  if (initialCnpjFilter) {
+    const root = initialCnpjFilter.substring(0, 8);
+    $('#quickRootCnpjFilter').val(root);
+    if (cnpjByRoot[root]) {
+      populateCnpjFilter(root);
+      $('#quickCnpjFilterWrapper').show();
+      $('#quickCnpjFilterSpacer').hide();
+      const items = cnpjByRoot[root] || [];
+      const match = items.find(function (item) {
+        return item.cnpj.replace(/\D/g, '') === initialCnpjFilter;
+      });
+      if (match) {
+        $('#quickCnpjFilter').val(match.cnpj);
       }
     }
+  }
 
-    // Inicializa painel filtrado
-    updateCatOperatorOptions();
-    updateCatFilterValueInputMask();
-    $('#catFilterOperator').trigger('change');
-    table.ajax.reload();
+  // Inicializa painel filtrado
+  updateCatOperatorOptions();
+  updateCatFilterValueInputMask();
+  $('#catFilterOperator').trigger('change');
+  table.ajax.reload();
 
-    // Modal de decisões
-    const catDecisionModal = document.getElementById('catDecisionModal');
-    if (catDecisionModal) {
-      catDecisionModal.addEventListener('show.bs.modal', function (event) {
-        const btn = event.relatedTarget;
-        if (!btn) return;
+  // Modal de decisões
+  const catDecisionModal = document.getElementById('catDecisionModal');
+  if (catDecisionModal) {
+    catDecisionModal.addEventListener('show.bs.modal', function (event) {
+      const btn = event.relatedTarget;
+      if (!btn) return;
 
-        const catNumber = btn.getAttribute('data-cat-number') || '';
-        const firstStatus = btn.getAttribute('data-first-status') || '';
-        const firstStatusRaw = (btn.getAttribute('data-first-status-raw') || '').trim();
-        const secondStatus = btn.getAttribute('data-second-status') || '';
-        const secondStatusRaw = (btn.getAttribute('data-second-status-raw') || '').trim();
+      const catNumber = btn.getAttribute('data-cat-number') || '';
+      const firstStatus = btn.getAttribute('data-first-status') || '';
+      const firstStatusRaw = (btn.getAttribute('data-first-status-raw') || '').trim();
+      const secondStatus = btn.getAttribute('data-second-status') || '';
+      const secondStatusRaw = (btn.getAttribute('data-second-status-raw') || '').trim();
 
-        document.getElementById('catDecisionNumber').textContent = catNumber;
-        document.getElementById('catDecisionSubtitle').textContent =
-          'CAT nº ' + catNumber;
+      document.getElementById('catDecisionNumber').textContent = catNumber;
+      document.getElementById('catDecisionSubtitle').textContent =
+        'CAT nº ' + catNumber;
 
-        function setStatusBadge(el, status) {
-          const s = (status || '').toLowerCase();
-          el.textContent = s === 'deferido' ? 'Deferido' :
-            s === 'indeferido' ? 'Indeferido' :
+      function setStatusBadge(el, status) {
+        const s = (status || '').toLowerCase();
+        el.textContent = s === 'deferido' ? 'Deferido' :
+          s === 'indeferido' ? 'Indeferido' :
             s === 'analyzing' ? 'Em análise' :
-            status || '-';
-          el.className = 'badge fs-6 ' + (
-            s === 'deferido' ? 'bg-success-subtle text-success-emphasis' :
+              status || '-';
+        el.className = 'badge fs-6 ' + (
+          s === 'deferido' ? 'bg-success-subtle text-success-emphasis' :
             s === 'indeferido' ? 'bg-danger-subtle text-danger-emphasis' :
-            s === 'analyzing' ? 'bg-warning-subtle text-warning-emphasis' :
-            'bg-secondary-subtle text-secondary-emphasis'
-          );
-        }
+              s === 'analyzing' ? 'bg-warning-subtle text-warning-emphasis' :
+                'bg-secondary-subtle text-secondary-emphasis'
+        );
+      }
 
-        setStatusBadge(document.getElementById('catDecisionFirstStatus'), firstStatus);
-        setStatusBadge(document.getElementById('catDecisionSecondStatus'), secondStatus);
+      setStatusBadge(document.getElementById('catDecisionFirstStatus'), firstStatus);
+      setStatusBadge(document.getElementById('catDecisionSecondStatus'), secondStatus);
 
-        const firstRawWrapper = document.getElementById('catDecisionFirstStatusRawWrapper');
-        const secondRawWrapper = document.getElementById('catDecisionSecondStatusRawWrapper');
-        document.getElementById('catDecisionFirstStatusRaw').textContent = firstStatusRaw;
-        document.getElementById('catDecisionSecondStatusRaw').textContent = secondStatusRaw;
-        firstRawWrapper.classList.toggle('d-none', !firstStatusRaw);
-        secondRawWrapper.classList.toggle('d-none', !secondStatusRaw);
+      const firstRawWrapper = document.getElementById('catDecisionFirstStatusRawWrapper');
+      const secondRawWrapper = document.getElementById('catDecisionSecondStatusRawWrapper');
+      document.getElementById('catDecisionFirstStatusRaw').textContent = firstStatusRaw;
+      document.getElementById('catDecisionSecondStatusRaw').textContent = secondStatusRaw;
+      firstRawWrapper.classList.toggle('d-none', !firstStatusRaw);
+      secondRawWrapper.classList.toggle('d-none', !secondStatusRaw);
 
-        function formatLongText(raw) {
-          const text = (raw || '').replace(/&#10;/g, '\n').replace(/&amp;/g, '&')
-            .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
-          if (!text.trim()) return '<span class="text-muted fst-italic">Não informado</span>';
-          return text
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-            .replace(/\n/g, '<br>');
-        }
+      function formatLongText(raw) {
+        const text = (raw || '').replace(/&#10;/g, '\n').replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+        if (!text.trim()) return '<span class="text-muted fst-italic">Não informado</span>';
+        return text
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/\n/g, '<br>');
+      }
 
-        document.getElementById('catDecisionFirstJustification').innerHTML =
-          formatLongText(btn.getAttribute('data-first-justification'));
-        document.getElementById('catDecisionFirstOpinion').innerHTML =
-          formatLongText(btn.getAttribute('data-first-opinion'));
-        document.getElementById('catDecisionSecondJustification').innerHTML =
-          formatLongText(btn.getAttribute('data-second-justification'));
-        document.getElementById('catDecisionSecondOpinion').innerHTML =
-          formatLongText(btn.getAttribute('data-second-opinion'));
-      });
-    }
+      document.getElementById('catDecisionFirstJustification').innerHTML =
+        formatLongText(btn.getAttribute('data-first-justification'));
+      document.getElementById('catDecisionFirstOpinion').innerHTML =
+        formatLongText(btn.getAttribute('data-first-opinion'));
+      document.getElementById('catDecisionSecondJustification').innerHTML =
+        formatLongText(btn.getAttribute('data-second-justification'));
+      document.getElementById('catDecisionSecondOpinion').innerHTML =
+        formatLongText(btn.getAttribute('data-second-opinion'));
+    });
+  }
 
-    // Init
-    renderActiveFilters();
-    $('#catFilterOperator').trigger('change');
+  // Init
+  renderActiveFilters();
+  $('#catFilterOperator').trigger('change');
   });
 
   // ─── CAT Timeline Modal ───────────────────────────────────────────────────

@@ -47,7 +47,8 @@
             <div class="card-body">
 
               <!-- Identificação do Benefício -->
-              <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.06em;">
+              <h6 class="text-muted text-uppercase fw-semibold mb-3"
+                style="font-size: 0.75rem; letter-spacing: 0.06em;">
                 <i class="bi bi-card-text me-1"></i>Identificação do Benefício
               </h6>
               <div class="row g-3 mb-4">
@@ -57,7 +58,8 @@
                 </div>
                 <div class="col-md-4">
                   {{ form.benefit_number.label(class="form-label") }}
-                  {{ form.benefit_number(class="form-control" + (" is-invalid" if form.benefit_number.errors else "")) }}
+                  {{ form.benefit_number(class="form-control" + (" is-invalid" if form.benefit_number.errors else ""))
+                  }}
                   {% if form.benefit_number.errors %}
                   <div class="invalid-feedback">{% for e in form.benefit_number.errors %}{{ e }}{% endfor %}</div>
                   {% endif %}
@@ -72,7 +74,8 @@
               </div>
 
               <!-- Dados do Segurado -->
-              <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.06em;">
+              <h6 class="text-muted text-uppercase fw-semibold mb-3"
+                style="font-size: 0.75rem; letter-spacing: 0.06em;">
                 <i class="bi bi-person me-1"></i>Dados do Segurado
               </h6>
               <div class="row g-3 mb-4">
@@ -95,7 +98,8 @@
               </div>
 
               <!-- Dados do Empregador -->
-              <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.06em;">
+              <h6 class="text-muted text-uppercase fw-semibold mb-3"
+                style="font-size: 0.75rem; letter-spacing: 0.06em;">
                 <i class="bi bi-building me-1"></i>Dados do Empregador
               </h6>
               <div class="row g-3 mb-4">
@@ -112,7 +116,8 @@
               <hr class="my-4">
 
               <!-- Benefício e Valores -->
-              <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.06em;">
+              <h6 class="text-muted text-uppercase fw-semibold mb-3"
+                style="font-size: 0.75rem; letter-spacing: 0.06em;">
                 <i class="bi bi-currency-dollar me-1"></i>Benefício e Valores
               </h6>
               <div class="row g-3 mb-4">
@@ -135,7 +140,8 @@
               </div>
 
               <!-- Acidente e Contexto FAP -->
-              <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.06em;">
+              <h6 class="text-muted text-uppercase fw-semibold mb-3"
+                style="font-size: 0.75rem; letter-spacing: 0.06em;">
                 <i class="bi bi-exclamation-triangle me-1"></i>Acidente e Contexto FAP
               </h6>
               <div class="row g-3 mb-4">
@@ -163,12 +169,19 @@
                   {{ form.fap_vigencia_years.label(class="form-label") }}
                   {{ form.fap_vigencia_years(class="form-control", placeholder="Ex.: 2021,2022") }}
                 </div>
+                <div class="col-12">
+                  {{ form.fap_contestation_topics.label(class="form-label") }}
+                  {{ form.fap_contestation_topics(class="form-select", multiple=true, size="8") }}
+                  <div class="form-text">Use Ctrl/Cmd para selecionar múltiplas classificações, seguindo o mesmo
+                    dicionário utilizado pela IA.</div>
+                </div>
               </div>
 
               <hr class="my-4">
 
               <!-- Resultado Consolidado -->
-              <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.06em;">
+              <h6 class="text-muted text-uppercase fw-semibold mb-3"
+                style="font-size: 0.75rem; letter-spacing: 0.06em;">
                 <i class="bi bi-check-circle me-1"></i>Resultado Consolidado
               </h6>
               <div class="row g-3 mb-4">
@@ -189,7 +202,8 @@
               <hr class="my-4">
 
               <!-- 1ª Instância -->
-              <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.06em;">
+              <h6 class="text-muted text-uppercase fw-semibold mb-3"
+                style="font-size: 0.75rem; letter-spacing: 0.06em;">
                 <i class="bi bi-1-circle me-1"></i>Administrativo 1ª Instância
               </h6>
               <div class="row g-3 mb-4">
@@ -208,7 +222,8 @@
               </div>
 
               <!-- 2ª Instância -->
-              <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.06em;">
+              <h6 class="text-muted text-uppercase fw-semibold mb-3"
+                style="font-size: 0.75rem; letter-spacing: 0.06em;">
                 <i class="bi bi-2-circle me-1"></i>Administrativo 2ª Instância
               </h6>
               <div class="row g-3 mb-4">
@@ -229,7 +244,8 @@
               <hr class="my-4">
 
               <!-- Resumo e Notas -->
-              <h6 class="text-muted text-uppercase fw-semibold mb-3" style="font-size: 0.75rem; letter-spacing: 0.06em;">
+              <h6 class="text-muted text-uppercase fw-semibold mb-3"
+                style="font-size: 0.75rem; letter-spacing: 0.06em;">
                 <i class="bi bi-journal-text me-1"></i>Resumo e Notas
               </h6>
               <div class="row g-3">
@@ -275,7 +291,7 @@
       employerCnpj.value = data.cnpj;
     }
   });
-}) ();
+  }) ();
 </script>
 {% endif %}
 {% endblock %}

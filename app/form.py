@@ -332,6 +332,12 @@ class CentralBenefitForm(FlaskForm):
         validators=[Optional()]
     )
 
+    fap_contestation_topics = SelectMultipleField(
+        'Classificações IA (tópicos FAP)',
+        validators=[Optional()],
+        choices=[]  # Populado dinamicamente com o mesmo dicionário do classificador IA
+    )
+
     status = SelectField(
         'Status',
         choices=[

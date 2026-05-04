@@ -7,13 +7,17 @@
 {% macro instance_status_badge(status) %}
 {% set s = (status or '')|lower %}
 {% if s == 'deferido' %}
-<span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2">Deferido</span>
+<span
+  class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2">Deferido</span>
 {% elif s == 'indeferido' %}
-<span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2">Indeferido</span>
+<span
+  class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2">Indeferido</span>
 {% elif s == 'analyzing' %}
-<span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2">Em análise</span>
+<span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2">Em
+  análise</span>
 {% else %}
-<span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3 py-2">-</span>
+<span
+  class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3 py-2">-</span>
 {% endif %}
 {% endmacro %}
 
@@ -29,19 +33,102 @@
     vertical-align: middle;
   }
 
-  .stat-cards { display:grid; grid-template-columns:repeat(5,1fr); gap:.75rem; }
-  @media (max-width:1200px) { .stat-cards { grid-template-columns:repeat(3,1fr); } }
-  @media (max-width:768px)  { .stat-cards { grid-template-columns:repeat(2,1fr); } }
-  @media (max-width:480px)  { .stat-cards { grid-template-columns:1fr; } }
-  .stat-card { position:relative; overflow:hidden; background:var(--bs-body-bg); border:1px solid rgba(15,23,42,.07); border-radius:.85rem; box-shadow:0 4px 16px rgba(15,23,42,.06); padding:.85rem 1rem .85rem 1.2rem; }
-  .stat-card::before { content:""; position:absolute; inset:0 auto 0 0; width:5px; background:var(--sc-color,#0d6efd); border-radius:4px 0 0 4px; }
-  .stat-card .sc-icon { width:2.1rem; height:2.1rem; background:var(--sc-soft,rgba(13,110,253,.10)); color:var(--sc-color,#0d6efd); border-radius:.55rem; display:inline-flex; align-items:center; justify-content:center; font-size:.9rem; flex-shrink:0; }
-  .stat-card .sc-label { font-size:.68rem; font-weight:700; text-transform:uppercase; letter-spacing:.04em; color:#6c7a8d; margin-bottom:.1rem; }
-  .stat-card .sc-value { font-size:1.55rem; font-weight:800; line-height:1; color:var(--bs-emphasis-color); }
-  .stat-card .sc-sub { display:flex; gap:.6rem; margin-top:.3rem; flex-wrap:wrap; }
-  .sc-sub-item { display:inline-flex; flex-direction:column; }
-  .sc-sub-label { font-size:.6rem; color:#9aa5b4; text-transform:uppercase; letter-spacing:.03em; }
-  .sc-sub-value { font-size:.8rem; font-weight:700; color:var(--sc-color,#0d6efd); }
+  .stat-cards {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: .75rem;
+  }
+
+  @media (max-width:1200px) {
+    .stat-cards {
+      grid-template-columns: repeat(3, 1fr);
+    }
+  }
+
+  @media (max-width:768px) {
+    .stat-cards {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+
+  @media (max-width:480px) {
+    .stat-cards {
+      grid-template-columns: 1fr;
+    }
+  }
+
+  .stat-card {
+    position: relative;
+    overflow: hidden;
+    background: var(--bs-body-bg);
+    border: 1px solid rgba(15, 23, 42, .07);
+    border-radius: .85rem;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, .06);
+    padding: .85rem 1rem .85rem 1.2rem;
+  }
+
+  .stat-card::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 5px;
+    background: var(--sc-color, #0d6efd);
+    border-radius: 4px 0 0 4px;
+  }
+
+  .stat-card .sc-icon {
+    width: 2.1rem;
+    height: 2.1rem;
+    background: var(--sc-soft, rgba(13, 110, 253, .10));
+    color: var(--sc-color, #0d6efd);
+    border-radius: .55rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: .9rem;
+    flex-shrink: 0;
+  }
+
+  .stat-card .sc-label {
+    font-size: .68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #6c7a8d;
+    margin-bottom: .1rem;
+  }
+
+  .stat-card .sc-value {
+    font-size: 1.55rem;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--bs-emphasis-color);
+  }
+
+  .stat-card .sc-sub {
+    display: flex;
+    gap: .6rem;
+    margin-top: .3rem;
+    flex-wrap: wrap;
+  }
+
+  .sc-sub-item {
+    display: inline-flex;
+    flex-direction: column;
+  }
+
+  .sc-sub-label {
+    font-size: .6rem;
+    color: #9aa5b4;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+  }
+
+  .sc-sub-value {
+    font-size: .8rem;
+    font-weight: 700;
+    color: var(--sc-color, #0d6efd);
+  }
 
   .pm-card {
     overflow: hidden;
@@ -85,9 +172,33 @@
     padding: 0.2rem;
   }
 
-  .stats-panel-header { display:flex; align-items:center; gap:.5rem; margin-bottom:.4rem; font-size:.75rem; font-weight:700; text-transform:uppercase; letter-spacing:.05em; color:#3d5080; }
-  .stats-panel-note { border:1px solid rgba(13,110,253,.10); border-left:4px solid #0d6efd; border-radius:.6rem; background:rgba(13,110,253,.04); color:#5d6b82; font-size:.8rem; padding:.45rem .75rem; margin-bottom:.85rem; }
-  .stats-panels-separator { border-top:1px dashed rgba(15,23,42,.12); margin:.5rem 0 1rem; }
+  .stats-panel-header {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    margin-bottom: .4rem;
+    font-size: .75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: #3d5080;
+  }
+
+  .stats-panel-note {
+    border: 1px solid rgba(13, 110, 253, .10);
+    border-left: 4px solid #0d6efd;
+    border-radius: .6rem;
+    background: rgba(13, 110, 253, .04);
+    color: #5d6b82;
+    font-size: .8rem;
+    padding: .45rem .75rem;
+    margin-bottom: .85rem;
+  }
+
+  .stats-panels-separator {
+    border-top: 1px dashed rgba(15, 23, 42, .12);
+    margin: .5rem 0 1rem;
+  }
 
   .vigencia-filter-notice {
     display: flex;
@@ -101,6 +212,7 @@
     padding: 0.85rem 1rem;
     margin-bottom: 1rem;
   }
+
   .vigencia-filter-notice-title {
     display: flex;
     align-items: center;
@@ -108,37 +220,44 @@
     font-weight: 700;
     margin-bottom: 0.15rem;
   }
+
   .vigencia-filter-notice-text {
     font-size: 0.88rem;
     color: var(--bs-secondary-color);
   }
+
   .vigencia-filter-badge {
     display: inline-flex;
     align-items: center;
     gap: 0.4rem;
     border-radius: 999px;
-    background: rgba(255,255,255,0.72);
-    border: 1px solid rgba(13,202,240,0.3);
+    background: rgba(255, 255, 255, 0.72);
+    border: 1px solid rgba(13, 202, 240, 0.3);
     padding: 0.35rem 0.6rem;
     font-family: var(--bs-font-monospace);
     font-size: 0.82rem;
     color: var(--bs-emphasis-color);
   }
+
   @media (max-width: 767.98px) {
-    .vigencia-filter-notice { flex-direction: column; align-items: stretch; }
+    .vigencia-filter-notice {
+      flex-direction: column;
+      align-items: stretch;
+    }
   }
-
-
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="pm-list-page">
-  {% call page_hero(title=page_title, subtitle='Massas Salariais extraídas dos relatórios de contestação do FAP', icon='bi bi-cash-stack') %}
+  {% call page_hero(title=page_title, subtitle='Massas Salariais extraídas dos relatórios de contestação do FAP',
+  icon='bi bi-cash-stack') %}
   <nav aria-label="breadcrumb">
     <ol class="breadcrumb mb-0 bg-transparent small">
-      <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
-      <li class="breadcrumb-item"><a href="{{ url_for('disputes_center.list_disputes_center') }}">Painel de Contestações</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a>
+      </li>
+      <li class="breadcrumb-item"><a href="{{ url_for('disputes_center.list_disputes_center') }}">Painel de
+          Contestações</a></li>
       <li class="breadcrumb-item active" aria-current="page">Massas Salariais</li>
     </ol>
   </nav>
@@ -166,7 +285,8 @@
       Painel geral
     </div>
     <div class="stats-panel-note">
-      Este painel mostra o consolidado completo das Massas Salariais cadastradas, independentemente dos filtros da tabela.
+      Este painel mostra o consolidado completo das Massas Salariais cadastradas, independentemente dos filtros da
+      tabela.
     </div>
 
     <div class="stat-cards mb-3">
@@ -184,8 +304,10 @@
         </div>
         <div class="sc-value">{{ first_instance_stats.approved }}</div>
         <div class="sc-sub">
-          <span class="sc-sub-item"><span class="sc-sub-label">1ª inst.</span><span class="sc-sub-value">{{ first_instance_stats.approved }}</span></span>
-          <span class="sc-sub-item"><span class="sc-sub-label">2ª inst.</span><span class="sc-sub-value">{{ second_instance_stats.approved }}</span></span>
+          <span class="sc-sub-item"><span class="sc-sub-label">1ª inst.</span><span class="sc-sub-value">{{
+              first_instance_stats.approved }}</span></span>
+          <span class="sc-sub-item"><span class="sc-sub-label">2ª inst.</span><span class="sc-sub-value">{{
+              second_instance_stats.approved }}</span></span>
         </div>
       </div>
       <div class="stat-card" style="--sc-color:#dc3545;--sc-soft:rgba(220,53,69,.10);">
@@ -195,8 +317,10 @@
         </div>
         <div class="sc-value">{{ first_instance_stats.rejected }}</div>
         <div class="sc-sub">
-          <span class="sc-sub-item"><span class="sc-sub-label">1ª inst.</span><span class="sc-sub-value">{{ first_instance_stats.rejected }}</span></span>
-          <span class="sc-sub-item"><span class="sc-sub-label">2ª inst.</span><span class="sc-sub-value">{{ second_instance_stats.rejected }}</span></span>
+          <span class="sc-sub-item"><span class="sc-sub-label">1ª inst.</span><span class="sc-sub-value">{{
+              first_instance_stats.rejected }}</span></span>
+          <span class="sc-sub-item"><span class="sc-sub-label">2ª inst.</span><span class="sc-sub-value">{{
+              second_instance_stats.rejected }}</span></span>
         </div>
       </div>
       <div class="stat-card" style="--sc-color:#f59e0b;--sc-soft:rgba(245,158,11,.10);">
@@ -206,8 +330,10 @@
         </div>
         <div class="sc-value">{{ first_instance_stats.analyzing }}</div>
         <div class="sc-sub">
-          <span class="sc-sub-item"><span class="sc-sub-label">1ª inst.</span><span class="sc-sub-value">{{ first_instance_stats.analyzing }}</span></span>
-          <span class="sc-sub-item"><span class="sc-sub-label">2ª inst.</span><span class="sc-sub-value">{{ second_instance_stats.analyzing }}</span></span>
+          <span class="sc-sub-item"><span class="sc-sub-label">1ª inst.</span><span class="sc-sub-value">{{
+              first_instance_stats.analyzing }}</span></span>
+          <span class="sc-sub-item"><span class="sc-sub-label">2ª inst.</span><span class="sc-sub-value">{{
+              second_instance_stats.analyzing }}</span></span>
         </div>
       </div>
       <div class="stat-card" style="--sc-color:#6c757d;--sc-soft:rgba(108,117,125,.10);">
@@ -277,6 +403,14 @@
               <h5 class="card-title mb-0 fw-semibold">
                 <i class="bi bi-list-ul me-2 text-primary"></i>Massas Salariais cadastradas
               </h5>
+              <div class="d-flex flex-wrap gap-2">
+                <span class="badge bg-info align-self-center px-3 py-2">{{ total_count|default(0) }} registro{{ 's' if
+                  total_count|default(0) != 1 else '' }}</span>
+                <button id="exportPayrollMassesBtn" type="button" class="btn btn-outline-success btn-sm"
+                  data-tooltip="Exportar resultado filtrado para Excel" data-bs-placement="top">
+                  <i class="bi bi-file-earmark-excel me-1"></i>Exportar Excel
+                </button>
+              </div>
             </div>
           </div>
           <div class="card-body pt-0">
@@ -285,8 +419,7 @@
             <div class="filters-card p-3 mb-3">
 
               {% set _vf = current_vigencia_filter %}
-              <div id="vigenciaFilterNotice"
-                class="vigencia-filter-notice {{ 'd-none' if not _vf else '' }}"
+              <div id="vigenciaFilterNotice" class="vigencia-filter-notice {{ 'd-none' if not _vf else '' }}"
                 data-vigencia-label="{% if _vf %}Vigência {{ _vf.year }}{% if _vf.company_name %} - {{ _vf.company_name }}{% elif _vf.company_cnpj %} - {{ _vf.company_cnpj }}{% endif %}{% endif %}">
                 <div>
                   <div class="vigencia-filter-notice-title">
@@ -295,7 +428,9 @@
                   </div>
                   <div class="vigencia-filter-notice-text">
                     A listagem abaixo está restrita às Massas Salariais vinculadas à vigência selecionada.
-                    <span class="vigencia-filter-badge ms-1">{% if _vf %}Vigência {{ _vf.year }}{% if _vf.company_name %} - {{ _vf.company_name }}{% elif _vf.company_cnpj %} - {{ _vf.company_cnpj }}{% endif %}{% endif %}</span>
+                    <span class="vigencia-filter-badge ms-1">{% if _vf %}Vigência {{ _vf.year }}{% if _vf.company_name
+                      %} - {{ _vf.company_name }}{% elif _vf.company_cnpj %} - {{ _vf.company_cnpj }}{% endif %}{% endif
+                      %}</span>
                   </div>
                 </div>
                 <div class="d-flex flex-wrap gap-2">
@@ -350,11 +485,13 @@
               </div>
               <div class="row g-2 align-items-end mt-1 pt-2 border-top">
                 <div class="col-md-4">
-                  <label for="quickRootCnpjFilter" class="form-label mb-1 small text-muted">Filtro adicional: CNPJ raiz</label>
+                  <label for="quickRootCnpjFilter" class="form-label mb-1 small text-muted">Filtro adicional: CNPJ
+                    raiz</label>
                   <select id="quickRootCnpjFilter" class="form-select form-select-sm">
                     <option value="">Todos os CNPJ raiz</option>
                     {% for item in cnpj_roots or [] %}
-                    <option value="{{ item.root }}">{{ item.root }}{% if item.company_name %} - {{ item.company_name }}{% endif %}</option>
+                    <option value="{{ item.root }}">{{ item.root }}{% if item.company_name %} - {{ item.company_name
+                      }}{% endif %}</option>
                     {% endfor %}
                   </select>
                 </div>
@@ -536,241 +673,288 @@
 <script>
   $(document).ready(function () {
     const apiUrl = "{{ url_for('disputes_center.list_payroll_masses_api') }}";
+    const exportUrl = "{{ url_for('disputes_center.export_payroll_masses_excel') }}";
     const filters = [];
-    const cnpjByRoot = {{ cnpj_by_root | tojson }};
-    const initialVigenciaId = (new URLSearchParams(window.location.search).get('vigencia_id') || '').trim();
+    const cnpjByRoot = {{ cnpj_by_root | tojson
+  }};
+  const initialVigenciaId = (new URLSearchParams(window.location.search).get('vigencia_id') || '').trim();
 
-    function clearVigenciaFilterFromUrl() {
-      const nextUrl = new URL(window.location.href);
-      nextUrl.searchParams.delete('vigencia_id');
-      window.location.href = nextUrl.toString();
+  function clearVigenciaFilterFromUrl() {
+    const nextUrl = new URL(window.location.href);
+    nextUrl.searchParams.delete('vigencia_id');
+    window.location.href = nextUrl.toString();
+  }
+
+  const fieldLabelMap = {
+    employer_cnpj: 'CNPJ Empregador',
+    competence: 'Competência',
+    status: 'Status geral',
+    first_instance_status: 'Status 1ª instância',
+    first_instance_status_raw: 'Texto status 1ª instância',
+    second_instance_status: 'Status 2ª instância',
+    second_instance_status_raw: 'Texto status 2ª instância',
+  };
+
+  const operatorLabelMap = {
+    contains: 'contém',
+    equals: 'igual a',
+    starts_with: 'começa com',
+    ends_with: 'termina com',
+    empty: 'está vazio',
+    not_empty: 'não está vazio',
+  };
+
+  const STATUS_SELECT_OPTIONS = {
+    status: [
+      { value: 'deferido', label: 'Deferido' },
+      { value: 'indeferido', label: 'Indeferido' },
+      { value: 'analyzing', label: 'Em análise' },
+      { value: 'pending', label: 'Pendente' },
+    ],
+    first_instance_status: [
+      { value: 'deferido', label: 'Deferido' },
+      { value: 'indeferido', label: 'Indeferido' },
+      { value: 'analyzing', label: 'Em análise' },
+      { value: 'pending', label: 'Pendente' },
+    ],
+    second_instance_status: [
+      { value: 'deferido', label: 'Deferido' },
+      { value: 'indeferido', label: 'Indeferido' },
+      { value: 'analyzing', label: 'Em análise' },
+      { value: 'pending', label: 'Pendente' },
+    ],
+  };
+
+  function isStatusSelectField(field) {
+    return Object.prototype.hasOwnProperty.call(STATUS_SELECT_OPTIONS, String(field || '').trim());
+  }
+
+  function getStatusOptionLabel(field, value) {
+    const options = STATUS_SELECT_OPTIONS[String(field || '').trim()] || [];
+    const normalizedValue = String(value || '').trim().toLowerCase();
+    const found = options.find(function (item) { return item.value.toLowerCase() === normalizedValue; });
+    return found ? found.label : String(value || '').trim();
+  }
+
+  function populatePmStatusFilterSelect(field) {
+    const select = $('#pmFilterValueSelect');
+    select.empty().append('<option value="">Selecione um status</option>');
+    (STATUS_SELECT_OPTIONS[String(field || '').trim()] || []).forEach(function (option) {
+      select.append(`<option value="${option.value}">${option.label}</option>`);
+    });
+  }
+
+  function escapeHtml(value) {
+    return String(value || '')
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  }
+
+  function encodeMultilineAttr(value) {
+    return escapeHtml(value).replace(/\n/g, '&#10;');
+  }
+
+  function needsValue(operator) {
+    return operator !== 'empty' && operator !== 'not_empty';
+  }
+
+  function instanceStatusBadge(status) {
+    const s = String(status || '').trim().toLowerCase();
+    if (s === 'deferido') {
+      return '<span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2">Deferido</span>';
     }
+    if (s === 'indeferido') {
+      return '<span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2">Indeferido</span>';
+    }
+    if (s === 'analyzing') {
+      return '<span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2">Em análise</span>';
+    }
+    if (s === 'pending') {
+      return '<span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3 py-2">Pendente</span>';
+    }
+    return '<span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3 py-2">-</span>';
+  }
 
-    const fieldLabelMap = {
-      employer_cnpj: 'CNPJ Empregador',
-      competence: 'Competência',
-      status: 'Status geral',
-      first_instance_status: 'Status 1ª instância',
-      first_instance_status_raw: 'Texto status 1ª instância',
-      second_instance_status: 'Status 2ª instância',
-      second_instance_status_raw: 'Texto status 2ª instância',
+  function formatCurrency(value) {
+    if (value === null || value === undefined || value === '') return '—';
+    const num = parseFloat(value);
+    if (isNaN(num)) return escapeHtml(String(value));
+    return 'R$ ' + num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+
+  function updateFilteredStats(stats) {
+    const s = stats || {};
+    $('#filteredTotalCount').text(s.total ?? 0);
+    $('#filteredApprovedCount').text(s.approved ?? 0);
+    $('#filteredRejectedCount').text(s.rejected ?? 0);
+    $('#filteredInReviewCount').text(s.in_review ?? 0);
+    $('#filteredPendingCount').text(s.pending ?? 0);
+  }
+
+  function exportFilteredPayrollMassesToExcel() {
+    const order = table.order() || [[0, 'desc']];
+    const payload = {
+      search: table.search(),
+      order_column: order[0][0],
+      order_dir: order[0][1],
+      filters: filters.map((filter) => ({
+        field: filter.field,
+        operator: filter.operator,
+        value: filter.value,
+      })),
+      quick_root: ($('#quickRootCnpjFilter').val() || '').trim(),
+      quick_cnpj: ($('#quickCnpjFilter').val() || '').trim(),
+      vigencia_id: initialVigenciaId,
     };
 
-    const operatorLabelMap = {
-      contains: 'contém',
-      equals: 'igual a',
-      starts_with: 'começa com',
-      ends_with: 'termina com',
-      empty: 'está vazio',
-      not_empty: 'não está vazio',
-    };
-
-    const STATUS_SELECT_OPTIONS = {
-      status: [
-        { value: 'deferido', label: 'Deferido' },
-        { value: 'indeferido', label: 'Indeferido' },
-        { value: 'analyzing', label: 'Em análise' },
-        { value: 'pending', label: 'Pendente' },
-      ],
-      first_instance_status: [
-        { value: 'deferido', label: 'Deferido' },
-        { value: 'indeferido', label: 'Indeferido' },
-        { value: 'analyzing', label: 'Em análise' },
-        { value: 'pending', label: 'Pendente' },
-      ],
-      second_instance_status: [
-        { value: 'deferido', label: 'Deferido' },
-        { value: 'indeferido', label: 'Indeferido' },
-        { value: 'analyzing', label: 'Em análise' },
-        { value: 'pending', label: 'Pendente' },
-      ],
-    };
-
-    function isStatusSelectField(field) {
-      return Object.prototype.hasOwnProperty.call(STATUS_SELECT_OPTIONS, String(field || '').trim());
-    }
-
-    function getStatusOptionLabel(field, value) {
-      const options = STATUS_SELECT_OPTIONS[String(field || '').trim()] || [];
-      const normalizedValue = String(value || '').trim().toLowerCase();
-      const found = options.find(function (item) { return item.value.toLowerCase() === normalizedValue; });
-      return found ? found.label : String(value || '').trim();
-    }
-
-    function populatePmStatusFilterSelect(field) {
-      const select = $('#pmFilterValueSelect');
-      select.empty().append('<option value="">Selecione um status</option>');
-      (STATUS_SELECT_OPTIONS[String(field || '').trim()] || []).forEach(function (option) {
-        select.append(`<option value="${option.value}">${option.label}</option>`);
+    fetch(exportUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    })
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error('Falha ao gerar o arquivo de exportação.');
+        }
+        const disposition = response.headers.get('Content-Disposition') || '';
+        const filenameMatch = disposition.match(/filename="?([^";]+)"?/i);
+        const filename = filenameMatch ? filenameMatch[1] : 'massa_salarial.xlsx';
+        return response.blob().then((blob) => ({ blob, filename }));
+      })
+      .then(({ blob, filename }) => {
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+      })
+      .catch((error) => {
+        alert(error.message || 'Erro inesperado ao exportar.');
       });
-    }
+  }
 
-    function escapeHtml(value) {
-      return String(value || '')
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&#39;');
-    }
-
-    function encodeMultilineAttr(value) {
-      return escapeHtml(value).replace(/\n/g, '&#10;');
-    }
-
-    function needsValue(operator) {
-      return operator !== 'empty' && operator !== 'not_empty';
-    }
-
-    function instanceStatusBadge(status) {
-      const s = String(status || '').trim().toLowerCase();
-      if (s === 'deferido') {
-        return '<span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2">Deferido</span>';
-      }
-      if (s === 'indeferido') {
-        return '<span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2">Indeferido</span>';
-      }
-      if (s === 'analyzing') {
-        return '<span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2">Em análise</span>';
-      }
-      if (s === 'pending') {
-        return '<span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3 py-2">Pendente</span>';
-      }
-      return '<span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3 py-2">-</span>';
-    }
-
-    function formatCurrency(value) {
-      if (value === null || value === undefined || value === '') return '—';
-      const num = parseFloat(value);
-      if (isNaN(num)) return escapeHtml(String(value));
-      return 'R$ ' + num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-    }
-
-    function updateFilteredStats(stats) {
-      const s = stats || {};
-      $('#filteredTotalCount').text(s.total ?? 0);
-      $('#filteredApprovedCount').text(s.approved ?? 0);
-      $('#filteredRejectedCount').text(s.rejected ?? 0);
-      $('#filteredInReviewCount').text(s.in_review ?? 0);
-      $('#filteredPendingCount').text(s.pending ?? 0);
-    }
-
-    const table = $('#pmTable').DataTable({
-      processing: true,
-      serverSide: true,
-      searchDelay: 350,
-      deferRender: true,
-      ajax: {
-        url: apiUrl,
-        type: 'GET',
-        data: function (d) {
-          d.custom_filters = JSON.stringify(filters.map(f => ({
-            field: f.field,
-            operator: f.operator,
-            value: f.value,
-          })));
-          d.quick_root = ($('#quickRootCnpjFilter').val() || '').trim();
-          d.quick_cnpj = ($('#quickCnpjFilter').val() || '').trim();
-          if (initialVigenciaId) d.vigencia_id = initialVigenciaId;
-        },
-        dataSrc: function (json) {
-          updateFilteredStats(json.filtered_stats);
-          return json.data || [];
+  const table = $('#pmTable').DataTable({
+    processing: true,
+    serverSide: true,
+    searchDelay: 350,
+    deferRender: true,
+    ajax: {
+      url: apiUrl,
+      type: 'GET',
+      data: function (d) {
+        d.custom_filters = JSON.stringify(filters.map(f => ({
+          field: f.field,
+          operator: f.operator,
+          value: f.value,
+        })));
+        d.quick_root = ($('#quickRootCnpjFilter').val() || '').trim();
+        d.quick_cnpj = ($('#quickCnpjFilter').val() || '').trim();
+        if (initialVigenciaId) d.vigencia_id = initialVigenciaId;
+      },
+      dataSrc: function (json) {
+        updateFilteredStats(json.filtered_stats);
+        return json.data || [];
+      },
+    },
+    language: { url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json' },
+    pageLength: 25,
+    order: [[0, 'desc']],
+    columnDefs: [{ orderable: false, targets: 8 }],
+    columns: [
+      {
+        data: 'id',
+        render: function (data) {
+          return `<strong>${data}</strong>`;
         },
       },
-      language: { url: '//cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json' },
-      pageLength: 25,
-      order: [[0, 'desc']],
-      columnDefs: [{ orderable: false, targets: 8 }],
-      columns: [
-        {
-          data: 'id',
-          render: function (data) {
-            return `<strong>${data}</strong>`;
-          },
+      {
+        data: null,
+        render: function (_, __, row) {
+          const cnpj = row.employer_cnpj
+            ? `<span class="font-monospace">${escapeHtml(row.employer_cnpj)}</span>`
+            : '<span class="text-muted">—</span>';
+          const name = row.employer_name
+            ? `<small class="text-muted">${escapeHtml(row.employer_name)}</small>`
+            : '';
+          return `<div class="d-flex flex-column gap-1">${cnpj}${name}</div>`;
         },
-        {
-          data: null,
-          render: function (_, __, row) {
-            const cnpj = row.employer_cnpj
-              ? `<span class="font-monospace">${escapeHtml(row.employer_cnpj)}</span>`
-              : '<span class="text-muted">—</span>';
-            const name = row.employer_name
-              ? `<small class="text-muted">${escapeHtml(row.employer_name)}</small>`
-              : '';
-            return `<div class="d-flex flex-column gap-1">${cnpj}${name}</div>`;
-          },
+      },
+      {
+        data: 'vigencia_year',
+        render: function (data) {
+          return data
+            ? `<span class="badge rounded-pill" style="background:rgba(15,95,215,.12);color:#0b4cb3;font-weight:700;">${escapeHtml(data)}</span>`
+            : '<span class="text-muted">—</span>';
         },
-        {
-          data: 'vigencia_year',
-          render: function (data) {
-            return data
-              ? `<span class="badge rounded-pill" style="background:rgba(15,95,215,.12);color:#0b4cb3;font-weight:700;">${escapeHtml(data)}</span>`
-              : '<span class="text-muted">—</span>';
-          },
+      },
+      {
+        data: 'competence',
+        render: function (data) {
+          return data
+            ? `<span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle font-monospace">${escapeHtml(data)}</span>`
+            : '<span class="text-muted">—</span>';
         },
-        {
-          data: 'competence',
-          render: function (data) {
-            return data
-              ? `<span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle font-monospace">${escapeHtml(data)}</span>`
-              : '<span class="text-muted">—</span>';
-          },
+      },
+      {
+        data: 'total_remuneration',
+        className: 'text-end font-monospace',
+        render: function (data) {
+          return `<span class="small">${formatCurrency(data)}</span>`;
         },
-        {
-          data: 'total_remuneration',
-          className: 'text-end font-monospace',
-          render: function (data) {
-            return `<span class="small">${formatCurrency(data)}</span>`;
-          },
+      },
+      {
+        data: 'first_instance_requested_value',
+        className: 'text-end font-monospace',
+        render: function (data) {
+          return `<span class="small">${formatCurrency(data)}</span>`;
         },
-        {
-          data: 'first_instance_requested_value',
-          className: 'text-end font-monospace',
-          render: function (data) {
-            return `<span class="small">${formatCurrency(data)}</span>`;
-          },
+      },
+      {
+        data: null,
+        className: 'text-center',
+        render: function (_, __, row) {
+          const s1 = String(row.first_instance_status || '').trim().toLowerCase();
+          const known = ['deferido', 'indeferido', 'analyzing'];
+          const badge = instanceStatusBadge(known.includes(s1) ? s1 : 'pending');
+          const raw = (row.first_instance_status_raw || '').trim();
+          const rawHtml = raw
+            ? `<div class="text-muted" style="font-size:0.72rem;margin-top:0.3rem;line-height:1.2;">${escapeHtml(raw)}</div>`
+            : '';
+          return badge + rawHtml;
         },
-        {
-          data: null,
-          className: 'text-center',
-          render: function (_, __, row) {
-            const s1 = String(row.first_instance_status || '').trim().toLowerCase();
-            const known = ['deferido', 'indeferido', 'analyzing'];
-            const badge = instanceStatusBadge(known.includes(s1) ? s1 : 'pending');
-            const raw = (row.first_instance_status_raw || '').trim();
-            const rawHtml = raw
-              ? `<div class="text-muted" style="font-size:0.72rem;margin-top:0.3rem;line-height:1.2;">${escapeHtml(raw)}</div>`
-              : '';
-            return badge + rawHtml;
-          },
+      },
+      {
+        data: null,
+        className: 'text-center',
+        render: function (_, __, row) {
+          const s2 = String(row.second_instance_status || '').trim().toLowerCase();
+          const s1 = String(row.first_instance_status || '').trim().toLowerCase();
+          const known = ['deferido', 'indeferido', 'analyzing'];
+          const effectiveS2 = known.includes(s2) ? s2 : (!['deferido', 'analyzing'].includes(s1) ? 'pending' : '');
+          const badge = instanceStatusBadge(effectiveS2);
+          const raw = (row.second_instance_status_raw || '').trim();
+          const rawHtml = raw
+            ? `<div class="text-muted" style="font-size:0.72rem;margin-top:0.3rem;line-height:1.2;">${escapeHtml(raw)}</div>`
+            : '';
+          return badge + rawHtml;
         },
-        {
-          data: null,
-          className: 'text-center',
-          render: function (_, __, row) {
-            const s2 = String(row.second_instance_status || '').trim().toLowerCase();
-            const s1 = String(row.first_instance_status || '').trim().toLowerCase();
-            const known = ['deferido', 'indeferido', 'analyzing'];
-            const effectiveS2 = known.includes(s2) ? s2 : (!['deferido', 'analyzing'].includes(s1) ? 'pending' : '');
-            const badge = instanceStatusBadge(effectiveS2);
-            const raw = (row.second_instance_status_raw || '').trim();
-            const rawHtml = raw
-              ? `<div class="text-muted" style="font-size:0.72rem;margin-top:0.3rem;line-height:1.2;">${escapeHtml(raw)}</div>`
-              : '';
-            return badge + rawHtml;
-          },
-        },
-        {
-          data: null,
-          className: 'text-center',
-          render: function (_, __, row) {
-            const firstJustification = encodeMultilineAttr(row.first_instance_justification || '');
-            const firstOpinion = encodeMultilineAttr(row.first_instance_opinion || '');
-            const secondJustification = encodeMultilineAttr(row.second_instance_justification || '');
-            const secondOpinion = encodeMultilineAttr(row.second_instance_opinion || '');
-            const label = `${escapeHtml(row.employer_cnpj || '')} / ${escapeHtml(row.competence || '')}`;
-            return `
+      },
+      {
+        data: null,
+        className: 'text-center',
+        render: function (_, __, row) {
+          const firstJustification = encodeMultilineAttr(row.first_instance_justification || '');
+          const firstOpinion = encodeMultilineAttr(row.first_instance_opinion || '');
+          const secondJustification = encodeMultilineAttr(row.second_instance_justification || '');
+          const secondOpinion = encodeMultilineAttr(row.second_instance_opinion || '');
+          const label = `${escapeHtml(row.employer_cnpj || '')} / ${escapeHtml(row.competence || '')}`;
+          return `
               <div class="d-flex gap-2 justify-content-center">
                 <button type="button" class="btn btn-sm btn-outline-primary"
                   data-bs-toggle="modal" data-bs-target="#pmDecisionModal"
@@ -805,242 +989,246 @@
                   <i class="bi bi-file-earmark-text"></i>
                 </a>
               </div>`;
-          },
         },
-      ],
-      drawCallback: function () {
-        document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function (el) {
-          if (!bootstrap.Tooltip.getInstance(el)) new bootstrap.Tooltip(el);
-        });
       },
-    });
+    ],
+    drawCallback: function () {
+      document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(function (el) {
+        if (!bootstrap.Tooltip.getInstance(el)) new bootstrap.Tooltip(el);
+      });
+    },
+  });
 
-    // Filtros
-    function updatePmOperatorOptions() {
-      const field = $('#pmFilterField').val();
-      const operatorSelect = $('#pmFilterOperator');
-      const currentOp = operatorSelect.val();
-      if (isStatusSelectField(field)) {
-        operatorSelect.empty().append('<option value="equals">igual a</option>');
-      } else if (operatorSelect.find('option').length <= 1) {
-        operatorSelect.empty()
-          .append('<option value="contains">contém</option>')
-          .append('<option value="equals">igual a</option>')
-          .append('<option value="starts_with">começa com</option>')
-          .append('<option value="ends_with">termina com</option>')
-          .append('<option value="empty">está vazio</option>')
-          .append('<option value="not_empty">não está vazio</option>');
-        operatorSelect.val(currentOp || 'contains');
-      }
-      operatorSelect.trigger('change');
+  // Filtros
+  function updatePmOperatorOptions() {
+    const field = $('#pmFilterField').val();
+    const operatorSelect = $('#pmFilterOperator');
+    const currentOp = operatorSelect.val();
+    if (isStatusSelectField(field)) {
+      operatorSelect.empty().append('<option value="equals">igual a</option>');
+    } else if (operatorSelect.find('option').length <= 1) {
+      operatorSelect.empty()
+        .append('<option value="contains">contém</option>')
+        .append('<option value="equals">igual a</option>')
+        .append('<option value="starts_with">começa com</option>')
+        .append('<option value="ends_with">termina com</option>')
+        .append('<option value="empty">está vazio</option>')
+        .append('<option value="not_empty">não está vazio</option>');
+      operatorSelect.val(currentOp || 'contains');
     }
+    operatorSelect.trigger('change');
+  }
 
-    function updatePmFilterValueInputMask() {
-      const field = $('#pmFilterField').val();
-      if (isStatusSelectField(field)) {
-        populatePmStatusFilterSelect(field);
-        $('#pmFilterValue').addClass('d-none');
-        $('#pmFilterValueSelect').removeClass('d-none');
-      } else {
-        $('#pmFilterValueSelect').addClass('d-none');
-        $('#pmFilterValue').removeClass('d-none').attr('placeholder', 'Digite um valor');
-      }
+  function updatePmFilterValueInputMask() {
+    const field = $('#pmFilterField').val();
+    if (isStatusSelectField(field)) {
+      populatePmStatusFilterSelect(field);
+      $('#pmFilterValue').addClass('d-none');
+      $('#pmFilterValueSelect').removeClass('d-none');
+    } else {
+      $('#pmFilterValueSelect').addClass('d-none');
+      $('#pmFilterValue').removeClass('d-none').attr('placeholder', 'Digite um valor');
     }
+  }
 
-    $('#pmFilterField').on('change', function () {
-      updatePmOperatorOptions();
-      updatePmFilterValueInputMask();
-    });
+  $('#pmFilterField').on('change', function () {
+    updatePmOperatorOptions();
+    updatePmFilterValueInputMask();
+  });
 
-    $('#pmFilterOperator').on('change', function () {
-      const op = $(this).val();
-      const mustHave = needsValue(op);
-      $('#pmFilterValue').prop('disabled', !mustHave);
-      $('#pmFilterValueSelect').prop('disabled', !mustHave);
-      if (!mustHave) {
-        $('#pmFilterValue').val('');
-        $('#pmFilterValueSelect').val('');
-      }
-    });
-
-    $('#addPmFilterBtn').on('click', function () {
-      const field = $('#pmFilterField').val();
-      const operator = $('#pmFilterOperator').val();
-      const rawValue = isStatusSelectField(field) ? $('#pmFilterValueSelect').val() : $('#pmFilterValue').val();
-      const value = (rawValue || '').trim();
-
-      if (needsValue(operator) && !value) {
-        (isStatusSelectField(field) ? $('#pmFilterValueSelect') : $('#pmFilterValue')).focus();
-        return;
-      }
-
-      const displayValue = needsValue(operator)
-        ? ` "${isStatusSelectField(field) ? getStatusOptionLabel(field, value) : value}"`
-        : '';
-      const label = `${fieldLabelMap[field]} ${operatorLabelMap[operator]}${displayValue}`;
-
-      filters.push({ id: Date.now() + Math.random(), field, operator, value, label });
+  $('#pmFilterOperator').on('change', function () {
+    const op = $(this).val();
+    const mustHave = needsValue(op);
+    $('#pmFilterValue').prop('disabled', !mustHave);
+    $('#pmFilterValueSelect').prop('disabled', !mustHave);
+    if (!mustHave) {
       $('#pmFilterValue').val('');
       $('#pmFilterValueSelect').val('');
-      renderActiveFilters();
-      table.ajax.reload();
-    });
+    }
+  });
 
-    $('#clearPmFiltersBtn').on('click', function () {
-      filters.splice(0, filters.length);
-      $('#quickRootCnpjFilter').val('');
+  $('#addPmFilterBtn').on('click', function () {
+    const field = $('#pmFilterField').val();
+    const operator = $('#pmFilterOperator').val();
+    const rawValue = isStatusSelectField(field) ? $('#pmFilterValueSelect').val() : $('#pmFilterValue').val();
+    const value = (rawValue || '').trim();
+
+    if (needsValue(operator) && !value) {
+      (isStatusSelectField(field) ? $('#pmFilterValueSelect') : $('#pmFilterValue')).focus();
+      return;
+    }
+
+    const displayValue = needsValue(operator)
+      ? ` "${isStatusSelectField(field) ? getStatusOptionLabel(field, value) : value}"`
+      : '';
+    const label = `${fieldLabelMap[field]} ${operatorLabelMap[operator]}${displayValue}`;
+
+    filters.push({ id: Date.now() + Math.random(), field, operator, value, label });
+    $('#pmFilterValue').val('');
+    $('#pmFilterValueSelect').val('');
+    renderActiveFilters();
+    table.ajax.reload();
+  });
+
+  $('#clearPmFiltersBtn').on('click', function () {
+    filters.splice(0, filters.length);
+    $('#quickRootCnpjFilter').val('');
+    $('#quickCnpjFilter').val('').empty().append('<option value="">Todas as empresas</option>');
+    $('#quickCnpjFilterWrapper').hide();
+    $('#quickCnpjFilterSpacer').show();
+    renderActiveFilters();
+    table.search('');
+    table.ajax.reload();
+  });
+
+  function populateCnpjFilter(root) {
+    const select = $('#quickCnpjFilter');
+    select.empty().append('<option value="">Todas as empresas</option>');
+    const items = cnpjByRoot[root] || [];
+    items.forEach(function (item) {
+      const lbl = item.company_name ? `${item.cnpj} — ${item.company_name}` : item.cnpj;
+      select.append(`<option value="${item.cnpj}">${lbl}</option>`);
+    });
+  }
+
+  $('#quickRootCnpjFilter').on('change', function () {
+    const root = $(this).val();
+    if (root) {
+      populateCnpjFilter(root);
+      $('#quickCnpjFilterWrapper').show();
+      $('#quickCnpjFilterSpacer').hide();
+    } else {
       $('#quickCnpjFilter').val('').empty().append('<option value="">Todas as empresas</option>');
       $('#quickCnpjFilterWrapper').hide();
       $('#quickCnpjFilterSpacer').show();
-      renderActiveFilters();
-      table.search('');
-      table.ajax.reload();
-    });
+    }
+    table.ajax.reload();
+  });
 
-    function populateCnpjFilter(root) {
-      const select = $('#quickCnpjFilter');
-      select.empty().append('<option value="">Todas as empresas</option>');
-      const items = cnpjByRoot[root] || [];
-      items.forEach(function (item) {
-        const lbl = item.company_name ? `${item.cnpj} — ${item.company_name}` : item.cnpj;
-        select.append(`<option value="${item.cnpj}">${lbl}</option>`);
-      });
+  $('#quickCnpjFilter').on('change', function () {
+    table.ajax.reload();
+  });
+
+  function renderActiveFilters() {
+    const container = $('#activePmFilters');
+    container.empty();
+
+    if (!filters.length) {
+      container.append('<span class="text-muted small">Nenhum filtro ativo.</span>');
+      return;
     }
 
-    $('#quickRootCnpjFilter').on('change', function () {
-      const root = $(this).val();
-      if (root) {
-        populateCnpjFilter(root);
-        $('#quickCnpjFilterWrapper').show();
-        $('#quickCnpjFilterSpacer').hide();
-      } else {
-        $('#quickCnpjFilter').val('').empty().append('<option value="">Todas as empresas</option>');
-        $('#quickCnpjFilterWrapper').hide();
-        $('#quickCnpjFilterSpacer').show();
-      }
-      table.ajax.reload();
-    });
-
-    $('#quickCnpjFilter').on('change', function () {
-      table.ajax.reload();
-    });
-
-    function renderActiveFilters() {
-      const container = $('#activePmFilters');
-      container.empty();
-
-      if (!filters.length) {
-        container.append('<span class="text-muted small">Nenhum filtro ativo.</span>');
-        return;
-      }
-
-      filters.forEach(function (filter) {
-        const chip = $(`
+    filters.forEach(function (filter) {
+      const chip = $(`
           <span class="filter-chip">
             <span>${filter.label}</span>
             <button type="button" class="btn-close btn-close-black remove-filter" aria-label="Remover"></button>
           </span>`);
 
-        chip.find('.remove-filter').on('click', function () {
-          const idx = filters.findIndex(f => f.id === filter.id);
-          if (idx >= 0) {
-            filters.splice(idx, 1);
-            renderActiveFilters();
-            table.ajax.reload();
-          }
-        });
-
-        container.append(chip);
+      chip.find('.remove-filter').on('click', function () {
+        const idx = filters.findIndex(f => f.id === filter.id);
+        if (idx >= 0) {
+          filters.splice(idx, 1);
+          renderActiveFilters();
+          table.ajax.reload();
+        }
       });
-    }
 
-    $('#clearVigenciaFilterBtn').on('click', function () {
-      clearVigenciaFilterFromUrl();
+      container.append(chip);
     });
+  }
 
-    // Inicializa painel filtrado
-    updatePmOperatorOptions();
-    updatePmFilterValueInputMask();
-    $('#pmFilterOperator').trigger('change');
-    table.ajax.reload();
+  $('#clearVigenciaFilterBtn').on('click', function () {
+    clearVigenciaFilterFromUrl();
+  });
 
-    // Modal de decisões
-    const pmDecisionModal = document.getElementById('pmDecisionModal');
-    if (pmDecisionModal) {
-      pmDecisionModal.addEventListener('show.bs.modal', function (event) {
-        const btn = event.relatedTarget;
-        if (!btn) return;
+  $('#exportPayrollMassesBtn').on('click', function () {
+    exportFilteredPayrollMassesToExcel();
+  });
 
-        const pmLabel = btn.getAttribute('data-pm-label') || '';
-        const firstStatus = btn.getAttribute('data-first-status') || '';
-        const firstStatusRaw = (btn.getAttribute('data-first-status-raw') || '').trim();
-        const secondStatus = btn.getAttribute('data-second-status') || '';
-        const secondStatusRaw = (btn.getAttribute('data-second-status-raw') || '').trim();
+  // Inicializa painel filtrado
+  updatePmOperatorOptions();
+  updatePmFilterValueInputMask();
+  $('#pmFilterOperator').trigger('change');
+  table.ajax.reload();
 
-        document.getElementById('pmDecisionLabel').textContent = pmLabel;
-        document.getElementById('pmDecisionSubtitle').textContent = pmLabel;
+  // Modal de decisões
+  const pmDecisionModal = document.getElementById('pmDecisionModal');
+  if (pmDecisionModal) {
+    pmDecisionModal.addEventListener('show.bs.modal', function (event) {
+      const btn = event.relatedTarget;
+      if (!btn) return;
 
-        document.getElementById('pmDecisionTotalRemuneration').textContent =
-          formatCurrencyRaw(btn.getAttribute('data-total-remuneration'));
-        document.getElementById('pmDecisionFirstRequestedValue').textContent =
-          formatCurrencyRaw(btn.getAttribute('data-first-requested-value'));
-        document.getElementById('pmDecisionSecondRequestedValue').textContent =
-          formatCurrencyRaw(btn.getAttribute('data-second-requested-value'));
+      const pmLabel = btn.getAttribute('data-pm-label') || '';
+      const firstStatus = btn.getAttribute('data-first-status') || '';
+      const firstStatusRaw = (btn.getAttribute('data-first-status-raw') || '').trim();
+      const secondStatus = btn.getAttribute('data-second-status') || '';
+      const secondStatusRaw = (btn.getAttribute('data-second-status-raw') || '').trim();
 
-        function formatCurrencyRaw(v) {
-          if (!v) return '—';
-          const num = parseFloat(v);
-          if (isNaN(num)) return v;
-          return 'R$ ' + num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        }
+      document.getElementById('pmDecisionLabel').textContent = pmLabel;
+      document.getElementById('pmDecisionSubtitle').textContent = pmLabel;
 
-        function setStatusBadge(el, status) {
-          const s = (status || '').toLowerCase();
-          el.textContent = s === 'deferido' ? 'Deferido' :
-            s === 'indeferido' ? 'Indeferido' :
+      document.getElementById('pmDecisionTotalRemuneration').textContent =
+        formatCurrencyRaw(btn.getAttribute('data-total-remuneration'));
+      document.getElementById('pmDecisionFirstRequestedValue').textContent =
+        formatCurrencyRaw(btn.getAttribute('data-first-requested-value'));
+      document.getElementById('pmDecisionSecondRequestedValue').textContent =
+        formatCurrencyRaw(btn.getAttribute('data-second-requested-value'));
+
+      function formatCurrencyRaw(v) {
+        if (!v) return '—';
+        const num = parseFloat(v);
+        if (isNaN(num)) return v;
+        return 'R$ ' + num.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      }
+
+      function setStatusBadge(el, status) {
+        const s = (status || '').toLowerCase();
+        el.textContent = s === 'deferido' ? 'Deferido' :
+          s === 'indeferido' ? 'Indeferido' :
             s === 'analyzing' ? 'Em análise' :
-            status || '-';
-          el.className = 'badge fs-6 ' + (
-            s === 'deferido' ? 'bg-success-subtle text-success-emphasis' :
+              status || '-';
+        el.className = 'badge fs-6 ' + (
+          s === 'deferido' ? 'bg-success-subtle text-success-emphasis' :
             s === 'indeferido' ? 'bg-danger-subtle text-danger-emphasis' :
-            s === 'analyzing' ? 'bg-warning-subtle text-warning-emphasis' :
-            'bg-secondary-subtle text-secondary-emphasis'
-          );
-        }
+              s === 'analyzing' ? 'bg-warning-subtle text-warning-emphasis' :
+                'bg-secondary-subtle text-secondary-emphasis'
+        );
+      }
 
-        setStatusBadge(document.getElementById('pmDecisionFirstStatus'), firstStatus);
-        setStatusBadge(document.getElementById('pmDecisionSecondStatus'), secondStatus);
+      setStatusBadge(document.getElementById('pmDecisionFirstStatus'), firstStatus);
+      setStatusBadge(document.getElementById('pmDecisionSecondStatus'), secondStatus);
 
-        const firstRawWrapper = document.getElementById('pmDecisionFirstStatusRawWrapper');
-        const secondRawWrapper = document.getElementById('pmDecisionSecondStatusRawWrapper');
-        document.getElementById('pmDecisionFirstStatusRaw').textContent = firstStatusRaw;
-        document.getElementById('pmDecisionSecondStatusRaw').textContent = secondStatusRaw;
-        firstRawWrapper.classList.toggle('d-none', !firstStatusRaw);
-        secondRawWrapper.classList.toggle('d-none', !secondStatusRaw);
+      const firstRawWrapper = document.getElementById('pmDecisionFirstStatusRawWrapper');
+      const secondRawWrapper = document.getElementById('pmDecisionSecondStatusRawWrapper');
+      document.getElementById('pmDecisionFirstStatusRaw').textContent = firstStatusRaw;
+      document.getElementById('pmDecisionSecondStatusRaw').textContent = secondStatusRaw;
+      firstRawWrapper.classList.toggle('d-none', !firstStatusRaw);
+      secondRawWrapper.classList.toggle('d-none', !secondStatusRaw);
 
-        function formatLongText(raw) {
-          const text = (raw || '').replace(/&#10;/g, '\n').replace(/&amp;/g, '&')
-            .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
-          if (!text.trim()) return '<span class="text-muted fst-italic">Não informado</span>';
-          return text
-            .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-            .replace(/\n/g, '<br>');
-        }
+      function formatLongText(raw) {
+        const text = (raw || '').replace(/&#10;/g, '\n').replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+        if (!text.trim()) return '<span class="text-muted fst-italic">Não informado</span>';
+        return text
+          .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+          .replace(/\n/g, '<br>');
+      }
 
-        document.getElementById('pmDecisionFirstJustification').innerHTML =
-          formatLongText(btn.getAttribute('data-first-justification'));
-        document.getElementById('pmDecisionFirstOpinion').innerHTML =
-          formatLongText(btn.getAttribute('data-first-opinion'));
-        document.getElementById('pmDecisionSecondJustification').innerHTML =
-          formatLongText(btn.getAttribute('data-second-justification'));
-        document.getElementById('pmDecisionSecondOpinion').innerHTML =
-          formatLongText(btn.getAttribute('data-second-opinion'));
-      });
-    }
+      document.getElementById('pmDecisionFirstJustification').innerHTML =
+        formatLongText(btn.getAttribute('data-first-justification'));
+      document.getElementById('pmDecisionFirstOpinion').innerHTML =
+        formatLongText(btn.getAttribute('data-first-opinion'));
+      document.getElementById('pmDecisionSecondJustification').innerHTML =
+        formatLongText(btn.getAttribute('data-second-justification'));
+      document.getElementById('pmDecisionSecondOpinion').innerHTML =
+        formatLongText(btn.getAttribute('data-second-opinion'));
+    });
+  }
 
-    // Init
-    renderActiveFilters();
-    $('#pmFilterOperator').trigger('change');
+  // Init
+  renderActiveFilters();
+  $('#pmFilterOperator').trigger('change');
   });
 
   // ─── Payroll Mass Timeline Modal ─────────────────────────────────────────
