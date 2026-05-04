@@ -1205,7 +1205,13 @@ vigência, empresa e instância.', icon='bi bi-table') %}
               method: 'POST',
               credentials: 'same-origin',
               headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-              body: JSON.stringify({ year: item.year, cnpj: item.cnpj, contestacao_id: item.id, rec_id: item.recId ? parseInt(item.recId) : null }),
+              body: JSON.stringify({
+                year: item.year,
+                cnpj: item.cnpj,
+                contestacao_id: item.id,
+                rec_id: item.recId ? parseInt(item.recId) : null,
+                force_process: true,
+              }),
             });
             var p = null;
             try { p = await r.json(); } catch (e) { }
