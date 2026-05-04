@@ -454,7 +454,7 @@ icon='bi bi-diagram-3') %}
         <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a>
         </li>
         <li class="breadcrumb-item"><a href="{{ url_for('disputes_center.list_disputes_center') }}">Disputes
-            Center</a></li>
+                Center</a></li>
         <li class="breadcrumb-item active" aria-current="page">{{ page_title }}</li>
     </ol>
 </nav>
@@ -650,7 +650,8 @@ icon='bi bi-diagram-3') %}
             </div>
             <div class="d-flex flex-wrap align-items-center justify-content-end gap-2">
                 {% if selected_show_deferivel and markable_vigencia_ids %}
-                <form method="POST" action="{{ url_for('disputes_center.mark_vigencias_first_instance_deferred_batch') }}"
+                <form method="POST"
+                    action="{{ url_for('disputes_center.mark_vigencias_first_instance_deferred_batch') }}"
                     onsubmit="return confirm('Marcar como deferido na 1ª instância todos os {{ markable_benefits_count }} benefício(s) elegíveis das {{ markable_vigencia_ids|length }} vigência(s) exibidas nesta página?');">
                     <input type="hidden" name="client_id" value="{{ selected_client_id }}">
                     <input type="hidden" name="client_cnpj" value="{{ selected_client_cnpj }}">
@@ -730,7 +731,6 @@ icon='bi bi-diagram-3') %}
                         <thead>
                             <tr>
                                 <th style="width: 110px;">Vigência</th>
-                                <th style="width: 220px;">CNPJ do empregador</th>
                                 <th style="width: 100px;">Benefícios</th>
                                 <th style="width: 100px;">CATs</th>
                                 <th style="width: 100px;">Massas</th>
@@ -746,9 +746,6 @@ icon='bi bi-diagram-3') %}
                             <tr>
                                 <td>
                                     <span class="year-pill">{{ vigencia.vigencia_year or '-' }}</span>
-                                </td>
-                                <td>
-                                    <div class="client-code">{{ vigencia.employer_cnpj or '-' }}</div>
                                 </td>
                                 <td>
                                     <span class="benefit-count">
@@ -843,8 +840,7 @@ icon='bi bi-diagram-3') %}
                                             ?
                                         </button>
                                         {% endif %}
-                                        <a href="{{ vigencia.cats_view_url }}"
-                                            class="btn btn-outline-warning btn-sm">
+                                        <a href="{{ vigencia.cats_view_url }}" class="btn btn-outline-warning btn-sm">
                                             <i class="bi bi-exclamation-triangle me-1"></i>Ver CATs
                                         </a>
                                         <a href="{{ vigencia.payroll_masses_view_url }}"
