@@ -2166,9 +2166,53 @@ class FapWebContestacao(db.Model):
     law_firm    = db.relationship('LawFirm')
     fap_company = db.relationship('FapCompany')
     report      = db.relationship('FapContestationJudgmentReport')
+    change_history = db.relationship(
+        'FapWebContestacaoChangeHistory',
+        back_populates='contestacao',
+        cascade='all, delete-orphan',
+        lazy='dynamic',
+    )
 
     def __repr__(self):
         return f'<FapWebContestacao id={self.contestacao_id} cnpj={self.cnpj} ano={self.ano_vigencia}>'
+
+
+class FapWebContestacaoChangeHistory(db.Model):
+    """Histórico de mudanças detectadas durante a sincronização das contestações FAP."""
+
+    __tablename__ = 'fap_web_contestacao_change_history'
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    contestacao_db_id = db.Column(
+        db.Integer,
+        db.ForeignKey('fap_web_contestacoes.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+
+    contestacao_id = db.Column(db.Integer, nullable=False, index=True)
+    cnpj = db.Column(db.String(20), nullable=False, index=True)
+    cnpj_raiz = db.Column(db.String(10), nullable=False, index=True)
+    ano_vigencia = db.Column(db.Integer, nullable=False, index=True)
+
+    change_type = db.Column(db.String(30), nullable=False, default='updated', index=True)
+    changed_fields = db.Column(db.Text)
+    old_values = db.Column(db.Text)
+    new_values = db.Column(db.Text)
+
+    synced_at = db.Column(db.DateTime, nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    law_firm = db.relationship('LawFirm')
+    contestacao = db.relationship('FapWebContestacao', back_populates='change_history')
+
+    def __repr__(self):
+        return (
+            f'<FapWebContestacaoChangeHistory contestacao_id={self.contestacao_id} '
+            f'change_type={self.change_type} synced_at={self.synced_at}>'
+        )
 
 
 class FapWebProcuracao(db.Model):

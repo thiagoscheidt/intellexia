@@ -39,7 +39,14 @@ from openpyxl.styles import (
 )
 from openpyxl.utils import get_column_letter
 
-from app.models import FapAutoImportedContestacao, FapCompany, FapWebContestacao, FapWebProcuracao, db
+from app.models import (
+    FapAutoImportedContestacao,
+    FapCompany,
+    FapWebContestacao,
+    FapWebContestacaoChangeHistory,
+    FapWebProcuracao,
+    db,
+)
 from app.services.fap_web_service import FapWebAuthPayload, FapWebService
 
 fap_panel_bp = Blueprint('fap_panel', __name__, url_prefix='/fap-panel')
@@ -278,6 +285,19 @@ def sync_run_year():
     updated = 0
     now = datetime.utcnow()
 
+    tracked_fields = (
+        'cnpj',
+        'cnpj_raiz',
+        'ano_vigencia',
+        'fap_company_id',
+        'instancia_codigo',
+        'instancia_descricao',
+        'situacao_codigo',
+        'situacao_descricao',
+        'protocolo',
+        'data_transmissao',
+    )
+
     try:
         for item in items:
             cid = item.get('id')
@@ -316,16 +336,54 @@ def sync_run_year():
             ).first()
 
             if existing:
-                existing.cnpj                = cnpj_full_14
-                existing.cnpj_raiz           = cnpj_raiz_14[:8]
-                existing.ano_vigencia        = year_int
-                existing.fap_company_id      = fap_company_id
-                existing.instancia_codigo    = instancia.get('codigo')
-                existing.instancia_descricao = instancia.get('descricao')
-                existing.situacao_codigo     = situacao.get('codigo')
-                existing.situacao_descricao  = situacao.get('descricao')
-                existing.protocolo           = item.get('protocolo')
-                existing.data_transmissao    = data_transmissao
+                next_values = {
+                    'cnpj': cnpj_full_14,
+                    'cnpj_raiz': cnpj_raiz_14[:8],
+                    'ano_vigencia': year_int,
+                    'fap_company_id': fap_company_id,
+                    'instancia_codigo': instancia.get('codigo'),
+                    'instancia_descricao': instancia.get('descricao'),
+                    'situacao_codigo': situacao.get('codigo'),
+                    'situacao_descricao': situacao.get('descricao'),
+                    'protocolo': item.get('protocolo'),
+                    'data_transmissao': data_transmissao,
+                }
+
+                changed_old = {}
+                changed_new = {}
+                for field_name in tracked_fields:
+                    current_value = getattr(existing, field_name)
+                    next_value = next_values[field_name]
+                    if current_value != next_value:
+                        changed_old[field_name] = current_value
+                        changed_new[field_name] = next_value
+
+                if changed_new:
+                    history_row = FapWebContestacaoChangeHistory(
+                        law_firm_id=law_firm_id,
+                        contestacao_db_id=existing.id,
+                        contestacao_id=existing.contestacao_id,
+                        cnpj=cnpj_full_14,
+                        cnpj_raiz=cnpj_raiz_14[:8],
+                        ano_vigencia=year_int,
+                        change_type='updated',
+                        changed_fields=json.dumps(sorted(changed_new.keys()), ensure_ascii=False),
+                        old_values=json.dumps(changed_old, ensure_ascii=False, default=str),
+                        new_values=json.dumps(changed_new, ensure_ascii=False, default=str),
+                        synced_at=now,
+                    )
+                    db.session.add(history_row)
+
+                existing.cnpj = next_values['cnpj']
+                existing.cnpj_raiz = next_values['cnpj_raiz']
+                existing.ano_vigencia = next_values['ano_vigencia']
+                existing.fap_company_id = next_values['fap_company_id']
+                existing.instancia_codigo = next_values['instancia_codigo']
+                existing.instancia_descricao = next_values['instancia_descricao']
+                existing.situacao_codigo = next_values['situacao_codigo']
+                existing.situacao_descricao = next_values['situacao_descricao']
+                existing.protocolo = next_values['protocolo']
+                existing.data_transmissao = next_values['data_transmissao']
                 existing.raw_data            = json.dumps(item, ensure_ascii=False)
                 existing.last_synced_at      = now
                 updated += 1
