@@ -22,6 +22,8 @@ logger = logging.getLogger(__name__)
 class FAPContestationClassifierAgent:
     """Classifica justificativas de contestação FAP em um tópico jurídico padronizado."""
 
+    MIN_CONFIDENCE = 0.80
+
     SYSTEM_PROMPT = (
         "Voce e um especialista juridico em FAP. "
         "Classifique o texto em ATE 3 topicos e retorne JSON valido. "
@@ -33,6 +35,9 @@ class FAPContestationClassifierAgent:
         "Quando houver evidencia de evento anterior a abril de 2007/pre-FAP, PRE-FAP deve ser o topico principal. "
         "Nao use categorias de OUTRA EMPRESA ou ERRO DE ESTABELECIMENTO sem indicios textuais explicitos de outro CNPJ/estabelecimento/vinculo empregaticio diverso. "
         "Quando houver indicio de acidente vinculado a outro CNPJ/estabelecimento, priorize categorias de OUTRA EMPRESA e/ou ERRO DE ESTABELECIMENTO. "
+        "Informe tambem a confianca individual de cada topico retornado. "
+        "So retorne topicos especificos quando a confianca global for maior ou igual a 0.80. "
+        "Se a confianca global for menor que 0.80, seja conservador e nao retorne topicos especificos. "
         "Priorize interpretacao juridica. "
         "Nunca invente categorias."
     )
@@ -110,8 +115,12 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
 
     FIXED_PROMPT_SUFFIX = """## Formato de resposta
 
+- Retorne slugs em `topics` somente quando `confidence` for maior ou igual a 0.80.
+- Retorne `topic_confidences` como um array de numeros na mesma ordem de `topics`.
+- Se `confidence` for menor que 0.80, retorne `topics` vazio (`[]`).
+
 ```json
-{"topics":["slug1","slug2"],"confidence":0.0,"reason":"explicacao curta ou vazio"}
+{"topics":["slug1","slug2"],"topic_confidences":[0.91,0.83],"confidence":0.0,"reason":"explicacao curta ou vazio"}
 ```
 
 ## Texto para classificar
@@ -392,6 +401,79 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
             return "discussao_medica"
         return "outros_argumentos"
 
+    @classmethod
+    def _build_topics_response(
+        cls,
+        topics: list[str],
+        *,
+        topic_confidences: list[float | None] | None = None,
+    ) -> dict[str, Any]:
+        return {
+            "topics": topics,
+            "topic_confidences": topic_confidences or [],
+        }
+
+    @classmethod
+    def _parse_confidence(cls, value: Any) -> float | None:
+        try:
+            if value is None or value == "":
+                return None
+            confidence = float(value)
+        except (TypeError, ValueError):
+            return None
+
+        if confidence < 0:
+            return 0.0
+        if confidence > 1:
+            return 1.0
+        return confidence
+
+    def _build_topic_confidences(
+        self,
+        parsed: dict[str, Any],
+        topics_slugs: list[str],
+        *,
+        fallback_confidence: float | None = None,
+    ) -> list[float | None]:
+        details_by_slug: dict[str, float | None] = {}
+        raw_details = parsed.get("topic_confidences")
+
+        if isinstance(raw_details, list):
+            if all(not isinstance(item, dict) for item in raw_details):
+                ordered_confidences: list[float | None] = []
+                for index, slug in enumerate(topics_slugs):
+                    raw_confidence = raw_details[index] if index < len(raw_details) else fallback_confidence
+                    ordered_confidences.append(self._parse_confidence(raw_confidence))
+                return [fallback_confidence if item is None else item for item in ordered_confidences]
+
+        if isinstance(raw_details, dict):
+            for raw_slug, raw_confidence in raw_details.items():
+                slug = str(raw_slug or "").strip().lower()
+                if slug not in self.VALID_SLUGS or slug not in topics_slugs or slug in details_by_slug:
+                    continue
+                details_by_slug[slug] = self._parse_confidence(raw_confidence)
+
+        if isinstance(raw_details, list):
+            for item in raw_details:
+                if not isinstance(item, dict):
+                    continue
+
+                slug = str(item.get("slug") or item.get("topic") or "").strip().lower()
+                if slug not in self.VALID_SLUGS or slug not in topics_slugs or slug in details_by_slug:
+                    continue
+
+                details_by_slug[slug] = self._parse_confidence(item.get("confidence"))
+
+        ordered_details: list[float | None] = []
+        for slug in topics_slugs:
+            detail = details_by_slug.get(slug)
+            confidence = fallback_confidence if detail is None else detail
+            if confidence is None:
+                confidence = fallback_confidence
+            ordered_details.append(confidence)
+
+        return ordered_details
+
     def _has_pre_fap_evidence(self, normalized_text: str) -> bool:
         if any(term.upper() in normalized_text for term in self.PRE_FAP_TERMS):
             return True
@@ -420,6 +502,34 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
 
         return False
 
+    def _has_positive_cat_evidence(self, normalized_text: str) -> bool:
+        has_negative_cat_signal = bool(
+            re.search(r"SEM\s+CAT|AUSENCIA\s+DE\s+CAT|INEXISTENCIA\s+DE\s+CAT|NAO\s+HA\s+CAT", normalized_text)
+        )
+        if has_negative_cat_signal:
+            return False
+
+        return bool(
+            re.search(
+                r"\bCAT\b|EMISSAO\s+DE\s+CAT|EMITIU\s+CAT|EMISSAO\s+DA\s+CAT|RESPONSAVEL\s+PELA\s+EMISSAO\s+DE\s+CAT|CAT\s+VINCULADA",
+                normalized_text,
+            )
+        )
+
+    def _has_other_company_cat_evidence(self, normalized_text: str) -> bool:
+        if not self._has_positive_cat_evidence(normalized_text):
+            return False
+
+        if self._has_other_company_evidence(normalized_text):
+            return True
+
+        return bool(
+            re.search(
+                r"OUTRA\s+EMPRESA|EMPRESA\s+DIVERSA|OUTRO\s+CNPJ|OUTRO\s+ESTABELECIMENTO|VINCULO\s+A\s+OUTR[OA]\s+EMPRESA",
+                normalized_text,
+            )
+        )
+
     def _detect_critical_regex_slugs(self, normalized_text: str) -> list[str]:
         detected: list[str] = []
 
@@ -439,8 +549,8 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
             re.search(r"ACAO JUDICIAL|PROCESSO|AUTOS|SENTENCA|DECISAO JUDICIAL", normalized_text)
         )
         has_sem_cat_signal = bool(re.search(r"SEM CAT|AUSENCIA DE CAT|INEXISTENCIA DE CAT", normalized_text))
-        has_cat_number = bool(re.search(r"CAT\s*(?:N|NO|N\s*O|N\s*º|NUMERO)?\s*[\d./-]{4,}", normalized_text))
-        if has_trajeto and (has_sem_cat_signal or (has_judicial_signal and not has_cat_number)):
+        has_positive_cat_evidence = self._has_positive_cat_evidence(normalized_text)
+        if has_trajeto and not has_positive_cat_evidence and (has_sem_cat_signal or has_judicial_signal):
             detected.append("acidente_trajeto_sem_cat")
 
         has_justica_federal = bool(re.search(r"\bJUSTICA\s+FEDERAL\b", normalized_text))
@@ -472,6 +582,7 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
 
         has_pre_fap = self._has_pre_fap_evidence(normalized_text)
         has_other_company = self._has_other_company_evidence(normalized_text)
+        has_other_company_cat = self._has_other_company_cat_evidence(normalized_text)
         has_justica_federal = self._has_justica_federal_evidence(normalized_text)
 
         for slug in reversed(critical_slugs):
@@ -483,11 +594,16 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
 
         # Se há CAT numerada explícita no texto, é ACIDENTE DE TRAJETO (com CAT), não sem_cat.
         has_trajeto_text = bool(re.search(r"ACIDENTE DE TRAJETO", normalized_text))
-        has_cat_number = bool(re.search(r"CAT\s*(?:N|NO|N\s*O|N\s*º|NUMERO)?\s*[\d./ ]{4,}", normalized_text))
-        if has_trajeto_text and has_cat_number:
+        has_positive_cat_evidence = self._has_positive_cat_evidence(normalized_text)
+        if has_trajeto_text and has_positive_cat_evidence:
             guarded_topics = [slug for slug in guarded_topics if slug != "acidente_trajeto_sem_cat"]
             if "acidente_trajeto" not in guarded_topics:
                 guarded_topics.insert(0, "acidente_trajeto")
+
+        if has_other_company_cat:
+            guarded_topics = [slug for slug in guarded_topics if slug != "acidente_trajeto_sem_cat"]
+            guarded_topics = [slug for slug in guarded_topics if slug != "outra_empresa_cat"]
+            guarded_topics.insert(0, "outra_empresa_cat")
 
         if not has_justica_federal:
             guarded_topics = [slug for slug in guarded_topics if slug != "beneficio_justica_federal"]
@@ -557,16 +673,16 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
         Returns:
             Dict no formato:
             {
-              "topic": "TOPICO PRINCIPAL",
-              "topics": ["TOPICO 1", "TOPICO 2", ...]
+              "topics": ["TOPICO 1", "TOPICO 2", ...],
+                            "topic_confidences": [0.91, 0.84]
             }
         """
         cleaned_text = (text or "").strip()
         if not cleaned_text:
-            return {
-                "topic": "OUTROS ARGUMENTOS",
-                "topics": ["OUTROS ARGUMENTOS"],
-            }
+            return self._build_topics_response(
+                ["OUTROS ARGUMENTOS"],
+                                topic_confidences=[None],
+            )
 
         user_prompt_markdown = (
             self._remove_non_editable_sections(prompt_markdown_override)
@@ -606,10 +722,12 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
             parsed = self._safe_parse_json(raw_content)
 
             if not parsed:
-                return {
-                    "topic": "OUTROS ARGUMENTOS",
-                    "topics": ["OUTROS ARGUMENTOS"],
-                }
+                return self._build_topics_response(
+                    ["OUTROS ARGUMENTOS"],
+                    topic_confidences=[None],
+                )
+
+            confidence = self._parse_confidence(parsed.get("confidence"))
 
             raw_topics = parsed.get("topics")
             topics_slugs: list[str] = []
@@ -628,25 +746,34 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
                 if topic_slug in self.VALID_SLUGS:
                     topics_slugs = [topic_slug]
 
+            if confidence is None or confidence < self.MIN_CONFIDENCE:
+                fallback_slug = self._fallback_slug(cleaned_text)
+                return self._build_topics_response(
+                    [self.SLUG_TO_TOPIC[fallback_slug]],
+                    topic_confidences=[confidence],
+                )
+
             if not topics_slugs:
                 fallback_slug = self._fallback_slug(cleaned_text)
-                return {
-                    "topic": self.SLUG_TO_TOPIC[fallback_slug],
-                    "topics": [self.SLUG_TO_TOPIC[fallback_slug]],
-                }
+                return self._build_topics_response(
+                    [self.SLUG_TO_TOPIC[fallback_slug]],
+                    topic_confidences=[confidence],
+                )
 
             topics_slugs = self._apply_rule_based_guards(cleaned_text, topics_slugs)
 
             topics = [self.SLUG_TO_TOPIC[slug] for slug in topics_slugs]
+            topic_confidences = self._build_topic_confidences(
+                parsed,
+                topics_slugs,
+                fallback_confidence=confidence,
+            )
 
-            return {
-                "topic": topics[0],
-                "topics": topics,
-            }
+            return self._build_topics_response(topics, topic_confidences=topic_confidences)
 
         except Exception as exc:
             logger.exception("Erro ao classificar justificativa FAP: %s", exc)
-            return {
-                "topic": "OUTROS ARGUMENTOS",
-                "topics": ["OUTROS ARGUMENTOS"],
-            }
+            return self._build_topics_response(
+                ["OUTROS ARGUMENTOS"],
+                topic_confidences=[None],
+            )
