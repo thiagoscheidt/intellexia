@@ -44,6 +44,7 @@ from app.models import (
     FapContestationTurnoverRateManualHistory,
     FapContestationClassifierSetting,
     FapContestationClassifierPromptVersion,
+    FapContestationClassifierReferenceVersion,
     KnowledgeBase,
     db,
 )
@@ -1614,6 +1615,31 @@ def _get_next_classifier_prompt_version_number(law_firm_id: int) -> int:
     return (current_max_version or 0) + 1
 
 
+def _get_active_classifier_reference_version(
+    law_firm_id: int,
+) -> FapContestationClassifierReferenceVersion | None:
+    return (
+        FapContestationClassifierReferenceVersion.query.filter_by(
+            law_firm_id=law_firm_id,
+            is_active=True,
+        )
+        .order_by(
+            FapContestationClassifierReferenceVersion.version.desc(),
+            FapContestationClassifierReferenceVersion.id.desc(),
+        )
+        .first()
+    )
+
+
+def _get_next_classifier_reference_version_number(law_firm_id: int) -> int:
+    current_max_version = (
+        db.session.query(func.max(FapContestationClassifierReferenceVersion.version))
+        .filter(FapContestationClassifierReferenceVersion.law_firm_id == law_firm_id)
+        .scalar()
+    )
+    return (current_max_version or 0) + 1
+
+
 def _activate_new_classifier_prompt_version(law_firm_id: int, prompt_markdown: str, created_by_user_id: int | None):
     prompt_markdown = FAPContestationClassifierAgent._remove_non_editable_sections(prompt_markdown)
     prompt_hash = FAPContestationClassifierAgent.compute_prompt_hash(prompt_markdown)
@@ -1628,6 +1654,31 @@ def _activate_new_classifier_prompt_version(law_firm_id: int, prompt_markdown: s
         version=_get_next_classifier_prompt_version_number(law_firm_id),
         prompt_markdown=prompt_markdown,
         prompt_hash=prompt_hash,
+        is_active=True,
+        created_by_user_id=created_by_user_id,
+    )
+    db.session.add(version)
+    return version
+
+
+def _activate_new_classifier_reference_version(
+    law_firm_id: int,
+    reference_markdown: str,
+    created_by_user_id: int | None,
+):
+    normalized_reference_markdown = (reference_markdown or '').strip()
+    reference_hash = FAPContestationClassifierAgent.compute_prompt_hash(normalized_reference_markdown)
+
+    FapContestationClassifierReferenceVersion.query.filter_by(
+        law_firm_id=law_firm_id,
+        is_active=True,
+    ).update({'is_active': False})
+
+    version = FapContestationClassifierReferenceVersion(
+        law_firm_id=law_firm_id,
+        version=_get_next_classifier_reference_version_number(law_firm_id),
+        reference_markdown=normalized_reference_markdown,
+        reference_hash=reference_hash,
         is_active=True,
         created_by_user_id=created_by_user_id,
     )
@@ -1747,11 +1798,17 @@ def _fetch_openrouter_text_models(selected_model: str | None = None) -> tuple[li
 def classifier_prompt_settings():
     law_firm_id = get_current_law_firm_id()
     current_version = _get_active_classifier_prompt_version(law_firm_id)
+    current_reference_version = _get_active_classifier_reference_version(law_firm_id)
     current_setting = _get_classifier_setting(law_firm_id)
     raw_prompt_markdown = (
         current_version.prompt_markdown
         if current_version and (current_version.prompt_markdown or '').strip()
         else FAPContestationClassifierAgent.get_default_user_prompt_markdown()
+    )
+    reference_markdown = (
+        current_reference_version.reference_markdown
+        if current_reference_version and (current_reference_version.reference_markdown or '').strip()
+        else FAPContestationClassifierAgent.get_default_reference_markdown()
     )
     prompt_markdown = FAPContestationClassifierAgent._remove_non_editable_sections(raw_prompt_markdown)
     selected_model = (current_setting.selected_model if current_setting else '') or ''
@@ -1765,15 +1822,27 @@ def classifier_prompt_settings():
         )
         .all()
     )
+    reference_version_history = (
+        FapContestationClassifierReferenceVersion.query.filter_by(law_firm_id=law_firm_id)
+        .order_by(
+            FapContestationClassifierReferenceVersion.version.desc(),
+            FapContestationClassifierReferenceVersion.id.desc(),
+        )
+        .all()
+    )
 
     return render_template(
         'disputes_center/classifier_prompt_settings.html',
         prompt_markdown=prompt_markdown,
+        reference_markdown=reference_markdown,
         current_version=current_version,
+        current_reference_version=current_reference_version,
         version_history=version_history,
+        reference_version_history=reference_version_history,
         default_prompt_markdown=FAPContestationClassifierAgent._remove_non_editable_sections(
             FAPContestationClassifierAgent.get_default_user_prompt_markdown()
         ),
+        default_reference_markdown=FAPContestationClassifierAgent.get_default_reference_markdown(),
         slugs_markdown=FAPContestationClassifierAgent._build_slugs_markdown(),
         selected_model=selected_model,
         default_classifier_model=FAPContestationClassifierAgent.get_default_model_name(),
@@ -1792,33 +1861,56 @@ def classifier_prompt_settings_save():
     prompt_markdown = FAPContestationClassifierAgent._remove_non_editable_sections(
         request.form.get('prompt_markdown') or ''
     )
+    reference_markdown = (request.form.get('reference_markdown') or '').strip()
 
     if not prompt_markdown:
         flash('O prompt em markdown não pode ficar vazio.', 'danger')
         return redirect(url_for('disputes_center.classifier_prompt_settings'))
 
+    if not reference_markdown:
+        flash('A referência técnico-jurídica não pode ficar vazia.', 'danger')
+        return redirect(url_for('disputes_center.classifier_prompt_settings'))
+
     current_version = _get_active_classifier_prompt_version(law_firm_id)
+    current_reference_version = _get_active_classifier_reference_version(law_firm_id)
     current_setting = _get_classifier_setting(law_firm_id)
     current_hash = current_version.prompt_hash if current_version else None
+    current_reference_hash = (
+        current_reference_version.reference_hash if current_reference_version else None
+    )
     current_model = (current_setting.selected_model if current_setting else '') or None
     incoming_hash = FAPContestationClassifierAgent.compute_prompt_hash(prompt_markdown)
+    incoming_reference_hash = FAPContestationClassifierAgent.compute_prompt_hash(reference_markdown)
     prompt_changed = current_hash != incoming_hash
+    reference_changed = current_reference_hash != incoming_reference_hash
     model_changed = current_model != selected_model
 
-    if not prompt_changed and not model_changed:
+    if not prompt_changed and not reference_changed and not model_changed:
         flash('Nenhuma alteração detectada nas configurações atuais.', 'info')
         return redirect(url_for('disputes_center.classifier_prompt_settings'))
 
     try:
         new_version = None
+        new_reference_version = None
         if prompt_changed:
             new_version = _activate_new_classifier_prompt_version(law_firm_id, prompt_markdown, user_id)
+        if reference_changed:
+            new_reference_version = _activate_new_classifier_reference_version(
+                law_firm_id,
+                reference_markdown,
+                user_id,
+            )
         if model_changed:
             _save_classifier_setting(law_firm_id, selected_model=selected_model, user_id=user_id)
         db.session.commit()
         messages = []
         if new_version is not None:
             messages.append(f'Prompt salvo com sucesso na versão {new_version.version}.')
+        if new_reference_version is not None:
+            messages.append(
+                'Referência técnico-jurídica salva com sucesso '
+                f'na versão {new_reference_version.version}.'
+            )
         if model_changed:
             if selected_model:
                 messages.append(f'Modelo do classificador atualizado para {selected_model}.')
@@ -1840,6 +1932,7 @@ def classifier_prompt_settings_test():
 
     payload = request.get_json(silent=True) or {}
     prompt_markdown = payload.get('prompt_markdown', '')
+    reference_markdown = payload.get('reference_markdown', '')
     test_text = payload.get('test_text', '')
     selected_model = (payload.get('selected_model') or '').strip() or None
 
@@ -1852,6 +1945,7 @@ def classifier_prompt_settings_test():
             str(test_text),
             law_firm_id=law_firm_id,
             prompt_markdown_override=str(prompt_markdown or ''),
+            reference_markdown_override=str(reference_markdown or ''),
             model_name_override=selected_model,
         )
         return jsonify({'success': True, 'result': result})
@@ -1891,6 +1985,42 @@ def classifier_prompt_settings_restore(version_id: int):
     except Exception as exc:
         db.session.rollback()
         flash(f'Erro ao restaurar versão do prompt: {exc}', 'danger')
+
+    return redirect(url_for('disputes_center.classifier_prompt_settings'))
+
+
+@disputes_center_bp.route('/classifier-reference-settings/<int:version_id>/restore', methods=['POST'])
+@require_law_firm
+@require_admin_user
+def classifier_reference_settings_restore(version_id: int):
+    law_firm_id = get_current_law_firm_id()
+    user_id = session.get('user_id')
+
+    source_version = FapContestationClassifierReferenceVersion.query.filter_by(
+        id=version_id,
+        law_firm_id=law_firm_id,
+    ).first_or_404()
+
+    current_version = _get_active_classifier_reference_version(law_firm_id)
+    if current_version and current_version.reference_hash == source_version.reference_hash:
+        flash('Essa versão de referência já está ativa.', 'info')
+        return redirect(url_for('disputes_center.classifier_prompt_settings'))
+
+    try:
+        restored_version = _activate_new_classifier_reference_version(
+            law_firm_id,
+            source_version.reference_markdown,
+            user_id,
+        )
+        db.session.commit()
+        flash(
+            'Versão de referência '
+            f'{source_version.version} restaurada como nova versão {restored_version.version}.',
+            'success',
+        )
+    except Exception as exc:
+        db.session.rollback()
+        flash(f'Erro ao restaurar versão da referência: {exc}', 'danger')
 
     return redirect(url_for('disputes_center.classifier_prompt_settings'))
 

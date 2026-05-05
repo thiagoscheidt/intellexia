@@ -63,8 +63,8 @@
 {% endblock %}
 
 {% block content %}
-{% call page_hero(title='Configuração IA do Painel de Contestações', subtitle='Edite e versione o prompt markdown usado
-na classificação automática das justificativas FAP', icon='bi bi-sliders') %}
+{% call page_hero(title='Configuração IA do Painel de Contestações', subtitle='Edite e versione o prompt e a referência
+técnico-jurídica usados na classificação automática das justificativas FAP', icon='bi bi-sliders') %}
 <nav aria-label="breadcrumb">
     <ol class="breadcrumb mb-0 bg-transparent small">
         <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a>
@@ -99,14 +99,15 @@ na classificação automática das justificativas FAP', icon='bi bi-sliders') %}
                     <div class="card-header d-flex align-items-start gap-2">
                         <div class="d-flex flex-column align-items-start">
                             <h3 class="card-title mb-0">
-                                <i class="bi bi-markdown me-2"></i>Prompt em Markdown
+                                <i class="bi bi-markdown me-2"></i>Textos do Classificador
                             </h3>
                             <div class="text-muted small mt-1">
-                                {% if current_version %}
-                                Versão ativa: <strong>v{{ current_version.version }}</strong>
-                                {% else %}
-                                Usando prompt padrão embutido no código
-                                {% endif %}
+                                Prompt ativo:
+                                <strong>{% if current_version %}v{{ current_version.version }}{% else %}padrão{% endif
+                                    %}</strong>
+                                · Referência ativa:
+                                <strong>{% if current_reference_version %}v{{ current_reference_version.version }}{%
+                                    else %}padrão{% endif %}</strong>
                             </div>
                         </div>
                         <button type="button" class="btn btn-outline-success btn-sm ms-auto" data-bs-toggle="modal"
@@ -170,12 +171,44 @@ na classificação automática das justificativas FAP', icon='bi bi-sliders') %}
                             </div>
 
                             <div class="mb-3">
-                                <label for="prompt_markdown" class="form-label">Conteúdo do prompt</label>
-                                <div class="classifier-prompt-editor">
-                                    <div id="promptMarkdownEditor"></div>
+                                <ul class="nav nav-tabs" id="classifierTextTabs" role="tablist">
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link active" id="prompt-tab" data-bs-toggle="tab"
+                                            data-bs-target="#prompt-tab-pane" type="button" role="tab"
+                                            aria-controls="prompt-tab-pane" aria-selected="true">
+                                            Prompt editável
+                                        </button>
+                                    </li>
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link" id="reference-tab" data-bs-toggle="tab"
+                                            data-bs-target="#reference-tab-pane" type="button" role="tab"
+                                            aria-controls="reference-tab-pane" aria-selected="false">
+                                            Referência técnico-jurídica
+                                        </button>
+                                    </li>
+                                </ul>
+                                <div class="tab-content border border-top-0 rounded-bottom p-3"
+                                    id="classifierTextTabsContent">
+                                    <div class="tab-pane fade show active" id="prompt-tab-pane" role="tabpanel"
+                                        aria-labelledby="prompt-tab" tabindex="0">
+                                        <label for="prompt_markdown" class="form-label">Conteúdo do prompt</label>
+                                        <div class="classifier-prompt-editor">
+                                            <div id="promptMarkdownEditor"></div>
+                                        </div>
+                                    </div>
+                                    <div class="tab-pane fade" id="reference-tab-pane" role="tabpanel"
+                                        aria-labelledby="reference-tab" tabindex="0">
+                                        <label for="reference_markdown" class="form-label">Referência técnico-jurídica
+                                            completa</label>
+                                        <div class="classifier-prompt-editor">
+                                            <div id="referenceMarkdownEditor"></div>
+                                        </div>
+                                    </div>
                                 </div>
                                 <textarea id="prompt_markdown" name="prompt_markdown" class="d-none"
                                     spellcheck="false">{{ prompt_markdown }}</textarea>
+                                <textarea id="reference_markdown" name="reference_markdown" class="d-none"
+                                    spellcheck="false">{{ reference_markdown }}</textarea>
                             </div>
                         </div>
                         <div class="card-footer d-flex gap-2 flex-wrap">
@@ -206,50 +239,111 @@ na classificação automática das justificativas FAP', icon='bi bi-sliders') %}
                         <h3 class="card-title mb-0"><i class="bi bi-clock-history me-2"></i>Histórico de versões</h3>
                     </div>
                     <div class="card-body p-0">
-                        {% if version_history %}
-                        <div class="list-group list-group-flush">
-                            {% for version in version_history %}
-                            <div class="list-group-item">
-                                <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
-                                    <div>
-                                        <div class="fw-semibold">v{{ version.version }} {% if version.is_active %}<span
-                                                class="badge text-bg-success ms-1">Ativa</span>{% endif %}</div>
-                                        <div class="small text-muted">
-                                            {{ version.created_at.strftime('%d/%m/%Y %H:%M') if version.created_at else
-                                            '-' }}
+                        <ul class="nav nav-tabs px-3 pt-3" id="historyTabs" role="tablist">
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link active" id="history-prompt-tab" data-bs-toggle="tab"
+                                    data-bs-target="#history-prompt-pane" type="button" role="tab"
+                                    aria-controls="history-prompt-pane" aria-selected="true">Prompt</button>
+                            </li>
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link" id="history-reference-tab" data-bs-toggle="tab"
+                                    data-bs-target="#history-reference-pane" type="button" role="tab"
+                                    aria-controls="history-reference-pane" aria-selected="false">Referência</button>
+                            </li>
+                        </ul>
+                        <div class="tab-content" id="historyTabsContent">
+                            <div class="tab-pane fade show active" id="history-prompt-pane" role="tabpanel"
+                                aria-labelledby="history-prompt-tab" tabindex="0">
+                                {% if version_history %}
+                                <div class="list-group list-group-flush">
+                                    {% for version in version_history %}
+                                    <div class="list-group-item">
+                                        <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                                            <div>
+                                                <div class="fw-semibold">v{{ version.version }} {% if version.is_active
+                                                    %}<span class="badge text-bg-success ms-1">Ativa</span>{% endif %}
+                                                </div>
+                                                <div class="small text-muted">
+                                                    {{ version.created_at.strftime('%d/%m/%Y %H:%M') if
+                                                    version.created_at else
+                                                    '-' }}
+                                                </div>
+                                            </div>
+                                            {% if not version.is_active %}
+                                            <form method="POST"
+                                                action="{{ url_for('disputes_center.classifier_prompt_settings_restore', version_id=version.id) }}">
+                                                <button type="submit" class="btn btn-outline-primary btn-sm">
+                                                    <i class="bi bi-arrow-counterclockwise me-1"></i>Restaurar
+                                                </button>
+                                            </form>
+                                            {% endif %}
                                         </div>
+                                        <details>
+                                            <summary class="small text-primary" style="cursor: pointer;">Ver conteúdo
+                                            </summary>
+                                            <div class="markdown-preview markdown-preview-target small mt-2 mb-0"></div>
+                                            <textarea
+                                                class="markdown-preview-source d-none">{{ version.prompt_markdown }}</textarea>
+                                        </details>
                                     </div>
-                                    {% if not version.is_active %}
-                                    <form method="POST"
-                                        action="{{ url_for('disputes_center.classifier_prompt_settings_restore', version_id=version.id) }}">
-                                        <button type="submit" class="btn btn-outline-primary btn-sm">
-                                            <i class="bi bi-arrow-counterclockwise me-1"></i>Restaurar
-                                        </button>
-                                    </form>
-                                    {% endif %}
+                                    {% endfor %}
                                 </div>
-                                <details>
-                                    <summary class="small text-primary" style="cursor: pointer;">Ver conteúdo</summary>
-                                    <div class="markdown-preview markdown-preview-target small mt-2 mb-0"></div>
-                                    <textarea
-                                        class="markdown-preview-source d-none">{{ version.prompt_markdown }}</textarea>
-                                </details>
+                                {% else %}
+                                <div class="p-3 text-muted">
+                                    Nenhuma versão customizada de prompt salva ainda.
+                                </div>
+                                {% endif %}
                             </div>
-                            {% endfor %}
+                            <div class="tab-pane fade" id="history-reference-pane" role="tabpanel"
+                                aria-labelledby="history-reference-tab" tabindex="0">
+                                {% if reference_version_history %}
+                                <div class="list-group list-group-flush">
+                                    {% for version in reference_version_history %}
+                                    <div class="list-group-item">
+                                        <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                                            <div>
+                                                <div class="fw-semibold">v{{ version.version }} {% if version.is_active
+                                                    %}<span class="badge text-bg-success ms-1">Ativa</span>{% endif %}
+                                                </div>
+                                                <div class="small text-muted">
+                                                    {{ version.created_at.strftime('%d/%m/%Y %H:%M') if
+                                                    version.created_at else
+                                                    '-' }}
+                                                </div>
+                                            </div>
+                                            {% if not version.is_active %}
+                                            <form method="POST"
+                                                action="{{ url_for('disputes_center.classifier_reference_settings_restore', version_id=version.id) }}">
+                                                <button type="submit" class="btn btn-outline-primary btn-sm">
+                                                    <i class="bi bi-arrow-counterclockwise me-1"></i>Restaurar
+                                                </button>
+                                            </form>
+                                            {% endif %}
+                                        </div>
+                                        <details>
+                                            <summary class="small text-primary" style="cursor: pointer;">Ver conteúdo
+                                            </summary>
+                                            <div class="markdown-preview markdown-preview-target small mt-2 mb-0"></div>
+                                            <textarea
+                                                class="markdown-preview-source d-none">{{ version.reference_markdown }}</textarea>
+                                        </details>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                {% else %}
+                                <div class="p-3 text-muted">
+                                    Nenhuma versão customizada de referência salva ainda.
+                                </div>
+                                {% endif %}
+                            </div>
                         </div>
-                        {% else %}
-                        <div class="p-3 text-muted">
-                            Nenhuma versão customizada salva ainda. O classificador está usando o prompt padrão embutido
-                            no código.
-                        </div>
-                        {% endif %}
                     </div>
                 </div>
 
                 <div class="card card-outline card-light">
                     <div class="card-header">
-                        <h3 class="card-title mb-0"><i class="bi bi-file-earmark-code me-2"></i>Prompt padrão de
-                            referência</h3>
+                        <h3 class="card-title mb-0"><i class="bi bi-file-earmark-code me-2"></i>Padrões embutidos no
+                            código</h3>
                     </div>
                     <div class="card-body">
                         <details>
@@ -257,6 +351,12 @@ na classificação automática das justificativas FAP', icon='bi bi-sliders') %}
                             </summary>
                             <div class="markdown-preview markdown-preview-target small mt-3 mb-0"></div>
                             <textarea class="markdown-preview-source d-none">{{ default_prompt_markdown }}</textarea>
+                        </details>
+                        <details class="mt-3">
+                            <summary class="small text-primary" style="cursor: pointer;">Expandir referência
+                                técnico-jurídica padrão</summary>
+                            <div class="markdown-preview markdown-preview-target small mt-3 mb-0"></div>
+                            <textarea class="markdown-preview-source d-none">{{ default_reference_markdown }}</textarea>
                         </details>
                     </div>
                 </div>
@@ -325,9 +425,11 @@ na classificação automática das justificativas FAP', icon='bi bi-sliders') %}
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        const editorElement = document.getElementById('promptMarkdownEditor');
-        const hiddenInput = document.getElementById('prompt_markdown');
-        const form = hiddenInput ? hiddenInput.closest('form') : null;
+        const promptEditorElement = document.getElementById('promptMarkdownEditor');
+        const referenceEditorElement = document.getElementById('referenceMarkdownEditor');
+        const promptHiddenInput = document.getElementById('prompt_markdown');
+        const referenceHiddenInput = document.getElementById('reference_markdown');
+        const form = promptHiddenInput ? promptHiddenInput.closest('form') : null;
         const testButton = document.getElementById('btnTestPrompt');
         const testInput = document.getElementById('promptTestText');
         const testStatus = document.getElementById('promptTestStatus');
@@ -347,7 +449,7 @@ na classificação automática das justificativas FAP', icon='bi bi-sliders') %}
         const availableModels = availableModelsData ? JSON.parse(availableModelsData.textContent || '[]') : [];
         const defaultModelId = defaultModelIdData ? JSON.parse(defaultModelIdData.textContent || '""') : '';
 
-        if (!editorElement || !hiddenInput || !form || typeof Quill === 'undefined') {
+        if (!promptEditorElement || !referenceEditorElement || !promptHiddenInput || !referenceHiddenInput || !form || typeof Quill === 'undefined') {
             return;
         }
 
@@ -722,14 +824,22 @@ na classificação automática das justificativas FAP', icon='bi bi-sliders') %}
             ['clean']
         ];
 
-        const quill = new Quill('#promptMarkdownEditor', {
+        const promptQuill = new Quill('#promptMarkdownEditor', {
             theme: 'snow',
             modules: { toolbar: toolbarOptions },
             placeholder: 'Escreva o prompt...'
         });
+        const referenceQuill = new Quill('#referenceMarkdownEditor', {
+            theme: 'snow',
+            modules: { toolbar: toolbarOptions },
+            placeholder: 'Escreva a referência técnico-jurídica...'
+        });
 
-        if (hiddenInput.value) {
-            quill.clipboard.dangerouslyPasteHTML(markdownToHtml(hiddenInput.value));
+        if (promptHiddenInput.value) {
+            promptQuill.clipboard.dangerouslyPasteHTML(markdownToHtml(promptHiddenInput.value));
+        }
+        if (referenceHiddenInput.value) {
+            referenceQuill.clipboard.dangerouslyPasteHTML(markdownToHtml(referenceHiddenInput.value));
         }
 
         renderSelectedModel();
@@ -768,12 +878,20 @@ na classificação automática das justificativas FAP', icon='bi bi-sliders') %}
         }
 
         form.addEventListener('submit', function (event) {
-            const markdownText = quillToMarkdown(quill);
-            hiddenInput.value = markdownText;
+            const promptMarkdownText = quillToMarkdown(promptQuill);
+            const referenceMarkdownText = quillToMarkdown(referenceQuill);
+            promptHiddenInput.value = promptMarkdownText;
+            referenceHiddenInput.value = referenceMarkdownText;
 
-            if (!markdownText.trim()) {
+            if (!promptMarkdownText.trim()) {
                 event.preventDefault();
                 alert('Escreva o prompt antes de salvar.');
+                return;
+            }
+
+            if (!referenceMarkdownText.trim()) {
+                event.preventDefault();
+                alert('Escreva a referência técnico-jurídica antes de salvar.');
             }
         });
 
@@ -787,9 +905,17 @@ na classificação automática das justificativas FAP', icon='bi bi-sliders') %}
                     return;
                 }
 
-                const markdownText = quillToMarkdown(quill);
+                const markdownText = quillToMarkdown(promptQuill);
+                const referenceMarkdownText = quillToMarkdown(referenceQuill);
                 if (!markdownText.trim()) {
                     testStatus.textContent = 'O prompt editável não pode ficar vazio para o teste.';
+                    testStatus.className = 'small text-danger mb-2';
+                    testResult.style.display = 'none';
+                    return;
+                }
+
+                if (!referenceMarkdownText.trim()) {
+                    testStatus.textContent = 'A referência técnico-jurídica não pode ficar vazia para o teste.';
                     testStatus.className = 'small text-danger mb-2';
                     testResult.style.display = 'none';
                     return;
@@ -808,6 +934,7 @@ na classificação automática das justificativas FAP', icon='bi bi-sliders') %}
                         },
                         body: JSON.stringify({
                             prompt_markdown: markdownText,
+                            reference_markdown: referenceMarkdownText,
                             selected_model: selectedModelInput ? selectedModelInput.value : '',
                             test_text: testText,
                         })

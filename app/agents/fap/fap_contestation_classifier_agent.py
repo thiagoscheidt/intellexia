@@ -12,7 +12,11 @@ from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
 
 from app.agents.config import DEFAULT_MODEL_MINI
-from app.models import FapContestationClassifierPromptVersion, FapContestationClassifierSetting
+from app.models import (
+    FapContestationClassifierPromptVersion,
+    FapContestationClassifierReferenceVersion,
+    FapContestationClassifierSetting,
+)
 from app.services.token_usage_service import TokenUsageService
 
 
@@ -102,6 +106,217 @@ class FAPContestationClassifierAgent:
 ## Regra de estruturacao
 
 - Se o texto trouxer mais de um bloco justificativo com fundamentos distintos, retorne multiplos slugs (ate 3), sem inventar.
+"""
+
+    REFERENCE_MARKDOWN_DEFAULT = """# NEXO TÉCNICO PREVIDENCIÁRIO PENDENTE DE JULGAMENTO
+
+A caracterização do benefício como acidentário pode ser realizada por meio da emissão da Comunicação de Acidente de Trabalho (CAT) ou pela atribuição de um Nexo Técnico Previdenciário (NTP) pela INSS. O NTP possui presunção relativa, permitindo a apresentação de provas em contrário. Nesse contexto, a empresa é notificada sobre a concessão do benefício acidentário e pode contestar o NTP, o que pode resultar na conversão do benefício de acidentário para previdenciário.
+
+No presente caso, apesar da atribuição de um NTP que resultou na concessão do benefício acidentário, este não se origina de um acidente de trabalho ou doença ocupacional. Dessa forma, a empresa apresentou contestação ao INSS, solicitando a conversão do benefício para a natureza previdenciária. Essa contestação encontra-se pendente de julgamento.
+
+Diante dessa situação, a contestação deve suspender os efeitos tributários do benefício, impedindo sua inclusão no índice FAP, uma vez que a natureza acidentária ainda não foi definida. O Código Tributário Nacional (CTN), em seu art. 116, II, estabelece que "considera-se ocorrido o fato gerador e existentes os seus efeitos: [...] II - tratando-se de situação jurídica, desde o momento em que esteja DEFINITIVAMENTE constituída, nos termos de direito aplicável".
+
+Assim, requer-se a concessão do efeito suspensivo deste benefício no cálculo do FAP, com a exclusão até o julgamento da contestação de NTP pelo INSS, e, posteriormente, a exclusão definitiva.
+
+# ACIDENTE DE TRAJETO
+
+A Resolução nº 1.347/2021 do CNPS dispõe que os benefícios decorrentes de acidentes de trajeto não devem compor a base de cálculo do Fator Acidentário de Prevenção, assim identificados por meio da CAT ou por outro instrumento que venha a substitui-la. No presente caso, a CAT nº 2019.123.456-9/01 comprova a vinculação entre o benefício e o acidente registrado.
+
+Assim, sendo um benefício decorrente de acidente de trajeto, este não deve integrar a base de cálculo do FAP da empresa. Diante do exposto, requer-se a exclusão do referido benefício do cálculo do índice FAP.
+
+## ACIDENTE DE TRAJETO SEM CAT - AÇÃO JUDICIAL
+
+A Resolução nº 1.347/2021 do CNPS dispõe que os benefícios decorrentes de acidentes de trajeto não devem compor a base de cálculo do Fator Acidentário de Prevenção.
+
+O acidente de trajeto é definido como aquele ocorrido entre a residência do trabalhador e o local de trabalho, e vice-versa, independentemente do meio de locomoção utilizado, incluindo veículo de propriedade do segurado (art. 21, IV, ''d'', da Lei no 8.213).
+
+Nesse contexto, a classificação do evento como sendo de trajeto está vinculada ao local, às circunstâncias e ao horário em que ocorreu, sendo as condições específicas do incidente os elementos que determinam essa classificação.
+
+Nesse passo, a ação judicial nº 5015126-19.2021.8.24.0036/SC confirma que o benefício é oriundo de um acidente de trajeto.
+
+Assim, sendo um benefício decorrente de acidente de trajeto, este não deve integrar a base de cálculo do FAP da empresa. Diante do exposto, requer-se a exclusão do referido benefício do cálculo do índice FAP.
+
+# RESTABELECIMENTO DE BENEFÍCIO - B91 60 DIAS
+
+O § 3º do artigo 75 do Decreto nº 3.048/1999 estabelece que, se um novo benefício é concedido em menos de 60 (sessenta) dias após o término do anterior, isso deve ser considerado um restabelecimento, não uma nova concessão. Isso ocorre porque se trata da mesma condição de saúde e não de uma nova situação ou agravamento.
+
+De acordo com os Regulamentos da Previdência Social, caso o segurado não se recupere completamente dentro do período de 60 dias após a cessação do benefício anterior e necessite de um novo afastamento, a medida correta é o restabelecimento do benefício originalmente concedido, e não a concessão de um novo.
+
+Nesse contexto, o benefício em questão decorre da mesma causa que originou a incapacidade que justificou a concessão do benefício nº xxxxxx, cuja data de cessação (DCB) ocorreu há menos de sessenta dias. Entretanto, em vez de restabelecer o primeiro benefício, o INSS concedeu equivocadamente um segundo benefício ao segurado. Cumpre destacar que o primeiro benefício já foi considerado no cálculo do FAP em outras vigências.
+
+Dessa forma, comprovado o erro no cálculo do índice FAP devido à inclusão de um novo benefício que, na verdade, refere-se ao restabelecimento do benefício anterior, requer-se a exclusão desse benefício para evitar a caracterização de bis in idem.
+
+# AUXÍLIO-DOENÇA PREVIDENCIÁRIO - B31
+
+A Resolução nº 1.347/2021 do CNPS, que estabelece a metodologia de cálculo do Fator Acidentário de Prevenção, determina que a base de cálculo do índice deve ser composta exclusivamente por benefícios de natureza acidentária. Portanto, benefícios de natureza previdenciária não devem ser incluídos nessa base.
+
+No entanto, de acordo com o sistema de benefícios por incapacidade do INSS, verifica-se que o benefício em questão foi concedido sob a espécie previdenciária. Dessa forma, a inclusão desse benefício contraria a legislação vigente, uma vez que penaliza a empresa ao elevar o FAP e, consequentemente, a alíquota de contribuição ao Seguro de Acidente de Trabalho (SAT), além de não atender ao propósito para o qual o FAP foi criado.
+
+Diante do exposto, considerando que se trata de um benefício de natureza previdenciária, requer-se a exclusão desse benefício da base de cálculo do índice FAP.
+
+# ERRO DE ESTABELECIMENTO
+
+A Resolução nº 1.347/2021 do CNPS estabelece a metodologia de cálculo do Fator Acidentário de Prevenção (FAP), estipulando parâmetros e critérios para a determinação do percentual a ser atribuído a cada estabelecimento, de forma individualizada, com base em seu Cadastro Nacional de Pessoas Jurídicas (CNPJ).
+
+Essa apuração está relacionada à forma de cálculo da alíquota de contribuição para o Seguro de Acidente de Trabalho (SAT), conforme dispõe a Súmula nº 351 do STJ, a qual determina que o cálculo deve ocorrer por estabelecimento.
+
+Dessa forma, os estabelecimentos com maior incidência e gravidade de acidentes apresentam um índice FAP mais elevado em comparação àqueles com menor frequência de ocorrências.
+
+Contudo, para que um benefício acidentário seja considerado na base de cálculo do FAP de um estabelecimento, é indispensável que exista nexo entre: (i) o empregado; (ii) o acidente ou a doença que deu origem ao benefício; e (iii) o estabelecimento identificado pelo CNPJ ao qual o empregado estava vinculado na data do acidente de trabalho.
+
+No caso, o acidente que originou o benefício não se relaciona a este estabelecimento, mas ao CNPJ [CNPJ_CORRETO], conforme demonstra a Comunicação de Acidente de Trabalho (CAT) nº [XXXX.XXXXXX.X/XX], que vincula o evento ao referido CNPJ.
+
+Dessa forma, não é possível imputar a este estabelecimento o aumento do índice FAP decorrente de benefício cuja origem está vinculada a outro estabelecimento (CNPJ).
+
+Portanto, para a correta aplicação da legislação e considerando que este estabelecimento não é o responsável pelo acidente ou doença, requer-se a exclusão desse benefício da base de cálculo do índice FAP.
+
+# PRÉ-FAP
+
+O art. 202-A, § 9º, do Decreto nº 3.048/1999, na redação dada pelo Decreto nº 6.957, de 2009, estabelece que: "Excepcionalmente, no primeiro processamento do FAP serão utilizados os dados de abril de 2007 a dezembro de 2008." Assim, somente acidentes ou doenças ocorridos a partir de 1º abril de 2007 podem compor a base de cálculo do FAP.
+
+Essa delimitação decorre do princípio da legalidade no Sistema Tributário Brasileiro, que restringe o poder de tributar e assegura ao contribuinte a certeza jurídica quanto ao momento em que as obrigações tributárias podem ser exigidas. Além disso, aplica-se o princípio da irretroatividade, que estabelece que, em geral, a legislação tributária não retroage para abranger eventos geradores anteriores à sua vigência.
+
+No presente caso, o evento acidentário que originou o benefício ocorreu antes da implementação e vigência do FAP, ou seja, antes de 1º de abril de 2007.
+
+Por tais razões, e considerando que o benefício decorre de um acidente ou doença adquirida antes de abril de 2007, requer-se a exclusão desse benefício da base de cálculo do índice FAP.
+
+# OUTRA EMPRESA - CAT VINCULADA
+
+A Resolução nº 1.347/2021 do CNPS estabelece a metodologia de cálculo do Fator Acidentário de Prevenção (FAP), definindo parâmetros e critérios para a determinação do percentual a ser atribuído a cada estabelecimento, de forma individualizada, com base em seu Cadastro Nacional de Pessoas Jurídicas (CNPJ).
+
+Nesse contexto, para que um benefício acidentário seja considerado na base de cálculo do Fator Acidentário de Prevenção (FAP) de um estabelecimento, é fundamental que exista um nexo entre: (i) o empregado; (ii) o acidente ou doença que gerou o benefício; e (iii) o estabelecimento identificado pelo seu Cadastro Nacional de Pessoas Jurídicas (CNPJ), ao qual o empregado estava vinculado na data do acidente ou doença.
+
+Contudo, conforme a Comunicação de Acidente de Trabalho (CAT) nº 2019.123.456-9/01 vinculada ao benefício, verifica-se que o empregado sofreu um acidente de trabalho em outra empresa. Dessa forma, a empresa não pode ser responsabilizada por benefício que teve origem em um acidente ou doença ocorridos em outra empresa.
+
+Diante disso, requer-se a exclusão do benefício da base de cálculo do índice FAP.
+
+## OUTRA EMPRESA - NUNCA FOI EMPREGADO
+
+A Resolução nº 1.347/2021 do CNPS estabelece a metodologia de cálculo do Fator Acidentário de Prevenção (FAP), definindo parâmetros e critérios para a determinação do percentual a ser atribuído a cada estabelecimento, de forma individualizada, com base em seu Cadastro Nacional de Pessoas Jurídicas (CNPJ).
+
+Nesse contexto, para que um benefício acidentário seja considerado na base de cálculo do Fator Acidentário de Prevenção (FAP) de um estabelecimento, é fundamental que exista um nexo entre: (i) o empregado; (ii) o acidente ou doença que gerou o benefício; e (iii) o estabelecimento identificado pelo seu Cadastro Nacional de Pessoas Jurídicas (CNPJ), ao qual o empregado estava vinculado na data do acidente ou doença.
+
+No caso, o segurado nunca manteve vínculo empregatício com a empresa, conforme evidenciado pela ausência de registros internos e pelas informações prestadas na Guia de Recolhimento do Fundo de Garantia do Tempo de Serviço e Informações à Previdência Social (GFIP) e no e-Social.
+
+Diante da inexistência de vínculo empregatício com a empresa, requer-se a exclusão do benefício da base de cálculo do índice FAP.
+
+## OUTRA EMPRESA - APÓS A RESCISÃO CONTRATUAL
+
+A Resolução nº 1.347/2021 do CNPS estabelece a metodologia de cálculo do Fator Acidentário de Prevenção (FAP), definindo parâmetros e critérios para a determinação do percentual a ser atribuído a cada estabelecimento, de forma individualizada, com base em seu Cadastro Nacional de Pessoas Jurídicas (CNPJ).
+
+Nesse contexto, para que um benefício acidentário seja considerado na base de cálculo do Fator Acidentário de Prevenção (FAP) de um estabelecimento, é fundamental que exista um nexo entre: (i) o empregado; (ii) o acidente ou doença que gerou o benefício; e (iii) o estabelecimento identificado pelo seu Cadastro Nacional de Pessoas Jurídicas (CNPJ), ao qual o empregado estava vinculado na data do acidente ou doença.
+
+No caso, a rescisão contratual do empregado ocorreu em [data]. Assim, verifica-se que a data de início do benefício (DIB) é posterior à rescisão do contrato de trabalho. Portanto, a empresa não pode ser responsabilizada pelo acidente de trabalho.
+
+Para reforçar a argumentação, o período de graça tem como objetivo garantir a qualidade de segurado, e não vincular um benefício a uma empresa com a qual o segurado não possui mais vínculo. Essa distinção é fundamental, pois responsabilizar uma empresa por um acidente de trabalho envolvendo um ex-empregado contraria os princípios que regem a legislação trabalhista e a metodologia do Fator Acidentário de Prevenção (FAP).
+
+Ademais, o cálculo do índice FAP visa incentivar a melhoria das condições laborais e de saúde dos empregados, estimulando os estabelecimentos a implementarem medidas coletivas e individuais de prevenção aos riscos de acidentes ou doenças do trabalho. Assim, atribuir responsabilidade a uma empresa por um acidente de trabalho envolvendo um segurado sem vínculo empregatício não apenas contraria a metodologia e os objetivos do FAP, mas também ignora a impossibilidade de a empresa evitar o referido acidente.
+
+Portanto, diante da inexistência de vínculo empregatício com a empresa na data do evento acidentário, requer-se a exclusão do benefício da base de cálculo do índice FAP.
+
+## OUTRA EMPRESA - DID ANTERIOR À ADMISSÃO NA EMPRESA
+
+A Resolução nº 1.347/2021 do CNPS estabelece a metodologia de cálculo do Fator Acidentário de Prevenção (FAP), definindo parâmetros e critérios para a determinação do percentual a ser atribuído a cada estabelecimento, de forma individualizada, com base em seu Cadastro Nacional de Pessoas Jurídicas (CNPJ).
+
+Nesse contexto, para que um benefício acidentário seja considerado na base de cálculo do Fator Acidentário de Prevenção (FAP) de um estabelecimento, é fundamental que exista um nexo entre: (i) o empregado; (ii) o acidente ou doença que gerou o benefício; e (iii) o estabelecimento identificado pelo seu Cadastro Nacional de Pessoas Jurídicas (CNPJ), ao qual o empregado estava vinculado na data do acidente ou doença.
+
+No presente caso, conforme indicado no laudo médico pericial de concessão do benefício, a data de início da doença (DID) é anterior à admissão do empregado. Portanto, o benefício decorre de um acidente de trabalho ou de uma doença ocupacional sofrida em outra empresa, o que significa que a responsabilidade pela inclusão desse benefício deve recair sobre o índice FAP da empresa onde ocorreu o evento.
+
+Diante dessas considerações, e tendo em vista que a DID precede a admissão do empregado, requer-se a exclusão do benefício da base de cálculo do índice FAP desta empresa.
+
+# NEXO AFASTADO
+
+Para que o benefício de incapacidade seja classificado como acidentário, é necessário estabelecer a relação de causa e efeito entre o trabalho e o acidente, ou seja, a confirmação do nexo causal ou da concausalidade, conforme disposto no art. 19, caput, e no art. 21, I, da Lei nº 8.213/1991.
+
+A caracterização do benefício como acidentário ocorre por meio da emissão da Comunicação de Acidente de Trabalho (CAT) ou por uma das modalidades de Nexo Técnico Previdenciário (NTP), este último possuindo presunção relativa, admitindo prova em contrário.
+
+No caso em questão, a perícia médica judicial realizada nos autos nº 1029867-26.2023.4.01.3500, que tramitou na Justiça Federal ou do Trabalho, apresentou fundamentos técnicos que afastaram o nexo de causalidade e concausalidade entre os problemas de saúde do empregado e suas atividades laborais, evidenciando que as condições apresentadas são degenerativas e inerentes à idade do empregado.
+
+Diante disso, a sentença judicial declarou a inexistência de acidente de trabalho, concluindo que a doença do empregado não está relacionada com o exercício de suas funções. Assim, conforme reconhecido pela decisão judicial, fica evidenciado que as lesões do segurado não decorrem do trabalho, caracterizando-se, portanto, como um benefício de natureza previdenciária.
+
+Por essas razões, requer-se a exclusão do benefício da base de cálculo do índice FAP.
+
+# BENEFÍCIO CONCEDIDO NA JUSTIÇA FEDERAL
+
+Consoante a Súmula nº 235 do Supremo Tribunal Federal (STF), compete à Justiça Comum Estadual julgar as ações acidentárias que, propostas pelo segurado contra o Instituto Nacional do Seguro Social (INSS), visem à prestação de benefícios relativos a acidentes de trabalho. Em contraposição, o art. 109, I e § 3º, da Constituição da República Federativa do Brasil (CRFB) de 1988 confere à Justiça Federal a competência para processar e julgar causas de natureza previdenciária, deixando claro que está não tem jurisdição sobre casos que envolvem acidentes de trabalho.
+
+Dessa forma, fica evidente que a Justiça Estadual é responsável pela concessão de benefícios acidentários, enquanto a Justiça Federal atua em matérias previdenciárias.
+
+No caso, o benefício foi concedido por meio de ação judicial que tramitou na JUSTIÇA FEDERAL, reafirmando sua natureza previdenciária. Contudo, o INSS implantou o benefício de forma equivocada, considerando-o acidentário.
+
+Portanto, tendo em vista que o benefício possui natureza previdenciária, requer-se a exclusão desse benefício do índice FAP da empresa.
+
+# CONCOMITANTE - AUXÍLIO-DOENÇA (B91) COM APOSENTADORIA
+
+Conforme dispõe o artigo 7º, inciso XXIV, da Constituição da República Federativa do Brasil de 1988, é assegurado aos empregados urbanos e rurais o direito à aposentadoria, desde que atendidos os requisitos legais. Esse benefício constitui uma prestação previdenciária mensal conferida pela Previdência Social.
+
+Importa ressaltar, ademais, a vedação de sua acumulação com o auxílio-doença, conforme preceituam o artigo 167, inciso I, do Decreto nº 3.048/1999, o artigo 124, inciso I, da Lei nº 8.213/1991 e o artigo 639, inciso I, da Instrução Normativa nº 128/2022 do INSS.
+
+Não obstante a proibição legal de acumulação entre aposentadoria e auxílio-doença, foi concedido o benefício de auxílio-doença em questão ao segurado, apesar de este já estar em gozo do benefício de aposentadoria (NB xxxxx), com data de início (DIB) fixada em [data]. Tal acumulação indevida configura violação a legislação vigente.
+
+Portanto, a inclusão desse benefício não atende aos critérios e metodologia estabelecidos no Fator Acidentário de Prevenção (FAP), considerando que o segurado já é beneficiário de aposentadoria.
+
+Diante do exposto, requer-se a exclusão desse benefício da base de cálculo do índice FAP.
+
+## CONCESSÃO CONCOMITANTE DE DOIS AUXÍLIO-DOENÇA (DOIS B91)
+
+O segurado que exerce mais de uma atividade abrangida pela Previdência Social e fica incapacitado para uma ou mais atividades, seja na espécie previdenciária ou acidentária, terá direito a um único benefício, conforme estipulado no art. 337, caput, da Instrução Normativa (IN) nº 128/2022 do INSS.
+
+Logo, é vedado ao segurado receber simultaneamente dois ou mais benefícios de incapacidade temporária, como previsto no art. 639, XII, da mesma Instrução Normativa.
+
+Todavia, apesar da proibição legal da cumulação de dois benefícios B91, foi concedido concomitantemente o benefício em tela, enquanto o empregado já estava usufruindo do auxílio-doença por acidente de trabalho, espécie B91, nº XXXXXX, com DIB em [data] e DCB em [data].
+
+Diante da vedação legal à concessão simultânea de mais de um auxílio-doença por acidente de trabalho, é evidente que o benefício em discussão, não deve ser incluído na base de cálculo do FAP.
+
+Diante do exposto, requer-se a exclusão deste benefício da base de cálculo do índice FAP.
+
+## CONCESSÃO - AUXÍLIO-ACIDENTE (B94) COM APOSENTADORIA
+
+Conforme dispõe o artigo 7º, inciso XXIV, da Constituição da República Federativa do Brasil de 1988, é assegurado aos empregados urbanos e rurais o direito à aposentadoria, desde que atendidos os requisitos legais. Esse benefício constitui uma prestação previdenciária mensal conferida pela Previdência Social.
+
+Importa ressaltar, ademais, a vedação de sua acumulação com o auxílio-acidente, conforme preceituam o artigo 167, inciso IX, do Decreto nº 3.048/1999, o artigo 86, parágrafo 2º, da Lei nº 8.213/1991 e o artigo 639, inciso VI, da Instrução Normativa nº 128/2022 do INSS.
+
+Não obstante a proibição legal de acumulação entre aposentadoria e auxílio-acidente, foi concedido o benefício de auxílio-acidente em questão ao segurado, apesar de este já estar em gozo do benefício de aposentadoria (NB xxxxx), com data de início (DIB) fixada em [data]. Tal acumulação indevida configura violação a legislação vigente.
+
+Portanto, a inclusão desse benefício não atende aos critérios e metodologia estabelecidos no Fator Acidentário de Prevenção (FAP), considerando que o segurado já é beneficiário de aposentadoria.
+
+Diante do exposto, requer-se a exclusão desse benefício da base de cálculo do índice FAP.
+
+# AUXÍLIO-ACIDENTE (B94) DUPLICADO
+
+A Resolução nº 1.347/2021 do CNPS estabelece os parâmetros e critérios para a apuração do índice Fator Acidentário de Prevenção (FAP). Entre as diretrizes, destaca-se a regra disposta no item 2.5, que determina que o cálculo anual do FAP considera os eventos de acidentalidade ocorridos nos dois anos anteriores ao ano de cálculo.
+
+Além disso, para a composição do índice, apenas um único benefício de cada espécie (B91, B92, B93 e B94) pode ser considerado para cada evento acidentário. Dessa forma, a inclusão de dois benefícios da mesma espécie, oriundos do mesmo fato gerador, mesmo que em vigências distintas, contraria a metodologia estabelecida pela norma, resultando em contagem duplicada e registro do mesmo acidente ou doença do trabalho e, consequentemente, distorcendo o cálculo do FAP.
+
+Neste contexto, verificou-se a concessão de dois benefícios de auxílio-acidente decorrentes do mesmo evento acidentário, sendo que o benefício nº xxxxx já foi incluído no índice FAP. Portanto, a inclusão de dois benefícios da mesma espécie (B94) relacionados ao mesmo fato gerador contraria a metodologia de cálculo do FAP e resulta em duplicidade na contagem dos eventos.
+
+Diante do exposto, requer-se a exclusão deste benefício da base de cálculo do índice FAP.
+
+# AUXÍLIO-DOENÇA (B94) SEM CUSTO
+
+O erro constata-se pela inclusão na base de cálculo do FAP do benefício nº xxxxx com a mesma data de início (DIB) e de cessação (DCB).
+
+Isso porque, não existe a possibilidade de concessão de benefício acidentário sem prazo de duração (DIB = DCB) e sem custo associado, ou seja, esse benefício nunca existiu no mundo jurídico. E, se não existiu não pode ser incluído na base de cálculo do FAP da Autora.
+
+Assim, o equívoco da Previdência Social ao incluir no sistema o benefício de auxílio-acidente com datas de início (DIB) e cessação (DCB) coincidentes, resultou em erro no cálculo de frequência, gravidade e custo, aumentando indevidamente o índice FAP e causando maior tributação à Autora.
+
+Diante do exposto, requer-se a exclusão deste benefício da base de cálculo do índice FAP.
+
+# DISCUSSÃO MÉDICA / OUTROS
+
+É muito comum perceber empresas que fazem discussões médicas no corpo das contestações administrativas de FAP.
+
+Esse tipo de discussão não é cabível no momento das contestações anuais de FAP, mas apenas nas contestações de nexo técnico.
+
+As contestações de fap e de nexo técnico são completamente diferentes e acontecem em momentos diferentes.
+
+Orientação para interpretação de contexto: todas as vezes em que você identificar uma contestação que não se adeque aos padrões dos tópicos indicados acima, é necessário avançar para a próxima etapa: interpretação livre do texto.
+
+Nessa etapa de interpretação livre, é muito comum percebermos casos em que houve DISCUSSÃO MÉDICA.
+
+O que precisamos é: sempre que você entrar na etapa de interpretação livre, verifique se a contestação de FAP está trazendo uma DISCUSSÃO MÉDICA. Em caso positivo, classifique o benefício sob a categoria DISCUSSÃO MÉDICA.
+
+Para qualquer outro tipo de discussão, que não seja médica, classifique o benefício como "OUTROS ARGUMENTOS".
 """
 
     FIXED_PROMPT_PREFIX = """# Tarefa
@@ -334,6 +549,10 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
     def get_default_user_prompt_markdown(cls) -> str:
         return cls.USER_PROMPT_MARKDOWN_DEFAULT.strip()
 
+    @classmethod
+    def get_default_reference_markdown(cls) -> str:
+        return cls.REFERENCE_MARKDOWN_DEFAULT.strip()
+
     @staticmethod
     def compute_prompt_hash(prompt_markdown: str) -> str:
         return hashlib.sha256((prompt_markdown or "").encode("utf-8")).hexdigest()
@@ -371,14 +590,32 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
         return prompt.strip()
 
     @classmethod
-    def _render_user_prompt(cls, prompt_markdown: str, cleaned_text: str) -> str:
+    def _render_user_prompt(
+        cls,
+        prompt_markdown: str,
+        cleaned_text: str,
+        reference_markdown: str,
+    ) -> str:
         prompt_body = cls._remove_non_editable_sections(
             prompt_markdown or cls.get_default_user_prompt_markdown()
         )
+        reference_body = (reference_markdown or cls.get_default_reference_markdown()).strip()
         fixed_prefix = cls.FIXED_PROMPT_PREFIX.strip().replace("{{SLUGS_MARKDOWN}}", cls._build_slugs_markdown())
         fixed_suffix = cls.FIXED_PROMPT_SUFFIX.strip().replace("{{TEXT}}", cleaned_text)
+        reference_section = ""
+        if reference_body:
+            reference_section = (
+                "## Referencia tecnico-juridica para interpretacao\n\n"
+                f"{reference_body.strip()}"
+            )
+
         if prompt_body:
+            if reference_section:
+                return f"{fixed_prefix}\n\n{prompt_body}\n\n{reference_section}\n\n{fixed_suffix}".strip()
             return f"{fixed_prefix}\n\n{prompt_body}\n\n{fixed_suffix}".strip()
+
+        if reference_section:
+            return f"{fixed_prefix}\n\n{reference_section}\n\n{fixed_suffix}".strip()
         return f"{fixed_prefix}\n\n{fixed_suffix}".strip()
 
     @classmethod
@@ -401,6 +638,27 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
             return prompt_version.prompt_markdown
 
         return cls.get_default_user_prompt_markdown()
+
+    @classmethod
+    def _load_reference_markdown(cls, law_firm_id: int | None) -> str:
+        if not law_firm_id:
+            return cls.get_default_reference_markdown()
+
+        reference_version = (
+            FapContestationClassifierReferenceVersion.query.filter_by(
+                law_firm_id=law_firm_id,
+                is_active=True,
+            )
+            .order_by(
+                FapContestationClassifierReferenceVersion.version.desc(),
+                FapContestationClassifierReferenceVersion.id.desc(),
+            )
+            .first()
+        )
+        if reference_version and (reference_version.reference_markdown or "").strip():
+            return reference_version.reference_markdown
+
+        return cls.get_default_reference_markdown()
 
     def _fallback_topic(self, text: str) -> str:
         normalized_text = self._normalize_text_for_match(text)
@@ -543,6 +801,29 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
             )
         )
 
+    def _has_pos_rescisao_evidence(self, normalized_text: str) -> bool:
+        return bool(
+            re.search(
+                r"APOS\s+A\s+RESCISAO|APOS\s+RESCISAO|POS\s+RESCISAO|DESLIGAD[OA]|RESCISAO\s+CONTRATUAL|DIB\s+(?:E\s+)?POSTERIOR",
+                normalized_text,
+            )
+        )
+
+    def _has_b94_duplicado_evidence(self, normalized_text: str) -> bool:
+        return bool(
+            re.search(
+                r"B94\s+DUPLICAD|DOIS\s+B94|2\s*B94|MESMO\s+FATO\s+GERADOR.*B94|B94.*MESMO\s+FATO\s+GERADOR|JA\s+FOI\s+INCLUID[OA].*B94|B94.*DUAS\s+VEZES",
+                normalized_text,
+            )
+        )
+
+    def _has_aposentadoria_concomitante_evidence(self, normalized_text: str) -> bool:
+        has_aposentadoria = bool(re.search(r"\bAPOSENTADORIA\b|\bAPOSENTAD[OA]\b", normalized_text))
+        has_accumulation_signal = bool(
+            re.search(r"ACUMULA|ACUMULACAO|CUMULA|CONCOMITANT|VEDACAO\s+DE\s+ACUMUL|PROIBICAO\s+DE\s+ACUMUL", normalized_text)
+        )
+        return has_aposentadoria and has_accumulation_signal
+
     def _detect_critical_regex_slugs(self, normalized_text: str) -> list[str]:
         detected: list[str] = []
 
@@ -596,6 +877,9 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
         has_pre_fap = self._has_pre_fap_evidence(normalized_text)
         has_other_company = self._has_other_company_evidence(normalized_text)
         has_other_company_cat = self._has_other_company_cat_evidence(normalized_text)
+        has_pos_rescisao = self._has_pos_rescisao_evidence(normalized_text)
+        has_b94_duplicado = self._has_b94_duplicado_evidence(normalized_text)
+        has_aposentadoria_concomitante = self._has_aposentadoria_concomitante_evidence(normalized_text)
         has_justica_federal = self._has_justica_federal_evidence(normalized_text)
 
         for slug in reversed(critical_slugs):
@@ -618,12 +902,31 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
             guarded_topics = [slug for slug in guarded_topics if slug != "outra_empresa_cat"]
             guarded_topics.insert(0, "outra_empresa_cat")
 
+        if has_other_company and has_pos_rescisao:
+            guarded_topics = [slug for slug in guarded_topics if slug != "outra_empresa_pos_rescisao"]
+            insert_index = 1 if guarded_topics and guarded_topics[0] == "outra_empresa_cat" else 0
+            guarded_topics.insert(insert_index, "outra_empresa_pos_rescisao")
+
+            # Em cenário de outra empresa + pós-rescisão, acidente de trajeto tende a ser contexto,
+            # não a tese principal da exclusão para este CNPJ.
+            guarded_topics = [slug for slug in guarded_topics if slug != "acidente_trajeto"]
+
         if not has_justica_federal:
             guarded_topics = [slug for slug in guarded_topics if slug != "beneficio_justica_federal"]
 
         if has_pre_fap:
             guarded_topics = [slug for slug in guarded_topics if slug != "pre_fap"]
             guarded_topics.insert(0, "pre_fap")
+
+        if not has_b94_duplicado:
+            guarded_topics = [slug for slug in guarded_topics if slug != "b94_duplicado"]
+
+        if not has_aposentadoria_concomitante:
+            guarded_topics = [
+                slug
+                for slug in guarded_topics
+                if slug not in {"concomitante_b91_aposentadoria", "concomitante_b94_aposentadoria"}
+            ]
 
         if has_other_company:
             has_other_company_topic = any(slug in other_company_slugs for slug in guarded_topics)
@@ -679,6 +982,7 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
         *,
         law_firm_id: int | None = None,
         prompt_markdown_override: str | None = None,
+        reference_markdown_override: str | None = None,
         model_name_override: str | None = None,
     ) -> dict[str, Any]:
         """
@@ -703,7 +1007,12 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
             if prompt_markdown_override is not None
             else self._load_user_prompt_markdown(law_firm_id)
         )
-        user_prompt = self._render_user_prompt(user_prompt_markdown, cleaned_text)
+        reference_markdown = (
+            str(reference_markdown_override or "").strip()
+            if reference_markdown_override is not None
+            else self._load_reference_markdown(law_firm_id)
+        )
+        user_prompt = self._render_user_prompt(user_prompt_markdown, cleaned_text, reference_markdown)
         effective_model_name = (
             str(model_name_override or "").strip()
             or self._load_selected_model_name(law_firm_id)

@@ -460,6 +460,27 @@ class FapContestationClassifierPromptVersion(db.Model):
         return f'<FapContestationClassifierPromptVersion v{self.version} - LawFirm {self.law_firm_id}>'
 
 
+class FapContestationClassifierReferenceVersion(db.Model):
+    """Versões do markdown de referência técnico-jurídica do classificador FAP."""
+    __tablename__ = 'fap_contestation_classifier_reference_versions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    version = db.Column(db.Integer, nullable=False)
+    reference_markdown = db.Column(db.Text, nullable=False)
+    reference_hash = db.Column(db.String(64), nullable=False, index=True)
+    is_active = db.Column(db.Boolean, default=True, nullable=False)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    law_firm = db.relationship('LawFirm')
+    created_by_user = db.relationship('User')
+
+    def __repr__(self):
+        return f'<FapContestationClassifierReferenceVersion v{self.version} - LawFirm {self.law_firm_id}>'
+
+
 class FapContestationClassifierSetting(db.Model):
     """Configurações do classificador FAP por escritório."""
     __tablename__ = 'fap_contestation_classifier_settings'
