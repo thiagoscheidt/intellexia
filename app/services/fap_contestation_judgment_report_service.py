@@ -1368,11 +1368,18 @@ class FapContestationJudgmentReportService:
             section,
             flags=re.IGNORECASE,
         )
-        status_match = labeled_status_match or re.search(
-            r'\b(Indeferido|Deferido|Analyzing|Pendente|Pending)\b',
-            section,
-            flags=re.IGNORECASE,
-        )
+        # O fallback amplo só é usado quando não há justificativa: evita capturar palavras
+        # como "PENDENTE DE JULGAMENTO" que aparecem dentro do texto da justificativa.
+        if labeled_status_match:
+            status_match = labeled_status_match
+        elif not justification:
+            status_match = re.search(
+                r'\b(Indeferido|Deferido|Analyzing|Pendente|Pending)\b',
+                section,
+                flags=re.IGNORECASE,
+            )
+        else:
+            status_match = None
         fallback_status = status_match.group(1).capitalize() if status_match else None
 
         # Texto completo do status: captura somente o valor ligado ao rótulo real "Status".
@@ -1394,6 +1401,11 @@ class FapContestationJudgmentReportService:
 
         if not status:
             status = fallback_status
+
+        # Regra de negócio: quando há justificativa mas não há status explícito,
+        # a instância está em análise (não deve herdar palavras da justificativa).
+        if not status and justification:
+            status = 'Em análise'
 
         # Parecer: adiciona delimitadores para evitar capturar "Sumário dos Elementos Contestados" do próximo bloco
         opinion = self._extract_text_between_keywords(
