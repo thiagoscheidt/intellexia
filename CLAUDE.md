@@ -15,12 +15,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | Backend    | Python 3.11–3.13 + Flask 3.1                   |
 | ORM        | SQLAlchemy via Flask-SQLAlchemy                |
 | LLM        | OpenAI (GPT-4o-mini, GPT-5-mini) via LangChain |
-| Vector DB  | Qdrant (busca semântica) + FAISS (local)      |
+| Vector DB  | Qdrant (busca semântica) + FAISS (local)       |
 | Full-text  | Meilisearch                                    |
 | Documentos | Docling, PyMuPDF, pdfplumber, python-docx      |
 | DB Dev     | SQLite (`instance/intellexia.db`)              |
 | DB Prod    | MySQL 8.0 (via `pymysql`)                      |
-| Infra      | Docker Compose (MySQL + Qdrant + Meilisearch) |
+| Infra      | Docker Compose (MySQL + Qdrant + Meilisearch)  |
 | Frontend   | Jinja2 + AdminLTE 4 + Bootstrap 5              |
 | Deps       | `uv` (não use `pip` diretamente)               |
 
@@ -275,6 +275,12 @@ SUMMARY_MAX_CHARS=50000
 - **Saída estruturada**: agentes retornam Pydantic models, não strings livres.
 - **Degradação graciosa**: todo agente tem fallback (regex, LLM direto sem tools, resposta simplificada).
 - **Rastreamento de tokens**: toda chamada LLM deve passar por `TokenUsageService`.
+- **Model Picker de IA (frontend)**: usar componente padronizado e reutilizável, sem duplicar modal por tela.
+  - Macro: `templates/partials/model_picker_modal.html`
+  - CSS: `static/css/model-picker-modal.css`
+  - JS: `static/js/model-picker-modal.js`
+  - Regra: telas devem instanciar `window.ModelPickerModal(...)` e usar callbacks (`onSelect`, `getSelectedModelId`) para integrar estado local.
+  - Não copiar HTML/JS/CSS do modal para templates de feature; evoluções devem ocorrer no componente compartilhado.
 - **Tabelas PDF**: lógica de carry-over para células vazias (CNPJ/NIT que se repetem em linhas).
 - **Dual vector store**: Qdrant para busca conceitual, Meilisearch para busca por termos exatos (CPF, CNPJ, número de processo).
 - **Filtro de tenant obrigatório**: toda query de listagem filtra por `law_firm_id`.

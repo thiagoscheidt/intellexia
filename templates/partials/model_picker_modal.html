@@ -1,0 +1,25 @@
+{% macro model_picker_modal(modal_id='modelPickerModal', title='Selecionar modelo de IA') %}
+<div class="modal fade model-picker-modal" id="{{ modal_id }}" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">
+                    <i class="bi bi-cpu me-2"></i>{{ title }}
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body" data-model-picker-root>
+                <div class="mb-3">
+                    <input type="text" class="form-control" data-role="search-input"
+                        placeholder="Buscar por nome, id ou descrição do modelo...">
+                </div>
+                <div class="mb-3">
+                    <div class="small text-muted mb-2">Filtrar por empresa de IA</div>
+                    <div class="provider-filters-wrap" data-role="provider-filters"></div>
+                </div>
+                <div class="list-group" data-role="model-list"></div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endmacro %}

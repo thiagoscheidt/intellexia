@@ -57,12 +57,12 @@ from app.models import db
 
 ### Convenção de Nomenclatura
 
-| Ação | Nomenclatura | Exemplo |
-|------|--------------|---------|
-| Adicionar coluna | `add_[nome]_column.py` | `add_status_column.py` |
-| Adicionar tabela | `add_[tabela]_table.py` | `add_users_table.py` |
+| Ação              | Nomenclatura               | Exemplo                    |
+| ----------------- | -------------------------- | -------------------------- |
+| Adicionar coluna  | `add_[nome]_column.py`     | `add_status_column.py`     |
+| Adicionar tabela  | `add_[tabela]_table.py`    | `add_users_table.py`       |
 | Alterar estrutura | `alter_[tabela]_[desc].py` | `alter_cases_add_index.py` |
-| Remover algo | `remove_[nome]_[tipo].py` | `remove_old_column.py` |
+| Remover algo      | `remove_[nome]_[tipo].py`  | `remove_old_column.py`     |
 
 ### Template Obrigatório
 
@@ -273,6 +273,39 @@ templates/
    ```html
    <i class="bi bi-[nome]"></i>
    ```
+
+6. **Model Picker de IA (obrigatório quando houver seleção de modelo):**
+   - Reutilizar o componente oficial.
+   - Não duplicar markup/estilos/lógica em cada tela.
+   
+   **Arquivos oficiais:**
+   - `templates/partials/model_picker_modal.html`
+   - `static/css/model-picker-modal.css`
+   - `static/js/model-picker-modal.js`
+
+   **Padrão de uso:**
+   ```jinja2
+   {% from "partials/model_picker_modal.html" import model_picker_modal %}
+   {{ model_picker_modal(modal_id='modelPickerModal', title='Selecionar modelo de IA') }}
+   <script src="{{ url_for('static', filename='js/model-picker-modal.js') }}"></script>
+   ```
+
+   ```javascript
+   const picker = new window.ModelPickerModal({
+      modalId: 'modelPickerModal',
+      models: availableModels,
+      defaultModelId,
+      getSelectedModelId: () => selectedModelInput.value || '',
+      onSelect: (modelId) => {
+         selectedModelInput.value = modelId || '';
+         renderSelectedModel();
+      },
+   });
+   ```
+
+   **Regra de manutenção:**
+   - Melhorias de UX devem ser feitas no componente compartilhado.
+   - Para detalhes, consultar `docs/MODEL_PICKER_PADRAO.md`.
 
 ---
 

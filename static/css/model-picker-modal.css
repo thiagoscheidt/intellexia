@@ -1,0 +1,41 @@
+.model-picker-modal .model-item {
+    cursor: pointer;
+}
+
+.model-picker-modal .model-item:hover {
+    background-color: var(--bs-light-bg-subtle);
+}
+
+.model-picker-modal .model-id {
+    font-family: var(--bs-font-monospace);
+    font-size: 0.8rem;
+    color: var(--bs-secondary-color);
+}
+
+.provider-filters-wrap {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.45rem;
+}
+
+.provider-filter-chip {
+    border-radius: 999px;
+    font-size: 0.78rem;
+    line-height: 1;
+    padding: 0.38rem 0.72rem;
+}
+
+.release-date-badge {
+    background: linear-gradient(135deg, #0ea5e9, #2563eb);
+    color: #fff;
+    border: 1px solid rgba(37, 99, 235, 0.35);
+    box-shadow: 0 2px 10px rgba(37, 99, 235, 0.18);
+    font-weight: 600;
+}
+
+.release-date-badge--muted {
+    background: #eef2f7;
+    color: #475569;
+    border: 1px solid #dbe3ee;
+    box-shadow: none;
+}

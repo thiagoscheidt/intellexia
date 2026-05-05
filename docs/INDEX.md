@@ -23,6 +23,7 @@ Bem-vindo à documentação do **IntellexIA**! Aqui você encontrará guias, tut
 - **[VISUALIZACAO_DOCX.md](VISUALIZACAO_DOCX.md)** - Como visualizar e gerar documentos DOCX
 - **[TEMPLATE_FAP_INSTRUCOES.md](TEMPLATE_FAP_INSTRUCOES.md)** - Instruções para trabalhar com templates FAP
 - **[INSTRUCOES_PARA_IA.md](INSTRUCOES_PARA_IA.md)** - Guia para integração com IA
+- **[MODEL_PICKER_PADRAO.md](MODEL_PICKER_PADRAO.md)** - Padrão oficial do modal reutilizável de seleção de modelo de IA
 
 ### 🖼️ Inserção de Imagens em Petições (NOVO!)
 - **[QUICKSTART_IMAGENS_PETICOES.md](QUICKSTART_IMAGENS_PETICOES.md)** ⚡ - Início rápido: Como usar imagens em 3 passos

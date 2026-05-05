@@ -1,10 +1,12 @@
 {% extends "layout/base.html" %}
 
 {% from "partials/page_hero.html" import page_hero %}
+{% from "partials/model_picker_modal.html" import model_picker_modal %}
 
 {% block title %}Configuração IA do Painel de Contestações{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/model-picker-modal.css') }}">
 <style>
     .classifier-prompt-editor .ql-toolbar {
         border-radius: 0.5rem 0.5rem 0 0;
@@ -44,20 +46,6 @@
     .markdown-preview blockquote,
     .markdown-preview pre {
         margin-bottom: 0.6rem;
-    }
-
-    .model-item {
-        cursor: pointer;
-    }
-
-    .model-item:hover {
-        background-color: var(--bs-light-bg-subtle);
-    }
-
-    .model-id {
-        font-family: var(--bs-font-monospace);
-        font-size: 0.8rem;
-        color: var(--bs-secondary-color);
     }
 </style>
 {% endblock %}
@@ -99,7 +87,7 @@ técnico-jurídica usados na classificação automática das justificativas FAP'
                     <div class="card-header d-flex align-items-start gap-2">
                         <div class="d-flex flex-column align-items-start">
                             <h3 class="card-title mb-0">
-                                <i class="bi bi-markdown me-2"></i>Textos do Classificador
+                                <i class="bi bi-markdown me-2"></i>Configurações do Agente de IA de Classificação FAP
                             </h3>
                             <div class="text-muted small mt-1">
                                 Prompt ativo:
@@ -112,22 +100,11 @@ técnico-jurídica usados na classificação automática das justificativas FAP'
                         </div>
                         <button type="button" class="btn btn-outline-success btn-sm ms-auto" data-bs-toggle="modal"
                             data-bs-target="#promptTestModal">
-                            <i class="bi bi-bezier2 me-1"></i>Testar Prompt
+                            <i class="bi bi-bezier2 me-1"></i>Testar Agente
                         </button>
                     </div>
                     <form method="POST" action="{{ url_for('disputes_center.classifier_prompt_settings_save') }}">
                         <div class="card-body">
-                            <div class="alert alert-info">
-                                <strong>Trecho editável:</strong>
-                                <div class="mt-1">A edição desta tela afeta apenas as regras e orientações centrais do
-                                    prompt.</div>
-                                <div class="mt-2 text-muted">
-                                    As seções <strong>Tarefa</strong>, <strong>Slugs válidos</strong>,
-                                    <strong>Formato de resposta</strong> e <strong>Texto para classificar</strong>
-                                    são fixas no código e não são editáveis nesta tela.
-                                </div>
-                            </div>
-
                             <div class="mb-3">
                                 <label for="selected_model" class="form-label">Modelo do classificador</label>
                                 <input type="hidden" id="selected_model" name="selected_model"
@@ -155,7 +132,9 @@ técnico-jurídica usados na classificação automática das justificativas FAP'
                                             -</span>
                                         <span class="badge text-bg-light me-1" id="selectedModelPromptPrice">Input:
                                             -</span>
-                                        <span class="badge text-bg-light" id="selectedModelCompletionPrice">Output:
+                                        <span class="badge text-bg-light me-1" id="selectedModelCompletionPrice">Output:
+                                            -</span>
+                                        <span class="badge release-date-badge" id="selectedModelReleaseDate">Lançamento:
                                             -</span>
                                     </div>
                                 </div>
@@ -368,25 +347,7 @@ técnico-jurídica usados na classificação automática das justificativas FAP'
 <script type="application/json" id="availableModelsData">{{ available_models|tojson }}</script>
 <script type="application/json" id="defaultModelIdData">{{ default_classifier_model|tojson }}</script>
 
-<div class="modal fade" id="modelPickerModal" tabindex="-1" aria-labelledby="modelPickerModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-xl modal-dialog-scrollable">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modelPickerModalLabel">
-                    <i class="bi bi-cpu me-2"></i>Selecionar modelo de IA
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body">
-                <div class="mb-3">
-                    <input type="text" id="modelSearchInput" class="form-control"
-                        placeholder="Buscar por nome, id ou descrição do modelo...">
-                </div>
-                <div class="list-group" id="modelListContainer"></div>
-            </div>
-        </div>
-    </div>
-</div>
+{{ model_picker_modal(modal_id='modelPickerModal', title='Selecionar modelo de IA') }}
 
 <div class="modal fade" id="promptTestModal" tabindex="-1" aria-labelledby="promptTestModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
@@ -423,6 +384,7 @@ técnico-jurídica usados na classificação automática das justificativas FAP'
 {% endblock %}
 
 {% block extra_js %}
+<script src="{{ url_for('static', filename='js/model-picker-modal.js') }}"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const promptEditorElement = document.getElementById('promptMarkdownEditor');
@@ -441,9 +403,8 @@ técnico-jurídica usados na classificação automática das justificativas FAP'
         const selectedModelContext = document.getElementById('selectedModelContext');
         const selectedModelPromptPrice = document.getElementById('selectedModelPromptPrice');
         const selectedModelCompletionPrice = document.getElementById('selectedModelCompletionPrice');
+        const selectedModelReleaseDate = document.getElementById('selectedModelReleaseDate');
         const btnResetModel = document.getElementById('btnResetModel');
-        const modelSearchInput = document.getElementById('modelSearchInput');
-        const modelListContainer = document.getElementById('modelListContainer');
         const availableModelsData = document.getElementById('availableModelsData');
         const defaultModelIdData = document.getElementById('defaultModelIdData');
         const availableModels = availableModelsData ? JSON.parse(availableModelsData.textContent || '[]') : [];
@@ -451,14 +412,6 @@ técnico-jurídica usados na classificação automática das justificativas FAP'
 
         if (!promptEditorElement || !referenceEditorElement || !promptHiddenInput || !referenceHiddenInput || !form || typeof Quill === 'undefined') {
             return;
-        }
-
-        function escapeAttr(text) {
-            return (text || '')
-                .replace(/&/g, '&amp;')
-                .replace(/"/g, '&quot;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;');
         }
 
         function formatContext(value) {
@@ -480,6 +433,20 @@ técnico-jurídica usados na classificação automática das justificativas FAP'
             return `$${n} / token`;
         }
 
+        function formatReleaseDate(value) {
+            if (window.ModelPickerModalUtils && typeof window.ModelPickerModalUtils.formatReleaseDate === 'function') {
+                return window.ModelPickerModalUtils.formatReleaseDate(value);
+            }
+            return '-';
+        }
+
+        function releaseBadgeClass(value) {
+            if (window.ModelPickerModalUtils && typeof window.ModelPickerModalUtils.releaseBadgeClass === 'function') {
+                return window.ModelPickerModalUtils.releaseBadgeClass(value);
+            }
+            return 'release-date-badge release-date-badge--muted';
+        }
+
         function getSelectedModelMeta() {
             const selected = (selectedModelInput && selectedModelInput.value || '').trim();
             if (!selected) {
@@ -491,6 +458,7 @@ técnico-jurídica usados na classificação automática das justificativas FAP'
                     context_length: defaultMeta?.context_length ?? null,
                     prompt_price: defaultMeta?.prompt_price ?? null,
                     completion_price: defaultMeta?.completion_price ?? null,
+                    release_timestamp: defaultMeta?.release_timestamp ?? null,
                     isDefault: true,
                 };
             }
@@ -510,6 +478,7 @@ técnico-jurídica usados na classificação automática das justificativas FAP'
                 context_length: null,
                 prompt_price: null,
                 completion_price: null,
+                release_timestamp: null,
                 isDefault: false,
             };
         }
@@ -526,59 +495,10 @@ técnico-jurídica usados na classificação automática das justificativas FAP'
             selectedModelContext.textContent = `Contexto: ${formatContext(meta.context_length)}`;
             selectedModelPromptPrice.textContent = `Input: ${formatPrice(meta.prompt_price)}`;
             selectedModelCompletionPrice.textContent = `Output: ${formatPrice(meta.completion_price)}`;
-        }
-
-        function renderModelList(filterText) {
-            if (!modelListContainer) {
-                return;
+            if (selectedModelReleaseDate) {
+                selectedModelReleaseDate.textContent = `Lançamento: ${formatReleaseDate(meta.release_timestamp)}`;
+                selectedModelReleaseDate.className = `badge ${releaseBadgeClass(meta.release_timestamp)}`;
             }
-
-            const filter = (filterText || '').trim().toLowerCase();
-            const selected = (selectedModelInput && selectedModelInput.value || '').trim();
-
-            const list = [
-                {
-                    id: '',
-                    name: 'Padrão do ambiente',
-                    description: `Usa FAP_CLASSIFIER_MODEL (${defaultModelId}).`,
-                    context_length: null,
-                    prompt_price: null,
-                    completion_price: null,
-                },
-                ...availableModels,
-            ].filter((item) => {
-                if (!filter) {
-                    return true;
-                }
-                const haystack = `${item.name || ''} ${item.id || ''} ${item.description || ''}`.toLowerCase();
-                return haystack.includes(filter);
-            });
-
-            if (!list.length) {
-                modelListContainer.innerHTML = '<div class="text-muted small p-2">Nenhum modelo encontrado.</div>';
-                return;
-            }
-
-            modelListContainer.innerHTML = list.map((item) => {
-                const id = (item.id || '').trim();
-                const active = selected === id || (!selected && !id);
-                return `
-                    <button type="button" class="list-group-item list-group-item-action model-item ${active ? 'active' : ''}" data-model-id="${escapeAttr(id)}">
-                        <div class="d-flex justify-content-between align-items-start gap-2">
-                            <div>
-                                <div class="fw-semibold">${escapeHtml(item.name || id || 'Padrão do ambiente')}</div>
-                                <div class="model-id">${escapeHtml(id || `FAP_CLASSIFIER_MODEL: ${defaultModelId}`)}</div>
-                            </div>
-                            <div class="text-end small">
-                                <div>Ctx: ${escapeHtml(formatContext(item.context_length))}</div>
-                                <div>In: ${escapeHtml(formatPrice(item.prompt_price))}</div>
-                                <div>Out: ${escapeHtml(formatPrice(item.completion_price))}</div>
-                            </div>
-                        </div>
-                        <div class="small mt-2 ${active ? '' : 'text-muted'}">${escapeHtml(item.description || '')}</div>
-                    </button>
-                `;
-            }).join('');
         }
 
         function escapeHtml(text) {
@@ -843,36 +763,24 @@ técnico-jurídica usados na classificação automática das justificativas FAP'
         }
 
         renderSelectedModel();
-        renderModelList('');
+
+        const modelPicker = (window.ModelPickerModal && selectedModelInput) ? new window.ModelPickerModal({
+            modalId: 'modelPickerModal',
+            models: availableModels,
+            defaultModelId,
+            getSelectedModelId: () => selectedModelInput.value || '',
+            onSelect: (modelId) => {
+                selectedModelInput.value = modelId || '';
+                renderSelectedModel();
+            },
+        }) : null;
 
         if (btnResetModel && selectedModelInput) {
             btnResetModel.addEventListener('click', function () {
                 selectedModelInput.value = '';
                 renderSelectedModel();
-                renderModelList(modelSearchInput ? modelSearchInput.value : '');
-            });
-        }
-
-        if (modelSearchInput) {
-            modelSearchInput.addEventListener('input', function () {
-                renderModelList(this.value || '');
-            });
-        }
-
-        if (modelListContainer && selectedModelInput) {
-            modelListContainer.addEventListener('click', function (event) {
-                const target = event.target.closest('[data-model-id]');
-                if (!target) {
-                    return;
-                }
-
-                selectedModelInput.value = target.getAttribute('data-model-id') || '';
-                renderSelectedModel();
-                renderModelList(modelSearchInput ? modelSearchInput.value : '');
-
-                const modalElement = document.getElementById('modelPickerModal');
-                if (modalElement && window.bootstrap && window.bootstrap.Modal) {
-                    window.bootstrap.Modal.getOrCreateInstance(modalElement).hide();
+                if (modelPicker) {
+                    modelPicker.renderModelList('');
                 }
             });
         }

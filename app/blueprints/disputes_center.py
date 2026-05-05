@@ -1727,6 +1727,7 @@ def _fetch_openrouter_text_models(selected_model: str | None = None) -> tuple[li
                     'context_length': None,
                     'prompt_price': None,
                     'completion_price': None,
+                    'release_timestamp': None,
                 }
             )
 
@@ -1748,6 +1749,21 @@ def _fetch_openrouter_text_models(selected_model: str | None = None) -> tuple[li
 
     items: list[dict[str, object]] = []
     seen_ids: set[str] = set()
+
+    def _safe_release_timestamp(raw_value) -> int | None:
+        if raw_value in (None, ''):
+            return None
+        try:
+            value = int(float(raw_value))
+        except (TypeError, ValueError):
+            return None
+
+        # Se vier em milissegundos, converte para segundos.
+        if value > 10_000_000_000:
+            value = int(value / 1000)
+
+        return value if value > 0 else None
+
     for item in payload.get('data') or []:
         if not isinstance(item, dict):
             continue
@@ -1766,6 +1782,13 @@ def _fetch_openrouter_text_models(selected_model: str | None = None) -> tuple[li
 
         pricing = item.get('pricing') or {}
         top_provider = item.get('top_provider') or {}
+        release_timestamp = (
+            _safe_release_timestamp(item.get('created'))
+            or _safe_release_timestamp(item.get('created_at'))
+            or _safe_release_timestamp(item.get('published_at'))
+            or _safe_release_timestamp(top_provider.get('created'))
+            or _safe_release_timestamp(top_provider.get('created_at'))
+        )
         context_length = item.get('context_length') or top_provider.get('context_length')
         try:
             context_length = int(context_length) if context_length is not None else None
@@ -1779,10 +1802,16 @@ def _fetch_openrouter_text_models(selected_model: str | None = None) -> tuple[li
             'context_length': context_length,
             'prompt_price': str(pricing.get('prompt') or '').strip() or None,
             'completion_price': str(pricing.get('completion') or '').strip() or None,
+            'release_timestamp': release_timestamp,
         })
         seen_ids.add(model_id)
 
-    items.sort(key=lambda model: model['name'].lower())
+    items.sort(
+        key=lambda model: (
+            -(int(model.get('release_timestamp') or 0)),
+            str(model.get('name') or '').lower(),
+        )
+    )
 
     for extra_model in fallback_options:
         if extra_model['id'] not in seen_ids:
