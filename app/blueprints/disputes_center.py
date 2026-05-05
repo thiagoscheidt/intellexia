@@ -6,11 +6,10 @@ import hashlib
 import json
 import os
 
-import requests
-
 from app.agents.fap.fap_contestation_classifier_agent import FAPContestationClassifierAgent
 from app.services.fap_web_service import FapWebAuthPayload, FapWebService
 from app.services.fap_contestation_judgment_report_service import FapContestationJudgmentReportService
+from app.services.openrouter_models_service import fetch_openrouter_text_models_for_info
 
 from app.utils.timezone import now_sp
 
@@ -51,8 +50,6 @@ from app.models import (
 
 
 disputes_center_bp = Blueprint('disputes_center', __name__, url_prefix='/disputes-center')
-
-OPENROUTER_MODELS_URL = os.getenv('OPENROUTER_MODELS_URL', 'https://openrouter.ai/api/v1/models')
 
 
 FILTER_FIELD_MAP = {
@@ -1713,114 +1710,6 @@ def _save_classifier_setting(
     return setting
 
 
-def _fetch_openrouter_text_models(selected_model: str | None = None) -> tuple[list[dict[str, object]], str | None]:
-    api_key = os.getenv('OPENAI_API_KEY') or os.getenv('OPENROUTER_API_KEY')
-    fallback_model = FAPContestationClassifierAgent.get_default_model_name()
-    fallback_options: list[dict[str, object]] = []
-    for model_id in [selected_model, fallback_model]:
-        if model_id and model_id not in {item['id'] for item in fallback_options}:
-            fallback_options.append(
-                {
-                    'id': model_id,
-                    'name': model_id,
-                    'description': 'Modelo disponível por fallback (não carregado da OpenRouter no momento).',
-                    'context_length': None,
-                    'prompt_price': None,
-                    'completion_price': None,
-                    'release_timestamp': None,
-                }
-            )
-
-    if not api_key:
-        return fallback_options, 'OPENAI_API_KEY não configurada para carregar os modelos da OpenRouter.'
-
-    try:
-        response = requests.get(
-            OPENROUTER_MODELS_URL,
-            headers={'Authorization': f'Bearer {api_key}'},
-            params={'output_modalities': 'text'},
-            timeout=15,
-        )
-        response.raise_for_status()
-        payload = response.json() or {}
-    except Exception as exc:
-        current_app.logger.warning('Falha ao carregar modelos da OpenRouter: %s', exc)
-        return fallback_options, 'Não foi possível carregar a lista de modelos da OpenRouter agora.'
-
-    items: list[dict[str, object]] = []
-    seen_ids: set[str] = set()
-
-    def _safe_release_timestamp(raw_value) -> int | None:
-        if raw_value in (None, ''):
-            return None
-        try:
-            value = int(float(raw_value))
-        except (TypeError, ValueError):
-            return None
-
-        # Se vier em milissegundos, converte para segundos.
-        if value > 10_000_000_000:
-            value = int(value / 1000)
-
-        return value if value > 0 else None
-
-    for item in payload.get('data') or []:
-        if not isinstance(item, dict):
-            continue
-
-        model_id = str(item.get('id') or '').strip()
-        if not model_id or model_id in seen_ids:
-            continue
-
-        architecture = item.get('architecture') or {}
-        output_modalities = architecture.get('output_modalities') or []
-        modality = str(architecture.get('modality') or '')
-        if output_modalities and 'text' not in output_modalities:
-            continue
-        if modality and 'text' not in modality:
-            continue
-
-        pricing = item.get('pricing') or {}
-        top_provider = item.get('top_provider') or {}
-        release_timestamp = (
-            _safe_release_timestamp(item.get('created'))
-            or _safe_release_timestamp(item.get('created_at'))
-            or _safe_release_timestamp(item.get('published_at'))
-            or _safe_release_timestamp(top_provider.get('created'))
-            or _safe_release_timestamp(top_provider.get('created_at'))
-        )
-        context_length = item.get('context_length') or top_provider.get('context_length')
-        try:
-            context_length = int(context_length) if context_length is not None else None
-        except (TypeError, ValueError):
-            context_length = None
-
-        items.append({
-            'id': model_id,
-            'name': str(item.get('name') or model_id).strip() or model_id,
-            'description': str(item.get('description') or '').strip(),
-            'context_length': context_length,
-            'prompt_price': str(pricing.get('prompt') or '').strip() or None,
-            'completion_price': str(pricing.get('completion') or '').strip() or None,
-            'release_timestamp': release_timestamp,
-        })
-        seen_ids.add(model_id)
-
-    items.sort(
-        key=lambda model: (
-            -(int(model.get('release_timestamp') or 0)),
-            str(model.get('name') or '').lower(),
-        )
-    )
-
-    for extra_model in fallback_options:
-        if extra_model['id'] not in seen_ids:
-            items.insert(0, extra_model)
-            seen_ids.add(extra_model['id'])
-
-    return items, None
-
-
 @disputes_center_bp.route('/classifier-prompt-settings', methods=['GET'])
 @require_law_firm
 @require_admin_user
@@ -1841,7 +1730,10 @@ def classifier_prompt_settings():
     )
     prompt_markdown = FAPContestationClassifierAgent._remove_non_editable_sections(raw_prompt_markdown)
     selected_model = (current_setting.selected_model if current_setting else '') or ''
-    available_models, model_options_error = _fetch_openrouter_text_models(selected_model)
+    available_models, model_options_error = fetch_openrouter_text_models_for_info(
+        selected_model=selected_model,
+        fallback_model=FAPContestationClassifierAgent.get_default_model_name(),
+    )
 
     version_history = (
         FapContestationClassifierPromptVersion.query.filter_by(law_firm_id=law_firm_id)
