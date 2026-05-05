@@ -5,6 +5,8 @@
 {% block title %}Configuração IA do Painel de Contestações{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
 <style>
     .classifier-prompt-editor .ql-toolbar {
         border-radius: 0.5rem 0.5rem 0 0;
@@ -111,6 +113,27 @@ na classificação automática das justificativas FAP', icon='bi bi-sliders') %}
                                     <strong>Formato de resposta</strong> e <strong>Texto para classificar</strong>
                                     são fixas no código e não são editáveis nesta tela.
                                 </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="selected_model" class="form-label">Modelo do classificador</label>
+                                <select id="selected_model" name="selected_model" class="form-select select2">
+                                    <option value="">Usar padrão do ambiente: {{ default_classifier_model }}</option>
+                                    {% for model in available_models %}
+                                    <option value="{{ model.id }}" {% if selected_model==model.id %}selected{% endif %}>
+                                        {{ model.name }} ({{ model.id }})
+                                    </option>
+                                    {% endfor %}
+                                </select>
+                                <div class="form-text">
+                                    Se nada for selecionado, o classificador usa <strong>FAP_CLASSIFIER_MODEL</strong>:
+                                    {{ default_classifier_model }}.
+                                </div>
+                                {% if model_options_error %}
+                                <div class="small text-warning mt-2">
+                                    <i class="bi bi-exclamation-triangle me-1"></i>{{ model_options_error }}
+                                </div>
+                                {% endif %}
                             </div>
 
                             <div class="mb-3">
@@ -253,6 +276,7 @@ na classificação automática das justificativas FAP', icon='bi bi-sliders') %}
         const testInput = document.getElementById('promptTestText');
         const testStatus = document.getElementById('promptTestStatus');
         const testResult = document.getElementById('promptTestResult');
+        const modelSelect = document.getElementById('selected_model');
 
         if (!editorElement || !hiddenInput || !form || typeof Quill === 'undefined') {
             return;
@@ -511,6 +535,18 @@ na classificação automática das justificativas FAP', icon='bi bi-sliders') %}
             quill.clipboard.dangerouslyPasteHTML(markdownToHtml(hiddenInput.value));
         }
 
+        if (modelSelect && typeof $ !== 'undefined' && $.fn && $.fn.select2) {
+            $(modelSelect).select2({
+                theme: 'bootstrap-5',
+                width: '100%',
+                placeholder: 'Selecione um modelo',
+                allowClear: true,
+                language: {
+                    noResults: function () { return 'Nenhum modelo encontrado.'; }
+                }
+            });
+        }
+
         form.addEventListener('submit', function (event) {
             const markdownText = quillToMarkdown(quill);
             hiddenInput.value = markdownText;
@@ -552,6 +588,7 @@ na classificação automática das justificativas FAP', icon='bi bi-sliders') %}
                         },
                         body: JSON.stringify({
                             prompt_markdown: markdownText,
+                            selected_model: modelSelect ? modelSelect.value : '',
                             test_text: testText,
                         })
                     });

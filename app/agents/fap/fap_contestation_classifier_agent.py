@@ -12,7 +12,7 @@ from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
 
 from app.agents.config import DEFAULT_MODEL_MINI
-from app.models import FapContestationClassifierPromptVersion
+from app.models import FapContestationClassifierPromptVersion, FapContestationClassifierSetting
 from app.services.token_usage_service import TokenUsageService
 
 
@@ -222,10 +222,23 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
     )
 
     def __init__(self, model_name: str | None = None, temperature: float = 0.1):
-        self.model_name = model_name or os.environ.get("FAP_CLASSIFIER_MODEL") or DEFAULT_MODEL_MINI
+        self.model_name = model_name or self.get_default_model_name()
         self.temperature = temperature
-        self.llm = ChatOpenAI(model=self.model_name, temperature=self.temperature)
         self.token_usage_service = TokenUsageService()
+
+    @staticmethod
+    def get_default_model_name() -> str:
+        return os.environ.get("FAP_CLASSIFIER_MODEL") or DEFAULT_MODEL_MINI
+
+    @classmethod
+    def _load_selected_model_name(cls, law_firm_id: int | None) -> str | None:
+        if not law_firm_id:
+            return None
+
+        setting = FapContestationClassifierSetting.query.filter_by(law_firm_id=law_firm_id).first()
+        if setting and (setting.selected_model or "").strip():
+            return setting.selected_model.strip()
+        return None
 
     @classmethod
     def _normalize_topic(cls, value: str | None) -> str:
@@ -666,6 +679,7 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
         *,
         law_firm_id: int | None = None,
         prompt_markdown_override: str | None = None,
+        model_name_override: str | None = None,
     ) -> dict[str, Any]:
         """
         Classifica um texto de justificativa FAP em tópico padronizado.
@@ -690,9 +704,15 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
             else self._load_user_prompt_markdown(law_firm_id)
         )
         user_prompt = self._render_user_prompt(user_prompt_markdown, cleaned_text)
+        effective_model_name = (
+            str(model_name_override or "").strip()
+            or self._load_selected_model_name(law_firm_id)
+            or self.model_name
+        )
 
         try:
-            agent = create_agent(model=self.llm, system_prompt=self.SYSTEM_PROMPT)
+            llm = ChatOpenAI(model=effective_model_name, temperature=self.temperature)
+            agent = create_agent(model=llm, system_prompt=self.SYSTEM_PROMPT)
 
             call_started_at = time.time()
             response_payload = agent.invoke(
@@ -705,7 +725,7 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
                 agent_name="FAPContestationClassifierAgent",
                 action_name="classify",
                 print_prefix="[FAPContestationClassifierAgent][tokens]",
-                model_name=self.model_name,
+                model_name=effective_model_name,
                 model_provider="openai",
                 user_id=None,
                 law_firm_id=law_firm_id,

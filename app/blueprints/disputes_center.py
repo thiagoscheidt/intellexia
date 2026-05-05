@@ -6,6 +6,8 @@ import hashlib
 import json
 import os
 
+import requests
+
 from app.agents.fap.fap_contestation_classifier_agent import FAPContestationClassifierAgent
 from app.services.fap_web_service import FapWebAuthPayload, FapWebService
 from app.services.fap_contestation_judgment_report_service import FapContestationJudgmentReportService
@@ -40,6 +42,7 @@ from app.models import (
     FapContestationTurnoverRate,
     FapContestationTurnoverRateSourceHistory,
     FapContestationTurnoverRateManualHistory,
+    FapContestationClassifierSetting,
     FapContestationClassifierPromptVersion,
     KnowledgeBase,
     db,
@@ -47,6 +50,8 @@ from app.models import (
 
 
 disputes_center_bp = Blueprint('disputes_center', __name__, url_prefix='/disputes-center')
+
+OPENROUTER_MODELS_URL = os.getenv('OPENROUTER_MODELS_URL', 'https://openrouter.ai/api/v1/models')
 
 
 FILTER_FIELD_MAP = {
@@ -1630,18 +1635,106 @@ def _activate_new_classifier_prompt_version(law_firm_id: int, prompt_markdown: s
     return version
 
 
+def _get_classifier_setting(law_firm_id: int) -> FapContestationClassifierSetting | None:
+    return FapContestationClassifierSetting.query.filter_by(law_firm_id=law_firm_id).first()
+
+
+def _save_classifier_setting(
+    law_firm_id: int,
+    *,
+    selected_model: str | None,
+    user_id: int | None,
+) -> FapContestationClassifierSetting:
+    setting = _get_classifier_setting(law_firm_id)
+    normalized_model = (selected_model or '').strip() or None
+
+    if setting is None:
+        setting = FapContestationClassifierSetting(
+            law_firm_id=law_firm_id,
+            selected_model=normalized_model,
+            created_by_user_id=user_id,
+        )
+        db.session.add(setting)
+        return setting
+
+    setting.selected_model = normalized_model
+    setting.created_by_user_id = user_id
+    return setting
+
+
+def _fetch_openrouter_text_models(selected_model: str | None = None) -> tuple[list[dict[str, str]], str | None]:
+    api_key = os.getenv('OPENAI_API_KEY') or os.getenv('OPENROUTER_API_KEY')
+    fallback_model = FAPContestationClassifierAgent.get_default_model_name()
+    fallback_options: list[dict[str, str]] = []
+    for model_id in [selected_model, fallback_model]:
+        if model_id and model_id not in {item['id'] for item in fallback_options}:
+            fallback_options.append({'id': model_id, 'name': model_id})
+
+    if not api_key:
+        return fallback_options, 'OPENAI_API_KEY não configurada para carregar os modelos da OpenRouter.'
+
+    try:
+        response = requests.get(
+            OPENROUTER_MODELS_URL,
+            headers={'Authorization': f'Bearer {api_key}'},
+            params={'output_modalities': 'text'},
+            timeout=15,
+        )
+        response.raise_for_status()
+        payload = response.json() or {}
+    except Exception as exc:
+        current_app.logger.warning('Falha ao carregar modelos da OpenRouter: %s', exc)
+        return fallback_options, 'Não foi possível carregar a lista de modelos da OpenRouter agora.'
+
+    items: list[dict[str, str]] = []
+    seen_ids: set[str] = set()
+    for item in payload.get('data') or []:
+        if not isinstance(item, dict):
+            continue
+
+        model_id = str(item.get('id') or '').strip()
+        if not model_id or model_id in seen_ids:
+            continue
+
+        architecture = item.get('architecture') or {}
+        output_modalities = architecture.get('output_modalities') or []
+        modality = str(architecture.get('modality') or '')
+        if output_modalities and 'text' not in output_modalities:
+            continue
+        if modality and 'text' not in modality:
+            continue
+
+        items.append({
+            'id': model_id,
+            'name': str(item.get('name') or model_id).strip() or model_id,
+        })
+        seen_ids.add(model_id)
+
+    items.sort(key=lambda model: model['name'].lower())
+
+    for extra_model in fallback_options:
+        if extra_model['id'] not in seen_ids:
+            items.insert(0, extra_model)
+            seen_ids.add(extra_model['id'])
+
+    return items, None
+
+
 @disputes_center_bp.route('/classifier-prompt-settings', methods=['GET'])
 @require_law_firm
 @require_admin_user
 def classifier_prompt_settings():
     law_firm_id = get_current_law_firm_id()
     current_version = _get_active_classifier_prompt_version(law_firm_id)
+    current_setting = _get_classifier_setting(law_firm_id)
     raw_prompt_markdown = (
         current_version.prompt_markdown
         if current_version and (current_version.prompt_markdown or '').strip()
         else FAPContestationClassifierAgent.get_default_user_prompt_markdown()
     )
     prompt_markdown = FAPContestationClassifierAgent._remove_non_editable_sections(raw_prompt_markdown)
+    selected_model = (current_setting.selected_model if current_setting else '') or ''
+    available_models, model_options_error = _fetch_openrouter_text_models(selected_model)
 
     version_history = (
         FapContestationClassifierPromptVersion.query.filter_by(law_firm_id=law_firm_id)
@@ -1661,6 +1754,10 @@ def classifier_prompt_settings():
             FAPContestationClassifierAgent.get_default_user_prompt_markdown()
         ),
         slugs_markdown=FAPContestationClassifierAgent._build_slugs_markdown(),
+        selected_model=selected_model,
+        default_classifier_model=FAPContestationClassifierAgent.get_default_model_name(),
+        available_models=available_models,
+        model_options_error=model_options_error,
     )
 
 
@@ -1670,6 +1767,7 @@ def classifier_prompt_settings():
 def classifier_prompt_settings_save():
     law_firm_id = get_current_law_firm_id()
     user_id = session.get('user_id')
+    selected_model = (request.form.get('selected_model') or '').strip() or None
     prompt_markdown = FAPContestationClassifierAgent._remove_non_editable_sections(
         request.form.get('prompt_markdown') or ''
     )
@@ -1679,20 +1777,36 @@ def classifier_prompt_settings_save():
         return redirect(url_for('disputes_center.classifier_prompt_settings'))
 
     current_version = _get_active_classifier_prompt_version(law_firm_id)
+    current_setting = _get_classifier_setting(law_firm_id)
     current_hash = current_version.prompt_hash if current_version else None
+    current_model = (current_setting.selected_model if current_setting else '') or None
     incoming_hash = FAPContestationClassifierAgent.compute_prompt_hash(prompt_markdown)
+    prompt_changed = current_hash != incoming_hash
+    model_changed = current_model != selected_model
 
-    if current_hash == incoming_hash:
-        flash('Nenhuma alteração detectada no prompt atual.', 'info')
+    if not prompt_changed and not model_changed:
+        flash('Nenhuma alteração detectada nas configurações atuais.', 'info')
         return redirect(url_for('disputes_center.classifier_prompt_settings'))
 
     try:
-        new_version = _activate_new_classifier_prompt_version(law_firm_id, prompt_markdown, user_id)
+        new_version = None
+        if prompt_changed:
+            new_version = _activate_new_classifier_prompt_version(law_firm_id, prompt_markdown, user_id)
+        if model_changed:
+            _save_classifier_setting(law_firm_id, selected_model=selected_model, user_id=user_id)
         db.session.commit()
-        flash(f'Prompt salvo com sucesso na versão {new_version.version}.', 'success')
+        messages = []
+        if new_version is not None:
+            messages.append(f'Prompt salvo com sucesso na versão {new_version.version}.')
+        if model_changed:
+            if selected_model:
+                messages.append(f'Modelo do classificador atualizado para {selected_model}.')
+            else:
+                messages.append('Modelo customizado removido. O classificador voltou a usar FAP_CLASSIFIER_MODEL.')
+        flash(' '.join(messages), 'success')
     except Exception as exc:
         db.session.rollback()
-        flash(f'Erro ao salvar nova versão do prompt: {exc}', 'danger')
+        flash(f'Erro ao salvar configurações do classificador: {exc}', 'danger')
 
     return redirect(url_for('disputes_center.classifier_prompt_settings'))
 
@@ -1706,6 +1820,7 @@ def classifier_prompt_settings_test():
     payload = request.get_json(silent=True) or {}
     prompt_markdown = payload.get('prompt_markdown', '')
     test_text = payload.get('test_text', '')
+    selected_model = (payload.get('selected_model') or '').strip() or None
 
     if not str(test_text or '').strip():
         return jsonify({'success': False, 'message': 'Informe um texto para teste.'}), 400
@@ -1716,6 +1831,7 @@ def classifier_prompt_settings_test():
             str(test_text),
             law_firm_id=law_firm_id,
             prompt_markdown_override=str(prompt_markdown or ''),
+            model_name_override=selected_model,
         )
         return jsonify({'success': True, 'result': result})
     except Exception as exc:

@@ -460,6 +460,24 @@ class FapContestationClassifierPromptVersion(db.Model):
         return f'<FapContestationClassifierPromptVersion v{self.version} - LawFirm {self.law_firm_id}>'
 
 
+class FapContestationClassifierSetting(db.Model):
+    """Configurações do classificador FAP por escritório."""
+    __tablename__ = 'fap_contestation_classifier_settings'
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True, unique=True)
+    selected_model = db.Column(db.String(255), nullable=True)
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    law_firm = db.relationship('LawFirm')
+    created_by_user = db.relationship('User')
+
+    def __repr__(self):
+        return f'<FapContestationClassifierSetting LawFirm {self.law_firm_id}>'
+
+
 class AiDocumentSummary(db.Model):
     """Tabela ai_document_summaries - Documentos para resumo por IA"""
     __tablename__ = 'ai_document_summaries'
