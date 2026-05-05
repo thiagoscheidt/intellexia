@@ -1662,13 +1662,22 @@ def _save_classifier_setting(
     return setting
 
 
-def _fetch_openrouter_text_models(selected_model: str | None = None) -> tuple[list[dict[str, str]], str | None]:
+def _fetch_openrouter_text_models(selected_model: str | None = None) -> tuple[list[dict[str, object]], str | None]:
     api_key = os.getenv('OPENAI_API_KEY') or os.getenv('OPENROUTER_API_KEY')
     fallback_model = FAPContestationClassifierAgent.get_default_model_name()
-    fallback_options: list[dict[str, str]] = []
+    fallback_options: list[dict[str, object]] = []
     for model_id in [selected_model, fallback_model]:
         if model_id and model_id not in {item['id'] for item in fallback_options}:
-            fallback_options.append({'id': model_id, 'name': model_id})
+            fallback_options.append(
+                {
+                    'id': model_id,
+                    'name': model_id,
+                    'description': 'Modelo disponível por fallback (não carregado da OpenRouter no momento).',
+                    'context_length': None,
+                    'prompt_price': None,
+                    'completion_price': None,
+                }
+            )
 
     if not api_key:
         return fallback_options, 'OPENAI_API_KEY não configurada para carregar os modelos da OpenRouter.'
@@ -1686,7 +1695,7 @@ def _fetch_openrouter_text_models(selected_model: str | None = None) -> tuple[li
         current_app.logger.warning('Falha ao carregar modelos da OpenRouter: %s', exc)
         return fallback_options, 'Não foi possível carregar a lista de modelos da OpenRouter agora.'
 
-    items: list[dict[str, str]] = []
+    items: list[dict[str, object]] = []
     seen_ids: set[str] = set()
     for item in payload.get('data') or []:
         if not isinstance(item, dict):
@@ -1704,9 +1713,21 @@ def _fetch_openrouter_text_models(selected_model: str | None = None) -> tuple[li
         if modality and 'text' not in modality:
             continue
 
+        pricing = item.get('pricing') or {}
+        top_provider = item.get('top_provider') or {}
+        context_length = item.get('context_length') or top_provider.get('context_length')
+        try:
+            context_length = int(context_length) if context_length is not None else None
+        except (TypeError, ValueError):
+            context_length = None
+
         items.append({
             'id': model_id,
             'name': str(item.get('name') or model_id).strip() or model_id,
+            'description': str(item.get('description') or '').strip(),
+            'context_length': context_length,
+            'prompt_price': str(pricing.get('prompt') or '').strip() or None,
+            'completion_price': str(pricing.get('completion') or '').strip() or None,
         })
         seen_ids.add(model_id)
 

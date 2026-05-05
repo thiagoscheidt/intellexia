@@ -5,8 +5,6 @@
 {% block title %}Configuração IA do Painel de Contestações{% endblock %}
 
 {% block extra_css %}
-<link rel="stylesheet"
-    href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
 <style>
     .classifier-prompt-editor .ql-toolbar {
         border-radius: 0.5rem 0.5rem 0 0;
@@ -46,6 +44,20 @@
     .markdown-preview blockquote,
     .markdown-preview pre {
         margin-bottom: 0.6rem;
+    }
+
+    .model-item {
+        cursor: pointer;
+    }
+
+    .model-item:hover {
+        background-color: var(--bs-light-bg-subtle);
+    }
+
+    .model-id {
+        font-family: var(--bs-font-monospace);
+        font-size: 0.8rem;
+        color: var(--bs-secondary-color);
     }
 </style>
 {% endblock %}
@@ -117,14 +129,35 @@ na classificação automática das justificativas FAP', icon='bi bi-sliders') %}
 
                             <div class="mb-3">
                                 <label for="selected_model" class="form-label">Modelo do classificador</label>
-                                <select id="selected_model" name="selected_model" class="form-select select2">
-                                    <option value="">Usar padrão do ambiente: {{ default_classifier_model }}</option>
-                                    {% for model in available_models %}
-                                    <option value="{{ model.id }}" {% if selected_model==model.id %}selected{% endif %}>
-                                        {{ model.name }} ({{ model.id }})
-                                    </option>
-                                    {% endfor %}
-                                </select>
+                                <input type="hidden" id="selected_model" name="selected_model"
+                                    value="{{ selected_model }}">
+                                <div class="border rounded p-3 bg-body-tertiary">
+                                    <div class="d-flex justify-content-between align-items-start gap-2 flex-wrap">
+                                        <div>
+                                            <div class="fw-semibold" id="selectedModelName">Carregando modelo...</div>
+                                            <div class="model-id" id="selectedModelId"></div>
+                                        </div>
+                                        <div class="d-flex gap-2">
+                                            <button type="button" class="btn btn-outline-primary btn-sm"
+                                                data-bs-toggle="modal" data-bs-target="#modelPickerModal">
+                                                <i class="bi bi-search me-1"></i>Escolher modelo
+                                            </button>
+                                            <button type="button" id="btnResetModel"
+                                                class="btn btn-outline-secondary btn-sm">
+                                                <i class="bi bi-arrow-counterclockwise me-1"></i>Usar padrão
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="small text-muted mt-2" id="selectedModelDescription"></div>
+                                    <div class="small mt-2">
+                                        <span class="badge text-bg-light me-1" id="selectedModelContext">Contexto:
+                                            -</span>
+                                        <span class="badge text-bg-light me-1" id="selectedModelPromptPrice">Input:
+                                            -</span>
+                                        <span class="badge text-bg-light" id="selectedModelCompletionPrice">Output:
+                                            -</span>
+                                    </div>
+                                </div>
                                 <div class="form-text">
                                     Se nada for selecionado, o classificador usa <strong>FAP_CLASSIFIER_MODEL</strong>:
                                     {{ default_classifier_model }}.
@@ -232,6 +265,29 @@ na classificação automática das justificativas FAP', icon='bi bi-sliders') %}
     </div>
 </div>
 
+<script type="application/json" id="availableModelsData">{{ available_models|tojson }}</script>
+<script type="application/json" id="defaultModelIdData">{{ default_classifier_model|tojson }}</script>
+
+<div class="modal fade" id="modelPickerModal" tabindex="-1" aria-labelledby="modelPickerModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modelPickerModalLabel">
+                    <i class="bi bi-cpu me-2"></i>Selecionar modelo de IA
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <input type="text" id="modelSearchInput" class="form-control"
+                        placeholder="Buscar por nome, id ou descrição do modelo...">
+                </div>
+                <div class="list-group" id="modelListContainer"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="modal fade" id="promptTestModal" tabindex="-1" aria-labelledby="promptTestModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
@@ -276,10 +332,151 @@ na classificação automática das justificativas FAP', icon='bi bi-sliders') %}
         const testInput = document.getElementById('promptTestText');
         const testStatus = document.getElementById('promptTestStatus');
         const testResult = document.getElementById('promptTestResult');
-        const modelSelect = document.getElementById('selected_model');
+        const selectedModelInput = document.getElementById('selected_model');
+        const selectedModelName = document.getElementById('selectedModelName');
+        const selectedModelId = document.getElementById('selectedModelId');
+        const selectedModelDescription = document.getElementById('selectedModelDescription');
+        const selectedModelContext = document.getElementById('selectedModelContext');
+        const selectedModelPromptPrice = document.getElementById('selectedModelPromptPrice');
+        const selectedModelCompletionPrice = document.getElementById('selectedModelCompletionPrice');
+        const btnResetModel = document.getElementById('btnResetModel');
+        const modelSearchInput = document.getElementById('modelSearchInput');
+        const modelListContainer = document.getElementById('modelListContainer');
+        const availableModelsData = document.getElementById('availableModelsData');
+        const defaultModelIdData = document.getElementById('defaultModelIdData');
+        const availableModels = availableModelsData ? JSON.parse(availableModelsData.textContent || '[]') : [];
+        const defaultModelId = defaultModelIdData ? JSON.parse(defaultModelIdData.textContent || '""') : '';
 
         if (!editorElement || !hiddenInput || !form || typeof Quill === 'undefined') {
             return;
+        }
+
+        function escapeAttr(text) {
+            return (text || '')
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+        }
+
+        function formatContext(value) {
+            const n = Number(value);
+            if (!Number.isFinite(n) || n <= 0) {
+                return '-';
+            }
+            return `${n.toLocaleString('pt-BR')} tokens`;
+        }
+
+        function formatPrice(value) {
+            if (value === null || value === undefined || value === '') {
+                return '-';
+            }
+            const n = Number(value);
+            if (!Number.isFinite(n)) {
+                return String(value);
+            }
+            return `$${n} / token`;
+        }
+
+        function getSelectedModelMeta() {
+            const selected = (selectedModelInput && selectedModelInput.value || '').trim();
+            if (!selected) {
+                const defaultMeta = availableModels.find((item) => item.id === defaultModelId);
+                return {
+                    id: defaultModelId,
+                    name: 'Padrão do ambiente',
+                    description: defaultMeta?.description || 'Usa o valor definido em FAP_CLASSIFIER_MODEL.',
+                    context_length: defaultMeta?.context_length ?? null,
+                    prompt_price: defaultMeta?.prompt_price ?? null,
+                    completion_price: defaultMeta?.completion_price ?? null,
+                    isDefault: true,
+                };
+            }
+
+            const model = availableModels.find((item) => item.id === selected);
+            if (model) {
+                return {
+                    ...model,
+                    isDefault: false,
+                };
+            }
+
+            return {
+                id: selected,
+                name: selected,
+                description: 'Modelo selecionado manualmente (não encontrado na lista atual).',
+                context_length: null,
+                prompt_price: null,
+                completion_price: null,
+                isDefault: false,
+            };
+        }
+
+        function renderSelectedModel() {
+            if (!selectedModelInput || !selectedModelName) {
+                return;
+            }
+
+            const meta = getSelectedModelMeta();
+            selectedModelName.textContent = meta.name || meta.id;
+            selectedModelId.textContent = meta.isDefault ? `FAP_CLASSIFIER_MODEL: ${meta.id}` : (meta.id || '');
+            selectedModelDescription.textContent = meta.description || '';
+            selectedModelContext.textContent = `Contexto: ${formatContext(meta.context_length)}`;
+            selectedModelPromptPrice.textContent = `Input: ${formatPrice(meta.prompt_price)}`;
+            selectedModelCompletionPrice.textContent = `Output: ${formatPrice(meta.completion_price)}`;
+        }
+
+        function renderModelList(filterText) {
+            if (!modelListContainer) {
+                return;
+            }
+
+            const filter = (filterText || '').trim().toLowerCase();
+            const selected = (selectedModelInput && selectedModelInput.value || '').trim();
+
+            const list = [
+                {
+                    id: '',
+                    name: 'Padrão do ambiente',
+                    description: `Usa FAP_CLASSIFIER_MODEL (${defaultModelId}).`,
+                    context_length: null,
+                    prompt_price: null,
+                    completion_price: null,
+                },
+                ...availableModels,
+            ].filter((item) => {
+                if (!filter) {
+                    return true;
+                }
+                const haystack = `${item.name || ''} ${item.id || ''} ${item.description || ''}`.toLowerCase();
+                return haystack.includes(filter);
+            });
+
+            if (!list.length) {
+                modelListContainer.innerHTML = '<div class="text-muted small p-2">Nenhum modelo encontrado.</div>';
+                return;
+            }
+
+            modelListContainer.innerHTML = list.map((item) => {
+                const id = (item.id || '').trim();
+                const active = selected === id || (!selected && !id);
+                return `
+                    <button type="button" class="list-group-item list-group-item-action model-item ${active ? 'active' : ''}" data-model-id="${escapeAttr(id)}">
+                        <div class="d-flex justify-content-between align-items-start gap-2">
+                            <div>
+                                <div class="fw-semibold">${escapeHtml(item.name || id || 'Padrão do ambiente')}</div>
+                                <div class="model-id">${escapeHtml(id || `FAP_CLASSIFIER_MODEL: ${defaultModelId}`)}</div>
+                            </div>
+                            <div class="text-end small">
+                                <div>Ctx: ${escapeHtml(formatContext(item.context_length))}</div>
+                                <div>In: ${escapeHtml(formatPrice(item.prompt_price))}</div>
+                                <div>Out: ${escapeHtml(formatPrice(item.completion_price))}</div>
+                            </div>
+                        </div>
+                        <div class="small mt-2 ${active ? '' : 'text-muted'}">${escapeHtml(item.description || '')}</div>
+                    </button>
+                `;
+            }).join('');
         }
 
         function escapeHtml(text) {
@@ -535,14 +732,37 @@ na classificação automática das justificativas FAP', icon='bi bi-sliders') %}
             quill.clipboard.dangerouslyPasteHTML(markdownToHtml(hiddenInput.value));
         }
 
-        if (modelSelect && typeof $ !== 'undefined' && $.fn && $.fn.select2) {
-            $(modelSelect).select2({
-                theme: 'bootstrap-5',
-                width: '100%',
-                placeholder: 'Selecione um modelo',
-                allowClear: true,
-                language: {
-                    noResults: function () { return 'Nenhum modelo encontrado.'; }
+        renderSelectedModel();
+        renderModelList('');
+
+        if (btnResetModel && selectedModelInput) {
+            btnResetModel.addEventListener('click', function () {
+                selectedModelInput.value = '';
+                renderSelectedModel();
+                renderModelList(modelSearchInput ? modelSearchInput.value : '');
+            });
+        }
+
+        if (modelSearchInput) {
+            modelSearchInput.addEventListener('input', function () {
+                renderModelList(this.value || '');
+            });
+        }
+
+        if (modelListContainer && selectedModelInput) {
+            modelListContainer.addEventListener('click', function (event) {
+                const target = event.target.closest('[data-model-id]');
+                if (!target) {
+                    return;
+                }
+
+                selectedModelInput.value = target.getAttribute('data-model-id') || '';
+                renderSelectedModel();
+                renderModelList(modelSearchInput ? modelSearchInput.value : '');
+
+                const modalElement = document.getElementById('modelPickerModal');
+                if (modalElement && window.bootstrap && window.bootstrap.Modal) {
+                    window.bootstrap.Modal.getOrCreateInstance(modalElement).hide();
                 }
             });
         }
@@ -588,7 +808,7 @@ na classificação automática das justificativas FAP', icon='bi bi-sliders') %}
                         },
                         body: JSON.stringify({
                             prompt_markdown: markdownText,
-                            selected_model: modelSelect ? modelSelect.value : '',
+                            selected_model: selectedModelInput ? selectedModelInput.value : '',
                             test_text: testText,
                         })
                     });
