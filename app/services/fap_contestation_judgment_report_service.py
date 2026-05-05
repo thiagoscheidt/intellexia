@@ -1420,9 +1420,9 @@ class FapContestationJudgmentReportService:
         second_match = re.search(r'Administrativo\s*2\s*[ªa]\s*inst[âa]ncia', block, flags=re.IGNORECASE)
         first_justification_match = re.search(r'\bJustificativa\b', block, flags=re.IGNORECASE)
         end_match = re.search(
-            r'\bNB\s*:|Informa[cç][oõ]es\s+de\s+Revis[aã]o\s+de\s+Benef[ií]cio|Dados\s+do\s+Benef[ií]cio|Sum[aá]rio\s+dos\s+Elementos\s+Contestados',
+            r'(?:^|\n)\s*NB\s*:|Informa[cç][oõ]es\s+de\s+Revis[aã]o\s+de\s+Benef[ií]cio|Dados\s+do\s+Benef[ií]cio|Sum[aá]rio\s+dos\s+Elementos\s+Contestados',
             block,
-            flags=re.IGNORECASE,
+            flags=re.IGNORECASE | re.MULTILINE,
         )
 
         if first_match:
