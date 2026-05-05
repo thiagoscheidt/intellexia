@@ -6,6 +6,7 @@ import hashlib
 import json
 import os
 
+from app.agents.fap.fap_contestation_classifier_agent import FAPContestationClassifierAgent
 from app.services.fap_web_service import FapWebAuthPayload, FapWebService
 from app.services.fap_contestation_judgment_report_service import FapContestationJudgmentReportService
 
@@ -39,6 +40,7 @@ from app.models import (
     FapContestationTurnoverRate,
     FapContestationTurnoverRateSourceHistory,
     FapContestationTurnoverRateManualHistory,
+    FapContestationClassifierPromptVersion,
     KnowledgeBase,
     db,
 )
@@ -1571,6 +1573,189 @@ def require_law_firm(f):
         return f(*args, **kwargs)
 
     return decorated_function
+
+
+def require_admin_user(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if session.get('user_role') != 'admin':
+            flash('Acesso negado. Apenas administradores podem alterar o prompt do classificador.', 'danger')
+            return redirect(url_for('disputes_center.list_disputes_center'))
+        return f(*args, **kwargs)
+
+    return decorated_function
+
+
+def _get_active_classifier_prompt_version(law_firm_id: int):
+    return (
+        FapContestationClassifierPromptVersion.query.filter_by(
+            law_firm_id=law_firm_id,
+            is_active=True,
+        )
+        .order_by(
+            FapContestationClassifierPromptVersion.version.desc(),
+            FapContestationClassifierPromptVersion.id.desc(),
+        )
+        .first()
+    )
+
+
+def _get_next_classifier_prompt_version_number(law_firm_id: int) -> int:
+    current_max_version = (
+        db.session.query(func.max(FapContestationClassifierPromptVersion.version))
+        .filter(FapContestationClassifierPromptVersion.law_firm_id == law_firm_id)
+        .scalar()
+    )
+    return (current_max_version or 0) + 1
+
+
+def _activate_new_classifier_prompt_version(law_firm_id: int, prompt_markdown: str, created_by_user_id: int | None):
+    prompt_markdown = FAPContestationClassifierAgent._remove_non_editable_sections(prompt_markdown)
+    prompt_hash = FAPContestationClassifierAgent.compute_prompt_hash(prompt_markdown)
+
+    FapContestationClassifierPromptVersion.query.filter_by(
+        law_firm_id=law_firm_id,
+        is_active=True,
+    ).update({'is_active': False})
+
+    version = FapContestationClassifierPromptVersion(
+        law_firm_id=law_firm_id,
+        version=_get_next_classifier_prompt_version_number(law_firm_id),
+        prompt_markdown=prompt_markdown,
+        prompt_hash=prompt_hash,
+        is_active=True,
+        created_by_user_id=created_by_user_id,
+    )
+    db.session.add(version)
+    return version
+
+
+@disputes_center_bp.route('/classifier-prompt-settings', methods=['GET'])
+@require_law_firm
+@require_admin_user
+def classifier_prompt_settings():
+    law_firm_id = get_current_law_firm_id()
+    current_version = _get_active_classifier_prompt_version(law_firm_id)
+    raw_prompt_markdown = (
+        current_version.prompt_markdown
+        if current_version and (current_version.prompt_markdown or '').strip()
+        else FAPContestationClassifierAgent.get_default_user_prompt_markdown()
+    )
+    prompt_markdown = FAPContestationClassifierAgent._remove_non_editable_sections(raw_prompt_markdown)
+
+    version_history = (
+        FapContestationClassifierPromptVersion.query.filter_by(law_firm_id=law_firm_id)
+        .order_by(
+            FapContestationClassifierPromptVersion.version.desc(),
+            FapContestationClassifierPromptVersion.id.desc(),
+        )
+        .all()
+    )
+
+    return render_template(
+        'disputes_center/classifier_prompt_settings.html',
+        prompt_markdown=prompt_markdown,
+        current_version=current_version,
+        version_history=version_history,
+        default_prompt_markdown=FAPContestationClassifierAgent._remove_non_editable_sections(
+            FAPContestationClassifierAgent.get_default_user_prompt_markdown()
+        ),
+        slugs_markdown=FAPContestationClassifierAgent._build_slugs_markdown(),
+    )
+
+
+@disputes_center_bp.route('/classifier-prompt-settings', methods=['POST'])
+@require_law_firm
+@require_admin_user
+def classifier_prompt_settings_save():
+    law_firm_id = get_current_law_firm_id()
+    user_id = session.get('user_id')
+    prompt_markdown = FAPContestationClassifierAgent._remove_non_editable_sections(
+        request.form.get('prompt_markdown') or ''
+    )
+
+    if not prompt_markdown:
+        flash('O prompt em markdown não pode ficar vazio.', 'danger')
+        return redirect(url_for('disputes_center.classifier_prompt_settings'))
+
+    current_version = _get_active_classifier_prompt_version(law_firm_id)
+    current_hash = current_version.prompt_hash if current_version else None
+    incoming_hash = FAPContestationClassifierAgent.compute_prompt_hash(prompt_markdown)
+
+    if current_hash == incoming_hash:
+        flash('Nenhuma alteração detectada no prompt atual.', 'info')
+        return redirect(url_for('disputes_center.classifier_prompt_settings'))
+
+    try:
+        new_version = _activate_new_classifier_prompt_version(law_firm_id, prompt_markdown, user_id)
+        db.session.commit()
+        flash(f'Prompt salvo com sucesso na versão {new_version.version}.', 'success')
+    except Exception as exc:
+        db.session.rollback()
+        flash(f'Erro ao salvar nova versão do prompt: {exc}', 'danger')
+
+    return redirect(url_for('disputes_center.classifier_prompt_settings'))
+
+
+@disputes_center_bp.route('/classifier-prompt-settings/test', methods=['POST'])
+@require_law_firm
+@require_admin_user
+def classifier_prompt_settings_test():
+    law_firm_id = get_current_law_firm_id()
+
+    payload = request.get_json(silent=True) or {}
+    prompt_markdown = payload.get('prompt_markdown', '')
+    test_text = payload.get('test_text', '')
+
+    if not str(test_text or '').strip():
+        return jsonify({'success': False, 'message': 'Informe um texto para teste.'}), 400
+
+    try:
+        classifier = FAPContestationClassifierAgent()
+        result = classifier.classify(
+            str(test_text),
+            law_firm_id=law_firm_id,
+            prompt_markdown_override=str(prompt_markdown or ''),
+        )
+        return jsonify({'success': True, 'result': result})
+    except Exception as exc:
+        current_app.logger.exception('Erro ao testar prompt do classificador FAP: %s', exc)
+        return jsonify({'success': False, 'message': 'Erro ao executar teste do prompt.'}), 500
+
+
+@disputes_center_bp.route('/classifier-prompt-settings/<int:version_id>/restore', methods=['POST'])
+@require_law_firm
+@require_admin_user
+def classifier_prompt_settings_restore(version_id: int):
+    law_firm_id = get_current_law_firm_id()
+    user_id = session.get('user_id')
+
+    source_version = FapContestationClassifierPromptVersion.query.filter_by(
+        id=version_id,
+        law_firm_id=law_firm_id,
+    ).first_or_404()
+
+    current_version = _get_active_classifier_prompt_version(law_firm_id)
+    if current_version and current_version.prompt_hash == source_version.prompt_hash:
+        flash('Essa versão já está ativa.', 'info')
+        return redirect(url_for('disputes_center.classifier_prompt_settings'))
+
+    try:
+        restored_version = _activate_new_classifier_prompt_version(
+            law_firm_id,
+            FAPContestationClassifierAgent._remove_non_editable_sections(source_version.prompt_markdown),
+            user_id,
+        )
+        db.session.commit()
+        flash(
+            f'Versão {source_version.version} restaurada como nova versão {restored_version.version}.',
+            'success',
+        )
+    except Exception as exc:
+        db.session.rollback()
+        flash(f'Erro ao restaurar versão do prompt: {exc}', 'danger')
+
+    return redirect(url_for('disputes_center.classifier_prompt_settings'))
 
 
 @disputes_center_bp.route('/<int:benefit_id>/file-timeline', methods=['GET'])

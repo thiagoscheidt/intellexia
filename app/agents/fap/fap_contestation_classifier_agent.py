@@ -5,12 +5,14 @@ import logging
 import os
 import re
 import time
+import hashlib
 from typing import Any
 
 from langchain.agents import create_agent
 from langchain_openai import ChatOpenAI
 
 from app.agents.config import DEFAULT_MODEL_MINI
+from app.models import FapContestationClassifierPromptVersion
 from app.services.token_usage_service import TokenUsageService
 
 
@@ -19,6 +21,103 @@ logger = logging.getLogger(__name__)
 
 class FAPContestationClassifierAgent:
     """Classifica justificativas de contestação FAP em um tópico jurídico padronizado."""
+
+    SYSTEM_PROMPT = (
+        "Voce e um especialista juridico em FAP. "
+        "Classifique o texto em ATE 3 topicos e retorne JSON valido. "
+        "Ordene por relevancia, com o principal na primeira posicao. "
+        "Quando houver cabecalho literal com nome de categoria, trate isso como evidencia forte. "
+        "DISCUSSAO MEDICA / OUTROS ARGUMENTOS so pode ser usada quando nenhum outro topico especifico se aplicar. "
+        "Prefira sempre topicos juridicos especificos quando houver evidencia textual suficiente. "
+        "Evite falso positivo: nunca retorne PRE-FAP, B31 ou NEXO PENDENTE sem evidencia textual explicita. "
+        "Quando houver evidencia de evento anterior a abril de 2007/pre-FAP, PRE-FAP deve ser o topico principal. "
+        "Nao use categorias de OUTRA EMPRESA ou ERRO DE ESTABELECIMENTO sem indicios textuais explicitos de outro CNPJ/estabelecimento/vinculo empregaticio diverso. "
+        "Quando houver indicio de acidente vinculado a outro CNPJ/estabelecimento, priorize categorias de OUTRA EMPRESA e/ou ERRO DE ESTABELECIMENTO. "
+        "Priorize interpretacao juridica. "
+        "Nunca invente categorias."
+    )
+
+    USER_PROMPT_MARKDOWN_DEFAULT = """## Regras
+
+- Retorne de 1 a 3 slugs validos, sem duplicidade.
+- O primeiro slug deve ser o tema principal.
+- So use discussao_medica quando NAO houver enquadramento claro em nenhum outro topico especifico.
+- So use outros_argumentos quando NAO houver enquadramento claro em nenhum outro topico especifico.
+- Se houver ao menos um topico especifico aplicavel, NAO inclua discussao_medica nem outros_argumentos.
+- Nao retorne pre_fap, b31_previdenciario ou nexo_pendente sem mencao textual clara e direta.
+- Se o texto mencionar numero de CAT (ex: 'CAT no XXXX', 'CAT 2018...'), use acidente_trajeto, NUNCA acidente_trajeto_sem_cat.
+- acidente_trajeto_sem_cat SOMENTE quando o texto diz explicitamente que NAO ha CAT emitida.
+- Quando houver mencao a evento/DID anterior a abril de 2007, pre_fap deve ser o primeiro slug.
+- Se o texto indicar outro CNPJ, outro estabelecimento, ou ausencia de nexo com este estabelecimento, priorize uma das categorias abaixo:
+    - outra_empresa_cat
+    - outra_empresa_nunca_empregado
+    - outra_empresa_pos_rescisao
+    - outra_empresa_did_anterior
+    - erro_estabelecimento
+- Nao use categorias de outra_empresa_* nem erro_estabelecimento sem expressao textual explicita de outro CNPJ/estabelecimento/empresa.
+- Informe reason apenas quando confidence >= 0.80; caso contrario, reason deve ser string vazia.
+- Se nao houver encaixe:
+    - Se houver termos medicos -> discussao_medica
+    - Caso contrario -> outros_argumentos
+
+## Exemplos de sinal forte para OUTRA EMPRESA/ERRO DE ESTABELECIMENTO
+
+- nao relacionado a este estabelecimento
+- acidente vinculado a outro CNPJ
+- requer exclusao da base de calculo FAP deste estabelecimento por vinculo a outro estabelecimento
+
+## Exemplos de sinal forte para PRE-FAP
+
+- evento acidentario anterior a 1o de abril de 2007
+- DID 2002
+- acidente/doenca antes da vigencia do FAP
+
+## Sinais juridicos fortes por categoria
+
+- nexo_pendente: mencao a NTP/nexo tecnico com contestacao pendente de julgamento e pedido de efeito suspensivo
+- acidente_trajeto: mencao expressa de acidente de trajeto com CAT comprovando o evento
+- acidente_trajeto_sem_cat: acidente de trajeto comprovado por acao judicial, sem CAT
+- restabelecimento_b91_60: mencao a restabelecimento em menos de 60 dias (DCB->novo beneficio)
+- b31_previdenciario: mencao expressa de especie previdenciaria/B31 e exclusao por nao ser acidentario
+- erro_estabelecimento: beneficio imputado ao estabelecimento/CNPJ errado
+- pre_fap: evento anterior a abril/2007, art. 202-A, decreto 6.957/2009, irretroatividade
+- outra_empresa_cat: CAT vincula acidente a outra empresa
+- outra_empresa_nunca_empregado: ausencia de vinculo empregaticio historico com a empresa
+- outra_empresa_pos_rescisao: DIB/evento posterior a rescisao contratual
+- outra_empresa_did_anterior: DID anterior a admissao na empresa
+- nexo_afastado: pericia/sentenca afasta nexo causal ou concausalidade laboral
+- beneficio_justica_federal: concessao judicial na Justica Federal indicando natureza previdenciaria
+- concomitante_b91_aposentadoria: B91 concedido com aposentadoria ativa
+- concomitante_dois_b91: concessao concomitante de dois auxilios-doenca
+- concomitante_b94_aposentadoria: B94 acumulado com aposentadoria
+- b94_duplicado: dois B94 para mesmo fato gerador
+- b94_sem_custo: DIB=DCB/beneficio sem custo juridico efetivo
+- discussao_medica: debate clinico/pericial sem enquadramento juridico FAP especifico
+
+## Regra de estruturacao
+
+- Se o texto trouxer mais de um bloco justificativo com fundamentos distintos, retorne multiplos slugs (ate 3), sem inventar.
+"""
+
+    FIXED_PROMPT_PREFIX = """# Tarefa
+
+Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
+
+## Slugs válidos
+
+{{SLUGS_MARKDOWN}}
+"""
+
+    FIXED_PROMPT_SUFFIX = """## Formato de resposta
+
+```json
+{"topics":["slug1","slug2"],"confidence":0.0,"reason":"explicacao curta ou vazio"}
+```
+
+## Texto para classificar
+
+{{TEXT}}
+"""
 
     ALLOWED_TOPICS: tuple[str, ...] = (
         "NEXO TÉCNICO PREVIDENCIÁRIO PENDENTE DE JULGAMENTO",
@@ -202,6 +301,85 @@ class FAPContestationClassifierAgent:
             except Exception:
                 return None
 
+    @classmethod
+    def _build_slugs_markdown(cls) -> str:
+        lines = []
+        for slug, topic in cls.SLUG_TO_TOPIC.items():
+            lines.append(f"- {topic} -> {slug}")
+        return "\n".join(lines)
+
+    @classmethod
+    def get_default_user_prompt_markdown(cls) -> str:
+        return cls.USER_PROMPT_MARKDOWN_DEFAULT.strip()
+
+    @staticmethod
+    def compute_prompt_hash(prompt_markdown: str) -> str:
+        return hashlib.sha256((prompt_markdown or "").encode("utf-8")).hexdigest()
+
+    @classmethod
+    def _remove_non_editable_sections(cls, prompt_markdown: str) -> str:
+        prompt = (prompt_markdown or "").strip()
+        if not prompt:
+            return ""
+
+        prompt = re.sub(
+            r"(?is)^\s*#\s*Tarefa\s*.*?(?=\n##\s|\Z)",
+            "\n",
+            prompt,
+        )
+        prompt = re.sub(
+            r"(?is)\n*##\s*Slugs\s+v[aá]lidos\s*.*?(?=\n##\s|\Z)",
+            "\n",
+            prompt,
+        )
+
+        prompt = re.sub(
+            r"(?is)\n*##\s*Formato\s+de\s+resposta.*?(?=\n##\s|\Z)",
+            "\n",
+            prompt,
+        )
+        prompt = re.sub(
+            r"(?is)\n*##\s*Texto\s+para\s+classificar.*?(?=\n##\s|\Z)",
+            "\n",
+            prompt,
+        )
+        prompt = prompt.replace("{{SLUGS_MARKDOWN}}", "")
+        prompt = prompt.replace("{{TEXT}}", "")
+        prompt = re.sub(r"\n{3,}", "\n\n", prompt)
+        return prompt.strip()
+
+    @classmethod
+    def _render_user_prompt(cls, prompt_markdown: str, cleaned_text: str) -> str:
+        prompt_body = cls._remove_non_editable_sections(
+            prompt_markdown or cls.get_default_user_prompt_markdown()
+        )
+        fixed_prefix = cls.FIXED_PROMPT_PREFIX.strip().replace("{{SLUGS_MARKDOWN}}", cls._build_slugs_markdown())
+        fixed_suffix = cls.FIXED_PROMPT_SUFFIX.strip().replace("{{TEXT}}", cleaned_text)
+        if prompt_body:
+            return f"{fixed_prefix}\n\n{prompt_body}\n\n{fixed_suffix}".strip()
+        return f"{fixed_prefix}\n\n{fixed_suffix}".strip()
+
+    @classmethod
+    def _load_user_prompt_markdown(cls, law_firm_id: int | None) -> str:
+        if not law_firm_id:
+            return cls.get_default_user_prompt_markdown()
+
+        prompt_version = (
+            FapContestationClassifierPromptVersion.query.filter_by(
+                law_firm_id=law_firm_id,
+                is_active=True,
+            )
+            .order_by(
+                FapContestationClassifierPromptVersion.version.desc(),
+                FapContestationClassifierPromptVersion.id.desc(),
+            )
+            .first()
+        )
+        if prompt_version and (prompt_version.prompt_markdown or "").strip():
+            return prompt_version.prompt_markdown
+
+        return cls.get_default_user_prompt_markdown()
+
     def _fallback_topic(self, text: str) -> str:
         normalized_text = self._normalize_text_for_match(text)
         if any(term.upper() in normalized_text for term in self.MEDICAL_TERMS):
@@ -366,7 +544,13 @@ class FAPContestationClassifierAgent:
 
         return str(last_message or "").strip()
 
-    def classify(self, text: str, *, law_firm_id: int | None = None) -> dict[str, Any]:
+    def classify(
+        self,
+        text: str,
+        *,
+        law_firm_id: int | None = None,
+        prompt_markdown_override: str | None = None,
+    ) -> dict[str, Any]:
         """
         Classifica um texto de justificativa FAP em tópico padronizado.
 
@@ -384,102 +568,15 @@ class FAPContestationClassifierAgent:
                 "topics": ["OUTROS ARGUMENTOS"],
             }
 
-        system_prompt = (
-            "Voce e um especialista juridico em FAP. "
-            "Classifique o texto em ATE 3 topicos e retorne JSON valido. "
-            "Ordene por relevancia, com o principal na primeira posicao. "
-            "Quando houver cabecalho literal com nome de categoria, trate isso como evidencia forte. "
-            "DISCUSSAO MEDICA / OUTROS ARGUMENTOS so pode ser usada quando nenhum outro topico especifico se aplicar. "
-            "Prefira sempre topicos juridicos especificos quando houver evidencia textual suficiente. "
-            "Evite falso positivo: nunca retorne PRE-FAP, B31 ou NEXO PENDENTE sem evidencia textual explicita. "
-            "Quando houver evidencia de evento anterior a abril de 2007/pre-FAP, PRE-FAP deve ser o topico principal. "
-            "Nao use categorias de OUTRA EMPRESA ou ERRO DE ESTABELECIMENTO sem indicios textuais explicitos de outro CNPJ/estabelecimento/vinculo empregaticio diverso. "
-            "Quando houver indicio de acidente vinculado a outro CNPJ/estabelecimento, priorize categorias de OUTRA EMPRESA e/ou ERRO DE ESTABELECIMENTO. "
-            "Priorize interpretacao juridica. "
-            "Nunca invente categorias."
+        user_prompt_markdown = (
+            self._remove_non_editable_sections(prompt_markdown_override)
+            if prompt_markdown_override is not None
+            else self._load_user_prompt_markdown(law_firm_id)
         )
-
-        user_prompt = (
-            "Classifique o texto e retorne uma lista de SLUGS (de 1 a 3).\n\n"
-            "Topicos:\n"
-            "NEXO TECNICO PREVIDENCIARIO PENDENTE DE JULGAMENTO -> nexo_pendente\n"
-            "ACIDENTE DE TRAJETO -> acidente_trajeto\n"
-            "ACIDENTE DE TRAJETO SEM CAT - ACAO JUDICIAL -> acidente_trajeto_sem_cat\n"
-            "RESTABELECIMENTO DE BENEFICIO - B91 60 DIAS -> restabelecimento_b91_60\n"
-            "AUXILIO-DOENCA PREVIDENCIARIO - B31 -> b31_previdenciario\n"
-            "ERRO DE ESTABELECIMENTO -> erro_estabelecimento\n"
-            "PRE-FAP -> pre_fap\n"
-            "OUTRA EMPRESA - CAT VINCULADA -> outra_empresa_cat\n"
-            "OUTRA EMPRESA - NUNCA FOI EMPREGADO -> outra_empresa_nunca_empregado\n"
-            "OUTRA EMPRESA - APOS A RESCISAO -> outra_empresa_pos_rescisao\n"
-            "OUTRA EMPRESA - DID ANTERIOR -> outra_empresa_did_anterior\n"
-            "NEXO AFASTADO -> nexo_afastado\n"
-            "BENEFICIO NA JUSTICA FEDERAL -> beneficio_justica_federal\n"
-            "B91 COM APOSENTADORIA -> concomitante_b91_aposentadoria\n"
-            "DOIS B91 -> concomitante_dois_b91\n"
-            "B94 COM APOSENTADORIA -> concomitante_b94_aposentadoria\n"
-            "B94 DUPLICADO -> b94_duplicado\n"
-            "B94 SEM CUSTO -> b94_sem_custo\n"
-            "DISCUSSAO MEDICA -> discussao_medica\n"
-            "OUTROS -> outros_argumentos\n\n"
-            "Regras:\n"
-            "- Retorne de 1 a 3 slugs validos, sem duplicidade\n"
-            "- O primeiro slug deve ser o tema principal\n"
-            "- So use discussao_medica quando NAO houver enquadramento claro em nenhum outro topico especifico\n"
-            "- So use outros_argumentos quando NAO houver enquadramento claro em nenhum outro topico especifico\n"
-            "- Se houver ao menos um topico especifico aplicavel, NAO inclua discussao_medica nem outros_argumentos\n"
-            "- Nao retorne pre_fap, b31_previdenciario ou nexo_pendente sem mencao textual clara e direta\n"
-            "- Se o texto mencionar numero de CAT (ex: 'CAT no XXXX', 'CAT 2018...'), use acidente_trajeto, NUNCA acidente_trajeto_sem_cat\n"
-            "- acidente_trajeto_sem_cat SOMENTE quando o texto diz explicitamente que NAO ha CAT emitida\n"
-            "- Quando houver mencao a evento/DID anterior a abril de 2007, pre_fap deve ser o primeiro slug\n"
-            "- Se o texto indicar outro CNPJ, outro estabelecimento, ou ausencia de nexo com este estabelecimento, priorize uma das categorias abaixo:\n"
-            "  - outra_empresa_cat\n"
-            "  - outra_empresa_nunca_empregado\n"
-            "  - outra_empresa_pos_rescisao\n"
-            "  - outra_empresa_did_anterior\n"
-            "  - erro_estabelecimento\n"
-            "- Nao use categorias de outra_empresa_* nem erro_estabelecimento sem expressao textual explicita de outro CNPJ/estabelecimento/empresa\n"
-            "- Informe reason apenas quando confidence >= 0.80; caso contrario, reason deve ser string vazia\n"
-            "- Se nao houver encaixe:\n"
-            "  - Se houver termos medicos -> discussao_medica\n"
-            "  - Caso contrario -> outros_argumentos\n\n"
-            "Exemplos de sinal forte para OUTRA EMPRESA/ERRO DE ESTABELECIMENTO:\n"
-            "- 'nao relacionado a este estabelecimento'\n"
-            "- 'acidente vinculado a outro CNPJ'\n"
-            "- 'requer exclusao da base de calculo FAP deste estabelecimento por vinculo a outro estabelecimento'\n\n"
-            "Exemplos de sinal forte para PRE-FAP:\n"
-            "- 'evento acidentario anterior a 1o de abril de 2007'\n"
-            "- 'DID 2002'\n"
-            "- 'acidente/doenca antes da vigencia do FAP'\n\n"
-            "Sinais juridicos fortes por categoria (use para desempate e prioridade):\n"
-            "- nexo_pendente: mencao a NTP/nexo tecnico com contestacao pendente de julgamento e pedido de efeito suspensivo\n"
-            "- acidente_trajeto: mencao expressa de acidente de trajeto com CAT comprovando o evento\n"
-            "- acidente_trajeto_sem_cat: acidente de trajeto comprovado por acao judicial, sem CAT\n"
-            "- restabelecimento_b91_60: mencao a restabelecimento em menos de 60 dias (DCB->novo beneficio)\n"
-            "- b31_previdenciario: mencao expressa de especie previdenciaria/B31 e exclusao por nao ser acidentario\n"
-            "- erro_estabelecimento: beneficio imputado ao estabelecimento/CNPJ errado\n"
-            "- pre_fap: evento anterior a abril/2007, art. 202-A, decreto 6.957/2009, irretroatividade\n"
-            "- outra_empresa_cat: CAT vincula acidente a outra empresa\n"
-            "- outra_empresa_nunca_empregado: ausencia de vinculo empregaticio historico com a empresa\n"
-            "- outra_empresa_pos_rescisao: DIB/evento posterior a rescisao contratual\n"
-            "- outra_empresa_did_anterior: DID anterior a admissao na empresa\n"
-            "- nexo_afastado: pericia/sentenca afasta nexo causal ou concausalidade laboral\n"
-            "- beneficio_justica_federal: concessao judicial na Justica Federal indicando natureza previdenciaria\n"
-            "- concomitante_b91_aposentadoria: B91 concedido com aposentadoria ativa\n"
-            "- concomitante_dois_b91: concessao concomitante de dois auxilios-doenca\n"
-            "- concomitante_b94_aposentadoria: B94 acumulado com aposentadoria\n"
-            "- b94_duplicado: dois B94 para mesmo fato gerador\n"
-            "- b94_sem_custo: DIB=DCB/beneficio sem custo juridico efetivo\n"
-            "- discussao_medica: debate clinico/pericial sem enquadramento juridico FAP especifico\n\n"
-            "Regra de estruturacao:\n"
-            "- Se o texto trouxer mais de um bloco justificativo com fundamentos distintos, retorne multiplos slugs (ate 3), sem inventar.\n"
-            "Formato:\n"
-            '{"topics":["slug1","slug2"],"confidence":0.0,"reason":"explicacao curta ou vazio"}\n\n'
-            f"Texto:\n{cleaned_text}"
-        )
+        user_prompt = self._render_user_prompt(user_prompt_markdown, cleaned_text)
 
         try:
-            agent = create_agent(model=self.llm, system_prompt=system_prompt)
+            agent = create_agent(model=self.llm, system_prompt=self.SYSTEM_PROMPT)
 
             call_started_at = time.time()
             response_payload = agent.invoke(

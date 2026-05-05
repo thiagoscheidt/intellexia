@@ -1,0 +1,579 @@
+{% extends "layout/base.html" %}
+
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}Configuração IA do Painel de Contestações{% endblock %}
+
+{% block extra_css %}
+<style>
+    .classifier-prompt-editor .ql-toolbar {
+        border-radius: 0.5rem 0.5rem 0 0;
+    }
+
+    .classifier-prompt-editor .ql-container {
+        min-height: 540px;
+        border-radius: 0 0 0.5rem 0.5rem;
+        font-family: var(--bs-font-monospace);
+        font-size: 0.92rem;
+    }
+
+    .classifier-prompt-editor .ql-editor {
+        white-space: pre-wrap;
+        font-family: var(--bs-font-monospace);
+        line-height: 1.5;
+        tab-size: 2;
+    }
+
+    .markdown-preview {
+        border: 1px solid var(--bs-border-color-translucent);
+        border-radius: 0.5rem;
+        background: var(--bs-body-bg);
+        padding: 0.75rem;
+    }
+
+    .markdown-preview h1,
+    .markdown-preview h2,
+    .markdown-preview h3 {
+        margin-top: 0.75rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .markdown-preview p,
+    .markdown-preview ul,
+    .markdown-preview ol,
+    .markdown-preview blockquote,
+    .markdown-preview pre {
+        margin-bottom: 0.6rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+{% call page_hero(title='Configuração IA do Painel de Contestações', subtitle='Edite e versione o prompt markdown usado
+na classificação automática das justificativas FAP', icon='bi bi-sliders') %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-0 bg-transparent small">
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a>
+        </li>
+        <li class="breadcrumb-item"><a href="{{ url_for('disputes_center.list_disputes_center') }}">Painel de
+                Contestações</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Configuração IA</li>
+    </ol>
+</nav>
+{% endcall %}
+
+<div class="app-content">
+    <div class="container-fluid">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="row mb-3">
+            <div class="col-12">
+                {% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                    <i class="bi bi-info-circle me-2"></i>{{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        {% endwith %}
+
+        <div class="row g-4">
+            <div class="col-xl-8">
+                <div class="card card-primary card-outline">
+                    <div class="card-header d-flex align-items-start gap-2">
+                        <div class="d-flex flex-column align-items-start">
+                            <h3 class="card-title mb-0">
+                                <i class="bi bi-markdown me-2"></i>Prompt em Markdown
+                            </h3>
+                            <div class="text-muted small mt-1">
+                                {% if current_version %}
+                                Versão ativa: <strong>v{{ current_version.version }}</strong>
+                                {% else %}
+                                Usando prompt padrão embutido no código
+                                {% endif %}
+                            </div>
+                        </div>
+                        <button type="button" class="btn btn-outline-success btn-sm ms-auto" data-bs-toggle="modal"
+                            data-bs-target="#promptTestModal">
+                            <i class="bi bi-bezier2 me-1"></i>Testar Prompt
+                        </button>
+                    </div>
+                    <form method="POST" action="{{ url_for('disputes_center.classifier_prompt_settings_save') }}">
+                        <div class="card-body">
+                            <div class="alert alert-info">
+                                <strong>Trecho editável:</strong>
+                                <div class="mt-1">A edição desta tela afeta apenas as regras e orientações centrais do
+                                    prompt.</div>
+                                <div class="mt-2 text-muted">
+                                    As seções <strong>Tarefa</strong>, <strong>Slugs válidos</strong>,
+                                    <strong>Formato de resposta</strong> e <strong>Texto para classificar</strong>
+                                    são fixas no código e não são editáveis nesta tela.
+                                </div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="prompt_markdown" class="form-label">Conteúdo do prompt</label>
+                                <div class="classifier-prompt-editor">
+                                    <div id="promptMarkdownEditor"></div>
+                                </div>
+                                <textarea id="prompt_markdown" name="prompt_markdown" class="d-none"
+                                    spellcheck="false">{{ prompt_markdown }}</textarea>
+                            </div>
+                        </div>
+                        <div class="card-footer d-flex gap-2 flex-wrap">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="bi bi-save me-1"></i>Salvar nova versão
+                            </button>
+                            <a href="{{ url_for('disputes_center.classifier_prompt_settings') }}"
+                                class="btn btn-outline-secondary">
+                                <i class="bi bi-arrow-clockwise me-1"></i>Recarregar
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div class="col-xl-4">
+                <div class="card card-outline card-info mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0"><i class="bi bi-list-check me-2"></i>Slugs fixos no código</h3>
+                    </div>
+                    <div class="card-body">
+                        <pre class="small mb-0" style="white-space: pre-wrap;">{{ slugs_markdown }}</pre>
+                    </div>
+                </div>
+
+                <div class="card card-outline card-secondary mb-4">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0"><i class="bi bi-clock-history me-2"></i>Histórico de versões</h3>
+                    </div>
+                    <div class="card-body p-0">
+                        {% if version_history %}
+                        <div class="list-group list-group-flush">
+                            {% for version in version_history %}
+                            <div class="list-group-item">
+                                <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                                    <div>
+                                        <div class="fw-semibold">v{{ version.version }} {% if version.is_active %}<span
+                                                class="badge text-bg-success ms-1">Ativa</span>{% endif %}</div>
+                                        <div class="small text-muted">
+                                            {{ version.created_at.strftime('%d/%m/%Y %H:%M') if version.created_at else
+                                            '-' }}
+                                        </div>
+                                    </div>
+                                    {% if not version.is_active %}
+                                    <form method="POST"
+                                        action="{{ url_for('disputes_center.classifier_prompt_settings_restore', version_id=version.id) }}">
+                                        <button type="submit" class="btn btn-outline-primary btn-sm">
+                                            <i class="bi bi-arrow-counterclockwise me-1"></i>Restaurar
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                </div>
+                                <details>
+                                    <summary class="small text-primary" style="cursor: pointer;">Ver conteúdo</summary>
+                                    <div class="markdown-preview markdown-preview-target small mt-2 mb-0"></div>
+                                    <textarea
+                                        class="markdown-preview-source d-none">{{ version.prompt_markdown }}</textarea>
+                                </details>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div class="p-3 text-muted">
+                            Nenhuma versão customizada salva ainda. O classificador está usando o prompt padrão embutido
+                            no código.
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="card card-outline card-light">
+                    <div class="card-header">
+                        <h3 class="card-title mb-0"><i class="bi bi-file-earmark-code me-2"></i>Prompt padrão de
+                            referência</h3>
+                    </div>
+                    <div class="card-body">
+                        <details>
+                            <summary class="small text-primary" style="cursor: pointer;">Expandir prompt padrão
+                            </summary>
+                            <div class="markdown-preview markdown-preview-target small mt-3 mb-0"></div>
+                            <textarea class="markdown-preview-source d-none">{{ default_prompt_markdown }}</textarea>
+                        </details>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="promptTestModal" tabindex="-1" aria-labelledby="promptTestModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="promptTestModalLabel">
+                    <i class="bi bi-bezier2 me-2"></i>Teste do Prompt
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="mb-3">
+                    <label for="promptTestText" class="form-label">Texto para classificar</label>
+                    <textarea id="promptTestText" class="form-control" rows="8"
+                        placeholder="Cole aqui uma justificativa para testar a classificação..."></textarea>
+                </div>
+
+                <div class="d-flex gap-2 flex-wrap mb-3">
+                    <button type="button" id="btnTestPrompt" class="btn btn-success">
+                        <i class="bi bi-play-circle me-1"></i>Classificar
+                    </button>
+                    <small class="text-muted align-self-center">
+                        O teste usa o conteúdo atual do editor, sem precisar salvar versão.
+                    </small>
+                </div>
+
+                <div id="promptTestStatus" class="small text-muted mb-2"></div>
+                <pre id="promptTestResult" class="small mb-0 p-3 border rounded bg-body-tertiary"
+                    style="display: none; white-space: pre-wrap;"></pre>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const editorElement = document.getElementById('promptMarkdownEditor');
+        const hiddenInput = document.getElementById('prompt_markdown');
+        const form = hiddenInput ? hiddenInput.closest('form') : null;
+        const testButton = document.getElementById('btnTestPrompt');
+        const testInput = document.getElementById('promptTestText');
+        const testStatus = document.getElementById('promptTestStatus');
+        const testResult = document.getElementById('promptTestResult');
+
+        if (!editorElement || !hiddenInput || !form || typeof Quill === 'undefined') {
+            return;
+        }
+
+        function escapeHtml(text) {
+            return (text || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function applyInlineMarkdown(text) {
+            let html = escapeHtml(text || '');
+            html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+            html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+            html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+            return html;
+        }
+
+        function markdownToHtml(markdownText) {
+            const lines = (markdownText || '').replace(/\r\n/g, '\n').split('\n');
+            let html = '';
+            let inUl = false;
+            let inOl = false;
+            let inCode = false;
+
+            function closeLists() {
+                if (inUl) {
+                    html += '</ul>';
+                    inUl = false;
+                }
+                if (inOl) {
+                    html += '</ol>';
+                    inOl = false;
+                }
+            }
+
+            for (const rawLine of lines) {
+                const line = rawLine || '';
+
+                if (line.trim().startsWith('```')) {
+                    closeLists();
+                    if (!inCode) {
+                        html += '<pre><code>';
+                        inCode = true;
+                    } else {
+                        html += '</code></pre>';
+                        inCode = false;
+                    }
+                    continue;
+                }
+
+                if (inCode) {
+                    html += escapeHtml(line) + '\n';
+                    continue;
+                }
+
+                const h3 = line.match(/^###\s+(.+)$/);
+                if (h3) {
+                    closeLists();
+                    html += `<h3>${applyInlineMarkdown(h3[1])}</h3>`;
+                    continue;
+                }
+
+                const h2 = line.match(/^##\s+(.+)$/);
+                if (h2) {
+                    closeLists();
+                    html += `<h2>${applyInlineMarkdown(h2[1])}</h2>`;
+                    continue;
+                }
+
+                const h1 = line.match(/^#\s+(.+)$/);
+                if (h1) {
+                    closeLists();
+                    html += `<h1>${applyInlineMarkdown(h1[1])}</h1>`;
+                    continue;
+                }
+
+                const ul = line.match(/^\s*[-*]\s+(.+)$/);
+                if (ul) {
+                    if (!inUl) {
+                        if (inOl) {
+                            html += '</ol>';
+                            inOl = false;
+                        }
+                        html += '<ul>';
+                        inUl = true;
+                    }
+                    html += `<li>${applyInlineMarkdown(ul[1])}</li>`;
+                    continue;
+                }
+
+                const ol = line.match(/^\s*(\d+)\.\s+(.+)$/);
+                if (ol) {
+                    if (!inOl) {
+                        if (inUl) {
+                            html += '</ul>';
+                            inUl = false;
+                        }
+                        html += '<ol>';
+                        inOl = true;
+                    }
+                    html += `<li>${applyInlineMarkdown(ol[2])}</li>`;
+                    continue;
+                }
+
+                const quote = line.match(/^>\s?(.*)$/);
+                if (quote) {
+                    closeLists();
+                    html += `<blockquote>${applyInlineMarkdown(quote[1])}</blockquote>`;
+                    continue;
+                }
+
+                if (!line.trim()) {
+                    closeLists();
+                    html += '<p><br></p>';
+                    continue;
+                }
+
+                closeLists();
+                html += `<p>${applyInlineMarkdown(line)}</p>`;
+            }
+
+            closeLists();
+            if (inCode) {
+                html += '</code></pre>';
+            }
+            return html;
+        }
+
+        function inlineHtmlToMarkdown(node) {
+            if (!node) {
+                return '';
+            }
+
+            if (node.nodeType === Node.TEXT_NODE) {
+                return node.textContent || '';
+            }
+
+            if (node.nodeType !== Node.ELEMENT_NODE) {
+                return '';
+            }
+
+            const tag = node.tagName.toLowerCase();
+            const content = Array.from(node.childNodes).map(inlineHtmlToMarkdown).join('');
+
+            if (tag === 'strong' || tag === 'b') {
+                return `**${content}**`;
+            }
+            if (tag === 'em' || tag === 'i') {
+                return `*${content}*`;
+            }
+            if (tag === 'code') {
+                return `\`${content}\``;
+            }
+            if (tag === 'a') {
+                const href = node.getAttribute('href') || '';
+                return href ? `[${content}](${href})` : content;
+            }
+            if (tag === 'br') {
+                return '\n';
+            }
+
+            return content;
+        }
+
+        function blockNodeToMarkdown(node) {
+            if (!node || node.nodeType !== Node.ELEMENT_NODE) {
+                return '';
+            }
+
+            const tag = node.tagName.toLowerCase();
+
+            if (tag === 'h1' || tag === 'h2' || tag === 'h3') {
+                const level = tag === 'h1' ? '#' : (tag === 'h2' ? '##' : '###');
+                const text = inlineHtmlToMarkdown(node).trim();
+                return text ? `${level} ${text}` : '';
+            }
+
+            if (tag === 'p') {
+                const text = inlineHtmlToMarkdown(node).replace(/\n+/g, ' ').trim();
+                return text;
+            }
+
+            if (tag === 'blockquote') {
+                const text = inlineHtmlToMarkdown(node).trim();
+                return text ? text.split('\n').map(line => `> ${line}`).join('\n') : '';
+            }
+
+            if (tag === 'pre') {
+                const text = (node.textContent || '').replace(/\n$/, '');
+                return `\`\`\`\n${text}\n\`\`\``;
+            }
+
+            if (tag === 'ul') {
+                const items = Array.from(node.querySelectorAll(':scope > li'));
+                return items.map(li => `- ${inlineHtmlToMarkdown(li).trim()}`).join('\n');
+            }
+
+            if (tag === 'ol') {
+                const items = Array.from(node.querySelectorAll(':scope > li'));
+                return items.map((li, idx) => `${idx + 1}. ${inlineHtmlToMarkdown(li).trim()}`).join('\n');
+            }
+
+            if (node.classList && node.classList.contains('ql-code-block-container')) {
+                const codeLines = Array.from(node.querySelectorAll('.ql-code-block')).map(el => el.textContent || '');
+                return `\`\`\`\n${codeLines.join('\n')}\n\`\`\``;
+            }
+
+            return inlineHtmlToMarkdown(node).trim();
+        }
+
+        function quillToMarkdown(quill) {
+            const blocks = [];
+            for (const child of Array.from(quill.root.children)) {
+                const markdownBlock = blockNodeToMarkdown(child);
+                if (markdownBlock) {
+                    blocks.push(markdownBlock);
+                }
+            }
+            return blocks.join('\n\n').replace(/\n{3,}/g, '\n\n').trim();
+        }
+
+        function renderMarkdownPreviews() {
+            const previewBlocks = document.querySelectorAll('.markdown-preview-target');
+            previewBlocks.forEach((target) => {
+                const source = target.parentElement.querySelector('.markdown-preview-source');
+                if (!source) {
+                    return;
+                }
+                target.innerHTML = markdownToHtml(source.value || '');
+            });
+        }
+
+        renderMarkdownPreviews();
+
+        const toolbarOptions = [
+            ['bold', 'italic', 'underline'],
+            ['blockquote', 'code-block'],
+            [{ 'list': 'ordered' }, { 'list': 'bullet' }],
+            ['link'],
+            ['clean']
+        ];
+
+        const quill = new Quill('#promptMarkdownEditor', {
+            theme: 'snow',
+            modules: { toolbar: toolbarOptions },
+            placeholder: 'Escreva o prompt...'
+        });
+
+        if (hiddenInput.value) {
+            quill.clipboard.dangerouslyPasteHTML(markdownToHtml(hiddenInput.value));
+        }
+
+        form.addEventListener('submit', function (event) {
+            const markdownText = quillToMarkdown(quill);
+            hiddenInput.value = markdownText;
+
+            if (!markdownText.trim()) {
+                event.preventDefault();
+                alert('Escreva o prompt antes de salvar.');
+            }
+        });
+
+        if (testButton && testInput && testStatus && testResult) {
+            testButton.addEventListener('click', async function () {
+                const testText = (testInput.value || '').trim();
+                if (!testText) {
+                    testStatus.textContent = 'Informe um texto para teste.';
+                    testStatus.className = 'small text-danger mb-2';
+                    testResult.style.display = 'none';
+                    return;
+                }
+
+                const markdownText = quillToMarkdown(quill);
+                if (!markdownText.trim()) {
+                    testStatus.textContent = 'O prompt editável não pode ficar vazio para o teste.';
+                    testStatus.className = 'small text-danger mb-2';
+                    testResult.style.display = 'none';
+                    return;
+                }
+
+                testButton.disabled = true;
+                testStatus.textContent = 'Executando classificação...';
+                testStatus.className = 'small text-muted mb-2';
+                testResult.style.display = 'none';
+
+                try {
+                    const response = await fetch("{{ url_for('disputes_center.classifier_prompt_settings_test') }}", {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            prompt_markdown: markdownText,
+                            test_text: testText,
+                        })
+                    });
+
+                    const data = await response.json();
+                    if (!response.ok || !data.success) {
+                        throw new Error(data.message || 'Falha ao executar o teste.');
+                    }
+
+                    testStatus.textContent = 'Classificação concluída com sucesso.';
+                    testStatus.className = 'small text-success mb-2';
+                    testResult.textContent = JSON.stringify(data.result, null, 2);
+                    testResult.style.display = 'block';
+                } catch (err) {
+                    testStatus.textContent = err.message || 'Erro inesperado ao testar o prompt.';
+                    testStatus.className = 'small text-danger mb-2';
+                    testResult.style.display = 'none';
+                } finally {
+                    testButton.disabled = false;
+                }
+            });
+        }
+    });
+</script>
+{% endblock %}

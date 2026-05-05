@@ -157,6 +157,16 @@
                 <p style="margin-left: 15px;">Importar Relatorio FAP</p>
               </a>
             </li>
+            {% if session.get('user_role') == 'admin' %}
+            <li class="nav-item">
+              <a href="{{ url_for('disputes_center.classifier_prompt_settings') }}"
+                class="nav-link {{ 'active' if request.endpoint in ['disputes_center.classifier_prompt_settings', 'disputes_center.classifier_prompt_settings_save', 'disputes_center.classifier_prompt_settings_restore'] else '' }}"
+                style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-sliders" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Configuração IA</p>
+              </a>
+            </li>
+            {% endif %}
           </ul>
         </li>
 
