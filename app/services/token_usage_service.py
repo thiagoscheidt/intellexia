@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from dataclasses import dataclass
 from decimal import Decimal
 from typing import Any
 
+import requests
 from flask import session, has_request_context
 from app.models import AgentTokenUsage, db
 
@@ -23,6 +25,9 @@ class TokenUsageEntry:
     request_id: str
     finish_reason: str
     estimated_cost_usd: Decimal
+    pricing_input_per_1k: Decimal
+    pricing_output_per_1k: Decimal
+    pricing_source: str
     usage_payload: dict[str, Any]
 
 
@@ -34,6 +39,10 @@ class TokenUsageService:
         "gpt-5-nano": (Decimal("0.00005"), Decimal("0.00040")),
         "gpt-4o-mini": (Decimal("0.00015"), Decimal("0.00060")),
     }
+    _OPENROUTER_MODELS_URL = os.getenv("OPENROUTER_MODELS_URL", "https://openrouter.ai/api/v1/models")
+    _OPENROUTER_PRICING_TTL_SECONDS = int(os.getenv("TOKEN_PRICING_CACHE_TTL_SECONDS", "3600"))
+    _openrouter_pricing_cache: dict[str, tuple[Decimal, Decimal]] = {}
+    _openrouter_pricing_cached_at: float = 0.0
 
     @staticmethod
     def _get_session_user_data() -> tuple[int | None, int | None]:
@@ -158,30 +167,118 @@ class TokenUsageService:
         model_name: str | None,
         input_tokens: int,
         output_tokens: int,
-    ) -> Decimal:
+    ) -> tuple[Decimal, Decimal, Decimal, str]:
         name = (model_name or "").strip().lower()
         # Strip provider prefix from OpenRouter-style names (e.g. "openai/gpt-4o-mini" -> "gpt-4o-mini")
-        if "/" in name:
-            name = name.rsplit("/", 1)[-1]
+        short_name = name.rsplit("/", 1)[-1] if "/" in name else name
 
-        configured_input = os.getenv(f"TOKEN_PRICE_INPUT_1K_{name.upper().replace('-', '_')}") if name else None
-        configured_output = os.getenv(f"TOKEN_PRICE_OUTPUT_1K_{name.upper().replace('-', '_')}") if name else None
+        input_price, output_price, pricing_source = self._resolve_pricing_per_1k(name, short_name)
+
+        if input_price == 0 and output_price == 0:
+            return Decimal("0"), input_price, output_price, pricing_source
+
+        input_cost = (Decimal(input_tokens) / Decimal(1000)) * input_price
+        output_cost = (Decimal(output_tokens) / Decimal(1000)) * output_price
+        return (input_cost + output_cost).quantize(Decimal("0.00000001")), input_price, output_price, pricing_source
+
+    def _resolve_pricing_per_1k(self, full_name: str, short_name: str) -> tuple[Decimal, Decimal, str]:
+        env_key = short_name.upper().replace('-', '_') if short_name else ""
+        configured_input = os.getenv(f"TOKEN_PRICE_INPUT_1K_{env_key}") if env_key else None
+        configured_output = os.getenv(f"TOKEN_PRICE_OUTPUT_1K_{env_key}") if env_key else None
 
         if configured_input and configured_output:
             try:
                 input_price = Decimal(configured_input)
                 output_price = Decimal(configured_output)
+                return input_price, output_price, "env"
             except Exception:
-                input_price, output_price = self._DEFAULT_PRICING_PER_1K.get(name, (Decimal("0"), Decimal("0")))
-        else:
-            input_price, output_price = self._DEFAULT_PRICING_PER_1K.get(name, (Decimal("0"), Decimal("0")))
+                pass
 
-        if input_price == 0 and output_price == 0:
-            return Decimal("0")
+        openrouter_prices = self._get_openrouter_prices_for_model(full_name, short_name)
+        if openrouter_prices:
+            return openrouter_prices[0], openrouter_prices[1], "openrouter"
 
-        input_cost = (Decimal(input_tokens) / Decimal(1000)) * input_price
-        output_cost = (Decimal(output_tokens) / Decimal(1000)) * output_price
-        return (input_cost + output_cost).quantize(Decimal("0.00000001"))
+        input_price, output_price = self._DEFAULT_PRICING_PER_1K.get(short_name, (Decimal("0"), Decimal("0")))
+        if input_price or output_price:
+            return input_price, output_price, "default"
+
+        return Decimal("0"), Decimal("0"), "none"
+
+    def _get_openrouter_prices_for_model(
+        self,
+        full_name: str,
+        short_name: str,
+    ) -> tuple[Decimal, Decimal] | None:
+        pricing_map = self._get_openrouter_pricing_map()
+        if not pricing_map:
+            return None
+
+        for key in [full_name, short_name]:
+            normalized = (key or "").strip().lower()
+            if normalized and normalized in pricing_map:
+                return pricing_map[normalized]
+
+        return None
+
+    def _get_openrouter_pricing_map(self) -> dict[str, tuple[Decimal, Decimal]]:
+        now = time.time()
+        if (
+            self._openrouter_pricing_cache
+            and self._openrouter_pricing_cached_at
+            and (now - self._openrouter_pricing_cached_at) < self._OPENROUTER_PRICING_TTL_SECONDS
+        ):
+            return self._openrouter_pricing_cache
+
+        api_key = os.getenv("OPENAI_API_KEY") or os.getenv("OPENROUTER_API_KEY")
+        if not api_key:
+            return self._openrouter_pricing_cache
+
+        try:
+            response = requests.get(
+                self._OPENROUTER_MODELS_URL,
+                headers={"Authorization": f"Bearer {api_key}"},
+                params={"output_modalities": "text"},
+                timeout=15,
+            )
+            response.raise_for_status()
+            payload = response.json() or {}
+        except Exception as exc:
+            logger.debug("TokenUsageService: falha ao atualizar pricing OpenRouter: %s", exc)
+            return self._openrouter_pricing_cache
+
+        pricing_map: dict[str, tuple[Decimal, Decimal]] = {}
+        for item in payload.get("data") or []:
+            if not isinstance(item, dict):
+                continue
+
+            model_id = str(item.get("id") or "").strip().lower()
+            if not model_id:
+                continue
+
+            pricing = item.get("pricing") or {}
+            prompt_raw = pricing.get("prompt")
+            completion_raw = pricing.get("completion")
+
+            try:
+                # OpenRouter retorna preço por token; convertemos para preço por 1k tokens.
+                prompt_per_1k = (Decimal(str(prompt_raw)) * Decimal(1000)).quantize(Decimal("0.00000001"))
+                completion_per_1k = (Decimal(str(completion_raw)) * Decimal(1000)).quantize(Decimal("0.00000001"))
+            except Exception:
+                continue
+
+            pricing_map[model_id] = (prompt_per_1k, completion_per_1k)
+            if "/" in model_id:
+                pricing_map[model_id.rsplit("/", 1)[-1]] = (prompt_per_1k, completion_per_1k)
+
+            canonical_slug = str(item.get("canonical_slug") or "").strip().lower()
+            if canonical_slug and canonical_slug not in pricing_map:
+                pricing_map[canonical_slug] = (prompt_per_1k, completion_per_1k)
+
+        if pricing_map:
+            self._openrouter_pricing_cache = pricing_map
+            self._openrouter_pricing_cached_at = now
+
+        return self._openrouter_pricing_cache
 
     def extract_entries(
         self,
@@ -206,7 +303,7 @@ class TokenUsageService:
             message_role = self._extract_message_role(message)
             request_id = self._extract_message_request_id(message)
             finish_reason = self._extract_finish_reason(message)
-            estimated_cost_usd = self._estimate_cost_usd(
+            estimated_cost_usd, pricing_input_per_1k, pricing_output_per_1k, pricing_source = self._estimate_cost_usd(
                 model_name=model_name,
                 input_tokens=input_tokens,
                 output_tokens=output_tokens,
@@ -222,6 +319,9 @@ class TokenUsageService:
                     request_id=request_id,
                     finish_reason=finish_reason,
                     estimated_cost_usd=estimated_cost_usd,
+                    pricing_input_per_1k=pricing_input_per_1k,
+                    pricing_output_per_1k=pricing_output_per_1k,
+                    pricing_source=pricing_source,
                     usage_payload=usage,
                 )
             )
@@ -238,7 +338,8 @@ class TokenUsageService:
                 f"{prefix} msg[{entry.message_index}] input={entry.input_tokens} "
                 f"output={entry.output_tokens} total={entry.total_tokens} "
                 f"role={entry.message_role} finish={entry.finish_reason or '-'} "
-                f"cost_usd={entry.estimated_cost_usd}"
+                f"cost_usd={entry.estimated_cost_usd} "
+                f"pricing_source={entry.pricing_source}"
             )
 
         total = sum(item.total_tokens for item in entries)
@@ -279,6 +380,15 @@ class TokenUsageService:
         try:
             rows = []
             for entry in entries:
+                row_metadata = dict(metadata_payload or {})
+                row_metadata.update(
+                    {
+                        "pricing_source": entry.pricing_source,
+                        "pricing_input_per_1k": str(entry.pricing_input_per_1k),
+                        "pricing_output_per_1k": str(entry.pricing_output_per_1k),
+                    }
+                )
+
                 rows.append(
                     AgentTokenUsage(
                         user_id=user_id,
@@ -301,7 +411,7 @@ class TokenUsageService:
                         estimated_cost_usd=entry.estimated_cost_usd,
                         currency="USD",
                         usage_payload=entry.usage_payload,
-                        metadata_payload=metadata_payload or {},
+                        metadata_payload=row_metadata,
                     )
                 )
 

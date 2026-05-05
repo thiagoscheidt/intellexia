@@ -773,11 +773,24 @@
                     <span id="decisionFirstStatusRaw" class="font-monospace small text-secondary"></span>
                   </div>
                   <div class="mb-2">
-                    <span class="text-muted small d-block mb-1">Justificativa</span>
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                      <span class="text-muted small d-block">Justificativa</span>
+                      <button type="button" class="btn btn-outline-secondary btn-sm copy-decision-text-btn"
+                        data-copy-target="decisionFirstJustification" title="Copiar justificativa"
+                        aria-label="Copiar justificativa">
+                        <i class="bi bi-clipboard me-1"></i>Copiar
+                      </button>
+                    </div>
                     <div id="decisionFirstJustification" class="small border rounded p-2 bg-white"></div>
                   </div>
                   <div>
-                    <span class="text-muted small d-block mb-1">Parecer</span>
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                      <span class="text-muted small d-block">Parecer</span>
+                      <button type="button" class="btn btn-outline-secondary btn-sm copy-decision-text-btn"
+                        data-copy-target="decisionFirstOpinion" title="Copiar parecer" aria-label="Copiar parecer">
+                        <i class="bi bi-clipboard me-1"></i>Copiar
+                      </button>
+                    </div>
                     <div id="decisionFirstOpinion" class="small border rounded p-2 bg-white"></div>
                   </div>
                 </div>
@@ -798,11 +811,24 @@
                     <span id="decisionSecondStatusRaw" class="font-monospace small text-secondary"></span>
                   </div>
                   <div class="mb-2">
-                    <span class="text-muted small d-block mb-1">Justificativa</span>
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                      <span class="text-muted small d-block">Justificativa</span>
+                      <button type="button" class="btn btn-outline-secondary btn-sm copy-decision-text-btn"
+                        data-copy-target="decisionSecondJustification" title="Copiar justificativa"
+                        aria-label="Copiar justificativa">
+                        <i class="bi bi-clipboard me-1"></i>Copiar
+                      </button>
+                    </div>
                     <div id="decisionSecondJustification" class="small border rounded p-2 bg-white"></div>
                   </div>
                   <div>
-                    <span class="text-muted small d-block mb-1">Parecer</span>
+                    <div class="d-flex align-items-center justify-content-between mb-1">
+                      <span class="text-muted small d-block">Parecer</span>
+                      <button type="button" class="btn btn-outline-secondary btn-sm copy-decision-text-btn"
+                        data-copy-target="decisionSecondOpinion" title="Copiar parecer" aria-label="Copiar parecer">
+                        <i class="bi bi-clipboard me-1"></i>Copiar
+                      </button>
+                    </div>
                     <div id="decisionSecondOpinion" class="small border rounded p-2 bg-white"></div>
                   </div>
                 </div>
@@ -2036,6 +2062,43 @@
       return '';
     }
 
+    async function copyTextToClipboard(text) {
+      if (navigator.clipboard && window.isSecureContext) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+
+      const textarea = document.createElement('textarea');
+      textarea.value = text;
+      textarea.setAttribute('readonly', '');
+      textarea.style.position = 'fixed';
+      textarea.style.opacity = '0';
+      document.body.appendChild(textarea);
+      textarea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textarea);
+    }
+
+    function setCopyButtonFeedback(button, ok) {
+      const originalHtml = button.dataset.originalHtml || button.innerHTML;
+      button.dataset.originalHtml = originalHtml;
+      if (ok) {
+        button.innerHTML = '<i class="bi bi-check2 me-1"></i>Copiado';
+        button.classList.remove('btn-outline-secondary');
+        button.classList.add('btn-success');
+      } else {
+        button.innerHTML = '<i class="bi bi-x-circle me-1"></i>Erro';
+        button.classList.remove('btn-outline-secondary');
+        button.classList.add('btn-danger');
+      }
+
+      setTimeout(function () {
+        button.innerHTML = originalHtml;
+        button.classList.remove('btn-success', 'btn-danger');
+        button.classList.add('btn-outline-secondary');
+      }, 1400);
+    }
+
     modal.addEventListener('show.bs.modal', function (event) {
       const btn = event.relatedTarget;
       if (!btn) return;
@@ -2098,6 +2161,24 @@
       firstOpinion.innerHTML = formatLongText(btn.getAttribute('data-first-opinion'));
       secondJustification.innerHTML = formatLongText(btn.getAttribute('data-second-justification'));
       secondOpinion.innerHTML = formatLongText(btn.getAttribute('data-second-opinion'));
+    });
+
+    modal.addEventListener('click', function (event) {
+      const button = event.target.closest('.copy-decision-text-btn');
+      if (!button) return;
+
+      const targetId = button.getAttribute('data-copy-target') || '';
+      const target = targetId ? document.getElementById(targetId) : null;
+      const textToCopy = target ? String(target.innerText || '').trim() : '';
+
+      if (!textToCopy || textToCopy.toLowerCase() === 'não informado') {
+        setCopyButtonFeedback(button, false);
+        return;
+      }
+
+      copyTextToClipboard(textToCopy)
+        .then(function () { setCopyButtonFeedback(button, true); })
+        .catch(function () { setCopyButtonFeedback(button, false); });
     });
   })();
 
