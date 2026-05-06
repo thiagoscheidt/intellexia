@@ -77,7 +77,95 @@ class FapContestationJudgmentReportService:
         if selected_value is None:
             return ""
 
-        return FapContestationJudgmentReportService._clean_classification_text_block(str(selected_value))
+        justification_text = FapContestationJudgmentReportService._clean_classification_text_block(str(selected_value))
+        context_lines = FapContestationJudgmentReportService._build_benefit_context_lines(benefit)
+
+        if context_lines:
+            context_block = "\n".join(context_lines)
+            return f"{context_block}\n\n{justification_text}".strip()
+
+        return justification_text
+
+    @staticmethod
+    def _build_benefit_context_lines(benefit: Benefit) -> list[str]:
+        """Monta cabeçalho curto com metadados úteis para desambiguar a classificação."""
+        lines: list[str] = []
+
+        benefit_number = str(getattr(benefit, 'benefit_number', '') or '').strip()
+        insured_nit = str(getattr(benefit, 'insured_nit', '') or '').strip()
+
+        employer_name = str(getattr(benefit, 'employer_name', '') or '').strip()
+        employer_cnpj = str(getattr(benefit, 'employer_cnpj', '') or '').strip()
+
+        # Fallback para dados do cliente quando o empregador não estiver preenchido no benefício.
+        client = getattr(benefit, 'client', None)
+        if not employer_name and client is not None:
+            employer_name = str(getattr(client, 'name', '') or '').strip()
+        if not employer_cnpj and client is not None:
+            employer_cnpj = str(getattr(client, 'cnpj', '') or '').strip()
+
+        current_vigencia = FapContestationJudgmentReportService._resolve_current_vigencia(benefit)
+
+        dib = FapContestationJudgmentReportService._format_date(getattr(benefit, 'benefit_start_date', None))
+        dcb = FapContestationJudgmentReportService._format_date(getattr(benefit, 'benefit_end_date', None))
+
+        if benefit_number:
+            lines.append(f"NB: {benefit_number}")
+        if insured_nit:
+            lines.append(f"NIT: {insured_nit}")
+
+        if employer_name or employer_cnpj:
+            company_chunks: list[str] = []
+            if employer_name:
+                company_chunks.append(f"nome={employer_name}")
+            if employer_cnpj:
+                company_chunks.append(f"cnpj={employer_cnpj}")
+            lines.append(f"Empresa vinculada: {' | '.join(company_chunks)}")
+
+        if current_vigencia:
+            lines.append(f"Vigencia atual FAP: {current_vigencia}")
+
+        if dib or dcb:
+            period_chunks: list[str] = []
+            if dib:
+                period_chunks.append(f"DIB={dib}")
+            if dcb:
+                period_chunks.append(f"DCB={dcb}")
+            lines.append(f"Periodo do beneficio: {' | '.join(period_chunks)}")
+
+        return lines
+
+    @staticmethod
+    def _resolve_current_vigencia(benefit: Benefit) -> str:
+        """Obtém vigência atual do benefício (prioriza vínculo dedicado por CNPJ/vigência)."""
+        fap_vigencia_cnpj = getattr(benefit, 'fap_vigencia_cnpj', None)
+        if fap_vigencia_cnpj is not None:
+            vigencia_year = str(getattr(fap_vigencia_cnpj, 'vigencia_year', '') or '').strip()
+            if vigencia_year:
+                return vigencia_year
+
+        raw_years = str(getattr(benefit, 'fap_vigencia_years', '') or '').strip()
+        if not raw_years:
+            return ''
+
+        years = [item.strip() for item in raw_years.split(',') if item and item.strip()]
+        if not years:
+            return ''
+
+        numeric_years = [item for item in years if item.isdigit()]
+        if numeric_years:
+            return max(numeric_years, key=int)
+
+        return years[-1]
+
+    @staticmethod
+    def _format_date(value) -> str:
+        if value is None:
+            return ''
+        try:
+            return value.strftime('%d/%m/%Y')
+        except Exception:
+            return str(value)
 
     @staticmethod
     def _clean_classification_text_block(text: str) -> str:

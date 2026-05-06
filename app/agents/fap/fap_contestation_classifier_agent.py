@@ -156,6 +156,8 @@ Texto original:
     SYSTEM_PROMPT = (
         "Voce e um especialista juridico em FAP. "
         "Classifique o texto em ATE 3 topicos e retorne JSON valido. "
+        "Retorne EXATAMENTE estas chaves: topics, topic_confidences, confidence. "
+        "Nao retorne nenhuma chave adicional. "
         "Ordene por relevancia, com o principal na primeira posicao. "
         "Quando houver cabecalho literal com nome de categoria, trate isso como evidencia forte. "
         "DISCUSSAO MEDICA / OUTROS ARGUMENTOS so pode ser usada quando nenhum outro topico especifico se aplicar. "
@@ -457,6 +459,8 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
 - Retorne slugs em `topics` somente quando `confidence` for maior ou igual a 0.80.
 - Retorne `topic_confidences` como um array de numeros na mesma ordem de `topics`.
 - Se `confidence` for menor que 0.80, retorne `topics` vazio (`[]`).
+- Retorne EXATAMENTE 3 chaves no JSON: `topics`, `topic_confidences`, `confidence`.
+- Nao inclua nenhuma chave extra.
 
 ```json
 {"topics":["slug1","slug2"],"topic_confidences":[0.91,0.83],"confidence":0.0}
@@ -818,7 +822,8 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
         )
         prompt = prompt.replace("{{SLUGS_MARKDOWN}}", "")
         prompt = prompt.replace("{{TEXT}}", "")
-        prompt = re.sub(r"(?im)^\s*[-*]?\s*Informe\s+reason\b.*$", "", prompt)
+        prompt = re.sub(r"(?im)^\s*(?:[-*]|\d+[\.)])?\s*Informe\s+reason\b.*$", "", prompt)
+        prompt = re.sub(r"(?im)^.*\breason\b.*$", "", prompt)
         prompt = re.sub(r"\n{3,}", "\n\n", prompt)
         return prompt.strip()
 
@@ -921,10 +926,12 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
         topics: list[str],
         *,
         topic_confidences: list[float | None] | None = None,
+        confidence: float | None = None,
     ) -> dict[str, Any]:
         return {
             "topics": topics,
             "topic_confidences": topic_confidences or [],
+            "confidence": confidence,
         }
 
     @classmethod
@@ -1328,6 +1335,8 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
             parsed = self._safe_parse_json(raw_content)
             if isinstance(parsed, dict):
                 parsed.pop("reason", None)
+                # Garante que o histórico não persista `reason` vindo da resposta bruta do modelo.
+                raw_content = json.dumps(parsed, ensure_ascii=False)
 
             # Extrai mensagens full do response_payload
             full_messages = (
@@ -1402,6 +1411,7 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
                 return self._build_topics_response(
                     [self.SLUG_TO_TOPIC[fallback_slug]],
                     topic_confidences=[confidence],
+                    confidence=confidence,
                 )
 
             if not topics_slugs:
@@ -1409,6 +1419,7 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
                 return self._build_topics_response(
                     [self.SLUG_TO_TOPIC[fallback_slug]],
                     topic_confidences=[confidence],
+                    confidence=confidence,
                 )
 
             topics_slugs = self._apply_rule_based_guards(cleaned_text, topics_slugs)
@@ -1420,7 +1431,11 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
                 fallback_confidence=confidence,
             )
 
-            return self._build_topics_response(topics, topic_confidences=topic_confidences)
+            return self._build_topics_response(
+                topics,
+                topic_confidences=topic_confidences,
+                confidence=confidence,
+            )
 
         except Exception as exc:
             logger.exception("Erro ao classificar justificativa FAP: %s", exc)
@@ -1450,4 +1465,5 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
             return self._build_topics_response(
                 ["OUTROS ARGUMENTOS"],
                 topic_confidences=[None],
+                confidence=None,
             )
