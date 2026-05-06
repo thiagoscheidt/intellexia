@@ -2,8 +2,16 @@
     cursor: pointer;
 }
 
-.model-picker-modal .model-item:hover {
+.model-picker-modal .model-item:hover:not(.active) {
     background-color: var(--bs-light-bg-subtle);
+}
+
+.model-picker-modal .model-item.active,
+.model-picker-modal .model-item.active:hover,
+.model-picker-modal .model-item.active:focus {
+    background-color: var(--bs-list-group-active-bg);
+    border-color: var(--bs-list-group-active-border-color);
+    color: var(--bs-list-group-active-color);
 }
 
 .model-picker-modal .model-id {
