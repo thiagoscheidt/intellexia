@@ -1132,15 +1132,6 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
     def _apply_rule_based_guards(self, text: str, topics_slugs: list[str]) -> list[str]:
         normalized_text = self._normalize_text_for_match(text)
         guarded_topics = topics_slugs.copy()
-        critical_slugs = self._detect_critical_regex_slugs(normalized_text)
-
-        other_company_slugs = {
-            "erro_estabelecimento",
-            "outra_empresa_cat",
-            "outra_empresa_nunca_empregado",
-            "outra_empresa_pos_rescisao",
-            "outra_empresa_did_anterior",
-        }
 
         has_pre_fap = self._has_pre_fap_evidence(normalized_text)
         has_other_company = self._has_other_company_evidence(normalized_text)
@@ -1150,41 +1141,36 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
         has_aposentadoria_concomitante = self._has_aposentadoria_concomitante_evidence(normalized_text)
         has_justica_federal = self._has_justica_federal_evidence(normalized_text)
 
-        for slug in reversed(critical_slugs):
-            guarded_topics = [item for item in guarded_topics if item != slug]
-            guarded_topics.insert(0, slug)
-
         if "acidente_trajeto_sem_cat" in guarded_topics:
-            guarded_topics = [slug for slug in guarded_topics if slug != "acidente_trajeto"]
+            if self._has_positive_cat_evidence(normalized_text):
+                guarded_topics = [slug for slug in guarded_topics if slug != "acidente_trajeto_sem_cat"]
+            else:
+                guarded_topics = [slug for slug in guarded_topics if slug != "acidente_trajeto"]
 
-        # Se há CAT numerada explícita no texto, é ACIDENTE DE TRAJETO (com CAT), não sem_cat.
-        has_trajeto_text = bool(re.search(r"ACIDENTE DE TRAJETO", normalized_text))
-        has_positive_cat_evidence = self._has_positive_cat_evidence(normalized_text)
-        if has_trajeto_text and has_positive_cat_evidence:
-            guarded_topics = [slug for slug in guarded_topics if slug != "acidente_trajeto_sem_cat"]
-            if "acidente_trajeto" not in guarded_topics:
-                guarded_topics.insert(0, "acidente_trajeto")
-
-        if has_other_company_cat:
-            guarded_topics = [slug for slug in guarded_topics if slug != "acidente_trajeto_sem_cat"]
+        if not has_other_company_cat:
             guarded_topics = [slug for slug in guarded_topics if slug != "outra_empresa_cat"]
-            guarded_topics.insert(0, "outra_empresa_cat")
 
-        if has_other_company and has_pos_rescisao:
+        if not has_pre_fap:
+            guarded_topics = [slug for slug in guarded_topics if slug != "pre_fap"]
+
+        if not has_other_company:
+            guarded_topics = [
+                slug
+                for slug in guarded_topics
+                if slug
+                not in {
+                    "erro_estabelecimento",
+                    "outra_empresa_cat",
+                    "outra_empresa_nunca_empregado",
+                    "outra_empresa_pos_rescisao",
+                    "outra_empresa_did_anterior",
+                }
+            ]
+        elif not has_pos_rescisao:
             guarded_topics = [slug for slug in guarded_topics if slug != "outra_empresa_pos_rescisao"]
-            insert_index = 1 if guarded_topics and guarded_topics[0] == "outra_empresa_cat" else 0
-            guarded_topics.insert(insert_index, "outra_empresa_pos_rescisao")
-
-            # Em cenário de outra empresa + pós-rescisão, acidente de trajeto tende a ser contexto,
-            # não a tese principal da exclusão para este CNPJ.
-            guarded_topics = [slug for slug in guarded_topics if slug != "acidente_trajeto"]
 
         if not has_justica_federal:
             guarded_topics = [slug for slug in guarded_topics if slug != "beneficio_justica_federal"]
-
-        if has_pre_fap:
-            guarded_topics = [slug for slug in guarded_topics if slug != "pre_fap"]
-            guarded_topics.insert(0, "pre_fap")
 
         if not has_b94_duplicado:
             guarded_topics = [slug for slug in guarded_topics if slug != "b94_duplicado"]
@@ -1195,17 +1181,6 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
                 for slug in guarded_topics
                 if slug not in {"concomitante_b91_aposentadoria", "concomitante_b94_aposentadoria"}
             ]
-
-        if has_other_company:
-            has_other_company_topic = any(slug in other_company_slugs for slug in guarded_topics)
-            if not has_other_company_topic:
-                guarded_topics.insert(0, "erro_estabelecimento")
-            guarded_topics = [slug for slug in guarded_topics if slug != "discussao_medica"]
-        else:
-            guarded_topics = [slug for slug in guarded_topics if slug not in other_company_slugs]
-
-        if critical_slugs:
-            guarded_topics = [slug for slug in guarded_topics if slug != "discussao_medica"]
 
         # Remove outros_argumentos e discussao_medica quando há tópico específico
         GENERIC_SLUGS = {"outros_argumentos", "discussao_medica"}
