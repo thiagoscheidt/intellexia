@@ -5,7 +5,6 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 from zoneinfo import ZoneInfo
-from app.utils.timezone import now_sp, SP_TZ as APP_TIMEZONE
 
 # Carregar variáveis do .env se existir
 env_path = Path('.') / '.env'
@@ -88,17 +87,6 @@ from app.middlewares import init_app_middlewares
 init_app_middlewares(app)
 
 
-def _to_sao_paulo_datetime(value):
-    """Converte datetime para timezone de São Paulo para exibição."""
-    if not isinstance(value, datetime):
-        return None
-
-    # Datetimes sem tzinfo no projeto são tratados como UTC.
-    if value.tzinfo is None:
-        value = value.replace(tzinfo=timezone.utc)
-
-    return value.astimezone(APP_TIMEZONE)
-
 # Registrar filtro Jinja para converter JSON
 @app.template_filter('from_json')
 def from_json_filter(value):
@@ -113,27 +101,7 @@ def from_json_filter(value):
         return {}
 
 
-@app.template_filter('datetime_sp')
-def datetime_sp_filter(value, fmt='%d/%m/%Y %H:%M:%S'):
-    """Formata datetime no fuso de São Paulo."""
-    converted = _to_sao_paulo_datetime(value)
-    if converted is None:
-        return ''
-    return converted.strftime(fmt)
 
-
-@app.template_filter('date_sp')
-def date_sp_filter(value, fmt='%d/%m/%Y'):
-    """Formata data no fuso de São Paulo."""
-    converted = _to_sao_paulo_datetime(value)
-    if converted is None:
-        return ''
-    return converted.strftime(fmt)
-
-
-@app.context_processor
-def inject_current_datetime_sp():
-    return {'current_datetime_sp': now_sp()}
 
 if __name__ == '__main__':
     # Criar tabelas apenas quando executando diretamente

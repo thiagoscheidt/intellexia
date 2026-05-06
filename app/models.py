@@ -11,7 +11,7 @@ judicial_process_benefit_legal_theses = db.Table(
     db.Column('id', db.Integer, primary_key=True),
     db.Column('benefit_id', db.Integer, db.ForeignKey('judicial_process_benefits.id'), nullable=False, index=True),
     db.Column('legal_thesis_id', db.Integer, db.ForeignKey('judicial_legal_theses.id'), nullable=False, index=True),
-    db.Column('created_at', db.DateTime, default=datetime.utcnow, nullable=False),
+    db.Column('created_at', db.DateTime, default=datetime.now, nullable=False),
     db.UniqueConstraint(
         'benefit_id',
         'legal_thesis_id',
@@ -51,8 +51,8 @@ class LawFirm(db.Model):
     max_cases = db.Column(db.Integer, default=50)
     
     # Auditoria
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     
     # Relacionamentos
     users = db.relationship('User', back_populates='law_firm', cascade='all, delete-orphan')
@@ -87,8 +87,8 @@ class User(db.Model):
     last_activity = db.Column(db.DateTime)
     
     # Auditoria
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     
     # Relacionamentos
     law_firm = db.relationship('LawFirm', back_populates='users')
@@ -141,8 +141,8 @@ class Client(db.Model):
     zip_code = db.Column(db.String(20))
     has_branches = db.Column(db.Boolean, default=False)
     branches_description = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     
     # Relacionamentos
     law_firm = db.relationship('LawFirm')
@@ -169,8 +169,8 @@ class JudicialDefendant(db.Model):
     name = db.Column(db.String(255), nullable=False, index=True)
     is_active = db.Column(db.Boolean, default=True)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     law_firm = db.relationship('LawFirm')
     judicial_processes = db.relationship(
@@ -195,8 +195,8 @@ class Court(db.Model):
     orgao_julgador = db.Column(db.String(255))
     city = db.Column(db.String(150))
     state = db.Column(db.String(50))
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     
     # Relacionamentos
     law_firm = db.relationship('LawFirm')
@@ -221,8 +221,8 @@ class Lawyer(db.Model):
     email = db.Column(db.String(255))
     phone = db.Column(db.String(50))
     is_default_for_publications = db.Column(db.Boolean, default=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     
     # Relacionamentos
     law_firm = db.relationship('LawFirm')
@@ -240,7 +240,7 @@ class CaseStatus(db.Model):
     status_name = db.Column(db.String(100), nullable=False, unique=True)
     status_order = db.Column(db.Integer, nullable=False)
     description = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
     
     # Relacionamento
     cases = db.relationship('Case', back_populates='status_obj')
@@ -268,8 +268,8 @@ class Case(db.Model):
     value_cause = db.Column(db.Numeric(15, 2))
     status = db.Column(db.String(30), default='draft')
     filing_date = db.Column(db.Date)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     
     # Relacionamentos
     law_firm = db.relationship('LawFirm')
@@ -294,8 +294,8 @@ class CaseLawyer(db.Model):
     case_id = db.Column(db.Integer, db.ForeignKey('cases.id'), nullable=False, index=True)
     lawyer_id = db.Column(db.Integer, db.ForeignKey('lawyers.id'), nullable=False, index=True)
     role = db.Column(db.String(50))  # Função do advogado no caso
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     
     # Relacionamentos
     case = db.relationship('Case', back_populates='case_lawyers')
@@ -314,8 +314,8 @@ class CaseCompetence(db.Model):
     competence_month = db.Column(db.SmallInteger, nullable=False)  # 1 a 12
     competence_year = db.Column(db.SmallInteger, nullable=False)
     status = db.Column(db.Enum('prescribed', 'valid', name='competence_status'), nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     
     # Relacionamentos
     case = db.relationship('Case', back_populates='competences')
@@ -345,8 +345,8 @@ class CaseBenefit(db.Model):
     fap_reason_id = db.Column(db.Integer, db.ForeignKey('fap_reasons.id'), index=True)  # Foreign key para fap_reasons
     fap_vigencia_years = db.Column(db.String(500))  # Anos de vigência FAP (comma-separated, ex: "2019,2020,2021")
     notes = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     
     # Relacionamentos
     case = db.relationship('Case', back_populates='benefits')
@@ -367,8 +367,8 @@ class FapReason(db.Model):
     description = db.Column(db.Text)  # Descrição completa do motivo
     template_id = db.Column(db.Integer, db.ForeignKey('case_templates.id'), index=True)  # Template relacionado (opcional)
     is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     
     # Relacionamentos
     law_firm = db.relationship('LawFirm')
@@ -398,7 +398,7 @@ class Document(db.Model):
     ai_error_message = db.Column(db.Text)  # Mensagem de erro caso o processamento falhe
     
     uploaded_by_user_id = db.Column(db.Integer)  # FK de usuário (futuro)
-    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
+    uploaded_at = db.Column(db.DateTime, default=datetime.now)
     
     # Relacionamentos
     case = db.relationship('Case', back_populates='documents')
@@ -422,7 +422,7 @@ class Petition(db.Model):
     file_path = db.Column(db.String(500))  # Caminho do arquivo DOCX (para casos FAP)
     
     # Metadados da geração
-    generated_at = db.Column(db.DateTime, default=datetime.utcnow)
+    generated_at = db.Column(db.DateTime, default=datetime.now)
     generated_by_user_id = db.Column(db.Integer)  # FK de usuário (futuro)
     
     # Status da geração
@@ -450,8 +450,8 @@ class FapContestationClassifierPromptVersion(db.Model):
     prompt_hash = db.Column(db.String(64), nullable=False, index=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
 
     law_firm = db.relationship('LawFirm')
     created_by_user = db.relationship('User')
@@ -472,8 +472,8 @@ class FapContestationClassifierReferenceVersion(db.Model):
     reference_hash = db.Column(db.String(64), nullable=False, index=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
 
     law_firm = db.relationship('LawFirm')
     created_by_user = db.relationship('User')
@@ -490,8 +490,8 @@ class FapContestationClassifierSetting(db.Model):
     law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True, unique=True)
     selected_model = db.Column(db.String(255), nullable=True)
     created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
 
     law_firm = db.relationship('LawFirm')
     created_by_user = db.relationship('User')
@@ -521,8 +521,8 @@ class AiDocumentSummary(db.Model):
     
     # Metadados
     processed_at = db.Column(db.DateTime)  # Data/hora do processamento
-    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    uploaded_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     
     # Relacionamentos
     user = db.relationship('User')
@@ -563,8 +563,8 @@ class JudicialSentenceAnalysis(db.Model):
     
     # Metadados
     processed_at = db.Column(db.DateTime)  # Data/hora do processamento
-    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    uploaded_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     
     # Relacionamentos
     user = db.relationship('User')
@@ -595,9 +595,9 @@ class JudicialAppeal(db.Model):
     error_message = db.Column(db.Text)  # Mensagem de erro caso falhe
     
     # Metadados
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
     processed_at = db.Column(db.DateTime)  # Data/hora do processamento
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     
     # Relacionamentos
     user = db.relationship('User')
@@ -636,8 +636,8 @@ class KnowledgeBase(db.Model):
     processed_at = db.Column(db.DateTime)
     
     # Auditoria
-    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    uploaded_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     
     # Relacionamentos
     user = db.relationship('User')
@@ -667,8 +667,8 @@ class KnowledgeCategory(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     
     # Auditoria
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     
     # Relacionamentos
     law_firm = db.relationship('LawFirm')
@@ -697,8 +697,8 @@ class KnowledgeTag(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     
     # Auditoria
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     
     # Relacionamentos
     law_firm = db.relationship('LawFirm')
@@ -730,7 +730,7 @@ class KnowledgeChatHistory(db.Model):
     user_feedback = db.Column(db.Text)  # Comentário do usuário
     
     # Auditoria
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
     
     # Relacionamentos
     user = db.relationship('User')
@@ -772,7 +772,7 @@ class AgentTokenUsage(db.Model):
     usage_payload = db.Column(db.JSON)
     metadata_payload = db.Column(db.JSON)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
 
     user = db.relationship('User')
     law_firm = db.relationship('LawFirm')
@@ -819,8 +819,8 @@ class AgentExecutionHistory(db.Model):
     result_data = db.Column(db.JSON)  # Dados estruturados do resultado
 
     # Auditoria
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     # Relacionamentos
     agent_token_usage = db.relationship('AgentTokenUsage')
@@ -843,8 +843,8 @@ class KnowledgeSummary(db.Model):
     payload = db.Column(db.JSON, nullable=False)  # JSON com o resumo e metadados
     
     # Auditoria
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     
     # Relacionamentos
     knowledge_base = db.relationship('KnowledgeBase')
@@ -863,8 +863,8 @@ class KnowledgeChatSession(db.Model):
     title = db.Column(db.String(255), nullable=False, default='Novo chat')
     is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False, index=True)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now, nullable=False, index=True)
 
     user = db.relationship('User')
     law_firm = db.relationship('LawFirm')
@@ -901,8 +901,8 @@ class CasesKnowledgeBase(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     
     # Auditoria
-    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    uploaded_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     
     # Relacionamentos
     user = db.relationship('User')
@@ -940,8 +940,8 @@ class CaseTemplate(db.Model):
     usage_count = db.Column(db.Integer, default=0)  # Quantas vezes foi usado
     
     # Auditoria
-    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    uploaded_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     last_used_at = db.Column(db.DateTime)  # Última vez que foi usado
     
     # Relacionamentos
@@ -963,8 +963,8 @@ class CaseActivity(db.Model):
     title = db.Column(db.String(255), nullable=False)
     description = db.Column(db.Text)
     related_id = db.Column(db.Integer)  # ID do documento, benefício, comentário, etc
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     
     # Relacionamentos
     case = db.relationship('Case', backref='activities')
@@ -999,8 +999,8 @@ class CaseComment(db.Model):
     mentions = db.Column(db.JSON, default=list)
     
     # Timestamps
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     
     # Relacionamentos
     case = db.relationship('Case', backref='comments')
@@ -1026,8 +1026,8 @@ class JudicialPhase(db.Model):
     display_order = db.Column(db.Integer, default=0)
     is_active = db.Column(db.Boolean, default=True)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     law_firm = db.relationship('LawFirm')
     document_types = db.relationship(
@@ -1060,8 +1060,8 @@ class JudicialDocumentType(db.Model):
     is_active = db.Column(db.Boolean, default=True)
     display_order = db.Column(db.Integer, default=0)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     law_firm = db.relationship('LawFirm')
     phase = db.relationship('JudicialPhase', back_populates='document_types')
@@ -1085,8 +1085,8 @@ class JudicialLegalThesis(db.Model):
     description = db.Column(db.Text)
     is_active = db.Column(db.Boolean, default=True)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     law_firm = db.relationship('LawFirm')
     benefits = db.relationship(
@@ -1142,8 +1142,8 @@ class JudicialProcess(db.Model):
     internal_notes = db.Column(db.Text)
     
     # Auditoria
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     
     # Relacionamentos
     law_firm = db.relationship('LawFirm')
@@ -1188,8 +1188,8 @@ class JudicialProcessNote(db.Model):
 
     content = db.Column(db.Text, nullable=False)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     law_firm = db.relationship('LawFirm')
     process = db.relationship('JudicialProcess', back_populates='notes')
@@ -1223,7 +1223,7 @@ class JudicialEvent(db.Model):
 
     description = db.Column(db.Text)
     event_date = db.Column(db.DateTime, nullable=False, index=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
 
     # Relacionamentos
     process = db.relationship('JudicialProcess', back_populates='events')
@@ -1261,8 +1261,8 @@ class JudicialProcessPhaseHistory(db.Model):
     notes = db.Column(db.Text)
     metadata_payload = db.Column(db.JSON)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     law_firm = db.relationship('LawFirm')
     process = db.relationship('JudicialProcess', back_populates='phase_history')
@@ -1284,7 +1284,7 @@ class JudicialMovement(db.Model):
 
     title = db.Column(db.String(255), nullable=False)
     movement_date = db.Column(db.DateTime, nullable=False, index=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
 
     # Relacionamentos
     process = db.relationship('JudicialProcess')
@@ -1310,7 +1310,7 @@ class JudicialDocument(db.Model):
     file_name = db.Column(db.String(255), nullable=False)
     file_path = db.Column(db.String(500), nullable=False)
     uploaded_by = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
 
     # Relacionamentos
     process = db.relationship('JudicialProcess')
@@ -1346,8 +1346,8 @@ class JudicialProcessBenefit(db.Model):
     second_instance_decision = db.Column(db.Text)
     third_instance_decision = db.Column(db.Text)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     process = db.relationship('JudicialProcess', back_populates='benefits')
     legal_theses = db.relationship(
@@ -1380,8 +1380,8 @@ class FapContestationJudgmentReport(db.Model):
     processed_at = db.Column(db.DateTime)
     imported_benefits_count = db.Column(db.Integer, default=0)
 
-    uploaded_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    uploaded_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     user = db.relationship('User')
     law_firm = db.relationship('LawFirm')
@@ -1428,8 +1428,8 @@ class FapVigenciaCnpj(db.Model):
     employer_cnpj = db.Column(db.String(20), nullable=False, index=True)
     vigencia_year = db.Column(db.String(10), nullable=False, index=True)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     law_firm = db.relationship('LawFirm')
     benefits = db.relationship('Benefit', back_populates='fap_vigencia_cnpj')
@@ -1511,8 +1511,8 @@ class Benefit(db.Model):
     opinion = db.Column(db.Text)
 
     # Audit
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     # Relationships
     law_firm = db.relationship('LawFirm')
@@ -1557,8 +1557,8 @@ class BenefitFapSourceHistory(db.Model):
     transmission_datetime = db.Column(db.DateTime, index=True)
     publication_datetime = db.Column(db.DateTime, index=True)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     law_firm = db.relationship('LawFirm')
     benefit = db.relationship('Benefit', back_populates='fap_source_history')
@@ -1584,8 +1584,8 @@ class BenefitManualHistory(db.Model):
     new_first_instance_status = db.Column(db.String(30), nullable=False, index=True)
     notes = db.Column(db.Text)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     law_firm = db.relationship('LawFirm')
     benefit = db.relationship('Benefit', back_populates='manual_history')
@@ -1649,8 +1649,8 @@ class FapContestationCat(db.Model):
     notes = db.Column(db.Text)
 
     # Audit
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     # Relationships
     law_firm = db.relationship('LawFirm')
@@ -1695,8 +1695,8 @@ class FapContestationCatSourceHistory(db.Model):
     transmission_datetime = db.Column(db.DateTime, index=True)
     publication_datetime = db.Column(db.DateTime, index=True)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     law_firm = db.relationship('LawFirm')
     cat = db.relationship('FapContestationCat', back_populates='source_history')
@@ -1721,8 +1721,8 @@ class FapContestationCatManualHistory(db.Model):
     new_first_instance_status = db.Column(db.String(30), nullable=False, index=True)
     notes = db.Column(db.Text)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     law_firm = db.relationship('LawFirm')
     cat = db.relationship('FapContestationCat', back_populates='manual_history')
@@ -1782,8 +1782,8 @@ class FapContestationPayrollMass(db.Model):
     notes = db.Column(db.Text)
 
     # Audit
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     # Relationships
     law_firm = db.relationship('LawFirm')
@@ -1828,8 +1828,8 @@ class FapContestationPayrollMassSourceHistory(db.Model):
     transmission_datetime = db.Column(db.DateTime, index=True)
     publication_datetime = db.Column(db.DateTime, index=True)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     law_firm = db.relationship('LawFirm')
     payroll_mass = db.relationship('FapContestationPayrollMass', back_populates='source_history')
@@ -1854,8 +1854,8 @@ class FapContestationPayrollMassManualHistory(db.Model):
     new_first_instance_status = db.Column(db.String(30), nullable=False, index=True)
     notes = db.Column(db.Text)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     law_firm = db.relationship('LawFirm')
     payroll_mass = db.relationship('FapContestationPayrollMass', back_populates='manual_history')
@@ -1915,8 +1915,8 @@ class FapContestationEmploymentLink(db.Model):
     notes = db.Column(db.Text)
 
     # Audit
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     # Relationships
     law_firm = db.relationship('LawFirm')
@@ -1961,8 +1961,8 @@ class FapContestationEmploymentLinkSourceHistory(db.Model):
     transmission_datetime = db.Column(db.DateTime, index=True)
     publication_datetime = db.Column(db.DateTime, index=True)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     law_firm = db.relationship('LawFirm')
     employment_link = db.relationship('FapContestationEmploymentLink', back_populates='source_history')
@@ -1987,8 +1987,8 @@ class FapContestationEmploymentLinkManualHistory(db.Model):
     new_first_instance_status = db.Column(db.String(30), nullable=False, index=True)
     notes = db.Column(db.Text)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     law_firm = db.relationship('LawFirm')
     employment_link = db.relationship('FapContestationEmploymentLink', back_populates='manual_history')
@@ -2057,8 +2057,8 @@ class FapContestationTurnoverRate(db.Model):
     notes = db.Column(db.Text)
 
     # Audit
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     # Relationships
     law_firm = db.relationship('LawFirm')
@@ -2103,8 +2103,8 @@ class FapContestationTurnoverRateSourceHistory(db.Model):
     transmission_datetime = db.Column(db.DateTime, index=True)
     publication_datetime = db.Column(db.DateTime, index=True)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     law_firm = db.relationship('LawFirm')
     turnover_rate = db.relationship('FapContestationTurnoverRate', back_populates='source_history')
@@ -2129,8 +2129,8 @@ class FapContestationTurnoverRateManualHistory(db.Model):
     new_first_instance_status = db.Column(db.String(30), nullable=False, index=True)
     notes = db.Column(db.Text)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     law_firm = db.relationship('LawFirm')
     turnover_rate = db.relationship('FapContestationTurnoverRate', back_populates='manual_history')
@@ -2157,8 +2157,8 @@ class FapCompany(db.Model):
     tipo_procuracao_descricao = db.Column(db.String(255))
 
     synced_at = db.Column(db.DateTime, nullable=False)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     law_firm = db.relationship('LawFirm')
 
@@ -2182,7 +2182,7 @@ class FapAutoImportedContestacao(db.Model):
     year = db.Column(db.Integer, nullable=False)
     original_filename = db.Column(db.String(255))
 
-    imported_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
+    imported_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
 
     law_firm = db.relationship('LawFirm')
     report = db.relationship('FapContestationJudgmentReport')
@@ -2207,8 +2207,8 @@ class JudicialProcessCitedBenefit(db.Model):
     benefit_type = db.Column(db.String(20), index=True)
     fap_vigencia_year = db.Column(db.String(10), index=True)
 
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     process = db.relationship('JudicialProcess', back_populates='cited_benefits')
 
@@ -2272,9 +2272,9 @@ class FapWebContestacao(db.Model):
     needs_reprocess = db.Column(db.Boolean, nullable=False, default=False, index=True)
 
     # ── Controle ─────────────────────────────────────────────────────
-    last_synced_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    created_at     = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at     = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_synced_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    created_at     = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at     = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     # ── Relacionamentos ───────────────────────────────────────────────
     law_firm    = db.relationship('LawFirm')
@@ -2316,8 +2316,8 @@ class FapWebContestacaoChangeHistory(db.Model):
     new_values = db.Column(db.Text)
 
     synced_at = db.Column(db.DateTime, nullable=False, index=True)
-    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
-    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     law_firm = db.relationship('LawFirm')
     contestacao = db.relationship('FapWebContestacao', back_populates='change_history')
@@ -2376,9 +2376,9 @@ class FapWebProcuracao(db.Model):
     raw_data = db.Column(db.Text)
 
     # ── Controle ──────────────────────────────────────────────────────
-    last_synced_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    created_at     = db.Column(db.DateTime, default=datetime.utcnow, nullable=False)
-    updated_at     = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    last_synced_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    created_at     = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at     = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     law_firm = db.relationship('LawFirm')
 
