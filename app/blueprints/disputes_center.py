@@ -212,7 +212,32 @@ def _normalize_cnpj_digits(value):
 
 
 def _normalize_status_key(value):
-    return _normalize_text(value).lower()
+    normalized = _normalize_text(value).lower()
+    status_aliases = {
+        'analyzing': 'analyzing',
+        'in_review': 'analyzing',
+        'in review': 'analyzing',
+        'em análise': 'analyzing',
+        'em analise': 'analyzing',
+        'deferido': 'deferido',
+        'approved': 'deferido',
+        'indeferido': 'indeferido',
+        'rejected': 'indeferido',
+        'pending': 'pending',
+        'pendente': 'pending',
+    }
+    return status_aliases.get(normalized, normalized)
+
+
+def _normalized_status_sql(column):
+    raw = func.lower(func.trim(func.coalesce(cast(column, String), '')))
+    return case(
+        (raw.in_(['analyzing', 'in_review', 'in review', 'em análise', 'em analise']), 'analyzing'),
+        (raw.in_(['deferido', 'approved']), 'deferido'),
+        (raw.in_(['indeferido', 'rejected']), 'indeferido'),
+        (raw.in_(['pending', 'pendente']), 'pending'),
+        else_=raw,
+    )
 
 
 def _normalize_optional_status(value):
@@ -1295,7 +1320,7 @@ def _serialize_turnover_rate_row(tr):
 
 
 def _group_count_by_status(query, column):
-    status_expr = func.lower(func.coalesce(cast(column, String), ''))
+    status_expr = _normalized_status_sql(column)
     rows = query.with_entities(status_expr.label('status_key'), func.count(Benefit.id)).group_by(status_expr).all()
     return {_normalize_status_key(status): int(count or 0) for status, count in rows}
 
@@ -1309,6 +1334,36 @@ def _build_instance_stats(total_count, status_counts):
         'approved': approved,
         'rejected': rejected,
         'analyzing': analyzing,
+        'pending': pending,
+    }
+
+
+def _build_overall_stats_from_instances(query):
+    second_expr = _normalized_status_sql(Benefit.second_instance_status)
+    first_expr = _normalized_status_sql(Benefit.first_instance_status)
+
+    consolidated_status = case(
+        (second_expr.in_(['deferido', 'indeferido', 'analyzing']), second_expr),
+        (first_expr.in_(['deferido', 'indeferido', 'analyzing']), first_expr),
+        else_='pending',
+    )
+
+    rows = query.with_entities(
+        consolidated_status.label('status_key'),
+        func.count(Benefit.id),
+    ).group_by(consolidated_status).all()
+
+    counts = {_normalize_status_key(status): int(count or 0) for status, count in rows}
+
+    approved = int(counts.get('deferido', 0) or 0)
+    rejected = int(counts.get('indeferido', 0) or 0)
+    in_review = int(counts.get('analyzing', 0) or 0)
+    pending = int(counts.get('pending', 0) or 0)
+
+    return {
+        'approved': approved,
+        'rejected': rejected,
+        'in_review': in_review,
         'pending': pending,
     }
 
@@ -1413,8 +1468,8 @@ def _apply_benefits_filters(
 
         # "Status geral" uses both instance fields with second-instance priority.
         if operator == 'equals' and field == 'status':
-            second_expr = func.lower(func.coalesce(cast(Benefit.second_instance_status, String), ''))
-            first_expr = func.lower(func.coalesce(cast(Benefit.first_instance_status, String), ''))
+            second_expr = _normalized_status_sql(Benefit.second_instance_status)
+            first_expr = _normalized_status_sql(Benefit.first_instance_status)
             if value == 'pending':
                 query = query.filter(
                     ~second_expr.in_(['deferido', 'indeferido', 'analyzing']),
@@ -1433,7 +1488,7 @@ def _apply_benefits_filters(
         if operator == 'equals' and value == 'pending':
             if field == 'first_instance_status':
                 query = query.filter(
-                    ~func.lower(func.coalesce(cast(Benefit.first_instance_status, String), '')).in_(
+                    ~_normalized_status_sql(Benefit.first_instance_status).in_(
                         ['deferido', 'indeferido', 'analyzing']
                     )
                 )
@@ -1441,10 +1496,10 @@ def _apply_benefits_filters(
             if field == 'second_instance_status':
                 query = query.filter(
                     and_(
-                        ~func.lower(func.coalesce(cast(Benefit.first_instance_status, String), '')).in_(
+                        ~_normalized_status_sql(Benefit.first_instance_status).in_(
                             ['deferido', 'analyzing']
                         ),
-                        ~func.lower(func.coalesce(cast(Benefit.second_instance_status, String), '')).in_(
+                        ~_normalized_status_sql(Benefit.second_instance_status).in_(
                             ['deferido', 'indeferido', 'analyzing']
                         ),
                     )
@@ -2107,13 +2162,13 @@ def list_disputes_center():
     law_firm_id = get_current_law_firm_id()
     current_vigencia_filter = None
     total_count = Benefit.query.filter_by(law_firm_id=law_firm_id).count()
-    approved_count = Benefit.query.filter_by(law_firm_id=law_firm_id, status='approved').count()
-    in_review_count = Benefit.query.filter(
-        Benefit.law_firm_id == law_firm_id,
-        func.lower(cast(Benefit.status, String)).in_(['in_review', 'analyzing']),
-    ).count()
-    rejected_count = Benefit.query.filter_by(law_firm_id=law_firm_id, status='rejected').count()
-    pending_count = max(total_count - approved_count - in_review_count - rejected_count, 0)
+
+    general_query = _base_benefits_query(law_firm_id)
+    overall_stats = _build_overall_stats_from_instances(general_query)
+    approved_count = overall_stats['approved']
+    in_review_count = overall_stats['in_review']
+    rejected_count = overall_stats['rejected']
+    pending_count = overall_stats['pending']
     categorized_count = Benefit.query.filter(
         Benefit.law_firm_id == law_firm_id,
         or_(
@@ -2130,14 +2185,13 @@ def list_disputes_center():
     ).count()
     uncategorized_count = max(total_count - categorized_count, 0)
 
-    general_query = _base_benefits_query(law_firm_id)
     first_instance_status_counts = _group_count_by_status(general_query, Benefit.first_instance_status)
     first_instance_stats = _build_instance_stats(total_count, first_instance_status_counts)
     first_instance_deferred_count = int(first_instance_status_counts.get('deferido', 0) or 0)
     first_instance_analyzing_count = int(first_instance_status_counts.get('analyzing', 0) or 0)
     second_instance_total_base = max(int(total_count) - first_instance_deferred_count - first_instance_analyzing_count, 0)
     second_instance_eligible_query = general_query.filter(
-        ~func.lower(func.coalesce(cast(Benefit.first_instance_status, String), '')).in_(['deferido', 'analyzing'])
+        ~_normalized_status_sql(Benefit.first_instance_status).in_(['deferido', 'analyzing'])
     )
     second_instance_stats = _build_instance_stats(
         second_instance_total_base,
@@ -2806,11 +2860,11 @@ def list_disputes_center_api():
 
     records_filtered = filtered_query.with_entities(func.count(Benefit.id)).scalar() or 0
 
-    status_counts = _group_count_by_status(filtered_query, Benefit.status)
-    approved_filtered = int(status_counts.get('approved', 0) or 0)
-    in_review_filtered = int(status_counts.get('in_review', 0) or 0) + int(status_counts.get('analyzing', 0) or 0)
-    rejected_filtered = int(status_counts.get('rejected', 0) or 0)
-    pending_filtered = max(int(records_filtered) - approved_filtered - in_review_filtered - rejected_filtered, 0)
+    filtered_overall_stats = _build_overall_stats_from_instances(filtered_query)
+    approved_filtered = int(filtered_overall_stats['approved'] or 0)
+    in_review_filtered = int(filtered_overall_stats['in_review'] or 0)
+    rejected_filtered = int(filtered_overall_stats['rejected'] or 0)
+    pending_filtered = int(filtered_overall_stats['pending'] or 0)
     categorized_filtered = (
         filtered_query.filter(
             or_(
@@ -2839,7 +2893,7 @@ def list_disputes_center_api():
     filtered_first_instance_analyzing_count = int(filtered_first_instance_status_counts.get('analyzing', 0) or 0)
     filtered_second_instance_total_base = max(int(records_filtered) - filtered_first_instance_deferred_count - filtered_first_instance_analyzing_count, 0)
     filtered_second_instance_eligible_query = filtered_query.filter(
-        ~func.lower(func.coalesce(cast(Benefit.first_instance_status, String), '')).in_(['deferido', 'analyzing'])
+        ~_normalized_status_sql(Benefit.first_instance_status).in_(['deferido', 'analyzing'])
     )
     filtered_second_instance_stats = _build_instance_stats(
         filtered_second_instance_total_base,

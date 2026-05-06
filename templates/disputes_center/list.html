@@ -1086,7 +1086,7 @@
         data: null,
         className: 'text-center',
         render: function (_, __, row) {
-          const s1 = String(row.first_instance_status || '').trim().toLowerCase();
+          const s1 = normalizeInstanceStatus(row.first_instance_status || '');
           const known = ['deferido', 'indeferido', 'analyzing'];
           const badge = instanceStatusBadge(known.includes(s1) ? s1 : 'pending');
           const raw = (row.first_instance_status_raw || '').trim();
@@ -1098,8 +1098,8 @@
         data: null,
         className: 'text-center',
         render: function (_, __, row) {
-          const s2 = String(row.second_instance_status || '').trim().toLowerCase();
-          const s1 = String(row.first_instance_status || '').trim().toLowerCase();
+          const s2 = normalizeInstanceStatus(row.second_instance_status || '');
+          const s1 = normalizeInstanceStatus(row.first_instance_status || '');
           const known = ['deferido', 'indeferido', 'analyzing'];
           const effectiveS2 = known.includes(s2) ? s2 : (!['deferido', 'analyzing'].includes(s1) ? 'pending' : '');
           const badge = instanceStatusBadge(effectiveS2);
@@ -1538,6 +1538,24 @@
     return '<span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3 py-2">-</span>';
   }
 
+  function normalizeInstanceStatus(value) {
+    const s = String(value || '').trim().toLowerCase();
+    const aliases = {
+      'analyzing': 'analyzing',
+      'in_review': 'analyzing',
+      'in review': 'analyzing',
+      'em análise': 'analyzing',
+      'em analise': 'analyzing',
+      'deferido': 'deferido',
+      'approved': 'deferido',
+      'indeferido': 'indeferido',
+      'rejected': 'indeferido',
+      'pending': 'pending',
+      'pendente': 'pending',
+    };
+    return aliases[s] || s;
+  }
+
   function exportFilteredBenefitsToExcel() {
     const order = table.order() || [[0, 'desc']];
     const payload = {
@@ -1558,7 +1576,6 @@
 
     fetch(exportUrl, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     })
       .then((response) => {
@@ -2040,7 +2057,7 @@
     }
 
     function statusClass(status) {
-      const s = String(status || '').trim().toLowerCase();
+      const s = normalizeDecisionStatus(status);
       if (s === 'deferido') return 'bg-success-subtle text-success-emphasis';
       if (s === 'indeferido') return 'bg-danger-subtle text-danger-emphasis';
       if (s === 'analyzing') return 'bg-warning-subtle text-warning-emphasis';
@@ -2048,18 +2065,36 @@
     }
 
     function statusLabel(status) {
-      const s = String(status || '').trim().toLowerCase();
+      const s = normalizeDecisionStatus(status);
       if (s === 'analyzing') return 'Em análise';
       if (!s) return '-';
-      return status;
+      return String(status || '').trim();
     }
 
     function statusTooltip(status) {
-      const s = String(status || '').trim().toLowerCase();
+      const s = normalizeDecisionStatus(status);
       if (s === 'deferido') return 'Pedido deferido na análise administrativa.';
       if (s === 'indeferido') return 'Pedido indeferido na análise administrativa.';
       if (s === 'analyzing') return 'Justificativa enviada, mas o pedido ainda não foi analisado.';
       return '';
+    }
+
+    function normalizeDecisionStatus(value) {
+      const s = String(value || '').trim().toLowerCase();
+      const aliases = {
+        'analyzing': 'analyzing',
+        'in_review': 'analyzing',
+        'in review': 'analyzing',
+        'em análise': 'analyzing',
+        'em analise': 'analyzing',
+        'deferido': 'deferido',
+        'approved': 'deferido',
+        'indeferido': 'indeferido',
+        'rejected': 'indeferido',
+        'pending': 'pending',
+        'pendente': 'pending',
+      };
+      return aliases[s] || s;
     }
 
     async function copyTextToClipboard(text) {
