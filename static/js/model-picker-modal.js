@@ -68,6 +68,112 @@
         return '$' + n + ' / token';
     }
 
+    function parsePriceNumber(value) {
+        if (value === null || value === undefined || value === '') {
+            return null;
+        }
+
+        var n = Number(value);
+        if (!Number.isFinite(n) || n < 0) {
+            return null;
+        }
+
+        return n;
+    }
+
+    function buildCostStats(models) {
+        var priced = [];
+
+        (models || []).forEach(function (model) {
+            var prompt = parsePriceNumber(model && model.prompt_price);
+            var completion = parsePriceNumber(model && model.completion_price);
+            if (prompt === null || completion === null) {
+                return;
+            }
+
+            // Score ponderado: custo de saída tende a impactar mais respostas longas.
+            var score = (prompt * 0.4) + (completion * 0.6);
+            if (Number.isFinite(score)) {
+                priced.push(score);
+            }
+        });
+
+        priced.sort(function (a, b) { return a - b; });
+
+        if (!priced.length) {
+            return {
+                hasData: false,
+                cheapLimit: null,
+                expensiveLimit: null,
+            };
+        }
+
+        var cheapIndex = Math.floor((priced.length - 1) * 0.33);
+        var expensiveIndex = Math.floor((priced.length - 1) * 0.66);
+
+        return {
+            hasData: true,
+            cheapLimit: priced[cheapIndex],
+            expensiveLimit: priced[expensiveIndex],
+        };
+    }
+
+    function getCostIndicator(model, costStats) {
+        var prompt = parsePriceNumber(model && model.prompt_price);
+        var completion = parsePriceNumber(model && model.completion_price);
+
+        if (!costStats || !costStats.hasData || prompt === null || completion === null) {
+            return {
+                label: 'Custo: n/d',
+                className: 'model-cost-indicator model-cost-indicator--unknown',
+                bolts: 0,
+            };
+        }
+
+        var score = (prompt * 0.4) + (completion * 0.6);
+        if (!Number.isFinite(score)) {
+            return {
+                label: 'Custo: n/d',
+                className: 'model-cost-indicator model-cost-indicator--unknown',
+                bolts: 0,
+            };
+        }
+
+        if (score <= costStats.cheapLimit) {
+            return {
+                label: 'Custo: barato',
+                className: 'model-cost-indicator model-cost-indicator--cheap',
+                bolts: 1,
+            };
+        }
+
+        if (score <= costStats.expensiveLimit) {
+            return {
+                label: 'Custo: médio',
+                className: 'model-cost-indicator model-cost-indicator--medium',
+                bolts: 2,
+            };
+        }
+
+        return {
+            label: 'Custo: caro',
+            className: 'model-cost-indicator model-cost-indicator--expensive',
+            bolts: 3,
+        };
+    }
+
+    function renderBolts(count) {
+        if (!count || count < 1) {
+            return '';
+        }
+
+        var html = '';
+        for (var i = 0; i < count; i += 1) {
+            html += '<i class="bi bi-lightning-fill"></i>';
+        }
+        return html;
+    }
+
     var providerLabelMap = {
         openai: 'OpenAI',
         anthropic: 'Anthropic',
@@ -268,6 +374,7 @@
         });
 
         sortByReleaseDate(list);
+        var costStats = buildCostStats(this.models);
 
         if (!list.length) {
             this.modelListContainer.innerHTML = '<div class="text-muted small p-2">Nenhum modelo encontrado.</div>';
@@ -277,6 +384,7 @@
         this.modelListContainer.innerHTML = list.map(function (item) {
             var id = String(item.id || '').trim();
             var active = selected === id || (!selected && !id);
+            var costIndicator = getCostIndicator(item, costStats);
             return '' +
                 '<button type="button" class="list-group-item list-group-item-action model-item ' + (active ? 'active' : '') + '" data-model-id="' + escapeAttr(id) + '">' +
                 '<div class="d-flex justify-content-between align-items-start gap-2">' +
@@ -285,6 +393,7 @@
                 '<div class="model-id">' + escapeHtml(id || ('FAP_CLASSIFIER_MODEL: ' + self.defaultModelId)) + '</div>' +
                 '</div>' +
                 '<div class="text-end small">' +
+                '<div><span class="' + costIndicator.className + '">' + renderBolts(costIndicator.bolts) + '<span class="ms-1">' + escapeHtml(costIndicator.label) + '</span></span></div>' +
                 '<div><span class="badge ' + releaseBadgeClass(item.release_timestamp) + '">Lançamento: ' + escapeHtml(formatReleaseDate(item.release_timestamp)) + '</span></div>' +
                 '<div>Ctx: ' + escapeHtml(formatContext(item.context_length)) + '</div>' +
                 '<div>In: ' + escapeHtml(formatPrice(item.prompt_price)) + '</div>' +

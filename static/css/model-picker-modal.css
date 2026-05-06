@@ -39,3 +39,41 @@
     border: 1px solid #dbe3ee;
     box-shadow: none;
 }
+
+.model-cost-indicator {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 0.12rem 0.5rem;
+    font-weight: 600;
+    border: 1px solid transparent;
+}
+
+.model-cost-indicator i {
+    font-size: 0.72rem;
+    line-height: 1;
+}
+
+.model-cost-indicator--cheap {
+    color: #166534;
+    background: #dcfce7;
+    border-color: #86efac;
+}
+
+.model-cost-indicator--medium {
+    color: #92400e;
+    background: #fef3c7;
+    border-color: #fcd34d;
+}
+
+.model-cost-indicator--expensive {
+    color: #991b1b;
+    background: #fee2e2;
+    border-color: #fca5a5;
+}
+
+.model-cost-indicator--unknown {
+    color: #475569;
+    background: #eef2f7;
+    border-color: #dbe3ee;
+}
