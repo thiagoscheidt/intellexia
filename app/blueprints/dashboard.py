@@ -4,8 +4,11 @@ from sqlalchemy import and_
 from datetime import datetime
 from functools import wraps
 from decimal import Decimal
+import logging
 
 from app.services.token_analytics_service import TokenAnalyticsService
+
+logger = logging.getLogger(__name__)
 
 dashboard_bp = Blueprint('dashboard', __name__)
 
@@ -273,6 +276,76 @@ def dashboard_tokens():
             selected_action='',
             selected_model='',
         )
+
+
+@dashboard_bp.route('/execution-history/<int:execution_id>')
+@require_law_firm
+def view_execution_history(execution_id: int):
+    """Visualiza histórico completo de execução de um agente."""
+    try:
+        from app.models import AgentExecutionHistory
+        from app.services.agent_execution_history_service import AgentExecutionHistoryService
+
+        user = User.query.get(session.get('user_id'))
+        law_firm = user.law_firm if user else None
+        law_firm_id = get_current_law_firm_id()
+
+        execution = AgentExecutionHistoryService.get_execution_history_by_id(execution_id)
+
+        if not execution or (execution.law_firm_id and execution.law_firm_id != law_firm_id):
+            from flask import flash
+            flash('Histórico de execução não encontrado', 'danger')
+            return redirect(url_for('dashboard.dashboard_tokens'))
+
+        return render_template(
+            'execution_history_detail.html',
+            user=user,
+            law_firm=law_firm,
+            execution=execution,
+        )
+
+    except Exception as e:
+        logger.exception(f"Erro ao visualizar histórico de execução: {str(e)}")
+        from flask import flash
+        flash(f'Erro ao visualizar histórico: {str(e)}', 'danger')
+        return redirect(url_for('dashboard.dashboard_tokens'))
+
+
+@dashboard_bp.route('/api/token-usage/<int:token_usage_id>/execution-history', methods=['GET'])
+@require_law_firm
+def get_execution_history_for_token_usage(token_usage_id: int):
+    """API para recuperar históricos de execução relacionados a um token usage."""
+    try:
+        from app.models import AgentTokenUsage, AgentExecutionHistory
+        from app.services.agent_execution_history_service import AgentExecutionHistoryService
+
+        law_firm_id = get_current_law_firm_id()
+
+        # Verificar permissão
+        token_usage = AgentTokenUsage.query.filter_by(id=token_usage_id).first()
+        if not token_usage or (token_usage.law_firm_id and token_usage.law_firm_id != law_firm_id):
+            return jsonify({"error": "Unauthorized"}), 403
+
+        executions = AgentExecutionHistoryService.get_executions_by_token_usage_id(token_usage_id)
+
+        return jsonify({
+            "executions": [
+                {
+                    "id": e.id,
+                    "agent_name": e.agent_name,
+                    "action_name": e.action_name,
+                    "agent_type": e.agent_type,
+                    "status": e.status,
+                    "model_name": e.model_name,
+                    "created_at": e.created_at.isoformat() if e.created_at else None,
+                }
+                for e in executions
+            ]
+        })
+
+    except Exception as e:
+        logger.exception(f"Erro ao recuperar históricos: {str(e)}")
+        return jsonify({"error": str(e)}), 500
 
 
 @dashboard_bp.route('/api/health', methods=['GET'])

@@ -177,8 +177,16 @@ técnico-jurídica usados na classificação automática das justificativas FAP'
                                     </div>
                                     <div class="tab-pane fade" id="reference-tab-pane" role="tabpanel"
                                         aria-labelledby="reference-tab" tabindex="0">
-                                        <label for="reference_markdown" class="form-label">Referência técnico-jurídica
-                                            completa</label>
+                                        <div
+                                            class="d-flex justify-content-between align-items-center gap-2 mb-2 flex-wrap">
+                                            <label for="reference_markdown" class="form-label mb-0">Referência
+                                                técnico-jurídica
+                                                completa</label>
+                                            <button type="button" class="btn btn-outline-info btn-sm"
+                                                data-bs-toggle="modal" data-bs-target="#referenceSummaryModal">
+                                                <i class="bi bi-eye me-1"></i>Ver resumo IA
+                                            </button>
+                                        </div>
                                         <div class="classifier-prompt-editor">
                                             <div id="referenceMarkdownEditor"></div>
                                         </div>
@@ -188,6 +196,8 @@ técnico-jurídica usados na classificação automática das justificativas FAP'
                                     spellcheck="false">{{ prompt_markdown }}</textarea>
                                 <textarea id="reference_markdown" name="reference_markdown" class="d-none"
                                     spellcheck="false">{{ reference_markdown }}</textarea>
+                                <textarea id="reference_summary_markdown" class="d-none"
+                                    spellcheck="false">{{ reference_summary_markdown }}</textarea>
                             </div>
                         </div>
                         <div class="card-footer d-flex gap-2 flex-wrap">
@@ -381,6 +391,26 @@ técnico-jurídica usados na classificação automática das justificativas FAP'
         </div>
     </div>
 </div>
+
+<div class="modal fade" id="referenceSummaryModal" tabindex="-1" aria-labelledby="referenceSummaryModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="referenceSummaryModalLabel">
+                    <i class="bi bi-card-text me-2"></i>Resumo gerado pela IA
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="small text-muted mb-2">
+                    Exibe o resumo persistido da referência ativa. Se ainda não existir, mostra o resumo default.
+                </div>
+                <div id="referenceSummaryMarkdownPreview" class="markdown-preview"></div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -396,6 +426,9 @@ técnico-jurídica usados na classificação automática das justificativas FAP'
         const testInput = document.getElementById('promptTestText');
         const testStatus = document.getElementById('promptTestStatus');
         const testResult = document.getElementById('promptTestResult');
+        const referenceSummaryHiddenInput = document.getElementById('reference_summary_markdown');
+        const referenceSummaryPreview = document.getElementById('referenceSummaryMarkdownPreview');
+        const referenceSummaryModal = document.getElementById('referenceSummaryModal');
         const selectedModelInput = document.getElementById('selected_model');
         const selectedModelName = document.getElementById('selectedModelName');
         const selectedModelId = document.getElementById('selectedModelId');
@@ -735,6 +768,16 @@ técnico-jurídica usados na classificação automática das justificativas FAP'
         }
 
         renderMarkdownPreviews();
+
+        if (referenceSummaryPreview && referenceSummaryHiddenInput) {
+            referenceSummaryPreview.innerHTML = markdownToHtml(referenceSummaryHiddenInput.value || '');
+        }
+
+        if (referenceSummaryModal && referenceSummaryPreview && referenceSummaryHiddenInput) {
+            referenceSummaryModal.addEventListener('show.bs.modal', function () {
+                referenceSummaryPreview.innerHTML = markdownToHtml(referenceSummaryHiddenInput.value || '');
+            });
+        }
 
         const toolbarOptions = [
             ['bold', 'italic', 'underline'],

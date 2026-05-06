@@ -1,0 +1,296 @@
+{% extends 'layout/base.html' %}
+
+{% block title %}Histórico de Execução do Agente{% endblock %}
+{% block page_title %}Histórico Completo de Execução{% endblock %}
+
+{% block extra_css %}
+<style>
+    .execution-detail-card {
+        border-radius: 12px;
+        border: 1px solid var(--bs-border-color);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, .06);
+        margin-bottom: 1.5rem;
+    }
+
+    .execution-detail-card .card-header {
+        background-color: rgba(79, 70, 229, 0.08);
+        border-bottom: 1px solid var(--bs-border-color);
+        padding: 1rem;
+    }
+
+    .execution-detail-card .card-header strong {
+        color: #4f46e5;
+    }
+
+    .code-block {
+        background-color: #f5f5f5;
+        border: 1px solid #e5e5e5;
+        border-radius: 8px;
+        padding: 1rem;
+        font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+        font-size: 0.85rem;
+        line-height: 1.5;
+        overflow-x: auto;
+        color: #2c3e50;
+        max-height: 400px;
+        overflow-y: auto;
+    }
+
+    .code-block code {
+        color: inherit;
+    }
+
+    .json-viewer {
+        background-color: #fff;
+        border: 1px solid #e5e5e5;
+        border-radius: 8px;
+        padding: 1rem;
+        max-height: 500px;
+        overflow-y: auto;
+    }
+
+    .json-key {
+        color: #a71930;
+        font-weight: 600;
+    }
+
+    .json-string {
+        color: #22863a;
+    }
+
+    .json-number {
+        color: #005cc5;
+    }
+
+    .json-boolean {
+        color: #d73a49;
+    }
+
+    .execution-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .status-badge-success::before {
+        content: '✓';
+        font-weight: bold;
+    }
+
+    .status-badge-error::before {
+        content: '✗';
+        font-weight: bold;
+    }
+
+    .meta-info {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .meta-item {
+        padding: 0.75rem;
+        background-color: #f9f9f9;
+        border-radius: 8px;
+        border-left: 3px solid #4f46e5;
+    }
+
+    .meta-label {
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: var(--bs-secondary-color);
+        margin-bottom: 0.25rem;
+    }
+
+    .meta-value {
+        font-weight: 600;
+        color: #2c3e50;
+    }
+
+    .copy-btn {
+        position: absolute;
+        top: 0.5rem;
+        right: 0.5rem;
+        opacity: 0;
+        transition: opacity 0.2s;
+    }
+
+    .code-block:hover .copy-btn {
+        opacity: 1;
+    }
+
+    .code-block-wrapper {
+        position: relative;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row g-3 mb-4">
+    <div class="col-12">
+        <a href="{{ url_for('dashboard.dashboard_tokens') }}" class="btn btn-sm btn-outline-secondary mb-3">
+            <i class="bi bi-arrow-left me-1"></i>Voltar
+        </a>
+
+        <div class="execution-detail-card">
+            <div class="card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <strong>{{ execution.agent_name }}.{{ execution.action_name }}</strong>
+                    <span
+                        class="badge {% if execution.status == 'success' %}text-bg-success{% else %}text-bg-danger{% endif %}">
+                        {{ execution.status.upper() }}
+                    </span>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="meta-info">
+                    <div class="meta-item">
+                        <div class="meta-label">Tipo de Agente</div>
+                        <div class="meta-value">{{ execution.agent_type }}</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">Modelo Usado</div>
+                        <div class="meta-value">{{ execution.model_name or '-' }}</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">Provider</div>
+                        <div class="meta-value">{{ execution.model_provider or '-' }}</div>
+                    </div>
+                    <div class="meta-item">
+                        <div class="meta-label">Data/Hora</div>
+                        <div class="meta-value">{{ execution.created_at.strftime('%d/%m/%Y %H:%M:%S') if
+                            execution.created_at else '-' }}</div>
+                    </div>
+                </div>
+
+                {% if execution.error_message %}
+                <div class="alert alert-danger" role="alert">
+                    <strong>Erro:</strong> {{ execution.error_message }}
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- System Prompt -->
+        <div class="execution-detail-card">
+            <div class="card-header">
+                <strong><i class="bi bi-gear me-2"></i>System Prompt</strong>
+            </div>
+            <div class="card-body">
+                {% if execution.system_prompt %}
+                <div class="code-block-wrapper">
+                    <div class="code-block">
+                        <button class="copy-btn btn btn-sm btn-outline-secondary"
+                            onclick="copyToClipboard(this, 'system-prompt')">
+                            <i class="bi bi-clipboard me-1"></i>Copiar
+                        </button>
+                        <pre id="system-prompt">{{ execution.system_prompt }}</pre>
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-muted">Não disponível</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- User Prompt -->
+        <div class="execution-detail-card">
+            <div class="card-header">
+                <strong><i class="bi bi-chat-dots me-2"></i>User Prompt</strong>
+            </div>
+            <div class="card-body">
+                {% if execution.user_prompt %}
+                <div class="code-block-wrapper">
+                    <div class="code-block">
+                        <button class="copy-btn btn btn-sm btn-outline-secondary"
+                            onclick="copyToClipboard(this, 'user-prompt')">
+                            <i class="bi bi-clipboard me-1"></i>Copiar
+                        </button>
+                        <pre id="user-prompt">{{ execution.user_prompt }}</pre>
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-muted">Não disponível</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Model Response -->
+        <div class="execution-detail-card">
+            <div class="card-header">
+                <strong><i class="bi bi-lightbulb me-2"></i>Resposta do Modelo</strong>
+            </div>
+            <div class="card-body">
+                {% if execution.model_response %}
+                <div class="code-block-wrapper">
+                    <div class="code-block">
+                        <button class="copy-btn btn btn-sm btn-outline-secondary"
+                            onclick="copyToClipboard(this, 'model-response')">
+                            <i class="bi bi-clipboard me-1"></i>Copiar
+                        </button>
+                        <pre id="model-response">{{ execution.model_response }}</pre>
+                    </div>
+                </div>
+                {% else %}
+                <p class="text-muted">Não disponível</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Full Messages History -->
+        <div class="execution-detail-card">
+            <div class="card-header">
+                <strong><i class="bi bi-chat-left me-2"></i>Histórico Completo de Mensagens</strong>
+            </div>
+            <div class="card-body">
+                {% if execution.full_messages_history %}
+                <div class="json-viewer">
+                    <pre>{{ execution.full_messages_history | tojson(indent=2) }}</pre>
+                </div>
+                {% else %}
+                <p class="text-muted">Não disponível</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Result Data -->
+        <div class="execution-detail-card">
+            <div class="card-header">
+                <strong><i class="bi bi-check-circle me-2"></i>Dados do Resultado</strong>
+            </div>
+            <div class="card-body">
+                {% if execution.result_data %}
+                <div class="json-viewer">
+                    <pre>{{ execution.result_data | tojson(indent=2) }}</pre>
+                </div>
+                {% else %}
+                <p class="text-muted">Não disponível</p>
+                {% endif %}
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function copyToClipboard(button, elementId) {
+        const text = document.getElementById(elementId).innerText;
+        navigator.clipboard.writeText(text).then(() => {
+            const originalText = button.innerHTML;
+            button.innerHTML = '<i class="bi bi-check me-1"></i>Copiado!';
+            button.classList.add('btn-success');
+            button.classList.remove('btn-outline-secondary');
+
+            setTimeout(() => {
+                button.innerHTML = originalText;
+                button.classList.remove('btn-success');
+                button.classList.add('btn-outline-secondary');
+            }, 2000);
+        });
+    }
+</script>
+{% endblock %}

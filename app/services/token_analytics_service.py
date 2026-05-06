@@ -4,7 +4,7 @@ from collections import defaultdict
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-from app.models import AgentTokenUsage
+from app.models import AgentExecutionHistory, AgentTokenUsage
 
 
 class TokenAnalyticsService:
@@ -157,8 +157,26 @@ class TokenAnalyticsService:
             reverse=True,
         )
 
+        recent_rows = rows[:120]
+        token_usage_ids = [row.id for row in recent_rows]
+
+        execution_history_by_token_usage: dict[int, int] = {}
+        if token_usage_ids:
+            execution_rows = (
+                AgentExecutionHistory.query.filter(
+                    AgentExecutionHistory.agent_token_usage_id.in_(token_usage_ids)
+                )
+                .order_by(AgentExecutionHistory.id.desc())
+                .all()
+            )
+            for execution in execution_rows:
+                token_usage_id = execution.agent_token_usage_id
+                if token_usage_id and token_usage_id not in execution_history_by_token_usage:
+                    execution_history_by_token_usage[token_usage_id] = execution.id
+
         recent_entries = [
             {
+                "id": row.id,
                 "created_at": row.created_at,
                 "agent_name": row.agent_name,
                 "action_name": row.action_name,
@@ -171,8 +189,9 @@ class TokenAnalyticsService:
                 "cost_usd": round(self._to_float(row.estimated_cost_usd), 8),
                 "finish_reason": row.finish_reason,
                 "request_id": row.request_id,
+                "execution_history_id": execution_history_by_token_usage.get(row.id),
             }
-            for row in rows[:120]
+            for row in recent_rows
         ]
 
         all_agents = [name for (name,) in AgentTokenUsage.query.with_entities(AgentTokenUsage.agent_name).filter(

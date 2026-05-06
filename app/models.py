@@ -468,6 +468,7 @@ class FapContestationClassifierReferenceVersion(db.Model):
     law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
     version = db.Column(db.Integer, nullable=False)
     reference_markdown = db.Column(db.Text, nullable=False)
+    reference_summary_markdown = db.Column(db.Text)
     reference_hash = db.Column(db.String(64), nullable=False, index=True)
     is_active = db.Column(db.Boolean, default=True, nullable=False)
     created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
@@ -779,6 +780,56 @@ class AgentTokenUsage(db.Model):
 
     def __repr__(self):
         return f'<AgentTokenUsage {self.agent_name}:{self.action_name} total={self.total_tokens}>'
+
+
+class AgentExecutionHistory(db.Model):
+    """Tabela agent_execution_history - Histórico completo de execuções de agentes com contexto full."""
+    __tablename__ = 'agent_execution_history'
+
+    id = db.Column(db.Integer, primary_key=True)
+
+    # Relacionamento com token usage (opcional, para linking)
+    agent_token_usage_id = db.Column(db.Integer, db.ForeignKey('agent_token_usage.id'), index=True)
+
+    # Identificadores
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), index=True)
+    chat_session_id = db.Column(db.Integer, db.ForeignKey('knowledge_chat_sessions.id'), index=True)
+
+    # Agente e ação
+    agent_name = db.Column(db.String(120), nullable=False, index=True)
+    action_name = db.Column(db.String(160), nullable=False, index=True)
+    agent_type = db.Column(db.String(80), nullable=False, index=True)  # 'fap_classifier', 'knowledge_query', etc.
+
+    # Prompts e contexto
+    system_prompt = db.Column(db.Text)
+    user_prompt = db.Column(db.Text)
+    model_response = db.Column(db.Text)
+
+    # Histórico de mensagens (JSON)
+    full_messages_history = db.Column(db.JSON)
+
+    # Metadados de execução
+    model_name = db.Column(db.String(120), index=True)
+    model_provider = db.Column(db.String(80), index=True)
+    status = db.Column(db.String(20), default='success', index=True)
+    error_message = db.Column(db.Text)
+
+    # Resultado/output
+    result_data = db.Column(db.JSON)  # Dados estruturados do resultado
+
+    # Auditoria
+    created_at = db.Column(db.DateTime, default=datetime.utcnow, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relacionamentos
+    agent_token_usage = db.relationship('AgentTokenUsage')
+    user = db.relationship('User')
+    law_firm = db.relationship('LawFirm')
+    chat_session = db.relationship('KnowledgeChatSession')
+
+    def __repr__(self):
+        return f'<AgentExecutionHistory {self.agent_type}:{self.action_name} id={self.id}>'
 
 
 class KnowledgeSummary(db.Model):

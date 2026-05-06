@@ -13,11 +13,13 @@ from langchain_openai import ChatOpenAI
 
 from app.agents.config import DEFAULT_MODEL_MINI
 from app.models import (
+    AgentTokenUsage,
     FapContestationClassifierPromptVersion,
     FapContestationClassifierReferenceVersion,
     FapContestationClassifierSetting,
 )
 from app.services.token_usage_service import TokenUsageService
+from app.services.agent_execution_history_service import AgentExecutionHistoryService
 
 
 logger = logging.getLogger(__name__)
@@ -27,6 +29,129 @@ class FAPContestationClassifierAgent:
     """Classifica justificativas de contestação FAP em um tópico jurídico padronizado."""
 
     MIN_CONFIDENCE = 0.80
+    REFERENCE_SUMMARY_MAX_CHARS = 5500
+    REFERENCE_SUMMARY_SECTION_MAX_CHARS = 300
+    _DEFAULT_REFERENCE_SUMMARY_CACHE: str | None = None
+
+    REFERENCE_MARKDOWN_SUMMARY_DEFAULT = """# NEXO TÉCNICO PREVIDENCIÁRIO PENDENTE DE JULGAMENTO
+A caracterização do benefício como acidentário pode ser realizada por meio da emissão da Comunicação de Acidente de Trabalho (CAT) ou pela atribuição de um Nexo Técnico Previdenciário (NTP) pela INSS. O NTP possui presunção relativa, permitindo a apresentação de provas em contrário.
+Nesse contexto, a empresa é notificada sobre a concessão do benefício acidentário e pode contestar o NTP, o que pode resultar na conversão do benefício de acidentário para previdenciário.
+No presente caso, apesar da atribuição de um NTP que resultou na concessão do benefício acidentário, este não se origina de um acidente de trabalho ou doença ocupacional. Dessa forma, a empresa apresentou contestação ao INSS, solicitando a conversão do benefício para a natureza previdenciária. Essa contestação encontra-se pendente de julgamento.
+Diante dessa situação, a contestação deve suspender os efeitos tributários do benefício, impedindo sua inclusão no índice FAP, uma vez que a natureza acidentária ainda não foi definida.
+Base legal: Art. 116, II, do CTN — considera-se ocorrido o fato gerador apenas quando definitivamente constituído.
+Requer-se:
+- Concessão de efeito suspensivo no cálculo do FAP
+- Exclusão do benefício até o julgamento da contestação
+- Exclusão definitiva após decisão favorável
+# ACIDENTE DE TRAJETO
+A Resolução nº 1.347/2021 do CNPS dispõe que benefícios decorrentes de acidentes de trajeto não devem compor o FAP.
+No caso, a CAT nº 2019.123.456-9/01 comprova o vínculo com acidente de trajeto.
+Requer-se:
+- Exclusão do benefício do cálculo do FAP
+# ACIDENTE DE TRAJETO SEM CAT – AÇÃO JUDICIAL
+Acidente de trajeto: ocorrido entre residência e trabalho (Lei nº 8.213, art. 21, IV, “d”).
+A ação judicial nº 5015126-19.2021.8.24.0036/SC confirma a natureza do evento.
+Requer-se:
+- Exclusão do benefício do FAP
+# RESTABELECIMENTO DE BENEFÍCIO – B91 (60 DIAS)
+Se um benefício é concedido em até 60 dias após cessação, trata-se de restabelecimento, não novo benefício (Decreto nº 3.048/1999, art. 75, §3º).
+No caso:
+- Houve concessão indevida de novo benefício
+- O benefício anterior já foi considerado no FAP
+Requer-se:
+- Exclusão para evitar bis in idem
+# AUXÍLIO-DOENÇA PREVIDENCIÁRIO – B31
+Somente benefícios acidentários compõem o FAP.
+O benefício em questão é previdenciário.
+Requer-se:
+- Exclusão do FAP
+# ERRO DE ESTABELECIMENTO
+O FAP deve ser calculado por CNPJ.
+O benefício está vinculado a outro estabelecimento.
+Requer-se:
+- Exclusão do benefício
+# PRÉ-FAP
+Somente eventos após 01/04/2007 podem compor o FAP.
+O evento ocorreu antes dessa data.
+Requer-se:
+- Exclusão do benefício
+# OUTRA EMPRESA – CAT VINCULADA
+A CAT comprova que o acidente ocorreu em outra empresa.
+Requer-se:
+- Exclusão do benefício
+# OUTRA EMPRESA – NUNCA FOI EMPREGADO
+Não há vínculo empregatício (GFIP / eSocial).
+Requer-se:
+- Exclusão do benefício
+# OUTRA EMPRESA – APÓS RESCISÃO
+O benefício iniciou após a rescisão contratual.
+Requer-se:
+- Exclusão do benefício
+# OUTRA EMPRESA – DID ANTERIOR À ADMISSÃO
+A doença é anterior ao vínculo com a empresa.
+Requer-se:
+- Exclusão do benefício
+# NEXO AFASTADO
+Perícia judicial afastou o nexo causal.
+A doença é degenerativa e não relacionada ao trabalho.
+Requer-se:
+- Exclusão do benefício
+# BENEFÍCIO CONCEDIDO NA JUSTIÇA FEDERAL
+Benefícios acidentários são competência da Justiça Estadual.
+Concessão na Justiça Federal indica natureza previdenciária.
+Requer-se:
+- Exclusão do benefício
+# CONCOMITANTE – B91 COM APOSENTADORIA
+É vedada a acumulação de:
+- Auxílio-doença + aposentadoria
+Requer-se:
+- Exclusão do benefício
+# CONCESSÃO CONCOMITANTE DE DOIS B91
+Vedada a acumulação de dois auxílios-doença.
+Requer-se:
+- Exclusão do benefício
+# AUXÍLIO-ACIDENTE (B94) COM APOSENTADORIA
+Vedada a acumulação de:
+- Auxílio-acidente + aposentadoria
+Requer-se:
+- Exclusão do benefício
+# AUXÍLIO-ACIDENTE (B94) DUPLICADO
+Duplicidade do mesmo evento acidentário.
+Requer-se:
+- Exclusão do benefício
+# AUXÍLIO-DOENÇA (B94) SEM CUSTO
+DIB = DCB → benefício inexistente juridicamente.
+Requer-se:
+- Exclusão do benefício
+# DISCUSSÃO MÉDICA / OUTROS
+Discussão médica não é cabível em contestação de FAP
+Deve ocorrer em contestação de nexo técnico
+Classificação:
+- Se houver discussão médica → DISCUSSÃO MÉDICA
+- Caso contrário → OUTROS ARGUMENTOS
+"""
+
+    REFERENCE_SUMMARY_SYSTEM_PROMPT = (
+        "Voce e um assistente juridico especializado em condensar referencias tecnico-juridicas para classificacao FAP. "
+        "Resuma o texto mantendo apenas os sinais juridicos fortes por categoria, exemplos essenciais, e regras de desambiguacao. "
+        "Mantenha os topicos/cabecalhos principais da referencia original no resumo (mesma ordem), sem remover categorias. "
+        "Nao invente tese nova, nao altere o sentido juridico, e nao inclua texto irrelevante."
+    )
+
+    REFERENCE_SUMMARY_USER_PROMPT_TEMPLATE = """Resuma a referencia abaixo para uso interno de classificacao.
+
+Requisitos:
+- Retorne markdown enxuto.
+- Priorize: (1) regra decisoria, (2) sinais textuais fortes, (3) excecoes importantes.
+- No maximo 2 bullets por secao.
+- Mantenha os topicos/cabecalhos da referencia original e preserve a ordem das secoes.
+- Preserve nomes de categorias e termos juridicos criticos (CAT, NTP, NEXO, PRE-FAP, B31, B91, B94, CNPJ, DID, DIB, DCB).
+- Remova repeticoes, fundamentacao longa e exemplos redundantes.
+- Limite total de aproximadamente {max_chars} caracteres.
+
+Texto original:
+{reference_markdown}
+"""
 
     SYSTEM_PROMPT = (
         "Voce e um especialista juridico em FAP. "
@@ -64,7 +189,6 @@ class FAPContestationClassifierAgent:
     - outra_empresa_did_anterior
     - erro_estabelecimento
 - Nao use categorias de outra_empresa_* nem erro_estabelecimento sem expressao textual explicita de outro CNPJ/estabelecimento/empresa.
-- Informe reason apenas quando confidence >= 0.80; caso contrario, reason deve ser string vazia.
 - Se nao houver encaixe:
     - Se houver termos medicos -> discussao_medica
     - Caso contrario -> outros_argumentos
@@ -335,7 +459,7 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
 - Se `confidence` for menor que 0.80, retorne `topics` vazio (`[]`).
 
 ```json
-{"topics":["slug1","slug2"],"topic_confidences":[0.91,0.83],"confidence":0.0,"reason":"explicacao curta ou vazio"}
+{"topics":["slug1","slug2"],"topic_confidences":[0.91,0.83],"confidence":0.0}
 ```
 
 ## Texto para classificar
@@ -553,6 +677,114 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
     def get_default_reference_markdown(cls) -> str:
         return cls.REFERENCE_MARKDOWN_DEFAULT.strip()
 
+    @classmethod
+    def summarize_reference_markdown(cls, reference_markdown: str) -> str:
+        """Gera um resumo enxuto da referência para reduzir custo de token no prompt."""
+        source = (reference_markdown or "").strip()
+        if not source:
+            return ""
+
+        source = re.sub(r"```.*?```", " ", source, flags=re.DOTALL)
+        parts = re.split(r"(?m)^(#{1,3}\s+.+)\s*$", source)
+
+        sections: list[tuple[str, str]] = []
+        current_title = ""
+        for index, part in enumerate(parts):
+            chunk = (part or "").strip()
+            if not chunk:
+                continue
+
+            if index % 2 == 1:
+                current_title = chunk
+                continue
+
+            sections.append((current_title or "## REFERENCIA", chunk))
+
+        if not sections:
+            compact = re.sub(r"\s+", " ", source).strip()
+            if len(compact) > cls.REFERENCE_SUMMARY_MAX_CHARS:
+                compact = compact[: cls.REFERENCE_SUMMARY_MAX_CHARS - 3].rstrip() + "..."
+            return compact
+
+        key_signal_pattern = re.compile(
+            r"requer|exclus[aã]o|nexo|cat|cnpj|did|dib|dcb|rescis[aã]o|justi[çc]a federal|"
+            r"pre[\s-]?fap|abril de 2007|aposentadoria|concomitant|duplicad|pendente|"
+            r"restabelecimento|b31|b91|b94",
+            flags=re.IGNORECASE,
+        )
+
+        summary_lines = ["# RESUMO TECNICO-JURIDICO (ENXUTO)"]
+        for title, body in sections:
+            body_lines = []
+            for raw_line in body.splitlines():
+                clean_line = re.sub(r"\s+", " ", raw_line).strip(" -\t")
+                if not clean_line or clean_line.startswith("#"):
+                    continue
+                body_lines.append(clean_line)
+
+            if not body_lines:
+                continue
+
+            key_lines = [line for line in body_lines if key_signal_pattern.search(line)]
+            selected_lines = key_lines[:2] if key_lines else body_lines[:2]
+            section_summary = re.sub(r"\s+", " ", " ".join(selected_lines)).strip()
+            if len(section_summary) > cls.REFERENCE_SUMMARY_SECTION_MAX_CHARS:
+                section_summary = (
+                    section_summary[: cls.REFERENCE_SUMMARY_SECTION_MAX_CHARS - 3].rstrip() + "..."
+                )
+
+            summary_lines.append(title if title.startswith("#") else f"## {title}")
+            summary_lines.append(f"- {section_summary}")
+
+        summary = "\n".join(summary_lines).strip()
+        if len(summary) > cls.REFERENCE_SUMMARY_MAX_CHARS:
+            summary = summary[: cls.REFERENCE_SUMMARY_MAX_CHARS - 3].rstrip() + "..."
+        return summary
+
+    @classmethod
+    def get_default_reference_summary_markdown(cls) -> str:
+        return cls.REFERENCE_MARKDOWN_SUMMARY_DEFAULT.strip()
+
+    @classmethod
+    def generate_reference_summary_for_storage(
+        cls,
+        reference_markdown: str,
+        *,
+        model_name: str | None = None,
+    ) -> str:
+        """Gera resumo para persistencia (uma unica vez por versao), com LLM e fallback local."""
+        source = (reference_markdown or "").strip()
+        if not source:
+            return ""
+
+        summary_model = (
+            str(model_name or "").strip()
+            or os.environ.get("FAP_REFERENCE_SUMMARY_MODEL")
+            or cls.get_default_model_name()
+        )
+
+        try:
+            llm = ChatOpenAI(model=summary_model, temperature=0)
+            user_prompt = cls.REFERENCE_SUMMARY_USER_PROMPT_TEMPLATE.format(
+                max_chars=cls.REFERENCE_SUMMARY_MAX_CHARS,
+                reference_markdown=source,
+            )
+            response = llm.invoke(
+                [
+                    {"role": "system", "content": cls.REFERENCE_SUMMARY_SYSTEM_PROMPT},
+                    {"role": "user", "content": user_prompt},
+                ]
+            )
+            content = str(getattr(response, "content", "") or "").strip()
+            if content:
+                if len(content) > cls.REFERENCE_SUMMARY_MAX_CHARS:
+                    content = content[: cls.REFERENCE_SUMMARY_MAX_CHARS - 3].rstrip() + "..."
+                return content
+        except Exception:
+            logger.exception("Falha ao gerar resumo de referencia via LLM. Usando fallback local.")
+
+        return cls.summarize_reference_markdown(source)
+
     @staticmethod
     def compute_prompt_hash(prompt_markdown: str) -> str:
         return hashlib.sha256((prompt_markdown or "").encode("utf-8")).hexdigest()
@@ -586,6 +818,7 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
         )
         prompt = prompt.replace("{{SLUGS_MARKDOWN}}", "")
         prompt = prompt.replace("{{TEXT}}", "")
+        prompt = re.sub(r"(?im)^\s*[-*]?\s*Informe\s+reason\b.*$", "", prompt)
         prompt = re.sub(r"\n{3,}", "\n\n", prompt)
         return prompt.strip()
 
@@ -640,9 +873,9 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
         return cls.get_default_user_prompt_markdown()
 
     @classmethod
-    def _load_reference_markdown(cls, law_firm_id: int | None) -> str:
+    def _load_reference_markdown_for_llm(cls, law_firm_id: int | None) -> str:
         if not law_firm_id:
-            return cls.get_default_reference_markdown()
+            return cls.get_default_reference_summary_markdown()
 
         reference_version = (
             FapContestationClassifierReferenceVersion.query.filter_by(
@@ -655,10 +888,20 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
             )
             .first()
         )
-        if reference_version and (reference_version.reference_markdown or "").strip():
-            return reference_version.reference_markdown
+        if reference_version:
+            summary_markdown = (getattr(reference_version, "reference_summary_markdown", "") or "").strip()
+            if summary_markdown:
+                return summary_markdown
 
-        return cls.get_default_reference_markdown()
+            logger.warning(
+                "Versao de referencia ativa sem resumo persistido (law_firm_id=%s, version_id=%s). "
+                "Usando resumo default para evitar sumarizacao em runtime.",
+                law_firm_id,
+                getattr(reference_version, "id", None),
+            )
+            return cls.get_default_reference_summary_markdown()
+
+        return cls.get_default_reference_summary_markdown()
 
     def _fallback_topic(self, text: str) -> str:
         normalized_text = self._normalize_text_for_match(text)
@@ -976,11 +1219,45 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
 
         return str(last_message or "").strip()
 
+    @staticmethod
+    def _extract_last_message_request_id(response_payload: dict[str, Any] | None) -> str:
+        if not isinstance(response_payload, dict):
+            return ""
+
+        messages = response_payload.get("messages")
+        if not isinstance(messages, list) or not messages:
+            return ""
+
+        last_message = messages[-1]
+
+        if isinstance(last_message, dict):
+            request_id = last_message.get("id")
+            if isinstance(request_id, str) and request_id.strip():
+                return request_id.strip()
+
+            response_metadata = last_message.get("response_metadata") or {}
+            request_id = response_metadata.get("id") or response_metadata.get("request_id")
+            if isinstance(request_id, str) and request_id.strip():
+                return request_id.strip()
+
+        request_id = getattr(last_message, "id", None)
+        if isinstance(request_id, str) and request_id.strip():
+            return request_id.strip()
+
+        response_metadata = getattr(last_message, "response_metadata", None)
+        if isinstance(response_metadata, dict):
+            request_id = response_metadata.get("id") or response_metadata.get("request_id")
+            if isinstance(request_id, str) and request_id.strip():
+                return request_id.strip()
+
+        return ""
+
     def classify(
         self,
         text: str,
         *,
         law_firm_id: int | None = None,
+        user_id: int | None = None,
         prompt_markdown_override: str | None = None,
         reference_markdown_override: str | None = None,
         model_name_override: str | None = None,
@@ -1010,7 +1287,7 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
         reference_markdown = (
             str(reference_markdown_override or "").strip()
             if reference_markdown_override is not None
-            else self._load_reference_markdown(law_firm_id)
+            else self._load_reference_markdown_for_llm(law_firm_id)
         )
         user_prompt = self._render_user_prompt(user_prompt_markdown, cleaned_text, reference_markdown)
         effective_model_name = (
@@ -1036,7 +1313,7 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
                 print_prefix="[FAPContestationClassifierAgent][tokens]",
                 model_name=effective_model_name,
                 model_provider="openai",
-                user_id=None,
+                user_id=user_id,
                 law_firm_id=law_firm_id,
                 chat_session_id=None,
                 latency_ms=latency_ms,
@@ -1049,6 +1326,51 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
 
             raw_content = self._extract_last_message_content(response_payload)
             parsed = self._safe_parse_json(raw_content)
+            if isinstance(parsed, dict):
+                parsed.pop("reason", None)
+
+            # Extrai mensagens full do response_payload
+            full_messages = (
+                response_payload.get("messages", [])
+                if isinstance(response_payload, dict)
+                else []
+            )
+
+            # Persistir histórico completo de execução
+            token_usage_id = None
+            request_id = self._extract_last_message_request_id(response_payload)
+            token_usage_query = AgentTokenUsage.query.filter_by(
+                agent_name="FAPContestationClassifierAgent",
+                action_name="classify",
+            )
+
+            if law_firm_id is not None:
+                token_usage_query = token_usage_query.filter_by(law_firm_id=law_firm_id)
+
+            if request_id:
+                token_usage_query = token_usage_query.filter_by(request_id=request_id)
+
+            token_usage_row = token_usage_query.order_by(AgentTokenUsage.id.desc()).first()
+            if token_usage_row:
+                token_usage_id = token_usage_row.id
+
+            AgentExecutionHistoryService.save_execution_history(
+                agent_name="FAPContestationClassifierAgent",
+                action_name="classify",
+                agent_type="fap_classifier",
+                system_prompt=self.SYSTEM_PROMPT,
+                user_prompt=user_prompt,
+                model_response=raw_content,
+                full_messages_history=full_messages,
+                result_data=parsed,
+                model_name=effective_model_name,
+                model_provider="openai",
+                status="success",
+                user_id=user_id,
+                law_firm_id=law_firm_id,
+                chat_session_id=None,
+                agent_token_usage_id=token_usage_id,
+            )
 
             if not parsed:
                 return self._build_topics_response(
@@ -1102,6 +1424,29 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
 
         except Exception as exc:
             logger.exception("Erro ao classificar justificativa FAP: %s", exc)
+
+            # Tenta persistir execução com erro
+            try:
+                AgentExecutionHistoryService.save_execution_history(
+                    agent_name="FAPContestationClassifierAgent",
+                    action_name="classify",
+                    agent_type="fap_classifier",
+                    system_prompt=self.SYSTEM_PROMPT,
+                    user_prompt=user_prompt,
+                    model_response=None,
+                    full_messages_history=None,
+                    result_data=None,
+                    model_name=effective_model_name,
+                    model_provider="openai",
+                    status="error",
+                    error_message=str(exc),
+                    user_id=user_id,
+                    law_firm_id=law_firm_id,
+                    chat_session_id=None,
+                )
+            except Exception as history_exc:
+                logger.exception("Erro ao persistir histórico de erro: %s", history_exc)
+
             return self._build_topics_response(
                 ["OUTROS ARGUMENTOS"],
                 topic_confidences=[None],

@@ -48,17 +48,97 @@ class FapContestationJudgmentReportService:
     @staticmethod
     def _build_benefit_classification_text(benefit: Benefit) -> str:
         """Monta o texto base para classificação do benefício."""
-        candidate_fields = [
+        primary_fields = [
             benefit.second_instance_justification,
             benefit.first_instance_justification,
             benefit.justification,
+        ]
+        fallback_fields = [
             benefit.second_instance_opinion,
             benefit.first_instance_opinion,
             benefit.opinion,
             benefit.notes,
         ]
-        parts = [str(value).strip() for value in candidate_fields if value and str(value).strip()]
-        return "\n\n".join(parts)
+        # Usa apenas a melhor fonte primária disponível para evitar repetições
+        # entre 2a instância, 1a instância e justificativa geral.
+        selected_value = None
+        for value in primary_fields:
+            if value and str(value).strip():
+                selected_value = value
+                break
+
+        # Fallback para opinião/notas somente se não houver justificativa.
+        if selected_value is None:
+            for value in fallback_fields:
+                if value and str(value).strip():
+                    selected_value = value
+                    break
+
+        if selected_value is None:
+            return ""
+
+        return FapContestationJudgmentReportService._clean_classification_text_block(str(selected_value))
+
+    @staticmethod
+    def _clean_classification_text_block(text: str) -> str:
+        """Remove ruído operacional e colapsa repetições óbvias para reduzir custo de token."""
+        raw = (text or "").strip()
+        if not raw:
+            return ""
+
+        # Remove linhas de rastreamento operacional que não ajudam na classificação jurídica.
+        noise_patterns = [
+            r"^Relat[oó]rio FAP importado.*$",
+            r"^\[DECISOES_ADMIN_FAP\].*$",
+        ]
+        cleaned_lines: list[str] = []
+        for line in raw.splitlines():
+            line_stripped = line.strip()
+            if not line_stripped:
+                continue
+
+            if any(re.match(pattern, line_stripped, flags=re.IGNORECASE) for pattern in noise_patterns):
+                continue
+
+            cleaned_lines.append(line_stripped)
+
+        cleaned = "\n".join(cleaned_lines)
+        cleaned = re.sub(r"\n{2,}", "\n", cleaned).strip()
+
+        # Deduplicação interna de frases longas repetidas no mesmo bloco.
+        sentences = re.split(r"(?<=[\.!\?])\s+", cleaned)
+        unique_sentences: list[str] = []
+        seen_sentence_fingerprints: set[str] = set()
+        for sentence in sentences:
+            sentence_clean = sentence.strip()
+            if not sentence_clean:
+                continue
+
+            fingerprint = FapContestationJudgmentReportService._text_fingerprint(sentence_clean)
+
+            # Evita remover tokens curtos repetidos que podem ser contextuais.
+            if len(fingerprint) >= 40 and fingerprint in seen_sentence_fingerprints:
+                continue
+
+            if len(fingerprint) >= 40:
+                seen_sentence_fingerprints.add(fingerprint)
+
+            unique_sentences.append(sentence_clean)
+
+        cleaned = " ".join(unique_sentences)
+        cleaned = re.sub(r"\s+", " ", cleaned).strip()
+        cleaned = re.sub(r"\s+/\s+", "/", cleaned)
+        cleaned = re.sub(r"\s+\.", ".", cleaned)
+
+        return cleaned
+
+    @staticmethod
+    def _text_fingerprint(text: str) -> str:
+        """Gera impressão textual estável para deduplicação de blocos muito parecidos."""
+        normalized = (text or "").lower()
+        normalized = re.sub(r"\s+", " ", normalized).strip()
+        normalized = re.sub(r"[^\w\s]", "", normalized)
+        return normalized
 
     @staticmethod
     def _parse_benefit_topics(benefit: Benefit) -> list[str]:

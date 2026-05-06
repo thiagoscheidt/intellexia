@@ -1719,6 +1719,9 @@ def _activate_new_classifier_reference_version(
     created_by_user_id: int | None,
 ):
     normalized_reference_markdown = (reference_markdown or '').strip()
+    summarized_reference_markdown = FAPContestationClassifierAgent.generate_reference_summary_for_storage(
+        normalized_reference_markdown
+    )
     reference_hash = FAPContestationClassifierAgent.compute_prompt_hash(normalized_reference_markdown)
 
     FapContestationClassifierReferenceVersion.query.filter_by(
@@ -1730,6 +1733,7 @@ def _activate_new_classifier_reference_version(
         law_firm_id=law_firm_id,
         version=_get_next_classifier_reference_version_number(law_firm_id),
         reference_markdown=normalized_reference_markdown,
+        reference_summary_markdown=summarized_reference_markdown,
         reference_hash=reference_hash,
         is_active=True,
         created_by_user_id=created_by_user_id,
@@ -1783,6 +1787,13 @@ def classifier_prompt_settings():
         if current_reference_version and (current_reference_version.reference_markdown or '').strip()
         else FAPContestationClassifierAgent.get_default_reference_markdown()
     )
+    reference_summary_markdown = (
+        (getattr(current_reference_version, 'reference_summary_markdown', '') or '').strip()
+        if current_reference_version
+        else ''
+    )
+    if not reference_summary_markdown:
+        reference_summary_markdown = FAPContestationClassifierAgent.get_default_reference_summary_markdown()
     prompt_markdown = FAPContestationClassifierAgent._remove_non_editable_sections(raw_prompt_markdown)
     selected_model = (current_setting.selected_model if current_setting else '') or ''
     available_models, model_options_error = fetch_openrouter_text_models_for_info(
@@ -1819,6 +1830,7 @@ def classifier_prompt_settings():
             FAPContestationClassifierAgent.get_default_user_prompt_markdown()
         ),
         default_reference_markdown=FAPContestationClassifierAgent.get_default_reference_markdown(),
+        reference_summary_markdown=reference_summary_markdown,
         slugs_markdown=FAPContestationClassifierAgent._build_slugs_markdown(),
         selected_model=selected_model,
         default_classifier_model=FAPContestationClassifierAgent.get_default_model_name(),
