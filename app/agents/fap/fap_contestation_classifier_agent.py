@@ -999,9 +999,23 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
         if any(term.upper() in normalized_text for term in self.PRE_FAP_TERMS):
             return True
 
-        year_matches = re.findall(r"\b(19\d{2}|20\d{2})\b", normalized_text)
-        if year_matches and any(int(year) < 2007 for year in year_matches):
-            if "DID" in normalized_text or "ACIDENT" in normalized_text:
+        for match in re.finditer(r"\b(19\d{2}|20\d{2})\b", normalized_text):
+            year = int(match.group(1))
+            if year >= 2007:
+                continue
+
+            context_start = max(0, match.start() - 80)
+            context_end = min(len(normalized_text), match.end() + 80)
+            context = normalized_text[context_start:context_end]
+
+            # Evita falso positivo por anos de decretos/leis citados na fundamentacao.
+            if re.search(r"\b(DECRETO|LEI|ART|ARTIGO|CTN|CNPS|INSTRUCAO|SUMULA)\b", context):
+                continue
+
+            if re.search(
+                r"\b(DID|EVENTO(?:\s+ACIDENTARIO)?|ACIDENTE|DOENCA|DOENCA\s+OCUPACIONAL)\b",
+                context,
+            ):
                 return True
 
         return False
@@ -1017,8 +1031,12 @@ Classifique o texto e retorne uma lista de SLUGS de 1 a 3 itens.
         ):
             return True
 
-        # Quando ha mencao de CNPJ diferente em contexto de estabelecimento, tambem e forte indicio.
-        if "CNPJ" in normalized_text and "ESTABELECIMENTO" in normalized_text and "NAO" in normalized_text:
+        # Quando ha mencao expressa de CNPJ/estabelecimento diverso, tambem e forte indicio.
+        if re.search(
+            r"\b(OUTR[OA]|DIVERS[OA]|ERRAD[OA])\b.{0,40}\b(CNPJ|ESTABELECIMENTO|EMPRESA)\b|"
+            r"\b(CNPJ|ESTABELECIMENTO|EMPRESA)\b.{0,40}\b(OUTR[OA]|DIVERS[OA]|ERRAD[OA])\b",
+            normalized_text,
+        ):
             return True
 
         return False
