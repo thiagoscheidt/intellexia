@@ -38,6 +38,7 @@ from openpyxl.styles import (
     Side,
 )
 from openpyxl.utils import get_column_letter
+from sqlalchemy import func, or_
 
 from app.models import (
     FapAutoImportedContestacao,
@@ -73,6 +74,19 @@ def require_law_firm(f):
 # ---------------------------------------------------------------------------
 
 FAP_AVAILABLE_YEARS = list(range(datetime.now().year, 2009, -1))
+
+
+def _only_digits(value: str | None) -> str:
+    return ''.join(ch for ch in str(value or '') if ch.isdigit())
+
+
+def _format_cnpj(value: str | None) -> str:
+    digits = _only_digits(value)
+    if len(digits) == 14:
+        return f'{digits[:2]}.{digits[2:5]}.{digits[5:8]}/{digits[8:12]}-{digits[12:]}'
+    if len(digits) == 8:
+        return f'{digits[:2]}.{digits[2:5]}.{digits[5:8]}'
+    return str(value or '')
 
 
 # ---------------------------------------------------------------------------
@@ -116,6 +130,60 @@ def sync_page():
         saved_auth=saved_auth,
         total_synced=total_synced,
         total_procuracoes=total_procuracoes,
+    )
+
+
+@fap_panel_bp.route('/empresas')
+@require_law_firm
+def empresas_page():
+    """Lista empresas sincronizadas no FAP com busca e atalhos de ação."""
+    law_firm_id = get_current_law_firm_id()
+    search = str(request.args.get('q') or '').strip()
+
+    query = FapCompany.query.filter_by(law_firm_id=law_firm_id)
+    if search:
+        like = f'%{search}%'
+        query = query.filter(
+            or_(
+                FapCompany.nome.ilike(like),
+                FapCompany.cnpj.ilike(like),
+            )
+        )
+
+    companies = query.order_by(FapCompany.nome.asc(), FapCompany.cnpj.asc()).all()
+
+    contestacoes_by_root = {
+        cnpj_raiz: int(total)
+        for cnpj_raiz, total in (
+            db.session.query(FapWebContestacao.cnpj_raiz, func.count(FapWebContestacao.id))
+            .filter(FapWebContestacao.law_firm_id == law_firm_id)
+            .group_by(FapWebContestacao.cnpj_raiz)
+            .all()
+        )
+    }
+
+    items = []
+    for company in companies:
+        digits = _only_digits(company.cnpj)
+        cnpj_root = digits[:8] if len(digits) >= 8 else digits
+        items.append(
+            {
+                'id': company.id,
+                'nome': (company.nome or '').strip(),
+                'cnpj': company.cnpj or '',
+                'cnpj_fmt': _format_cnpj(company.cnpj),
+                'cnpj_root': cnpj_root,
+                'tipo_procuracao': (company.tipo_procuracao_descricao or '').strip(),
+                'synced_at': company.synced_at,
+                'contestacoes_count': contestacoes_by_root.get(cnpj_root, 0),
+            }
+        )
+
+    return render_template(
+        'fap_panel/empresas.html',
+        items=items,
+        search=search,
+        total=len(items),
     )
 
 

@@ -59,6 +59,17 @@ anos de vigência e salva no banco de dados.', icon='bi bi-arrow-repeat') %}
 
 <div class="app-content">
   <div class="container-fluid">
+    <div class="d-flex flex-wrap gap-2 mb-3">
+      <a href="{{ url_for('fap_panel.empresas_page') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-buildings me-1"></i> Empresas sincronizadas
+      </a>
+      <a href="{{ url_for('fap_panel.contestacoes_page') }}" class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-table me-1"></i> Contestações
+      </a>
+      <a href="{{ url_for('fap_panel.procuracoes_page') }}" class="btn btn-outline-success btn-sm">
+        <i class="bi bi-file-earmark-text me-1"></i> Procurações
+      </a>
+    </div>
     <div class="row g-3">
 
       {# ─── Alert de status de conexão FAP ────────────────────────── #}

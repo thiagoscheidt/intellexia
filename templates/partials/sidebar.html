@@ -64,6 +64,14 @@
           </a>
           <ul class="nav nav-treeview" style="background-color: rgba(0,0,0,0.1);">
             <li class="nav-item">
+              <a href="{{ url_for('fap_panel.empresas_page') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'fap_panel.empresas_page' else '' }}"
+                style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-buildings" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Empresas</p>
+              </a>
+            </li>
+            <li class="nav-item">
               <a href="{{ url_for('fap_panel.contestacoes_page') }}"
                 class="nav-link {{ 'active' if request.endpoint == 'fap_panel.contestacoes_page' else '' }}"
                 style="font-size: 0.9em;">
