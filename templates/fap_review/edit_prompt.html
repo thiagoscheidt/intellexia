@@ -58,7 +58,7 @@
                                     <dd class="col-sm-9">{{ prompt.version_number }}</dd>
 
                                     <dt class="col-sm-3">Criado em:</dt>
-                                    <dd class="col-sm-9">{{ prompt.created_at | datetime_sp }}</dd>
+                                    <dd class="col-sm-9">{{ prompt.created_at.strftime('%d/%m/%Y %H:%M:%S') }}</dd>
 
                                     <dt class="col-sm-3">Criado por:</dt>
                                     <dd class="col-sm-9">{{ prompt.created_by.name if prompt.created_by else 'Sistema'

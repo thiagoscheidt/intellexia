@@ -14,12 +14,12 @@ O módulo **FAP Review** foi implementado com sucesso e está pronto para uso em
 
 ### Funcionalidades Implementadas
 
-| Componente | Status | Detalhes |
-|-----------|--------|---------|
-| **ETAPA 1: Agent Invocation** | ✅ Completo | Extração de documentos + execução assíncrona + armazenamento |
-| **ETAPA 2: Edit UI** | ✅ Completo | Versionamento de prompts/referências + seeds |
-| **ETAPA 3: Navigation** | ✅ Completo | Menu integrado ao sidebar com 5 submenu items |
-| **ETAPA 4: Production Testing** | ✅ Completo | Validação total com 100% de testes passando |
+| Componente                      | Status     | Detalhes                                                     |
+| ------------------------------- | ---------- | ------------------------------------------------------------ |
+| **ETAPA 1: Agent Invocation**   | ✅ Completo | Extração de documentos + execução assíncrona + armazenamento |
+| **ETAPA 2: Edit UI**            | ✅ Completo | Versionamento de prompts/referências + seeds                 |
+| **ETAPA 3: Navigation**         | ✅ Completo | Menu integrado ao sidebar com 5 submenu items                |
+| **ETAPA 4: Production Testing** | ✅ Completo | Validação total com 100% de testes passando                  |
 
 ---
 

@@ -59,7 +59,7 @@
                                     <dd class="col-sm-9">{{ reference.version_number }}</dd>
 
                                     <dt class="col-sm-3">Criado em:</dt>
-                                    <dd class="col-sm-9">{{ reference.created_at | datetime_sp }}</dd>
+                                    <dd class="col-sm-9">{{ reference.created_at.strftime('%d/%m/%Y %H:%M:%S') }}</dd>
 
                                     <dt class="col-sm-3">Criado por:</dt>
                                     <dd class="col-sm-9">{{ reference.created_by.name if reference.created_by else

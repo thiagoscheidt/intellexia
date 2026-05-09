@@ -176,7 +176,7 @@
                                             {% endif %}
                                             {% endif %}
                                         </td>
-                                        <td>{{ execution.created_at | datetime_sp }}</td>
+                                        <td>{{ execution.created_at.strftime('%d/%m/%Y %H:%M:%S') }}</td>
                                         <td>
                                             <a href="{{ url_for('fap_review.revision_result', execution_id=execution.id) }}"
                                                 class="btn btn-sm btn-info">

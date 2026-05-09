@@ -64,7 +64,7 @@
                                 <p><strong>Documento:</strong> {{ execution.main_document_filename }}</p>
                             </div>
                             <div class="col-md-3">
-                                <p><strong>Data:</strong> {{ execution.created_at | datetime_sp }}</p>
+                                <p><strong>Data:</strong> {{ execution.created_at.strftime('%d/%m/%Y %H:%M:%S') }}</p>
                                 <p><strong>Auxiliares:</strong> {{ execution.auxiliary_documents_count }}</p>
                             </div>
                             <div class="col-md-3">
