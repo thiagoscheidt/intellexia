@@ -43,6 +43,7 @@ dependencies = [
     "requests>=2.32.3",
     "rich>=14.2.0",
     "sentence-transformers>=5.2.3",
+    "fastmcp>=2.0.0",
     "zeep>=4.2.1",
 ]
 
