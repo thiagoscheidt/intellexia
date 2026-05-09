@@ -148,15 +148,15 @@ training_temperature = 0.7         # configurável
 
 ## 📁 Arquivos Principais
 
-| Arquivo | Linhas | Status |
-|---------|--------|--------|
-| `/database/add_fap_review_tables.py` | 30 | ✅ Concluído |
-| `/app/models.py` (adições) | ~200 | ✅ Concluído |
-| `/app/agents/fap_review/reviewer_agent.py` | ~450 | ✅ Concluído |
-| `/app/agents/fap_review/training_agent.py` | ~450 | ✅ Concluído |
-| `/app/blueprints/fap_review.py` | ~900 | ✅ Concluído |
-| `/templates/fap_review/` | 8 arquivos | ✅ Concluído |
-| `/tests/test_fap_review_implementation.py` | ~250 | ✅ Concluído |
+| Arquivo                                    | Linhas     | Status      |
+| ------------------------------------------ | ---------- | ----------- |
+| `/database/add_fap_review_tables.py`       | 30         | ✅ Concluído |
+| `/app/models.py` (adições)                 | ~200       | ✅ Concluído |
+| `/app/agents/fap_review/reviewer_agent.py` | ~450       | ✅ Concluído |
+| `/app/agents/fap_review/training_agent.py` | ~450       | ✅ Concluído |
+| `/app/blueprints/fap_review.py`            | ~900       | ✅ Concluído |
+| `/templates/fap_review/`                   | 8 arquivos | ✅ Concluído |
+| `/tests/test_fap_review_implementation.py` | ~250       | ✅ Concluído |
 
 **Total de Código Implementado:** ~2,600 linhas ✅
 

@@ -627,6 +627,12 @@ def edit_prompt(prompt_version_id: int):
         law_firm_id=law_firm_id
     ).first_or_404()
     
+    # Carregar todas as versões deste tipo
+    all_versions = FapReviewPromptVersion.query.filter_by(
+        law_firm_id=law_firm_id,
+        prompt_type=prompt.prompt_type
+    ).order_by(FapReviewPromptVersion.version_number.desc()).all()
+    
     if request.method == 'POST':
         try:
             content = request.json.get('content', '')
@@ -654,7 +660,7 @@ def edit_prompt(prompt_version_id: int):
             return jsonify({'error': str(e)}), 500
     
     # GET
-    return render_template('fap_review/edit_prompt.html', prompt=prompt)
+    return render_template('fap_review/edit_prompt.html', prompt=prompt, versions=all_versions)
 
 
 @fap_review_bp.route('/settings/prompts/<int:prompt_version_id>/activate', methods=['POST'])
@@ -728,6 +734,12 @@ def edit_reference(reference_version_id: int):
         law_firm_id=law_firm_id
     ).first_or_404()
     
+    # Carregar todas as versões deste tipo
+    all_versions = FapReviewReferenceVersion.query.filter_by(
+        law_firm_id=law_firm_id,
+        reference_type=reference.reference_type
+    ).order_by(FapReviewReferenceVersion.version_number.desc()).all()
+    
     if request.method == 'POST':
         try:
             content = request.json.get('content', '')
@@ -754,7 +766,7 @@ def edit_reference(reference_version_id: int):
             return jsonify({'error': str(e)}), 500
     
     # GET
-    return render_template('fap_review/edit_reference.html', reference=reference)
+    return render_template('fap_review/edit_reference.html', reference=reference, versions=all_versions)
 
 
 @fap_review_bp.route('/settings/references/<int:reference_version_id>/activate', methods=['POST'])

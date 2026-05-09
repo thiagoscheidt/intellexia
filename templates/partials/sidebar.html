@@ -178,6 +178,61 @@
           </ul>
         </li>
 
+        {# ── FAP Review (Revisão de Petições) ──────────────────────────── #}
+        <li
+          class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('fap_review.') else '' }}">
+          <a href="#"
+            class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('fap_review.') else '' }}">
+            <i class="nav-icon bi bi-file-earmark-check"></i>
+            <p>
+              FAP Review
+              <i class="nav-arrow bi bi-chevron-right"></i>
+            </p>
+          </a>
+          <ul class="nav nav-treeview" style="background-color: rgba(0,0,0,0.1);">
+            <li class="nav-item">
+              <a href="{{ url_for('fap_review.index') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'fap_review.index' else '' }}"
+                style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-graph-up" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Dashboard</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('fap_review.revision') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'fap_review.revision' else '' }}"
+                style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-file-audit" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Revisar Petição</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('fap_review.training') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'fap_review.training' else '' }}"
+                style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-book-half" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Treinamento</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('fap_review.settings') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'fap_review.settings' else '' }}"
+                style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-sliders" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Configurações</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('fap_review.audit_logs') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'fap_review.audit_logs' else '' }}"
+                style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-clock-history" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Auditoria</p>
+              </a>
+            </li>
+          </ul>
+        </li>
+
         <li
           class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('process_panel.') else '' }}">
           <a href="#"
