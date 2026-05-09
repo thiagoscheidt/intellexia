@@ -216,41 +216,10 @@ def main() -> None:
         # 8. Aguarda o fluxo OIDC completar
         page.wait_for_timeout(5000)
 
-        # Dump completo de localStorage, sessionStorage e cookies
-        diag = page.evaluate("""
-            () => {
-                const ls = {}, ss = {};
-                for (let i = 0; i < localStorage.length; i++) {
-                    const k = localStorage.key(i);
-                    ls[k] = localStorage.getItem(k);
-                }
-                for (let i = 0; i < sessionStorage.length; i++) {
-                    const k = sessionStorage.key(i);
-                    ss[k] = sessionStorage.getItem(k);
-                }
-                return { localStorage: ls, sessionStorage: ss };
-            }
-        """)
+        # 9. Remove todos os interceptadores — browser volta a funcionar normalmente
+        page.unroute_all()
 
-        print('\n=== localStorage ===')
-        for k, v in (diag.get('localStorage') or {}).items():
-            print(f'  [{k}] = {str(v)[:200]}')
-        if not diag.get('localStorage'):
-            print('  (vazio)')
-
-        print('\n=== sessionStorage ===')
-        for k, v in (diag.get('sessionStorage') or {}).items():
-            print(f'  [{k}] = {str(v)[:200]}')
-        if not diag.get('sessionStorage'):
-            print('  (vazio)')
-
-        print('\n=== Cookies no contexto ===')
-        for c in context.cookies():
-            print(f'  {c["name"]}={c["value"][:60]}  domain={c["domain"]}')
-
-        print(f'\nURL atual: {page.url}')
-
-        print(f'\nNavegador aberto em: {FAP_URL}')
+        print(f'\nNavegador aberto em: {page.url}')
         print('Pressione Enter para fechar o navegador...')
         input()
 
