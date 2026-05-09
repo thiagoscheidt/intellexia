@@ -2384,3 +2384,182 @@ class FapWebProcuracao(db.Model):
 
     def __repr__(self):
         return f'<FapWebProcuracao protocolo={self.protocolo} outorgante={self.cnpj_raiz_outorgante}>'
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# FAP REVIEW MODULE — Revisão de Petição Inicial FAP
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+class FapReviewPromptVersion(db.Model):
+    """Tabela fap_review_prompt_versions - Versionamento de prompts dos agentes FAP Review"""
+    __tablename__ = 'fap_review_prompt_versions'
+    __table_args__ = (
+        db.Index('ix_fap_review_prompt_versions_law_firm_prompt_type', 'law_firm_id', 'prompt_type'),
+        db.Index('ix_fap_review_prompt_versions_is_active', 'is_active'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    version_number = db.Column(db.Integer, nullable=False)
+    prompt_type = db.Column(
+        db.String(50),
+        nullable=False,
+        comment='revisor, training, revisor_identity, revisor_rules, revisor_output_format, training_identity, training_rules, training_update_policy'
+    )
+    content = db.Column(db.Text, nullable=False)
+    is_active = db.Column(db.Boolean, default=False, nullable=False)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    law_firm = db.relationship('LawFirm')
+    created_by = db.relationship('User')
+
+    def __repr__(self):
+        return f'<FapReviewPromptVersion v{self.version_number} type={self.prompt_type}>'
+
+
+class FapReviewReferenceVersion(db.Model):
+    """Tabela fap_review_reference_versions - Versionamento de documentos de referência (manual, casos, etc)"""
+    __tablename__ = 'fap_review_reference_versions'
+    __table_args__ = (
+        db.Index('ix_fap_review_reference_versions_law_firm_ref_type', 'law_firm_id', 'reference_type'),
+        db.Index('ix_fap_review_reference_versions_is_active', 'is_active'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    version_number = db.Column(db.Integer, nullable=False)
+    reference_type = db.Column(
+        db.String(50),
+        nullable=False,
+        comment='manual_fap, casos_referencia, project_instructions'
+    )
+    content = db.Column(db.Text, nullable=False)
+    is_active = db.Column(db.Boolean, default=False, nullable=False)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    law_firm = db.relationship('LawFirm')
+    created_by = db.relationship('User')
+
+    def __repr__(self):
+        return f'<FapReviewReferenceVersion v{self.version_number} type={self.reference_type}>'
+
+
+class FapReviewSetting(db.Model):
+    """Tabela fap_review_settings - Configurações do módulo FAP Review por escritório"""
+    __tablename__ = 'fap_review_settings'
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, unique=True, index=True)
+
+    # Modelos LLM
+    reviewer_model = db.Column(db.String(100), default='gpt-4o-mini', nullable=False)
+    training_model = db.Column(db.String(100), default='gpt-4o-mini', nullable=False)
+
+    # Configurações de comportamento
+    reviewer_temperature = db.Column(db.Float, default=0.7, nullable=False)
+    training_temperature = db.Column(db.Float, default=0.7, nullable=False)
+
+    # Políticas de atualização
+    auto_update_manual = db.Column(db.Boolean, default=False)
+    auto_update_cases = db.Column(db.Boolean, default=False)
+    require_approval_before_publish = db.Column(db.Boolean, default=True)
+    enable_continuous_learning = db.Column(db.Boolean, default=True)
+
+    # Status dos agentes
+    reviewer_enabled = db.Column(db.Boolean, default=True)
+    training_enabled = db.Column(db.Boolean, default=True)
+
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    law_firm = db.relationship('LawFirm')
+    created_by = db.relationship('User')
+
+    def __repr__(self):
+        return f'<FapReviewSetting law_firm_id={self.law_firm_id}>'
+
+
+class FapReviewExecution(db.Model):
+    """Tabela fap_review_executions - Registro de execuções do Agente Revisor e Agente de Treinamento"""
+    __tablename__ = 'fap_review_executions'
+    __table_args__ = (
+        db.Index('ix_fap_review_executions_law_firm_status', 'law_firm_id', 'status'),
+        db.Index('ix_fap_review_executions_user_id', 'user_id'),
+        db.Index('ix_fap_review_executions_execution_type', 'execution_type'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+
+    execution_type = db.Column(db.String(50), nullable=False, comment='revision, training')
+    status = db.Column(db.String(20), default='pending', nullable=False, comment='pending, processing, completed, failed')
+
+    # Documentos
+    main_document_path = db.Column(db.String(500))
+    main_document_filename = db.Column(db.String(255))
+    auxiliary_documents_count = db.Column(db.Integer, default=0)
+    auxiliary_documents_json = db.Column(db.Text, comment='JSON array com informações dos documentos auxiliares')
+
+    # Metadados
+    prompt_version_id = db.Column(db.Integer, db.ForeignKey('fap_review_prompt_versions.id'))
+    reference_version_id = db.Column(db.Integer, db.ForeignKey('fap_review_reference_versions.id'))
+
+    # Análise comparativa (se houver duas versões)
+    comparative_analysis = db.Column(db.Boolean, default=False, comment='True se análise comparativa')
+    compared_document_path = db.Column(db.String(500), comment='Caminho da segunda versão da petição')
+
+    # Resultados
+    result_json = db.Column(db.Text, comment='JSON com resultado estruturado da análise')
+    error_message = db.Column(db.Text)
+
+    # Tokens e custo
+    tokens_used = db.Column(db.Integer)
+    cost_usd = db.Column(db.Numeric(10, 4))
+
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+    completed_at = db.Column(db.DateTime)
+
+    law_firm = db.relationship('LawFirm')
+    user = db.relationship('User')
+    prompt_version = db.relationship('FapReviewPromptVersion')
+    reference_version = db.relationship('FapReviewReferenceVersion')
+
+    def __repr__(self):
+        return f'<FapReviewExecution type={self.execution_type} status={self.status}>'
+
+
+class FapReviewAuditLog(db.Model):
+    """Tabela fap_review_audit_logs - Log de auditoria de todas as alterações do módulo"""
+    __tablename__ = 'fap_review_audit_logs'
+    __table_args__ = (
+        db.Index('ix_fap_review_audit_logs_law_firm_action', 'law_firm_id', 'action'),
+        db.Index('ix_fap_review_audit_logs_user_id', 'user_id'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+
+    action = db.Column(db.String(100), nullable=False, comment='prompt_updated, reference_updated, revision_executed, etc')
+    entity_type = db.Column(db.String(50), nullable=False, comment='prompt, reference, setting, execution')
+    entity_id = db.Column(db.Integer)
+
+    change_description = db.Column(db.Text)
+    old_value = db.Column(db.Text)
+    new_value = db.Column(db.Text)
+
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+
+    law_firm = db.relationship('LawFirm')
+    user = db.relationship('User')
+
+    def __repr__(self):
+        return f'<FapReviewAuditLog action={self.action} entity={self.entity_type}>'

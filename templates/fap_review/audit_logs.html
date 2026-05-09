@@ -1,0 +1,180 @@
+{% extends "layout.html" %}
+
+{% block title %}Log de Auditoria - FAP Review{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">
+                    <i class="fas fa-history"></i> Log de Auditoria
+                </h1>
+            </div>
+            <div class="col-sm-6">
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb float-sm-right">
+                        <li class="breadcrumb-item"><a href="{{ url_for('fap_review.index') }}">FAP Review</a></li>
+                        <li class="breadcrumb-item active">Auditoria</li>
+                    </ol>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="content">
+    <div class="container-fluid">
+        <!-- Filtros -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h3 class="card-title">Filtros</h3>
+            </div>
+            <div class="card-body">
+                <form method="GET" class="form-inline">
+                    <div class="form-group mr-2">
+                        <label for="actionFilter" class="mr-2">Ação:</label>
+                        <select class="form-control form-control-sm" id="actionFilter" name="action">
+                            <option value="">Todas</option>
+                            <option value="prompt_updated">Prompt Atualizado</option>
+                            <option value="reference_updated">Referência Atualizada</option>
+                            <option value="settings_updated">Configurações Atualizadas</option>
+                            <option value="revision_started">Revisão Iniciada</option>
+                            <option value="prompt_activated">Prompt Ativado</option>
+                            <option value="reference_activated">Referência Ativada</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group mr-2">
+                        <label for="entityFilter" class="mr-2">Entidade:</label>
+                        <select class="form-control form-control-sm" id="entityFilter" name="entity_type">
+                            <option value="">Todas</option>
+                            <option value="prompt">Prompt</option>
+                            <option value="reference">Referência</option>
+                            <option value="setting">Configuração</option>
+                            <option value="execution">Execução</option>
+                        </select>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fas fa-filter"></i> Filtrar
+                    </button>
+                    <a href="{{ url_for('fap_review.audit_logs') }}" class="btn btn-secondary btn-sm ml-2">
+                        <i class="fas fa-redo"></i> Limpar
+                    </a>
+                </form>
+            </div>
+        </div>
+
+        <!-- Tabela de Logs -->
+        <div class="card">
+            <div class="card-header">
+                <h3 class="card-title">Atividades</h3>
+            </div>
+            <div class="card-body">
+                {% if logs.items %}
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm">
+                        <thead>
+                            <tr>
+                                <th>Data/Hora</th>
+                                <th>Usuário</th>
+                                <th>Ação</th>
+                                <th>Entidade</th>
+                                <th>ID</th>
+                                <th>Descrição</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in logs.items %}
+                            <tr>
+                                <td>
+                                    <small>{{ log.created_at | datetime_sp }}</small>
+                                </td>
+                                <td>
+                                    {% if log.user %}
+                                    <span class="badge badge-info">{{ log.user.name }}</span>
+                                    {% else %}
+                                    <span class="badge badge-secondary">Sistema</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <code class="text-danger">{{ log.action }}</code>
+                                </td>
+                                <td>
+                                    <span class="badge badge-warning">{{ log.entity_type }}</span>
+                                </td>
+                                <td>
+                                    {% if log.entity_id %}
+                                    #{{ log.entity_id }}
+                                    {% else %}
+                                    -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <small>{{ log.change_description or '-' }}</small>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+
+                <!-- Paginação -->
+                {% if logs.pages > 1 %}
+                <nav aria-label="Page navigation" class="mt-3">
+                    <ul class="pagination">
+                        {% if logs.has_prev %}
+                        <li class="page-item">
+                            <a class="page-link"
+                                href="{{ url_for('fap_review.audit_logs', page=logs.prev_num) }}">Anterior</a>
+                        </li>
+                        {% endif %}
+
+                        {% for page_num in logs.iter_pages() %}
+                        {% if page_num %}
+                        {% if page_num == logs.page %}
+                        <li class="page-item active">
+                            <span class="page-link">{{ page_num }}</span>
+                        </li>
+                        {% else %}
+                        <li class="page-item">
+                            <a class="page-link" href="{{ url_for('fap_review.audit_logs', page=page_num) }}">{{
+                                page_num }}</a>
+                        </li>
+                        {% endif %}
+                        {% else %}
+                        <li class="page-item disabled">
+                            <span class="page-link">...</span>
+                        </li>
+                        {% endif %}
+                        {% endfor %}
+
+                        {% if logs.has_next %}
+                        <li class="page-item">
+                            <a class="page-link"
+                                href="{{ url_for('fap_review.audit_logs', page=logs.next_num) }}">Próximo</a>
+                        </li>
+                        {% endif %}
+                    </ul>
+                </nav>
+                {% endif %}
+                {% else %}
+                <p class="text-muted text-center py-3">Nenhum log encontrado</p>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Informações -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="alert alert-info">
+                    <i class="fas fa-info-circle"></i>
+                    <strong>Nota:</strong> Este log registra todas as ações administrativas do módulo FAP Review,
+                    incluindo atualizações de configurações, prompts, referências e execuções de análises.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

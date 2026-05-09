@@ -18,6 +18,7 @@ from app.blueprints.admin_users import admin_users_bp
 from app.blueprints.process_panel import process_panel_bp
 from app.blueprints.disputes_center import disputes_center_bp
 from app.blueprints.fap_panel import fap_panel_bp
+from app.blueprints.fap_review import fap_review_bp
 
 __all__ = [
     'auth_bp',
@@ -37,4 +38,5 @@ __all__ = [
     'process_panel_bp',
     'disputes_center_bp',
     'fap_panel_bp',
+    'fap_review_bp',
 ]

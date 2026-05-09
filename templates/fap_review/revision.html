@@ -1,0 +1,241 @@
+{% extends "layout.html" %}
+
+{% block title %}Revisão de Petição - FAP Review{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">
+                    <i class="fas fa-file-audit"></i> Revisar Petição
+                </h1>
+            </div>
+            <div class="col-sm-6">
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb float-sm-right">
+                        <li class="breadcrumb-item"><a href="{{ url_for('fap_review.index') }}">FAP Review</a></li>
+                        <li class="breadcrumb-item active">Revisão</li>
+                    </ol>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-lg-8">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Upload de Petição</h3>
+                    </div>
+                    <div class="card-body">
+                        <form id="petitionForm" enctype="multipart/form-data">
+                            <!-- Documento Principal -->
+                            <div class="form-group">
+                                <label for="mainDocument">Documento Principal <span class="text-danger">*</span></label>
+                                <div class="custom-file">
+                                    <input type="file" class="custom-file-input" id="mainDocument" name="main_document"
+                                        accept=".pdf,.doc,.docx" required>
+                                    <label class="custom-file-label" for="mainDocument">Escolher arquivo</label>
+                                </div>
+                                <small class="form-text text-muted">
+                                    PDF, Word (.doc/.docx). Máximo 50MB
+                                </small>
+                            </div>
+
+                            <!-- Documentos Auxiliares -->
+                            <div class="form-group">
+                                <label for="auxiliaryDocuments">Documentos Auxiliares (Opcionais)</label>
+                                <div class="custom-file">
+                                    <input type="file" class="custom-file-input" id="auxiliaryDocuments"
+                                        name="auxiliary_documents" multiple
+                                        accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg">
+                                    <label class="custom-file-label" for="auxiliaryDocuments">Escolher arquivos</label>
+                                </div>
+                                <small class="form-text text-muted">
+                                    PDF, Word, Excel, imagens, etc. Máximo 50MB por arquivo
+                                </small>
+                                <div id="auxiliaryFilesList" class="mt-2"></div>
+                            </div>
+
+                            <!-- Análise Comparativa -->
+                            <div class="form-group">
+                                <div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" id="comparativeAnalysis"
+                                        name="comparative_analysis">
+                                    <label class="custom-control-label" for="comparativeAnalysis">
+                                        Análise Comparativa
+                                    </label>
+                                </div>
+                                <small class="form-text text-muted">
+                                    Se ativada, faça upload de uma segunda versão da petição
+                                </small>
+                            </div>
+
+                            <!-- Segunda Versão (Análise Comparativa) -->
+                            <div class="form-group" id="comparedDocumentGroup" style="display:none;">
+                                <label for="comparedDocument">Versão Revisada (para análise comparativa)</label>
+                                <div class="custom-file">
+                                    <input type="file" class="custom-file-input" id="comparedDocument"
+                                        name="compared_document" accept=".pdf,.doc,.docx">
+                                    <label class="custom-file-label" for="comparedDocument">Escolher arquivo</label>
+                                </div>
+                            </div>
+
+                            <!-- Configurações do Revisor -->
+                            <hr>
+                            <h5>Configurações do Agente Revisor</h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="reviewerModel">Modelo LLM</label>
+                                        <select class="form-control" id="reviewerModel" name="reviewer_model">
+                                            <option value="gpt-4o-mini" {% if setting.reviewer_model=='gpt-4o-mini'
+                                                %}selected{% endif %}>GPT-4o Mini</option>
+                                            <option value="gpt-4" {% if setting.reviewer_model=='gpt-4' %}selected{%
+                                                endif %}>GPT-4</option>
+                                            <option value="gpt-4-turbo" {% if setting.reviewer_model=='gpt-4-turbo'
+                                                %}selected{% endif %}>GPT-4 Turbo</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="reviewerTemperature">Temperatura</label>
+                                        <input type="number" class="form-control" id="reviewerTemperature"
+                                            name="reviewer_temperature" min="0" max="2" step="0.1"
+                                            value="{{ setting.reviewer_temperature }}">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Botões -->
+                            <div class="form-group mt-4">
+                                <button type="submit" class="btn btn-primary btn-lg">
+                                    <i class="fas fa-play"></i> Iniciar Revisão
+                                </button>
+                                <a href="{{ url_for('fap_review.index') }}" class="btn btn-secondary btn-lg">
+                                    Cancelar
+                                </a>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Informações e Ajuda -->
+            <div class="col-lg-4">
+                <div class="card bg-light">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-info-circle"></i> Como Funciona
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <h5>Etapas:</h5>
+                        <ol>
+                            <li>Upload da petição principal</li>
+                            <li>Agente Revisor analisa</li>
+                            <li>Identifica inconsistências</li>
+                            <li>Gera relatório estruturado</li>
+                            <li>Encaminha para Treinamento</li>
+                        </ol>
+
+                        <h5 class="mt-3">Arquivos Aceitos:</h5>
+                        <ul>
+                            <li><strong>Principal:</strong> PDF, Word</li>
+                            <li><strong>Auxiliares:</strong> PDF, Word, Excel, Imagens, etc</li>
+                        </ul>
+
+                        <h5 class="mt-3">Análise Comparativa:</h5>
+                        <p>Se você tem duas versões da petição (original e revisada), ative a análise comparativa para
+                            identificar todas as alterações.</p>
+
+                        <p class="mt-3 text-muted">
+                            <i class="fas fa-clock"></i> Tempo estimado: 2-5 minutos
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Status do Agente -->
+                <div class="card mt-3">
+                    <div class="card-header">
+                        <h3 class="card-title">Status do Agente</h3>
+                    </div>
+                    <div class="card-body">
+                        {% if setting.reviewer_enabled %}
+                        <p><span class="badge bg-success">Ativo</span></p>
+                        <p class="text-muted small">Agente Revisor pronto para executar análises</p>
+                        {% else %}
+                        <p><span class="badge bg-danger">Inativo</span></p>
+                        <p class="text-muted small">Configure o agente nas Configurações</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Mostrar/ocultar análise comparativa
+        document.getElementById('comparativeAnalysis').addEventListener('change', function () {
+            document.getElementById('comparedDocumentGroup').style.display =
+                this.checked ? 'block' : 'none';
+        });
+
+        // Atualizar labels de arquivo
+        ['mainDocument', 'auxiliaryDocuments', 'comparedDocument'].forEach(id => {
+            const input = document.getElementById(id);
+            if (input) {
+                input.addEventListener('change', function () {
+                    const label = this.nextElementSibling;
+                    if (this.files.length) {
+                        label.textContent = Array.from(this.files)
+                            .map(f => f.name)
+                            .join(', ');
+                    } else {
+                        label.textContent = 'Escolher arquivo(s)';
+                    }
+                });
+            }
+        });
+
+        // Submissão do formulário
+        document.getElementById('petitionForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+            const btn = document.querySelector('button[type="submit"]');
+            const originalText = btn.innerHTML;
+
+            try {
+                btn.disabled = true;
+                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
+
+                const response = await fetch('{{ url_for("fap_review.revision") }}', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    window.location.href = `{{ url_for('fap_review.revision_result', execution_id='') }}${data.execution_id}`;
+                } else {
+                    alert('Erro: ' + (data.error || 'Erro desconhecido'));
+                }
+            } catch (error) {
+                alert('Erro ao enviar: ' + error);
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        });
+    });
+</script>
+{% endblock %}

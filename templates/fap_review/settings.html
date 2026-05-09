@@ -1,0 +1,353 @@
+{% extends "layout.html" %}
+
+{% block title %}Configurações - FAP Review{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">
+                    <i class="fas fa-cog"></i> Configurações
+                </h1>
+            </div>
+            <div class="col-sm-6">
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb float-sm-right">
+                        <li class="breadcrumb-item"><a href="{{ url_for('fap_review.index') }}">FAP Review</a></li>
+                        <li class="breadcrumb-item active">Configurações</li>
+                    </ol>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <!-- Menu Lateral -->
+            <div class="col-md-3">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Configuração</h3>
+                    </div>
+                    <div class="list-group list-group-flush">
+                        <a href="#general" class="list-group-item list-group-item-action active" data-toggle="list">
+                            <i class="fas fa-sliders-h"></i> Geral
+                        </a>
+                        <a href="#prompts" class="list-group-item list-group-item-action" data-toggle="list">
+                            <i class="fas fa-file-alt"></i> Prompts
+                        </a>
+                        <a href="#references" class="list-group-item list-group-item-action" data-toggle="list">
+                            <i class="fas fa-book"></i> Referências
+                        </a>
+                        <a href="#audit" class="list-group-item list-group-item-action" data-toggle="list">
+                            <i class="fas fa-history"></i> Auditoria
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Conteúdo -->
+            <div class="col-md-9">
+                <!-- Configurações Gerais -->
+                <div class="card" id="general">
+                    <div class="card-header">
+                        <h3 class="card-title">Configurações Gerais</h3>
+                    </div>
+                    <form id="settingsForm">
+                        <div class="card-body">
+                            <h5>Agente Revisor</h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="reviewerModel">Modelo LLM</label>
+                                        <select class="form-control" id="reviewerModel" name="reviewer_model">
+                                            <option value="gpt-4o-mini" {% if setting.reviewer_model=='gpt-4o-mini'
+                                                %}selected{% endif %}>GPT-4o Mini</option>
+                                            <option value="gpt-4" {% if setting.reviewer_model=='gpt-4' %}selected{%
+                                                endif %}>GPT-4</option>
+                                            <option value="gpt-4-turbo" {% if setting.reviewer_model=='gpt-4-turbo'
+                                                %}selected{% endif %}>GPT-4 Turbo</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="reviewerTemperature">Temperatura</label>
+                                        <input type="number" class="form-control" id="reviewerTemperature"
+                                            name="reviewer_temperature" min="0" max="2" step="0.1"
+                                            value="{{ setting.reviewer_temperature }}">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" id="reviewerEnabled"
+                                        name="reviewer_enabled" {% if setting.reviewer_enabled %}checked{% endif %}>
+                                    <label class="custom-control-label" for="reviewerEnabled">
+                                        Agente Revisor Ativado
+                                    </label>
+                                </div>
+                            </div>
+
+                            <hr>
+
+                            <h5>Agente de Treinamento</h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="trainingModel">Modelo LLM</label>
+                                        <select class="form-control" id="trainingModel" name="training_model">
+                                            <option value="gpt-4o-mini" {% if setting.training_model=='gpt-4o-mini'
+                                                %}selected{% endif %}>GPT-4o Mini</option>
+                                            <option value="gpt-4" {% if setting.training_model=='gpt-4' %}selected{%
+                                                endif %}>GPT-4</option>
+                                            <option value="gpt-4-turbo" {% if setting.training_model=='gpt-4-turbo'
+                                                %}selected{% endif %}>GPT-4 Turbo</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label for="trainingTemperature">Temperatura</label>
+                                        <input type="number" class="form-control" id="trainingTemperature"
+                                            name="training_temperature" min="0" max="2" step="0.1"
+                                            value="{{ setting.training_temperature }}">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" id="trainingEnabled"
+                                        name="training_enabled" {% if setting.training_enabled %}checked{% endif %}>
+                                    <label class="custom-control-label" for="trainingEnabled">
+                                        Agente de Treinamento Ativado
+                                    </label>
+                                </div>
+                            </div>
+
+                            <hr>
+
+                            <h5>Políticas de Atualização</h5>
+                            <div class="form-group">
+                                <div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" id="autoUpdateManual"
+                                        name="auto_update_manual" {% if setting.auto_update_manual %}checked{% endif %}>
+                                    <label class="custom-control-label" for="autoUpdateManual">
+                                        Atualizar Manual Automaticamente
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" id="autoUpdateCases"
+                                        name="auto_update_cases" {% if setting.auto_update_cases %}checked{% endif %}>
+                                    <label class="custom-control-label" for="autoUpdateCases">
+                                        Atualizar Casos de Referência Automaticamente
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" id="requireApproval"
+                                        name="require_approval_before_publish" {% if
+                                        setting.require_approval_before_publish %}checked{% endif %}>
+                                    <label class="custom-control-label" for="requireApproval">
+                                        Requer Aprovação Antes de Publicar
+                                    </label>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <div class="custom-control custom-checkbox">
+                                    <input type="checkbox" class="custom-control-input" id="enableLearning"
+                                        name="enable_continuous_learning" {% if setting.enable_continuous_learning
+                                        %}checked{% endif %}>
+                                    <label class="custom-control-label" for="enableLearning">
+                                        Habilitar Aprendizado Contínuo
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card-footer">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Salvar Configurações
+                            </button>
+                        </div>
+                    </form>
+                </div>
+
+                <!-- Prompts -->
+                <div class="card mt-4" id="prompts" style="display:none;">
+                    <div class="card-header">
+                        <h3 class="card-title">Gerenciamento de Prompts</h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">
+                            Gerencie os prompts que controlam o comportamento dos agentes.
+                        </p>
+
+                        <div class="list-group">
+                            <a href="#" class="list-group-item list-group-item-action">
+                                <h6 class="mb-1">REVISOR_IDENTITY.md</h6>
+                                <p class="mb-0 text-muted">Identidade do agente revisor</p>
+                            </a>
+                            <a href="#" class="list-group-item list-group-item-action">
+                                <h6 class="mb-1">REVISOR_RULES.md</h6>
+                                <p class="mb-0 text-muted">Regras invioláveis do revisor</p>
+                            </a>
+                            <a href="#" class="list-group-item list-group-item-action">
+                                <h6 class="mb-1">REVISOR_PROMPT.md</h6>
+                                <p class="mb-0 text-muted">Prompt principal do revisor</p>
+                            </a>
+                            <a href="#" class="list-group-item list-group-item-action">
+                                <h6 class="mb-1">REVISOR_OUTPUT_FORMAT.md</h6>
+                                <p class="mb-0 text-muted">Formato de saída do revisor</p>
+                            </a>
+                            <a href="#" class="list-group-item list-group-item-action">
+                                <h6 class="mb-1">TRAINING_IDENTITY.md</h6>
+                                <p class="mb-0 text-muted">Identidade do agente de treinamento</p>
+                            </a>
+                            <a href="#" class="list-group-item list-group-item-action">
+                                <h6 class="mb-1">TRAINING_RULES.md</h6>
+                                <p class="mb-0 text-muted">Regras do agente de treinamento</p>
+                            </a>
+                            <a href="#" class="list-group-item list-group-item-action">
+                                <h6 class="mb-1">TRAINING_PROMPT.md</h6>
+                                <p class="mb-0 text-muted">Prompt principal do treinamento</p>
+                            </a>
+                            <a href="#" class="list-group-item list-group-item-action">
+                                <h6 class="mb-1">TRAINING_UPDATE_POLICY.md</h6>
+                                <p class="mb-0 text-muted">Política de atualização do treinamento</p>
+                            </a>
+                        </div>
+
+                        <p class="text-muted mt-3 small">
+                            Clique em um prompt para visualizar, editar ou gerenciar suas versões.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Referências -->
+                <div class="card mt-4" id="references" style="display:none;">
+                    <div class="card-header">
+                        <h3 class="card-title">Gerenciamento de Referências</h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">
+                            Gerencie os documentos de referência compartilhados entre os agentes.
+                        </p>
+
+                        <div class="list-group">
+                            <a href="#" class="list-group-item list-group-item-action">
+                                <h6 class="mb-1">MANUAL_REVISAO_FAP.md</h6>
+                                <p class="mb-0 text-muted">Manual de revisão do FAP - Versão Ativa</p>
+                                <span class="badge badge-success">Ativa</span>
+                            </a>
+                            <a href="#" class="list-group-item list-group-item-action">
+                                <h6 class="mb-1">CASOS_REFERENCIA.md</h6>
+                                <p class="mb-0 text-muted">Casos de referência - Versão Ativa</p>
+                                <span class="badge badge-success">Ativa</span>
+                            </a>
+                            <a href="#" class="list-group-item list-group-item-action">
+                                <h6 class="mb-1">PROJECT_INSTRUCTIONS.md</h6>
+                                <p class="mb-0 text-muted">Instruções do projeto - Versão Ativa</p>
+                                <span class="badge badge-success">Ativa</span>
+                            </a>
+                        </div>
+
+                        <p class="text-muted mt-3 small">
+                            Clique em uma referência para visualizar, editar ou gerenciar versões.
+                        </p>
+                    </div>
+                </div>
+
+                <!-- Auditoria -->
+                <div class="card mt-4" id="audit" style="display:none;">
+                    <div class="card-header">
+                        <h3 class="card-title">Log de Auditoria</h3>
+                    </div>
+                    <div class="card-body">
+                        <p class="text-muted">
+                            Visualize o histórico de todas as alterações e configurações do módulo.
+                        </p>
+                        <a href="{{ url_for('fap_review.audit_logs') }}" class="btn btn-primary">
+                            <i class="fas fa-clipboard-list"></i> Ver Auditoria Completa
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Menu lateral
+        document.querySelectorAll('[data-toggle="list"]').forEach(link => {
+            link.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = this.getAttribute('href');
+
+                // Ocultar todos
+                document.querySelectorAll('.card[id]').forEach(card => {
+                    card.style.display = 'none';
+                    if (card.id !== 'general') {
+                        card.classList.add('mt-4');
+                    }
+                });
+
+                // Mostrar selecionado
+                document.querySelector(target).style.display = 'block';
+
+                // Atualizar active
+                document.querySelectorAll('[data-toggle="list"]').forEach(l => {
+                    l.classList.remove('active');
+                });
+                this.classList.add('active');
+            });
+        });
+
+        // Salvar configurações
+        document.getElementById('settingsForm').addEventListener('submit', async function (e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+            const data = {};
+            formData.forEach((value, key) => {
+                if (key.endsWith('_enabled') || key.endsWith('_automatic') || key.startsWith('auto_') || key.startsWith('require_') || key.startsWith('enable_')) {
+                    data[key] = formData.getAll(key).length > 0 ? true : false;
+                } else {
+                    data[key] = value;
+                }
+            });
+
+            try {
+                const response = await fetch('{{ url_for("fap_review.settings") }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+                if (result.success) {
+                    alert('Configurações salvas com sucesso!');
+                } else {
+                    alert('Erro: ' + (result.error || 'Erro desconhecido'));
+                }
+            } catch (error) {
+                alert('Erro ao salvar: ' + error);
+            }
+        });
+    });
+</script>
+{% endblock %}

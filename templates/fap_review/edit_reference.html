@@ -1,0 +1,212 @@
+{% extends "layout.html" %}
+
+{% block title %}Editar Referência - FAP Review{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">
+                    <i class="fas fa-book-edit"></i> Editar Referência
+                </h1>
+            </div>
+            <div class="col-sm-6">
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb float-sm-right">
+                        <li class="breadcrumb-item"><a href="{{ url_for('fap_review.settings') }}">Configurações</a>
+                        </li>
+                        <li class="breadcrumb-item active">{{ reference.reference_type }}</li>
+                    </ol>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="content">
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            {{ reference.reference_type }} - v{{ reference.version_number }}
+                            {% if reference.is_active %}
+                            <span class="badge badge-success float-right">Ativa</span>
+                            {% endif %}
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <form id="referenceForm">
+                            <div class="form-group">
+                                <label for="content">Conteúdo da Referência (Markdown)</label>
+                                <textarea class="form-control" id="content" name="content" rows="30"
+                                    style="font-family: monospace; font-size: 12px;">{{ reference.content }}</textarea>
+                                <small class="form-text text-muted">
+                                    Edite o conteúdo. Uma nova versão será criada ao salvar.
+                                    Use Markdown para formatação.
+                                </small>
+                            </div>
+
+                            <div class="form-group">
+                                <label>Informações</label>
+                                <dl class="row">
+                                    <dt class="col-sm-3">Tipo:</dt>
+                                    <dd class="col-sm-9">{{ reference.reference_type }}</dd>
+
+                                    <dt class="col-sm-3">Versão Atual:</dt>
+                                    <dd class="col-sm-9">{{ reference.version_number }}</dd>
+
+                                    <dt class="col-sm-3">Criado em:</dt>
+                                    <dd class="col-sm-9">{{ reference.created_at | datetime_sp }}</dd>
+
+                                    <dt class="col-sm-3">Criado por:</dt>
+                                    <dd class="col-sm-9">{{ reference.created_by.name if reference.created_by else
+                                        'Sistema' }}</dd>
+
+                                    <dt class="col-sm-3">Tamanho:</dt>
+                                    <dd class="col-sm-9">{{ (reference.content|length / 1024)|round(2) }} KB</dd>
+                                </dl>
+                            </div>
+                        </form>
+                    </div>
+                    <div class="card-footer">
+                        <button type="button" class="btn btn-primary" id="saveBtn">
+                            <i class="fas fa-save"></i> Salvar como Nova Versão
+                        </button>
+                        {% if not reference.is_active %}
+                        <button type="button" class="btn btn-success" id="activateBtn">
+                            <i class="fas fa-check"></i> Usar Esta Versão
+                        </button>
+                        {% endif %}
+                        <a href="{{ url_for('fap_review.settings') }}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Cancelar
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Histórico de Versões -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Histórico de Versões</h3>
+                    </div>
+                    <div class="card-body">
+                        <div id="versionsList" class="text-muted">Carregando...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Pré-visualização -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Pré-visualização (Markdown)</h3>
+                    </div>
+                    <div class="card-body">
+                        <div id="preview" class="markdown-preview">
+                            <!-- Pré-visualização será renderizada aqui -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/github-markdown-css@5.1.0/github-markdown.css">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        // Atualizar pré-visualização
+        const contentArea = document.getElementById('content');
+        const preview = document.getElementById('preview');
+
+        function updatePreview() {
+            const markdown = contentArea.value;
+            preview.innerHTML = marked.parse(markdown);
+        }
+
+        contentArea.addEventListener('input', updatePreview);
+        updatePreview(); // Preview inicial
+
+        // Salvar nova versão
+        document.getElementById('saveBtn').addEventListener('click', async function () {
+            const content = document.getElementById('content').value;
+
+            try {
+                const response = await fetch('{{ url_for("fap_review.edit_reference", reference_version_id=reference.id) }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ content: content })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    alert('Nova versão criada com sucesso!');
+                    window.location.reload();
+                } else {
+                    alert('Erro: ' + (data.error || 'Erro desconhecido'));
+                }
+            } catch (error) {
+                alert('Erro ao salvar: ' + error);
+            }
+        });
+
+        // Ativar versão
+        const activateBtn = document.getElementById('activateBtn');
+        if (activateBtn) {
+            activateBtn.addEventListener('click', async function () {
+                try {
+                    const response = await fetch('{{ url_for("fap_review.activate_reference", reference_version_id=reference.id) }}', {
+                        method: 'POST'
+                    });
+
+                    const data = await response.json();
+                    if (data.success) {
+                        alert('Versão ativada com sucesso!');
+                        window.location.reload();
+                    } else {
+                        alert('Erro: ' + (data.error || 'Erro desconhecido'));
+                    }
+                } catch (error) {
+                    alert('Erro ao ativar: ' + error);
+                }
+            });
+        }
+
+        // Carregar histórico
+        loadVersionHistory();
+    });
+
+    async function loadVersionHistory() {
+        try {
+            const response = await fetch('{{ url_for("fap_review.list_references") }}');
+            const data = await response.json();
+            document.getElementById('versionsList').innerHTML =
+                '<p class="text-muted">Histórico de versões disponível</p>';
+        } catch (error) {
+            console.error('Erro ao carregar histórico:', error);
+        }
+    }
+</script>
+
+<style>
+    .markdown-preview {
+        padding: 15px;
+        border: 1px solid #e0e0e0;
+        border-radius: 4px;
+        background-color: #f9f9f9;
+        min-height: 200px;
+    }
+</style>
+{% endblock %}

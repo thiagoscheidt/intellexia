@@ -1,0 +1,221 @@
+{% extends "layout.html" %}
+
+{% block title %}FAP Review - Revisão de Petição Inicial FAP{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">
+                    <i class="fas fa-file-contract"></i> FAP Review
+                </h1>
+                <p class="text-muted">Revisão de Petição Inicial FAP com Agentes de IA</p>
+            </div>
+            <div class="col-sm-6">
+                <div class="float-sm-right">
+                    <a href="{{ url_for('fap_review.revision') }}" class="btn btn-primary">
+                        <i class="fas fa-upload"></i> Nova Revisão
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="content">
+    <div class="container-fluid">
+        <!-- Estatísticas -->
+        <div class="row">
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-info">
+                    <div class="inner">
+                        <h3>{{ total_executions }}</h3>
+                        <p>Total de Execuções</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-chart-bar"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-success">
+                    <div class="inner">
+                        <h3>{{ completed_executions }}</h3>
+                        <p>Concluídas</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-check-circle"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-warning">
+                    <div class="inner">
+                        <h3>{{ total_executions - completed_executions - failed_executions }}</h3>
+                        <p>Em Processamento</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-hourglass-half"></i>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-3 col-6">
+                <div class="small-box bg-danger">
+                    <div class="inner">
+                        <h3>{{ failed_executions }}</h3>
+                        <p>Erros</p>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-exclamation-circle"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Últimas Execuções -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Últimas Execuções</h3>
+                    </div>
+                    <div class="card-body">
+                        {% if recent_executions %}
+                        <table class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>Tipo</th>
+                                    <th>Status</th>
+                                    <th>Documento</th>
+                                    <th>Data</th>
+                                    <th>Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for execution in recent_executions %}
+                                <tr>
+                                    <td>#{{ execution.id }}</td>
+                                    <td>
+                                        {% if execution.execution_type == 'revision' %}
+                                        <span class="badge bg-info">Revisão</span>
+                                        {% else %}
+                                        <span class="badge bg-primary">Treinamento</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if execution.status == 'completed' %}
+                                        <span class="badge bg-success">Concluída</span>
+                                        {% elif execution.status == 'processing' %}
+                                        <span class="badge bg-warning">Processando</span>
+                                        {% elif execution.status == 'failed' %}
+                                        <span class="badge bg-danger">Erro</span>
+                                        {% else %}
+                                        <span class="badge bg-secondary">{{ execution.status }}</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ execution.main_document_filename }}</td>
+                                    <td>{{ execution.created_at | date_sp }}</td>
+                                    <td>
+                                        <a href="{{ url_for('fap_review.revision_result', execution_id=execution.id) }}"
+                                            class="btn btn-sm btn-info">
+                                            <i class="fas fa-eye"></i>
+                                        </a>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                        {% else %}
+                        <p class="text-muted text-center py-3">Nenhuma execução ainda</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Informações dos Agentes -->
+        <div class="row mt-4">
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Agente Revisor</h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row">
+                            <dt class="col-sm-6">Status:</dt>
+                            <dd class="col-sm-6">
+                                {% if setting.reviewer_enabled %}
+                                <span class="badge bg-success">Ativo</span>
+                                {% else %}
+                                <span class="badge bg-danger">Inativo</span>
+                                {% endif %}
+                            </dd>
+                            <dt class="col-sm-6">Modelo:</dt>
+                            <dd class="col-sm-6">{{ setting.reviewer_model }}</dd>
+                            <dt class="col-sm-6">Temperatura:</dt>
+                            <dd class="col-sm-6">{{ setting.reviewer_temperature }}</dd>
+                        </dl>
+                        <p class="text-muted small">
+                            Responsável por revisar petições iniciais e identificar inconsistências
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-6">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Agente de Treinamento</h3>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row">
+                            <dt class="col-sm-6">Status:</dt>
+                            <dd class="col-sm-6">
+                                {% if setting.training_enabled %}
+                                <span class="badge bg-success">Ativo</span>
+                                {% else %}
+                                <span class="badge bg-danger">Inativo</span>
+                                {% endif %}
+                            </dd>
+                            <dt class="col-sm-6">Modelo:</dt>
+                            <dd class="col-sm-6">{{ setting.training_model }}</dd>
+                            <dt class="col-sm-6">Temperatura:</dt>
+                            <dd class="col-sm-6">{{ setting.training_temperature }}</dd>
+                        </dl>
+                        <p class="text-muted small">
+                            Responsável por manter e evoluir a base de conhecimento
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Links Rápidos -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Ações Rápidas</h3>
+                    </div>
+                    <div class="card-body">
+                        <a href="{{ url_for('fap_review.revision') }}" class="btn btn-primary btn-lg mr-2">
+                            <i class="fas fa-file-upload"></i> Revisar Petição
+                        </a>
+                        <a href="{{ url_for('fap_review.training') }}" class="btn btn-info btn-lg mr-2">
+                            <i class="fas fa-graduation-cap"></i> Treinamento
+                        </a>
+                        <a href="{{ url_for('fap_review.settings') }}" class="btn btn-warning btn-lg mr-2">
+                            <i class="fas fa-cog"></i> Configurações
+                        </a>
+                        <a href="{{ url_for('fap_review.audit_logs') }}" class="btn btn-secondary btn-lg">
+                            <i class="fas fa-clipboard-list"></i> Auditoria
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

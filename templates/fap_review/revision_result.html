@@ -1,0 +1,414 @@
+{% extends "layout.html" %}
+
+{% block title %}Resultado da Revisão - FAP Review{% endblock %}
+
+{% block content %}
+<div class="content-header">
+    <div class="container-fluid">
+        <div class="row mb-2">
+            <div class="col-sm-6">
+                <h1 class="m-0">
+                    <i class="fas fa-file-check"></i> Resultado da Revisão
+                </h1>
+            </div>
+            <div class="col-sm-6">
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb float-sm-right">
+                        <li class="breadcrumb-item"><a href="{{ url_for('fap_review.index') }}">FAP Review</a></li>
+                        <li class="breadcrumb-item active">Resultado #{{ execution.id }}</li>
+                    </ol>
+                </nav>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="content">
+    <div class="container-fluid">
+        <!-- Informações da Execução -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Informações da Execução</h3>
+                        <div class="card-tools">
+                            <a href="{{ url_for('fap_review.revision') }}" class="btn btn-sm btn-primary">
+                                <i class="fas fa-plus"></i> Nova Revisão
+                            </a>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <div class="row">
+                            <div class="col-md-3">
+                                <p><strong>ID da Execução:</strong> #{{ execution.id }}</p>
+                                <p><strong>Tipo:</strong>
+                                    {% if execution.execution_type == 'revision' %}
+                                    <span class="badge bg-info">Revisão</span>
+                                    {% else %}
+                                    <span class="badge bg-primary">Treinamento</span>
+                                    {% endif %}
+                                </p>
+                            </div>
+                            <div class="col-md-3">
+                                <p><strong>Status:</strong>
+                                    {% if execution.status == 'completed' %}
+                                    <span class="badge bg-success">Concluída</span>
+                                    {% elif execution.status == 'processing' %}
+                                    <span class="badge bg-warning">Processando</span>
+                                    {% elif execution.status == 'failed' %}
+                                    <span class="badge bg-danger">Erro</span>
+                                    {% else %}
+                                    <span class="badge bg-secondary">{{ execution.status }}</span>
+                                    {% endif %}
+                                </p>
+                                <p><strong>Documento:</strong> {{ execution.main_document_filename }}</p>
+                            </div>
+                            <div class="col-md-3">
+                                <p><strong>Data:</strong> {{ execution.created_at | datetime_sp }}</p>
+                                <p><strong>Auxiliares:</strong> {{ execution.auxiliary_documents_count }}</p>
+                            </div>
+                            <div class="col-md-3">
+                                {% if execution.tokens_used %}
+                                <p><strong>Tokens:</strong> {{ execution.tokens_used }}</p>
+                                <p><strong>Custo:</strong> ${{ execution.cost_usd }}</p>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {% if execution.status == 'completed' and result_data %}
+        <!-- Resumo Executivo -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-info">
+                        <h3 class="card-title">
+                            <i class="fas fa-chart-pie"></i> Resumo Executivo
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        {% if result_data.executive_summary %}
+                        <div class="row">
+                            <div class="col-md-3">
+                                <div class="small-box bg-info">
+                                    <div class="inner">
+                                        <h3>{{ result_data.executive_summary.total_findings }}</h3>
+                                        <p>Total de Achados</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="small-box bg-danger">
+                                    <div class="inner">
+                                        <h3>{{ result_data.executive_summary.critical_findings }}</h3>
+                                        <p>Achados Críticos</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="small-box bg-warning">
+                                    <div class="inner">
+                                        <h3>{{ result_data.executive_summary.moderate_findings }}</h3>
+                                        <p>Achados Moderados</p>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="small-box bg-success">
+                                    <div class="inner">
+                                        <h3>{{ result_data.executive_summary.formal_findings }}</h3>
+                                        <p>Achados Formais</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {% if result_data.executive_summary.main_legal_risks %}
+                        <div class="mt-3">
+                            <h5>Principais Riscos Jurídicos:</h5>
+                            <ul>
+                                {% for risk in result_data.executive_summary.main_legal_risks %}
+                                <li>{{ risk }}</li>
+                                {% endfor %}
+                            </ul>
+                        </div>
+                        {% endif %}
+
+                        <p class="mt-3"><strong>Prioridade de Correção:</strong>
+                            {{ result_data.executive_summary.correction_priority }}</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Teses Identificadas -->
+        {% if result_data.theses %}
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-book"></i> Teses Identificadas
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Tese</th>
+                                    <th>Benefício</th>
+                                    <th>Enquadramento</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for thesis in result_data.theses %}
+                                <tr>
+                                    <td>{{ thesis.thesis }}</td>
+                                    <td>{{ thesis.benefit_number or '-' }}</td>
+                                    <td>{{ thesis.classification or '-' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Achados -->
+        {% if result_data.findings %}
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-exclamation-triangle"></i> Achados por Categoria
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        {% for finding in result_data.findings %}
+                        <div class="mb-3 p-3 border-left"
+                            style="border-left: 4px solid {% if finding.severity == 'CRÍTICO' %}#dc3545{% elif finding.severity == 'MODERADO' %}#ffc107{% else %}#17a2b8{% endif %}">
+                            <div class="row">
+                                <div class="col-md-1">
+                                    {% if finding.severity == 'CRÍTICO' %}
+                                    <span class="badge bg-danger badge-lg">🔴</span>
+                                    {% elif finding.severity == 'MODERADO' %}
+                                    <span class="badge bg-warning badge-lg">🟡</span>
+                                    {% else %}
+                                    <span class="badge bg-info badge-lg">🔵</span>
+                                    {% endif %}
+                                </div>
+                                <div class="col-md-11">
+                                    <h5>{{ finding.description }}</h5>
+                                    {% if finding.location %}
+                                    <p><strong>Localização:</strong> {{ finding.location }}</p>
+                                    {% endif %}
+                                    {% if finding.correction %}
+                                    <p><strong>Correção:</strong> <code>{{ finding.correction }}</code></p>
+                                    {% endif %}
+                                    {% if finding.manual_reference %}
+                                    <p><strong>Manual:</strong> {{ finding.manual_reference }}</p>
+                                    {% endif %}
+                                    {% if finding.is_new_pattern %}
+                                    <p><span class="badge bg-warning">Padrão Novo</span></p>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Documentos em Falta -->
+        {% if result_data.missing_documents %}
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-folder-open"></i> Documentos Obrigatórios em Falta
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr>
+                                    <th>Documento</th>
+                                    <th>Tese Relacionada</th>
+                                    <th>Referência do Manual</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for doc in result_data.missing_documents %}
+                                <tr>
+                                    <td>{{ doc.document_type }}</td>
+                                    <td>{{ doc.thesis or '-' }}</td>
+                                    <td>{{ doc.manual_reference or '-' }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Padrões Novos -->
+        {% if result_data.new_patterns %}
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header bg-warning">
+                        <h3 class="card-title">
+                            <i class="fas fa-star"></i> Padrões Novos Identificados
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        {% for pattern in result_data.new_patterns %}
+                        <div class="mb-3 p-3 bg-light rounded">
+                            <h5>{{ pattern.pattern_description }}</h5>
+                            <p><strong>Comportamento Recorrente:</strong> {{ pattern.recurrence }}</p>
+                            <p><strong>Proposta de Atualização:</strong> {{ pattern.suggested_update }}</p>
+                            {% if pattern.section %}
+                            <p><strong>Seção do Manual:</strong> {{ pattern.section }}</p>
+                            {% endif %}
+                        </div>
+                        {% endfor %}
+
+                        <div class="alert alert-info mt-3">
+                            <i class="fas fa-info-circle"></i>
+                            Estes padrões foram identificados e encaminhados ao <strong>Agente de Treinamento</strong>
+                            para possível atualização do manual.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Análise Comparativa -->
+        {% if result_data.comparative_changes %}
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">
+                            <i class="fas fa-arrows-alt-h"></i> Alterações Identificadas (Análise Comparativa)
+                        </h3>
+                    </div>
+                    <div class="card-body">
+                        {% for change in result_data.comparative_changes %}
+                        <div class="mb-4 p-3 border rounded">
+                            <h5>Alteração {{ loop.index }}</h5>
+                            <div class="row">
+                                <div class="col-md-6">
+                                    <h6>Original:</h6>
+                                    <pre class="bg-light p-2"
+                                        style="border-left: 3px solid #dc3545">{{ change.original_excerpt }}</pre>
+                                </div>
+                                <div class="col-md-6">
+                                    <h6>Corrigido:</h6>
+                                    <pre class="bg-light p-2"
+                                        style="border-left: 3px solid #28a745">{{ change.corrected_excerpt }}</pre>
+                                </div>
+                            </div>
+                            <p><strong>Motivo:</strong> {{ change.correction_reason }}</p>
+                            <p>
+                                {% if change.pattern_in_manual %}
+                                <span class="badge bg-success">Padrão no Manual</span>
+                                {% endif %}
+                                {% if change.is_new_pattern %}
+                                <span class="badge bg-warning">Padrão Novo</span>
+                                {% endif %}
+                            </p>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        {% elif execution.status == 'failed' %}
+        <!-- Erro na Execução -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="alert alert-danger">
+                    <h4 class="alert-heading">
+                        <i class="fas fa-exclamation-circle"></i> Erro na Execução
+                    </h4>
+                    <p>{{ execution.error_message }}</p>
+                    <hr>
+                    <a href="{{ url_for('fap_review.revision') }}" class="btn btn-primary btn-sm">
+                        <i class="fas fa-redo"></i> Tentar Novamente
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        {% elif execution.status == 'processing' %}
+        <!-- Processando -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="alert alert-info">
+                    <h4 class="alert-heading">
+                        <i class="fas fa-spinner fa-spin"></i> Processando
+                    </h4>
+                    <p>A revisão está sendo processada. Esta página será atualizada automaticamente.</p>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            setTimeout(function () {
+                location.reload();
+            }, 3000);
+        </script>
+
+        {% else %}
+        <!-- Pendente -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="alert alert-warning">
+                    <h4 class="alert-heading">
+                        <i class="fas fa-clock"></i> Pendente
+                    </h4>
+                    <p>A revisão está pendente de processamento.</p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Ações -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="card">
+                    <div class="card-body">
+                        <a href="{{ url_for('fap_review.revision') }}" class="btn btn-primary">
+                            <i class="fas fa-plus"></i> Nova Revisão
+                        </a>
+                        <a href="{{ url_for('fap_review.index') }}" class="btn btn-secondary">
+                            <i class="fas fa-home"></i> Dashboard
+                        </a>
+                        {% if execution.status == 'completed' %}
+                        <button type="button" class="btn btn-info" onclick="window.print()">
+                            <i class="fas fa-print"></i> Imprimir
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
