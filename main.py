@@ -102,6 +102,15 @@ def from_json_filter(value):
         return {}
 
 
+# Registrar filtro Jinja para extrair basename de caminho
+@app.template_filter('basename')
+def basename_filter(value):
+    """Extrai o nome do arquivo de um caminho completo"""
+    if not value:
+        return ''
+    return os.path.basename(value)
+
+
 
 
 if __name__ == '__main__':

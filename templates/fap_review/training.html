@@ -1,220 +1,282 @@
 {% extends "layout/base.html" %}
 
-{% block title %}Treinamento - FAP Review{% endblock %}
+{% from "partials/page_hero.html" import page_hero %}
+
+{% set page_title = "Treinamento e Evolução" %}
+
+{% block title %}{{ page_title }} - FAP Review - IntellexIA{% endblock %}
+
+{% block extra_css %}
+<style>
+  .table td,
+  .table th {
+    vertical-align: middle;
+  }
+
+  .info-card {
+    border: 1px solid rgba(15, 23, 42, .07);
+    border-radius: .85rem;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, .06);
+  }
+
+  .info-card .card-header {
+    background: transparent;
+    border-bottom: 1px solid rgba(15, 23, 42, .07);
+    font-weight: 700;
+    font-size: .85rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #6c7a8d;
+  }
+
+  .policy-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: .55rem 0;
+    border-bottom: 1px solid var(--bs-border-color);
+  }
+
+  .policy-row:last-child {
+    border-bottom: none;
+  }
+
+  .policy-label {
+    font-size: .88rem;
+    color: var(--bs-secondary-color);
+  }
+
+  .training-row {
+    transition: background-color 0.2s ease;
+  }
+
+  .training-row:hover {
+    background-color: var(--bs-secondary-bg);
+  }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="content-header">
-    <div class="container-fluid">
-        <div class="row mb-2">
-            <div class="col-sm-6">
-                <h1 class="m-0">
-                    <i class="fas fa-graduation-cap"></i> Treinamento e Evolução
-                </h1>
+<div class="fap-training-page">
+  {% call page_hero(title=page_title, subtitle='Gerencie o agente de treinamento e evolução de conhecimento', icon='bi bi-mortarboard') %}
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-0 bg-transparent small">
+      <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('fap_review.index') }}"><i class="bi bi-file-earmark-check"></i> FAP Review</a></li>
+      <li class="breadcrumb-item active">{{ page_title }}</li>
+    </ol>
+  </nav>
+  {% endcall %}
+
+  <div class="container-fluid">
+    <div class="row g-4">
+
+      <!-- Informações do Agente -->
+      <div class="col-lg-8">
+        <div class="card info-card h-100">
+          <div class="card-header d-flex align-items-center gap-2">
+            <i class="bi bi-robot text-primary"></i>
+            Agente de Treinamento e Evolução
+          </div>
+          <div class="card-body">
+            <div class="d-flex flex-wrap gap-3 mb-3">
+              <div>
+                <div class="text-muted small mb-1">Status</div>
+                {% if setting.training_enabled %}
+                <span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2">
+                  <i class="bi bi-check-circle me-1"></i>Ativo
+                </span>
+                {% else %}
+                <span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2">
+                  <i class="bi bi-x-circle me-1"></i>Inativo
+                </span>
+                {% endif %}
+              </div>
+              <div>
+                <div class="text-muted small mb-1">Modelo LLM</div>
+                <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3 py-2">
+                  <i class="bi bi-cpu me-1"></i>{{ setting.training_model }}
+                </span>
+              </div>
+              <div>
+                <div class="text-muted small mb-1">Temperatura</div>
+                <span class="badge rounded-pill bg-info-subtle text-info-emphasis border border-info-subtle px-3 py-2">
+                  <i class="bi bi-thermometer me-1"></i>{{ setting.training_temperature }}
+                </span>
+              </div>
             </div>
-            <div class="col-sm-6">
-                <nav aria-label="breadcrumb">
-                    <ol class="breadcrumb float-sm-right">
-                        <li class="breadcrumb-item"><a href="{{ url_for('fap_review.index') }}">FAP Review</a></li>
-                        <li class="breadcrumb-item active">Treinamento</li>
-                    </ol>
-                </nav>
+
+            <hr class="my-3">
+
+            <h6 class="text-muted text-uppercase small fw-bold mb-3"><i class="bi bi-list-task me-1"></i>Responsabilidades</h6>
+            <ul class="list-unstyled">
+              <li class="d-flex align-items-center gap-2 mb-2"><i class="bi bi-arrow-right-short text-primary"></i> Manter e evoluir a base de conhecimento</li>
+              <li class="d-flex align-items-center gap-2 mb-2"><i class="bi bi-arrow-right-short text-primary"></i> Consolidar padrões identificados pelo Revisor</li>
+              <li class="d-flex align-items-center gap-2 mb-2"><i class="bi bi-arrow-right-short text-primary"></i> Atualizar o Manual de Revisão</li>
+              <li class="d-flex align-items-center gap-2 mb-2"><i class="bi bi-arrow-right-short text-primary"></i> Atualizar Casos de Referência</li>
+              <li class="d-flex align-items-center gap-2 mb-2"><i class="bi bi-arrow-right-short text-primary"></i> Gerar novas versões oficiais</li>
+            </ul>
+
+            <hr class="my-3">
+
+            <h6 class="text-muted text-uppercase small fw-bold mb-3"><i class="bi bi-toggles me-1"></i>Políticas de Atualização</h6>
+            <div>
+              <div class="policy-row">
+                <span class="policy-label">Atualizar Manual Automaticamente</span>
+                {% if setting.auto_update_manual %}
+                <span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-2">Ativado</span>
+                {% else %}
+                <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-2">Desativado</span>
+                {% endif %}
+              </div>
+              <div class="policy-row">
+                <span class="policy-label">Atualizar Casos Automaticamente</span>
+                {% if setting.auto_update_cases %}
+                <span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-2">Ativado</span>
+                {% else %}
+                <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-2">Desativado</span>
+                {% endif %}
+              </div>
+              <div class="policy-row">
+                <span class="policy-label">Requer Aprovação Antes de Publicar</span>
+                {% if setting.require_approval_before_publish %}
+                <span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2">Ativado</span>
+                {% else %}
+                <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-2">Desativado</span>
+                {% endif %}
+              </div>
+              <div class="policy-row">
+                <span class="policy-label">Aprendizado Contínuo</span>
+                {% if setting.enable_continuous_learning %}
+                <span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-2">Ativado</span>
+                {% else %}
+                <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-2">Desativado</span>
+                {% endif %}
+              </div>
             </div>
+          </div>
         </div>
+      </div>
+
+      <!-- Como Funciona -->
+      <div class="col-lg-4">
+        <div class="card info-card h-100" style="border-left: 4px solid #0d6efd;">
+          <div class="card-header d-flex align-items-center gap-2">
+            <i class="bi bi-lightbulb text-warning"></i>
+            Como Funciona
+          </div>
+          <div class="card-body">
+            <ol class="ps-3">
+              <li class="mb-2 small">Revisor identifica padrões</li>
+              <li class="mb-2 small">Treinamento recebe achados</li>
+              <li class="mb-2 small">Valida padrões novos</li>
+              <li class="mb-2 small">Atualiza Manual (v X.X)</li>
+              <li class="mb-2 small">Atualiza Casos de Referência</li>
+              <li class="mb-2 small">Gera nova versão</li>
+              <li class="mb-2 small">Aguarda aprovação (opcional)</li>
+              <li class="mb-2 small">Publica atualizações</li>
+            </ol>
+            <div class="mt-3">
+              <a href="{{ url_for('fap_review.settings') }}" class="btn btn-sm btn-outline-primary w-100">
+                <i class="bi bi-sliders me-1"></i> Ir para Configurações
+              </a>
+            </div>
+          </div>
+        </div>
+      </div>
+
     </div>
-</div>
 
-<div class="content">
-    <div class="container-fluid">
-        <!-- Informações do Agente de Treinamento -->
-        <div class="row">
-            <div class="col-lg-8">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">
-                            <i class="fas fa-robot"></i> Agente de Treinamento e Evolução
-                        </h3>
-                    </div>
-                    <div class="card-body">
-                        <p><strong>Status:</strong>
-                            {% if setting.training_enabled %}
-                            <span class="badge bg-success">Ativo</span>
-                            {% else %}
-                            <span class="badge bg-danger">Inativo</span>
-                            {% endif %}
-                        </p>
-                        <p><strong>Modelo LLM:</strong> {{ setting.training_model }}</p>
-                        <p><strong>Temperatura:</strong> {{ setting.training_temperature }}</p>
-
-                        <hr>
-
-                        <h5>Responsabilidades:</h5>
-                        <ul>
-                            <li>Manter e evoluir a base de conhecimento</li>
-                            <li>Consolidar padrões identificados pelo Revisor</li>
-                            <li>Atualizar o Manual de Revisão</li>
-                            <li>Atualizar Casos de Referência</li>
-                            <li>Gerar novas versões oficiais</li>
-                        </ul>
-
-                        <h5 class="mt-3">Políticas de Atualização:</h5>
-                        <ul>
-                            <li>
-                                <strong>Atualizar Manual Automaticamente:</strong>
-                                {% if setting.auto_update_manual %}
-                                <span class="badge bg-success">Ativado</span>
-                                {% else %}
-                                <span class="badge bg-secondary">Desativado</span>
-                                {% endif %}
-                            </li>
-                            <li>
-                                <strong>Atualizar Casos Automaticamente:</strong>
-                                {% if setting.auto_update_cases %}
-                                <span class="badge bg-success">Ativado</span>
-                                {% else %}
-                                <span class="badge bg-secondary">Desativado</span>
-                                {% endif %}
-                            </li>
-                            <li>
-                                <strong>Requer Aprovação Antes de Publicar:</strong>
-                                {% if setting.require_approval_before_publish %}
-                                <span class="badge bg-success">Ativado</span>
-                                {% else %}
-                                <span class="badge bg-secondary">Desativado</span>
-                                {% endif %}
-                            </li>
-                            <li>
-                                <strong>Aprendizado Contínuo:</strong>
-                                {% if setting.enable_continuous_learning %}
-                                <span class="badge bg-success">Ativado</span>
-                                {% else %}
-                                <span class="badge bg-secondary">Desativado</span>
-                                {% endif %}
-                            </li>
-                        </ul>
-                    </div>
-                </div>
-            </div>
-
-            <div class="col-lg-4">
-                <div class="card bg-info">
-                    <div class="card-header bg-info">
-                        <h3 class="card-title text-white">
-                            <i class="fas fa-lightbulb"></i> Como Funciona
-                        </h3>
-                    </div>
-                    <div class="card-body text-white">
-                        <ol>
-                            <li>Revisor identifica padrões</li>
-                            <li>Treinamento recebe achados</li>
-                            <li>Valida padrões novos</li>
-                            <li>Atualiza Manual (v X.X)</li>
-                            <li>Atualiza Casos de Referência</li>
-                            <li>Gera nova versão</li>
-                            <li>Aguarda aprovação (opcional)</li>
-                            <li>Publica atualizações</li>
-                        </ol>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Últimas Execuções de Treinamento -->
-        <div class="row mt-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Histórico de Treinamento</h3>
-                    </div>
-                    <div class="card-body">
-                        {% if recent_training %}
-                        <div class="table-responsive">
-                            <table class="table table-hover table-sm">
-                                <thead>
-                                    <tr>
-                                        <th>ID</th>
-                                        <th>Status</th>
-                                        <th>Padrões Processados</th>
-                                        <th>Manual</th>
-                                        <th>Casos</th>
-                                        <th>Data</th>
-                                        <th>Ações</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for execution in recent_training %}
-                                    <tr>
-                                        <td>#{{ execution.id }}</td>
-                                        <td>
-                                            {% if execution.status == 'completed' %}
-                                            <span class="badge bg-success">Concluída</span>
-                                            {% elif execution.status == 'processing' %}
-                                            <span class="badge bg-warning">Processando</span>
-                                            {% elif execution.status == 'failed' %}
-                                            <span class="badge bg-danger">Erro</span>
-                                            {% else %}
-                                            <span class="badge bg-secondary">{{ execution.status }}</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>{{ execution.auxiliary_documents_count }}</td>
-                                        <td>
-                                            {% if execution.result_json %}
-                                            {% set result = execution.result_json | from_json %}
-                                            {% if result.manual_updates_generated %}
-                                            <span class="badge bg-info">Sim</span>
-                                            {% else %}
-                                            <span class="badge bg-secondary">Não</span>
-                                            {% endif %}
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% if execution.result_json %}
-                                            {% set result = execution.result_json | from_json %}
-                                            {% if result.case_reference_generated %}
-                                            <span class="badge bg-info">Sim</span>
-                                            {% else %}
-                                            <span class="badge bg-secondary">Não</span>
-                                            {% endif %}
-                                            {% endif %}
-                                        </td>
-                                        <td>{{ execution.created_at.strftime('%d/%m/%Y %H:%M:%S') }}</td>
-                                        <td>
-                                            <a href="{{ url_for('fap_review.revision_result', execution_id=execution.id) }}"
-                                                class="btn btn-sm btn-info">
-                                                <i class="fas fa-eye"></i>
-                                            </a>
-                                        </td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                        </div>
+    <!-- Histórico de Treinamento -->
+    <div class="row mt-4">
+      <div class="col-12">
+        <div class="card info-card">
+          <div class="card-header d-flex align-items-center gap-2">
+            <i class="bi bi-clock-history text-primary"></i>
+            Histórico de Treinamento
+          </div>
+          <div class="card-body p-0">
+            {% if recent_training %}
+            <div class="table-responsive">
+              <table class="table table-hover mb-0">
+                <thead class="table-light">
+                  <tr>
+                    <th class="ps-3">ID</th>
+                    <th>Status</th>
+                    <th>Padrões</th>
+                    <th>Manual</th>
+                    <th>Casos</th>
+                    <th>Data</th>
+                    <th class="pe-3">Ações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {% for execution in recent_training %}
+                  <tr class="training-row">
+                    <td class="ps-3"><span class="text-muted small">#{{ execution.id }}</span></td>
+                    <td>
+                      {% if execution.status == 'completed' %}
+                      <span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-2 py-1">
+                        <i class="bi bi-check-circle me-1"></i>Concluída
+                      </span>
+                      {% elif execution.status == 'processing' %}
+                      <span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-1">
+                        <i class="bi bi-hourglass-split me-1"></i>Processando
+                      </span>
+                      {% elif execution.status == 'failed' %}
+                      <span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-2 py-1">
+                        <i class="bi bi-x-circle me-1"></i>Erro
+                      </span>
+                      {% else %}
+                      <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-2 py-1">{{ execution.status }}</span>
+                      {% endif %}
+                    </td>
+                    <td>{{ execution.auxiliary_documents_count }}</td>
+                    <td>
+                      {% if execution.result_json %}
+                        {% set result = execution.result_json | from_json %}
+                        {% if result.manual_updates_generated %}
+                        <span class="badge rounded-pill bg-info-subtle text-info-emphasis border border-info-subtle px-2">Sim</span>
                         {% else %}
-                        <p class="text-muted text-center py-3">Nenhuma execução de treinamento ainda</p>
+                        <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-2">Não</span>
                         {% endif %}
-                    </div>
-                </div>
+                      {% else %}
+                        <span class="text-muted small">-</span>
+                      {% endif %}
+                    </td>
+                    <td>
+                      {% if execution.result_json %}
+                        {% set result = execution.result_json | from_json %}
+                        {% if result.case_reference_generated %}
+                        <span class="badge rounded-pill bg-info-subtle text-info-emphasis border border-info-subtle px-2">Sim</span>
+                        {% else %}
+                        <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-2">Não</span>
+                        {% endif %}
+                      {% else %}
+                        <span class="text-muted small">-</span>
+                      {% endif %}
+                    </td>
+                    <td><small class="text-muted">{{ execution.created_at.strftime('%d/%m/%Y %H:%M') }}</small></td>
+                    <td class="pe-3">
+                      <a href="{{ url_for('fap_review.revision_result', execution_id=execution.id) }}" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-eye"></i>
+                      </a>
+                    </td>
+                  </tr>
+                  {% endfor %}
+                </tbody>
+              </table>
             </div>
-        </div>
-
-        <!-- Gerenciamento Manual -->
-        <div class="row mt-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Gerenciamento Manual</h3>
-                    </div>
-                    <div class="card-body">
-                        <p class="text-muted">
-                            Use a seção de Configurações para editar o manual, casos de referência
-                            e outras políticas de treinamento.
-                        </p>
-                        <a href="{{ url_for('fap_review.settings') }}" class="btn btn-primary">
-                            <i class="fas fa-cog"></i> Ir para Configurações
-                        </a>
-                    </div>
-                </div>
+            {% else %}
+            <div class="text-center py-5 text-muted">
+              <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+              Nenhuma execução de treinamento ainda
             </div>
+            {% endif %}
+          </div>
         </div>
+      </div>
     </div>
+  </div>
 </div>
 {% endblock %}

@@ -1,221 +1,402 @@
 {% extends "layout/base.html" %}
 
-{% block title %}FAP Review - Revisão de Petição Inicial FAP{% endblock %}
+{% from "partials/page_hero.html" import page_hero %}
+
+{% set page_title = "FAP Review - Revisão de Petições com IA" %}
+
+{% block title %}{{ page_title }} - IntellexIA{% endblock %}
+
+{% block extra_css %}
+<style>
+    .fap-review-page {
+        animation: fadeIn 0.3s ease-in;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+        }
+
+        to {
+            opacity: 1;
+        }
+    }
+
+    .stat-cards {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: .75rem;
+        margin-bottom: 1.5rem;
+    }
+
+    @media (max-width: 1200px) {
+        .stat-cards {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    @media (max-width: 600px) {
+        .stat-cards {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .stat-card {
+        position: relative;
+        overflow: hidden;
+        background: var(--bs-body-bg);
+        border: 1px solid rgba(15, 23, 42, .07);
+        border-radius: .85rem;
+        box-shadow: 0 4px 16px rgba(15, 23, 42, .06);
+        padding: .85rem 1rem .85rem 1.2rem;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .stat-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 6px 20px rgba(15, 23, 42, .10);
+    }
+
+    .stat-card::before {
+        content: "";
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 5px;
+        background: var(--sc-color, #0d6efd);
+        border-radius: 4px 0 0 4px;
+    }
+
+    .stat-card .sc-icon {
+        width: 2.1rem;
+        height: 2.1rem;
+        background: var(--sc-soft, rgba(13, 110, 253, .10));
+        color: var(--sc-color, #0d6efd);
+        border-radius: .55rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .9rem;
+        flex-shrink: 0;
+    }
+
+    .stat-card .sc-label {
+        font-size: .68rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: #6c7a8d;
+        margin-bottom: .1rem;
+    }
+
+    .stat-card .sc-value {
+        font-size: 1.55rem;
+        font-weight: 800;
+        line-height: 1;
+        color: var(--bs-emphasis-color);
+    }
+
+    .sc-sub {
+        display: flex;
+        gap: .6rem;
+        margin-top: .3rem;
+        flex-wrap: wrap;
+    }
+
+    .sc-sub-item {
+        display: inline-flex;
+        flex-direction: column;
+    }
+
+    .sc-sub-label {
+        font-size: .6rem;
+        color: #9aa5b4;
+        text-transform: uppercase;
+        letter-spacing: .03em;
+    }
+
+    .sc-sub-value {
+        font-size: .8rem;
+        font-weight: 700;
+        color: var(--sc-color, #0d6efd);
+    }
+
+    .agent-config-row {
+        transition: background-color 0.2s ease;
+    }
+
+    .agent-config-row:hover {
+        background-color: var(--bs-secondary-bg);
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="content-header">
-    <div class="container-fluid">
-        <div class="row mb-2">
-            <div class="col-sm-6">
-                <h1 class="m-0">
-                    <i class="fas fa-file-contract"></i> FAP Review
-                </h1>
-                <p class="text-muted">Revisão de Petição Inicial FAP com Agentes de IA</p>
-            </div>
-            <div class="col-sm-6">
-                <div class="float-sm-right">
-                    <a href="{{ url_for('fap_review.revision') }}" class="btn btn-primary">
-                        <i class="fas fa-upload"></i> Nova Revisão
-                    </a>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+<div class="fap-review-page">
+    {% call page_hero(title=page_title, subtitle='Controle centralizado de revisão e análise de petições iniciais com
+    agentes de IA', icon='bi bi-file-earmark-check') %}
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0 bg-transparent small">
+            <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i>
+                    Home</a></li>
+            <li class="breadcrumb-item active"><i class="bi bi-file-earmark-check"></i> FAP Review</li>
+        </ol>
+    </nav>
+    {% endcall %}
 
-<div class="content">
-    <div class="container-fluid">
-        <!-- Estatísticas -->
-        <div class="row">
-            <div class="col-lg-3 col-6">
-                <div class="small-box bg-info">
-                    <div class="inner">
-                        <h3>{{ total_executions }}</h3>
-                        <p>Total de Execuções</p>
-                    </div>
-                    <div class="icon">
-                        <i class="fas fa-chart-bar"></i>
-                    </div>
-                </div>
-            </div>
-            <div class="col-lg-3 col-6">
-                <div class="small-box bg-success">
-                    <div class="inner">
-                        <h3>{{ completed_executions }}</h3>
-                        <p>Concluídas</p>
-                    </div>
-                    <div class="icon">
-                        <i class="fas fa-check-circle"></i>
+    <div class="page-content">
+        <!-- Estatísticas em Grid -->
+        <div class="stat-cards">
+            <!-- Total de Execuções -->
+            <div class="stat-card" style="--sc-color: #0d6efd; --sc-soft: rgba(13, 110, 253, .10);">
+                <div class="sc-icon"><i class="bi bi-bar-chart"></i></div>
+                <div class="sc-label">Total</div>
+                <div class="sc-value">{{ total_executions }}</div>
+                <div class="sc-sub">
+                    <div class="sc-sub-item">
+                        <span class="sc-sub-label">Execuções</span>
                     </div>
                 </div>
             </div>
-            <div class="col-lg-3 col-6">
-                <div class="small-box bg-warning">
-                    <div class="inner">
-                        <h3>{{ total_executions - completed_executions - failed_executions }}</h3>
-                        <p>Em Processamento</p>
-                    </div>
-                    <div class="icon">
-                        <i class="fas fa-hourglass-half"></i>
+
+            <!-- Concluídas -->
+            <div class="stat-card" style="--sc-color: #198754; --sc-soft: rgba(25, 135, 84, .10);">
+                <div class="sc-icon"><i class="bi bi-check-circle"></i></div>
+                <div class="sc-label">Concluídas</div>
+                <div class="sc-value">{{ completed_executions }}</div>
+                <div class="sc-sub">
+                    <div class="sc-sub-item">
+                        <span class="sc-sub-label">Sucesso</span>
+                        <span class="sc-sub-value" style="--sc-color: #198754;">{{ (completed_executions /
+                            total_executions * 100)|round if total_executions else 0 }}%</span>
                     </div>
                 </div>
             </div>
-            <div class="col-lg-3 col-6">
-                <div class="small-box bg-danger">
-                    <div class="inner">
-                        <h3>{{ failed_executions }}</h3>
-                        <p>Erros</p>
+
+            <!-- Em Processamento -->
+            <div class="stat-card" style="--sc-color: #ffc107; --sc-soft: rgba(255, 193, 7, .10);">
+                <div class="sc-icon"><i class="bi bi-hourglass-split"></i></div>
+                <div class="sc-label">Processando</div>
+                <div class="sc-value">{{ total_executions - completed_executions - failed_executions }}</div>
+                <div class="sc-sub">
+                    <div class="sc-sub-item">
+                        <span class="sc-sub-label">Pendentes</span>
                     </div>
-                    <div class="icon">
-                        <i class="fas fa-exclamation-circle"></i>
+                </div>
+            </div>
+
+            <!-- Erros -->
+            <div class="stat-card" style="--sc-color: #dc3545; --sc-soft: rgba(220, 53, 69, .10);">
+                <div class="sc-icon"><i class="bi bi-exclamation-circle"></i></div>
+                <div class="sc-label">Erros</div>
+                <div class="sc-value">{{ failed_executions }}</div>
+                <div class="sc-sub">
+                    <div class="sc-sub-item">
+                        <span class="sc-sub-label">Falhas</span>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- Últimas Execuções -->
-        <div class="row">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Últimas Execuções</h3>
-                    </div>
-                    <div class="card-body">
-                        {% if recent_executions %}
-                        <table class="table table-striped table-hover">
-                            <thead>
+        <!-- Botões de Ação -->
+        <div class="mb-3">
+            <a href="{{ url_for('fap_review.revision') }}" class="btn btn-primary btn-lg">
+                <i class="bi bi-upload"></i> Nova Revisão
+            </a>
+            <a href="{{ url_for('fap_review.settings') }}" class="btn btn-outline-secondary btn-lg ms-2">
+                <i class="bi bi-sliders"></i> Configurações
+            </a>
+            <!-- Últimas Execuções -->
+            <div class="card">
+                <div class="card-header border-0">
+                    <h5 class="card-title mb-0"><i class="bi bi-clock-history me-2"></i> Últimas Execuções</h5>
+                </div>
+                <div class="card-body">
+                    {% if recent_executions %}
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0">
+                            <thead class="table-light">
                                 <tr>
-                                    <th>ID</th>
+                                    <th style="width: 60px;">ID</th>
                                     <th>Tipo</th>
                                     <th>Status</th>
                                     <th>Documento</th>
-                                    <th>Data</th>
-                                    <th>Ações</th>
+                                    <th style="width: 120px;">Data</th>
+                                    <th style="width: 80px;">Ações</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {% for execution in recent_executions %}
-                                <tr>
-                                    <td>#{{ execution.id }}</td>
+                                <tr class="agent-config-row">
+                                    <td><code>#{{ execution.id }}</code></td>
                                     <td>
                                         {% if execution.execution_type == 'revision' %}
-                                        <span class="badge bg-info">Revisão</span>
+                                        <span
+                                            class="badge rounded-pill bg-info-subtle text-info-emphasis border border-info-subtle">
+                                            <i class="bi bi-file-earmark-check me-1"></i> Revisão
+                                        </span>
                                         {% else %}
-                                        <span class="badge bg-primary">Treinamento</span>
+                                        <span
+                                            class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle">
+                                            <i class="bi bi-graduation-cap me-1"></i> Treinamento
+                                        </span>
                                         {% endif %}
                                     </td>
                                     <td>
                                         {% if execution.status == 'completed' %}
-                                        <span class="badge bg-success">Concluída</span>
+                                        <span
+                                            class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle">
+                                            <i class="bi bi-check-circle me-1"></i> Concluída
+                                        </span>
                                         {% elif execution.status == 'processing' %}
-                                        <span class="badge bg-warning">Processando</span>
+                                        <span
+                                            class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle">
+                                            <i class="bi bi-hourglass-split me-1"></i> Processando
+                                        </span>
                                         {% elif execution.status == 'failed' %}
-                                        <span class="badge bg-danger">Erro</span>
+                                        <span
+                                            class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle">
+                                            <i class="bi bi-exclamation-circle me-1"></i> Erro
+                                        </span>
                                         {% else %}
-                                        <span class="badge bg-secondary">{{ execution.status }}</span>
+                                        <span
+                                            class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">
+                                            {{ execution.status|capitalize }}
+                                        </span>
                                         {% endif %}
                                     </td>
-                                    <td>{{ execution.main_document_filename }}</td>
-                                    <td>{{ execution.created_at.strftime('%d/%m/%Y') }}</td>
                                     <td>
-                                        <a href="{{ url_for('fap_review.revision_result', execution_id=execution.id) }}"
-                                            class="btn btn-sm btn-info">
-                                            <i class="fas fa-eye"></i>
+                                        <small class="text-muted">{{ execution.main_document_path|basename if
+                                            execution.main_document_path else 'N/A' }}</small>
+                                    </td>
+                                    <td>
+                                        <small>{{ execution.created_at.strftime('%d/%m/%Y %H:%M') }}</small>
+                                    </td>
+                                    <td>
+                                        <a href="/fap-review/revision/{{ execution.id }}"
+                                            class="btn btn-sm btn-outline-primary" title="Visualizar resultado">
+                                            <i class="bi bi-eye"></i>
                                         </a>
                                     </td>
                                 </tr>
                                 {% endfor %}
                             </tbody>
                         </table>
-                        {% else %}
-                        <p class="text-muted text-center py-3">Nenhuma execução ainda</p>
-                        {% endif %}
                     </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- Informações dos Agentes -->
-        <div class="row mt-4">
-            <div class="col-lg-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Agente Revisor</h3>
+                    {% else %}
+                    <div class="text-center py-4">
+                        <i class="bi bi-inbox text-muted" style="font-size: 2rem;"></i>
+                        <p class="text-muted mt-2">Nenhuma execução registrada ainda</p>
                     </div>
-                    <div class="card-body">
-                        <dl class="row">
-                            <dt class="col-sm-6">Status:</dt>
-                            <dd class="col-sm-6">
-                                {% if setting.reviewer_enabled %}
-                                <span class="badge bg-success">Ativo</span>
-                                {% else %}
-                                <span class="badge bg-danger">Inativo</span>
-                                {% endif %}
-                            </dd>
-                            <dt class="col-sm-6">Modelo:</dt>
-                            <dd class="col-sm-6">{{ setting.reviewer_model }}</dd>
-                            <dt class="col-sm-6">Temperatura:</dt>
-                            <dd class="col-sm-6">{{ setting.reviewer_temperature }}</dd>
-                        </dl>
-                        <p class="text-muted small">
-                            Responsável por revisar petições iniciais e identificar inconsistências
-                        </p>
-                    </div>
+                    {% endif %}
                 </div>
             </div>
 
-            <div class="col-lg-6">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Agente de Treinamento</h3>
+            <!-- Configuração dos Agentes -->
+            <div class="row mt-4">
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-header border-0">
+                            <h5 class="card-title mb-0"><i class="bi bi-gear-wide-connected me-2"></i> Agente Revisor
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="agent-config-row p-2 rounded">
+                                <dl class="row mb-0">
+                                    <dt class="col-6"><small class="text-muted">Status</small></dt>
+                                    <dd class="col-6 text-end">
+                                        {% if setting.reviewer_enabled %}
+                                        <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>
+                                            Ativo</span>
+                                        {% else %}
+                                        <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i> Inativo</span>
+                                        {% endif %}
+                                    </dd>
+                                    <dt class="col-6"><small class="text-muted">Modelo</small></dt>
+                                    <dd class="col-6 text-end"><code>{{ setting.reviewer_model }}</code></dd>
+                                    <dt class="col-6"><small class="text-muted">Temperatura</small></dt>
+                                    <dd class="col-6 text-end"><span class="badge bg-light text-dark">{{
+                                            setting.reviewer_temperature }}</span></dd>
+                                </dl>
+                            </div>
+                            <hr>
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Responsável por revisar petições iniciais e identificar inconsistências, erros de
+                                formatação e falta de documentação.
+                            </small>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <dl class="row">
-                            <dt class="col-sm-6">Status:</dt>
-                            <dd class="col-sm-6">
-                                {% if setting.training_enabled %}
-                                <span class="badge bg-success">Ativo</span>
-                                {% else %}
-                                <span class="badge bg-danger">Inativo</span>
-                                {% endif %}
-                            </dd>
-                            <dt class="col-sm-6">Modelo:</dt>
-                            <dd class="col-sm-6">{{ setting.training_model }}</dd>
-                            <dt class="col-sm-6">Temperatura:</dt>
-                            <dd class="col-sm-6">{{ setting.training_temperature }}</dd>
-                        </dl>
-                        <p class="text-muted small">
-                            Responsável por manter e evoluir a base de conhecimento
-                        </p>
+                </div>
+
+                <div class="col-lg-6">
+                    <div class="card">
+                        <div class="card-header border-0">
+                            <h5 class="card-title mb-0"><i class="bi bi-graduation-cap me-2"></i> Agente de Treinamento
+                            </h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="agent-config-row p-2 rounded">
+                                <dl class="row mb-0">
+                                    <dt class="col-6"><small class="text-muted">Status</small></dt>
+                                    <dd class="col-6 text-end">
+                                        {% if setting.training_enabled %}
+                                        <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>
+                                            Ativo</span>
+                                        {% else %}
+                                        <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i> Inativo</span>
+                                        {% endif %}
+                                    </dd>
+                                    <dt class="col-6"><small class="text-muted">Modelo</small></dt>
+                                    <dd class="col-6 text-end"><code>{{ setting.training_model }}</code></dd>
+                                    <dt class="col-6"><small class="text-muted">Temperatura</small></dt>
+                                    <dd class="col-6 text-end"><span class="badge bg-light text-dark">{{
+                                            setting.training_temperature }}</span></dd>
+                                </dl>
+                            </div>
+                            <hr>
+                            <small class="text-muted">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Responsável por consolidar padrões de erros recorrentes e evoluir a base de
+                                conhecimento.
+                            </small>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Links Rápidos -->
-        <div class="row mt-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Ações Rápidas</h3>
-                    </div>
-                    <div class="card-body">
-                        <a href="{{ url_for('fap_review.revision') }}" class="btn btn-primary btn-lg mr-2">
-                            <i class="fas fa-file-upload"></i> Revisar Petição
-                        </a>
-                        <a href="{{ url_for('fap_review.training') }}" class="btn btn-info btn-lg mr-2">
-                            <i class="fas fa-graduation-cap"></i> Treinamento
-                        </a>
-                        <a href="{{ url_for('fap_review.settings') }}" class="btn btn-warning btn-lg mr-2">
-                            <i class="fas fa-cog"></i> Configurações
-                        </a>
-                        <a href="{{ url_for('fap_review.audit_logs') }}" class="btn btn-secondary btn-lg">
-                            <i class="fas fa-clipboard-list"></i> Auditoria
-                        </a>
+            <!-- Menu de Navegação Rápida -->
+            <div class="row mt-4">
+                <div class="col-12">
+                    <div class="card">
+                        <div class="card-body">
+                            <div class="row g-2">
+                                <div class="col-md-3 col-sm-6">
+                                    <a href="{{ url_for('fap_review.revision') }}"
+                                        class="btn btn-outline-primary w-100">
+                                        <i class="bi bi-file-earmark-arrow-up me-2"></i> Revisar Petição
+                                    </a>
+                                </div>
+                                <div class="col-md-3 col-sm-6">
+                                    <a href="{{ url_for('fap_review.training') }}" class="btn btn-outline-info w-100">
+                                        <i class="bi bi-book me-2"></i> Treinamento
+                                    </a>
+                                </div>
+                                <div class="col-md-3 col-sm-6">
+                                    <a href="{{ url_for('fap_review.settings') }}"
+                                        class="btn btn-outline-secondary w-100">
+                                        <i class="bi bi-sliders me-2"></i> Configurações
+                                    </a>
+                                </div>
+                                <div class="col-md-3 col-sm-6">
+                                    <a href="{{ url_for('fap_review.audit_logs') }}" class="btn btn-outline-dark w-100">
+                                        <i class="bi bi-clipboard-check me-2"></i> Auditoria
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
-{% endblock %}
+    {% endblock %}

@@ -1,353 +1,502 @@
 {% extends "layout/base.html" %}
 
-{% block title %}Configurações - FAP Review{% endblock %}
+{% from "partials/page_hero.html" import page_hero %}
+{% from "partials/model_picker_modal.html" import model_picker_modal %}
+
+{% set page_title = "Configurações" %}
+
+{% block title %}{{ page_title }} - FAP Review - IntellexIA{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/model-picker-modal.css') }}">
+<style>
+  .info-card {
+    border: 1px solid rgba(15, 23, 42, .07);
+    border-radius: .85rem;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, .06);
+  }
+
+  .info-card .card-header {
+    background: transparent;
+    border-bottom: 1px solid rgba(15, 23, 42, .07);
+    font-weight: 700;
+    font-size: .85rem;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #6c7a8d;
+  }
+
+  .nav-pills-fap .nav-link {
+    border-radius: .55rem;
+    color: var(--bs-secondary-color);
+    font-size: .875rem;
+    padding: .45rem .9rem;
+  }
+
+  .nav-pills-fap .nav-link.active {
+    background: var(--bs-primary);
+    color: #fff;
+  }
+
+  .nav-pills-fap .nav-link:not(.active):hover {
+    background: var(--bs-secondary-bg);
+  }
+
+  .prompt-item {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: .75rem 1rem;
+    border: 1px solid rgba(15, 23, 42, .07);
+    border-radius: .65rem;
+    margin-bottom: .5rem;
+    background: var(--bs-body-bg);
+    transition: border-color 0.15s ease;
+  }
+
+  .prompt-item:hover {
+    border-color: var(--bs-primary);
+  }
+
+  .prompt-item-name {
+    font-family: var(--bs-font-monospace);
+    font-size: .82rem;
+    font-weight: 600;
+    color: var(--bs-emphasis-color);
+  }
+
+  .prompt-item-desc {
+    font-size: .78rem;
+    color: var(--bs-secondary-color);
+    margin-top: .15rem;
+  }
+
+  /* Model selector card */
+  .model-selector-card {
+    border: 1px solid rgba(15, 23, 42, .09);
+    border-radius: .75rem;
+    padding: .85rem 1rem;
+    background: var(--bs-body-bg);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+  }
+
+  .model-selector-name {
+    font-weight: 600;
+    font-size: .92rem;
+    color: var(--bs-emphasis-color);
+  }
+
+  .model-selector-id {
+    font-family: var(--bs-font-monospace);
+    font-size: .75rem;
+    color: var(--bs-secondary-color);
+    margin-top: .1rem;
+  }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="content-header">
-    <div class="container-fluid">
-        <div class="row mb-2">
-            <div class="col-sm-6">
-                <h1 class="m-0">
-                    <i class="fas fa-cog"></i> Configurações
-                </h1>
-            </div>
-            <div class="col-sm-6">
-                <nav aria-label="breadcrumb">
-                    <ol class="breadcrumb float-sm-right">
-                        <li class="breadcrumb-item"><a href="{{ url_for('fap_review.index') }}">FAP Review</a></li>
-                        <li class="breadcrumb-item active">Configurações</li>
-                    </ol>
-                </nav>
-            </div>
-        </div>
+<div class="fap-settings-page">
+  {% call page_hero(title=page_title, subtitle='Configure os parâmetros dos agentes revisor e treinamento', icon='bi bi-sliders') %}
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-0 bg-transparent small">
+      <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('fap_review.index') }}"><i class="bi bi-file-earmark-check"></i> FAP Review</a></li>
+      <li class="breadcrumb-item active">{{ page_title }}</li>
+    </ol>
+  </nav>
+  {% endcall %}
+
+  <div class="container-fluid">
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% if messages %}
+    <div class="mb-3">
+      {% for category, message in messages %}
+      <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+        <i class="bi bi-info-circle me-2"></i>{{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+      {% endfor %}
     </div>
+    {% endif %}
+    {% endwith %}
+
+    <!-- Tabs de navegação -->
+    <ul class="nav nav-pills nav-pills-fap mb-4" id="settingsTabs" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" id="general-tab" data-bs-toggle="pill" data-bs-target="#general" type="button" role="tab">
+          <i class="bi bi-gear me-1"></i> Geral
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="prompts-tab" data-bs-toggle="pill" data-bs-target="#prompts" type="button" role="tab">
+          <i class="bi bi-file-text me-1"></i> Prompts
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="references-tab" data-bs-toggle="pill" data-bs-target="#references" type="button" role="tab">
+          <i class="bi bi-book me-1"></i> Referências
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="audit-tab" data-bs-toggle="pill" data-bs-target="#audit" type="button" role="tab">
+          <i class="bi bi-clock-history me-1"></i> Auditoria
+        </button>
+      </li>
+    </ul>
+
+    <div class="tab-content" id="settingsTabContent">
+
+      <!-- Configurações Gerais -->
+      <div class="tab-pane fade show active" id="general" role="tabpanel">
+        <form id="settingsForm">
+          <div class="row g-4">
+
+            <!-- Agente Revisor -->
+            <div class="col-lg-6">
+              <div class="card info-card h-100">
+                <div class="card-header d-flex align-items-center gap-2">
+                  <i class="bi bi-search text-primary"></i>
+                  Agente Revisor
+                </div>
+                <div class="card-body d-flex flex-column gap-3">
+                  <!-- Modelo -->
+                  <div>
+                    <label class="form-label small fw-semibold mb-2">Modelo de IA</label>
+                    <input type="hidden" id="reviewer_model" name="reviewer_model" value="{{ setting.reviewer_model }}">
+                    <div class="model-selector-card">
+                      <div>
+                        <div class="model-selector-name" id="reviewerModelName">{{ setting.reviewer_model or 'Padrão' }}</div>
+                        <div class="model-selector-id" id="reviewerModelId">{{ setting.reviewer_model or '' }}</div>
+                      </div>
+                      <button type="button" class="btn btn-sm btn-outline-primary flex-shrink-0"
+                        data-bs-toggle="modal" data-bs-target="#reviewerModelPickerModal">
+                        <i class="bi bi-cpu me-1"></i> Alterar modelo
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Temperatura -->
+                  <div>
+                    <label for="reviewerTemperature" class="form-label small fw-semibold">Temperatura</label>
+                    <input type="number" class="form-control form-control-sm" id="reviewerTemperature"
+                      name="reviewer_temperature" min="0" max="2" step="0.1"
+                      value="{{ setting.reviewer_temperature }}">
+                  </div>
+
+                  <!-- Ativo -->
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" id="reviewerEnabled"
+                      name="reviewer_enabled" {% if setting.reviewer_enabled %}checked{% endif %}>
+                    <label class="form-check-label small" for="reviewerEnabled">Agente Revisor Ativado</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Agente de Treinamento -->
+            <div class="col-lg-6">
+              <div class="card info-card h-100">
+                <div class="card-header d-flex align-items-center gap-2">
+                  <i class="bi bi-mortarboard text-success"></i>
+                  Agente de Treinamento
+                </div>
+                <div class="card-body d-flex flex-column gap-3">
+                  <!-- Modelo -->
+                  <div>
+                    <label class="form-label small fw-semibold mb-2">Modelo de IA</label>
+                    <input type="hidden" id="training_model" name="training_model" value="{{ setting.training_model }}">
+                    <div class="model-selector-card">
+                      <div>
+                        <div class="model-selector-name" id="trainingModelName">{{ setting.training_model or 'Padrão' }}</div>
+                        <div class="model-selector-id" id="trainingModelId">{{ setting.training_model or '' }}</div>
+                      </div>
+                      <button type="button" class="btn btn-sm btn-outline-success flex-shrink-0"
+                        data-bs-toggle="modal" data-bs-target="#trainingModelPickerModal">
+                        <i class="bi bi-cpu me-1"></i> Alterar modelo
+                      </button>
+                    </div>
+                  </div>
+
+                  <!-- Temperatura -->
+                  <div>
+                    <label for="trainingTemperature" class="form-label small fw-semibold">Temperatura</label>
+                    <input type="number" class="form-control form-control-sm" id="trainingTemperature"
+                      name="training_temperature" min="0" max="2" step="0.1"
+                      value="{{ setting.training_temperature }}">
+                  </div>
+
+                  <!-- Ativo -->
+                  <div class="form-check form-switch">
+                    <input class="form-check-input" type="checkbox" role="switch" id="trainingEnabled"
+                      name="training_enabled" {% if setting.training_enabled %}checked{% endif %}>
+                    <label class="form-check-label small" for="trainingEnabled">Agente de Treinamento Ativado</label>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Políticas -->
+            <div class="col-12">
+              <div class="card info-card">
+                <div class="card-header d-flex align-items-center gap-2">
+                  <i class="bi bi-toggles text-warning"></i>
+                  Políticas de Atualização
+                </div>
+                <div class="card-body">
+                  <div class="row g-3">
+                    <div class="col-sm-6 col-lg-3">
+                      <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch" id="autoUpdateManual"
+                          name="auto_update_manual" {% if setting.auto_update_manual %}checked{% endif %}>
+                        <label class="form-check-label small" for="autoUpdateManual">Atualizar Manual Automaticamente</label>
+                      </div>
+                    </div>
+                    <div class="col-sm-6 col-lg-3">
+                      <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch" id="autoUpdateCases"
+                          name="auto_update_cases" {% if setting.auto_update_cases %}checked{% endif %}>
+                        <label class="form-check-label small" for="autoUpdateCases">Atualizar Casos Automaticamente</label>
+                      </div>
+                    </div>
+                    <div class="col-sm-6 col-lg-3">
+                      <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch" id="requireApproval"
+                          name="require_approval_before_publish" {% if setting.require_approval_before_publish %}checked{% endif %}>
+                        <label class="form-check-label small" for="requireApproval">Requer Aprovação Antes de Publicar</label>
+                      </div>
+                    </div>
+                    <div class="col-sm-6 col-lg-3">
+                      <div class="form-check form-switch">
+                        <input class="form-check-input" type="checkbox" role="switch" id="enableLearning"
+                          name="enable_continuous_learning" {% if setting.enable_continuous_learning %}checked{% endif %}>
+                        <label class="form-check-label small" for="enableLearning">Habilitar Aprendizado Contínuo</label>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Botão Salvar -->
+            <div class="col-12 d-flex justify-content-end">
+              <button type="submit" class="btn btn-primary px-4">
+                <i class="bi bi-floppy me-1"></i> Salvar Configurações
+              </button>
+            </div>
+
+          </div>
+        </form>
+      </div>
+
+      <!-- Prompts -->
+      <div class="tab-pane fade" id="prompts" role="tabpanel">
+        <div class="card info-card">
+          <div class="card-header d-flex align-items-center gap-2">
+            <i class="bi bi-file-text text-primary"></i>
+            Gerenciamento de Prompts
+          </div>
+          <div class="card-body">
+            <p class="text-muted small mb-3">Gerencie os prompts que controlam o comportamento dos agentes. Clique em um prompt para visualizar, editar ou gerenciar suas versões.</p>
+            <div class="row g-2">
+              {% for prompt_name, prompt_desc in [
+                ('REVISOR_IDENTITY.md', 'Identidade do agente revisor'),
+                ('REVISOR_RULES.md', 'Regras invioláveis do revisor'),
+                ('REVISOR_PROMPT.md', 'Prompt principal do revisor'),
+                ('REVISOR_OUTPUT_FORMAT.md', 'Formato de saída do revisor'),
+                ('TRAINING_IDENTITY.md', 'Identidade do agente de treinamento'),
+                ('TRAINING_RULES.md', 'Regras do agente de treinamento'),
+                ('TRAINING_PROMPT.md', 'Prompt principal do treinamento'),
+                ('TRAINING_UPDATE_POLICY.md', 'Política de atualização do treinamento')
+              ] %}
+              <div class="col-12">
+                <div class="prompt-item">
+                  <div>
+                    <div class="prompt-item-name"><i class="bi bi-file-earmark-text me-1 text-primary"></i>{{ prompt_name }}</div>
+                    <div class="prompt-item-desc">{{ prompt_desc }}</div>
+                  </div>
+                  <a href="#" class="btn btn-sm btn-outline-secondary ms-2">
+                    <i class="bi bi-pencil"></i>
+                  </a>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Referências -->
+      <div class="tab-pane fade" id="references" role="tabpanel">
+        <div class="card info-card">
+          <div class="card-header d-flex align-items-center gap-2">
+            <i class="bi bi-book text-success"></i>
+            Gerenciamento de Referências
+          </div>
+          <div class="card-body">
+            <p class="text-muted small mb-3">Gerencie os documentos de referência compartilhados entre os agentes. Clique em uma referência para visualizar, editar ou gerenciar versões.</p>
+            <div class="row g-2">
+              {% for ref_name, ref_desc in [
+                ('MANUAL_REVISAO_FAP.md', 'Manual de revisão do FAP'),
+                ('CASOS_REFERENCIA.md', 'Casos de referência'),
+                ('PROJECT_INSTRUCTIONS.md', 'Instruções do projeto')
+              ] %}
+              <div class="col-12">
+                <div class="prompt-item">
+                  <div>
+                    <div class="prompt-item-name"><i class="bi bi-file-earmark-richtext me-1 text-success"></i>{{ ref_name }}</div>
+                    <div class="prompt-item-desc">{{ ref_desc }}</div>
+                  </div>
+                  <div class="d-flex align-items-center gap-2 ms-2">
+                    <span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-2">Ativa</span>
+                    <a href="#" class="btn btn-sm btn-outline-secondary">
+                      <i class="bi bi-pencil"></i>
+                    </a>
+                  </div>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Auditoria -->
+      <div class="tab-pane fade" id="audit" role="tabpanel">
+        <div class="card info-card">
+          <div class="card-header d-flex align-items-center gap-2">
+            <i class="bi bi-clock-history text-warning"></i>
+            Log de Auditoria
+          </div>
+          <div class="card-body">
+            <p class="text-muted small mb-3">Visualize o histórico de todas as alterações e configurações do módulo.</p>
+            <a href="{{ url_for('fap_review.audit_logs') }}" class="btn btn-outline-primary">
+              <i class="bi bi-arrow-right me-1"></i> Ver Auditoria Completa
+            </a>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
 </div>
 
-<div class="content">
-    <div class="container-fluid">
-        <div class="row">
-            <!-- Menu Lateral -->
-            <div class="col-md-3">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Configuração</h3>
-                    </div>
-                    <div class="list-group list-group-flush">
-                        <a href="#general" class="list-group-item list-group-item-action active" data-toggle="list">
-                            <i class="fas fa-sliders-h"></i> Geral
-                        </a>
-                        <a href="#prompts" class="list-group-item list-group-item-action" data-toggle="list">
-                            <i class="fas fa-file-alt"></i> Prompts
-                        </a>
-                        <a href="#references" class="list-group-item list-group-item-action" data-toggle="list">
-                            <i class="fas fa-book"></i> Referências
-                        </a>
-                        <a href="#audit" class="list-group-item list-group-item-action" data-toggle="list">
-                            <i class="fas fa-history"></i> Auditoria
-                        </a>
-                    </div>
-                </div>
-            </div>
+<!-- Model Picker Modals -->
+<script type="application/json" id="availableModelsData">{{ available_models | tojson }}</script>
 
-            <!-- Conteúdo -->
-            <div class="col-md-9">
-                <!-- Configurações Gerais -->
-                <div class="card" id="general">
-                    <div class="card-header">
-                        <h3 class="card-title">Configurações Gerais</h3>
-                    </div>
-                    <form id="settingsForm">
-                        <div class="card-body">
-                            <h5>Agente Revisor</h5>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label for="reviewerModel">Modelo LLM</label>
-                                        <select class="form-control" id="reviewerModel" name="reviewer_model">
-                                            <option value="gpt-4o-mini" {% if setting.reviewer_model=='gpt-4o-mini'
-                                                %}selected{% endif %}>GPT-4o Mini</option>
-                                            <option value="gpt-4" {% if setting.reviewer_model=='gpt-4' %}selected{%
-                                                endif %}>GPT-4</option>
-                                            <option value="gpt-4-turbo" {% if setting.reviewer_model=='gpt-4-turbo'
-                                                %}selected{% endif %}>GPT-4 Turbo</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label for="reviewerTemperature">Temperatura</label>
-                                        <input type="number" class="form-control" id="reviewerTemperature"
-                                            name="reviewer_temperature" min="0" max="2" step="0.1"
-                                            value="{{ setting.reviewer_temperature }}">
-                                    </div>
-                                </div>
-                            </div>
+{{ model_picker_modal(modal_id='reviewerModelPickerModal', title='Selecionar modelo — Agente Revisor') }}
+{{ model_picker_modal(modal_id='trainingModelPickerModal', title='Selecionar modelo — Agente de Treinamento') }}
 
-                            <div class="form-group">
-                                <div class="custom-control custom-checkbox">
-                                    <input type="checkbox" class="custom-control-input" id="reviewerEnabled"
-                                        name="reviewer_enabled" {% if setting.reviewer_enabled %}checked{% endif %}>
-                                    <label class="custom-control-label" for="reviewerEnabled">
-                                        Agente Revisor Ativado
-                                    </label>
-                                </div>
-                            </div>
+{% endblock %}
 
-                            <hr>
-
-                            <h5>Agente de Treinamento</h5>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label for="trainingModel">Modelo LLM</label>
-                                        <select class="form-control" id="trainingModel" name="training_model">
-                                            <option value="gpt-4o-mini" {% if setting.training_model=='gpt-4o-mini'
-                                                %}selected{% endif %}>GPT-4o Mini</option>
-                                            <option value="gpt-4" {% if setting.training_model=='gpt-4' %}selected{%
-                                                endif %}>GPT-4</option>
-                                            <option value="gpt-4-turbo" {% if setting.training_model=='gpt-4-turbo'
-                                                %}selected{% endif %}>GPT-4 Turbo</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label for="trainingTemperature">Temperatura</label>
-                                        <input type="number" class="form-control" id="trainingTemperature"
-                                            name="training_temperature" min="0" max="2" step="0.1"
-                                            value="{{ setting.training_temperature }}">
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div class="form-group">
-                                <div class="custom-control custom-checkbox">
-                                    <input type="checkbox" class="custom-control-input" id="trainingEnabled"
-                                        name="training_enabled" {% if setting.training_enabled %}checked{% endif %}>
-                                    <label class="custom-control-label" for="trainingEnabled">
-                                        Agente de Treinamento Ativado
-                                    </label>
-                                </div>
-                            </div>
-
-                            <hr>
-
-                            <h5>Políticas de Atualização</h5>
-                            <div class="form-group">
-                                <div class="custom-control custom-checkbox">
-                                    <input type="checkbox" class="custom-control-input" id="autoUpdateManual"
-                                        name="auto_update_manual" {% if setting.auto_update_manual %}checked{% endif %}>
-                                    <label class="custom-control-label" for="autoUpdateManual">
-                                        Atualizar Manual Automaticamente
-                                    </label>
-                                </div>
-                            </div>
-
-                            <div class="form-group">
-                                <div class="custom-control custom-checkbox">
-                                    <input type="checkbox" class="custom-control-input" id="autoUpdateCases"
-                                        name="auto_update_cases" {% if setting.auto_update_cases %}checked{% endif %}>
-                                    <label class="custom-control-label" for="autoUpdateCases">
-                                        Atualizar Casos de Referência Automaticamente
-                                    </label>
-                                </div>
-                            </div>
-
-                            <div class="form-group">
-                                <div class="custom-control custom-checkbox">
-                                    <input type="checkbox" class="custom-control-input" id="requireApproval"
-                                        name="require_approval_before_publish" {% if
-                                        setting.require_approval_before_publish %}checked{% endif %}>
-                                    <label class="custom-control-label" for="requireApproval">
-                                        Requer Aprovação Antes de Publicar
-                                    </label>
-                                </div>
-                            </div>
-
-                            <div class="form-group">
-                                <div class="custom-control custom-checkbox">
-                                    <input type="checkbox" class="custom-control-input" id="enableLearning"
-                                        name="enable_continuous_learning" {% if setting.enable_continuous_learning
-                                        %}checked{% endif %}>
-                                    <label class="custom-control-label" for="enableLearning">
-                                        Habilitar Aprendizado Contínuo
-                                    </label>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="card-footer">
-                            <button type="submit" class="btn btn-primary">
-                                <i class="fas fa-save"></i> Salvar Configurações
-                            </button>
-                        </div>
-                    </form>
-                </div>
-
-                <!-- Prompts -->
-                <div class="card mt-4" id="prompts" style="display:none;">
-                    <div class="card-header">
-                        <h3 class="card-title">Gerenciamento de Prompts</h3>
-                    </div>
-                    <div class="card-body">
-                        <p class="text-muted">
-                            Gerencie os prompts que controlam o comportamento dos agentes.
-                        </p>
-
-                        <div class="list-group">
-                            <a href="#" class="list-group-item list-group-item-action">
-                                <h6 class="mb-1">REVISOR_IDENTITY.md</h6>
-                                <p class="mb-0 text-muted">Identidade do agente revisor</p>
-                            </a>
-                            <a href="#" class="list-group-item list-group-item-action">
-                                <h6 class="mb-1">REVISOR_RULES.md</h6>
-                                <p class="mb-0 text-muted">Regras invioláveis do revisor</p>
-                            </a>
-                            <a href="#" class="list-group-item list-group-item-action">
-                                <h6 class="mb-1">REVISOR_PROMPT.md</h6>
-                                <p class="mb-0 text-muted">Prompt principal do revisor</p>
-                            </a>
-                            <a href="#" class="list-group-item list-group-item-action">
-                                <h6 class="mb-1">REVISOR_OUTPUT_FORMAT.md</h6>
-                                <p class="mb-0 text-muted">Formato de saída do revisor</p>
-                            </a>
-                            <a href="#" class="list-group-item list-group-item-action">
-                                <h6 class="mb-1">TRAINING_IDENTITY.md</h6>
-                                <p class="mb-0 text-muted">Identidade do agente de treinamento</p>
-                            </a>
-                            <a href="#" class="list-group-item list-group-item-action">
-                                <h6 class="mb-1">TRAINING_RULES.md</h6>
-                                <p class="mb-0 text-muted">Regras do agente de treinamento</p>
-                            </a>
-                            <a href="#" class="list-group-item list-group-item-action">
-                                <h6 class="mb-1">TRAINING_PROMPT.md</h6>
-                                <p class="mb-0 text-muted">Prompt principal do treinamento</p>
-                            </a>
-                            <a href="#" class="list-group-item list-group-item-action">
-                                <h6 class="mb-1">TRAINING_UPDATE_POLICY.md</h6>
-                                <p class="mb-0 text-muted">Política de atualização do treinamento</p>
-                            </a>
-                        </div>
-
-                        <p class="text-muted mt-3 small">
-                            Clique em um prompt para visualizar, editar ou gerenciar suas versões.
-                        </p>
-                    </div>
-                </div>
-
-                <!-- Referências -->
-                <div class="card mt-4" id="references" style="display:none;">
-                    <div class="card-header">
-                        <h3 class="card-title">Gerenciamento de Referências</h3>
-                    </div>
-                    <div class="card-body">
-                        <p class="text-muted">
-                            Gerencie os documentos de referência compartilhados entre os agentes.
-                        </p>
-
-                        <div class="list-group">
-                            <a href="#" class="list-group-item list-group-item-action">
-                                <h6 class="mb-1">MANUAL_REVISAO_FAP.md</h6>
-                                <p class="mb-0 text-muted">Manual de revisão do FAP - Versão Ativa</p>
-                                <span class="badge badge-success">Ativa</span>
-                            </a>
-                            <a href="#" class="list-group-item list-group-item-action">
-                                <h6 class="mb-1">CASOS_REFERENCIA.md</h6>
-                                <p class="mb-0 text-muted">Casos de referência - Versão Ativa</p>
-                                <span class="badge badge-success">Ativa</span>
-                            </a>
-                            <a href="#" class="list-group-item list-group-item-action">
-                                <h6 class="mb-1">PROJECT_INSTRUCTIONS.md</h6>
-                                <p class="mb-0 text-muted">Instruções do projeto - Versão Ativa</p>
-                                <span class="badge badge-success">Ativa</span>
-                            </a>
-                        </div>
-
-                        <p class="text-muted mt-3 small">
-                            Clique em uma referência para visualizar, editar ou gerenciar versões.
-                        </p>
-                    </div>
-                </div>
-
-                <!-- Auditoria -->
-                <div class="card mt-4" id="audit" style="display:none;">
-                    <div class="card-header">
-                        <h3 class="card-title">Log de Auditoria</h3>
-                    </div>
-                    <div class="card-body">
-                        <p class="text-muted">
-                            Visualize o histórico de todas as alterações e configurações do módulo.
-                        </p>
-                        <a href="{{ url_for('fap_review.audit_logs') }}" class="btn btn-primary">
-                            <i class="fas fa-clipboard-list"></i> Ver Auditoria Completa
-                        </a>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
-
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/model-picker-modal.js') }}"></script>
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        // Menu lateral
-        document.querySelectorAll('[data-toggle="list"]').forEach(link => {
-            link.addEventListener('click', function (e) {
-                e.preventDefault();
-                const target = this.getAttribute('href');
+  document.addEventListener('DOMContentLoaded', function () {
+    const availableModels = JSON.parse(document.getElementById('availableModelsData').textContent || '[]');
 
-                // Ocultar todos
-                document.querySelectorAll('.card[id]').forEach(card => {
-                    card.style.display = 'none';
-                    if (card.id !== 'general') {
-                        card.classList.add('mt-4');
-                    }
-                });
+    // ── Agente Revisor ────────────────────────────────────────────────────────
+    const reviewerModelInput = document.getElementById('reviewer_model');
+    const reviewerModelName = document.getElementById('reviewerModelName');
+    const reviewerModelId = document.getElementById('reviewerModelId');
 
-                // Mostrar selecionado
-                document.querySelector(target).style.display = 'block';
+    function updateReviewerDisplay() {
+      const val = reviewerModelInput.value || '';
+      const model = availableModels.find(m => m.id === val);
+      reviewerModelName.textContent = model ? model.name : (val || 'Padrão');
+      reviewerModelId.textContent = val;
+    }
 
-                // Atualizar active
-                document.querySelectorAll('[data-toggle="list"]').forEach(l => {
-                    l.classList.remove('active');
-                });
-                this.classList.add('active');
-            });
+    if (window.ModelPickerModal) {
+      new window.ModelPickerModal({
+        modalId: 'reviewerModelPickerModal',
+        models: availableModels,
+        defaultModelId: reviewerModelInput.value || '',
+        getSelectedModelId: () => reviewerModelInput.value || '',
+        onSelect: (modelId) => {
+          reviewerModelInput.value = modelId;
+          updateReviewerDisplay();
+        },
+      });
+    }
+
+    // ── Agente de Treinamento ─────────────────────────────────────────────────
+    const trainingModelInput = document.getElementById('training_model');
+    const trainingModelName = document.getElementById('trainingModelName');
+    const trainingModelId = document.getElementById('trainingModelId');
+
+    function updateTrainingDisplay() {
+      const val = trainingModelInput.value || '';
+      const model = availableModels.find(m => m.id === val);
+      trainingModelName.textContent = model ? model.name : (val || 'Padrão');
+      trainingModelId.textContent = val;
+    }
+
+    if (window.ModelPickerModal) {
+      new window.ModelPickerModal({
+        modalId: 'trainingModelPickerModal',
+        models: availableModels,
+        defaultModelId: trainingModelInput.value || '',
+        getSelectedModelId: () => trainingModelInput.value || '',
+        onSelect: (modelId) => {
+          trainingModelInput.value = modelId;
+          updateTrainingDisplay();
+        },
+      });
+    }
+
+    // ── Salvar configurações ──────────────────────────────────────────────────
+    document.getElementById('settingsForm').addEventListener('submit', async function (e) {
+      e.preventDefault();
+
+      const formData = new FormData(this);
+      const data = {};
+      formData.forEach((value, key) => {
+        if (key.endsWith('_enabled') || key.endsWith('_automatic') || key.startsWith('auto_') || key.startsWith('require_') || key.startsWith('enable_')) {
+          data[key] = formData.getAll(key).length > 0 ? true : false;
+        } else {
+          data[key] = value;
+        }
+      });
+
+      // Garantir checkboxes desmarcados
+      ['reviewer_enabled', 'training_enabled', 'auto_update_manual', 'auto_update_cases', 'require_approval_before_publish', 'enable_continuous_learning'].forEach(key => {
+        if (!(key in data)) data[key] = false;
+      });
+
+      try {
+        const btn = this.querySelector('[type="submit"]');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Salvando…';
+
+        const response = await fetch('{{ url_for("fap_review.settings") }}', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(data)
         });
 
-        // Salvar configurações
-        document.getElementById('settingsForm').addEventListener('submit', async function (e) {
-            e.preventDefault();
-
-            const formData = new FormData(this);
-            const data = {};
-            formData.forEach((value, key) => {
-                if (key.endsWith('_enabled') || key.endsWith('_automatic') || key.startsWith('auto_') || key.startsWith('require_') || key.startsWith('enable_')) {
-                    data[key] = formData.getAll(key).length > 0 ? true : false;
-                } else {
-                    data[key] = value;
-                }
-            });
-
-            try {
-                const response = await fetch('{{ url_for("fap_review.settings") }}', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify(data)
-                });
-
-                const result = await response.json();
-                if (result.success) {
-                    alert('Configurações salvas com sucesso!');
-                } else {
-                    alert('Erro: ' + (result.error || 'Erro desconhecido'));
-                }
-            } catch (error) {
-                alert('Erro ao salvar: ' + error);
-            }
-        });
+        const result = await response.json();
+        if (result.success) {
+          btn.innerHTML = '<i class="bi bi-check me-1"></i> Salvo!';
+          btn.classList.replace('btn-primary', 'btn-success');
+          setTimeout(() => {
+            btn.innerHTML = '<i class="bi bi-floppy me-1"></i> Salvar Configurações';
+            btn.classList.replace('btn-success', 'btn-primary');
+            btn.disabled = false;
+          }, 2000);
+        } else {
+          alert('Erro: ' + (result.error || 'Erro desconhecido'));
+          btn.innerHTML = '<i class="bi bi-floppy me-1"></i> Salvar Configurações';
+          btn.disabled = false;
+        }
+      } catch (error) {
+        alert('Erro ao salvar: ' + error);
+      }
     });
+  });
 </script>
 {% endblock %}

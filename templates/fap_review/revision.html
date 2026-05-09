@@ -1,180 +1,326 @@
 {% extends "layout/base.html" %}
 
-{% block title %}Revisão de Petição - FAP Review{% endblock %}
+{% from "partials/page_hero.html" import page_hero %}
+
+{% set page_title = "Revisar Petição" %}
+
+{% block title %}{{ page_title }} - FAP Review - IntellexIA{% endblock %}
+
+{% block extra_css %}
+<style>
+    .info-card {
+        border: 1px solid rgba(15, 23, 42, .07);
+        border-radius: .85rem;
+        box-shadow: 0 4px 16px rgba(15, 23, 42, .06);
+    }
+
+    .info-card .card-header {
+        background: transparent;
+        border-bottom: 1px solid rgba(15, 23, 42, .07);
+        font-weight: 700;
+        font-size: .85rem;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: #6c7a8d;
+    }
+
+    .dropzone-custom {
+        border: 2px dashed var(--bs-border-color);
+        border-radius: .75rem;
+        background: var(--bs-secondary-bg);
+        padding: 2rem 1.5rem;
+        text-align: center;
+        cursor: pointer;
+        transition: border-color 0.2s ease, background 0.2s ease;
+    }
+
+    .dropzone-custom:hover,
+    .dropzone-custom.dragover {
+        border-color: var(--bs-primary);
+        background: var(--bs-primary-bg-subtle);
+    }
+
+    .dropzone-custom .dropzone-icon {
+        font-size: 2rem;
+        color: var(--bs-primary);
+        opacity: 0.7;
+    }
+
+    .file-list-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: .6rem .85rem;
+        background: var(--bs-secondary-bg);
+        border: 1px solid rgba(15, 23, 42, .07);
+        border-radius: .55rem;
+        margin-top: .4rem;
+        font-size: .85rem;
+    }
+
+    .file-list-item .file-name {
+        font-weight: 500;
+        color: var(--bs-emphasis-color);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        max-width: 80%;
+    }
+
+    .how-it-works-step {
+        display: flex;
+        align-items: flex-start;
+        gap: .75rem;
+        padding: .65rem 0;
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+
+    .how-it-works-step:last-child {
+        border-bottom: none;
+    }
+
+    .step-number {
+        width: 1.6rem;
+        height: 1.6rem;
+        border-radius: 50%;
+        background: var(--bs-primary-bg-subtle);
+        color: var(--bs-primary);
+        font-size: .72rem;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        margin-top: .05rem;
+    }
+
+    .step-text {
+        font-size: .85rem;
+        color: var(--bs-secondary-color);
+        line-height: 1.45;
+    }
+
+    .step-text strong {
+        color: var(--bs-emphasis-color);
+        font-size: .88rem;
+        display: block;
+        margin-bottom: .1rem;
+    }
+
+    .status-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: .5rem 0;
+        border-bottom: 1px solid var(--bs-border-color);
+        font-size: .87rem;
+    }
+
+    .status-row:last-child {
+        border-bottom: none;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="content-header">
-    <div class="container-fluid">
-        <div class="row mb-2">
-            <div class="col-sm-6">
-                <h1 class="m-0">
-                    <i class="fas fa-file-audit"></i> Revisar Petição
-                </h1>
-            </div>
-            <div class="col-sm-6">
-                <nav aria-label="breadcrumb">
-                    <ol class="breadcrumb float-sm-right">
-                        <li class="breadcrumb-item"><a href="{{ url_for('fap_review.index') }}">FAP Review</a></li>
-                        <li class="breadcrumb-item active">Revisão</li>
-                    </ol>
-                </nav>
-            </div>
-        </div>
-    </div>
-</div>
+<div class="fap-revision-page">
+    {% call page_hero(title=page_title, subtitle='Envie a petição para análise automática pelo agente revisor', icon='bi
+    bi-file-earmark-arrow-up') %}
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0 bg-transparent small">
+            <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i>
+                    Home</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('fap_review.index') }}"><i
+                        class="bi bi-file-earmark-check"></i> FAP Review</a></li>
+            <li class="breadcrumb-item active">{{ page_title }}</li>
+        </ol>
+    </nav>
+    {% endcall %}
 
-<div class="content">
     <div class="container-fluid">
-        <div class="row">
+        <div class="row g-4">
+
+            <!-- Formulário principal -->
             <div class="col-lg-8">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Upload de Petição</h3>
+                <div class="card info-card">
+                    <div class="card-header d-flex align-items-center gap-2">
+                        <i class="bi bi-cloud-upload text-primary"></i>
+                        Enviar Documentos
                     </div>
                     <div class="card-body">
                         <form id="petitionForm" enctype="multipart/form-data">
+
                             <!-- Documento Principal -->
-                            <div class="form-group">
-                                <label for="mainDocument">Documento Principal <span class="text-danger">*</span></label>
-                                <div class="custom-file">
-                                    <input type="file" class="custom-file-input" id="mainDocument" name="main_document"
+                            <div class="mb-4">
+                                <label class="form-label small fw-semibold mb-2">
+                                    <i class="bi bi-file-earmark-pdf text-danger me-1"></i>
+                                    Documento Principal <span class="text-danger">*</span>
+                                </label>
+                                <div class="dropzone-custom" id="mainDocumentDropzone">
+                                    <i class="bi bi-file-earmark-arrow-up dropzone-icon"></i>
+                                    <p class="mb-1 mt-2 fw-semibold small">Arraste o arquivo aqui ou clique para
+                                        selecionar</p>
+                                    <small class="text-muted">PDF, Word (.doc/.docx) — Máximo 50MB</small>
+                                    <input type="file" class="d-none" id="mainDocument" name="main_document"
                                         accept=".pdf,.doc,.docx" required>
-                                    <label class="custom-file-label" for="mainDocument">Escolher arquivo</label>
                                 </div>
-                                <small class="form-text text-muted">
-                                    PDF, Word (.doc/.docx). Máximo 50MB
-                                </small>
+                                <div id="mainDocumentList"></div>
                             </div>
 
                             <!-- Documentos Auxiliares -->
-                            <div class="form-group">
-                                <label for="auxiliaryDocuments">Documentos Auxiliares (Opcionais)</label>
-                                <div class="custom-file">
-                                    <input type="file" class="custom-file-input" id="auxiliaryDocuments"
-                                        name="auxiliary_documents" multiple
-                                        accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg">
-                                    <label class="custom-file-label" for="auxiliaryDocuments">Escolher arquivos</label>
+                            <div class="mb-4">
+                                <label class="form-label small fw-semibold mb-2">
+                                    <i class="bi bi-paperclip text-info me-1"></i>
+                                    Documentos Auxiliares <span class="text-muted fw-normal">(Opcional)</span>
+                                </label>
+                                <div class="dropzone-custom" id="auxiliaryDocumentsDropzone">
+                                    <i class="bi bi-paperclip dropzone-icon"
+                                        style="color: var(--bs-secondary-color);"></i>
+                                    <p class="mb-1 mt-2 fw-semibold small">Arraste os arquivos aqui ou clique para
+                                        selecionar</p>
+                                    <small class="text-muted">PDF, Word, Excel, imagens — Máximo 50MB cada</small>
+                                    <input type="file" class="d-none" id="auxiliaryDocuments" name="auxiliary_documents"
+                                        multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg">
                                 </div>
-                                <small class="form-text text-muted">
-                                    PDF, Word, Excel, imagens, etc. Máximo 50MB por arquivo
-                                </small>
-                                <div id="auxiliaryFilesList" class="mt-2"></div>
+                                <div id="auxiliaryDocumentsList"></div>
                             </div>
 
                             <!-- Análise Comparativa -->
-                            <div class="form-group">
-                                <div class="custom-control custom-checkbox">
-                                    <input type="checkbox" class="custom-control-input" id="comparativeAnalysis"
-                                        name="comparative_analysis">
-                                    <label class="custom-control-label" for="comparativeAnalysis">
-                                        Análise Comparativa
+                            <div class="mb-3">
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" role="switch"
+                                        id="comparativeAnalysis" name="comparative_analysis" value="1">
+                                    <label class="form-check-label small" for="comparativeAnalysis">
+                                        <span class="fw-semibold">Ativar Análise Comparativa</span>
+                                        <span class="text-muted ms-1">— compare a petição original com uma versão
+                                            revisada</span>
                                     </label>
                                 </div>
-                                <small class="form-text text-muted">
-                                    Se ativada, faça upload de uma segunda versão da petição
-                                </small>
                             </div>
 
-                            <!-- Segunda Versão (Análise Comparativa) -->
-                            <div class="form-group" id="comparedDocumentGroup" style="display:none;">
-                                <label for="comparedDocument">Versão Revisada (para análise comparativa)</label>
-                                <div class="custom-file">
-                                    <input type="file" class="custom-file-input" id="comparedDocument"
-                                        name="compared_document" accept=".pdf,.doc,.docx">
-                                    <label class="custom-file-label" for="comparedDocument">Escolher arquivo</label>
+                            <!-- Segunda Versão -->
+                            <div id="comparedDocumentGroup" style="display:none;" class="mb-4">
+                                <label class="form-label small fw-semibold mb-2">
+                                    <i class="bi bi-file-earmark-check text-success me-1"></i>
+                                    Versão Revisada (para comparação)
+                                </label>
+                                <div class="dropzone-custom" id="comparedDocumentDropzone">
+                                    <i class="bi bi-arrow-left-right dropzone-icon"
+                                        style="color: var(--bs-success);"></i>
+                                    <p class="mb-1 mt-2 fw-semibold small">Versão que será comparada com a original</p>
+                                    <small class="text-muted">PDF, Word (.doc/.docx)</small>
+                                    <input type="file" class="d-none" id="comparedDocument" name="compared_document"
+                                        accept=".pdf,.doc,.docx">
                                 </div>
+                                <div id="comparedDocumentList"></div>
                             </div>
 
-                            <!-- Configurações do Revisor -->
-                            <hr>
-                            <h5>Configurações do Agente Revisor</h5>
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label for="reviewerModel">Modelo LLM</label>
-                                        <select class="form-control" id="reviewerModel" name="reviewer_model">
-                                            <option value="gpt-4o-mini" {% if setting.reviewer_model=='gpt-4o-mini'
-                                                %}selected{% endif %}>GPT-4o Mini</option>
-                                            <option value="gpt-4" {% if setting.reviewer_model=='gpt-4' %}selected{%
-                                                endif %}>GPT-4</option>
-                                            <option value="gpt-4-turbo" {% if setting.reviewer_model=='gpt-4-turbo'
-                                                %}selected{% endif %}>GPT-4 Turbo</option>
-                                        </select>
-                                    </div>
-                                </div>
-                                <div class="col-md-6">
-                                    <div class="form-group">
-                                        <label for="reviewerTemperature">Temperatura</label>
-                                        <input type="number" class="form-control" id="reviewerTemperature"
-                                            name="reviewer_temperature" min="0" max="2" step="0.1"
-                                            value="{{ setting.reviewer_temperature }}">
-                                    </div>
-                                </div>
-                            </div>
+                            <hr class="my-4">
 
                             <!-- Botões -->
-                            <div class="form-group mt-4">
-                                <button type="submit" class="btn btn-primary btn-lg">
-                                    <i class="fas fa-play"></i> Iniciar Revisão
+                            <div class="d-flex gap-2">
+                                <button type="submit" class="btn btn-primary flex-grow-1" id="submitBtn">
+                                    <i class="bi bi-play-circle me-2"></i> Iniciar Revisão
                                 </button>
-                                <a href="{{ url_for('fap_review.index') }}" class="btn btn-secondary btn-lg">
-                                    Cancelar
+                                <a href="{{ url_for('fap_review.index') }}" class="btn btn-outline-secondary">
+                                    <i class="bi bi-arrow-left me-1"></i> Voltar
                                 </a>
                             </div>
+
                         </form>
                     </div>
                 </div>
             </div>
 
-            <!-- Informações e Ajuda -->
-            <div class="col-lg-4">
-                <div class="card bg-light">
-                    <div class="card-header">
-                        <h3 class="card-title">
-                            <i class="fas fa-info-circle"></i> Como Funciona
-                        </h3>
+            <!-- Sidebar -->
+            <div class="col-lg-4 d-flex flex-column gap-4">
+
+                <!-- Status dos agentes -->
+                <div class="card info-card">
+                    <div class="card-header d-flex align-items-center gap-2">
+                        <i class="bi bi-cpu text-primary"></i>
+                        Status dos Agentes
                     </div>
                     <div class="card-body">
-                        <h5>Etapas:</h5>
-                        <ol>
-                            <li>Upload da petição principal</li>
-                            <li>Agente Revisor analisa</li>
-                            <li>Identifica inconsistências</li>
-                            <li>Gera relatório estruturado</li>
-                            <li>Encaminha para Treinamento</li>
-                        </ol>
-
-                        <h5 class="mt-3">Arquivos Aceitos:</h5>
-                        <ul>
-                            <li><strong>Principal:</strong> PDF, Word</li>
-                            <li><strong>Auxiliares:</strong> PDF, Word, Excel, Imagens, etc</li>
-                        </ul>
-
-                        <h5 class="mt-3">Análise Comparativa:</h5>
-                        <p>Se você tem duas versões da petição (original e revisada), ative a análise comparativa para
-                            identificar todas as alterações.</p>
-
-                        <p class="mt-3 text-muted">
-                            <i class="fas fa-clock"></i> Tempo estimado: 2-5 minutos
-                        </p>
+                        <div class="status-row">
+                            <span class="small">Agente Revisor</span>
+                            {% if setting.reviewer_enabled %}
+                            <span
+                                class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2">
+                                <i class="bi bi-check-circle me-1"></i> Ativo
+                            </span>
+                            {% else %}
+                            <span
+                                class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2">
+                                <i class="bi bi-x-circle me-1"></i> Inativo
+                            </span>
+                            {% endif %}
+                        </div>
+                        <div class="status-row">
+                            <span class="small">Agente de Treinamento</span>
+                            {% if setting.training_enabled %}
+                            <span
+                                class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2">
+                                <i class="bi bi-check-circle me-1"></i> Ativo
+                            </span>
+                            {% else %}
+                            <span
+                                class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2">
+                                <i class="bi bi-x-circle me-1"></i> Inativo
+                            </span>
+                            {% endif %}
+                        </div>
+                        <div class="mt-3 pt-1">
+                            <a href="{{ url_for('fap_review.settings') }}"
+                                class="btn btn-sm btn-outline-secondary w-100">
+                                <i class="bi bi-sliders me-1"></i> Configurações
+                            </a>
+                        </div>
                     </div>
                 </div>
 
-                <!-- Status do Agente -->
-                <div class="card mt-3">
-                    <div class="card-header">
-                        <h3 class="card-title">Status do Agente</h3>
+                <!-- Como funciona -->
+                <div class="card info-card">
+                    <div class="card-header d-flex align-items-center gap-2">
+                        <i class="bi bi-lightbulb text-warning"></i>
+                        Como Funciona
                     </div>
                     <div class="card-body">
-                        {% if setting.reviewer_enabled %}
-                        <p><span class="badge bg-success">Ativo</span></p>
-                        <p class="text-muted small">Agente Revisor pronto para executar análises</p>
-                        {% else %}
-                        <p><span class="badge bg-danger">Inativo</span></p>
-                        <p class="text-muted small">Configure o agente nas Configurações</p>
-                        {% endif %}
+                        <div class="how-it-works-step">
+                            <div class="step-number">1</div>
+                            <div class="step-text">
+                                <strong>Envio do documento</strong>
+                                Faça o upload da petição inicial em PDF ou Word.
+                            </div>
+                        </div>
+                        <div class="how-it-works-step">
+                            <div class="step-number">2</div>
+                            <div class="step-text">
+                                <strong>Análise pelo agente</strong>
+                                O agente revisor analisa tecnicamente o documento com base nas regras configuradas.
+                            </div>
+                        </div>
+                        <div class="how-it-works-step">
+                            <div class="step-number">3</div>
+                            <div class="step-text">
+                                <strong>Identificação de problemas</strong>
+                                Inconsistências, erros e oportunidades de melhoria são identificados.
+                            </div>
+                        </div>
+                        <div class="how-it-works-step">
+                            <div class="step-number">4</div>
+                            <div class="step-text">
+                                <strong>Relatório completo</strong>
+                                Um relatório detalhado é gerado com comentários e sugestões.
+                            </div>
+                        </div>
+                        <div class="mt-3 pt-1 d-flex align-items-center gap-2 text-muted small">
+                            <i class="bi bi-clock"></i>
+                            Tempo estimado: <strong class="text-emphasis">2–5 minutos</strong>
+                        </div>
                     </div>
                 </div>
+
             </div>
         </div>
     </div>
@@ -182,41 +328,71 @@
 
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        // Mostrar/ocultar análise comparativa
+        // Toggle análise comparativa
         document.getElementById('comparativeAnalysis').addEventListener('change', function () {
-            document.getElementById('comparedDocumentGroup').style.display =
-                this.checked ? 'block' : 'none';
+            document.getElementById('comparedDocumentGroup').style.display = this.checked ? 'block' : 'none';
         });
 
-        // Atualizar labels de arquivo
-        ['mainDocument', 'auxiliaryDocuments', 'comparedDocument'].forEach(id => {
-            const input = document.getElementById(id);
-            if (input) {
-                input.addEventListener('change', function () {
-                    const label = this.nextElementSibling;
-                    if (this.files.length) {
-                        label.textContent = Array.from(this.files)
-                            .map(f => f.name)
-                            .join(', ');
-                    } else {
-                        label.textContent = 'Escolher arquivo(s)';
-                    }
-                });
-            }
-        });
+        // Dropzone genérico
+        function setupDropzone(dropzoneId, inputId, listId, multiple) {
+            const zone = document.getElementById(dropzoneId);
+            const input = document.getElementById(inputId);
+            const list = document.getElementById(listId);
 
-        // Submissão do formulário
+            zone.addEventListener('click', () => input.click());
+            zone.addEventListener('dragover', e => { e.preventDefault(); zone.classList.add('dragover'); });
+            zone.addEventListener('dragleave', () => zone.classList.remove('dragover'));
+            zone.addEventListener('drop', e => {
+                e.preventDefault();
+                zone.classList.remove('dragover');
+                if (multiple) {
+                    const dt = new DataTransfer();
+                    Array.from(input.files).forEach(f => dt.items.add(f));
+                    Array.from(e.dataTransfer.files).forEach(f => dt.items.add(f));
+                    input.files = dt.files;
+                } else {
+                    const dt = new DataTransfer();
+                    if (e.dataTransfer.files[0]) dt.items.add(e.dataTransfer.files[0]);
+                    input.files = dt.files;
+                }
+                renderList(input.files, list);
+            });
+            input.addEventListener('change', () => renderList(input.files, list));
+        }
+
+        function renderList(files, list) {
+            list.innerHTML = '';
+            Array.from(files).forEach((file, i) => {
+                const ext = file.name.split('.').pop().toUpperCase();
+                const item = document.createElement('div');
+                item.className = 'file-list-item';
+                item.innerHTML = `
+          <span class="file-name"><i class="bi bi-file-earmark me-1 text-primary"></i>${file.name}</span>
+          <span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">${ext}</span>
+        `;
+                list.appendChild(item);
+            });
+        }
+
+        setupDropzone('mainDocumentDropzone', 'mainDocument', 'mainDocumentList', false);
+        setupDropzone('auxiliaryDocumentsDropzone', 'auxiliaryDocuments', 'auxiliaryDocumentsList', true);
+        setupDropzone('comparedDocumentDropzone', 'comparedDocument', 'comparedDocumentList', false);
+
+        // Submit
         document.getElementById('petitionForm').addEventListener('submit', async function (e) {
             e.preventDefault();
 
-            const formData = new FormData(this);
-            const btn = document.querySelector('button[type="submit"]');
-            const originalText = btn.innerHTML;
+            if (!document.getElementById('mainDocument').files.length) {
+                alert('Por favor, selecione um documento principal');
+                return;
+            }
+
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Processando…';
 
             try {
-                btn.disabled = true;
-                btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Enviando...';
-
+                const formData = new FormData(this);
                 const response = await fetch('{{ url_for("fap_review.revision") }}', {
                     method: 'POST',
                     body: formData
@@ -225,15 +401,16 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    window.location.href = `{{ url_for('fap_review.revision_result', execution_id='') }}${data.execution_id}`;
+                    window.location.href = `/fap-review/revision/${data.execution_id}`;
                 } else {
                     alert('Erro: ' + (data.error || 'Erro desconhecido'));
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-play-circle me-2"></i> Iniciar Revisão';
                 }
             } catch (error) {
                 alert('Erro ao enviar: ' + error);
-            } finally {
                 btn.disabled = false;
-                btn.innerHTML = originalText;
+                btn.innerHTML = '<i class="bi bi-play-circle me-2"></i> Iniciar Revisão';
             }
         });
     });

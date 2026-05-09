@@ -27,6 +27,7 @@ from app.models import (
     FapReviewExecution, FapReviewAuditLog
 )
 from app.agents.fap_review import FapPetitionReviewerAgent, FapTrainingEvolutionAgent
+from app.services.openrouter_models_service import fetch_openrouter_text_models_for_info
 from app.utils.timezone import now_sp
 
 # Document processing
@@ -573,7 +574,14 @@ def settings():
             return jsonify({'error': str(e)}), 500
     
     # GET - Exibir página
-    return render_template('fap_review/settings.html', setting=setting)
+    available_models, model_options_error = fetch_openrouter_text_models_for_info(
+        selected_model=setting.reviewer_model or '',
+        fallback_model=setting.reviewer_model or '',
+    )
+    return render_template('fap_review/settings.html',
+                           setting=setting,
+                           available_models=available_models,
+                           model_options_error=model_options_error)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
