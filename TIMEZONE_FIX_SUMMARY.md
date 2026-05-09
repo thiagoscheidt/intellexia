@@ -26,14 +26,14 @@ jinja2.exceptions.TemplateAssertionError: No filter named 'date_sp'.
 ### 2. **Atualização de Templates**
 Substituídos 6 templates para usar `.strftime()` direto ao invés de filtros:
 
-| Template | De | Para |
-|----------|----|----|
-| `index.html` | `created_at \| date_sp` | `created_at.strftime('%d/%m/%Y')` |
-| `edit_prompt.html` | `created_at \| datetime_sp` | `created_at.strftime('%d/%m/%Y %H:%M:%S')` |
-| `edit_reference.html` | `created_at \| datetime_sp` | `created_at.strftime('%d/%m/%Y %H:%M:%S')` |
-| `training.html` | `created_at \| datetime_sp` | `created_at.strftime('%d/%m/%Y %H:%M:%S')` |
+| Template               | De                          | Para                                       |
+| ---------------------- | --------------------------- | ------------------------------------------ |
+| `index.html`           | `created_at \| date_sp`     | `created_at.strftime('%d/%m/%Y')`          |
+| `edit_prompt.html`     | `created_at \| datetime_sp` | `created_at.strftime('%d/%m/%Y %H:%M:%S')` |
+| `edit_reference.html`  | `created_at \| datetime_sp` | `created_at.strftime('%d/%m/%Y %H:%M:%S')` |
+| `training.html`        | `created_at \| datetime_sp` | `created_at.strftime('%d/%m/%Y %H:%M:%S')` |
 | `revision_result.html` | `created_at \| datetime_sp` | `created_at.strftime('%d/%m/%Y %H:%M:%S')` |
-| `audit_logs.html` | `created_at \| datetime_sp` | `created_at.strftime('%d/%m/%Y %H:%M:%S')` |
+| `audit_logs.html`      | `created_at \| datetime_sp` | `created_at.strftime('%d/%m/%Y %H:%M:%S')` |
 
 ### 3. **Verificações Realizadas**
 - ✅ Sintaxe Python validada (`main.py`)
