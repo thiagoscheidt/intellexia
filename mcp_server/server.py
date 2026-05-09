@@ -29,17 +29,32 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastmcp import FastMCP
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
+from starlette.responses import JSONResponse
 
 from main import app  # noqa: E402 — importa o app Flask com DB e configs
 
-# ── Autenticação (requerida quando MCP_TRANSPORT=streamable-http) ──────────────
+# ── Autenticação Bearer (só ativa quando MCP_API_KEY está definida) ───────────
 _MCP_API_KEY = os.environ.get("MCP_API_KEY", "")
 
-def _auth_provider(api_key: str) -> bool:
-    """Valida o Bearer token enviado pelo cliente MCP."""
-    if not _MCP_API_KEY:
-        return True  # sem chave configurada: só permite em desenvolvimento local
-    return api_key == _MCP_API_KEY
+
+class BearerAuthMiddleware(BaseHTTPMiddleware):
+    """Valida o header Authorization: Bearer <token> em todas as requisições."""
+
+    async def dispatch(self, request: Request, call_next):
+        if not _MCP_API_KEY:
+            return await call_next(request)  # sem chave configurada: acesso livre
+
+        auth_header = request.headers.get("Authorization", "")
+        if not auth_header.startswith("Bearer "):
+            return JSONResponse({"error": "Authorization header ausente ou inválido"}, status_code=401)
+
+        token = auth_header.removeprefix("Bearer ").strip()
+        if token != _MCP_API_KEY:
+            return JSONResponse({"error": "Token inválido"}, status_code=403)
+
+        return await call_next(request)
 
 from mcp_server.tools.knowledge import (
     query_knowledge_base_handler,
@@ -218,6 +233,10 @@ if __name__ == "__main__":
     port = int(os.environ.get("MCP_PORT", "8001"))
 
     if transport == "streamable-http":
-        mcp.run(transport="streamable-http", host=host, port=port)
+        mcp_app = mcp.http_app()
+        mcp_app.add_middleware(BearerAuthMiddleware)
+
+        import uvicorn
+        uvicorn.run(mcp_app, host=host, port=port)
     else:
         mcp.run(transport="stdio")
