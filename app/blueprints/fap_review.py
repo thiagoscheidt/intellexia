@@ -214,8 +214,8 @@ def _extract_text_from_document(filepath: str) -> str:
         raise
 
 
-def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_text: str, 
-                           compared_text: str = None) -> dict:
+def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_file_path: str,
+                           compared_file_path: str = None) -> dict:
     """Executa o agente revisor e armazena resultado"""
     try:
         execution = FapReviewExecution.query.get(execution_id)
@@ -260,12 +260,6 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_text: 
             is_active=True
         ).first()
 
-        reviewer_main_prompt = FapReviewPromptVersion.query.filter_by(
-            law_firm_id=law_firm_id,
-            prompt_type='revisor_prompt',
-            is_active=True
-        ).first()
-
         reviewer_output_format_prompt = FapReviewPromptVersion.query.filter_by(
             law_firm_id=law_firm_id,
             prompt_type='revisor_output_format',
@@ -291,15 +285,14 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_text: 
         asyncio.set_event_loop(loop)
         
         try:
-            if compared_text and execution.comparative_analysis:
+            if compared_file_path and execution.comparative_analysis:
                 # Análise comparativa
                 result = loop.run_until_complete(
                     agent.review_petition_comparative(
-                        original_petition=petition_text,
-                        revised_petition=compared_text,
+                        original_petition_file_path=petition_file_path,
+                        revised_petition_file_path=compared_file_path,
                         reviewer_identity=reviewer_identity_prompt.content if reviewer_identity_prompt else "",
                         reviewer_rules=reviewer_rules_prompt.content if reviewer_rules_prompt else "",
-                        reviewer_prompt=reviewer_main_prompt.content if reviewer_main_prompt else "",
                         reviewer_output_format=reviewer_output_format_prompt.content if reviewer_output_format_prompt else "",
                         execution_id=execution.id,
                         user_id=execution.user_id,
@@ -310,10 +303,9 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_text: 
                 # Análise simples
                 result = loop.run_until_complete(
                     agent.review_petition_single_version(
-                        petition_content=petition_text,
+                        petition_file_path=petition_file_path,
                         reviewer_identity=reviewer_identity_prompt.content if reviewer_identity_prompt else "",
                         reviewer_rules=reviewer_rules_prompt.content if reviewer_rules_prompt else "",
-                        reviewer_prompt=reviewer_main_prompt.content if reviewer_main_prompt else "",
                         reviewer_output_format=reviewer_output_format_prompt.content if reviewer_output_format_prompt else "",
                         execution_id=execution.id,
                         user_id=execution.user_id,
@@ -481,25 +473,23 @@ def revision():
             
             # ===== INVOCAR AGENTE REVISOR =====
             try:
-                # Extrair texto do documento principal
-                petition_text = _extract_text_from_document(str(filepath))
-                
-                if not petition_text.strip():
-                    raise ValueError("Documento principal está vazio ou não foi possível extrair texto")
-                
-                # Extrair texto do documento comparado (se houver)
-                compared_text = None
+                petition_file_path = str(filepath)
+
+                if not Path(petition_file_path).exists():
+                    raise ValueError("Arquivo principal não encontrado para análise")
+
+                compared_file_path = None
                 if comparative_analysis and compared_document:
-                    compared_text = _extract_text_from_document(compared_document)
-                    if not compared_text.strip():
-                        raise ValueError("Documento comparado está vazio ou não foi possível extrair texto")
+                    compared_file_path = compared_document
+                    if not Path(compared_file_path).exists():
+                        raise ValueError("Arquivo comparado não encontrado para análise")
                 
                 # Executar agente revisor
                 _execute_reviewer_agent(
                     execution.id,
                     law_firm_id,
-                    petition_text,
-                    compared_text
+                    petition_file_path,
+                    compared_file_path
                 )
             
             except Exception as agent_error:
@@ -635,7 +625,6 @@ def edit_prompt_by_type(prompt_type: str):
     valid_types = {
         'revisor_identity',
         'revisor_rules',
-        'revisor_prompt',
         'revisor_output_format',
         'training_identity',
         'training_rules',
@@ -749,7 +738,6 @@ def list_prompts():
     prompt_types = [
         'revisor_identity',
         'revisor_rules',
-        'revisor_prompt',
         'revisor_output_format',
         'training_identity',
         'training_rules',

@@ -16,6 +16,7 @@ import json
 import os
 import re
 import time
+from decimal import Decimal
 from typing import Optional, Any
 from datetime import datetime
 from pathlib import Path
@@ -24,6 +25,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
 
+from app.agents.core.file_agent import FileAgent
 from app.models import AgentTokenUsage
 from app.services.agent_execution_history_service import AgentExecutionHistoryService
 from app.services.token_usage_service import TokenUsageService
@@ -86,6 +88,8 @@ class PetitionReviewResult(BaseModel):
     """Resultado completo da revisão de petição"""
     execution_id: Optional[int] = None
     analysis_type: str = Field(..., description="'single_version' ou 'comparative'")
+    tokens_used: Optional[int] = Field(None, description="Total de tokens utilizados na execução")
+    cost_usd: Optional[float] = Field(None, description="Custo estimado da execução em USD")
     
     # Teses identificadas
     theses: list[IdentifiedThesis] = Field(default_factory=list)
@@ -146,6 +150,7 @@ class FapPetitionReviewerAgent:
         )
         
         self.token_usage_service = TokenUsageService()
+        self.file_agent = FileAgent()
         
         self.manual_content: str = ""
         self.cases_content: str = ""
@@ -171,7 +176,6 @@ class FapPetitionReviewerAgent:
         self,
         reviewer_identity: str = "",
         reviewer_rules: str = "",
-        reviewer_prompt: str = "",
         reviewer_output_format: str = "",
     ) -> str:
         """
@@ -180,7 +184,6 @@ class FapPetitionReviewerAgent:
         Args:
             reviewer_identity: Identidade do revisor (REVISOR_IDENTITY.md)
             reviewer_rules: Regras do revisor (REVISOR_RULES.md)
-            reviewer_prompt: Prompt principal do revisor (REVISOR_PROMPT.md)
             reviewer_output_format: Formato de saída (REVISOR_OUTPUT_FORMAT.md)
             
         Returns:
@@ -198,25 +201,26 @@ FORMATO DE SAÍDA:
 {reviewer_output_format or 'Estruture a resposta em seções claras'}
 
 INSTRUÇÕES OPERACIONAIS:
-{reviewer_prompt or 'Aplique o procedimento padrão de revisão FAP'}
+Ao revisar a petição, valide estritamente com base no MANUAL DE REFERÊNCIA.
+Em caso de divergência entre qualquer instrução e o manual, o manual prevalece.
+Não invente critérios fora do manual.
 
 MANUAL DE REFERÊNCIA:
-{self.manual_content[:3000] if self.manual_content else 'Manual não carregado'}
+{self.manual_content if self.manual_content else 'Manual não carregado'}
 
 CASOS DE REFERÊNCIA:
-{self.cases_content[:2000] if self.cases_content else 'Casos não carregados'}
+{self.cases_content if self.cases_content else 'Casos não carregados'}
 
 INSTRUÇÕES DO PROJETO:
-{self.project_instructions[:2000] if self.project_instructions else 'Instruções não carregadas'}"""
+{self.project_instructions if self.project_instructions else 'Instruções não carregadas'}"""
         
         return base_system
 
     async def review_petition_single_version(self,
-                                            petition_content: str,
+                                            petition_file_path: str,
                                             auxiliary_documents: list[dict] = None,
                                             reviewer_identity: str = "",
                                             reviewer_rules: str = "",
-                                            reviewer_prompt: str = "",
                                             reviewer_output_format: str = "",
                                             execution_id: int | None = None,
                                             user_id: int | None = None,
@@ -225,11 +229,10 @@ INSTRUÇÕES DO PROJETO:
         Revisa uma única versão de petição contra o manual
         
         Args:
-            petition_content: Conteúdo da petição
+            petition_file_path: Caminho do PDF/arquivo da petição
             auxiliary_documents: Documentos auxiliares opcionais
             reviewer_identity: Identidade do revisor
             reviewer_rules: Regras do revisor
-            reviewer_prompt: Prompt principal do revisor
             reviewer_output_format: Formato de saída
             
         Returns:
@@ -238,106 +241,102 @@ INSTRUÇÕES DO PROJETO:
         system_prompt = self._build_system_prompt(
             reviewer_identity,
             reviewer_rules,
-            reviewer_prompt,
             reviewer_output_format,
         )
         
-        chunks = self._split_text_into_chunks(petition_content)
-        
         try:
-            chunk_results: list[dict] = []
-            total_chunks = len(chunks)
+            petition_file_part = self._build_file_part_for_message(petition_file_path)
 
-            for idx, chunk_text in enumerate(chunks, start=1):
-                chunk_section = str(chunk_text.get("section") or "Seção não identificada")
-                chunk_body = str(chunk_text.get("text") or "")
+            user_message = self._build_single_user_message(
+                auxiliary_documents=auxiliary_documents,
+            )
 
-                user_message = self._build_single_user_message(
-                    petition_chunk=chunk_body,
-                    auxiliary_documents=auxiliary_documents,
-                    chunk_index=idx,
-                    total_chunks=total_chunks,
-                    section_label=chunk_section,
-                )
-
-                messages = [
-                    SystemMessage(content=system_prompt),
-                    HumanMessage(content=user_message)
-                ]
-
-                start_time = time.time()
-                response = self.llm.invoke(messages)
-                latency_ms = int((time.time() - start_time) * 1000)
-                response_text = response.content
-
-                # Capturar e persistir logs de tokens
-                response_payload = self._build_response_payload(response)
-                self.token_usage_service.capture_and_store(
-                    response_payload,
-                    agent_name="FapPetitionReviewerAgent",
-                    action_name="review_petition_single_version",
-                    print_prefix="[FapReviewer]",
-                    model_name=self.model_name,
-                    model_provider="openai",
-                    latency_ms=latency_ms,
-                    metadata_payload={
-                        "petition_length": len(petition_content),
-                        "auxiliary_documents_count": len(auxiliary_documents or []),
-                        "chunk_index": idx,
-                        "total_chunks": total_chunks,
-                        "chunk_length": len(chunk_body),
-                        "chunk_section": chunk_section,
-                        "llm_input": {
-                            "system_prompt": self._truncate_for_log(system_prompt),
-                            "user_prompt": self._truncate_for_log(user_message),
-                        },
-                        "prompt_versions": {
-                            "reviewer_identity": self._truncate_for_log(reviewer_identity),
-                            "reviewer_rules": self._truncate_for_log(reviewer_rules),
-                            "reviewer_prompt": self._truncate_for_log(reviewer_prompt),
-                            "reviewer_output_format": self._truncate_for_log(reviewer_output_format),
-                        },
-                    }
-                )
-
-                # Persistir histórico completo e vincular ao token usage
-                request_id = self._extract_response_request_id(response)
-                token_usage_id = self._find_token_usage_id_for_request(
-                    action_name="review_petition_single_version",
-                    law_firm_id=law_firm_id,
-                    request_id=request_id,
-                )
-                AgentExecutionHistoryService.save_execution_history(
-                    agent_name="FapPetitionReviewerAgent",
-                    action_name="review_petition_single_version",
-                    agent_type="fap_review_reviewer",
-                    system_prompt=system_prompt,
-                    user_prompt=user_message,
-                    model_response=response_text,
-                    full_messages_history=[*messages, response],
-                    result_data={
-                        "execution_id": execution_id,
-                        "analysis_type": "single_version",
-                        "chunk_index": idx,
-                        "total_chunks": total_chunks,
-                        "chunk_section": chunk_section,
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=[
+                    {
+                        "type": "text",
+                        "text": user_message,
                     },
-                    model_name=self.model_name,
-                    model_provider="openai",
-                    status="success",
-                    user_id=user_id,
-                    law_firm_id=law_firm_id,
-                    chat_session_id=None,
-                    agent_token_usage_id=token_usage_id,
-                )
+                    petition_file_part,
+                ])
+            ]
 
-                chunk_results.append(self._extract_json_dict_from_response(response_text))
+            start_time = time.time()
+            response = self.llm.invoke(messages)
+            latency_ms = int((time.time() - start_time) * 1000)
+            response_text = response.content
 
-            result_dict = self._merge_result_dicts(chunk_results)
+            # Capturar e persistir logs de tokens
+            response_payload = self._build_response_payload(response)
+            token_entries = self.token_usage_service.extract_entries(
+                response_payload,
+                model_name=self.model_name,
+            )
+            total_tokens = sum(entry.total_tokens for entry in token_entries)
+            total_cost = sum((entry.estimated_cost_usd for entry in token_entries), Decimal("0"))
+            self.token_usage_service.capture_and_store(
+                response_payload,
+                agent_name="FapPetitionReviewerAgent",
+                action_name="review_petition_single_version",
+                print_prefix="[FapReviewer]",
+                model_name=self.model_name,
+                model_provider="openai",
+                latency_ms=latency_ms,
+                metadata_payload={
+                    "petition_file_path": petition_file_path,
+                    "petition_file_name": self._extract_file_name(petition_file_path),
+                    "auxiliary_documents_count": len(auxiliary_documents or []),
+                    "mode": "file_attachment",
+                    "llm_input": {
+                        "system_prompt": self._truncate_for_log(system_prompt),
+                        "user_prompt": self._truncate_for_log(user_message),
+                    },
+                    "prompt_versions": {
+                        "reviewer_identity": self._truncate_for_log(reviewer_identity),
+                        "reviewer_rules": self._truncate_for_log(reviewer_rules),
+                        "reviewer_output_format": self._truncate_for_log(reviewer_output_format),
+                    },
+                }
+            )
+
+            # Persistir histórico completo e vincular ao token usage
+            request_id = self._extract_response_request_id(response)
+            token_usage_id = self._find_token_usage_id_for_request(
+                action_name="review_petition_single_version",
+                law_firm_id=law_firm_id,
+                request_id=request_id,
+            )
+            AgentExecutionHistoryService.save_execution_history(
+                agent_name="FapPetitionReviewerAgent",
+                action_name="review_petition_single_version",
+                agent_type="fap_review_reviewer",
+                system_prompt=system_prompt,
+                user_prompt=user_message,
+                model_response=response_text,
+                full_messages_history=[*messages, response],
+                result_data={
+                    "execution_id": execution_id,
+                    "analysis_type": "single_version",
+                    "mode": "file_attachment",
+                    "petition_file_name": self._extract_file_name(petition_file_path),
+                },
+                model_name=self.model_name,
+                model_provider="openai",
+                status="success",
+                user_id=user_id,
+                law_firm_id=law_firm_id,
+                chat_session_id=None,
+                agent_token_usage_id=token_usage_id,
+            )
+
+            result_dict = self._extract_json_dict_from_response(response_text)
             
             # Criar resultado com dados salvaguardados
             result = PetitionReviewResult(
                 analysis_type="single_version",
+                tokens_used=total_tokens or None,
+                cost_usd=float(total_cost) if total_cost else None,
                 theses=self._parse_theses(result_dict.get('theses', [])),
                 findings=self._parse_findings(result_dict.get('findings', [])),
                 missing_documents=self._parse_missing_documents(result_dict.get('missing_documents', [])),
@@ -361,12 +360,11 @@ INSTRUÇÕES DO PROJETO:
             )
 
     async def review_petition_comparative(self,
-                                         original_petition: str,
-                                         revised_petition: str,
+                                         original_petition_file_path: str,
+                                         revised_petition_file_path: str,
                                          auxiliary_documents: list[dict] = None,
                                          reviewer_identity: str = "",
                                          reviewer_rules: str = "",
-                                         reviewer_prompt: str = "",
                                          reviewer_output_format: str = "",
                                          execution_id: int | None = None,
                                          user_id: int | None = None,
@@ -375,12 +373,11 @@ INSTRUÇÕES DO PROJETO:
         Realiza análise comparativa entre duas versões de petição
         
         Args:
-            original_petition: Versão original da petição
-            revised_petition: Versão revisada da petição
+            original_petition_file_path: Caminho da versão original da petição
+            revised_petition_file_path: Caminho da versão revisada da petição
             auxiliary_documents: Documentos auxiliares opcionais
             reviewer_identity: Identidade do revisor
             reviewer_rules: Regras do revisor
-            reviewer_prompt: Prompt principal do revisor
             reviewer_output_format: Formato de saída
             
         Returns:
@@ -389,117 +386,106 @@ INSTRUÇÕES DO PROJETO:
         system_prompt = self._build_system_prompt(
             reviewer_identity,
             reviewer_rules,
-            reviewer_prompt,
             reviewer_output_format,
         )
         
-        original_chunks = self._split_text_into_chunks(original_petition)
-        revised_chunks = self._split_text_into_chunks(revised_petition)
-        
         try:
-            chunk_results: list[dict] = []
-            total_chunks = max(len(original_chunks), len(revised_chunks))
+            original_file_part = self._build_file_part_for_message(original_petition_file_path)
+            revised_file_part = self._build_file_part_for_message(revised_petition_file_path)
 
-            for idx in range(total_chunks):
-                original_chunk = original_chunks[idx] if idx < len(original_chunks) else {"text": "", "section": "Sem seção (original)"}
-                revised_chunk = revised_chunks[idx] if idx < len(revised_chunks) else {"text": "", "section": "Sem seção (revisada)"}
+            user_message = self._build_comparative_user_message(
+                auxiliary_documents=auxiliary_documents,
+            )
 
-                original_chunk_text = str(original_chunk.get("text") or "")
-                revised_chunk_text = str(revised_chunk.get("text") or "")
-                original_section = str(original_chunk.get("section") or "Sem seção (original)")
-                revised_section = str(revised_chunk.get("section") or "Sem seção (revisada)")
-
-                user_message = self._build_comparative_user_message(
-                    original_chunk=original_chunk_text,
-                    revised_chunk=revised_chunk_text,
-                    auxiliary_documents=auxiliary_documents,
-                    chunk_index=idx + 1,
-                    total_chunks=total_chunks,
-                    original_section_label=original_section,
-                    revised_section_label=revised_section,
-                )
-
-                messages = [
-                    SystemMessage(content=system_prompt),
-                    HumanMessage(content=user_message)
-                ]
-
-                start_time = time.time()
-                response = self.llm.invoke(messages)
-                latency_ms = int((time.time() - start_time) * 1000)
-                response_text = response.content
-
-                # Capturar e persistir logs de tokens
-                response_payload = self._build_response_payload(response)
-                self.token_usage_service.capture_and_store(
-                    response_payload,
-                    agent_name="FapPetitionReviewerAgent",
-                    action_name="review_petition_comparative",
-                    print_prefix="[FapReviewer]",
-                    model_name=self.model_name,
-                    model_provider="openai",
-                    latency_ms=latency_ms,
-                    metadata_payload={
-                        "original_petition_length": len(original_petition),
-                        "revised_petition_length": len(revised_petition),
-                        "auxiliary_documents_count": len(auxiliary_documents or []),
-                        "chunk_index": idx + 1,
-                        "total_chunks": total_chunks,
-                        "original_chunk_length": len(original_chunk_text),
-                        "revised_chunk_length": len(revised_chunk_text),
-                        "original_chunk_section": original_section,
-                        "revised_chunk_section": revised_section,
-                        "llm_input": {
-                            "system_prompt": self._truncate_for_log(system_prompt),
-                            "user_prompt": self._truncate_for_log(user_message),
-                        },
-                        "prompt_versions": {
-                            "reviewer_identity": self._truncate_for_log(reviewer_identity),
-                            "reviewer_rules": self._truncate_for_log(reviewer_rules),
-                            "reviewer_prompt": self._truncate_for_log(reviewer_prompt),
-                            "reviewer_output_format": self._truncate_for_log(reviewer_output_format),
-                        },
-                    }
-                )
-
-                # Persistir histórico completo e vincular ao token usage
-                request_id = self._extract_response_request_id(response)
-                token_usage_id = self._find_token_usage_id_for_request(
-                    action_name="review_petition_comparative",
-                    law_firm_id=law_firm_id,
-                    request_id=request_id,
-                )
-                AgentExecutionHistoryService.save_execution_history(
-                    agent_name="FapPetitionReviewerAgent",
-                    action_name="review_petition_comparative",
-                    agent_type="fap_review_reviewer",
-                    system_prompt=system_prompt,
-                    user_prompt=user_message,
-                    model_response=response_text,
-                    full_messages_history=[*messages, response],
-                    result_data={
-                        "execution_id": execution_id,
-                        "analysis_type": "comparative",
-                        "chunk_index": idx + 1,
-                        "total_chunks": total_chunks,
-                        "original_chunk_section": original_section,
-                        "revised_chunk_section": revised_section,
+            messages = [
+                SystemMessage(content=system_prompt),
+                HumanMessage(content=[
+                    {
+                        "type": "text",
+                        "text": user_message,
                     },
-                    model_name=self.model_name,
-                    model_provider="openai",
-                    status="success",
-                    user_id=user_id,
-                    law_firm_id=law_firm_id,
-                    chat_session_id=None,
-                    agent_token_usage_id=token_usage_id,
-                )
+                    original_file_part,
+                    revised_file_part,
+                ])
+            ]
 
-                chunk_results.append(self._extract_json_dict_from_response(response_text))
+            start_time = time.time()
+            response = self.llm.invoke(messages)
+            latency_ms = int((time.time() - start_time) * 1000)
+            response_text = response.content
 
-            result_dict = self._merge_result_dicts(chunk_results)
+            # Capturar e persistir logs de tokens
+            response_payload = self._build_response_payload(response)
+            token_entries = self.token_usage_service.extract_entries(
+                response_payload,
+                model_name=self.model_name,
+            )
+            total_tokens = sum(entry.total_tokens for entry in token_entries)
+            total_cost = sum((entry.estimated_cost_usd for entry in token_entries), Decimal("0"))
+            self.token_usage_service.capture_and_store(
+                response_payload,
+                agent_name="FapPetitionReviewerAgent",
+                action_name="review_petition_comparative",
+                print_prefix="[FapReviewer]",
+                model_name=self.model_name,
+                model_provider="openai",
+                latency_ms=latency_ms,
+                metadata_payload={
+                    "original_petition_file_path": original_petition_file_path,
+                    "revised_petition_file_path": revised_petition_file_path,
+                    "original_file_name": self._extract_file_name(original_petition_file_path),
+                    "revised_file_name": self._extract_file_name(revised_petition_file_path),
+                    "auxiliary_documents_count": len(auxiliary_documents or []),
+                    "mode": "file_attachment",
+                    "llm_input": {
+                        "system_prompt": self._truncate_for_log(system_prompt),
+                        "user_prompt": self._truncate_for_log(user_message),
+                    },
+                    "prompt_versions": {
+                        "reviewer_identity": self._truncate_for_log(reviewer_identity),
+                        "reviewer_rules": self._truncate_for_log(reviewer_rules),
+                        "reviewer_output_format": self._truncate_for_log(reviewer_output_format),
+                    },
+                }
+            )
+
+            # Persistir histórico completo e vincular ao token usage
+            request_id = self._extract_response_request_id(response)
+            token_usage_id = self._find_token_usage_id_for_request(
+                action_name="review_petition_comparative",
+                law_firm_id=law_firm_id,
+                request_id=request_id,
+            )
+            AgentExecutionHistoryService.save_execution_history(
+                agent_name="FapPetitionReviewerAgent",
+                action_name="review_petition_comparative",
+                agent_type="fap_review_reviewer",
+                system_prompt=system_prompt,
+                user_prompt=user_message,
+                model_response=response_text,
+                full_messages_history=[*messages, response],
+                result_data={
+                    "execution_id": execution_id,
+                    "analysis_type": "comparative",
+                    "mode": "file_attachment",
+                    "original_file_name": self._extract_file_name(original_petition_file_path),
+                    "revised_file_name": self._extract_file_name(revised_petition_file_path),
+                },
+                model_name=self.model_name,
+                model_provider="openai",
+                status="success",
+                user_id=user_id,
+                law_firm_id=law_firm_id,
+                chat_session_id=None,
+                agent_token_usage_id=token_usage_id,
+            )
+
+            result_dict = self._extract_json_dict_from_response(response_text)
             
             result = PetitionReviewResult(
                 analysis_type="comparative",
+                tokens_used=total_tokens or None,
+                cost_usd=float(total_cost) if total_cost else None,
                 comparative_changes=self._parse_comparative_changes(result_dict.get('comparative_changes', [])),
                 findings=self._parse_findings(result_dict.get('findings', [])),
                 new_patterns=self._parse_new_patterns(result_dict.get('new_patterns', [])),
@@ -723,20 +709,13 @@ INSTRUÇÕES DO PROJETO:
     def _build_single_user_message(
         self,
         *,
-        petition_chunk: str,
         auxiliary_documents: list[dict] | None,
-        chunk_index: int,
-        total_chunks: int,
-        section_label: str,
     ) -> str:
         aux_text = self._format_auxiliary_documents(auxiliary_documents)
         return f"""Revise esta petição inicial de FAP contra o manual.
 
-BLOCO ANALISADO: {chunk_index}/{total_chunks}
-SEÇÃO DO DOCUMENTO: {section_label}
-
-PETIÇÃO A REVISAR (TRECHO):
-{petition_chunk}
+PETIÇÃO A REVISAR:
+O documento foi enviado como anexo de arquivo nesta mensagem.
 
 {aux_text}
 
@@ -757,26 +736,12 @@ Estruture a resposta em JSON válido com a seguinte estrutura:
     def _build_comparative_user_message(
         self,
         *,
-        original_chunk: str,
-        revised_chunk: str,
         auxiliary_documents: list[dict] | None,
-        chunk_index: int,
-        total_chunks: int,
-        original_section_label: str,
-        revised_section_label: str,
     ) -> str:
         aux_text = self._format_auxiliary_documents(auxiliary_documents)
         return f"""Revise comparativamente estas duas versões de petição de FAP.
 
-BLOCO ANALISADO: {chunk_index}/{total_chunks}
-SEÇÃO ORIGINAL: {original_section_label}
-SEÇÃO REVISADA: {revised_section_label}
-
-VERSÃO ORIGINAL (TRECHO):
-{original_chunk}
-
-VERSÃO REVISADA (TRECHO):
-{revised_chunk}
+As duas versões (original e revisada) foram enviadas como anexos de arquivo nesta mensagem.
 
 {aux_text}
 
@@ -791,6 +756,29 @@ Estruture em JSON com:
 - findings (achados gerais)
 - new_patterns (padrões novos)
 - executive_summary (resumo)"""
+
+    def _build_file_part_for_message(self, file_path: str) -> dict[str, Any]:
+        """Monta o bloco de arquivo no formato aceito pelo OpenRouter."""
+        path = str(file_path or "").strip()
+        if not path:
+            raise ValueError("Caminho de arquivo inválido")
+
+        # URLs públicas também são válidas para OpenRouter.
+        if path.startswith("http://") or path.startswith("https://"):
+            return self.file_agent.build_openrouter_file_part(path)
+
+        if not Path(path).exists():
+            raise FileNotFoundError(f"Arquivo não encontrado: {path}")
+        return self.file_agent.build_openrouter_file_part(path)
+
+    def _extract_file_name(self, file_path: str) -> str:
+        """Extrai nome amigável de arquivo para logs/metadados."""
+        path = str(file_path or "").strip()
+        if not path:
+            return ""
+        if path.startswith("http://") or path.startswith("https://"):
+            return path.rstrip("/").split("/")[-1]
+        return Path(path).name
 
     def _extract_json_dict_from_response(self, response_text: str) -> dict:
         """Extrai JSON da resposta textual do modelo."""

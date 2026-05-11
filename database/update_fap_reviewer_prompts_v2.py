@@ -51,28 +51,6 @@ Restrições absolutas:
 - Não omitir alteração relevante na análise comparativa.
 - Não contrariar manual vigente por preferência estilística.
 """,
-    "revisor_prompt": """# REVISOR_PROMPT.md
-
-Execute a revisão conforme o cenário identificado.
-
-## Cenário A — análise comparativa (petição original + revisada)
-1. Identifique todas as alterações relevantes entre as versões.
-2. Para cada alteração: trecho original, trecho corrigido, motivo técnico, seção do manual e indicação de padrão novo/antigo.
-3. Aponte riscos jurídicos remanescentes após a revisão.
-4. Indique padrões novos não cobertos pelo manual.
-
-## Cenário B — revisão autônoma (apenas petição inicial)
-1. Identifique teses e benefícios envolvidos.
-2. Liste achados por categoria e gravidade.
-3. Valide completude documental por tese (Seção 3 do manual).
-4. Aponte riscos jurídicos e prioridade de correção.
-5. Indique padrões novos para evolução do manual.
-
-Critérios de execução obrigatórios:
-- Cobrir o documento inteiro (todos os blocos/seções recebidos).
-- Priorizar exatidão factual e aderência ao manual.
-- Evitar respostas genéricas; cada achado deve ser verificável no texto.
-""",
     "revisor_output_format": """# REVISOR_OUTPUT_FORMAT.md
 
 Responder obrigatoriamente em JSON válido, sem texto fora do JSON.

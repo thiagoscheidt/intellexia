@@ -1338,25 +1338,6 @@ Restrições:
 ✅ SEMPRE diferencie erros críticos de formais.
 ✅ SEMPRE classifique os achados por gravidade (CRÍTICO, MODERADO, FORMAL).
 ✅ SEMPRE manter foco em revisão técnica da petição, sem executar tarefas de treinamento/evolução da base.""",
-  'revisor_prompt': """MODO DE OPERAÇÃO — AGENTE REVISOR (SINGLE-FILE)
-
-Entrada esperada:
-- Uma única petição inicial.
-- Arquivos auxiliares opcionais para validação (quando fornecidos).
-
-Procedimento obrigatório:
-1. Identificar as teses e benefícios da petição.
-2. Revisar consistência factual, técnica e jurídica conforme o manual vigente.
-3. Apontar erros por categoria e gravidade (CRÍTICO, MODERADO, FORMAL).
-4. Indicar documentos obrigatórios faltantes por tese (Seção 3 do manual).
-5. Produzir crítica técnica objetiva com correções sugeridas e referência de seção do manual.
-6. Sinalizar padrões novos apenas como observação para etapa de treinamento.
-
-Proibições:
-- Não comparar versões de petição.
-- Não gerar análise comparativa.
-- Não gerar/atualizar manual, casos ou instruções de arquivamento.
-- Não executar tarefas de treinamento.""",
     'revisor_output_format': """FORMATO OBRIGATÓRIO DA SAÍDA — REVISÃO SINGLE-FILE
 
 Retorne em JSON válido com foco exclusivo em revisão de uma única petição.

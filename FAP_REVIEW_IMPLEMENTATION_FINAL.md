@@ -73,15 +73,14 @@ GET        /api/audit-logs                  API de auditoria
 
 ## 📋 Dados Iniciais Carregados
 
-### Prompts (8 Versões v1.0)
+### Prompts (7 Versões v1.0)
 1. `revisor_identity` - Identidade do agente revisor
 2. `revisor_rules` - Regras de análise
-3. `revisor_prompt` - Instrução principal
-4. `revisor_output_format` - Formato de saída JSON
-5. `training_identity` - Identidade do agente de treinamento
-6. `training_rules` - Regras de consolidação
-7. `training_prompt` - Instrução de treinamento
-8. `training_update_policy` - Política de atualização
+3. `revisor_output_format` - Formato de saída JSON
+4. `training_identity` - Identidade do agente de treinamento
+5. `training_rules` - Regras de consolidação
+6. `training_prompt` - Instrução de treinamento
+7. `training_update_policy` - Política de atualização
 
 ### Referências (3 Versões v1.0)
 1. `manual_fap` - Manual de revisão FAP (2.0 KB)

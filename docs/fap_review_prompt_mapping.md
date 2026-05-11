@@ -4,16 +4,15 @@ Este documento define como os conteúdos fornecidos pelo cliente devem ser distr
 
 ## Decisão de Estrutura
 
-Manter 4 arquivos de prompt do revisor:
+Manter 3 arquivos de prompt do revisor:
 - REVISOR_IDENTITY.md
 - REVISOR_RULES.md
-- REVISOR_PROMPT.md
 - REVISOR_OUTPUT_FORMAT.md
 
 Motivo:
-- A estrutura já está integrada no backend e no painel de configuração.
-- Evita mudanças de contrato entre UI, banco e agente no pré-implantação.
-- Permite evolução de conteúdo sem risco de regressão funcional.
+- A revisão operacional foi consolidada diretamente no código do agente.
+- O painel mantém apenas identidade, regras e formato de saída como pontos configuráveis.
+- Reduz ambiguidade entre instrução fixa do sistema e prompts editáveis.
 
 ## Encaixe dos Materiais Recebidos
 
@@ -28,7 +27,6 @@ Conteúdo aproveitado:
 ### 2) INSTRUÇÕES GERAIS DO PROJETO.txt
 Destinos:
 - REVISOR_RULES.md (regras invioláveis e hierarquia)
-- REVISOR_PROMPT.md (fluxo operacional dos cenários A e B)
 - REVISOR_OUTPUT_FORMAT.md (obrigatoriedade de estrutura de saída)
 
 ### 3) MANUAL GERAL.txt
@@ -45,9 +43,8 @@ Nome no sistema: PROJECT_INSTRUCTIONS.md
 
 ## Observação Importante
 
-Mesmo mantendo 4 prompts, a granularidade foi aumentada no conteúdo interno:
+Mesmo mantendo 3 prompts, a granularidade foi preservada entre identidade, regras e contrato de saída:
 - identidade separada de regras
-- regras separadas de execução por cenário
-- execução separada do contrato de saída JSON
+- regras separadas do contrato de saída JSON
 
-Isso preserva compatibilidade e melhora a acurácia do comportamento do agente.
+O fluxo de execução por cenário fica embutido no código do agente, preservando previsibilidade operacional.
