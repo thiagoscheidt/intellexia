@@ -117,18 +117,42 @@
 
     .finding-meta-box {
         border: 1px solid rgba(15, 23, 42, .06);
-        border-radius: .7rem;
-        background: var(--bs-secondary-bg);
-        padding: .75rem .8rem;
+        border-radius: .65rem;
+        padding: 1rem;
+        background: var(--bs-body-bg);
+    }
+
+    .finding-location-box {
+        background: rgba(13, 202, 240, 0.08);
+        border: 1px solid rgba(13, 202, 240, .15);
+    }
+
+    .finding-correction-box {
+        background: rgba(13, 110, 253, 0.08);
+        border: 1px solid rgba(13, 110, 253, .15);
+    }
+
+    .finding-manual-box {
+        background: rgba(25, 135, 84, 0.08);
+        border: 1px solid rgba(25, 135, 84, .15);
+    }
+
+    .finding-meta-box .meta-icon {
+        font-size: 1rem;
+        margin-right: .4rem;
+        display: inline-block;
     }
 
     .finding-meta-label {
-        font-size: .72rem;
+        font-size: .7rem;
         text-transform: uppercase;
-        letter-spacing: .04em;
+        letter-spacing: .05em;
         color: #6c7a8d;
-        margin-bottom: .3rem;
+        margin-bottom: .6rem;
         font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: .3rem;
     }
 
     .finding-meta-value {
@@ -136,16 +160,7 @@
         color: var(--bs-emphasis-color);
         margin: 0;
         white-space: pre-wrap;
-    }
-
-    .finding-correction-box {
-        border-color: rgba(13, 110, 253, .16);
-        background: rgba(13, 110, 253, .05);
-    }
-
-    .finding-manual-box {
-        border-color: rgba(25, 135, 84, .16);
-        background: rgba(25, 135, 84, .05);
+        line-height: 1.5;
     }
 
     .finding-description-copy {
@@ -416,86 +431,137 @@
             <div class="col-12">
                 <div class="card info-card">
                     <div class="card-header d-flex align-items-center gap-2">
-                        <i class="bi bi-exclamation-triangle text-warning"></i>
-                        Achados da Revisão
+                        <i class="bi bi-clipboard-check text-primary"></i>
+                        Pontos de Atenção Identificados
                     </div>
                     <div class="card-body">
                         <div class="findings-intro">
-                            Abaixo estão os pontos que merecem ajuste na petição. A gravidade indica prioridade de
-                            revisão. Quando houver referência ao manual, ela aparece ao final do achado como fundamento
-                            da observação.
+                            <strong>Como usar esta seção:</strong> Abaixo estão os pontos que precisam ser revisados e
+                            ajustados na petição.
+                            A <strong>gravidade</strong> (Crítico, Moderado, Formal) indica a <strong>prioridade de
+                                correção</strong>.
+                            Cada ponto inclui a <strong>localização exata</strong>, <strong>o que corrigir</strong> e,
+                            quando disponível,
+                            o <strong>fundamento legal</strong> (referência do manual) que justifica a observação.
                         </div>
 
-                        <div class="findings-toolbar">
+                        <!-- Resumo Rápido -->
+                        <div class="findings-toolbar mb-4">
                             <span class="toolbar-pill"><strong>Total:</strong> {{ result_data.findings|length }}</span>
-                            <span class="toolbar-pill"><strong>Críticos:</strong> {{
+                            <span class="toolbar-pill"
+                                style="border-color: #dc3545; background: rgba(220, 53, 69, 0.05);"><strong
+                                    style="color: #dc3545;">⚠ Críticos:</strong> {{
                                 result_data.executive_summary.critical_findings if result_data.executive_summary else 0
                                 }}</span>
-                            <span class="toolbar-pill"><strong>Moderados:</strong> {{
+                            <span class="toolbar-pill"
+                                style="border-color: #ffc107; background: rgba(255, 193, 7, 0.05);"><strong
+                                    style="color: #997404;">⚡ Moderados:</strong> {{
                                 result_data.executive_summary.moderate_findings if result_data.executive_summary else 0
                                 }}</span>
-                            <span class="toolbar-pill"><strong>Formais:</strong> {{
+                            <span class="toolbar-pill"
+                                style="border-color: #0dcaf0; background: rgba(13, 202, 240, 0.05);"><strong
+                                    style="color: #055160;">ℹ Formais:</strong> {{
                                 result_data.executive_summary.formal_findings if result_data.executive_summary else 0
                                 }}</span>
                         </div>
 
+                        <!-- Índice de Pontos (Navegação Rápida) -->
+                        <div class="mb-4 p-3 rounded"
+                            style="background: var(--bs-secondary-bg); border: 1px solid rgba(15, 23, 42, .07);">
+                            <div class="small fw-semibold mb-2">Navegação Rápida:</div>
+                            <div class="d-flex flex-wrap gap-2">
+                                {% for finding in result_data.findings %}
+                                <a href="#ponto-{{ loop.index }}"
+                                    class="btn btn-sm btn-outline-secondary {% if finding.severity == 'CRÍTICO' %}border-danger{% elif finding.severity == 'MODERADO' %}border-warning{% else %}border-info{% endif %}">
+                                    Ponto {{ loop.index }}
+                                </a>
+                                {% endfor %}
+                            </div>
+                        </div>
+
+                        <!-- Listagem de Pontos -->
                         {% for finding in result_data.findings %}
                         {% set normalized_category = (finding.category or '')|upper %}
                         {% set show_category = normalized_category and normalized_category not in ['CRITICAL',
                         'MODERATE', 'FORMAL', 'CRÍTICO', 'MODERADO'] %}
-                        <div
-                            class="finding-item {% if finding.severity == 'CRÍTICO' %}severity-critical{% elif finding.severity == 'MODERADO' %}severity-moderate{% else %}severity-formal{% endif %}">
-                            <div class="finding-item-header">
-                                <h6 class="finding-item-title mb-0">Achado {{ loop.index }}</h6>
-                                <div class="d-flex flex-wrap gap-2">
-                                    {% if finding.severity == 'CRÍTICO' %}
-                                    <span
-                                        class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle">CRÍTICO</span>
-                                    {% elif finding.severity == 'MODERADO' %}
-                                    <span
-                                        class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle">MODERADO</span>
-                                    {% else %}
-                                    <span
-                                        class="badge rounded-pill bg-info-subtle text-info-emphasis border border-info-subtle">FORMAL</span>
-                                    {% endif %}
-                                    {% if show_category %}
-                                    <span class="badge rounded-pill bg-light text-dark border">{{ finding.category
-                                        }}</span>
-                                    {% endif %}
-                                    {% if finding.is_new_pattern %}
-                                    <span
-                                        class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle">Padrão
-                                        Novo</span>
-                                    {% endif %}
+                        <div id="ponto-{{ loop.index }}"
+                            class="finding-item {% if finding.severity == 'CRÍTICO' %}severity-critical{% elif finding.severity == 'MODERADO' %}severity-moderate{% else %}severity-formal{% endif %}"
+                            style="scroll-margin-top: 80px;">
+
+                            <!-- Header com Número + Gravidade -->
+                            <div class="finding-item-header" style="margin-bottom: 1rem;">
+                                <div class="flex-grow-1">
+                                    <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
+                                        <h6 class="finding-item-title mb-0">Ponto de Atenção {{ loop.index }}</h6>
+                                        {% if finding.severity == 'CRÍTICO' %}
+                                        <span
+                                            class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle">CRÍTICO</span>
+                                        {% elif finding.severity == 'MODERADO' %}
+                                        <span
+                                            class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle">MODERADO</span>
+                                        {% else %}
+                                        <span
+                                            class="badge rounded-pill bg-info-subtle text-info-emphasis border border-info-subtle">FORMAL</span>
+                                        {% endif %}
+                                        {% if show_category %}
+                                        <span class="badge rounded-pill bg-light text-dark border">{{ finding.category
+                                            }}</span>
+                                        {% endif %}
+                                        {% if finding.is_new_pattern %}
+                                        <span
+                                            class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle">Padrão
+                                            Novo</span>
+                                        {% endif %}
+                                    </div>
                                 </div>
                             </div>
 
-                            <p class="finding-description-copy">{{ finding.description }}</p>
+                            <!-- Descrição Principal -->
+                            <div class="mb-3">
+                                <p class="finding-description-copy mb-0">{{ finding.description }}</p>
+                            </div>
 
+                            <!-- Metadados em Grid Melhorado -->
                             <div class="finding-meta-grid">
                                 {% if finding.location %}
-                                <div class="finding-meta-box">
-                                    <div class="finding-meta-label">Localização na peça</div>
+                                <div class="finding-meta-box finding-location-box">
+                                    <div class="finding-meta-label"><i class="bi bi-map text-info"></i> Localização
+                                    </div>
                                     <p class="finding-meta-value">{{ finding.location }}</p>
                                 </div>
                                 {% endif %}
 
                                 {% if finding.correction %}
                                 <div class="finding-meta-box finding-correction-box">
-                                    <div class="finding-meta-label">Correção sugerida</div>
+                                    <div class="finding-meta-label"><i class="bi bi-pencil-square text-primary"></i>
+                                        Sugestão de Correção</div>
                                     <p class="finding-meta-value">{{ finding.correction }}</p>
                                 </div>
                                 {% endif %}
 
                                 {% if finding.manual_reference %}
                                 <div class="finding-meta-box finding-manual-box">
-                                    <div class="finding-meta-label">Fundamento no manual</div>
+                                    <div class="finding-meta-label"><i class="bi bi-book text-success"></i> Fundamento
+                                        Legal</div>
                                     <p class="finding-meta-value">{{ finding.manual_reference }}</p>
                                 </div>
                                 {% endif %}
                             </div>
                         </div>
                         {% endfor %}
+
+                        <!-- CTA para Ação -->
+                        <div class="alert alert-light border mt-4 mb-0" style="background: var(--bs-secondary-bg);">
+                            <div class="d-flex align-items-start gap-3">
+                                <div style="font-size: 1.5rem;">💡</div>
+                                <div>
+                                    <strong>Próximas Etapas:</strong> Revise os pontos críticos e moderados
+                                    prioritariamente.
+                                    Incorporate as correções sugeridas na sua petição. Os pontos formais melhoram a
+                                    conformidade, mas não bloqueiam.
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
