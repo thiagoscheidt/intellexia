@@ -130,7 +130,7 @@ class FapPetitionReviewerAgent:
     def __init__(self, 
                  openai_api_key: Optional[str] = None,
                  model: str = 'gpt-4o-mini',
-                 temperature: float = 0.7):
+                 temperature: float = 0.2):
         """
         Inicializa o agente revisor
         

@@ -2461,7 +2461,7 @@ class FapReviewSetting(db.Model):
     training_model = db.Column(db.String(100), default='gpt-4o-mini', nullable=False)
 
     # Configurações de comportamento
-    reviewer_temperature = db.Column(db.Float, default=0.7, nullable=False)
+    reviewer_temperature = db.Column(db.Float, default=0.2, nullable=False)
     training_temperature = db.Column(db.Float, default=0.7, nullable=False)
 
     # Políticas de atualização

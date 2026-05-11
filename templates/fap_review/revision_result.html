@@ -67,6 +67,105 @@
         border-left-color: #0dcaf0;
     }
 
+    .findings-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .65rem;
+        margin-bottom: 1rem;
+    }
+
+    .findings-toolbar .toolbar-pill {
+        border: 1px solid rgba(15, 23, 42, .07);
+        background: var(--bs-secondary-bg);
+        border-radius: 999px;
+        padding: .45rem .8rem;
+        font-size: .78rem;
+        color: var(--bs-secondary-color);
+    }
+
+    .finding-item-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .75rem;
+        margin-bottom: .75rem;
+    }
+
+    .finding-item-title {
+        font-size: .95rem;
+        font-weight: 700;
+        color: var(--bs-emphasis-color);
+        margin: 0;
+    }
+
+    .findings-intro {
+        border: 1px solid rgba(15, 23, 42, .07);
+        background: var(--bs-secondary-bg);
+        border-radius: .8rem;
+        padding: .85rem .95rem;
+        margin-bottom: 1rem;
+        color: var(--bs-secondary-color);
+        font-size: .88rem;
+    }
+
+    .finding-meta-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .75rem;
+        margin-top: .85rem;
+    }
+
+    .finding-meta-box {
+        border: 1px solid rgba(15, 23, 42, .06);
+        border-radius: .7rem;
+        background: var(--bs-secondary-bg);
+        padding: .75rem .8rem;
+    }
+
+    .finding-meta-label {
+        font-size: .72rem;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: #6c7a8d;
+        margin-bottom: .3rem;
+        font-weight: 700;
+    }
+
+    .finding-meta-value {
+        font-size: .88rem;
+        color: var(--bs-emphasis-color);
+        margin: 0;
+        white-space: pre-wrap;
+    }
+
+    .finding-correction-box {
+        border-color: rgba(13, 110, 253, .16);
+        background: rgba(13, 110, 253, .05);
+    }
+
+    .finding-manual-box {
+        border-color: rgba(25, 135, 84, .16);
+        background: rgba(25, 135, 84, .05);
+    }
+
+    .finding-description-copy {
+        font-size: .92rem;
+        color: var(--bs-secondary-color);
+        line-height: 1.55;
+        margin: 0;
+    }
+
+    @media (max-width: 767.98px) {
+        .finding-meta-grid {
+            grid-template-columns: 1fr;
+        }
+
+        .finding-item-header {
+            flex-direction: column;
+            align-items: flex-start;
+        }
+    }
+
     .code-block-lite {
         background: var(--bs-secondary-bg);
         border: 1px solid var(--bs-border-color);
@@ -193,7 +292,17 @@
                             </div>
                             <div class="col-md-6">
                                 <div class="text-muted small">Documento Principal</div>
-                                <div class="fw-semibold">{{ execution.main_document_filename }}</div>
+                                <div class="d-flex flex-wrap align-items-center gap-2">
+                                    <div class="fw-semibold">{{ execution.main_document_filename }}</div>
+                                    {% if execution.main_document_path and execution.main_document_filename and
+                                    execution.main_document_filename.lower().endswith('.pdf') %}
+                                    <a href="{{ url_for('fap_review.revision_main_document', execution_id=execution.id) }}"
+                                        class="btn btn-sm btn-outline-primary" target="_blank"
+                                        rel="noopener noreferrer">
+                                        <i class="bi bi-eye me-1"></i> Visualizar PDF
+                                    </a>
+                                    {% endif %}
+                                </div>
                             </div>
                             <div class="col-md-2">
                                 <div class="text-muted small">Auxiliares</div>
@@ -308,42 +417,83 @@
                 <div class="card info-card">
                     <div class="card-header d-flex align-items-center gap-2">
                         <i class="bi bi-exclamation-triangle text-warning"></i>
-                        Achados por Categoria
+                        Achados da Revisão
                     </div>
                     <div class="card-body">
+                        <div class="findings-intro">
+                            Abaixo estão os pontos que merecem ajuste na petição. A gravidade indica prioridade de
+                            revisão. Quando houver referência ao manual, ela aparece ao final do achado como fundamento
+                            da observação.
+                        </div>
+
+                        <div class="findings-toolbar">
+                            <span class="toolbar-pill"><strong>Total:</strong> {{ result_data.findings|length }}</span>
+                            <span class="toolbar-pill"><strong>Críticos:</strong> {{
+                                result_data.executive_summary.critical_findings if result_data.executive_summary else 0
+                                }}</span>
+                            <span class="toolbar-pill"><strong>Moderados:</strong> {{
+                                result_data.executive_summary.moderate_findings if result_data.executive_summary else 0
+                                }}</span>
+                            <span class="toolbar-pill"><strong>Formais:</strong> {{
+                                result_data.executive_summary.formal_findings if result_data.executive_summary else 0
+                                }}</span>
+                        </div>
+
                         {% for finding in result_data.findings %}
+                        {% set normalized_category = (finding.category or '')|upper %}
+                        {% set show_category = normalized_category and normalized_category not in ['CRITICAL',
+                        'MODERATE', 'FORMAL', 'CRÍTICO', 'MODERADO'] %}
                         <div
                             class="finding-item {% if finding.severity == 'CRÍTICO' %}severity-critical{% elif finding.severity == 'MODERADO' %}severity-moderate{% else %}severity-formal{% endif %}">
-                            <div class="d-flex align-items-center gap-2 mb-2">
-                                {% if finding.severity == 'CRÍTICO' %}
-                                <span
-                                    class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle">CRÍTICO</span>
-                                {% elif finding.severity == 'MODERADO' %}
-                                <span
-                                    class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle">MODERADO</span>
-                                {% else %}
-                                <span
-                                    class="badge rounded-pill bg-info-subtle text-info-emphasis border border-info-subtle">FORMAL</span>
+                            <div class="finding-item-header">
+                                <h6 class="finding-item-title mb-0">Achado {{ loop.index }}</h6>
+                                <div class="d-flex flex-wrap gap-2">
+                                    {% if finding.severity == 'CRÍTICO' %}
+                                    <span
+                                        class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle">CRÍTICO</span>
+                                    {% elif finding.severity == 'MODERADO' %}
+                                    <span
+                                        class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle">MODERADO</span>
+                                    {% else %}
+                                    <span
+                                        class="badge rounded-pill bg-info-subtle text-info-emphasis border border-info-subtle">FORMAL</span>
+                                    {% endif %}
+                                    {% if show_category %}
+                                    <span class="badge rounded-pill bg-light text-dark border">{{ finding.category
+                                        }}</span>
+                                    {% endif %}
+                                    {% if finding.is_new_pattern %}
+                                    <span
+                                        class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle">Padrão
+                                        Novo</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+
+                            <p class="finding-description-copy">{{ finding.description }}</p>
+
+                            <div class="finding-meta-grid">
+                                {% if finding.location %}
+                                <div class="finding-meta-box">
+                                    <div class="finding-meta-label">Localização na peça</div>
+                                    <p class="finding-meta-value">{{ finding.location }}</p>
+                                </div>
+                                {% endif %}
+
+                                {% if finding.correction %}
+                                <div class="finding-meta-box finding-correction-box">
+                                    <div class="finding-meta-label">Correção sugerida</div>
+                                    <p class="finding-meta-value">{{ finding.correction }}</p>
+                                </div>
+                                {% endif %}
+
+                                {% if finding.manual_reference %}
+                                <div class="finding-meta-box finding-manual-box">
+                                    <div class="finding-meta-label">Fundamento no manual</div>
+                                    <p class="finding-meta-value">{{ finding.manual_reference }}</p>
+                                </div>
                                 {% endif %}
                             </div>
-
-                            <div class="fw-semibold mb-2">{{ finding.description }}</div>
-
-                            {% if finding.location %}
-                            <div class="small mb-1"><strong>Localização:</strong> {{ finding.location }}</div>
-                            {% endif %}
-                            {% if finding.correction %}
-                            <div class="small mb-1"><strong>Correção:</strong> <code>{{ finding.correction }}</code>
-                            </div>
-                            {% endif %}
-                            {% if finding.manual_reference %}
-                            <div class="small mb-1"><strong>Manual:</strong> {{ finding.manual_reference }}</div>
-                            {% endif %}
-                            {% if finding.is_new_pattern %}
-                            <span
-                                class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle mt-1">Padrão
-                                Novo</span>
-                            {% endif %}
                         </div>
                         {% endfor %}
                     </div>

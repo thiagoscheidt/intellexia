@@ -111,7 +111,7 @@ def _get_fap_setting(law_firm_id: int) -> FapReviewSetting:
             law_firm_id=law_firm_id,
             reviewer_model='gpt-4o-mini',
             training_model='gpt-4o-mini',
-            reviewer_temperature=0.7,
+            reviewer_temperature=0.2,
             training_temperature=0.7,
             reviewer_enabled=True,
             training_enabled=True
@@ -541,6 +541,34 @@ def revision_result(execution_id: int):
                           result_data=result_data)
 
 
+@fap_review_bp.route('/revision/<int:execution_id>/document/main', methods=['GET'])
+@require_law_firm
+def revision_main_document(execution_id: int):
+    """Abre o documento principal salvo da execução de revisão."""
+    law_firm_id = get_current_law_firm_id()
+
+    execution = FapReviewExecution.query.filter_by(
+        id=execution_id,
+        law_firm_id=law_firm_id
+    ).first_or_404()
+
+    file_path = str(execution.main_document_path or '').strip()
+    if not file_path:
+        flash('Documento principal não disponível para esta execução.', 'warning')
+        return redirect(url_for('fap_review.revision_result', execution_id=execution_id))
+
+    path = Path(file_path)
+    if not path.exists() or not path.is_file():
+        flash('Arquivo da revisão não foi encontrado no armazenamento.', 'error')
+        return redirect(url_for('fap_review.revision_result', execution_id=execution_id))
+
+    return send_file(
+        path,
+        as_attachment=False,
+        download_name=execution.main_document_filename or path.name,
+    )
+
+
 @fap_review_bp.route('/training', methods=['GET', 'POST'])
 @require_law_firm
 @require_admin_user
@@ -582,8 +610,11 @@ def settings():
             # Atualizar configurações
             setting.reviewer_model = data.get('reviewer_model', setting.reviewer_model)
             setting.training_model = data.get('training_model', setting.training_model)
-            setting.reviewer_temperature = float(data.get('reviewer_temperature', setting.reviewer_temperature))
-            setting.training_temperature = float(data.get('training_temperature', setting.training_temperature))
+            # Normalizar temperatura (converter vírgula para ponto se necessário)
+            reviewer_temp_str = str(data.get('reviewer_temperature', setting.reviewer_temperature)).replace(',', '.')
+            setting.reviewer_temperature = float(reviewer_temp_str)
+            training_temp_str = str(data.get('training_temperature', setting.training_temperature)).replace(',', '.')
+            setting.training_temperature = float(training_temp_str)
             setting.auto_update_manual = data.get('auto_update_manual', setting.auto_update_manual)
             setting.auto_update_cases = data.get('auto_update_cases', setting.auto_update_cases)
             setting.require_approval_before_publish = data.get('require_approval_before_publish', setting.require_approval_before_publish)

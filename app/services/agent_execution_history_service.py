@@ -13,21 +13,72 @@ logger = logging.getLogger(__name__)
 class AgentExecutionHistoryService:
     """Serviço para armazenar e recuperar histórico completo de execução de agentes."""
 
+    _MAX_INLINE_STRING_LENGTH = 4000
+
+    @staticmethod
+    def _truncate_string(value: str) -> str:
+        """Limita strings muito grandes para reduzir risco de overflow no banco."""
+        if len(value) <= AgentExecutionHistoryService._MAX_INLINE_STRING_LENGTH:
+            return value
+        omitted = len(value) - AgentExecutionHistoryService._MAX_INLINE_STRING_LENGTH
+        return (
+            value[:AgentExecutionHistoryService._MAX_INLINE_STRING_LENGTH]
+            + f"\n\n...[truncated {omitted} chars]"
+        )
+
+    @staticmethod
+    def _sanitize_payload(value: Any) -> Any:
+        """Remove payloads binários/base64 gigantes antes de persistir o histórico."""
+        if isinstance(value, dict):
+            payload_type = str(value.get("type") or "").lower()
+            file_info = value.get("file")
+            if payload_type == "file" and isinstance(file_info, dict):
+                sanitized_file = dict(file_info)
+                file_data = sanitized_file.get("file_data")
+                if isinstance(file_data, str):
+                    sanitized_file["file_data"] = (
+                        f"[omitted file payload: {len(file_data)} chars]"
+                    )
+                return {
+                    **value,
+                    "file": AgentExecutionHistoryService._sanitize_payload(sanitized_file),
+                }
+
+            return {
+                key: AgentExecutionHistoryService._sanitize_payload(item)
+                for key, item in value.items()
+            }
+
+        if isinstance(value, list):
+            return [AgentExecutionHistoryService._sanitize_payload(item) for item in value]
+
+        if isinstance(value, str):
+            if value.startswith("data:") and ";base64," in value:
+                return f"[omitted data-url payload: {len(value)} chars]"
+            return AgentExecutionHistoryService._truncate_string(value)
+
+        return value
+
+    @staticmethod
+    def _build_execution_history(**kwargs: Any) -> AgentExecutionHistory:
+        """Cria a entidade de histórico com payload já sanitizado."""
+        return AgentExecutionHistory(**kwargs)
+
     @staticmethod
     def _serialize_message(msg: Any) -> dict[str, Any]:
         """Serializa uma mensagem LangChain para dict JSON-compatível."""
         if hasattr(msg, "model_dump"):
-            return msg.model_dump()
+            return AgentExecutionHistoryService._sanitize_payload(msg.model_dump())
         if hasattr(msg, "dict"):
-            return msg.dict()
+            return AgentExecutionHistoryService._sanitize_payload(msg.dict())
         if hasattr(msg, "content") and hasattr(msg, "type"):
-            return {
+            return AgentExecutionHistoryService._sanitize_payload({
                 "type": str(msg.type),
                 "content": str(msg.content),
-            }
+            })
         if isinstance(msg, dict):
-            return msg
-        return {"content": str(msg)}
+            return AgentExecutionHistoryService._sanitize_payload(msg)
+        return AgentExecutionHistoryService._sanitize_payload({"content": str(msg)})
 
     @staticmethod
     def save_execution_history(
@@ -86,7 +137,7 @@ class AgentExecutionHistoryService:
                     logger.warning("Erro ao serializar mensagens: %s. Usando None.", e)
                     serialized_messages = None
 
-            execution_history = AgentExecutionHistory(
+            execution_history = AgentExecutionHistoryService._build_execution_history(
                 agent_name=agent_name,
                 action_name=action_name,
                 agent_type=agent_type,
@@ -120,12 +171,50 @@ class AgentExecutionHistoryService:
             return execution_history
 
         except Exception as exc:
+            db.session.rollback()
+
             logger.exception(
-                "✗ Erro ao persistir histórico de execução: %s",
+                "✗ Erro ao persistir histórico de execução com mensagens completas: %s",
                 exc,
             )
-            db.session.rollback()
-            return None
+
+            try:
+                execution_history = AgentExecutionHistoryService._build_execution_history(
+                    agent_name=agent_name,
+                    action_name=action_name,
+                    agent_type=agent_type,
+                    system_prompt=AgentExecutionHistoryService._sanitize_payload(system_prompt),
+                    user_prompt=AgentExecutionHistoryService._sanitize_payload(user_prompt),
+                    model_response=AgentExecutionHistoryService._sanitize_payload(model_response),
+                    full_messages_history=None,
+                    result_data=AgentExecutionHistoryService._sanitize_payload(result_data),
+                    model_name=model_name,
+                    model_provider=model_provider,
+                    status=status,
+                    error_message=error_message,
+                    user_id=user_id,
+                    law_firm_id=law_firm_id,
+                    chat_session_id=chat_session_id,
+                    agent_token_usage_id=agent_token_usage_id,
+                )
+
+                db.session.add(execution_history)
+                db.session.commit()
+
+                logger.warning(
+                    "✓ Histórico persistido sem full_messages_history: agent=%s, action=%s, id=%s",
+                    agent_name,
+                    action_name,
+                    execution_history.id,
+                )
+                return execution_history
+            except Exception as fallback_exc:
+                db.session.rollback()
+                logger.exception(
+                    "✗ Erro ao persistir histórico de execução mesmo sem mensagens completas: %s",
+                    fallback_exc,
+                )
+                return None
 
     @staticmethod
     def get_execution_history_by_id(execution_id: int) -> AgentExecutionHistory | None:
