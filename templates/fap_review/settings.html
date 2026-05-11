@@ -333,6 +333,7 @@
                             <div class="card-body">
                                 <p class="text-muted small mb-3">Gerencie os prompts que controlam o comportamento do
                                     agente revisor. Clique em um prompt para visualizar, editar ou gerenciar suas
+                                    versões (REVISOR_OUTPUT_FORMAT.md é somente leitura).
                                     versões.</p>
                                 <div class="row g-2">
                                     {% for prompt_type, prompt_name, prompt_desc in [
@@ -353,8 +354,9 @@
                                             </div>
                                             <a href="{{ url_for('fap_review.edit_prompt_by_type', prompt_type=prompt_type) }}"
                                                 class="btn btn-sm btn-outline-secondary ms-2"
-                                                title="Editar {{ prompt_name }}">
-                                                <i class="bi bi-pencil"></i>
+                                                title="{{ 'Visualizar ' ~ prompt_name if prompt_type == 'revisor_output_format' else 'Editar ' ~ prompt_name }}">
+                                                <i
+                                                    class="bi {{ 'bi-eye' if prompt_type == 'revisor_output_format' else 'bi-pencil' }}"></i>
                                             </a>
                                         </div>
                                     </div>
@@ -496,7 +498,8 @@
                             </div>
                             <div class="card-body">
                                 <p class="text-muted small mb-3">Documentos de referência utilizados por todos os
-                                    agentes. Clique em uma referência para visualizar, editar ou gerenciar suas versões.
+                                    agentes. Clique em uma referência para visualizar, editar ou gerenciar suas versões
+                                    (PROJECT_INSTRUCTIONS.md é somente leitura).
                                 </p>
                                 <div class="row g-2">
                                     {% for reference_type, ref_name, ref_desc in [
@@ -515,8 +518,9 @@
                                             </div>
                                             <a href="{{ url_for('fap_review.edit_reference_by_type', reference_type=reference_type) }}"
                                                 class="btn btn-sm btn-outline-secondary ms-2"
-                                                title="Editar {{ ref_name }}">
-                                                <i class="bi bi-pencil"></i>
+                                                title="{{ 'Visualizar ' ~ ref_name if reference_type == 'project_instructions' else 'Editar ' ~ ref_name }}">
+                                                <i
+                                                    class="bi {{ 'bi-eye' if reference_type == 'project_instructions' else 'bi-pencil' }}"></i>
                                             </a>
                                         </div>
                                     </div>

@@ -2,7 +2,7 @@
 
 {% from "partials/page_hero.html" import page_hero %}
 
-{% set page_title = "Editar Referência" %}
+{% set page_title = "Visualizar Referência" if is_read_only_reference else "Editar Referência" %}
 
 {% block title %}{{ page_title }} - FAP Review - IntellexIA{% endblock %}
 
@@ -123,22 +123,33 @@
                                 <div class="markdown-editor">
                                     <div id="referenceMarkdownEditor"></div>
                                 </div>
+                                {% if is_read_only_reference %}
+                                <div class="form-text text-warning">Esta referência é somente leitura para proteger o
+                                    sistema.</div>
+                                {% else %}
                                 <div class="form-text">Ao salvar, uma nova versão será criada automaticamente.</div>
+                                {% endif %}
                             </div>
 
                             <div class="d-flex flex-wrap gap-2 justify-content-end">
                                 <a href="{{ url_for('fap_review.settings') }}" class="btn btn-outline-secondary">
                                     <i class="bi bi-arrow-left me-1"></i> Voltar
                                 </a>
-                                {% if not reference.is_active %}
+                                {% if not reference.is_active and not is_read_only_reference %}
                                 <button type="button" class="btn btn-outline-success" id="activateBtn"
                                     data-activate-url="{{ url_for('fap_review.activate_reference', reference_version_id=reference.id) }}">
                                     <i class="bi bi-check2-circle me-1"></i> Usar Esta Versão
                                 </button>
                                 {% endif %}
+                                {% if is_read_only_reference %}
+                                <button type="button" class="btn btn-primary" id="saveBtn" disabled>
+                                    <i class="bi bi-lock me-1"></i> Somente Visualização
+                                </button>
+                                {% else %}
                                 <button type="button" class="btn btn-primary" id="saveBtn">
                                     <i class="bi bi-floppy me-1"></i> Salvar Nova Versão
                                 </button>
+                                {% endif %}
                             </div>
                         </form>
                     </div>
@@ -202,9 +213,12 @@
                                 {% if item.is_active %}
                                 <span
                                     class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle">Ativa</span>
-                                {% else %}
+                                {% elif not is_read_only_reference %}
                                 <button type="button" class="btn btn-sm btn-outline-success activate-version-btn"
                                     data-activate-url="{{ url_for('fap_review.activate_reference', reference_version_id=item.id) }}">Ativar</button>
+                                {% else %}
+                                <span
+                                    class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">Bloqueada</span>
                                 {% endif %}
                                 <a href="{{ url_for('fap_review.edit_reference', reference_version_id=item.id) }}"
                                     class="btn btn-sm btn-outline-secondary"
@@ -225,11 +239,14 @@
 </div>
 
 <script type="application/json" id="initialReferenceContentData">{{ reference.content|tojson }}</script>
+<script type="application/json" id="isReadOnlyReferenceData">{{ is_read_only_reference|tojson }}</script>
 {% endblock %}
 
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+        const isReadOnlyData = document.getElementById('isReadOnlyReferenceData');
+        const isReadOnlyReference = isReadOnlyData ? JSON.parse(isReadOnlyData.textContent || 'false') : false;
         const editorElement = document.getElementById('referenceMarkdownEditor');
         const previewElement = document.getElementById('referencePreview');
         const initialData = document.getElementById('initialReferenceContentData');
@@ -364,6 +381,7 @@
 
         const quill = new Quill('#referenceMarkdownEditor', {
             theme: 'snow',
+            readOnly: isReadOnlyReference,
             modules: {
                 toolbar: [
                     [{ header: [1, 2, 3, false] }],
@@ -407,6 +425,10 @@
 
         if (saveBtn) {
             saveBtn.addEventListener('click', async function () {
+                if (isReadOnlyReference) {
+                    return;
+                }
+
                 const content = getEditorText();
 
                 try {

@@ -54,6 +54,8 @@ fap_review_bp = Blueprint('fap_review', __name__, url_prefix='/fap-review')
 ALLOWED_DOCUMENT_EXTENSIONS = {'pdf', 'doc', 'docx', 'txt'}
 ALLOWED_AUXILIARY_EXTENSIONS = {'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'png', 'jpg', 'jpeg'}
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB
+READ_ONLY_PROMPT_TYPES = {'revisor_output_format'}
+READ_ONLY_REFERENCE_TYPES = {'project_instructions'}
 
 
 def allowed_file(filename: str, allowed_extensions: set) -> bool:
@@ -648,6 +650,13 @@ def edit_prompt_by_type(prompt_type: str):
     prompt = FapReviewPromptVersion.query.filter_by(
         law_firm_id=law_firm_id,
         prompt_type=prompt_type,
+        is_active=True,
+    ).order_by(FapReviewPromptVersion.version_number.desc()).first()
+
+    if not prompt:
+        prompt = FapReviewPromptVersion.query.filter_by(
+        law_firm_id=law_firm_id,
+        prompt_type=prompt_type,
     ).order_by(FapReviewPromptVersion.version_number.desc()).first()
 
     if not prompt:
@@ -691,6 +700,13 @@ def edit_reference_by_type(reference_type: str):
         return redirect(url_for('fap_review.settings'))
 
     reference = FapReviewReferenceVersion.query.filter_by(
+        law_firm_id=law_firm_id,
+        reference_type=reference_type,
+        is_active=True,
+    ).order_by(FapReviewReferenceVersion.version_number.desc()).first()
+
+    if not reference:
+        reference = FapReviewReferenceVersion.query.filter_by(
         law_firm_id=law_firm_id,
         reference_type=reference_type,
     ).order_by(FapReviewReferenceVersion.version_number.desc()).first()
@@ -768,14 +784,29 @@ def edit_prompt(prompt_version_id: int):
         id=prompt_version_id,
         law_firm_id=law_firm_id
     ).first_or_404()
+
+    # Evita abrir versão inativa por padrão; direciona para a ativa mais recente.
+    if request.method == 'GET' and not prompt.is_active:
+        active_prompt = FapReviewPromptVersion.query.filter_by(
+            law_firm_id=law_firm_id,
+            prompt_type=prompt.prompt_type,
+            is_active=True,
+        ).order_by(FapReviewPromptVersion.version_number.desc()).first()
+        if active_prompt and active_prompt.id != prompt.id:
+            return redirect(url_for('fap_review.edit_prompt', prompt_version_id=active_prompt.id))
     
     # Carregar todas as versões deste tipo
     all_versions = FapReviewPromptVersion.query.filter_by(
         law_firm_id=law_firm_id,
         prompt_type=prompt.prompt_type
     ).order_by(FapReviewPromptVersion.version_number.desc()).all()
+
+    is_read_only_prompt = prompt.prompt_type in READ_ONLY_PROMPT_TYPES
     
     if request.method == 'POST':
+        if is_read_only_prompt:
+            return jsonify({'error': 'Este prompt é somente leitura e não pode ser editado.'}), 403
+
         try:
             content = request.json.get('content', '')
             
@@ -802,7 +833,12 @@ def edit_prompt(prompt_version_id: int):
             return jsonify({'error': str(e)}), 500
     
     # GET
-    return render_template('fap_review/edit_prompt.html', prompt=prompt, versions=all_versions)
+    return render_template(
+        'fap_review/edit_prompt.html',
+        prompt=prompt,
+        versions=all_versions,
+        is_read_only_prompt=is_read_only_prompt,
+    )
 
 
 @fap_review_bp.route('/settings/prompts/<int:prompt_version_id>/activate', methods=['POST'])
@@ -816,6 +852,9 @@ def activate_prompt(prompt_version_id: int):
         id=prompt_version_id,
         law_firm_id=law_firm_id
     ).first_or_404()
+
+    if prompt.prompt_type in READ_ONLY_PROMPT_TYPES:
+        return jsonify({'error': 'Este prompt é somente leitura e não permite ativação manual.'}), 403
     
     try:
         # Desativar outras versões do mesmo tipo
@@ -875,14 +914,29 @@ def edit_reference(reference_version_id: int):
         id=reference_version_id,
         law_firm_id=law_firm_id
     ).first_or_404()
+
+    # Evita abrir versão inativa por padrão; direciona para a ativa mais recente.
+    if request.method == 'GET' and not reference.is_active:
+        active_reference = FapReviewReferenceVersion.query.filter_by(
+            law_firm_id=law_firm_id,
+            reference_type=reference.reference_type,
+            is_active=True,
+        ).order_by(FapReviewReferenceVersion.version_number.desc()).first()
+        if active_reference and active_reference.id != reference.id:
+            return redirect(url_for('fap_review.edit_reference', reference_version_id=active_reference.id))
     
     # Carregar todas as versões deste tipo
     all_versions = FapReviewReferenceVersion.query.filter_by(
         law_firm_id=law_firm_id,
         reference_type=reference.reference_type
     ).order_by(FapReviewReferenceVersion.version_number.desc()).all()
+
+    is_read_only_reference = reference.reference_type in READ_ONLY_REFERENCE_TYPES
     
     if request.method == 'POST':
+        if is_read_only_reference:
+            return jsonify({'error': 'Esta referência é somente leitura e não pode ser editada.'}), 403
+
         try:
             content = request.json.get('content', '')
             
@@ -908,7 +962,12 @@ def edit_reference(reference_version_id: int):
             return jsonify({'error': str(e)}), 500
     
     # GET
-    return render_template('fap_review/edit_reference.html', reference=reference, versions=all_versions)
+    return render_template(
+        'fap_review/edit_reference.html',
+        reference=reference,
+        versions=all_versions,
+        is_read_only_reference=is_read_only_reference,
+    )
 
 
 @fap_review_bp.route('/settings/references/<int:reference_version_id>/activate', methods=['POST'])
@@ -922,6 +981,9 @@ def activate_reference(reference_version_id: int):
         id=reference_version_id,
         law_firm_id=law_firm_id
     ).first_or_404()
+
+    if reference.reference_type in READ_ONLY_REFERENCE_TYPES:
+        return jsonify({'error': 'Esta referência é somente leitura e não permite ativação manual.'}), 403
     
     try:
         # Desativar outras versões do mesmo tipo
