@@ -117,6 +117,9 @@ class FapPetitionReviewerAgent:
     """
 
     _PROMPT_LOG_MAX_CHARS = int(os.environ.get('TOKEN_PROMPT_LOG_MAX_CHARS', '12000'))
+    _REVIEW_CHUNK_MAX_CHARS = int(os.environ.get('FAP_REVIEW_CHUNK_MAX_CHARS', '12000'))
+    _REVIEW_CHUNK_OVERLAP_CHARS = int(os.environ.get('FAP_REVIEW_CHUNK_OVERLAP_CHARS', '1200'))
+    _AUX_PREVIEW_LIMIT = int(os.environ.get('FAP_REVIEW_AUX_PREVIEW_LIMIT', '5'))
 
     def __init__(self, 
                  openai_api_key: Optional[str] = None,
@@ -199,7 +202,10 @@ MANUAL DE REFERÊNCIA:
 {self.manual_content[:3000] if self.manual_content else 'Manual não carregado'}
 
 CASOS DE REFERÊNCIA:
-{self.cases_content[:2000] if self.cases_content else 'Casos não carregados'}"""
+{self.cases_content[:2000] if self.cases_content else 'Casos não carregados'}
+
+INSTRUÇÕES DO PROJETO:
+{self.project_instructions[:2000] if self.project_instructions else 'Instruções não carregadas'}"""
         
         return base_system
 
@@ -234,101 +240,92 @@ CASOS DE REFERÊNCIA:
             reviewer_output_format,
         )
         
-        user_message = f"""Revise esta petição inicial de FAP contra o manual.
-
-PETIÇÃO A REVISAR:
-{petition_content[:5000]}
-
-{f'DOCUMENTOS AUXILIARES ({len(auxiliary_documents)} arquivos):' + str(auxiliary_documents[:500]) if auxiliary_documents else ''}
-
-Identifique:
-1. Todas as inconsistências com o manual
-2. Erros críticos, moderados e formais
-3. Documentos obrigatórios em falta
-4. Padrões novos não cobertos pelo manual
-5. Riscos jurídicos
-
-Estruture a resposta em JSON válido com a seguinte estrutura:
-- theses (array de teses identificadas)
-- findings (array de achados)
-- missing_documents (array de documentos em falta)
-- executive_summary (resumo executivo)
-- new_patterns (padrões novos)"""
+        chunks = self._split_text_into_chunks(petition_content)
         
         try:
-            messages = [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=user_message)
-            ]
-            
-            start_time = time.time()
-            response = self.llm.invoke(messages)
-            latency_ms = int((time.time() - start_time) * 1000)
-            response_text = response.content
-            
-            # Capturar e persistir logs de tokens
-            response_payload = self._build_response_payload(response)
-            self.token_usage_service.capture_and_store(
-                response_payload,
-                agent_name="FapPetitionReviewerAgent",
-                action_name="review_petition_single_version",
-                print_prefix="[FapReviewer]",
-                model_name=self.model_name,
-                model_provider="openai",
-                latency_ms=latency_ms,
-                metadata_payload={
-                    "petition_length": len(petition_content),
-                    "auxiliary_documents_count": len(auxiliary_documents or []),
-                    "llm_input": {
-                        "system_prompt": self._truncate_for_log(system_prompt),
-                        "user_prompt": self._truncate_for_log(user_message),
-                    },
-                    "prompt_versions": {
-                        "reviewer_identity": self._truncate_for_log(reviewer_identity),
-                        "reviewer_rules": self._truncate_for_log(reviewer_rules),
-                        "reviewer_prompt": self._truncate_for_log(reviewer_prompt),
-                        "reviewer_output_format": self._truncate_for_log(reviewer_output_format),
-                    },
-                }
-            )
+            chunk_results: list[dict] = []
+            total_chunks = len(chunks)
 
-            # Persistir histórico completo e vincular ao token usage
-            request_id = self._extract_response_request_id(response)
-            token_usage_id = self._find_token_usage_id_for_request(
-                action_name="review_petition_single_version",
-                law_firm_id=law_firm_id,
-                request_id=request_id,
-            )
-            AgentExecutionHistoryService.save_execution_history(
-                agent_name="FapPetitionReviewerAgent",
-                action_name="review_petition_single_version",
-                agent_type="fap_review_reviewer",
-                system_prompt=system_prompt,
-                user_prompt=user_message,
-                model_response=response_text,
-                full_messages_history=[*messages, response],
-                result_data={"execution_id": execution_id, "analysis_type": "single_version"},
-                model_name=self.model_name,
-                model_provider="openai",
-                status="success",
-                user_id=user_id,
-                law_firm_id=law_firm_id,
-                chat_session_id=None,
-                agent_token_usage_id=token_usage_id,
-            )
-            
-            # Tentar extrair JSON da resposta
-            try:
-                # Procurar por JSON na resposta
-                json_start = response_text.find('{')
-                json_end = response_text.rfind('}') + 1
-                if json_start != -1 and json_end > json_start:
-                    json_str = response_text[json_start:json_end]
-                    result_dict = json.loads(json_str)
-                else:
-                    result_dict = {}
-            except json.JSONDecodeError:
-                result_dict = {}
+            for idx, chunk_text in enumerate(chunks, start=1):
+                user_message = self._build_single_user_message(
+                    petition_chunk=chunk_text,
+                    auxiliary_documents=auxiliary_documents,
+                    chunk_index=idx,
+                    total_chunks=total_chunks,
+                )
+
+                messages = [
+                    SystemMessage(content=system_prompt),
+                    HumanMessage(content=user_message)
+                ]
+
+                start_time = time.time()
+                response = self.llm.invoke(messages)
+                latency_ms = int((time.time() - start_time) * 1000)
+                response_text = response.content
+
+                # Capturar e persistir logs de tokens
+                response_payload = self._build_response_payload(response)
+                self.token_usage_service.capture_and_store(
+                    response_payload,
+                    agent_name="FapPetitionReviewerAgent",
+                    action_name="review_petition_single_version",
+                    print_prefix="[FapReviewer]",
+                    model_name=self.model_name,
+                    model_provider="openai",
+                    latency_ms=latency_ms,
+                    metadata_payload={
+                        "petition_length": len(petition_content),
+                        "auxiliary_documents_count": len(auxiliary_documents or []),
+                        "chunk_index": idx,
+                        "total_chunks": total_chunks,
+                        "chunk_length": len(chunk_text),
+                        "llm_input": {
+                            "system_prompt": self._truncate_for_log(system_prompt),
+                            "user_prompt": self._truncate_for_log(user_message),
+                        },
+                        "prompt_versions": {
+                            "reviewer_identity": self._truncate_for_log(reviewer_identity),
+                            "reviewer_rules": self._truncate_for_log(reviewer_rules),
+                            "reviewer_prompt": self._truncate_for_log(reviewer_prompt),
+                            "reviewer_output_format": self._truncate_for_log(reviewer_output_format),
+                        },
+                    }
+                )
+
+                # Persistir histórico completo e vincular ao token usage
+                request_id = self._extract_response_request_id(response)
+                token_usage_id = self._find_token_usage_id_for_request(
+                    action_name="review_petition_single_version",
+                    law_firm_id=law_firm_id,
+                    request_id=request_id,
+                )
+                AgentExecutionHistoryService.save_execution_history(
+                    agent_name="FapPetitionReviewerAgent",
+                    action_name="review_petition_single_version",
+                    agent_type="fap_review_reviewer",
+                    system_prompt=system_prompt,
+                    user_prompt=user_message,
+                    model_response=response_text,
+                    full_messages_history=[*messages, response],
+                    result_data={
+                        "execution_id": execution_id,
+                        "analysis_type": "single_version",
+                        "chunk_index": idx,
+                        "total_chunks": total_chunks,
+                    },
+                    model_name=self.model_name,
+                    model_provider="openai",
+                    status="success",
+                    user_id=user_id,
+                    law_firm_id=law_firm_id,
+                    chat_session_id=None,
+                    agent_token_usage_id=token_usage_id,
+                )
+
+                chunk_results.append(self._extract_json_dict_from_response(response_text))
+
+            result_dict = self._merge_result_dicts(chunk_results)
             
             # Criar resultado com dados salvaguardados
             result = PetitionReviewResult(
@@ -388,102 +385,99 @@ Estruture a resposta em JSON válido com a seguinte estrutura:
             reviewer_output_format,
         )
         
-        user_message = f"""Revise comparativamente estas duas versões de petição de FAP.
-
-VERSÃO ORIGINAL:
-{original_petition[:5000]}
-
-VERSÃO REVISADA:
-{revised_petition[:5000]}
-
-{f'DOCUMENTOS AUXILIARES ({len(auxiliary_documents)} arquivos):' + str(auxiliary_documents[:500]) if auxiliary_documents else ''}
-
-Para cada alteração identificada:
-1. Transcreva trecho original e corrigido
-2. Explique motivo da correção
-3. Indique se padrão já existe no manual
-4. Indique se é padrão novo
-
-Estruture em JSON com:
-- comparative_changes (array de alterações)
-- findings (achados gerais)
-- new_patterns (padrões novos)
-- executive_summary (resumo)"""
+        original_chunks = self._split_text_into_chunks(original_petition)
+        revised_chunks = self._split_text_into_chunks(revised_petition)
         
         try:
-            messages = [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=user_message)
-            ]
-            
-            start_time = time.time()
-            response = self.llm.invoke(messages)
-            latency_ms = int((time.time() - start_time) * 1000)
-            response_text = response.content
-            
-            # Capturar e persistir logs de tokens
-            response_payload = self._build_response_payload(response)
-            self.token_usage_service.capture_and_store(
-                response_payload,
-                agent_name="FapPetitionReviewerAgent",
-                action_name="review_petition_comparative",
-                print_prefix="[FapReviewer]",
-                model_name=self.model_name,
-                model_provider="openai",
-                latency_ms=latency_ms,
-                metadata_payload={
-                    "original_petition_length": len(original_petition),
-                    "revised_petition_length": len(revised_petition),
-                    "auxiliary_documents_count": len(auxiliary_documents or []),
-                    "llm_input": {
-                        "system_prompt": self._truncate_for_log(system_prompt),
-                        "user_prompt": self._truncate_for_log(user_message),
-                    },
-                    "prompt_versions": {
-                        "reviewer_identity": self._truncate_for_log(reviewer_identity),
-                        "reviewer_rules": self._truncate_for_log(reviewer_rules),
-                        "reviewer_prompt": self._truncate_for_log(reviewer_prompt),
-                        "reviewer_output_format": self._truncate_for_log(reviewer_output_format),
-                    },
-                }
-            )
+            chunk_results: list[dict] = []
+            total_chunks = max(len(original_chunks), len(revised_chunks))
 
-            # Persistir histórico completo e vincular ao token usage
-            request_id = self._extract_response_request_id(response)
-            token_usage_id = self._find_token_usage_id_for_request(
-                action_name="review_petition_comparative",
-                law_firm_id=law_firm_id,
-                request_id=request_id,
-            )
-            AgentExecutionHistoryService.save_execution_history(
-                agent_name="FapPetitionReviewerAgent",
-                action_name="review_petition_comparative",
-                agent_type="fap_review_reviewer",
-                system_prompt=system_prompt,
-                user_prompt=user_message,
-                model_response=response_text,
-                full_messages_history=[*messages, response],
-                result_data={"execution_id": execution_id, "analysis_type": "comparative"},
-                model_name=self.model_name,
-                model_provider="openai",
-                status="success",
-                user_id=user_id,
-                law_firm_id=law_firm_id,
-                chat_session_id=None,
-                agent_token_usage_id=token_usage_id,
-            )
-            
-            # Tentar extrair JSON
-            try:
-                json_start = response_text.find('{')
-                json_end = response_text.rfind('}') + 1
-                if json_start != -1 and json_end > json_start:
-                    json_str = response_text[json_start:json_end]
-                    result_dict = json.loads(json_str)
-                else:
-                    result_dict = {}
-            except json.JSONDecodeError:
-                result_dict = {}
+            for idx in range(total_chunks):
+                original_chunk = original_chunks[idx] if idx < len(original_chunks) else ""
+                revised_chunk = revised_chunks[idx] if idx < len(revised_chunks) else ""
+
+                user_message = self._build_comparative_user_message(
+                    original_chunk=original_chunk,
+                    revised_chunk=revised_chunk,
+                    auxiliary_documents=auxiliary_documents,
+                    chunk_index=idx + 1,
+                    total_chunks=total_chunks,
+                )
+
+                messages = [
+                    SystemMessage(content=system_prompt),
+                    HumanMessage(content=user_message)
+                ]
+
+                start_time = time.time()
+                response = self.llm.invoke(messages)
+                latency_ms = int((time.time() - start_time) * 1000)
+                response_text = response.content
+
+                # Capturar e persistir logs de tokens
+                response_payload = self._build_response_payload(response)
+                self.token_usage_service.capture_and_store(
+                    response_payload,
+                    agent_name="FapPetitionReviewerAgent",
+                    action_name="review_petition_comparative",
+                    print_prefix="[FapReviewer]",
+                    model_name=self.model_name,
+                    model_provider="openai",
+                    latency_ms=latency_ms,
+                    metadata_payload={
+                        "original_petition_length": len(original_petition),
+                        "revised_petition_length": len(revised_petition),
+                        "auxiliary_documents_count": len(auxiliary_documents or []),
+                        "chunk_index": idx + 1,
+                        "total_chunks": total_chunks,
+                        "original_chunk_length": len(original_chunk),
+                        "revised_chunk_length": len(revised_chunk),
+                        "llm_input": {
+                            "system_prompt": self._truncate_for_log(system_prompt),
+                            "user_prompt": self._truncate_for_log(user_message),
+                        },
+                        "prompt_versions": {
+                            "reviewer_identity": self._truncate_for_log(reviewer_identity),
+                            "reviewer_rules": self._truncate_for_log(reviewer_rules),
+                            "reviewer_prompt": self._truncate_for_log(reviewer_prompt),
+                            "reviewer_output_format": self._truncate_for_log(reviewer_output_format),
+                        },
+                    }
+                )
+
+                # Persistir histórico completo e vincular ao token usage
+                request_id = self._extract_response_request_id(response)
+                token_usage_id = self._find_token_usage_id_for_request(
+                    action_name="review_petition_comparative",
+                    law_firm_id=law_firm_id,
+                    request_id=request_id,
+                )
+                AgentExecutionHistoryService.save_execution_history(
+                    agent_name="FapPetitionReviewerAgent",
+                    action_name="review_petition_comparative",
+                    agent_type="fap_review_reviewer",
+                    system_prompt=system_prompt,
+                    user_prompt=user_message,
+                    model_response=response_text,
+                    full_messages_history=[*messages, response],
+                    result_data={
+                        "execution_id": execution_id,
+                        "analysis_type": "comparative",
+                        "chunk_index": idx + 1,
+                        "total_chunks": total_chunks,
+                    },
+                    model_name=self.model_name,
+                    model_provider="openai",
+                    status="success",
+                    user_id=user_id,
+                    law_firm_id=law_firm_id,
+                    chat_session_id=None,
+                    agent_token_usage_id=token_usage_id,
+                )
+
+                chunk_results.append(self._extract_json_dict_from_response(response_text))
+
+            result_dict = self._merge_result_dicts(chunk_results)
             
             result = PetitionReviewResult(
                 analysis_type="comparative",
@@ -588,6 +582,181 @@ Estruture em JSON com:
             Dict com estrutura {"messages": [response]}
         """
         return {"messages": [response]}
+
+    def _split_text_into_chunks(self, text: str) -> list[str]:
+        """Divide texto grande em chunks com sobreposição para cobrir o documento inteiro."""
+        if not text:
+            return [""]
+
+        text = str(text)
+        max_chars = max(1000, self._REVIEW_CHUNK_MAX_CHARS)
+        overlap = max(0, min(self._REVIEW_CHUNK_OVERLAP_CHARS, max_chars // 2))
+
+        if len(text) <= max_chars:
+            return [text]
+
+        chunks: list[str] = []
+        start = 0
+        while start < len(text):
+            end = min(start + max_chars, len(text))
+            chunk = text[start:end]
+            if chunk.strip():
+                chunks.append(chunk)
+            if end >= len(text):
+                break
+            start = max(0, end - overlap)
+
+        return chunks or [text]
+
+    def _format_auxiliary_documents(self, auxiliary_documents: list[dict] | None) -> str:
+        """Monta resumo enxuto dos documentos auxiliares para manter contexto sem poluir prompt."""
+        if not auxiliary_documents:
+            return ""
+
+        docs = auxiliary_documents[:self._AUX_PREVIEW_LIMIT]
+        names = []
+        for doc in docs:
+            if isinstance(doc, dict):
+                names.append(str(doc.get("name") or "arquivo_sem_nome"))
+            else:
+                names.append(str(doc))
+
+        suffix = ""
+        if len(auxiliary_documents) > len(docs):
+            suffix = f" (+{len(auxiliary_documents) - len(docs)} arquivos)"
+
+        return f"DOCUMENTOS AUXILIARES ({len(auxiliary_documents)} arquivos){suffix}: " + ", ".join(names)
+
+    def _build_single_user_message(
+        self,
+        *,
+        petition_chunk: str,
+        auxiliary_documents: list[dict] | None,
+        chunk_index: int,
+        total_chunks: int,
+    ) -> str:
+        aux_text = self._format_auxiliary_documents(auxiliary_documents)
+        return f"""Revise esta petição inicial de FAP contra o manual.
+
+BLOCO ANALISADO: {chunk_index}/{total_chunks}
+
+PETIÇÃO A REVISAR (TRECHO):
+{petition_chunk}
+
+{aux_text}
+
+Identifique:
+1. Todas as inconsistências com o manual
+2. Erros críticos, moderados e formais
+3. Documentos obrigatórios em falta
+4. Padrões novos não cobertos pelo manual
+5. Riscos jurídicos
+
+Estruture a resposta em JSON válido com a seguinte estrutura:
+- theses (array de teses identificadas)
+- findings (array de achados)
+- missing_documents (array de documentos em falta)
+- executive_summary (resumo executivo)
+- new_patterns (padrões novos)"""
+
+    def _build_comparative_user_message(
+        self,
+        *,
+        original_chunk: str,
+        revised_chunk: str,
+        auxiliary_documents: list[dict] | None,
+        chunk_index: int,
+        total_chunks: int,
+    ) -> str:
+        aux_text = self._format_auxiliary_documents(auxiliary_documents)
+        return f"""Revise comparativamente estas duas versões de petição de FAP.
+
+BLOCO ANALISADO: {chunk_index}/{total_chunks}
+
+VERSÃO ORIGINAL (TRECHO):
+{original_chunk}
+
+VERSÃO REVISADA (TRECHO):
+{revised_chunk}
+
+{aux_text}
+
+Para cada alteração identificada:
+1. Transcreva trecho original e corrigido
+2. Explique motivo da correção
+3. Indique se padrão já existe no manual
+4. Indique se é padrão novo
+
+Estruture em JSON com:
+- comparative_changes (array de alterações)
+- findings (achados gerais)
+- new_patterns (padrões novos)
+- executive_summary (resumo)"""
+
+    def _extract_json_dict_from_response(self, response_text: str) -> dict:
+        """Extrai JSON da resposta textual do modelo."""
+        if not isinstance(response_text, str) or not response_text.strip():
+            return {}
+
+        try:
+            json_start = response_text.find('{')
+            json_end = response_text.rfind('}') + 1
+            if json_start != -1 and json_end > json_start:
+                parsed = json.loads(response_text[json_start:json_end])
+                return parsed if isinstance(parsed, dict) else {}
+        except json.JSONDecodeError:
+            return {}
+
+        return {}
+
+    def _merge_unique_dict_items(self, all_dicts: list[dict], key: str) -> list[dict]:
+        """Une listas de dicts removendo duplicidades por serialização JSON estável."""
+        unique: dict[str, dict] = {}
+        for item_dict in all_dicts:
+            items = item_dict.get(key, [])
+            if not isinstance(items, list):
+                continue
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                signature = json.dumps(item, ensure_ascii=False, sort_keys=True)
+                if signature not in unique:
+                    unique[signature] = item
+        return list(unique.values())
+
+    def _merge_result_dicts(self, all_dicts: list[dict]) -> dict:
+        """Consolida resultados de múltiplos chunks em um único dicionário."""
+        merged: dict[str, Any] = {
+            "theses": self._merge_unique_dict_items(all_dicts, "theses"),
+            "findings": self._merge_unique_dict_items(all_dicts, "findings"),
+            "missing_documents": self._merge_unique_dict_items(all_dicts, "missing_documents"),
+            "new_patterns": self._merge_unique_dict_items(all_dicts, "new_patterns"),
+            "comparative_changes": self._merge_unique_dict_items(all_dicts, "comparative_changes"),
+        }
+
+        total = len(merged["findings"])
+        critical = 0
+        moderate = 0
+        formal = 0
+        for finding in merged["findings"]:
+            sev = str(finding.get("severity") or "").upper()
+            if "CRÍTICO" in sev or "CRITICO" in sev:
+                critical += 1
+            elif "MODERADO" in sev:
+                moderate += 1
+            else:
+                formal += 1
+
+        merged["executive_summary"] = {
+            "total_findings": total,
+            "critical_findings": critical,
+            "moderate_findings": moderate,
+            "formal_findings": formal,
+            "main_legal_risks": [],
+            "correction_priority": "ALTA" if critical > 0 else "MÉDIA" if moderate > 0 else "BAIXA",
+        }
+
+        return merged
 
     def _truncate_for_log(self, text: str, max_chars: int | None = None) -> str:
         """Limita payload textual para evitar metadados gigantes no banco."""
