@@ -40,6 +40,11 @@
         background: var(--bs-primary-bg-subtle);
     }
 
+    .dropzone-custom.is-filled {
+        border-color: var(--bs-success);
+        background: var(--bs-success-bg-subtle);
+    }
+
     .dropzone-custom .dropzone-icon {
         font-size: 2rem;
         color: var(--bs-primary);
@@ -58,6 +63,10 @@
         font-size: .85rem;
     }
 
+    .file-list-item .file-badge {
+        white-space: nowrap;
+    }
+
     .file-list-item .file-name {
         font-weight: 500;
         color: var(--bs-emphasis-color);
@@ -65,46 +74,6 @@
         overflow: hidden;
         text-overflow: ellipsis;
         max-width: 80%;
-    }
-
-    .how-it-works-step {
-        display: flex;
-        align-items: flex-start;
-        gap: .75rem;
-        padding: .65rem 0;
-        border-bottom: 1px solid var(--bs-border-color);
-    }
-
-    .how-it-works-step:last-child {
-        border-bottom: none;
-    }
-
-    .step-number {
-        width: 1.6rem;
-        height: 1.6rem;
-        border-radius: 50%;
-        background: var(--bs-primary-bg-subtle);
-        color: var(--bs-primary);
-        font-size: .72rem;
-        font-weight: 700;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        flex-shrink: 0;
-        margin-top: .05rem;
-    }
-
-    .step-text {
-        font-size: .85rem;
-        color: var(--bs-secondary-color);
-        line-height: 1.45;
-    }
-
-    .step-text strong {
-        color: var(--bs-emphasis-color);
-        font-size: .88rem;
-        display: block;
-        margin-bottom: .1rem;
     }
 
     .status-row {
@@ -118,6 +87,24 @@
 
     .status-row:last-child {
         border-bottom: none;
+    }
+
+    .upload-guideline {
+        border: 1px solid var(--bs-info-border-subtle);
+        background: var(--bs-info-bg-subtle);
+        color: var(--bs-info-text-emphasis);
+        border-radius: .75rem;
+        padding: .75rem .9rem;
+    }
+
+    .how-it-works-card {
+        border-left: 4px solid #0d6efd;
+    }
+
+    .how-it-works-list li {
+        font-size: .85rem;
+        margin-bottom: .45rem;
+        color: var(--bs-secondary-color);
     }
 </style>
 {% endblock %}
@@ -138,19 +125,37 @@
     {% endcall %}
 
     <div class="container-fluid">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+        <div class="mb-3">
+            {% for category, message in messages %}
+            <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+                <i class="bi bi-info-circle me-2"></i>{{ message }}
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+        {% endwith %}
+
         <div class="row g-4">
 
-            <!-- Formulário principal -->
             <div class="col-lg-8">
-                <div class="card info-card">
+                <div class="card info-card h-100">
                     <div class="card-header d-flex align-items-center gap-2">
                         <i class="bi bi-cloud-upload text-primary"></i>
                         Enviar Documentos
                     </div>
                     <div class="card-body">
                         <form id="petitionForm" enctype="multipart/form-data">
+                            <div class="upload-guideline d-flex align-items-start gap-2 mb-4 small">
+                                <i class="bi bi-shield-check mt-1"></i>
+                                <div>
+                                    O sistema aceita arquivos de até 50MB por documento. Em modo comparativo, envie a
+                                    versão original e a versão revisada para análise lado a lado.
+                                </div>
+                            </div>
 
-                            <!-- Documento Principal -->
                             <div class="mb-4">
                                 <label class="form-label small fw-semibold mb-2">
                                     <i class="bi bi-file-earmark-pdf text-danger me-1"></i>
@@ -160,14 +165,13 @@
                                     <i class="bi bi-file-earmark-arrow-up dropzone-icon"></i>
                                     <p class="mb-1 mt-2 fw-semibold small">Arraste o arquivo aqui ou clique para
                                         selecionar</p>
-                                    <small class="text-muted">PDF, Word (.doc/.docx) — Máximo 50MB</small>
+                                    <small class="text-muted">PDF, Word (.doc/.docx) - Máximo 50MB</small>
                                     <input type="file" class="d-none" id="mainDocument" name="main_document"
                                         accept=".pdf,.doc,.docx" required>
                                 </div>
                                 <div id="mainDocumentList"></div>
                             </div>
 
-                            <!-- Documentos Auxiliares -->
                             <div class="mb-4">
                                 <label class="form-label small fw-semibold mb-2">
                                     <i class="bi bi-paperclip text-info me-1"></i>
@@ -178,28 +182,26 @@
                                         style="color: var(--bs-secondary-color);"></i>
                                     <p class="mb-1 mt-2 fw-semibold small">Arraste os arquivos aqui ou clique para
                                         selecionar</p>
-                                    <small class="text-muted">PDF, Word, Excel, imagens — Máximo 50MB cada</small>
+                                    <small class="text-muted">PDF, Word, Excel, imagens - Máximo 50MB cada</small>
                                     <input type="file" class="d-none" id="auxiliaryDocuments" name="auxiliary_documents"
                                         multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg">
                                 </div>
                                 <div id="auxiliaryDocumentsList"></div>
                             </div>
 
-                            <!-- Análise Comparativa -->
                             <div class="mb-3">
                                 <div class="form-check form-switch">
                                     <input class="form-check-input" type="checkbox" role="switch"
                                         id="comparativeAnalysis" name="comparative_analysis" value="1">
                                     <label class="form-check-label small" for="comparativeAnalysis">
                                         <span class="fw-semibold">Ativar Análise Comparativa</span>
-                                        <span class="text-muted ms-1">— compare a petição original com uma versão
+                                        <span class="text-muted ms-1">- compare a petição original com uma versão
                                             revisada</span>
                                     </label>
                                 </div>
                             </div>
 
-                            <!-- Segunda Versão -->
-                            <div id="comparedDocumentGroup" style="display:none;" class="mb-4">
+                            <div id="comparedDocumentGroup" class="mb-4 d-none">
                                 <label class="form-label small fw-semibold mb-2">
                                     <i class="bi bi-file-earmark-check text-success me-1"></i>
                                     Versão Revisada (para comparação)
@@ -217,7 +219,6 @@
 
                             <hr class="my-4">
 
-                            <!-- Botões -->
                             <div class="d-flex gap-2">
                                 <button type="submit" class="btn btn-primary flex-grow-1" id="submitBtn">
                                     <i class="bi bi-play-circle me-2"></i> Iniciar Revisão
@@ -232,10 +233,8 @@
                 </div>
             </div>
 
-            <!-- Sidebar -->
             <div class="col-lg-4 d-flex flex-column gap-4">
 
-                <!-- Status dos agentes -->
                 <div class="card info-card">
                     <div class="card-header d-flex align-items-center gap-2">
                         <i class="bi bi-cpu text-primary"></i>
@@ -279,44 +278,26 @@
                     </div>
                 </div>
 
-                <!-- Como funciona -->
-                <div class="card info-card">
+                <div class="card info-card how-it-works-card">
                     <div class="card-header d-flex align-items-center gap-2">
                         <i class="bi bi-lightbulb text-warning"></i>
                         Como Funciona
                     </div>
                     <div class="card-body">
-                        <div class="how-it-works-step">
-                            <div class="step-number">1</div>
-                            <div class="step-text">
-                                <strong>Envio do documento</strong>
-                                Faça o upload da petição inicial em PDF ou Word.
-                            </div>
-                        </div>
-                        <div class="how-it-works-step">
-                            <div class="step-number">2</div>
-                            <div class="step-text">
-                                <strong>Análise pelo agente</strong>
-                                O agente revisor analisa tecnicamente o documento com base nas regras configuradas.
-                            </div>
-                        </div>
-                        <div class="how-it-works-step">
-                            <div class="step-number">3</div>
-                            <div class="step-text">
-                                <strong>Identificação de problemas</strong>
-                                Inconsistências, erros e oportunidades de melhoria são identificados.
-                            </div>
-                        </div>
-                        <div class="how-it-works-step">
-                            <div class="step-number">4</div>
-                            <div class="step-text">
-                                <strong>Relatório completo</strong>
-                                Um relatório detalhado é gerado com comentários e sugestões.
-                            </div>
-                        </div>
+                        <ol class="how-it-works-list ps-3 mb-0">
+                            <li>Faça upload da petição inicial (PDF ou Word)</li>
+                            <li>O agente revisor analisa o conteúdo com as regras ativas</li>
+                            <li>Inconsistências e oportunidades de melhoria são detectadas</li>
+                            <li>O sistema gera um relatório final para revisão jurídica</li>
+                        </ol>
                         <div class="mt-3 pt-1 d-flex align-items-center gap-2 text-muted small">
                             <i class="bi bi-clock"></i>
-                            Tempo estimado: <strong class="text-emphasis">2–5 minutos</strong>
+                            Tempo estimado: <strong class="text-emphasis">2-5 minutos</strong>
+                        </div>
+                        <div class="mt-3">
+                            <a href="{{ url_for('fap_review.settings') }}" class="btn btn-sm btn-outline-primary w-100">
+                                <i class="bi bi-sliders me-1"></i> Ir para Configurações
+                            </a>
                         </div>
                     </div>
                 </div>
@@ -325,15 +306,42 @@
         </div>
     </div>
 </div>
+{% endblock %}
 
+{% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        // Toggle análise comparativa
-        document.getElementById('comparativeAnalysis').addEventListener('change', function () {
-            document.getElementById('comparedDocumentGroup').style.display = this.checked ? 'block' : 'none';
-        });
+        const MAX_FILE_SIZE = 50 * 1024 * 1024;
+        const comparativeSwitch = document.getElementById('comparativeAnalysis');
+        const comparedDocumentGroup = document.getElementById('comparedDocumentGroup');
+        const comparedDocumentInput = document.getElementById('comparedDocument');
 
-        // Dropzone genérico
+        function updateComparativeState() {
+            comparedDocumentGroup.classList.toggle('d-none', !comparativeSwitch.checked);
+            comparedDocumentInput.required = comparativeSwitch.checked;
+        }
+
+        function hasOversizedFiles(fileList) {
+            return Array.from(fileList).some(file => file.size > MAX_FILE_SIZE);
+        }
+
+        function renderList(files, list, zone) {
+            list.innerHTML = '';
+            Array.from(files).forEach((file) => {
+                const ext = file.name.split('.').pop().toUpperCase();
+                const sizeMb = (file.size / (1024 * 1024)).toFixed(1);
+                const item = document.createElement('div');
+                item.className = 'file-list-item';
+                item.innerHTML = `
+          <span class="file-name"><i class="bi bi-file-earmark me-1 text-primary"></i>${file.name}</span>
+                <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle file-badge">${ext} - ${sizeMb}MB</span>
+        `;
+                list.appendChild(item);
+            });
+
+            zone.classList.toggle('is-filled', files.length > 0);
+        }
+
         function setupDropzone(dropzoneId, inputId, listId, multiple) {
             const zone = document.getElementById(dropzoneId);
             const input = document.getElementById(inputId);
@@ -345,6 +353,7 @@
             zone.addEventListener('drop', e => {
                 e.preventDefault();
                 zone.classList.remove('dragover');
+
                 if (multiple) {
                     const dt = new DataTransfer();
                     Array.from(input.files).forEach(f => dt.items.add(f));
@@ -352,44 +361,50 @@
                     input.files = dt.files;
                 } else {
                     const dt = new DataTransfer();
-                    if (e.dataTransfer.files[0]) dt.items.add(e.dataTransfer.files[0]);
+                    if (e.dataTransfer.files[0]) {
+                        dt.items.add(e.dataTransfer.files[0]);
+                    }
                     input.files = dt.files;
                 }
-                renderList(input.files, list);
+
+                renderList(input.files, list, zone);
             });
-            input.addEventListener('change', () => renderList(input.files, list));
+
+            input.addEventListener('change', () => renderList(input.files, list, zone));
         }
 
-        function renderList(files, list) {
-            list.innerHTML = '';
-            Array.from(files).forEach((file, i) => {
-                const ext = file.name.split('.').pop().toUpperCase();
-                const item = document.createElement('div');
-                item.className = 'file-list-item';
-                item.innerHTML = `
-          <span class="file-name"><i class="bi bi-file-earmark me-1 text-primary"></i>${file.name}</span>
-          <span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">${ext}</span>
-        `;
-                list.appendChild(item);
-            });
-        }
+        comparativeSwitch.addEventListener('change', updateComparativeState);
+        updateComparativeState();
 
         setupDropzone('mainDocumentDropzone', 'mainDocument', 'mainDocumentList', false);
         setupDropzone('auxiliaryDocumentsDropzone', 'auxiliaryDocuments', 'auxiliaryDocumentsList', true);
         setupDropzone('comparedDocumentDropzone', 'comparedDocument', 'comparedDocumentList', false);
 
-        // Submit
         document.getElementById('petitionForm').addEventListener('submit', async function (e) {
             e.preventDefault();
 
-            if (!document.getElementById('mainDocument').files.length) {
+            const mainFiles = document.getElementById('mainDocument').files;
+            const auxiliaryFiles = document.getElementById('auxiliaryDocuments').files;
+            const comparedFiles = document.getElementById('comparedDocument').files;
+
+            if (!mainFiles.length) {
                 alert('Por favor, selecione um documento principal');
+                return;
+            }
+
+            if (comparativeSwitch.checked && !comparedFiles.length) {
+                alert('Envie a versão revisada para usar a análise comparativa.');
+                return;
+            }
+
+            if (hasOversizedFiles(mainFiles) || hasOversizedFiles(auxiliaryFiles) || hasOversizedFiles(comparedFiles)) {
+                alert('Um ou mais arquivos excedem o limite de 50MB por documento.');
                 return;
             }
 
             const btn = document.getElementById('submitBtn');
             btn.disabled = true;
-            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Processando…';
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Processando...';
 
             try {
                 const formData = new FormData(this);
@@ -397,6 +412,10 @@
                     method: 'POST',
                     body: formData
                 });
+
+                if (!response.ok) {
+                    throw new Error('Falha na comunicação com o servidor');
+                }
 
                 const data = await response.json();
 
@@ -408,7 +427,7 @@
                     btn.innerHTML = '<i class="bi bi-play-circle me-2"></i> Iniciar Revisão';
                 }
             } catch (error) {
-                alert('Erro ao enviar: ' + error);
+                alert('Erro ao enviar: ' + error.message);
                 btn.disabled = false;
                 btn.innerHTML = '<i class="bi bi-play-circle me-2"></i> Iniciar Revisão';
             }

@@ -279,16 +279,11 @@
                 <td class="text-end">{{ row.latency_ms }}</td>
                 <td class="text-end">{{ '%.8f'|format(row.cost_usd or 0) }}</td>
                 <td class="text-center">
-                  {% if row.execution_history_id %}
-                  <a href="{{ url_for('dashboard.view_execution_history', execution_id=row.execution_history_id) }}"
-                    class="btn btn-sm btn-link p-0" title="Ver histórico completo de execução">
+                  <button type="button" class="btn btn-sm btn-link p-0 js-open-execution-history"
+                    data-token-usage-id="{{ row.id }}" data-execution-history-id="{{ row.execution_history_id or '' }}"
+                    title="Ver histórico completo de execução">
                     <i class="bi bi-search"></i>
-                  </a>
-                  {% else %}
-                  <span class="text-muted" title="Sem histórico completo vinculado para esta execução">
-                    <i class="bi bi-search"></i>
-                  </span>
-                  {% endif %}
+                  </button>
                 </td>
               </tr>
               {% else %}
@@ -372,6 +367,50 @@
       }
     });
   }
+
+  const historyButtons = document.querySelectorAll('.js-open-execution-history');
+  historyButtons.forEach((button) => {
+    button.addEventListener('click', async () => {
+      const executionHistoryId = button.dataset.executionHistoryId;
+      const tokenUsageId = button.dataset.tokenUsageId;
+
+      if (executionHistoryId) {
+        window.location.href = `{{ url_for('dashboard.view_execution_history', execution_id=0) }}`.replace('/0', `/${executionHistoryId}`);
+        return;
+      }
+
+      if (!tokenUsageId) {
+        alert('Token usage inválido para abrir histórico.');
+        return;
+      }
+
+      const originalHtml = button.innerHTML;
+      button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+      button.disabled = true;
+
+      try {
+        const response = await fetch(`{{ url_for('dashboard.get_execution_history_for_token_usage', token_usage_id=0) }}`.replace('/0', `/${tokenUsageId}`));
+        if (!response.ok) {
+          throw new Error('Não foi possível consultar histórico da execução.');
+        }
+
+        const data = await response.json();
+        const executions = data.executions || [];
+        if (!executions.length) {
+          alert('Ainda não há histórico detalhado para esta execução.');
+          return;
+        }
+
+        const latestExecution = executions[0];
+        window.location.href = `{{ url_for('dashboard.view_execution_history', execution_id=0) }}`.replace('/0', `/${latestExecution.id}`);
+      } catch (error) {
+        alert(error.message || 'Erro ao abrir histórico da execução.');
+      } finally {
+        button.innerHTML = originalHtml;
+        button.disabled = false;
+      }
+    });
+  });
   }) ();
 </script>
 {% endblock %}

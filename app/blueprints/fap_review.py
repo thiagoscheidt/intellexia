@@ -244,6 +244,31 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_text: 
             reference_type='project_instructions',
             is_active=True
         ).first()
+
+        # Carregar prompts ativos do revisor
+        reviewer_identity_prompt = FapReviewPromptVersion.query.filter_by(
+            law_firm_id=law_firm_id,
+            prompt_type='revisor_identity',
+            is_active=True
+        ).first()
+
+        reviewer_rules_prompt = FapReviewPromptVersion.query.filter_by(
+            law_firm_id=law_firm_id,
+            prompt_type='revisor_rules',
+            is_active=True
+        ).first()
+
+        reviewer_main_prompt = FapReviewPromptVersion.query.filter_by(
+            law_firm_id=law_firm_id,
+            prompt_type='revisor_prompt',
+            is_active=True
+        ).first()
+
+        reviewer_output_format_prompt = FapReviewPromptVersion.query.filter_by(
+            law_firm_id=law_firm_id,
+            prompt_type='revisor_output_format',
+            is_active=True
+        ).first()
         
         # Instanciar agente revisor
         agent = FapPetitionReviewerAgent(
@@ -269,14 +294,28 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_text: 
                 result = loop.run_until_complete(
                     agent.review_petition_comparative(
                         original_petition=petition_text,
-                        revised_petition=compared_text
+                        revised_petition=compared_text,
+                        reviewer_identity=reviewer_identity_prompt.content if reviewer_identity_prompt else "",
+                        reviewer_rules=reviewer_rules_prompt.content if reviewer_rules_prompt else "",
+                        reviewer_prompt=reviewer_main_prompt.content if reviewer_main_prompt else "",
+                        reviewer_output_format=reviewer_output_format_prompt.content if reviewer_output_format_prompt else "",
+                        execution_id=execution.id,
+                        user_id=execution.user_id,
+                        law_firm_id=law_firm_id,
                     )
                 )
             else:
                 # Análise simples
                 result = loop.run_until_complete(
                     agent.review_petition_single_version(
-                        petition_content=petition_text
+                        petition_content=petition_text,
+                        reviewer_identity=reviewer_identity_prompt.content if reviewer_identity_prompt else "",
+                        reviewer_rules=reviewer_rules_prompt.content if reviewer_rules_prompt else "",
+                        reviewer_prompt=reviewer_main_prompt.content if reviewer_main_prompt else "",
+                        reviewer_output_format=reviewer_output_format_prompt.content if reviewer_output_format_prompt else "",
+                        execution_id=execution.id,
+                        user_id=execution.user_id,
+                        law_firm_id=law_firm_id,
                     )
                 )
             
@@ -582,6 +621,101 @@ def settings():
                            setting=setting,
                            available_models=available_models,
                            model_options_error=model_options_error)
+
+
+@fap_review_bp.route('/settings/prompts/type/<string:prompt_type>/edit', methods=['GET'])
+@require_law_firm
+@require_admin_user
+def edit_prompt_by_type(prompt_type: str):
+    """Abre edição do prompt pela tipagem, criando versão inicial se necessário."""
+    law_firm_id = get_current_law_firm_id()
+
+    valid_types = {
+        'revisor_identity',
+        'revisor_rules',
+        'revisor_prompt',
+        'revisor_output_format',
+        'training_identity',
+        'training_rules',
+        'training_prompt',
+        'training_update_policy',
+    }
+
+    if prompt_type not in valid_types:
+        flash('Tipo de prompt inválido', 'error')
+        return redirect(url_for('fap_review.settings'))
+
+    prompt = FapReviewPromptVersion.query.filter_by(
+        law_firm_id=law_firm_id,
+        prompt_type=prompt_type,
+    ).order_by(FapReviewPromptVersion.version_number.desc()).first()
+
+    if not prompt:
+        prompt = FapReviewPromptVersion(
+            law_firm_id=law_firm_id,
+            version_number=1,
+            prompt_type=prompt_type,
+            content='',
+            is_active=True,
+            created_by_id=session.get('user_id'),
+        )
+        db.session.add(prompt)
+        db.session.commit()
+
+        _log_audit(
+            law_firm_id,
+            'prompt_created',
+            'prompt',
+            prompt.id,
+            f'Prompt inicial criado para {prompt_type}'
+        )
+
+    return redirect(url_for('fap_review.edit_prompt', prompt_version_id=prompt.id))
+
+
+@fap_review_bp.route('/settings/references/type/<string:reference_type>/edit', methods=['GET'])
+@require_law_firm
+@require_admin_user
+def edit_reference_by_type(reference_type: str):
+    """Abre edição da referência pela tipagem, criando versão inicial se necessário."""
+    law_firm_id = get_current_law_firm_id()
+
+    valid_types = {
+        'manual_fap',
+        'casos_referencia',
+        'project_instructions',
+    }
+
+    if reference_type not in valid_types:
+        flash('Tipo de referência inválido', 'error')
+        return redirect(url_for('fap_review.settings'))
+
+    reference = FapReviewReferenceVersion.query.filter_by(
+        law_firm_id=law_firm_id,
+        reference_type=reference_type,
+    ).order_by(FapReviewReferenceVersion.version_number.desc()).first()
+
+    if not reference:
+        reference = FapReviewReferenceVersion(
+            law_firm_id=law_firm_id,
+            version_number=1,
+            reference_type=reference_type,
+            content='',
+            is_active=True,
+            created_by_id=session.get('user_id'),
+        )
+        db.session.add(reference)
+        db.session.commit()
+
+        _log_audit(
+            law_firm_id,
+            'reference_created',
+            'reference',
+            reference.id,
+            f'Referência inicial criada para {reference_type}'
+        )
+
+    return redirect(url_for('fap_review.edit_reference', reference_version_id=reference.id))
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

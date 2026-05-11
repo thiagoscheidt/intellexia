@@ -5681,7 +5681,7 @@ def edit_turnover_rate(turnover_rate_id):
         new_first_instance_status = tr.first_instance_status or ''
         if new_first_instance_status != old_first_instance_status:
             db.session.add(FapContestationTurnoverRateManualHistory(
-                law_firm_id=law_firm_id,
+                law_firwm_id=law_firm_id,
                 turnover_rate_id=tr.id,
                 performed_by_user_id=session.get('user_id'),
                 action='edit_turnover_rate_first_instance_status',

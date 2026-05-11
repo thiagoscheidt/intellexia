@@ -1,135 +1,261 @@
 {% extends "layout/base.html" %}
 
-{% block title %}Resultado da Revisão - FAP Review{% endblock %}
+{% from "partials/page_hero.html" import page_hero %}
+
+{% set page_title = "Resultado da Revisão" %}
+
+{% block title %}{{ page_title }} - FAP Review - IntellexIA{% endblock %}
+
+{% block extra_css %}
+<style>
+    .info-card {
+        border: 1px solid rgba(15, 23, 42, .07);
+        border-radius: .85rem;
+        box-shadow: 0 4px 16px rgba(15, 23, 42, .06);
+    }
+
+    .info-card .card-header {
+        background: transparent;
+        border-bottom: 1px solid rgba(15, 23, 42, .07);
+        font-weight: 700;
+        font-size: .85rem;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: #6c7a8d;
+    }
+
+    .summary-stat {
+        border: 1px solid rgba(15, 23, 42, .07);
+        border-radius: .75rem;
+        padding: .85rem .9rem;
+        background: var(--bs-body-bg);
+    }
+
+    .summary-stat-label {
+        font-size: .72rem;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: #6c7a8d;
+        margin-bottom: .25rem;
+    }
+
+    .summary-stat-value {
+        font-size: 1.35rem;
+        font-weight: 800;
+        line-height: 1;
+        color: var(--bs-emphasis-color);
+    }
+
+    .finding-item {
+        border: 1px solid rgba(15, 23, 42, .07);
+        border-left-width: 4px;
+        border-radius: .65rem;
+        padding: .85rem;
+        margin-bottom: .75rem;
+        background: var(--bs-body-bg);
+    }
+
+    .finding-item.severity-critical {
+        border-left-color: #dc3545;
+    }
+
+    .finding-item.severity-moderate {
+        border-left-color: #ffc107;
+    }
+
+    .finding-item.severity-formal {
+        border-left-color: #0dcaf0;
+    }
+
+    .code-block-lite {
+        background: var(--bs-secondary-bg);
+        border: 1px solid var(--bs-border-color);
+        border-radius: .5rem;
+        padding: .7rem;
+        font-size: .82rem;
+        white-space: pre-wrap;
+        margin-bottom: 0;
+    }
+
+    .debug-section-toggle {
+        cursor: pointer;
+        user-select: none;
+    }
+
+    .debug-json-viewer {
+        background: #1e1e1e;
+        color: #d4d4d4;
+        border-radius: .5rem;
+        padding: 1rem;
+        font-family: 'Courier New', monospace;
+        font-size: .8rem;
+        max-height: 500px;
+        overflow-y: auto;
+        line-height: 1.4;
+    }
+
+    .debug-json-viewer .json-key {
+        color: #9cdcfe;
+    }
+
+    .debug-json-viewer .json-string {
+        color: #ce9178;
+    }
+
+    .debug-json-viewer .json-number {
+        color: #b5cea8;
+    }
+
+    .debug-json-viewer .json-boolean {
+        color: #569cd6;
+    }
+
+    .debug-json-viewer .json-null {
+        color: #569cd6;
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="content-header">
-    <div class="container-fluid">
-        <div class="row mb-2">
-            <div class="col-sm-6">
-                <h1 class="m-0">
-                    <i class="fas fa-file-check"></i> Resultado da Revisão
-                </h1>
-            </div>
-            <div class="col-sm-6">
-                <nav aria-label="breadcrumb">
-                    <ol class="breadcrumb float-sm-right">
-                        <li class="breadcrumb-item"><a href="{{ url_for('fap_review.index') }}">FAP Review</a></li>
-                        <li class="breadcrumb-item active">Resultado #{{ execution.id }}</li>
-                    </ol>
-                </nav>
-            </div>
-        </div>
-    </div>
-</div>
+<div class="fap-revision-result-page">
+    {% call page_hero(title=page_title, subtitle='Visualize os achados e o diagnóstico gerado pelo agente revisor',
+    icon='bi bi-file-earmark-check') %}
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0 bg-transparent small">
+            <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i>
+                    Home</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('fap_review.index') }}"><i
+                        class="bi bi-file-earmark-check"></i> FAP Review</a></li>
+            <li class="breadcrumb-item active">Resultado #{{ execution.id }}</li>
+        </ol>
+    </nav>
+    {% endcall %}
 
-<div class="content">
     <div class="container-fluid">
-        <!-- Informações da Execução -->
-        <div class="row">
+        <div class="row g-4">
             <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Informações da Execução</h3>
-                        <div class="card-tools">
-                            <a href="{{ url_for('fap_review.revision') }}" class="btn btn-sm btn-primary">
-                                <i class="fas fa-plus"></i> Nova Revisão
-                            </a>
+                <div class="card info-card">
+                    <div class="card-header d-flex align-items-center justify-content-between gap-2">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-info-circle text-primary"></i>
+                            Informações da Execução
                         </div>
+                        <a href="{{ url_for('fap_review.revision') }}" class="btn btn-sm btn-primary">
+                            <i class="bi bi-plus-circle me-1"></i> Nova Revisão
+                        </a>
                     </div>
                     <div class="card-body">
-                        <div class="row">
-                            <div class="col-md-3">
-                                <p><strong>ID da Execução:</strong> #{{ execution.id }}</p>
-                                <p><strong>Tipo:</strong>
-                                    {% if execution.execution_type == 'revision' %}
-                                    <span class="badge bg-info">Revisão</span>
-                                    {% else %}
-                                    <span class="badge bg-primary">Treinamento</span>
-                                    {% endif %}
-                                </p>
+                        <div class="row g-3">
+                            <div class="col-sm-6 col-lg-3">
+                                <div class="text-muted small">ID da Execução</div>
+                                <div class="fw-semibold">#{{ execution.id }}</div>
                             </div>
-                            <div class="col-md-3">
-                                <p><strong>Status:</strong>
-                                    {% if execution.status == 'completed' %}
-                                    <span class="badge bg-success">Concluída</span>
-                                    {% elif execution.status == 'processing' %}
-                                    <span class="badge bg-warning">Processando</span>
-                                    {% elif execution.status == 'failed' %}
-                                    <span class="badge bg-danger">Erro</span>
-                                    {% else %}
-                                    <span class="badge bg-secondary">{{ execution.status }}</span>
-                                    {% endif %}
-                                </p>
-                                <p><strong>Documento:</strong> {{ execution.main_document_filename }}</p>
-                            </div>
-                            <div class="col-md-3">
-                                <p><strong>Data:</strong> {{ execution.created_at.strftime('%d/%m/%Y %H:%M:%S') }}</p>
-                                <p><strong>Auxiliares:</strong> {{ execution.auxiliary_documents_count }}</p>
-                            </div>
-                            <div class="col-md-3">
-                                {% if execution.tokens_used %}
-                                <p><strong>Tokens:</strong> {{ execution.tokens_used }}</p>
-                                <p><strong>Custo:</strong> ${{ execution.cost_usd }}</p>
+                            <div class="col-sm-6 col-lg-3">
+                                <div class="text-muted small">Tipo</div>
+                                {% if execution.execution_type == 'revision' %}
+                                <span
+                                    class="badge rounded-pill bg-info-subtle text-info-emphasis border border-info-subtle px-3 py-2">
+                                    <i class="bi bi-file-earmark-check me-1"></i> Revisão
+                                </span>
+                                {% else %}
+                                <span
+                                    class="badge rounded-pill bg-primary-subtle text-primary-emphasis border border-primary-subtle px-3 py-2">
+                                    <i class="bi bi-mortarboard me-1"></i> Treinamento
+                                </span>
                                 {% endif %}
+                            </div>
+                            <div class="col-sm-6 col-lg-3">
+                                <div class="text-muted small">Status</div>
+                                {% if execution.status == 'completed' %}
+                                <span
+                                    class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2">
+                                    <i class="bi bi-check-circle me-1"></i> Concluída
+                                </span>
+                                {% elif execution.status == 'processing' %}
+                                <span
+                                    class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2">
+                                    <i class="bi bi-hourglass-split me-1"></i> Processando
+                                </span>
+                                {% elif execution.status == 'failed' %}
+                                <span
+                                    class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2">
+                                    <i class="bi bi-x-circle me-1"></i> Erro
+                                </span>
+                                {% else %}
+                                <span
+                                    class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3 py-2">{{
+                                    execution.status }}</span>
+                                {% endif %}
+                            </div>
+                            <div class="col-sm-6 col-lg-3">
+                                <div class="text-muted small">Data</div>
+                                <div class="fw-semibold">{{ execution.created_at.strftime('%d/%m/%Y %H:%M:%S') }}</div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="text-muted small">Documento Principal</div>
+                                <div class="fw-semibold">{{ execution.main_document_filename }}</div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="text-muted small">Auxiliares</div>
+                                <div class="fw-semibold">{{ execution.auxiliary_documents_count }}</div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="text-muted small">Tokens</div>
+                                <div class="fw-semibold">{{ execution.tokens_used or '-' }}</div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="text-muted small">Custo (USD)</div>
+                                <div class="fw-semibold">{{ execution.cost_usd or '-' }}</div>
                             </div>
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        {% if execution.status == 'completed' and result_data %}
-        <!-- Resumo Executivo -->
-        <div class="row mt-4">
+            {% if execution.status == 'completed' and result_data %}
+            {% if result_data.executive_summary %}
             <div class="col-12">
-                <div class="card">
-                    <div class="card-header bg-info">
-                        <h3 class="card-title">
-                            <i class="fas fa-chart-pie"></i> Resumo Executivo
-                        </h3>
+                <div class="card info-card">
+                    <div class="card-header d-flex align-items-center gap-2">
+                        <i class="bi bi-clipboard-data text-info"></i>
+                        Resumo Executivo
                     </div>
                     <div class="card-body">
-                        {% if result_data.executive_summary %}
-                        <div class="row">
-                            <div class="col-md-3">
-                                <div class="small-box bg-info">
-                                    <div class="inner">
-                                        <h3>{{ result_data.executive_summary.total_findings }}</h3>
-                                        <p>Total de Achados</p>
+                        <div class="row g-3 mb-3">
+                            <div class="col-sm-6 col-lg-3">
+                                <div class="summary-stat">
+                                    <div class="summary-stat-label">Total de Achados</div>
+                                    <div class="summary-stat-value">{{ result_data.executive_summary.total_findings }}
                                     </div>
                                 </div>
                             </div>
-                            <div class="col-md-3">
-                                <div class="small-box bg-danger">
-                                    <div class="inner">
-                                        <h3>{{ result_data.executive_summary.critical_findings }}</h3>
-                                        <p>Achados Críticos</p>
-                                    </div>
+                            <div class="col-sm-6 col-lg-3">
+                                <div class="summary-stat">
+                                    <div class="summary-stat-label">Críticos</div>
+                                    <div class="summary-stat-value text-danger">{{
+                                        result_data.executive_summary.critical_findings }}</div>
                                 </div>
                             </div>
-                            <div class="col-md-3">
-                                <div class="small-box bg-warning">
-                                    <div class="inner">
-                                        <h3>{{ result_data.executive_summary.moderate_findings }}</h3>
-                                        <p>Achados Moderados</p>
-                                    </div>
+                            <div class="col-sm-6 col-lg-3">
+                                <div class="summary-stat">
+                                    <div class="summary-stat-label">Moderados</div>
+                                    <div class="summary-stat-value text-warning">{{
+                                        result_data.executive_summary.moderate_findings }}</div>
                                 </div>
                             </div>
-                            <div class="col-md-3">
-                                <div class="small-box bg-success">
-                                    <div class="inner">
-                                        <h3>{{ result_data.executive_summary.formal_findings }}</h3>
-                                        <p>Achados Formais</p>
-                                    </div>
+                            <div class="col-sm-6 col-lg-3">
+                                <div class="summary-stat">
+                                    <div class="summary-stat-label">Formais</div>
+                                    <div class="summary-stat-value text-info">{{
+                                        result_data.executive_summary.formal_findings }}</div>
                                 </div>
                             </div>
                         </div>
 
                         {% if result_data.executive_summary.main_legal_risks %}
-                        <div class="mt-3">
-                            <h5>Principais Riscos Jurídicos:</h5>
-                            <ul>
+                        <div class="mb-2">
+                            <div class="small text-muted fw-semibold mb-1">Principais Riscos Jurídicos</div>
+                            <ul class="mb-2">
                                 {% for risk in result_data.executive_summary.main_legal_risks %}
                                 <li>{{ risk }}</li>
                                 {% endfor %}
@@ -137,278 +263,455 @@
                         </div>
                         {% endif %}
 
-                        <p class="mt-3"><strong>Prioridade de Correção:</strong>
-                            {{ result_data.executive_summary.correction_priority }}</p>
-                        {% endif %}
+                        <div class="small"><strong>Prioridade de Correção:</strong> {{
+                            result_data.executive_summary.correction_priority }}</div>
                     </div>
                 </div>
             </div>
-        </div>
+            {% endif %}
 
-        <!-- Teses Identificadas -->
-        {% if result_data.theses %}
-        <div class="row mt-4">
+            {% if result_data.theses %}
             <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">
-                            <i class="fas fa-book"></i> Teses Identificadas
-                        </h3>
+                <div class="card info-card">
+                    <div class="card-header d-flex align-items-center gap-2">
+                        <i class="bi bi-book text-primary"></i>
+                        Teses Identificadas
                     </div>
-                    <div class="card-body">
-                        <table class="table table-sm">
-                            <thead>
-                                <tr>
-                                    <th>Tese</th>
-                                    <th>Benefício</th>
-                                    <th>Enquadramento</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for thesis in result_data.theses %}
-                                <tr>
-                                    <td>{{ thesis.thesis }}</td>
-                                    <td>{{ thesis.benefit_number or '-' }}</td>
-                                    <td>{{ thesis.classification or '-' }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-3">Tese</th>
+                                        <th>Benefício</th>
+                                        <th class="pe-3">Enquadramento</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for thesis in result_data.theses %}
+                                    <tr>
+                                        <td class="ps-3">{{ thesis.thesis }}</td>
+                                        <td>{{ thesis.benefit_number or '-' }}</td>
+                                        <td class="pe-3">{{ thesis.classification or '-' }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-        {% endif %}
+            {% endif %}
 
-        <!-- Achados -->
-        {% if result_data.findings %}
-        <div class="row mt-4">
+            {% if result_data.findings %}
             <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">
-                            <i class="fas fa-exclamation-triangle"></i> Achados por Categoria
-                        </h3>
+                <div class="card info-card">
+                    <div class="card-header d-flex align-items-center gap-2">
+                        <i class="bi bi-exclamation-triangle text-warning"></i>
+                        Achados por Categoria
                     </div>
                     <div class="card-body">
                         {% for finding in result_data.findings %}
-                        <div class="mb-3 p-3 border-left"
-                            style="border-left: 4px solid {% if finding.severity == 'CRÍTICO' %}#dc3545{% elif finding.severity == 'MODERADO' %}#ffc107{% else %}#17a2b8{% endif %}">
-                            <div class="row">
-                                <div class="col-md-1">
-                                    {% if finding.severity == 'CRÍTICO' %}
-                                    <span class="badge bg-danger badge-lg">🔴</span>
-                                    {% elif finding.severity == 'MODERADO' %}
-                                    <span class="badge bg-warning badge-lg">🟡</span>
-                                    {% else %}
-                                    <span class="badge bg-info badge-lg">🔵</span>
-                                    {% endif %}
-                                </div>
-                                <div class="col-md-11">
-                                    <h5>{{ finding.description }}</h5>
-                                    {% if finding.location %}
-                                    <p><strong>Localização:</strong> {{ finding.location }}</p>
-                                    {% endif %}
-                                    {% if finding.correction %}
-                                    <p><strong>Correção:</strong> <code>{{ finding.correction }}</code></p>
-                                    {% endif %}
-                                    {% if finding.manual_reference %}
-                                    <p><strong>Manual:</strong> {{ finding.manual_reference }}</p>
-                                    {% endif %}
-                                    {% if finding.is_new_pattern %}
-                                    <p><span class="badge bg-warning">Padrão Novo</span></p>
-                                    {% endif %}
-                                </div>
+                        <div
+                            class="finding-item {% if finding.severity == 'CRÍTICO' %}severity-critical{% elif finding.severity == 'MODERADO' %}severity-moderate{% else %}severity-formal{% endif %}">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                {% if finding.severity == 'CRÍTICO' %}
+                                <span
+                                    class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle">CRÍTICO</span>
+                                {% elif finding.severity == 'MODERADO' %}
+                                <span
+                                    class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle">MODERADO</span>
+                                {% else %}
+                                <span
+                                    class="badge rounded-pill bg-info-subtle text-info-emphasis border border-info-subtle">FORMAL</span>
+                                {% endif %}
                             </div>
+
+                            <div class="fw-semibold mb-2">{{ finding.description }}</div>
+
+                            {% if finding.location %}
+                            <div class="small mb-1"><strong>Localização:</strong> {{ finding.location }}</div>
+                            {% endif %}
+                            {% if finding.correction %}
+                            <div class="small mb-1"><strong>Correção:</strong> <code>{{ finding.correction }}</code>
+                            </div>
+                            {% endif %}
+                            {% if finding.manual_reference %}
+                            <div class="small mb-1"><strong>Manual:</strong> {{ finding.manual_reference }}</div>
+                            {% endif %}
+                            {% if finding.is_new_pattern %}
+                            <span
+                                class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle mt-1">Padrão
+                                Novo</span>
+                            {% endif %}
                         </div>
                         {% endfor %}
                     </div>
                 </div>
             </div>
-        </div>
-        {% endif %}
+            {% endif %}
 
-        <!-- Documentos em Falta -->
-        {% if result_data.missing_documents %}
-        <div class="row mt-4">
+            {% if result_data.missing_documents %}
             <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">
-                            <i class="fas fa-folder-open"></i> Documentos Obrigatórios em Falta
-                        </h3>
+                <div class="card info-card">
+                    <div class="card-header d-flex align-items-center gap-2">
+                        <i class="bi bi-folder2-open text-danger"></i>
+                        Documentos Obrigatórios em Falta
                     </div>
-                    <div class="card-body">
-                        <table class="table table-sm">
-                            <thead>
-                                <tr>
-                                    <th>Documento</th>
-                                    <th>Tese Relacionada</th>
-                                    <th>Referência do Manual</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for doc in result_data.missing_documents %}
-                                <tr>
-                                    <td>{{ doc.document_type }}</td>
-                                    <td>{{ doc.thesis or '-' }}</td>
-                                    <td>{{ doc.manual_reference or '-' }}</td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+                    <div class="card-body p-0">
+                        <div class="table-responsive">
+                            <table class="table table-hover mb-0">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th class="ps-3">Documento</th>
+                                        <th>Tese Relacionada</th>
+                                        <th class="pe-3">Referência do Manual</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for doc in result_data.missing_documents %}
+                                    <tr>
+                                        <td class="ps-3">{{ doc.document_type }}</td>
+                                        <td>{{ doc.thesis or '-' }}</td>
+                                        <td class="pe-3">{{ doc.manual_reference or '-' }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-        {% endif %}
+            {% endif %}
 
-        <!-- Padrões Novos -->
-        {% if result_data.new_patterns %}
-        <div class="row mt-4">
+            {% if result_data.new_patterns %}
             <div class="col-12">
-                <div class="card">
-                    <div class="card-header bg-warning">
-                        <h3 class="card-title">
-                            <i class="fas fa-star"></i> Padrões Novos Identificados
-                        </h3>
+                <div class="card info-card">
+                    <div class="card-header d-flex align-items-center gap-2">
+                        <i class="bi bi-stars text-warning"></i>
+                        Padrões Novos Identificados
                     </div>
                     <div class="card-body">
                         {% for pattern in result_data.new_patterns %}
-                        <div class="mb-3 p-3 bg-light rounded">
-                            <h5>{{ pattern.pattern_description }}</h5>
-                            <p><strong>Comportamento Recorrente:</strong> {{ pattern.recurrence }}</p>
-                            <p><strong>Proposta de Atualização:</strong> {{ pattern.suggested_update }}</p>
+                        <div class="p-3 rounded border mb-3" style="background: var(--bs-secondary-bg);">
+                            <div class="fw-semibold mb-2">{{ pattern.pattern_description }}</div>
+                            <div class="small mb-1"><strong>Comportamento Recorrente:</strong> {{ pattern.recurrence }}
+                            </div>
+                            <div class="small mb-1"><strong>Proposta de Atualização:</strong> {{
+                                pattern.suggested_update }}</div>
                             {% if pattern.section %}
-                            <p><strong>Seção do Manual:</strong> {{ pattern.section }}</p>
+                            <div class="small"><strong>Seção do Manual:</strong> {{ pattern.section }}</div>
                             {% endif %}
                         </div>
                         {% endfor %}
 
-                        <div class="alert alert-info mt-3">
-                            <i class="fas fa-info-circle"></i>
-                            Estes padrões foram identificados e encaminhados ao <strong>Agente de Treinamento</strong>
-                            para possível atualização do manual.
+                        <div class="alert alert-info border-0 mb-0"
+                            style="background: var(--bs-info-bg-subtle); color: var(--bs-info-text-emphasis);">
+                            <i class="bi bi-info-circle-fill me-1"></i>
+                            Estes padrões foram encaminhados ao Agente de Treinamento para possível atualização do
+                            manual.
                         </div>
                     </div>
                 </div>
             </div>
-        </div>
-        {% endif %}
+            {% endif %}
 
-        <!-- Análise Comparativa -->
-        {% if result_data.comparative_changes %}
-        <div class="row mt-4">
+            {% if result_data.comparative_changes %}
             <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">
-                            <i class="fas fa-arrows-alt-h"></i> Alterações Identificadas (Análise Comparativa)
-                        </h3>
+                <div class="card info-card">
+                    <div class="card-header d-flex align-items-center gap-2">
+                        <i class="bi bi-arrow-left-right text-primary"></i>
+                        Alterações Identificadas (Análise Comparativa)
                     </div>
                     <div class="card-body">
                         {% for change in result_data.comparative_changes %}
-                        <div class="mb-4 p-3 border rounded">
-                            <h5>Alteração {{ loop.index }}</h5>
-                            <div class="row">
+                        <div class="p-3 rounded border mb-3">
+                            <div class="fw-semibold mb-2">Alteração {{ loop.index }}</div>
+                            <div class="row g-3">
                                 <div class="col-md-6">
-                                    <h6>Original:</h6>
-                                    <pre class="bg-light p-2"
-                                        style="border-left: 3px solid #dc3545">{{ change.original_excerpt }}</pre>
+                                    <div class="small text-muted mb-1">Original</div>
+                                    <pre class="code-block-lite">{{ change.original_excerpt }}</pre>
                                 </div>
                                 <div class="col-md-6">
-                                    <h6>Corrigido:</h6>
-                                    <pre class="bg-light p-2"
-                                        style="border-left: 3px solid #28a745">{{ change.corrected_excerpt }}</pre>
+                                    <div class="small text-muted mb-1">Corrigido</div>
+                                    <pre class="code-block-lite">{{ change.corrected_excerpt }}</pre>
                                 </div>
                             </div>
-                            <p><strong>Motivo:</strong> {{ change.correction_reason }}</p>
-                            <p>
+                            <div class="small mt-2"><strong>Motivo:</strong> {{ change.correction_reason }}</div>
+                            <div class="mt-2 d-flex gap-2 flex-wrap">
                                 {% if change.pattern_in_manual %}
-                                <span class="badge bg-success">Padrão no Manual</span>
+                                <span
+                                    class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle">Padrão
+                                    no Manual</span>
                                 {% endif %}
                                 {% if change.is_new_pattern %}
-                                <span class="badge bg-warning">Padrão Novo</span>
+                                <span
+                                    class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle">Padrão
+                                    Novo</span>
                                 {% endif %}
-                            </p>
+                            </div>
                         </div>
                         {% endfor %}
                     </div>
                 </div>
             </div>
-        </div>
-        {% endif %}
+            {% endif %}
 
-        {% elif execution.status == 'failed' %}
-        <!-- Erro na Execução -->
-        <div class="row mt-4">
+            {% elif execution.status == 'failed' %}
             <div class="col-12">
                 <div class="alert alert-danger">
-                    <h4 class="alert-heading">
-                        <i class="fas fa-exclamation-circle"></i> Erro na Execução
-                    </h4>
-                    <p>{{ execution.error_message }}</p>
-                    <hr>
-                    <a href="{{ url_for('fap_review.revision') }}" class="btn btn-primary btn-sm">
-                        <i class="fas fa-redo"></i> Tentar Novamente
+                    <h5 class="alert-heading"><i class="bi bi-exclamation-triangle-fill me-1"></i> Erro na Execução</h5>
+                    <p class="mb-3">{{ execution.error_message }}</p>
+                    <a href="{{ url_for('fap_review.revision') }}" class="btn btn-sm btn-primary">
+                        <i class="bi bi-arrow-repeat me-1"></i> Tentar Novamente
                     </a>
                 </div>
             </div>
-        </div>
 
-        {% elif execution.status == 'processing' %}
-        <!-- Processando -->
-        <div class="row mt-4">
+            {% elif execution.status == 'processing' %}
             <div class="col-12">
                 <div class="alert alert-info">
-                    <h4 class="alert-heading">
-                        <i class="fas fa-spinner fa-spin"></i> Processando
-                    </h4>
-                    <p>A revisão está sendo processada. Esta página será atualizada automaticamente.</p>
+                    <h5 class="alert-heading"><i class="bi bi-hourglass-split me-1"></i> Processando</h5>
+                    <p class="mb-0">A revisão está sendo processada. Esta página será atualizada automaticamente.</p>
                 </div>
             </div>
-        </div>
 
-        <script>
-            setTimeout(function () {
-                location.reload();
-            }, 3000);
-        </script>
-
-        {% else %}
-        <!-- Pendente -->
-        <div class="row mt-4">
+            {% else %}
             <div class="col-12">
                 <div class="alert alert-warning">
-                    <h4 class="alert-heading">
-                        <i class="fas fa-clock"></i> Pendente
-                    </h4>
-                    <p>A revisão está pendente de processamento.</p>
+                    <h5 class="alert-heading"><i class="bi bi-clock-history me-1"></i> Pendente</h5>
+                    <p class="mb-0">A revisão está pendente de processamento.</p>
                 </div>
             </div>
-        </div>
-        {% endif %}
+            {% endif %}
 
-        <!-- Ações -->
-        <div class="row mt-4">
+            <!-- Debug / Visualização Completa -->
             <div class="col-12">
-                <div class="card">
-                    <div class="card-body">
-                        <a href="{{ url_for('fap_review.revision') }}" class="btn btn-primary">
-                            <i class="fas fa-plus"></i> Nova Revisão
+                <div class="card info-card">
+                    <div class="card-header d-flex align-items-center justify-content-between debug-section-toggle"
+                        data-bs-toggle="collapse" data-bs-target="#debugSection" role="button" aria-expanded="false"
+                        aria-controls="debugSection">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-bug text-secondary"></i>
+                            <span>Debug / Visualização Completa</span>
+                        </div>
+                        <i class="bi bi-chevron-down text-secondary"></i>
+                    </div>
+                    <div id="debugSection" class="collapse">
+                        <div class="card-body">
+                            <ul class="nav nav-tabs mb-3" role="tablist" id="debugTabs">
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link active" id="execution-tab" data-bs-toggle="tab"
+                                        data-bs-target="#executionData" type="button" role="tab" aria-selected="true">
+                                        <i class="bi bi-info-circle me-1"></i> Execução
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="payload-tab" data-bs-toggle="tab"
+                                        data-bs-target="#payloadData" type="button" role="tab" aria-selected="false">
+                                        <i class="bi bi-box me-1"></i> Payload Completo
+                                    </button>
+                                </li>
+                                <li class="nav-item" role="presentation">
+                                    <button class="nav-link" id="tokens-tab" data-bs-toggle="tab"
+                                        data-bs-target="#tokensData" type="button" role="tab" aria-selected="false">
+                                        <i class="bi bi-lightning me-1"></i> Tokens Consumidos
+                                    </button>
+                                </li>
+                            </ul>
+
+                            <div class="tab-content">
+                                <!-- Execution Data -->
+                                <div class="tab-pane fade show active" id="executionData" role="tabpanel">
+                                    <div class="table-responsive small">
+                                        <table class="table table-sm mb-0">
+                                            <tr>
+                                                <td class="fw-semibold">ID da Execução</td>
+                                                <td><code>{{ execution.id }}</code></td>
+                                            </tr>
+                                            <tr>
+                                                <td class="fw-semibold">Status</td>
+                                                <td>
+                                                    {% if execution.status == 'completed' %}
+                                                    <span
+                                                        class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle">Completo</span>
+                                                    {% elif execution.status == 'processing' %}
+                                                    <span
+                                                        class="badge rounded-pill bg-info-subtle text-info-emphasis border border-info-subtle">Processando</span>
+                                                    {% elif execution.status == 'failed' %}
+                                                    <span
+                                                        class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle">Erro</span>
+                                                    {% else %}
+                                                    <span
+                                                        class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle">{{
+                                                        execution.status }}</span>
+                                                    {% endif %}
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td class="fw-semibold">Criado em</td>
+                                                <td><code>{{ execution.created_at }}</code></td>
+                                            </tr>
+                                            {% if execution.completed_at %}
+                                            <tr>
+                                                <td class="fw-semibold">Concluído em</td>
+                                                <td><code>{{ execution.completed_at }}</code></td>
+                                            </tr>
+                                            {% endif %}
+                                            <tr>
+                                                <td class="fw-semibold">Agentes Utilizados</td>
+                                                <td>FapPetitionReviewerAgent</td>
+                                            </tr>
+                                            <tr>
+                                                <td class="fw-semibold">Modelo LLM</td>
+                                                <td><code>{{ execution.model_name or 'gpt-4o-mini' }}</code></td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                </div>
+
+                                <!-- Payload Data -->
+                                <div class="tab-pane fade" id="payloadData" role="tabpanel">
+                                    <div class="alert alert-info border-0 mb-3"
+                                        style="background: var(--bs-info-bg-subtle); color: var(--bs-info-text-emphasis);">
+                                        <i class="bi bi-info-circle-fill me-1"></i>
+                                        Esta é a resposta completa do agente revisor em formato JSON.
+                                    </div>
+                                    {% if result_data %}
+                                    <div class="debug-json-viewer" id="payloadJsonViewer">
+                                        <pre id="payloadJson">{{ result_data|tojson(indent=2) }}</pre>
+                                    </div>
+                                    <button class="btn btn-sm btn-outline-secondary mt-2"
+                                        onclick="copyToClipboard('payloadJson')">
+                                        <i class="bi bi-clipboard me-1"></i> Copiar JSON
+                                    </button>
+                                    {% else %}
+                                    <div class="alert alert-warning border-0 mb-0">
+                                        Resultado ainda não disponível.
+                                    </div>
+                                    {% endif %}
+                                </div>
+
+                                <!-- Tokens Data -->
+                                <div class="tab-pane fade" id="tokensData" role="tabpanel">
+                                    {% if execution.token_usage_data %}
+                                    <div class="table-responsive small">
+                                        <table class="table table-sm mb-0">
+                                            {% set usage = execution.token_usage_data %}
+                                            <tr>
+                                                <td class="fw-semibold">Tokens de Entrada</td>
+                                                <td><code>{{ usage.get('input_tokens', 0)|int }}</code></td>
+                                            </tr>
+                                            <tr>
+                                                <td class="fw-semibold">Tokens de Saída</td>
+                                                <td><code>{{ usage.get('output_tokens', 0)|int }}</code></td>
+                                            </tr>
+                                            <tr>
+                                                <td class="fw-semibold">Total de Tokens</td>
+                                                <td><strong><code>{{ (usage.get('input_tokens', 0)|int) + (usage.get('output_tokens', 0)|int) }}</code></strong>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td class="fw-semibold">Custo Estimado (USD)</td>
+                                                <td><code>${{ usage.get('estimated_cost_usd', 0)|float|round(6) }}</code>
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td class="fw-semibold">Fonte de Preço</td>
+                                                <td><code>{{ usage.get('pricing_source', 'unknown') }}</code></td>
+                                            </tr>
+                                        </table>
+                                    </div>
+                                    {% else %}
+                                    <div class="alert alert-info border-0 mb-0">
+                                        Dados de tokens serão preenchidos após conclusão.
+                                    </div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-12">
+                <div class="card info-card">
+                    <div class="card-body d-flex justify-content-between align-items-center gap-2 flex-wrap">
+                        <div class="d-flex gap-2">
+                            <a href="{{ url_for('fap_review.index') }}" class="btn btn-outline-secondary">
+                                <i class="bi bi-house me-1"></i> Dashboard
+                            </a>
+                            {% if execution.status == 'completed' %}
+                            <button type="button" class="btn btn-outline-info" onclick="window.print()">
+                                <i class="bi bi-printer me-1"></i> Imprimir
+                            </button>
+                            {% endif %}
+                        </div>
+                        <a href="{{ url_for('fap_review.revision') }}" class="btn btn-primary ms-auto">
+                            <i class="bi bi-plus-circle me-1"></i> Nova Revisão
                         </a>
-                        <a href="{{ url_for('fap_review.index') }}" class="btn btn-secondary">
-                            <i class="fas fa-home"></i> Dashboard
-                        </a>
-                        {% if execution.status == 'completed' %}
-                        <button type="button" class="btn btn-info" onclick="window.print()">
-                            <i class="fas fa-print"></i> Imprimir
-                        </button>
-                        {% endif %}
                     </div>
                 </div>
             </div>
         </div>
     </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    function copyToClipboard(elementId) {
+        const element = document.getElementById(elementId);
+        const text = element.innerText || element.textContent;
+
+        navigator.clipboard.writeText(text).then(() => {
+            const btn = event.target.closest('button');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="bi bi-check me-1"></i> Copiado!';
+            setTimeout(() => {
+                btn.innerHTML = originalText;
+            }, 2000);
+        }).catch(err => {
+            alert('Erro ao copiar: ' + err);
+        });
+    }
+
+    // Syntax highlighting para JSON
+    function highlightJSON(element) {
+        let json = element.innerText;
+        json = json.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+        json = json.replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, function (match) {
+            var cls = 'json-number';
+            if (/^"/.test(match)) {
+                if (/:$/.test(match)) {
+                    cls = 'json-key';
+                } else {
+                    cls = 'json-string';
+                }
+            } else if (/true|false/.test(match)) {
+                cls = 'json-boolean';
+            } else if (/null/.test(match)) {
+                cls = 'json-null';
+            }
+            return '<span class="' + cls + '">' + match + '</span>';
+        });
+        element.innerHTML = json;
+    }
+
+    // Aplicar highlighting ao carregar
+    document.addEventListener('DOMContentLoaded', function () {
+        const jsonViewers = document.querySelectorAll('.debug-json-viewer pre');
+        jsonViewers.forEach(viewer => {
+            highlightJSON(viewer);
+        });
+    });
+</script>
+
+{% if execution.status == 'processing' %}
+<script>
+    setTimeout(function () {
+        location.reload();
+    }, 3000);
+</script>
+{% endif %}
 {% endblock %}

@@ -1,98 +1,218 @@
 {% extends "layout/base.html" %}
 
-{% block title %}Editar Prompt - FAP Review{% endblock %}
+{% from "partials/page_hero.html" import page_hero %}
+
+{% set page_title = "Editar Prompt" %}
+
+{% block title %}{{ page_title }} - FAP Review - IntellexIA{% endblock %}
+
+{% block extra_css %}
+<style>
+    .info-card {
+        border: 1px solid rgba(15, 23, 42, .07);
+        border-radius: .85rem;
+        box-shadow: 0 4px 16px rgba(15, 23, 42, .06);
+    }
+
+    .info-card .card-header {
+        background: transparent;
+        border-bottom: 1px solid rgba(15, 23, 42, .07);
+        font-weight: 700;
+        font-size: .85rem;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: #6c7a8d;
+    }
+
+    .markdown-editor .ql-toolbar {
+        border-radius: .6rem .6rem 0 0;
+    }
+
+    .markdown-editor .ql-container {
+        min-height: 420px;
+        border-radius: 0 0 .6rem .6rem;
+        font-family: var(--bs-font-monospace);
+        font-size: .9rem;
+    }
+
+    .markdown-editor .ql-editor {
+        white-space: pre-wrap;
+        font-family: var(--bs-font-monospace);
+        line-height: 1.5;
+        tab-size: 2;
+    }
+
+    .markdown-preview {
+        border: 1px solid var(--bs-border-color-translucent);
+        border-radius: .5rem;
+        background: var(--bs-body-bg);
+        padding: .85rem;
+        min-height: 210px;
+    }
+
+    .markdown-preview h1,
+    .markdown-preview h2,
+    .markdown-preview h3 {
+        margin-top: .75rem;
+        margin-bottom: .5rem;
+    }
+
+    .markdown-preview p,
+    .markdown-preview ul,
+    .markdown-preview ol,
+    .markdown-preview blockquote,
+    .markdown-preview pre {
+        margin-bottom: .6rem;
+    }
+
+    .version-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .75rem;
+        padding: .65rem 0;
+        border-bottom: 1px solid var(--bs-border-color);
+    }
+
+    .version-row:last-child {
+        border-bottom: none;
+    }
+
+    .version-meta {
+        font-size: .8rem;
+        color: var(--bs-secondary-color);
+    }
+</style>
+{% endblock %}
 
 {% block content %}
-<div class="content-header">
-    <div class="container-fluid">
-        <div class="row mb-2">
-            <div class="col-sm-6">
-                <h1 class="m-0">
-                    <i class="fas fa-file-edit"></i> Editar Prompt
-                </h1>
-            </div>
-            <div class="col-sm-6">
-                <nav aria-label="breadcrumb">
-                    <ol class="breadcrumb float-sm-right">
-                        <li class="breadcrumb-item"><a href="{{ url_for('fap_review.settings') }}">Configurações</a>
-                        </li>
-                        <li class="breadcrumb-item active">{{ prompt.prompt_type }}</li>
-                    </ol>
-                </nav>
-            </div>
-        </div>
-    </div>
-</div>
+<div class="fap-edit-prompt-page">
+    {% call page_hero(title=page_title, subtitle='Gerencie o conteúdo markdown e as versões do prompt', icon='bi
+    bi-file-earmark-text') %}
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0 bg-transparent small">
+            <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i>
+                    Home</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('fap_review.index') }}"><i
+                        class="bi bi-file-earmark-check"></i> FAP Review</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('fap_review.settings') }}">Configurações</a></li>
+            <li class="breadcrumb-item active">{{ prompt.prompt_type }}</li>
+        </ol>
+    </nav>
+    {% endcall %}
 
-<div class="content">
     <div class="container-fluid">
-        <div class="row">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">
-                            {{ prompt.prompt_type }} - v{{ prompt.version_number }}
-                            {% if prompt.is_active %}
-                            <span class="badge badge-success float-right">Ativa</span>
-                            {% endif %}
-                        </h3>
+        <div class="row g-4">
+            <div class="col-lg-8">
+                <div class="card info-card">
+                    <div class="card-header d-flex align-items-center gap-2">
+                        <i class="bi bi-pencil-square text-primary"></i>
+                        {{ prompt.prompt_type }} - v{{ prompt.version_number }}
+                        {% if prompt.is_active %}
+                        <span
+                            class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle ms-auto px-3 py-2">Ativa</span>
+                        {% else %}
+                        <span
+                            class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle ms-auto px-3 py-2">Inativa</span>
+                        {% endif %}
                     </div>
                     <div class="card-body">
-                        <form id="promptForm">
-                            <div class="form-group">
-                                <label for="content">Conteúdo do Prompt</label>
-                                <textarea class="form-control" id="content" name="content" rows="20"
-                                    style="font-family: monospace; font-size: 12px;">{{ prompt.content }}</textarea>
-                                <small class="form-text text-muted">
-                                    Edite o conteúdo do prompt. Uma nova versão será criada ao salvar.
-                                </small>
+                        <form id="promptForm" class="d-flex flex-column gap-3">
+                            <div>
+                                <label class="form-label small fw-semibold mb-2">Conteúdo Markdown</label>
+                                <div class="markdown-editor">
+                                    <div id="promptMarkdownEditor"></div>
+                                </div>
+                                <div class="form-text">Ao salvar, uma nova versão será criada automaticamente.</div>
                             </div>
 
-                            <div class="form-group">
-                                <label>Informações</label>
-                                <dl class="row">
-                                    <dt class="col-sm-3">Tipo:</dt>
-                                    <dd class="col-sm-9">{{ prompt.prompt_type }}</dd>
-
-                                    <dt class="col-sm-3">Versão Atual:</dt>
-                                    <dd class="col-sm-9">{{ prompt.version_number }}</dd>
-
-                                    <dt class="col-sm-3">Criado em:</dt>
-                                    <dd class="col-sm-9">{{ prompt.created_at.strftime('%d/%m/%Y %H:%M:%S') }}</dd>
-
-                                    <dt class="col-sm-3">Criado por:</dt>
-                                    <dd class="col-sm-9">{{ prompt.created_by.name if prompt.created_by else 'Sistema'
-                                        }}</dd>
-                                </dl>
+                            <div class="d-flex flex-wrap gap-2 justify-content-end">
+                                <a href="{{ url_for('fap_review.settings') }}" class="btn btn-outline-secondary">
+                                    <i class="bi bi-arrow-left me-1"></i> Voltar
+                                </a>
+                                {% if not prompt.is_active %}
+                                <button type="button" class="btn btn-outline-success" id="activateBtn"
+                                    data-activate-url="{{ url_for('fap_review.activate_prompt', prompt_version_id=prompt.id) }}">
+                                    <i class="bi bi-check2-circle me-1"></i> Usar Esta Versão
+                                </button>
+                                {% endif %}
+                                <button type="button" class="btn btn-primary" id="saveBtn">
+                                    <i class="bi bi-floppy me-1"></i> Salvar Nova Versão
+                                </button>
                             </div>
                         </form>
                     </div>
-                    <div class="card-footer">
-                        <button type="button" class="btn btn-primary" id="saveBtn">
-                            <i class="fas fa-save"></i> Salvar como Nova Versão
-                        </button>
-                        {% if not prompt.is_active %}
-                        <button type="button" class="btn btn-success" id="activateBtn">
-                            <i class="fas fa-check"></i> Usar Esta Versão
-                        </button>
-                        {% endif %}
-                        <a href="{{ url_for('fap_review.settings') }}" class="btn btn-secondary">
-                            <i class="fas fa-times"></i> Cancelar
-                        </a>
+                </div>
+
+                <div class="card info-card mt-4">
+                    <div class="card-header d-flex align-items-center gap-2">
+                        <i class="bi bi-eye text-info"></i>
+                        Pré-visualização Markdown
+                    </div>
+                    <div class="card-body">
+                        <div id="promptPreview" class="markdown-preview"></div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <!-- Histórico de Versões -->
-        <div class="row mt-4">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header">
-                        <h3 class="card-title">Histórico de Versões</h3>
+            <div class="col-lg-4 d-flex flex-column gap-4">
+                <div class="card info-card">
+                    <div class="card-header d-flex align-items-center gap-2">
+                        <i class="bi bi-info-circle text-primary"></i>
+                        Informações
+                    </div>
+                    <div class="card-body small">
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Tipo</span>
+                            <span class="fw-semibold">{{ prompt.prompt_type }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Versão atual</span>
+                            <span class="fw-semibold">v{{ prompt.version_number }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between mb-2">
+                            <span class="text-muted">Criado em</span>
+                            <span>{{ prompt.created_at.strftime('%d/%m/%Y %H:%M:%S') }}</span>
+                        </div>
+                        <div class="d-flex justify-content-between">
+                            <span class="text-muted">Criado por</span>
+                            <span>{{ prompt.created_by.name if prompt.created_by else 'Sistema' }}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card info-card">
+                    <div class="card-header d-flex align-items-center gap-2">
+                        <i class="bi bi-clock-history text-warning"></i>
+                        Histórico de Versões
                     </div>
                     <div class="card-body">
-                        <div id="versionsList" class="text-muted">Carregando...</div>
+                        {% if versions %}
+                        {% for item in versions %}
+                        <div class="version-row">
+                            <div>
+                                <div class="fw-semibold small">v{{ item.version_number }}</div>
+                                <div class="version-meta">{{ item.created_at.strftime('%d/%m/%Y %H:%M') }}</div>
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                {% if item.is_active %}
+                                <span
+                                    class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle">Ativa</span>
+                                {% else %}
+                                <button type="button" class="btn btn-sm btn-outline-success activate-version-btn"
+                                    data-activate-url="{{ url_for('fap_review.activate_prompt', prompt_version_id=item.id) }}">Ativar</button>
+                                {% endif %}
+                                <a href="{{ url_for('fap_review.edit_prompt', prompt_version_id=item.id) }}"
+                                    class="btn btn-sm btn-outline-secondary"
+                                    title="Abrir versão v{{ item.version_number }}">
+                                    <i class="bi bi-box-arrow-up-right"></i>
+                                </a>
+                            </div>
+                        </div>
+                        {% endfor %}
+                        {% else %}
+                        <p class="text-muted small mb-0">Nenhuma versão encontrada.</p>
+                        {% endif %}
                     </div>
                 </div>
             </div>
@@ -100,70 +220,234 @@
     </div>
 </div>
 
+<script type="application/json" id="initialPromptContentData">{{ prompt.content|tojson }}</script>
+{% endblock %}
+
+{% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-        // Salvar nova versão
-        document.getElementById('saveBtn').addEventListener('click', async function () {
-            const content = document.getElementById('content').value;
+        const editorElement = document.getElementById('promptMarkdownEditor');
+        const previewElement = document.getElementById('promptPreview');
+        const initialData = document.getElementById('initialPromptContentData');
+        const saveBtn = document.getElementById('saveBtn');
+        const activateBtn = document.getElementById('activateBtn');
 
-            try {
-                const response = await fetch('{{ url_for("fap_review.edit_prompt", prompt_version_id=prompt.id) }}', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ content: content })
-                });
+        if (!editorElement || typeof Quill === 'undefined') {
+            return;
+        }
 
-                const data = await response.json();
-                if (data.success) {
-                    alert('Nova versão criada com sucesso!');
-                    window.location.reload();
-                } else {
-                    alert('Erro: ' + (data.error || 'Erro desconhecido'));
+        function escapeHtml(text) {
+            return (text || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        function applyInlineMarkdown(text) {
+            let html = escapeHtml(text || '');
+            html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
+            html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+            html = html.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+            html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+            return html;
+        }
+
+        function markdownToHtml(markdownText) {
+            const lines = (markdownText || '').replace(/\r\n/g, '\n').split('\n');
+            let html = '';
+            let inUl = false;
+            let inOl = false;
+            let inCode = false;
+
+            function closeLists() {
+                if (inUl) {
+                    html += '</ul>';
+                    inUl = false;
                 }
-            } catch (error) {
-                alert('Erro ao salvar: ' + error);
+                if (inOl) {
+                    html += '</ol>';
+                    inOl = false;
+                }
+            }
+
+            for (const rawLine of lines) {
+                const line = rawLine || '';
+
+                if (line.trim().startsWith('```')) {
+                    closeLists();
+                    if (!inCode) {
+                        html += '<pre><code>';
+                        inCode = true;
+                    } else {
+                        html += '</code></pre>';
+                        inCode = false;
+                    }
+                    continue;
+                }
+
+                if (inCode) {
+                    html += escapeHtml(line) + '\n';
+                    continue;
+                }
+
+                const h3 = line.match(/^###\s+(.+)$/);
+                if (h3) {
+                    closeLists();
+                    html += `<h3>${applyInlineMarkdown(h3[1])}</h3>`;
+                    continue;
+                }
+
+                const h2 = line.match(/^##\s+(.+)$/);
+                if (h2) {
+                    closeLists();
+                    html += `<h2>${applyInlineMarkdown(h2[1])}</h2>`;
+                    continue;
+                }
+
+                const h1 = line.match(/^#\s+(.+)$/);
+                if (h1) {
+                    closeLists();
+                    html += `<h1>${applyInlineMarkdown(h1[1])}</h1>`;
+                    continue;
+                }
+
+                const ul = line.match(/^\s*[-*]\s+(.+)$/);
+                if (ul) {
+                    if (!inUl) {
+                        if (inOl) {
+                            html += '</ol>';
+                            inOl = false;
+                        }
+                        html += '<ul>';
+                        inUl = true;
+                    }
+                    html += `<li>${applyInlineMarkdown(ul[1])}</li>`;
+                    continue;
+                }
+
+                const ol = line.match(/^\s*\d+\.\s+(.+)$/);
+                if (ol) {
+                    if (!inOl) {
+                        if (inUl) {
+                            html += '</ul>';
+                            inUl = false;
+                        }
+                        html += '<ol>';
+                        inOl = true;
+                    }
+                    html += `<li>${applyInlineMarkdown(ol[1])}</li>`;
+                    continue;
+                }
+
+                if (!line.trim()) {
+                    closeLists();
+                    html += '<p></p>';
+                    continue;
+                }
+
+                closeLists();
+                html += `<p>${applyInlineMarkdown(line)}</p>`;
+            }
+
+            closeLists();
+            if (inCode) {
+                html += '</code></pre>';
+            }
+            return html;
+        }
+
+        const quill = new Quill('#promptMarkdownEditor', {
+            theme: 'snow',
+            modules: {
+                toolbar: [
+                    [{ header: [1, 2, 3, false] }],
+                    ['bold', 'italic', 'underline'],
+                    ['blockquote', 'code-block'],
+                    [{ list: 'ordered' }, { list: 'bullet' }],
+                    ['link'],
+                    ['clean']
+                ]
             }
         });
 
-        // Ativar versão
-        const activateBtn = document.getElementById('activateBtn');
-        if (activateBtn) {
-            activateBtn.addEventListener('click', async function () {
+        const initialContent = initialData ? JSON.parse(initialData.textContent || '""') : '';
+        quill.setText(initialContent || '');
+
+        function getEditorText() {
+            return (quill.getText() || '').replace(/\n$/, '');
+        }
+
+        function updatePreview() {
+            const markdown = getEditorText();
+            previewElement.innerHTML = markdownToHtml(markdown);
+        }
+
+        quill.on('text-change', updatePreview);
+        updatePreview();
+
+        async function activateVersion(url) {
+            try {
+                const response = await fetch(url, { method: 'POST' });
+                const data = await response.json();
+                if (data.success) {
+                    window.location.reload();
+                    return;
+                }
+                alert('Erro: ' + (data.error || 'Erro desconhecido'));
+            } catch (error) {
+                alert('Erro ao ativar: ' + error);
+            }
+        }
+
+        if (saveBtn) {
+            saveBtn.addEventListener('click', async function () {
+                const content = getEditorText();
+
                 try {
-                    const response = await fetch('{{ url_for("fap_review.activate_prompt", prompt_version_id=prompt.id) }}', {
-                        method: 'POST'
+                    saveBtn.disabled = true;
+                    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Salvando...';
+
+                    const response = await fetch('{{ url_for("fap_review.edit_prompt", prompt_version_id=prompt.id) }}', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ content })
                     });
 
                     const data = await response.json();
                     if (data.success) {
-                        alert('Versão ativada com sucesso!');
-                        window.location.reload();
-                    } else {
-                        alert('Erro: ' + (data.error || 'Erro desconhecido'));
+                        window.location.href = `{{ url_for("fap_review.edit_prompt", prompt_version_id=0) }}`.replace('/0', `/${data.version_id}`);
+                        return;
                     }
+
+                    alert('Erro: ' + (data.error || 'Erro desconhecido'));
                 } catch (error) {
-                    alert('Erro ao ativar: ' + error);
+                    alert('Erro ao salvar: ' + error);
+                } finally {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = '<i class="bi bi-floppy me-1"></i> Salvar Nova Versão';
                 }
             });
         }
 
-        // Carregar histórico de versões
-        loadVersionHistory();
-    });
-
-    async function loadVersionHistory() {
-        try {
-            const response = await fetch('{{ url_for("fap_review.list_prompts") }}');
-            const data = await response.json();
-            // Mostrar histórico aqui
-            // Por enquanto, mostrar mensagem genérica
-            document.getElementById('versionsList').innerHTML =
-                '<p class="text-muted">Histórico de versões disponível</p>';
-        } catch (error) {
-            console.error('Erro ao carregar histórico:', error);
+        if (activateBtn) {
+            activateBtn.addEventListener('click', function () {
+                const url = activateBtn.dataset.activateUrl;
+                if (url) {
+                    activateVersion(url);
+                }
+            });
         }
-    }
+
+        document.querySelectorAll('.activate-version-btn').forEach((button) => {
+            button.addEventListener('click', function () {
+                const url = button.dataset.activateUrl;
+                if (url) {
+                    activateVersion(url);
+                }
+            });
+        });
+    });
 </script>
 {% endblock %}

@@ -14,13 +14,18 @@ Ele apenas identifica padrões e encaminha achados ao Agente de Treinamento.
 
 import json
 import os
-from typing import Optional
+import time
+from typing import Optional, Any
 from datetime import datetime
 from pathlib import Path
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field
+
+from app.models import AgentTokenUsage
+from app.services.agent_execution_history_service import AgentExecutionHistoryService
+from app.services.token_usage_service import TokenUsageService
 
 
 class FindingItem(BaseModel):
@@ -111,6 +116,8 @@ class FapPetitionReviewerAgent:
     sem atualizar diretamente nenhum documento oficial.
     """
 
+    _PROMPT_LOG_MAX_CHARS = int(os.environ.get('TOKEN_PROMPT_LOG_MAX_CHARS', '12000'))
+
     def __init__(self, 
                  openai_api_key: Optional[str] = None,
                  model: str = 'gpt-4o-mini',
@@ -133,6 +140,8 @@ class FapPetitionReviewerAgent:
             temperature=temperature
         )
         
+        self.token_usage_service = TokenUsageService()
+        
         self.manual_content: str = ""
         self.cases_content: str = ""
         self.project_instructions: str = ""
@@ -153,13 +162,20 @@ class FapPetitionReviewerAgent:
         self.cases_content = cases_md
         self.project_instructions = project_instructions_md
 
-    def _build_system_prompt(self, reviewer_identity: str = "", reviewer_rules: str = "", reviewer_output_format: str = "") -> str:
+    def _build_system_prompt(
+        self,
+        reviewer_identity: str = "",
+        reviewer_rules: str = "",
+        reviewer_prompt: str = "",
+        reviewer_output_format: str = "",
+    ) -> str:
         """
         Constrói o prompt do sistema carregando dinamicamente da configuração
         
         Args:
             reviewer_identity: Identidade do revisor (REVISOR_IDENTITY.md)
             reviewer_rules: Regras do revisor (REVISOR_RULES.md)
+            reviewer_prompt: Prompt principal do revisor (REVISOR_PROMPT.md)
             reviewer_output_format: Formato de saída (REVISOR_OUTPUT_FORMAT.md)
             
         Returns:
@@ -176,6 +192,9 @@ REGRAS INVIOLÁVEIS:
 FORMATO DE SAÍDA:
 {reviewer_output_format or 'Estruture a resposta em seções claras'}
 
+INSTRUÇÕES OPERACIONAIS:
+{reviewer_prompt or 'Aplique o procedimento padrão de revisão FAP'}
+
 MANUAL DE REFERÊNCIA:
 {self.manual_content[:3000] if self.manual_content else 'Manual não carregado'}
 
@@ -189,7 +208,11 @@ CASOS DE REFERÊNCIA:
                                             auxiliary_documents: list[dict] = None,
                                             reviewer_identity: str = "",
                                             reviewer_rules: str = "",
-                                            reviewer_output_format: str = "") -> PetitionReviewResult:
+                                            reviewer_prompt: str = "",
+                                            reviewer_output_format: str = "",
+                                            execution_id: int | None = None,
+                                            user_id: int | None = None,
+                                            law_firm_id: int | None = None) -> PetitionReviewResult:
         """
         Revisa uma única versão de petição contra o manual
         
@@ -198,12 +221,18 @@ CASOS DE REFERÊNCIA:
             auxiliary_documents: Documentos auxiliares opcionais
             reviewer_identity: Identidade do revisor
             reviewer_rules: Regras do revisor
+            reviewer_prompt: Prompt principal do revisor
             reviewer_output_format: Formato de saída
             
         Returns:
             Resultado estruturado da revisão
         """
-        system_prompt = self._build_system_prompt(reviewer_identity, reviewer_rules, reviewer_output_format)
+        system_prompt = self._build_system_prompt(
+            reviewer_identity,
+            reviewer_rules,
+            reviewer_prompt,
+            reviewer_output_format,
+        )
         
         user_message = f"""Revise esta petição inicial de FAP contra o manual.
 
@@ -232,8 +261,61 @@ Estruture a resposta em JSON válido com a seguinte estrutura:
                 HumanMessage(content=user_message)
             ]
             
+            start_time = time.time()
             response = self.llm.invoke(messages)
+            latency_ms = int((time.time() - start_time) * 1000)
             response_text = response.content
+            
+            # Capturar e persistir logs de tokens
+            response_payload = self._build_response_payload(response)
+            self.token_usage_service.capture_and_store(
+                response_payload,
+                agent_name="FapPetitionReviewerAgent",
+                action_name="review_petition_single_version",
+                print_prefix="[FapReviewer]",
+                model_name=self.model_name,
+                model_provider="openai",
+                latency_ms=latency_ms,
+                metadata_payload={
+                    "petition_length": len(petition_content),
+                    "auxiliary_documents_count": len(auxiliary_documents or []),
+                    "llm_input": {
+                        "system_prompt": self._truncate_for_log(system_prompt),
+                        "user_prompt": self._truncate_for_log(user_message),
+                    },
+                    "prompt_versions": {
+                        "reviewer_identity": self._truncate_for_log(reviewer_identity),
+                        "reviewer_rules": self._truncate_for_log(reviewer_rules),
+                        "reviewer_prompt": self._truncate_for_log(reviewer_prompt),
+                        "reviewer_output_format": self._truncate_for_log(reviewer_output_format),
+                    },
+                }
+            )
+
+            # Persistir histórico completo e vincular ao token usage
+            request_id = self._extract_response_request_id(response)
+            token_usage_id = self._find_token_usage_id_for_request(
+                action_name="review_petition_single_version",
+                law_firm_id=law_firm_id,
+                request_id=request_id,
+            )
+            AgentExecutionHistoryService.save_execution_history(
+                agent_name="FapPetitionReviewerAgent",
+                action_name="review_petition_single_version",
+                agent_type="fap_review_reviewer",
+                system_prompt=system_prompt,
+                user_prompt=user_message,
+                model_response=response_text,
+                full_messages_history=[*messages, response],
+                result_data={"execution_id": execution_id, "analysis_type": "single_version"},
+                model_name=self.model_name,
+                model_provider="openai",
+                status="success",
+                user_id=user_id,
+                law_firm_id=law_firm_id,
+                chat_session_id=None,
+                agent_token_usage_id=token_usage_id,
+            )
             
             # Tentar extrair JSON da resposta
             try:
@@ -279,7 +361,11 @@ Estruture a resposta em JSON válido com a seguinte estrutura:
                                          auxiliary_documents: list[dict] = None,
                                          reviewer_identity: str = "",
                                          reviewer_rules: str = "",
-                                         reviewer_output_format: str = "") -> PetitionReviewResult:
+                                         reviewer_prompt: str = "",
+                                         reviewer_output_format: str = "",
+                                         execution_id: int | None = None,
+                                         user_id: int | None = None,
+                                         law_firm_id: int | None = None) -> PetitionReviewResult:
         """
         Realiza análise comparativa entre duas versões de petição
         
@@ -289,12 +375,18 @@ Estruture a resposta em JSON válido com a seguinte estrutura:
             auxiliary_documents: Documentos auxiliares opcionais
             reviewer_identity: Identidade do revisor
             reviewer_rules: Regras do revisor
+            reviewer_prompt: Prompt principal do revisor
             reviewer_output_format: Formato de saída
             
         Returns:
             Resultado estruturado da análise comparativa
         """
-        system_prompt = self._build_system_prompt(reviewer_identity, reviewer_rules, reviewer_output_format)
+        system_prompt = self._build_system_prompt(
+            reviewer_identity,
+            reviewer_rules,
+            reviewer_prompt,
+            reviewer_output_format,
+        )
         
         user_message = f"""Revise comparativamente estas duas versões de petição de FAP.
 
@@ -324,8 +416,62 @@ Estruture em JSON com:
                 HumanMessage(content=user_message)
             ]
             
+            start_time = time.time()
             response = self.llm.invoke(messages)
+            latency_ms = int((time.time() - start_time) * 1000)
             response_text = response.content
+            
+            # Capturar e persistir logs de tokens
+            response_payload = self._build_response_payload(response)
+            self.token_usage_service.capture_and_store(
+                response_payload,
+                agent_name="FapPetitionReviewerAgent",
+                action_name="review_petition_comparative",
+                print_prefix="[FapReviewer]",
+                model_name=self.model_name,
+                model_provider="openai",
+                latency_ms=latency_ms,
+                metadata_payload={
+                    "original_petition_length": len(original_petition),
+                    "revised_petition_length": len(revised_petition),
+                    "auxiliary_documents_count": len(auxiliary_documents or []),
+                    "llm_input": {
+                        "system_prompt": self._truncate_for_log(system_prompt),
+                        "user_prompt": self._truncate_for_log(user_message),
+                    },
+                    "prompt_versions": {
+                        "reviewer_identity": self._truncate_for_log(reviewer_identity),
+                        "reviewer_rules": self._truncate_for_log(reviewer_rules),
+                        "reviewer_prompt": self._truncate_for_log(reviewer_prompt),
+                        "reviewer_output_format": self._truncate_for_log(reviewer_output_format),
+                    },
+                }
+            )
+
+            # Persistir histórico completo e vincular ao token usage
+            request_id = self._extract_response_request_id(response)
+            token_usage_id = self._find_token_usage_id_for_request(
+                action_name="review_petition_comparative",
+                law_firm_id=law_firm_id,
+                request_id=request_id,
+            )
+            AgentExecutionHistoryService.save_execution_history(
+                agent_name="FapPetitionReviewerAgent",
+                action_name="review_petition_comparative",
+                agent_type="fap_review_reviewer",
+                system_prompt=system_prompt,
+                user_prompt=user_message,
+                model_response=response_text,
+                full_messages_history=[*messages, response],
+                result_data={"execution_id": execution_id, "analysis_type": "comparative"},
+                model_name=self.model_name,
+                model_provider="openai",
+                status="success",
+                user_id=user_id,
+                law_firm_id=law_firm_id,
+                chat_session_id=None,
+                agent_token_usage_id=token_usage_id,
+            )
             
             # Tentar extrair JSON
             try:
@@ -430,3 +576,60 @@ Estruture em JSON com:
                 formal_findings=0,
                 correction_priority="N/A"
             )
+
+    def _build_response_payload(self, response: Any) -> dict[str, Any]:
+        """
+        Converte a resposta do LangChain em payload esperado pelo TokenUsageService
+        
+        Args:
+            response: Resposta do LLM (AIMessage ou similar)
+            
+        Returns:
+            Dict com estrutura {"messages": [response]}
+        """
+        return {"messages": [response]}
+
+    def _truncate_for_log(self, text: str, max_chars: int | None = None) -> str:
+        """Limita payload textual para evitar metadados gigantes no banco."""
+        if not isinstance(text, str):
+            return ""
+        limit = max_chars or self._PROMPT_LOG_MAX_CHARS
+        if len(text) <= limit:
+            return text
+        return f"{text[:limit]}\n\n...[truncated {len(text) - limit} chars]"
+
+    def _extract_response_request_id(self, response: Any) -> str:
+        """Extrai request_id/id da resposta do modelo quando disponível."""
+        response_id = getattr(response, "id", None)
+        if isinstance(response_id, str) and response_id.strip():
+            return response_id.strip()
+
+        response_metadata = getattr(response, "response_metadata", None)
+        if isinstance(response_metadata, dict):
+            request_id = response_metadata.get("request_id") or response_metadata.get("id")
+            if isinstance(request_id, str) and request_id.strip():
+                return request_id.strip()
+
+        return ""
+
+    def _find_token_usage_id_for_request(
+        self,
+        *,
+        action_name: str,
+        law_firm_id: int | None,
+        request_id: str,
+    ) -> int | None:
+        """Localiza o último token usage do agente para vincular histórico detalhado."""
+        query = AgentTokenUsage.query.filter_by(
+            agent_name="FapPetitionReviewerAgent",
+            action_name=action_name,
+        )
+
+        if law_firm_id is not None:
+            query = query.filter_by(law_firm_id=law_firm_id)
+
+        if request_id:
+            query = query.filter_by(request_id=request_id)
+
+        row = query.order_by(AgentTokenUsage.id.desc()).first()
+        return row.id if row else None
