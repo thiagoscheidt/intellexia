@@ -97,7 +97,7 @@ class DocumentProcessorService:
         if letters:
             upper_count = sum(1 for ch in letters if ch.isupper())
             lower_count = sum(1 for ch in letters if ch.islower())
-
+    
             # Se predomina minusculo em texto longo, tende a ser frase/citacao.
             if len(letters) >= 20 and lower_count > upper_count:
                 return False

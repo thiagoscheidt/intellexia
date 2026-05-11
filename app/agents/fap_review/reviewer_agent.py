@@ -14,6 +14,7 @@ Ele apenas identifica padrões e encaminha achados ao Agente de Treinamento.
 
 import json
 import os
+import re
 import time
 from typing import Optional, Any
 from datetime import datetime
@@ -120,6 +121,7 @@ class FapPetitionReviewerAgent:
     _REVIEW_CHUNK_MAX_CHARS = int(os.environ.get('FAP_REVIEW_CHUNK_MAX_CHARS', '12000'))
     _REVIEW_CHUNK_OVERLAP_CHARS = int(os.environ.get('FAP_REVIEW_CHUNK_OVERLAP_CHARS', '1200'))
     _AUX_PREVIEW_LIMIT = int(os.environ.get('FAP_REVIEW_AUX_PREVIEW_LIMIT', '5'))
+    _SECTION_TITLE_MAX_CHARS = int(os.environ.get('FAP_REVIEW_SECTION_TITLE_MAX_CHARS', '160'))
 
     def __init__(self, 
                  openai_api_key: Optional[str] = None,
@@ -247,11 +249,15 @@ INSTRUÇÕES DO PROJETO:
             total_chunks = len(chunks)
 
             for idx, chunk_text in enumerate(chunks, start=1):
+                chunk_section = str(chunk_text.get("section") or "Seção não identificada")
+                chunk_body = str(chunk_text.get("text") or "")
+
                 user_message = self._build_single_user_message(
-                    petition_chunk=chunk_text,
+                    petition_chunk=chunk_body,
                     auxiliary_documents=auxiliary_documents,
                     chunk_index=idx,
                     total_chunks=total_chunks,
+                    section_label=chunk_section,
                 )
 
                 messages = [
@@ -279,7 +285,8 @@ INSTRUÇÕES DO PROJETO:
                         "auxiliary_documents_count": len(auxiliary_documents or []),
                         "chunk_index": idx,
                         "total_chunks": total_chunks,
-                        "chunk_length": len(chunk_text),
+                        "chunk_length": len(chunk_body),
+                        "chunk_section": chunk_section,
                         "llm_input": {
                             "system_prompt": self._truncate_for_log(system_prompt),
                             "user_prompt": self._truncate_for_log(user_message),
@@ -313,6 +320,7 @@ INSTRUÇÕES DO PROJETO:
                         "analysis_type": "single_version",
                         "chunk_index": idx,
                         "total_chunks": total_chunks,
+                        "chunk_section": chunk_section,
                     },
                     model_name=self.model_name,
                     model_provider="openai",
@@ -393,15 +401,22 @@ INSTRUÇÕES DO PROJETO:
             total_chunks = max(len(original_chunks), len(revised_chunks))
 
             for idx in range(total_chunks):
-                original_chunk = original_chunks[idx] if idx < len(original_chunks) else ""
-                revised_chunk = revised_chunks[idx] if idx < len(revised_chunks) else ""
+                original_chunk = original_chunks[idx] if idx < len(original_chunks) else {"text": "", "section": "Sem seção (original)"}
+                revised_chunk = revised_chunks[idx] if idx < len(revised_chunks) else {"text": "", "section": "Sem seção (revisada)"}
+
+                original_chunk_text = str(original_chunk.get("text") or "")
+                revised_chunk_text = str(revised_chunk.get("text") or "")
+                original_section = str(original_chunk.get("section") or "Sem seção (original)")
+                revised_section = str(revised_chunk.get("section") or "Sem seção (revisada)")
 
                 user_message = self._build_comparative_user_message(
-                    original_chunk=original_chunk,
-                    revised_chunk=revised_chunk,
+                    original_chunk=original_chunk_text,
+                    revised_chunk=revised_chunk_text,
                     auxiliary_documents=auxiliary_documents,
                     chunk_index=idx + 1,
                     total_chunks=total_chunks,
+                    original_section_label=original_section,
+                    revised_section_label=revised_section,
                 )
 
                 messages = [
@@ -430,8 +445,10 @@ INSTRUÇÕES DO PROJETO:
                         "auxiliary_documents_count": len(auxiliary_documents or []),
                         "chunk_index": idx + 1,
                         "total_chunks": total_chunks,
-                        "original_chunk_length": len(original_chunk),
-                        "revised_chunk_length": len(revised_chunk),
+                        "original_chunk_length": len(original_chunk_text),
+                        "revised_chunk_length": len(revised_chunk_text),
+                        "original_chunk_section": original_section,
+                        "revised_chunk_section": revised_section,
                         "llm_input": {
                             "system_prompt": self._truncate_for_log(system_prompt),
                             "user_prompt": self._truncate_for_log(user_message),
@@ -465,6 +482,8 @@ INSTRUÇÕES DO PROJETO:
                         "analysis_type": "comparative",
                         "chunk_index": idx + 1,
                         "total_chunks": total_chunks,
+                        "original_chunk_section": original_section,
+                        "revised_chunk_section": revised_section,
                     },
                     model_name=self.model_name,
                     model_provider="openai",
@@ -583,30 +602,104 @@ INSTRUÇÕES DO PROJETO:
         """
         return {"messages": [response]}
 
-    def _split_text_into_chunks(self, text: str) -> list[str]:
-        """Divide texto grande em chunks com sobreposição para cobrir o documento inteiro."""
+    def _split_text_into_chunks(self, text: str) -> list[dict[str, str]]:
+        """Divide texto em blocos de seção e, se necessário, subchunks com sobreposição."""
         if not text:
-            return [""]
+            return [{"section": "Documento vazio", "text": ""}]
 
         text = str(text)
         max_chars = max(1000, self._REVIEW_CHUNK_MAX_CHARS)
         overlap = max(0, min(self._REVIEW_CHUNK_OVERLAP_CHARS, max_chars // 2))
 
-        if len(text) <= max_chars:
-            return [text]
+        section_blocks = self._split_text_into_sections(text)
+        chunks: list[dict[str, str]] = []
 
-        chunks: list[str] = []
-        start = 0
-        while start < len(text):
-            end = min(start + max_chars, len(text))
-            chunk = text[start:end]
-            if chunk.strip():
-                chunks.append(chunk)
-            if end >= len(text):
-                break
-            start = max(0, end - overlap)
+        for block in section_blocks:
+            section_name = str(block.get("section") or "Seção não identificada")
+            section_text = str(block.get("text") or "")
 
-        return chunks or [text]
+            if len(section_text) <= max_chars:
+                if section_text.strip():
+                    chunks.append({"section": section_name, "text": section_text})
+                continue
+
+            part_texts: list[str] = []
+            start = 0
+            while start < len(section_text):
+                end = min(start + max_chars, len(section_text))
+                chunk = section_text[start:end]
+                if chunk.strip():
+                    part_texts.append(chunk)
+                if end >= len(section_text):
+                    break
+                start = max(0, end - overlap)
+
+            total_parts = len(part_texts)
+            for part_idx, part in enumerate(part_texts, start=1):
+                label = f"{section_name} (parte {part_idx}/{total_parts})" if total_parts > 1 else section_name
+                chunks.append({"section": label, "text": part})
+
+        return chunks or [{"section": "Documento completo", "text": text}]
+
+    def _split_text_into_sections(self, text: str) -> list[dict[str, str]]:
+        """Separa texto por títulos numerados de seção (formato markdown/jurídico)."""
+        heading_pattern = re.compile(r'(?m)^(?:#{1,3}[ \t]+)?(\d+\.[ \t]+[^\n]+)$')
+        matches = list(heading_pattern.finditer(text))
+
+        valid_matches: list[re.Match[str]] = []
+        for match in matches:
+            candidate = str(match.group(1) or "").strip()
+            if self._is_valid_section_title(candidate):
+                valid_matches.append(match)
+
+        if not valid_matches:
+            return [{"section": "Documento completo", "text": text}]
+
+        sections: list[dict[str, str]] = []
+
+        first_start = valid_matches[0].start()
+        if first_start > 0:
+            preamble = text[:first_start].strip()
+            if preamble:
+                sections.append({"section": "Preâmbulo", "text": preamble})
+
+        for idx, match in enumerate(valid_matches):
+            start = match.start()
+            end = valid_matches[idx + 1].start() if idx + 1 < len(valid_matches) else len(text)
+            section_text = text[start:end].strip()
+            section_title = str(match.group(1) or "").strip()
+
+            if section_text:
+                sections.append({"section": section_title, "text": section_text})
+
+        return sections or [{"section": "Documento completo", "text": text}]
+
+    def _is_valid_section_title(self, candidate: str) -> bool:
+        """Filtra falsos positivos de seção para evitar quebra indevida de chunks."""
+        title = " ".join(str(candidate or "").strip().split())
+        if not title:
+            return False
+
+        if len(title) > self._SECTION_TITLE_MAX_CHARS:
+            return False
+
+        if re.search(r'\.{3,}\s*\d+\s*$', title):
+            return False
+
+        if re.search(r'["“”]|\(p\.\s*\d+|RE\s*n[ºo]', title, re.IGNORECASE):
+            return False
+
+        letters = [ch for ch in title if ch.isalpha()]
+        if letters and len(letters) >= 20:
+            upper_count = sum(1 for ch in letters if ch.isupper())
+            lower_count = sum(1 for ch in letters if ch.islower())
+            if lower_count > upper_count:
+                return False
+
+        if len(title) > 80 and title.count(",") >= 2:
+            return False
+
+        return True
 
     def _format_auxiliary_documents(self, auxiliary_documents: list[dict] | None) -> str:
         """Monta resumo enxuto dos documentos auxiliares para manter contexto sem poluir prompt."""
@@ -634,11 +727,13 @@ INSTRUÇÕES DO PROJETO:
         auxiliary_documents: list[dict] | None,
         chunk_index: int,
         total_chunks: int,
+        section_label: str,
     ) -> str:
         aux_text = self._format_auxiliary_documents(auxiliary_documents)
         return f"""Revise esta petição inicial de FAP contra o manual.
 
 BLOCO ANALISADO: {chunk_index}/{total_chunks}
+SEÇÃO DO DOCUMENTO: {section_label}
 
 PETIÇÃO A REVISAR (TRECHO):
 {petition_chunk}
@@ -667,11 +762,15 @@ Estruture a resposta em JSON válido com a seguinte estrutura:
         auxiliary_documents: list[dict] | None,
         chunk_index: int,
         total_chunks: int,
+        original_section_label: str,
+        revised_section_label: str,
     ) -> str:
         aux_text = self._format_auxiliary_documents(auxiliary_documents)
         return f"""Revise comparativamente estas duas versões de petição de FAP.
 
 BLOCO ANALISADO: {chunk_index}/{total_chunks}
+SEÇÃO ORIGINAL: {original_section_label}
+SEÇÃO REVISADA: {revised_section_label}
 
 VERSÃO ORIGINAL (TRECHO):
 {original_chunk}
