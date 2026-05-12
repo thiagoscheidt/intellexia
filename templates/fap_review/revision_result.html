@@ -231,7 +231,7 @@
 {% endblock %}
 
 {% block content %}
-<div class="fap-revision-result-page">
+<div class="fap-revision-result-page" data-execution-id="{{ execution.id }}">
     {% call page_hero(title=page_title, subtitle='Visualize os achados e o diagnóstico gerado pelo agente revisor',
     icon='bi bi-file-earmark-check') %}
     <nav aria-label="breadcrumb">
@@ -341,35 +341,47 @@
             <div class="col-12">
                 <div class="card info-card">
                     <div class="card-header d-flex align-items-center gap-2">
-                        <i class="bi bi-clipboard-data text-info"></i>
+                        <i class="bi bi-graph-up text-primary"></i>
                         Resumo Executivo
                     </div>
                     <div class="card-body">
-                        <div class="row g-3 mb-3">
+                        <div class="row g-3 mb-4">
                             <div class="col-sm-6 col-lg-3">
-                                <div class="summary-stat">
-                                    <div class="summary-stat-label">Total de Achados</div>
+                                <div class="summary-stat" style="border-left: 4px solid #6c757d;">
+                                    <div class="d-flex align-items-center gap-2 mb-2">
+                                        <i class="bi bi-collection text-secondary"></i>
+                                        <div class="summary-stat-label" style="margin: 0;">Total</div>
+                                    </div>
                                     <div class="summary-stat-value">{{ result_data.executive_summary.total_findings }}
                                     </div>
                                 </div>
                             </div>
                             <div class="col-sm-6 col-lg-3">
-                                <div class="summary-stat">
-                                    <div class="summary-stat-label">Críticos</div>
+                                <div class="summary-stat" style="border-left: 4px solid #dc3545;">
+                                    <div class="d-flex align-items-center gap-2 mb-2">
+                                        <i class="bi bi-exclamation-triangle-fill text-danger"></i>
+                                        <div class="summary-stat-label" style="margin: 0;">Críticos</div>
+                                    </div>
                                     <div class="summary-stat-value text-danger">{{
                                         result_data.executive_summary.critical_findings }}</div>
                                 </div>
                             </div>
                             <div class="col-sm-6 col-lg-3">
-                                <div class="summary-stat">
-                                    <div class="summary-stat-label">Moderados</div>
+                                <div class="summary-stat" style="border-left: 4px solid #ffc107;">
+                                    <div class="d-flex align-items-center gap-2 mb-2">
+                                        <i class="bi bi-exclamation-circle-fill text-warning"></i>
+                                        <div class="summary-stat-label" style="margin: 0;">Moderados</div>
+                                    </div>
                                     <div class="summary-stat-value text-warning">{{
                                         result_data.executive_summary.moderate_findings }}</div>
                                 </div>
                             </div>
                             <div class="col-sm-6 col-lg-3">
-                                <div class="summary-stat">
-                                    <div class="summary-stat-label">Formais</div>
+                                <div class="summary-stat" style="border-left: 4px solid #0dcaf0;">
+                                    <div class="d-flex align-items-center gap-2 mb-2">
+                                        <i class="bi bi-info-circle-fill text-info"></i>
+                                        <div class="summary-stat-label" style="margin: 0;">Formais</div>
+                                    </div>
                                     <div class="summary-stat-value text-info">{{
                                         result_data.executive_summary.formal_findings }}</div>
                                 </div>
@@ -377,18 +389,23 @@
                         </div>
 
                         {% if result_data.executive_summary.main_legal_risks %}
-                        <div class="mb-2">
-                            <div class="small text-muted fw-semibold mb-1">Principais Riscos Jurídicos</div>
-                            <ul class="mb-2">
+                        <div class="mb-3 p-3 rounded"
+                            style="background: rgba(220, 53, 69, 0.05); border-left: 4px solid #dc3545;">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <i class="bi bi-shield-alert text-danger fw-bold"></i>
+                                <strong class="text-danger">Principais Riscos Jurídicos</strong>
+                            </div>
+                            <ul class="mb-0 ps-4">
                                 {% for risk in result_data.executive_summary.main_legal_risks %}
-                                <li>{{ risk }}</li>
+                                <li class="small">{{ risk }}</li>
                                 {% endfor %}
                             </ul>
                         </div>
                         {% endif %}
 
-                        <div class="small"><strong>Prioridade de Correção:</strong> {{
-                            result_data.executive_summary.correction_priority }}</div>
+                        <div class="small text-muted"><strong>Prioridade de Correção:</strong> <span
+                                class="badge rounded-pill bg-warning text-dark ms-1">{{
+                                result_data.executive_summary.correction_priority }}</span></div>
                     </div>
                 </div>
             </div>
@@ -442,26 +459,32 @@
                                 correção</strong>.
                             Cada ponto inclui a <strong>localização exata</strong>, <strong>o que corrigir</strong> e,
                             quando disponível,
-                            o <strong>fundamento legal</strong> (referência do manual) que justifica a observação.
+                            o <strong>fundamento do manual</strong> (seção do manual que justifica a observação) que
+                            justifica a observação.
                         </div>
 
                         <!-- Resumo Rápido -->
                         <div class="findings-toolbar mb-4">
-                            <span class="toolbar-pill"><strong>Total:</strong> {{ result_data.findings|length }}</span>
                             <span class="toolbar-pill"
-                                style="border-color: #dc3545; background: rgba(220, 53, 69, 0.05);"><strong
-                                    style="color: #dc3545;">⚠ Críticos:</strong> {{
+                                style="background: rgba(108, 117, 125, 0.1); border-color: #6c757d;"><strong
+                                    style="color: #6c757d;"><i class="bi bi-collection me-1"></i>Total:</strong> {{
+                                result_data.findings|length }}</span>
+                            <span class="toolbar-pill"
+                                style="border-color: #dc3545; background: rgba(220, 53, 69, 0.08);"><strong
+                                    style="color: #dc3545;"><i
+                                        class="bi bi-exclamation-triangle-fill me-1"></i>Críticos:</strong> {{
                                 result_data.executive_summary.critical_findings if result_data.executive_summary else 0
                                 }}</span>
                             <span class="toolbar-pill"
-                                style="border-color: #ffc107; background: rgba(255, 193, 7, 0.05);"><strong
-                                    style="color: #997404;">⚡ Moderados:</strong> {{
+                                style="border-color: #ffc107; background: rgba(255, 193, 7, 0.08);"><strong
+                                    style="color: #997404;"><i
+                                        class="bi bi-exclamation-circle-fill me-1"></i>Moderados:</strong> {{
                                 result_data.executive_summary.moderate_findings if result_data.executive_summary else 0
                                 }}</span>
                             <span class="toolbar-pill"
-                                style="border-color: #0dcaf0; background: rgba(13, 202, 240, 0.05);"><strong
-                                    style="color: #055160;">ℹ Formais:</strong> {{
-                                result_data.executive_summary.formal_findings if result_data.executive_summary else 0
+                                style="border-color: #0dcaf0; background: rgba(13, 202, 240, 0.08);"><strong
+                                    style="color: #055160;"><i class="bi bi-info-circle-fill me-1"></i>Formais:</strong>
+                                {{ result_data.executive_summary.formal_findings if result_data.executive_summary else 0
                                 }}</span>
                         </div>
 
@@ -488,7 +511,7 @@
                             class="finding-item {% if finding.severity == 'CRÍTICO' %}severity-critical{% elif finding.severity == 'MODERADO' %}severity-moderate{% else %}severity-formal{% endif %}"
                             style="scroll-margin-top: 80px;">
 
-                            <!-- Header com Número + Gravidade -->
+                            <!-- Header com Número + Gravidade + Botão Ver Página -->
                             <div class="finding-item-header" style="margin-bottom: 1rem;">
                                 <div class="flex-grow-1">
                                     <div class="d-flex align-items-center gap-2 flex-wrap mb-2">
@@ -513,6 +536,18 @@
                                             Novo</span>
                                         {% endif %}
                                     </div>
+                                    {% if finding.location %}
+                                    <div>
+                                        <button type="button"
+                                            class="btn btn-sm btn-outline-primary view-finding-page-btn"
+                                            data-bs-toggle="modal" data-bs-target="#findingPageModal"
+                                            data-finding-number="{{ loop.index }}"
+                                            data-location="{{ finding.location }}"
+                                            title="Visualizar página do documento">
+                                            <i class="bi bi-eye me-1"></i> Ver Página
+                                        </button>
+                                    </div>
+                                    {% endif %}
                                 </div>
                             </div>
 
@@ -541,8 +576,8 @@
 
                                 {% if finding.manual_reference %}
                                 <div class="finding-meta-box finding-manual-box">
-                                    <div class="finding-meta-label"><i class="bi bi-book text-success"></i> Fundamento
-                                        Legal</div>
+                                    <div class="finding-meta-label"><i class="bi bi-book text-success"></i> Referência
+                                        do Manual</div>
                                     <p class="finding-meta-value">{{ finding.manual_reference }}</p>
                                 </div>
                                 {% endif %}
@@ -701,7 +736,37 @@
             </div>
             {% endif %}
 
-            <!-- Debug / Visualização Completa -->
+            <!-- Modal: Visualizar Página do Ponto -->
+            <div class="modal fade" id="findingPageModal" tabindex="-1" aria-hidden="true">
+                <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                    <div class="modal-content">
+                        <div class="modal-header border-bottom">
+                            <div>
+                                <h5 class="modal-title fw-semibold">
+                                    <i class="bi bi-file-pdf me-2 text-danger"></i>Visualizar Documento
+                                </h5>
+                                <small class="text-muted d-block mt-1" id="findingPageSubtitle"></small>
+                            </div>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"
+                                aria-label="Fechar"></button>
+                        </div>
+                        <div class="modal-body p-0">
+                            <iframe id="findingPageIframe" style="width: 100%; height: 600px; border: none;"
+                                title="Visualização do documento">
+                            </iframe>
+                        </div>
+                        <div class="modal-footer border-top">
+                            <a id="findingPageDownloadLink" href="#" class="btn btn-sm btn-outline-secondary"
+                                target="_blank" rel="noopener noreferrer">
+                                <i class="bi bi-download me-1"></i> Baixar PDF
+                            </a>
+                            <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">
+                                <i class="bi bi-x me-1"></i> Fechar
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
             <div class="col-12">
                 <div class="card info-card">
                     <div class="card-header d-flex align-items-center justify-content-between debug-section-toggle"
@@ -876,6 +941,57 @@
 
 {% block extra_js %}
 <script>
+    // Modal para Visualizar Página do Ponto de Atenção
+    document.addEventListener('DOMContentLoaded', function () {
+        const findingPageModal = document.getElementById('findingPageModal');
+
+        if (findingPageModal) {
+            findingPageModal.addEventListener('show.bs.modal', function (e) {
+                const btn = e.relatedTarget;
+                const findingNumber = btn.dataset.findingNumber;
+                const location = btn.dataset.location;
+                const executionId = document.querySelector('[data-execution-id]')?.dataset.executionId;
+                const iframe = document.getElementById('findingPageIframe');
+
+                // Atualizar subtitle
+                document.getElementById('findingPageSubtitle').textContent =
+                    `Ponto de Atenção ${findingNumber} • Localização: ${location}`;
+
+                // Extrair número da página de location
+                const pageMatch = location.match(/(?:página|page|p\.?)\s*(\d+)/i);
+                const pageNumber = pageMatch ? parseInt(pageMatch[1]) : null;
+
+                // URL base do PDF
+                const baseUrl = `/fap-review/revision/${executionId}/document/main`;
+
+                // Link para download (sem fragmento)
+                document.getElementById('findingPageDownloadLink').href = baseUrl;
+
+                // Tentar diferentes formatos de fragmento para navegação de página
+                if (pageNumber) {
+                    // Limpar src anterior para forçar recarga
+                    iframe.src = '';
+
+                    // Dar tempo para limpar e depois carregar com fragmento
+                    setTimeout(() => {
+                        // Tentar #page=N primeiro (PDF.js standard)
+                        iframe.src = `${baseUrl}#page=${pageNumber}`;
+
+                        // Se não funcionar após 1.5s, recarregar com zoom
+                        setTimeout(() => {
+                            if (!iframe.src.includes('zoom')) {
+                                iframe.src = `${baseUrl}#page=${pageNumber}&zoom=100`;
+                            }
+                        }, 1500);
+                    }, 100);
+                } else {
+                    // Se não conseguir extrair página, abrir no começo
+                    iframe.src = baseUrl;
+                }
+            });
+        }
+    });
+
     function copyToClipboard(elementId) {
         const element = document.getElementById(elementId);
         const text = element.innerText || element.textContent;
