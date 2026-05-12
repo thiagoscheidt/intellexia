@@ -151,8 +151,7 @@
                             <div class="upload-guideline d-flex align-items-start gap-2 mb-4 small">
                                 <i class="bi bi-shield-check mt-1"></i>
                                 <div>
-                                    O sistema aceita arquivos de até 50MB por documento. Em modo comparativo, envie a
-                                    versão original e a versão revisada para análise lado a lado.
+                                    O sistema aceita arquivos de até 50MB por documento.
                                 </div>
                             </div>
 
@@ -187,34 +186,6 @@
                                         multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg">
                                 </div>
                                 <div id="auxiliaryDocumentsList"></div>
-                            </div>
-
-                            <div class="mb-3">
-                                <div class="form-check form-switch">
-                                    <input class="form-check-input" type="checkbox" role="switch"
-                                        id="comparativeAnalysis" name="comparative_analysis" value="1">
-                                    <label class="form-check-label small" for="comparativeAnalysis">
-                                        <span class="fw-semibold">Ativar Análise Comparativa</span>
-                                        <span class="text-muted ms-1">- compare a petição original com uma versão
-                                            revisada</span>
-                                    </label>
-                                </div>
-                            </div>
-
-                            <div id="comparedDocumentGroup" class="mb-4 d-none">
-                                <label class="form-label small fw-semibold mb-2">
-                                    <i class="bi bi-file-earmark-check text-success me-1"></i>
-                                    Versão Revisada (para comparação)
-                                </label>
-                                <div class="dropzone-custom" id="comparedDocumentDropzone">
-                                    <i class="bi bi-arrow-left-right dropzone-icon"
-                                        style="color: var(--bs-success);"></i>
-                                    <p class="mb-1 mt-2 fw-semibold small">Versão que será comparada com a original</p>
-                                    <small class="text-muted">PDF, Word (.doc/.docx)</small>
-                                    <input type="file" class="d-none" id="comparedDocument" name="compared_document"
-                                        accept=".pdf,.doc,.docx">
-                                </div>
-                                <div id="comparedDocumentList"></div>
                             </div>
 
                             <hr class="my-4">
@@ -329,14 +300,6 @@
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const MAX_FILE_SIZE = 50 * 1024 * 1024;
-        const comparativeSwitch = document.getElementById('comparativeAnalysis');
-        const comparedDocumentGroup = document.getElementById('comparedDocumentGroup');
-        const comparedDocumentInput = document.getElementById('comparedDocument');
-
-        function updateComparativeState() {
-            comparedDocumentGroup.classList.toggle('d-none', !comparativeSwitch.checked);
-            comparedDocumentInput.required = comparativeSwitch.checked;
-        }
 
         function hasOversizedFiles(fileList) {
             return Array.from(fileList).some(file => file.size > MAX_FILE_SIZE);
@@ -390,31 +353,21 @@
             input.addEventListener('change', () => renderList(input.files, list, zone));
         }
 
-        comparativeSwitch.addEventListener('change', updateComparativeState);
-        updateComparativeState();
-
         setupDropzone('mainDocumentDropzone', 'mainDocument', 'mainDocumentList', false);
         setupDropzone('auxiliaryDocumentsDropzone', 'auxiliaryDocuments', 'auxiliaryDocumentsList', true);
-        setupDropzone('comparedDocumentDropzone', 'comparedDocument', 'comparedDocumentList', false);
 
         document.getElementById('petitionForm').addEventListener('submit', async function (e) {
             e.preventDefault();
 
             const mainFiles = document.getElementById('mainDocument').files;
             const auxiliaryFiles = document.getElementById('auxiliaryDocuments').files;
-            const comparedFiles = document.getElementById('comparedDocument').files;
 
             if (!mainFiles.length) {
                 alert('Por favor, selecione um documento principal');
                 return;
             }
 
-            if (comparativeSwitch.checked && !comparedFiles.length) {
-                alert('Envie a versão revisada para usar a análise comparativa.');
-                return;
-            }
-
-            if (hasOversizedFiles(mainFiles) || hasOversizedFiles(auxiliaryFiles) || hasOversizedFiles(comparedFiles)) {
+            if (hasOversizedFiles(mainFiles) || hasOversizedFiles(auxiliaryFiles)) {
                 alert('Um ou mais arquivos excedem o limite de 50MB por documento.');
                 return;
             }

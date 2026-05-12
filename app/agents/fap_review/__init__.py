@@ -8,5 +8,10 @@ Este módulo contém:
 
 from .reviewer_agent import FapPetitionReviewerAgent
 from .training_agent import FapTrainingEvolutionAgent
+from .training_apply_agent import FapTrainingApplySubAgent
 
-__all__ = ['FapPetitionReviewerAgent', 'FapTrainingEvolutionAgent']
+__all__ = [
+	'FapPetitionReviewerAgent',
+	'FapTrainingEvolutionAgent',
+	'FapTrainingApplySubAgent',
+]
