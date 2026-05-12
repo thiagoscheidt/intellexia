@@ -129,7 +129,7 @@ class FapPetitionReviewerAgent:
 
     def __init__(self, 
                  openai_api_key: Optional[str] = None,
-                 model: str = 'gpt-4o-mini',
+                    model: str = 'gpt-4o-mini',
                  temperature: float = 0.0):
         """
         Inicializa o agente revisor
@@ -143,11 +143,12 @@ class FapPetitionReviewerAgent:
         self.model_name = model
         self.temperature = temperature
         
+        # Com gpt-4o + temperature=0.0, OpenAI oferece determinismo
+        # temperature=0.0 = máximo determinismo para o modelo (limites dependem do modelo)
         self.llm = ChatOpenAI(
             api_key=self.api_key,
             model=model,
-            temperature=temperature,
-            seed=42  # Seed determinístico: OpenAI garante mesma resposta
+            temperature=temperature
         )
         
         self.token_usage_service = TokenUsageService()
