@@ -115,7 +115,7 @@ def _get_fap_setting(law_firm_id: int) -> FapReviewSetting:
             law_firm_id=law_firm_id,
             reviewer_model='gpt-4o-mini',
             training_model='gpt-4o-mini',
-            reviewer_temperature=0.2,
+            reviewer_temperature=0.0,  # Temperature=0.0 com seed para determinismo garantido
             training_temperature=0.7,
             reviewer_enabled=True,
             training_enabled=True
