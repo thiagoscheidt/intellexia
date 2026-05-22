@@ -1300,6 +1300,9 @@ class JudicialDocument(db.Model):
     O documento pode opcionalmente referenciar um item já existente em KnowledgeBase.
     """
     __tablename__ = 'judicial_documents'
+    __table_args__ = (
+        db.UniqueConstraint('process_id', 'file_hash', name='uq_judicial_documents_process_file_hash'),
+    )
 
     id = db.Column(db.Integer, primary_key=True)
     process_id = db.Column(db.Integer, db.ForeignKey('judicial_processes.id'), nullable=False, index=True)
@@ -1309,6 +1312,7 @@ class JudicialDocument(db.Model):
     type = db.Column(db.String(100), nullable=False)
     file_name = db.Column(db.String(255), nullable=False)
     file_path = db.Column(db.String(500), nullable=False)
+    file_hash = db.Column(db.String(64), index=True)
     uploaded_by = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
     created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
 

@@ -178,6 +178,15 @@ def link_to_process(file_id):
     if existing_link:
         return jsonify({'success': False, 'message': 'Este arquivo já está vinculado a um processo.'}), 400
 
+    file_hash = str(file.file_hash or '').strip()
+    if file_hash:
+        duplicate_in_process = JudicialDocument.query.filter_by(
+            process_id=process.id,
+            file_hash=file_hash,
+        ).first()
+        if duplicate_in_process:
+            return jsonify({'success': False, 'message': 'Já existe um arquivo idêntico vinculado a este processo.'}), 400
+
     phase_key = document_type.phase.key if document_type.phase else None
     if not phase_key:
         fallback_phase = JudicialPhase.query.filter_by(
@@ -211,6 +220,7 @@ def link_to_process(file_id):
                 type=document_type.key,
                 file_name=file.original_filename,
                 file_path=file.file_path,
+                file_hash=file_hash or None,
                 uploaded_by=user_id,
             )
         )

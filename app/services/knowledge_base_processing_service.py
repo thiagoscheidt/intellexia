@@ -493,6 +493,16 @@ class KnowledgeBaseProcessingService:
 
         event_type, event_phase, event_type_name = self._resolve_type_and_phase(item.law_firm_id, extraction_payload)
 
+        file_hash = str(item.file_hash or '').strip()
+        if file_hash:
+            duplicate_in_process = JudicialDocument.query.filter_by(
+                process_id=process.id,
+                file_hash=file_hash,
+            ).first()
+            if duplicate_in_process:
+                process.updated_at = datetime.utcnow()
+                return
+
         event = JudicialEvent(
             process_id=process.id,
             type=event_type,
@@ -511,6 +521,7 @@ class KnowledgeBaseProcessingService:
                 type=event_type,
                 file_name=item.original_filename,
                 file_path=item.file_path,
+                file_hash=file_hash or None,
                 uploaded_by=item.user_id,
             )
         )

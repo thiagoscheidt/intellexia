@@ -4,6 +4,176 @@
 
 {% block title %}Novo Processo{% endblock %}
 
+{% block extra_css %}
+<style>
+    .wizard-card {
+        border: 1px solid rgba(15, 23, 42, .07);
+        border-radius: .95rem;
+        box-shadow: 0 6px 22px rgba(15, 23, 42, .06);
+    }
+
+    .wizard-steps {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 2rem;
+        position: relative;
+    }
+
+    .wizard-steps::before {
+        content: '';
+        position: absolute;
+        top: 20px;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: #e9ecef;
+        z-index: 0;
+    }
+
+    .wizard-step {
+        flex: 1;
+        text-align: center;
+        position: relative;
+        z-index: 1;
+    }
+
+    .wizard-step-circle {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: #e9ecef;
+        color: #6c757d;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto .5rem;
+        font-weight: bold;
+        transition: all .3s;
+    }
+
+    .wizard-step-label {
+        font-size: .875rem;
+        color: #6c757d;
+    }
+
+    .wizard-step.active .wizard-step-circle {
+        background: #0d6efd;
+        color: #fff;
+    }
+
+    .wizard-step.completed .wizard-step-circle {
+        background: #198754;
+        color: white;
+    }
+
+    .wizard-step.active .wizard-step-label {
+        color: #0d6efd;
+        font-weight: 600;
+    }
+
+    .wizard-step.completed .wizard-step-label {
+        color: #198754;
+    }
+
+    .wizard-panel {
+        display: none;
+    }
+
+    .wizard-panel.active {
+        display: block;
+    }
+
+    .dropzone-custom {
+        border: 2px dashed rgba(47, 108, 181, .35);
+        border-radius: .85rem;
+        background: linear-gradient(180deg, #f8fbff 0%, #f2f7ff 100%);
+        padding: 1.8rem 1.2rem;
+        text-align: center;
+        cursor: pointer;
+        transition: border-color .2s ease, background .2s ease;
+    }
+
+    .dropzone-custom:hover,
+    .dropzone-custom.dragover {
+        border-color: #2f6cb5;
+        background: #eaf3ff;
+    }
+
+    .dropzone-custom .dropzone-icon {
+        font-size: 2rem;
+        color: #2f6cb5;
+    }
+
+    .file-item {
+        border: 1px solid rgba(15, 23, 42, .07);
+        border-radius: .75rem;
+        padding: .8rem;
+        margin-top: .7rem;
+        background: var(--bs-body-bg);
+    }
+
+    .file-item-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: .6rem;
+        margin-bottom: .55rem;
+    }
+
+    .file-item-name {
+        font-weight: 600;
+        font-size: .88rem;
+        color: var(--bs-emphasis-color);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .file-item-meta {
+        font-size: .78rem;
+        color: var(--bs-secondary-color);
+    }
+
+    .summary-box {
+        border: 1px solid rgba(15, 23, 42, .08);
+        border-radius: .8rem;
+        background: var(--bs-secondary-bg);
+        padding: .85rem;
+    }
+
+    .summary-line {
+        display: flex;
+        justify-content: space-between;
+        gap: .75rem;
+        padding: .35rem 0;
+        border-bottom: 1px solid rgba(15, 23, 42, .08);
+        font-size: .83rem;
+    }
+
+    .summary-line:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+    }
+
+    .step-actions {
+        border-top: 1px solid rgba(15, 23, 42, .08);
+        margin-top: 1rem;
+        padding-top: 1rem;
+    }
+
+    @media (max-width: 767.98px) {
+        .wizard-steps {
+            flex-direction: column;
+            gap: .75rem;
+        }
+
+        .wizard-steps::before {
+            display: none;
+        }
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 {% call page_hero(title='Novo Processo', subtitle='Cadastro rápido com número do processo e documentos', icon='bi
 bi-file-earmark-plus') %}
@@ -21,68 +191,165 @@ bi-file-earmark-plus') %}
     <div class="container-fluid">
         <div class="row">
             <div class="col-lg-8 offset-lg-2">
-                <div class="card card-primary card-outline shadow-sm">
+                <div class="card wizard-card card-primary card-outline">
                     <div class="card-header">
-                        <h3 class="card-title mb-0"><i class="bi bi-lightning-charge me-2"></i>Cadastro Rápido</h3>
+                        <h3 class="card-title mb-0"><i class="bi bi-lightning-charge me-2"></i>Cadastro em Etapas</h3>
                     </div>
                     <div class="card-body">
-                        <form method="POST" enctype="multipart/form-data">
-                            <div class="mb-3">
-                                <label for="process_number" class="form-label">
-                                    Número do Processo
-                                </label>
-                                <input type="text" class="form-control" id="process_number" name="process_number"
-                                    placeholder="NNNNNNN-DD.AAAA.J.TR.OOOO" maxlength="25" inputmode="numeric">
-                                <small class="text-muted d-block mt-1">
-                                    Formato CNJ: 7 dígitos - 2 verificadores . 4 ano . 1 segmento . 2 tribunal . 4
-                                    origem. Pode ser deixado em branco.
-                                </small>
+                        <div class="wizard-steps" id="wizardSteps">
+                            <div class="wizard-step active" data-step="1">
+                                <div class="wizard-step-circle">1</div>
+                                <div class="wizard-step-label">Dados Iniciais</div>
                             </div>
+                            <div class="wizard-step" data-step="2">
+                                <div class="wizard-step-circle">2</div>
+                                <div class="wizard-step-label">Arquivos e Documentos do processo</div>
+                            </div>
+                            <div class="wizard-step" data-step="3">
+                                <div class="wizard-step-circle">3</div>
+                                <div class="wizard-step-label">Revisão e Envio</div>
+                            </div>
+                        </div>
 
-                            <div class="row">
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label for="plaintiff_client_id" class="form-label">Polo Ativo (Cliente)</label>
-                                        <select class="form-select" id="plaintiff_client_id" name="plaintiff_client_id">
-                                            <option value="">-- Não informado --</option>
-                                            {% for client in clients %}
-                                            <option value="{{ client.id }}">{{ client.name }}</option>
-                                            {% endfor %}
-                                        </select>
+                        <form method="POST" enctype="multipart/form-data" id="newProcessWizardForm" novalidate>
+                            <div class="wizard-panel active" data-panel="1">
+                                <div class="mb-3">
+                                    <label for="process_number" class="form-label">
+                                        Número do Processo
+                                    </label>
+                                    <input type="text" class="form-control" id="process_number" name="process_number"
+                                        placeholder="NNNNNNN-DD.AAAA.J.TR.OOOO" maxlength="25" inputmode="numeric">
+                                    <small class="text-muted d-block mt-1">
+                                        Formato CNJ: 7 dígitos - 2 verificadores . 4 ano . 1 segmento . 2 tribunal . 4
+                                        origem. Pode ser deixado em branco.
+                                    </small>
+                                </div>
+
+                                <div class="row">
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="plaintiff_client_id" class="form-label">Polo Ativo
+                                                (Cliente)</label>
+                                            <select class="form-select" id="plaintiff_client_id"
+                                                name="plaintiff_client_id">
+                                                <option value="">-- Não informado --</option>
+                                                {% for client in clients %}
+                                                <option value="{{ client.id }}">{{ client.name }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
+                                    </div>
+                                    <div class="col-md-6">
+                                        <div class="mb-3">
+                                            <label for="defendant_id" class="form-label">Polo Passivo (Réu)</label>
+                                            <select class="form-select" id="defendant_id" name="defendant_id">
+                                                <option value="">-- Não informado --</option>
+                                                {% for defendant in defendants %}
+                                                <option value="{{ defendant.id }}">{{ defendant.name }}</option>
+                                                {% endfor %}
+                                            </select>
+                                        </div>
                                     </div>
                                 </div>
-                                <div class="col-md-6">
-                                    <div class="mb-3">
-                                        <label for="defendant_id" class="form-label">Polo Passivo (Réu)</label>
-                                        <select class="form-select" id="defendant_id" name="defendant_id">
-                                            <option value="">-- Não informado --</option>
-                                            {% for defendant in defendants %}
-                                            <option value="{{ defendant.id }}">{{ defendant.name }}</option>
-                                            {% endfor %}
-                                        </select>
-                                    </div>
+
+                                <div class="step-actions d-flex justify-content-end gap-2">
+                                    <a href="{{ url_for('process_panel.list_processes') }}"
+                                        class="btn btn-outline-secondary">
+                                        <i class="bi bi-x-circle me-1"></i> Cancelar
+                                    </a>
+                                    <button type="button" class="btn btn-primary" data-action="next">
+                                        Próxima Etapa <i class="bi bi-arrow-right ms-1"></i>
+                                    </button>
                                 </div>
                             </div>
 
-                            <div class="mb-3">
-                                <label for="documents" class="form-label">
-                                    Documentos para Base de Conhecimento <span class="text-danger">*</span>
-                                </label>
-                                <input type="file" class="form-control" id="documents" name="documents" multiple
-                                    required>
-                                <small class="text-muted d-block mt-1">
-                                    Os arquivos enviados serão vinculados ao número do processo e salvos na base de
-                                    conhecimento, sem categoria e sem tags.
-                                </small>
+                            <div class="wizard-panel" data-panel="2">
+                                <div class="mb-3">
+                                    <label class="form-label">Envio de Documentos <span
+                                            class="text-danger">*</span></label>
+                                    <div class="dropzone-custom" id="documentsDropzone">
+                                        <i class="bi bi-cloud-arrow-up dropzone-icon"></i>
+                                        <p class="mb-1 mt-2 fw-semibold">Arraste e solte arquivos aqui</p>
+                                        <small class="text-muted">ou clique para selecionar múltiplos arquivos</small>
+                                        <input type="file" class="d-none" id="documents" name="documents" multiple
+                                            required>
+                                    </div>
+                                    <small class="text-muted d-block mt-2">
+                                        Para cada arquivo, selecione o tipo conforme a configuração em
+                                        <a href="{{ url_for('process_panel.manage_document_types') }}"
+                                            target="_blank">Tipos de Documento</a>.
+                                    </small>
+                                </div>
+
+                                <div id="filesEmptyState" class="alert alert-info small mb-0">
+                                    Nenhum arquivo selecionado ainda.
+                                </div>
+
+                                <div id="filesContainer"></div>
+
+                                <div class="summary-box mt-3" id="filesSummary" style="display: none;">
+                                    <div class="fw-semibold small mb-2">Extrato dos Arquivos</div>
+                                    <div class="summary-line">
+                                        <span>Total de arquivos</span>
+                                        <strong id="summaryTotalFiles">0</strong>
+                                    </div>
+                                    <div class="summary-line">
+                                        <span>Tamanho total</span>
+                                        <strong id="summaryTotalSize">0 KB</strong>
+                                    </div>
+                                </div>
+
+                                <div class="step-actions d-flex justify-content-between gap-2">
+                                    <button type="button" class="btn btn-outline-secondary" data-action="back">
+                                        <i class="bi bi-arrow-left me-1"></i> Etapa Anterior
+                                    </button>
+                                    <button type="button" class="btn btn-primary" data-action="next">
+                                        Próxima Etapa <i class="bi bi-arrow-right ms-1"></i>
+                                    </button>
+                                </div>
                             </div>
 
-                            <div class="d-flex gap-3 mt-4 border-top pt-4">
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="bi bi-check-circle me-2"></i>Criar Processo e Enviar Documentos
-                                </button>
-                                <a href="{{ url_for('process_panel.list_processes') }}" class="btn btn-secondary">
-                                    <i class="bi bi-x-circle me-2"></i>Cancelar
-                                </a>
+                            <div class="wizard-panel" data-panel="3">
+                                <div class="alert alert-primary mb-3">
+                                    Revise os dados antes de concluir. Ao confirmar, o processo será criado e os
+                                    documentos serão vinculados com os tipos selecionados.
+                                </div>
+
+                                <div class="summary-box mb-3">
+                                    <div class="summary-line">
+                                        <span>Número do processo</span>
+                                        <strong id="reviewProcessNumber">Não informado (será gerado temporário)</strong>
+                                    </div>
+                                    <div class="summary-line">
+                                        <span>Polo ativo</span>
+                                        <strong id="reviewPlaintiff">Não informado</strong>
+                                    </div>
+                                    <div class="summary-line">
+                                        <span>Polo passivo</span>
+                                        <strong id="reviewDefendant">Não informado</strong>
+                                    </div>
+                                    <div class="summary-line">
+                                        <span>Arquivos prontos para envio</span>
+                                        <strong id="reviewFilesCount">0</strong>
+                                    </div>
+                                </div>
+
+                                <div id="reviewFilesList"></div>
+
+                                <div class="step-actions d-flex justify-content-between gap-2">
+                                    <button type="button" class="btn btn-outline-secondary" data-action="back">
+                                        <i class="bi bi-arrow-left me-1"></i> Etapa Anterior
+                                    </button>
+                                    <div class="d-flex gap-2">
+                                        <a href="{{ url_for('process_panel.list_processes') }}"
+                                            class="btn btn-outline-secondary">
+                                            Cancelar
+                                        </a>
+                                        <button type="submit" class="btn btn-success" id="submitWizardBtn">
+                                            <i class="bi bi-check-circle me-1"></i> Criar Processo e Enviar
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </form>
                     </div>
@@ -98,7 +365,292 @@ bi-file-earmark-plus') %}
     </div>
 </div>
 
+{% set ns = namespace(options=[]) %}
+{% for doc_type in document_types %}
+{% set ns.options = ns.options + [{
+'id': doc_type.id,
+'label': doc_type.name ~ (' - ' ~ doc_type.phase.name if doc_type.phase else '')
+}] %}
+{% endfor %}
+<script type="application/json" id="documentTypeOptionsData">{{ ns.options | tojson }}</script>
+
 <script>
+    const wizardForm = document.getElementById('newProcessWizardForm');
+    const wizardSteps = Array.from(document.querySelectorAll('.wizard-step'));
+    const wizardPanels = Array.from(document.querySelectorAll('.wizard-panel'));
+    const nextButtons = Array.from(document.querySelectorAll('[data-action="next"]'));
+    const backButtons = Array.from(document.querySelectorAll('[data-action="back"]'));
+
+    const documentsInput = document.getElementById('documents');
+    const documentsDropzone = document.getElementById('documentsDropzone');
+    const filesContainer = document.getElementById('filesContainer');
+    const filesEmptyState = document.getElementById('filesEmptyState');
+    const filesSummary = document.getElementById('filesSummary');
+    const reviewFilesList = document.getElementById('reviewFilesList');
+
+    const summaryTotalFiles = document.getElementById('summaryTotalFiles');
+    const summaryTotalSize = document.getElementById('summaryTotalSize');
+
+    const reviewProcessNumber = document.getElementById('reviewProcessNumber');
+    const reviewPlaintiff = document.getElementById('reviewPlaintiff');
+    const reviewDefendant = document.getElementById('reviewDefendant');
+    const reviewFilesCount = document.getElementById('reviewFilesCount');
+
+    let currentStep = 1;
+    let fileItems = [];
+
+    const documentTypeOptionsNode = document.getElementById('documentTypeOptionsData');
+    const docTypeOptions = documentTypeOptionsNode
+        ? JSON.parse(documentTypeOptionsNode.textContent || '[]')
+        : [];
+
+    function showStep(step) {
+        currentStep = step;
+        wizardSteps.forEach((item) => {
+            const itemStep = Number(item.dataset.step);
+            item.classList.toggle('active', itemStep === step);
+            item.classList.toggle('completed', itemStep < step);
+        });
+
+        wizardPanels.forEach((panel) => {
+            panel.classList.toggle('active', Number(panel.dataset.panel) === step);
+        });
+    }
+
+    function formatBytes(bytes) {
+        if (!bytes || bytes <= 0) return '0 KB';
+        const units = ['KB', 'MB', 'GB'];
+        let size = bytes / 1024;
+        let idx = 0;
+        while (size >= 1024 && idx < units.length - 1) {
+            size /= 1024;
+            idx += 1;
+        }
+        return `${size.toFixed(size >= 10 ? 0 : 1)} ${units[idx]}`;
+    }
+
+    function buildDocTypeSelect(selectedId, rowIndex) {
+        const select = document.createElement('select');
+        select.className = 'form-select form-select-sm';
+        select.name = 'document_type_ids';
+        select.required = true;
+        select.dataset.index = String(rowIndex);
+
+        const emptyOption = document.createElement('option');
+        emptyOption.value = '';
+        emptyOption.textContent = 'Selecione o tipo de documento';
+        select.appendChild(emptyOption);
+
+        docTypeOptions.forEach((item) => {
+            const option = document.createElement('option');
+            option.value = String(item.id);
+            option.textContent = item.label;
+            if (selectedId && Number(selectedId) === Number(item.id)) {
+                option.selected = true;
+            }
+            select.appendChild(option);
+        });
+
+        select.addEventListener('change', () => {
+            const idx = Number(select.dataset.index);
+            fileItems[idx].documentTypeId = select.value ? Number(select.value) : null;
+            refreshSummary();
+        });
+
+        return select;
+    }
+
+    function syncFileInput() {
+        const dataTransfer = new DataTransfer();
+        fileItems.forEach((item) => dataTransfer.items.add(item.file));
+        documentsInput.files = dataTransfer.files;
+    }
+
+    function removeFile(index) {
+        fileItems.splice(index, 1);
+        syncFileInput();
+        renderFiles();
+    }
+
+    function refreshSummary() {
+        const totalSize = fileItems.reduce((sum, item) => sum + (item.file.size || 0), 0);
+
+        summaryTotalFiles.textContent = String(fileItems.length);
+        summaryTotalSize.textContent = formatBytes(totalSize);
+
+        filesSummary.style.display = fileItems.length ? 'block' : 'none';
+    }
+
+    function renderFiles() {
+        filesContainer.innerHTML = '';
+
+        if (!fileItems.length) {
+            filesEmptyState.style.display = 'block';
+            refreshSummary();
+            return;
+        }
+
+        filesEmptyState.style.display = 'none';
+
+        fileItems.forEach((item, index) => {
+            const row = document.createElement('div');
+            row.className = 'file-item';
+
+            const head = document.createElement('div');
+            head.className = 'file-item-head';
+
+            const nameWrap = document.createElement('div');
+            nameWrap.className = 'flex-grow-1';
+
+            const name = document.createElement('div');
+            name.className = 'file-item-name';
+            name.textContent = item.file.name;
+
+            const meta = document.createElement('div');
+            meta.className = 'file-item-meta';
+            meta.textContent = formatBytes(item.file.size || 0);
+
+            nameWrap.appendChild(name);
+            nameWrap.appendChild(meta);
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'btn btn-sm btn-outline-danger';
+            removeBtn.innerHTML = '<i class="bi bi-trash"></i>';
+            removeBtn.title = 'Remover arquivo';
+            removeBtn.addEventListener('click', () => removeFile(index));
+
+            head.appendChild(nameWrap);
+            head.appendChild(removeBtn);
+
+            const selectLabel = document.createElement('label');
+            selectLabel.className = 'form-label small mb-1';
+            selectLabel.textContent = 'Tipo de documento';
+
+            const select = buildDocTypeSelect(item.documentTypeId, index);
+
+            row.appendChild(head);
+            row.appendChild(selectLabel);
+            row.appendChild(select);
+            filesContainer.appendChild(row);
+        });
+
+        refreshSummary();
+    }
+
+    function appendFiles(files) {
+        const existingKeys = new Set(fileItems.map((item) => `${item.file.name}::${item.file.size}::${item.file.lastModified}`));
+
+        Array.from(files || []).forEach((file) => {
+            const key = `${file.name}::${file.size}::${file.lastModified}`;
+            if (existingKeys.has(key)) {
+                return;
+            }
+            fileItems.push({ file, documentTypeId: null });
+            existingKeys.add(key);
+        });
+
+        syncFileInput();
+        renderFiles();
+    }
+
+    function validateStep(step) {
+        if (step !== 2) {
+            return true;
+        }
+
+        if (!fileItems.length) {
+            alert('Adicione ao menos um arquivo para continuar.');
+            return false;
+        }
+
+        const missingType = fileItems.some((item) => !item.documentTypeId);
+        if (missingType) {
+            alert('Selecione o tipo de documento para todos os arquivos.');
+            return false;
+        }
+
+        return true;
+    }
+
+    function fillReview() {
+        const processNumber = (document.getElementById('process_number').value || '').trim();
+        reviewProcessNumber.textContent = processNumber || 'Não informado (será gerado temporário)';
+
+        const plaintiffSelect = document.getElementById('plaintiff_client_id');
+        reviewPlaintiff.textContent = plaintiffSelect && plaintiffSelect.value
+            ? plaintiffSelect.options[plaintiffSelect.selectedIndex].text
+            : 'Não informado';
+
+        const defendantSelect = document.getElementById('defendant_id');
+        reviewDefendant.textContent = defendantSelect && defendantSelect.value
+            ? defendantSelect.options[defendantSelect.selectedIndex].text
+            : 'Não informado';
+
+        reviewFilesCount.textContent = String(fileItems.length);
+
+        reviewFilesList.innerHTML = '';
+        fileItems.forEach((item) => {
+            const line = document.createElement('div');
+            line.className = 'summary-line';
+
+            const typeLabel = docTypeOptions.find((opt) => Number(opt.id) === Number(item.documentTypeId));
+            const left = document.createElement('span');
+            left.textContent = item.file.name;
+            const right = document.createElement('strong');
+            right.textContent = typeLabel ? typeLabel.label : 'Tipo não selecionado';
+
+            line.appendChild(left);
+            line.appendChild(right);
+            reviewFilesList.appendChild(line);
+        });
+    }
+
+    nextButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            if (!validateStep(currentStep)) {
+                return;
+            }
+
+            if (currentStep < 3) {
+                const targetStep = currentStep + 1;
+                if (targetStep === 3) {
+                    fillReview();
+                }
+                showStep(targetStep);
+            }
+        });
+    });
+
+    backButtons.forEach((button) => {
+        button.addEventListener('click', () => {
+            if (currentStep > 1) {
+                showStep(currentStep - 1);
+            }
+        });
+    });
+
+    documentsDropzone.addEventListener('click', () => documentsInput.click());
+
+    documentsDropzone.addEventListener('dragover', (event) => {
+        event.preventDefault();
+        documentsDropzone.classList.add('dragover');
+    });
+
+    documentsDropzone.addEventListener('dragleave', () => {
+        documentsDropzone.classList.remove('dragover');
+    });
+
+    documentsDropzone.addEventListener('drop', (event) => {
+        event.preventDefault();
+        documentsDropzone.classList.remove('dragover');
+        appendFiles(event.dataTransfer.files);
+    });
+
+    documentsInput.addEventListener('change', () => {
+        appendFiles(documentsInput.files);
+    });
+
     function formatCnj(value) {
         let digits = value.replace(/\D/g, '');
         digits = digits.substring(0, 20);
@@ -131,5 +683,16 @@ bi-file-earmark-plus') %}
             }
         });
     }
+
+    wizardForm.addEventListener('submit', function (event) {
+        if (!validateStep(2)) {
+            event.preventDefault();
+            showStep(2);
+            return;
+        }
+    });
+
+    renderFiles();
+    showStep(1);
 </script>
 {% endblock %}

@@ -1236,6 +1236,11 @@ def new_process():
     """Criar processo simplificado (número CNJ + documentos para base de conhecimento)."""
     law_firm_id = get_current_law_firm_id()
     user_id = session.get('user_id')
+
+    try:
+        _ensure_judicial_config_defaults(law_firm_id)
+    except Exception:
+        db.session.rollback()
     
     if request.method == 'POST':
         process_number = request.form.get('process_number', '').strip().upper() or None
@@ -1247,6 +1252,30 @@ def new_process():
             file for file in request.files.getlist('documents')
             if file and file.filename and file.filename.strip()
         ]
+        document_type_ids = request.form.getlist('document_type_ids', type=int)
+
+        if not uploaded_files:
+            flash('Envie ao menos um documento para a base de conhecimento.', 'danger')
+            return redirect(url_for('process_panel.new_process'))
+
+        if len(document_type_ids) != len(uploaded_files) or any(not item for item in document_type_ids):
+            flash('Selecione o tipo de documento para cada arquivo enviado.', 'danger')
+            return redirect(url_for('process_panel.new_process'))
+
+        selected_type_ids = sorted(set(document_type_ids))
+        document_types = JudicialDocumentType.query.options(
+            selectinload(JudicialDocumentType.phase)
+        ).filter(
+            JudicialDocumentType.law_firm_id == law_firm_id,
+            JudicialDocumentType.is_active.is_(True),
+            JudicialDocumentType.id.in_(selected_type_ids)
+        ).all()
+
+        if len(document_types) != len(selected_type_ids):
+            flash('Um ou mais tipos de documento são inválidos ou inativos.', 'danger')
+            return redirect(url_for('process_panel.new_process'))
+
+        document_types_by_id = {doc_type.id: doc_type for doc_type in document_types}
 
         plaintiff_client = None
         if plaintiff_client_id:
@@ -1267,10 +1296,6 @@ def new_process():
             if not defendant:
                 flash('Polo passivo (réu) inválido.', 'danger')
                 return redirect(url_for('process_panel.new_process'))
-
-        if not uploaded_files:
-            flash('Envie ao menos um documento para a base de conhecimento.', 'danger')
-            return redirect(url_for('process_panel.new_process'))
 
         # Verificar duplicata apenas se o número foi informado
         if process_number:
@@ -1295,6 +1320,8 @@ def new_process():
                 plaintiff_client_id=plaintiff_client.id if plaintiff_client else None,
                 defendant_id=defendant.id if defendant else None,
             )
+            db.session.add(new_proc)
+            db.session.flush()
 
             upload_dir = f"uploads/knowledge_base/{law_firm_id}"
             os.makedirs(upload_dir, exist_ok=True)
@@ -1302,9 +1329,28 @@ def new_process():
             saved_file_paths = []
             duplicates_count = 0
             uploaded_count = 0
+            seen_file_hashes = set()
 
-            for file in uploaded_files:
+            for index, file in enumerate(uploaded_files):
+                document_type_id = document_type_ids[index]
+                document_type = document_types_by_id.get(document_type_id)
+                if not document_type or not document_type.phase:
+                    continue
+
                 file_hash = _compute_file_hash(file)
+
+                if file_hash in seen_file_hashes:
+                    duplicates_count += 1
+                    continue
+                seen_file_hashes.add(file_hash)
+
+                existing_process_doc = JudicialDocument.query.filter_by(
+                    process_id=new_proc.id,
+                    file_hash=file_hash,
+                ).first()
+                if existing_process_doc:
+                    duplicates_count += 1
+                    continue
 
                 duplicate = KnowledgeBase.query.filter_by(
                     law_firm_id=law_firm_id,
@@ -1337,19 +1383,64 @@ def new_process():
                     file_type=file_type,
                     file_hash=file_hash,
                     description='',
-                    category='',
-                    tags='',
+                    category=document_type.phase.name or '',
+                    tags=document_type.name or '',
                     lawsuit_number=process_number,
                     processing_status='pending'
                 )
                 db.session.add(kb_entry)
+                db.session.flush()
+
+                event_date = datetime.utcnow()
+                event = JudicialEvent(
+                    process_id=new_proc.id,
+                    type=document_type.key,
+                    phase=document_type.phase.key,
+                    description=(
+                        f'Documento {document_type.name} adicionado no cadastro inicial do processo.'
+                    ),
+                    event_date=event_date,
+                )
+                db.session.add(event)
+                db.session.flush()
+
+                _register_phase_history(
+                    process=new_proc,
+                    phase=document_type.phase,
+                    occurred_at=event_date,
+                    entered_by_user_id=user_id,
+                    source_event_id=event.id,
+                    notes=(
+                        'Fase registrada automaticamente no cadastro inicial '
+                        f'via documento: {document_type.name}.'
+                    ),
+                    location_text='Cadastro inicial',
+                    metadata_payload={
+                        'origin': 'new_process_initial_upload',
+                        'document_type_key': document_type.key,
+                    },
+                )
+
+                db.session.add(
+                    JudicialDocument(
+                        process_id=new_proc.id,
+                        event_id=event.id,
+                        knowledge_base_id=kb_entry.id,
+                        type=document_type.key,
+                        file_name=filename,
+                        file_path=file_path,
+                        file_hash=file_hash,
+                        uploaded_by=user_id,
+                    )
+                )
                 uploaded_count += 1
 
             if uploaded_count == 0:
+                db.session.rollback()
                 flash('Nenhum arquivo novo foi enviado (todos os arquivos já existem na base).', 'warning')
                 return redirect(url_for('process_panel.new_process'))
-            
-            db.session.add(new_proc)
+
+            new_proc.updated_at = datetime.utcnow()
             db.session.commit()
 
             if duplicates_count > 0:
@@ -1379,12 +1470,21 @@ def new_process():
         law_firm_id=law_firm_id,
         is_active=True
     ).order_by(JudicialDefendant.name.asc()).all()
+    document_types = JudicialDocumentType.query.filter_by(
+        law_firm_id=law_firm_id,
+        is_active=True
+    ).join(JudicialPhase, JudicialPhase.id == JudicialDocumentType.phase_id).order_by(
+        JudicialPhase.display_order.asc(),
+        JudicialDocumentType.display_order.asc(),
+        JudicialDocumentType.name.asc()
+    ).all()
 
     return render_template(
         'process_panel/form_new_simple.html',
         action='novo',
         clients=clients,
         defendants=defendants,
+        document_types=document_types,
     )
 
 
@@ -1804,6 +1904,15 @@ def new_process_document(process_id):
             saved_file_path = os.path.join(upload_dir, filename_with_timestamp)
 
             file_hash = _compute_file_hash(file)
+
+            existing_process_doc = JudicialDocument.query.filter_by(
+                process_id=process.id,
+                file_hash=file_hash,
+            ).first()
+            if existing_process_doc:
+                flash('Este arquivo já está vinculado a este processo.', 'warning')
+                return redirect(url_for('process_panel.new_process_document', process_id=process.id))
+
             file.save(saved_file_path)
 
             file_size = os.path.getsize(saved_file_path)
@@ -1861,6 +1970,7 @@ def new_process_document(process_id):
                     type=document_type.key,
                     file_name=original_filename,
                     file_path=saved_file_path,
+                    file_hash=file_hash,
                     uploaded_by=user_id,
                 )
             )
