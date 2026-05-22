@@ -13,10 +13,7 @@ from app.models import (
     FapContestationJudgmentReport,
     JudicialDocument,
     JudicialDefendant,
-    JudicialDocumentType,
-    JudicialEvent,
     JudicialLegalThesis,
-    JudicialPhase,
     JudicialProcess,
     JudicialProcessBenefit,
     JudicialProcessCitedBenefit,
@@ -27,12 +24,14 @@ from app.models import (
 from app.agents.document_processing.agent_document_extractor import AgentDocumentExtractor
 from app.agents.knowledge_base.knowledge_ingestion_agent import KnowledgeIngestionAgent
 from app.services.document_processor_service import DocumentProcessorService
+from app.services.judicial_document_service import JudicialDocumentService
 
 
 class KnowledgeBaseProcessingService:
     def __init__(self, flask_app, max_files_per_execution: int = 5):
         self.app = flask_app
         self.max_files_per_execution = max_files_per_execution
+        self.judicial_document_service = JudicialDocumentService()
 
     def _build_query(self, file_id: int | None = None, include_errors: bool = False):
         """Monta a query base para itens pendentes (ou um item específico)."""
@@ -176,41 +175,6 @@ class KnowledgeBaseProcessingService:
             f"Propagação do número do processo: KB atualizados={kb_updated}, "
             f"análises atualizadas={sentence_updated}."
         )
-
-    def _resolve_type_and_phase(self, law_firm_id: int, extraction_payload: dict) -> tuple[str, str, str]:
-        extracted_type_key = str(extraction_payload.get("suggested_document_type_key", "") or "").strip()
-        extracted_type_name = str(extraction_payload.get("suggested_document_type_name", "") or "").strip()
-
-        document_type = None
-        if extracted_type_key:
-            document_type = JudicialDocumentType.query.filter_by(
-                law_firm_id=law_firm_id,
-                key=extracted_type_key,
-                is_active=True,
-            ).first()
-
-        if not document_type and extracted_type_name:
-            document_type = JudicialDocumentType.query.filter_by(
-                law_firm_id=law_firm_id,
-                name=extracted_type_name,
-                is_active=True,
-            ).first()
-
-        if document_type and document_type.phase:
-            type_key = document_type.key
-            phase_key = document_type.phase.key
-            type_name = document_type.name
-            return type_key, phase_key, type_name
-
-        default_phase = JudicialPhase.query.filter_by(
-            law_firm_id=law_firm_id,
-            is_active=True,
-        ).order_by(JudicialPhase.display_order.asc(), JudicialPhase.name.asc()).first()
-
-        fallback_type = extracted_type_key or "documento_juntado"
-        fallback_phase = default_phase.key if default_phase else "inicio_processo"
-        fallback_name = extracted_type_name or fallback_type
-        return fallback_type, fallback_phase, fallback_name
 
     def _is_initial_petition_document(self, extraction_payload: dict) -> bool:
         doc_type_key = str(extraction_payload.get("suggested_document_type_key", "") or "").strip().lower()
@@ -389,7 +353,7 @@ class KnowledgeBaseProcessingService:
             process.liminar_tutela = bool(liminar_tutela)
 
     def _link_knowledge_to_process_if_needed(self, item: KnowledgeBase, extraction_payload: dict) -> None:
-        existing_link = JudicialDocument.query.filter_by(knowledge_base_id=item.id).first()
+        existing_link = self.judicial_document_service.get_link_by_knowledge_base_id(item.id)
         if existing_link:
             process = JudicialProcess.query.filter_by(id=existing_link.process_id).first()
             if process:
@@ -491,45 +455,19 @@ class KnowledgeBaseProcessingService:
                     force_update=False,
                 )
 
-        event_type, event_phase, event_type_name = self._resolve_type_and_phase(item.law_firm_id, extraction_payload)
-
-        file_hash = str(item.file_hash or '').strip()
-        if file_hash:
-            duplicate_in_process = JudicialDocument.query.filter_by(
-                process_id=process.id,
-                file_hash=file_hash,
-            ).first()
-            if duplicate_in_process:
-                process.updated_at = datetime.utcnow()
-                return
-
-        event = JudicialEvent(
-            process_id=process.id,
-            type=event_type,
-            phase=event_phase,
-            description=f"Documento da KnowledgeBase vinculado automaticamente ({event_type_name}).",
-            event_date=datetime.utcnow(),
+        linked = self.judicial_document_service.link_knowledge_base_document(
+            process=process,
+            knowledge_item=item,
+            extraction_payload=extraction_payload,
         )
-        db.session.add(event)
-        db.session.flush()
-
-        db.session.add(
-            JudicialDocument(
-                process_id=process.id,
-                event_id=event.id,
-                knowledge_base_id=item.id,
-                type=event_type,
-                file_name=item.original_filename,
-                file_path=item.file_path,
-                file_hash=file_hash or None,
-                uploaded_by=item.user_id,
-            )
-        )
+        if not linked:
+            process.updated_at = datetime.utcnow()
+            return
 
         process.updated_at = datetime.utcnow()
 
     def _resolve_target_process(self, item: KnowledgeBase, extraction_payload: dict) -> JudicialProcess | None:
-        existing_link = JudicialDocument.query.filter_by(knowledge_base_id=item.id).first()
+        existing_link = self.judicial_document_service.get_link_by_knowledge_base_id(item.id)
         if existing_link:
             return JudicialProcess.query.filter_by(id=existing_link.process_id).first()
 
@@ -797,7 +735,7 @@ class KnowledgeBaseProcessingService:
                         self._link_knowledge_to_process_if_needed(item, extraction_payload)
 
                     if not is_fap_report and extracted_process_number:
-                        linked_doc = JudicialDocument.query.filter_by(knowledge_base_id=item.id).first()
+                        linked_doc = self.judicial_document_service.get_link_by_knowledge_base_id(item.id)
                         if linked_doc:
                             linked_process = JudicialProcess.query.filter_by(id=linked_doc.process_id).first()
                             if linked_process and str(linked_process.process_number or "").startswith("TEMP-"):

@@ -84,7 +84,7 @@ DOCUMENT_TYPES = {
     "citacao": {"name": "Citação", "phase": "citacao"},
     "contestacao": {"name": "Contestação", "phase": "defesa_reu"},
     "reconvencao": {"name": "Reconvenção", "phase": "defesa_reu"},
-    "replica": {"name": "Réplica", "phase": "manifestacao_autor"},
+    "replica": {"name": "Impugnação à Contestação", "phase": "manifestacao_autor"},
     "manifestacao": {"name": "Manifestação", "phase": "peticoes_diversas"},
     "peticao_intermediaria": {"name": "Petição Intermediária", "phase": "peticoes_diversas"},
     "juntada_documentos": {"name": "Juntada de Documentos", "phase": "peticoes_diversas"},

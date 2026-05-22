@@ -57,7 +57,7 @@ DOCUMENT_TYPES = {
     "citacao": {"name": "Citação", "phase": "citacao"},
     "contestacao": {"name": "Contestação", "phase": "defesa_reu"},
     "reconvencao": {"name": "Reconvenção", "phase": "defesa_reu"},
-    "replica": {"name": "Réplica", "phase": "manifestacao_autor"},
+    "replica": {"name": "Impugnação à Contestação", "phase": "manifestacao_autor"},
     "manifestacao": {"name": "Manifestação", "phase": "peticoes_diversas"},
     "peticao_intermediaria": {"name": "Petição Intermediária", "phase": "peticoes_diversas"},
     "juntada_documentos": {"name": "Juntada de Documentos", "phase": "peticoes_diversas"},
@@ -137,15 +137,13 @@ def migrate():
 
                 db.session.flush()
 
-                existing_type_keys = {
-                    doc_type.key
-                    for doc_type in JudicialDocumentType.query.filter_by(law_firm_id=law_firm.id).all()
-                }
+                removed_types = JudicialDocumentType.query.filter_by(
+                    law_firm_id=law_firm.id
+                ).delete(synchronize_session=False)
+                if removed_types:
+                    print(f"🧹 Tipos antigos removidos para escritório {law_firm.id}: {removed_types}")
 
                 for order, (doc_key, doc_payload) in enumerate(DOCUMENT_TYPES.items(), start=1):
-                    if doc_key in existing_type_keys:
-                        continue
-
                     phase = phases_by_key.get(doc_payload['phase'])
                     if not phase:
                         continue
