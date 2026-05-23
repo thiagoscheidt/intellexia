@@ -19,13 +19,13 @@ uv run python scripts/classify_fap_benefits.py --force-reclassify --workers 10
 uv run python scripts/classify_fap_benefits.py --batch-size 100 --workers 5
 ```
 
-| Argumento | Padrão | Descrição |
-|---|---|---|
-| `--batch-size` | `200` | Quantidade de benefícios por commit no banco |
-| `--law-firm-id` | — | Restringe a um escritório específico |
-| `--benefit-id` | — | Classifica apenas um benefício pelo ID |
-| `--force-reclassify` | `false` | Reclassifica mesmo quem já tem tópico salvo |
-| `--workers` | `1` | Chamadas LLM simultâneas. Recomendado: 5–10 |
+| Argumento            | Padrão  | Descrição                                    |
+| -------------------- | ------- | -------------------------------------------- |
+| `--batch-size`       | `200`   | Quantidade de benefícios por commit no banco |
+| `--law-firm-id`      | —       | Restringe a um escritório específico         |
+| `--benefit-id`       | —       | Classifica apenas um benefício pelo ID       |
+| `--force-reclassify` | `false` | Reclassifica mesmo quem já tem tópico salvo  |
+| `--workers`          | `1`     | Chamadas LLM simultâneas. Recomendado: 5–10  |
 
 ---
 
@@ -40,10 +40,10 @@ uv run python scripts/process_fap_contestation_judgment_reports.py --report-id 1
 uv run python scripts/process_fap_contestation_judgment_reports.py --include-errors
 ```
 
-| Argumento | Padrão | Descrição |
-|---|---|---|
-| `--batch-size` | `100` | Máximo de relatórios por execução |
-| `--report-id` | — | Processa apenas um relatório pelo ID |
+| Argumento          | Padrão  | Descrição                                |
+| ------------------ | ------- | ---------------------------------------- |
+| `--batch-size`     | `100`   | Máximo de relatórios por execução        |
+| `--report-id`      | —       | Processa apenas um relatório pelo ID     |
 | `--include-errors` | `false` | Reprocessa relatórios com status `error` |
 
 ---
@@ -59,11 +59,30 @@ uv run python scripts/process_knowledge_base.py --file-id 123
 uv run python scripts/process_knowledge_base.py --include-errors
 ```
 
-| Argumento | Padrão | Descrição |
-|---|---|---|
-| `--batch-size` | `10` | Máximo de arquivos por execução |
-| `--file-id` | — | Processa apenas um arquivo pelo ID |
+| Argumento          | Padrão  | Descrição                              |
+| ------------------ | ------- | -------------------------------------- |
+| `--batch-size`     | `10`    | Máximo de arquivos por execução        |
+| `--file-id`        | —       | Processa apenas um arquivo pelo ID     |
 | `--include-errors` | `false` | Reprocessa arquivos com status `error` |
+
+---
+
+### `process_judicial_documents.py`
+
+Processa documentos judiciais pendentes vinculados à Base de Conhecimento e atualiza o status de processamento no `JudicialDocument`.
+
+```bash
+uv run python scripts/process_judicial_documents.py
+uv run python scripts/process_judicial_documents.py --batch-size 20
+uv run python scripts/process_judicial_documents.py --document-id 123
+uv run python scripts/process_judicial_documents.py --include-errors
+```
+
+| Argumento          | Padrão  | Descrição                                |
+| ------------------ | ------- | ---------------------------------------- |
+| `--batch-size`     | `5`     | Máximo de documentos por execução        |
+| `--document-id`    | —       | Processa apenas o documento pelo ID      |
+| `--include-errors` | `false` | Reprocessa documentos com status `error` |
 
 ---
 
@@ -78,11 +97,11 @@ uv run python scripts/process_judicial_sentence_analysis.py --process-id 123
 uv run python scripts/process_judicial_sentence_analysis.py --include-errors
 ```
 
-| Argumento | Padrão | Descrição |
-|---|---|---|
-| `--batch-size` | `10` | Máximo de itens por execução |
-| `--process-id` | — | Enfileira e processa sentenças de um processo específico |
-| `--include-errors` | `false` | Reprocessa itens com status `error` |
+| Argumento          | Padrão  | Descrição                                                |
+| ------------------ | ------- | -------------------------------------------------------- |
+| `--batch-size`     | `10`    | Máximo de itens por execução                             |
+| `--process-id`     | —       | Enfileira e processa sentenças de um processo específico |
+| `--include-errors` | `false` | Reprocessa itens com status `error`                      |
 
 ---
 
@@ -108,11 +127,11 @@ uv run python scripts/import_courts_from_txt.py scripts/varas_unificado.json --l
 uv run python scripts/import_courts_from_txt.py --all-law-firms
 ```
 
-| Argumento | Padrão | Descrição |
-|---|---|---|
-| `arquivo` (posicional) | `scripts/varas_unificado.json` | Caminho para o JSON de varas |
-| `--law-firm-id` | — | Importa apenas para um escritório |
-| `--all-law-firms` | — | Importa para todos os escritórios cadastrados |
+| Argumento              | Padrão                         | Descrição                                     |
+| ---------------------- | ------------------------------ | --------------------------------------------- |
+| `arquivo` (posicional) | `scripts/varas_unificado.json` | Caminho para o JSON de varas                  |
+| `--law-firm-id`        | —                              | Importa apenas para um escritório             |
+| `--all-law-firms`      | —                              | Importa para todos os escritórios cadastrados |
 
 Formato esperado do JSON:
 ```json
@@ -166,13 +185,13 @@ uv run python scripts/tests/test_document_processor_service.py --knowledge-id 23
 uv run python scripts/tests/test_document_processor_service.py --file caminho/para/arquivo.pdf --method all
 ```
 
-| Método | Descrição |
-|---|---|
-| `markitdown` | Extração via MarkItDown |
-| `docling` | Extração via Docling |
-| `process` | Pipeline completo de processamento |
-| `rag` | Consulta semântica no documento |
-| `all` | Todos os métodos acima |
+| Método       | Descrição                          |
+| ------------ | ---------------------------------- |
+| `markitdown` | Extração via MarkItDown            |
+| `docling`    | Extração via Docling               |
+| `process`    | Pipeline completo de processamento |
+| `rag`        | Consulta semântica no documento    |
+| `all`        | Todos os métodos acima             |
 
 ---
 
@@ -184,11 +203,11 @@ Alguns scripts dependem de serviços externos. Suba antes com:
 docker compose -f docker/docker-compose.yml up -d
 ```
 
-| Script | Qdrant | Meilisearch | OpenAI |
-|---|---|---|---|
-| `classify_fap_benefits.py` | — | — | ✅ |
-| `process_fap_contestation_judgment_reports.py` | ✅ | ✅ | ✅ |
-| `process_knowledge_base.py` | ✅ | ✅ | ✅ |
-| `process_judicial_sentence_analysis.py` | — | — | ✅ |
-| `process_judicial_appeals.py` | — | — | ✅ |
-| `import_courts_from_txt.py` | — | — | — |
+| Script                                         | Qdrant | Meilisearch | OpenAI |
+| ---------------------------------------------- | ------ | ----------- | ------ |
+| `classify_fap_benefits.py`                     | —      | —           | ✅      |
+| `process_fap_contestation_judgment_reports.py` | ✅      | ✅           | ✅      |
+| `process_knowledge_base.py`                    | ✅      | ✅           | ✅      |
+| `process_judicial_sentence_analysis.py`        | —      | —           | ✅      |
+| `process_judicial_appeals.py`                  | —      | —           | ✅      |
+| `import_courts_from_txt.py`                    | —      | —           | —      |

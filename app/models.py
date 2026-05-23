@@ -1314,6 +1314,10 @@ class JudicialDocument(db.Model):
     file_path = db.Column(db.String(500), nullable=False)
     file_hash = db.Column(db.String(64), index=True)
     uploaded_by = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
+    status = db.Column(db.String(20), default='pending', nullable=False, index=True)
+    error_message = db.Column(db.Text)
+    processed_at = db.Column(db.DateTime)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
     created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
 
     # Relacionamentos

@@ -2,17 +2,32 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from app.models import (
-    db,
-    JudicialDocument,
-    JudicialDocumentType,
-    JudicialEvent,
-    JudicialPhase,
-)
+from rich import print
+
+from app.models import db, JudicialDocument, JudicialDocumentType, JudicialEvent, JudicialPhase
 
 
 class JudicialDocumentService:
-    """Serviço para organização de operações de vínculo documental no painel judicial."""
+    """Serviço para vínculo e processamento de documentos judiciais."""
+
+    def __init__(self, flask_app=None, max_documents_per_execution: int = 5):
+        self.app = flask_app
+        self.max_documents_per_execution = max_documents_per_execution
+
+    def _build_query(self, document_id: int | None = None, include_errors: bool = False):
+        statuses = ['pending']
+        if include_errors:
+            statuses.append('error')
+
+        base_query = JudicialDocument.query.filter(
+            JudicialDocument.status.in_(statuses),
+            JudicialDocument.knowledge_base_id.isnot(None),
+        )
+
+        if document_id:
+            return base_query.filter(JudicialDocument.id == document_id)
+
+        return base_query.order_by(JudicialDocument.created_at.asc())
 
     @staticmethod
     def get_link_by_knowledge_base_id(knowledge_base_id: int) -> JudicialDocument | None:
@@ -20,8 +35,8 @@ class JudicialDocumentService:
 
     @staticmethod
     def resolve_type_and_phase(law_firm_id: int, extraction_payload: dict) -> tuple[str, str, str]:
-        extracted_type_key = str(extraction_payload.get("suggested_document_type_key", "") or "").strip()
-        extracted_type_name = str(extraction_payload.get("suggested_document_type_name", "") or "").strip()
+        extracted_type_key = str(extraction_payload.get('suggested_document_type_key', '') or '').strip()
+        extracted_type_name = str(extraction_payload.get('suggested_document_type_name', '') or '').strip()
 
         document_type = None
         if extracted_type_key:
@@ -46,8 +61,8 @@ class JudicialDocumentService:
             is_active=True,
         ).order_by(JudicialPhase.display_order.asc(), JudicialPhase.name.asc()).first()
 
-        fallback_type = extracted_type_key or "documento_juntado"
-        fallback_phase = default_phase.key if default_phase else "inicio_processo"
+        fallback_type = extracted_type_key or 'documento_juntado'
+        fallback_phase = default_phase.key if default_phase else 'inicio_processo'
         fallback_name = extracted_type_name or fallback_type
         return fallback_type, fallback_phase, fallback_name
 
@@ -58,7 +73,7 @@ class JudicialDocumentService:
             extraction_payload,
         )
 
-        file_hash = str(getattr(knowledge_item, "file_hash", "") or "").strip()
+        file_hash = str(getattr(knowledge_item, 'file_hash', '') or '').strip()
         if file_hash:
             duplicate_in_process = JudicialDocument.query.filter_by(
                 process_id=process.id,
@@ -71,7 +86,7 @@ class JudicialDocumentService:
             process_id=process.id,
             type=event_type,
             phase=event_phase,
-            description=f"Documento da KnowledgeBase vinculado automaticamente ({event_type_name}).",
+            description=f'Documento da KnowledgeBase vinculado automaticamente ({event_type_name}).',
             event_date=datetime.utcnow(),
         )
         db.session.add(event)
@@ -87,6 +102,90 @@ class JudicialDocumentService:
                 file_path=knowledge_item.file_path,
                 file_hash=file_hash or None,
                 uploaded_by=knowledge_item.user_id,
+                status='pending',
             )
         )
         return True
+
+    @staticmethod
+    def _set_document_status(document: JudicialDocument, status: str, error_message: str | None = None) -> None:
+        document.status = status
+        document.error_message = error_message
+        if status == 'completed':
+            document.processed_at = datetime.utcnow()
+        document.updated_at = datetime.utcnow()
+
+    def _process_single_document(self, document: JudicialDocument) -> bool:
+        if not document.knowledge_base_id:
+            self._set_document_status(document, 'error', 'Documento sem vínculo com KnowledgeBase.')
+            db.session.commit()
+            return False
+
+        try:
+            self._set_document_status(document, 'processing')
+            db.session.commit()
+
+            from app.services.knowledge_base_processing_service import KnowledgeBaseProcessingService
+
+            kb_service = KnowledgeBaseProcessingService(flask_app=self.app)
+            success = kb_service.process_single_knowledge_file(document.knowledge_base_id)
+
+            if success:
+                refreshed = JudicialDocument.query.get(document.id)
+                if refreshed:
+                    self._set_document_status(refreshed, 'completed')
+                db.session.commit()
+                return True
+
+            self._set_document_status(document, 'error', 'Falha no processamento da KnowledgeBase.')
+            db.session.commit()
+            return False
+        except Exception as error:
+            db.session.rollback()
+            try:
+                self._set_document_status(document, 'error', str(error))
+                db.session.commit()
+            except Exception:
+                db.session.rollback()
+            print(f'Erro ao processar documento judicial ID {document.id}: {error}')
+            return False
+
+    def process_pending_documents(
+        self,
+        batch_size: int | None = None,
+        document_id: int | None = None,
+        include_errors: bool = False,
+    ) -> int:
+        with self.app.app_context():
+            query = self._build_query(document_id=document_id, include_errors=include_errors)
+
+            if document_id:
+                items = query.all()
+            else:
+                batch_size = batch_size or self.max_documents_per_execution
+                effective_batch_size = max(1, min(batch_size, self.max_documents_per_execution))
+                items = query.limit(effective_batch_size).all()
+
+            print(f'Itens elegíveis para processamento: {len(items)}')
+
+            if not items:
+                if document_id:
+                    print(f'Nenhum documento elegível encontrado para o ID {document_id}.')
+                else:
+                    print('Nenhum documento pendente encontrado.')
+                return 0
+
+            document_ids = [item.id for item in items]
+
+        print('Processando em modo sequencial...')
+
+        processed = 0
+        for item_id in document_ids:
+            with self.app.app_context():
+                document = JudicialDocument.query.get(item_id)
+                if not document:
+                    continue
+                if self._process_single_document(document):
+                    processed += 1
+
+        return processed

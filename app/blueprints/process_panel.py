@@ -1599,48 +1599,9 @@ def detail(process_id):
         process_id=process.id
     ).order_by(JudicialDocument.created_at.desc(), JudicialDocument.id.desc()).all()
 
-    judicial_documents_by_kb = {}
-    for judicial_doc in judicial_documents:
-        if judicial_doc.knowledge_base_id and judicial_doc.knowledge_base_id not in judicial_documents_by_kb:
-            judicial_documents_by_kb[judicial_doc.knowledge_base_id] = judicial_doc
-
     documents_list = []
 
-    for kb_doc in kb_documents:
-        judicial_doc = judicial_documents_by_kb.get(kb_doc.id)
-
-        phase_key = judicial_doc.event.phase if judicial_doc and judicial_doc.event else None
-        phase_label = None
-        if phase_key:
-            phase_label = phase_labels_by_key.get(
-                phase_key,
-                JUDICIAL_PHASES.get(phase_key, phase_key.replace('_', ' ').title())
-            )
-
-        doc_type_key = judicial_doc.type if judicial_doc else None
-        doc_type_label = None
-        if doc_type_key:
-            doc_type_label = document_type_labels_by_key.get(
-                doc_type_key,
-                doc_type_key.replace('_', ' ').title()
-            )
-
-        documents_list.append({
-            'filename': kb_doc.original_filename,
-            'category': kb_doc.category,
-            'uploaded_at': kb_doc.uploaded_at,
-            'phase_label': phase_label,
-            'doc_type_label': doc_type_label,
-            'knowledge_base_id': kb_doc.id,
-            'kb_processing_status': (kb_doc.processing_status or '').strip().lower(),
-            'judicial_document_id': judicial_doc.id if judicial_doc else None,
-            'phase_order': phase_order_by_key.get(phase_key, 9999),
-        })
-
     for judicial_doc in judicial_documents:
-        if judicial_doc.knowledge_base_id:
-            continue
-
         phase_key = judicial_doc.event.phase if judicial_doc.event else None
         phase_label = None
         if phase_key:
@@ -1661,8 +1622,8 @@ def detail(process_id):
             'uploaded_at': judicial_doc.created_at,
             'phase_label': phase_label,
             'doc_type_label': doc_type_label,
-            'knowledge_base_id': None,
-            'kb_processing_status': None,
+            'knowledge_base_id': judicial_doc.knowledge_base_id,
+            'processing_status': (judicial_doc.status or '').strip().lower(),
             'judicial_document_id': judicial_doc.id,
             'phase_order': phase_order_by_key.get(phase_key, 9999),
         })

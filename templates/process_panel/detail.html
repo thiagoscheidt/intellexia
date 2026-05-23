@@ -46,6 +46,66 @@
   .benefit-doc-excerpt strong {
     color: var(--bs-emphasis-color);
   }
+
+  .ai-alert {
+    border-color: color-mix(in srgb, #6f42c1 35%, var(--bs-border-color));
+    background: linear-gradient(135deg, rgba(111, 66, 193, 0.12), rgba(13, 110, 253, 0.08));
+  }
+
+  .ai-accent {
+    color: #6f42c1;
+  }
+
+  .ai-status {
+    display: inline-flex;
+    align-items: center;
+    gap: .45rem;
+  }
+
+  .ai-status-inline {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    margin-left: .5rem;
+    padding: .12rem .55rem;
+    border-radius: 999px;
+    border: 1px solid rgba(111, 66, 193, 0.25);
+    background: rgba(111, 66, 193, 0.12);
+    color: #6f42c1;
+    font-size: .72rem;
+    white-space: nowrap;
+  }
+
+  .ai-pulse {
+    display: inline-block;
+    width: .55rem;
+    height: .55rem;
+    border-radius: 50%;
+    background: #6f42c1;
+    box-shadow: 0 0 0 0 rgba(111, 66, 193, 0.6);
+    animation: aiPulse 1.6s ease-out infinite;
+  }
+
+  .ai-glow {
+    animation: aiGlow 1.5s ease-in-out infinite;
+  }
+
+  @keyframes aiPulse {
+    0% {
+      transform: scale(0.95);
+      box-shadow: 0 0 0 0 rgba(111, 66, 193, 0.55);
+    }
+
+    70% {
+      transform: scale(1);
+      box-shadow: 0 0 0 12px rgba(111, 66, 193, 0);
+    }
+
+    100% {
+      transform: scale(0.95);
+      box-shadow: 0 0 0 0 rgba(111, 66, 193, 0);
+    }
+  }
 </style>
 {% endblock %}
 
@@ -165,6 +225,22 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
 
   <div class="app-content">
     <div class="container-fluid">
+      {% set pending_docs = namespace(found=false) %}
+      {% for doc in documents_list %}
+      {% if doc.processing_status in ['pending', 'processing'] %}
+      {% set pending_docs.found = true %}
+      {% endif %}
+      {% endfor %}
+      {% if pending_docs.found %}
+      <div class="alert ai-alert py-2 px-3 mb-4" role="status">
+        <div class="d-flex align-items-center gap-2">
+          <span class="spinner-border spinner-border-sm ai-accent" role="status" aria-hidden="true"></span>
+          <i class="bi bi-cpu ai-accent ai-glow"></i>
+          <span>O processo sera atualizado em breve assim que todos os arquivos forem analisados pela inteligencia
+            artificial.</span>
+        </div>
+      </div>
+      {% endif %}
       <div class="row">
         <div class="col-12">
           <!-- Estatísticas -->
@@ -524,18 +600,21 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                             {% for doc in documents_list %}
                             <tr>
                               <td>
-                                <i class="bi bi-file-earmark me-2"></i>
-                                {{ doc.filename }}
-                                {% if doc.knowledge_base_id and doc.kb_processing_status == 'pending' %}
-                                <div class="small text-muted mt-1">
-                                  <i class="bi bi-clock-history me-1"></i>
-                                  Aguardando processamento na base de conhecimento
+                                <div>
+                                  <i class="bi bi-file-earmark me-2"></i>
+                                  <span>{{ doc.filename }}</span>
                                 </div>
-                                {% elif doc.knowledge_base_id and doc.kb_processing_status == 'processing' %}
-                                <div class="small text-muted mt-1">
-                                  <span class="spinner-border spinner-border-sm me-1" role="status"
+                                {% if doc.processing_status == 'pending' %}
+                                <div class="small text-muted mt-1 ai-status d-block">
+                                  <span class="ai-pulse" aria-hidden="true"></span>
+                                  <i class="bi bi-clock-history ai-accent"></i>
+                                  Aguardando processamento do documento
+                                </div>
+                                {% elif doc.processing_status == 'processing' %}
+                                <div class="small text-muted mt-1 ai-status d-block">
+                                  <span class="spinner-border spinner-border-sm ai-accent" role="status"
                                     aria-hidden="true"></span>
-                                  Processando na base de conhecimento
+                                  Processando documento
                                 </div>
                                 {% endif %}
                               </td>

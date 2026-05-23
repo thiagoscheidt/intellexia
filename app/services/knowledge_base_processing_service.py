@@ -842,6 +842,14 @@ class KnowledgeBaseProcessingService:
                 item.processing_error_message = None
                 db.session.commit()
 
+                linked_document = self.judicial_document_service.get_link_by_knowledge_base_id(item.id)
+                if linked_document:
+                    linked_document.status = "completed"
+                    linked_document.processed_at = datetime.utcnow()
+                    linked_document.error_message = None
+                    linked_document.updated_at = datetime.utcnow()
+                    db.session.commit()
+
                 print(f"Processado com sucesso: {item.id} - {item.original_filename}")
                 return True
 
@@ -853,6 +861,13 @@ class KnowledgeBaseProcessingService:
                         item.processing_status = "error"
                         item.processing_error_message = str(error)
                         db.session.commit()
+
+                        linked_document = self.judicial_document_service.get_link_by_knowledge_base_id(item.id)
+                        if linked_document:
+                            linked_document.status = "error"
+                            linked_document.error_message = str(error)
+                            linked_document.updated_at = datetime.utcnow()
+                            db.session.commit()
                     except Exception:
                         db.session.rollback()
 
