@@ -1433,8 +1433,19 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
-      document.querySelectorAll('.js-tooltip').forEach(function (el) {
-        new bootstrap.Tooltip(el);
+      document.querySelectorAll('.btn').forEach(function (el) {
+        const hasTitle = el.getAttribute('title');
+        const ariaLabel = el.getAttribute('aria-label');
+        const textLabel = (el.textContent || '').trim();
+        if (!hasTitle) {
+          const label = (ariaLabel || textLabel || '').trim();
+          if (label) {
+            el.setAttribute('title', label);
+          }
+        }
+        if (el.getAttribute('title')) {
+          new bootstrap.Tooltip(el);
+        }
       });
     });
 
