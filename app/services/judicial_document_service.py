@@ -128,7 +128,10 @@ class JudicialDocumentService:
             from app.services.knowledge_base_processing_service import KnowledgeBaseProcessingService
 
             kb_service = KnowledgeBaseProcessingService(flask_app=self.app)
-            success = kb_service.process_single_knowledge_file(document.knowledge_base_id)
+            success = kb_service.process_single_knowledge_file(
+                document.knowledge_base_id,
+                skip_indexing=True,
+            )
 
             if success:
                 refreshed = JudicialDocument.query.get(document.id)

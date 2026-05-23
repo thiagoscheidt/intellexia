@@ -651,7 +651,7 @@ class KnowledgeBaseProcessingService:
 
         return updated
 
-    def process_single_knowledge_file(self, item_id: int) -> bool:
+    def process_single_knowledge_file(self, item_id: int, skip_indexing: bool = False) -> bool:
         """Processa um único arquivo da base de conhecimento."""
         with self.app.app_context():
             item = None
@@ -672,7 +672,7 @@ class KnowledgeBaseProcessingService:
                     raise FileNotFoundError(f"Arquivo não encontrado no caminho: {item.file_path}")
 
                 document_processor = DocumentProcessorService()
-                ingestion_agent = KnowledgeIngestionAgent()
+                ingestion_agent = None if skip_indexing else KnowledgeIngestionAgent()
                 document_data = document_processor.process_document(file_path=str(file_path))
 
                 if isinstance(document_data, dict):
@@ -690,15 +690,21 @@ class KnowledgeBaseProcessingService:
                     document_faiss_vector=document_faiss_vector,
                 )
 
-                markdown_content = ingestion_agent.process_file(
-                    processed_document=document_data,
-                    source_name=item.original_filename,
-                    category=item.category,
-                    description=item.description,
-                    tags=item.tags,
-                    lawsuit_number=None if self._is_fap_benefits_report(item) else item.lawsuit_number,
-                    file_id=item.id,
-                )
+                if skip_indexing:
+                    if isinstance(document_data, dict):
+                        markdown_content = str(document_data.get("full_text", "") or "")
+                    else:
+                        markdown_content = str(getattr(document_data, "full_text", "") or "")
+                else:
+                    markdown_content = ingestion_agent.process_file(
+                        processed_document=document_data,
+                        source_name=item.original_filename,
+                        category=item.category,
+                        description=item.description,
+                        tags=item.tags,
+                        lawsuit_number=None if self._is_fap_benefits_report(item) else item.lawsuit_number,
+                        file_id=item.id,
+                    )
 
                 if not markdown_content:
                     raise RuntimeError("Processamento não retornou conteúdo.")

@@ -2377,6 +2377,40 @@ def delete_process_document(process_id, doc_id):
     return redirect(url_for('process_panel.detail', process_id=process.id) + '#documents')
 
 
+@process_panel_bp.route('/<int:process_id>/documentos/<int:doc_id>/reprocessar', methods=['POST'])
+@require_law_firm
+def reprocess_process_document(process_id, doc_id):
+    """Reprocessar um documento judicial via IA."""
+    law_firm_id = get_current_law_firm_id()
+
+    process = JudicialProcess.query.filter_by(
+        id=process_id,
+        law_firm_id=law_firm_id,
+    ).first_or_404()
+
+    judicial_doc = JudicialDocument.query.filter_by(
+        id=doc_id,
+        process_id=process_id,
+    ).first_or_404()
+
+    if not judicial_doc.knowledge_base_id:
+        flash('Documento sem vínculo com a base de conhecimento.', 'warning')
+        return redirect(url_for('process_panel.detail', process_id=process.id) + '#documents')
+
+    try:
+        judicial_doc.status = 'pending'
+        judicial_doc.error_message = None
+        judicial_doc.processed_at = None
+        judicial_doc.updated_at = datetime.utcnow()
+        db.session.commit()
+        flash('Documento enviado para reprocessamento com sucesso.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao reenviar documento: {str(e)}', 'danger')
+
+    return redirect(url_for('process_panel.detail', process_id=process.id) + '#documents')
+
+
 @process_panel_bp.route('/<int:process_id>/deletar', methods=['POST'])
 @require_law_firm
 def delete(process_id):

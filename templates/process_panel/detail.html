@@ -658,6 +658,11 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                     <i class="bi bi-download"></i>
                                   </a>
                                   {% if doc.judicial_document_id %}
+                                  <button type="submit" class="btn btn-outline-primary" title="Reprocessar IA"
+                                    form="reprocess-doc-{{ doc.judicial_document_id }}"
+                                    onclick="return confirm('Reprocessar este documento com IA?');">
+                                    <i class="bi bi-arrow-clockwise"></i>
+                                  </button>
                                   <button type="button" class="btn btn-outline-danger" title="Remover do processo"
                                     data-delete-url="{{ url_for('process_panel.delete_process_document', process_id=process.id, doc_id=doc.judicial_document_id) }}"
                                     onclick="confirmDeleteDocument(this.dataset.deleteUrl)">
@@ -665,6 +670,11 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                   </button>
                                   {% endif %}
                                 </div>
+                                {% if doc.judicial_document_id %}
+                                <form method="post" id="reprocess-doc-{{ doc.judicial_document_id }}"
+                                  action="{{ url_for('process_panel.reprocess_process_document', process_id=process.id, doc_id=doc.judicial_document_id) }}">
+                                </form>
+                                {% endif %}
                                 {% else %}
                                 <span class="text-muted">-</span>
                                 {% endif %}
