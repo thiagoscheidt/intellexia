@@ -76,6 +76,38 @@
     white-space: nowrap;
   }
 
+  .benefit-row-dim {
+    opacity: .28;
+    transition: opacity .15s ease;
+  }
+
+  .benefit-row-highlight {
+    transition: box-shadow .15s ease, background .15s ease;
+  }
+
+  .benefit-nb-summary-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: .3rem;
+    padding: .2rem .6rem;
+    border-radius: 999px;
+    font-size: .75rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: filter .15s ease, transform .1s ease;
+    white-space: nowrap;
+  }
+
+  .benefit-nb-summary-pill:hover {
+    filter: brightness(.92);
+    transform: translateY(-1px);
+  }
+
+  .benefit-nb-summary-pill.is-active {
+    filter: brightness(.88);
+    transform: translateY(-1px);
+  }
+
   .ai-pulse {
     display: inline-block;
     width: .55rem;
@@ -1239,6 +1271,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                         <small class="text-muted">Um benefício pode aparecer em mais de um grupo.</small>
                       </div>
 
+                      <div id="benefit-nb-summary" class="d-flex flex-wrap gap-2 mb-3"></div>
+
                       <div class="accordion" id="benefitsByThesisAccordion">
                         {% for thesis_group in benefits_grouped_by_thesis %}
                         <div class="accordion-item">
@@ -1276,7 +1310,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                   </thead>
                                   <tbody>
                                     {% for benefit in thesis_group.benefits %}
-                                    <tr>
+                                    <tr class="benefit-row" data-benefit-nb="{{ benefit.benefit_number or '' }}">
                                       <td><strong class="benefit-nb-label" data-benefit-nb="{{ benefit.benefit_number or '' }}">{{ benefit.benefit_number or '-' }}</strong></td>
                                       <td>{{ benefit.nit_number or '-' }}</td>
                                       <td>{{ benefit.insured_name or '-' }}</td>
@@ -2333,50 +2367,116 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
       });
     })();
 
-    // Pill colorido para NB duplicados entre teses
+    // Summary de NB + pills coloridos para duplicados + hover highlight
     (function () {
       const palette = [
-        { bg: 'rgba(13,110,253,0.12)',   color: '#0d6efd' },
-        { bg: 'rgba(25,135,84,0.12)',    color: '#198754' },
-        { bg: 'rgba(253,126,20,0.13)',   color: '#fd7e14' },
-        { bg: 'rgba(111,66,193,0.12)',   color: '#6f42c1' },
-        { bg: 'rgba(214,51,132,0.12)',   color: '#d63384' },
-        { bg: 'rgba(32,201,151,0.13)',   color: '#0aa87a' },
-        { bg: 'rgba(220,53,69,0.11)',    color: '#dc3545' },
+        { bg: 'rgba(13,110,253,0.12)',  color: '#0d6efd' },
+        { bg: 'rgba(25,135,84,0.12)',   color: '#198754' },
+        { bg: 'rgba(253,126,20,0.13)',  color: '#fd7e14' },
+        { bg: 'rgba(111,66,193,0.12)',  color: '#6f42c1' },
+        { bg: 'rgba(214,51,132,0.12)', color: '#d63384' },
+        { bg: 'rgba(32,201,151,0.13)', color: '#0aa87a' },
+        { bg: 'rgba(220,53,69,0.11)',  color: '#dc3545' },
       ];
+      const defaultScheme = { bg: 'rgba(108,117,125,0.1)', color: '#6c757d' };
 
-      const labels = document.querySelectorAll('.benefit-nb-label[data-benefit-nb]');
-      const counts = {};
-      labels.forEach(function (el) {
-        const nb = el.dataset.benefitNb;
-        if (nb) counts[nb] = (counts[nb] || 0) + 1;
-      });
-
-      const nbColor = {};
-      let idx = 0;
-      Object.keys(counts).forEach(function (nb) {
-        if (counts[nb] > 1) {
-          nbColor[nb] = palette[idx % palette.length];
-          idx++;
+      // Coleta NB → { insured, count } preservando ordem de aparição
+      const nbMeta = {};
+      const nbOrder = [];
+      document.querySelectorAll('.benefit-row[data-benefit-nb]').forEach(function (row) {
+        const nb = row.dataset.benefitNb;
+        if (!nb) return;
+        if (!nbMeta[nb]) {
+          nbMeta[nb] = { insured: row.querySelector('td:nth-child(3)')?.textContent?.trim() || '', count: 0 };
+          nbOrder.push(nb);
         }
+        nbMeta[nb].count++;
       });
 
-      labels.forEach(function (el) {
+      // Atribui cor só aos duplicados
+      const nbColor = {};
+      let ci = 0;
+      nbOrder.forEach(function (nb) {
+        nbColor[nb] = nbMeta[nb].count > 1 ? palette[ci++ % palette.length] : defaultScheme;
+      });
+
+      // Estiliza os labels inline
+      document.querySelectorAll('.benefit-nb-label[data-benefit-nb]').forEach(function (el) {
         const nb = el.dataset.benefitNb;
-        const scheme = nb && nbColor[nb];
-        if (!scheme) return;
+        const s = nbColor[nb];
+        if (!s) return;
         el.style.cssText = [
           'display:inline-block',
           'padding:.15rem .55rem',
           'border-radius:999px',
           'font-size:.8rem',
           'font-weight:700',
-          'background:' + scheme.bg,
-          'color:' + scheme.color,
-          'border:1px solid ' + scheme.color.replace(')', ',0.25)').replace('rgb', 'rgba'),
+          'background:' + s.bg,
+          'color:' + s.color,
+          'border:1px solid ' + s.color.replace('rgb(', 'rgba(').replace(')', ',0.25)'),
           'white-space:nowrap',
         ].join(';');
-        el.title = 'Este benefício aparece em ' + counts[nb] + ' teses';
+        if (nbMeta[nb].count > 1) {
+          el.title = 'Este benefício aparece em ' + nbMeta[nb].count + ' teses';
+        }
+      });
+
+      // Monta o summary
+      const summary = document.getElementById('benefit-nb-summary');
+      if (!summary || !nbOrder.length) return;
+
+      nbOrder.forEach(function (nb) {
+        const s = nbColor[nb];
+        const meta = nbMeta[nb];
+        const pill = document.createElement('span');
+        pill.className = 'benefit-nb-summary-pill';
+        pill.dataset.summaryNb = nb;
+        pill.style.cssText = 'background:' + s.bg + ';color:' + s.color + ';border:1px solid ' + s.color.replace('rgb(', 'rgba(').replace(')', ',0.25)');
+        pill.innerHTML = (meta.count > 1 ? '<i class="bi bi-diagram-2" style="font-size:.7rem;"></i>' : '<i class="bi bi-person" style="font-size:.7rem;"></i>') +
+          '<span>' + nb + '</span>' +
+          (meta.insured ? '<span style="font-weight:400;opacity:.75;font-size:.7rem;">· ' + meta.insured.split(' ').slice(0, 2).join(' ') + '</span>' : '') +
+          (meta.count > 1 ? '<span style="font-weight:400;opacity:.6;font-size:.68rem;">' + meta.count + ' teses</span>' : '');
+        pill.title = meta.insured + (meta.count > 1 ? ' — aparece em ' + meta.count + ' teses' : '');
+        summary.appendChild(pill);
+      });
+
+      // Hover: highlight rows / dim demais
+      const allRows = Array.from(document.querySelectorAll('.benefit-row[data-benefit-nb]'));
+      let activePill = null;
+
+      function activate(nb, pill) {
+        if (activePill) activePill.classList.remove('is-active');
+        activePill = pill;
+        pill.classList.add('is-active');
+        const s = nbColor[nb] || defaultScheme;
+        allRows.forEach(function (row) {
+          if (row.dataset.benefitNb === nb) {
+            row.classList.remove('benefit-row-dim');
+            row.classList.add('benefit-row-highlight');
+            row.style.boxShadow = 'inset 3px 0 0 ' + s.color;
+            row.style.background = s.bg;
+          } else {
+            row.classList.add('benefit-row-dim');
+            row.classList.remove('benefit-row-highlight');
+            row.style.boxShadow = '';
+            row.style.background = '';
+          }
+        });
+      }
+
+      function deactivate() {
+        if (activePill) activePill.classList.remove('is-active');
+        activePill = null;
+        allRows.forEach(function (row) {
+          row.classList.remove('benefit-row-dim', 'benefit-row-highlight');
+          row.style.boxShadow = '';
+          row.style.background = '';
+        });
+      }
+
+      summary.querySelectorAll('.benefit-nb-summary-pill').forEach(function (pill) {
+        pill.addEventListener('mouseenter', function () { activate(pill.dataset.summaryNb, pill); });
+        pill.addEventListener('mouseleave', deactivate);
       });
     })();
 
