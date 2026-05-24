@@ -476,7 +476,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
             <div class="col-md-4 mb-4">
               <div class="card card-primary card-outline shadow-sm">
                 <div class="card-header">
-                  <h3 class="card-title"><i class="bi bi-info-circle me-2"></i>Informações</h3>
+                  <h3 class="card-title"><i class="bi bi-info-circle me-2 text-primary"></i>Informações</h3>
                   <div class="card-tools">
                     <a href="{{ url_for('process_panel.edit', process_id=process.id) }}" class="btn btn-sm btn-primary"
                       target="_blank" rel="noopener noreferrer">
@@ -514,49 +514,49 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                   <div class="vstack gap-3">
                     {% if current_phase_label %}
                     <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-signpost-2 me-2"></i>Fase Atual</small>
+                      <small class="text-muted"><i class="bi bi-signpost-2 me-2 text-warning"></i>Fase Atual</small>
                       <span class="badge bg-light text-dark">{{ current_phase_label }}</span>
                     </div>
                     {% endif %}
 
                     {% if process.tribunal_name %}
                     <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-building me-2"></i>Tribunal</small>
+                      <small class="text-muted"><i class="bi bi-building me-2 text-secondary"></i>Tribunal</small>
                       <strong class="text-end ms-3">{{ process.tribunal_name }}</strong>
                     </div>
                     {% endif %}
 
                     {% if process.section %}
                     <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-diagram-2 me-2"></i>Seção</small>
+                      <small class="text-muted"><i class="bi bi-diagram-2 me-2 text-secondary"></i>Seção</small>
                       <strong class="text-end ms-3">{{ process.section }}</strong>
                     </div>
                     {% endif %}
 
                     {% if process.judge_name %}
                     <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-person-badge me-2"></i>Juiz</small>
+                      <small class="text-muted"><i class="bi bi-person-badge me-2 text-primary"></i>Juiz</small>
                       <strong class="text-end ms-3">{{ process.judge_name }}</strong>
                     </div>
                     {% endif %}
 
                     {% if process.origin_unit %}
                     <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-geo-alt me-2"></i>Unidade de Origem</small>
+                      <small class="text-muted"><i class="bi bi-geo-alt me-2 text-danger"></i>Unidade de Origem</small>
                       <strong class="text-end ms-3">{{ process.origin_unit }}</strong>
                     </div>
                     {% endif %}
 
                     {% if process.process_class %}
                     <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-tag me-2"></i>Classe</small>
+                      <small class="text-muted"><i class="bi bi-tag me-2 text-info"></i>Classe</small>
                       <strong class="text-end ms-3">{{ process.process_class }}</strong>
                     </div>
                     {% endif %}
 
                     {% if process.valor_causa_texto %}
                     <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-cash-coin me-2"></i>Valor da Causa</small>
+                      <small class="text-muted"><i class="bi bi-cash-coin me-2 text-success"></i>Valor da Causa</small>
                       <strong class="text-end ms-3" id="display-valor-causa"
                         data-raw="{{ process.valor_causa_texto }}">{{ process.valor_causa_texto }}</strong>
                     </div>
@@ -564,7 +564,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
 
                     {% if process.assuntos %}
                     <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-tags me-2"></i>Assuntos</small>
+                      <small class="text-muted"><i class="bi bi-tags me-2 text-info"></i>Assuntos</small>
                       <div class="text-end ms-3">
                         {% for assunto in process.assuntos %}
                         <span class="badge bg-secondary me-1 mb-1">{{ assunto }}</span>
@@ -575,7 +575,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
 
                     {% if process.segredo_justica is not none %}
                     <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-shield-lock me-2"></i>Segredo de Justiça</small>
+                      <small class="text-muted"><i class="bi bi-shield-lock me-2 text-warning"></i>Segredo de Justiça</small>
                       <span class="badge {{ 'bg-danger' if process.segredo_justica else 'bg-success' }}">
                         {{ 'Sim' if process.segredo_justica else 'Não' }}
                       </span>
@@ -584,7 +584,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
 
                     {% if process.justica_gratuita is not none %}
                     <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-hand-thumbs-up me-2"></i>Justiça Gratuita</small>
+                      <small class="text-muted"><i class="bi bi-hand-thumbs-up me-2 text-success"></i>Justiça Gratuita</small>
                       <span class="badge {{ 'bg-success' if process.justica_gratuita else 'bg-secondary' }}">
                         {{ 'Sim' if process.justica_gratuita else 'Não' }}
                       </span>
@@ -593,7 +593,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
 
                     {% if process.liminar_tutela is not none %}
                     <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-exclamation-circle me-2"></i>Liminar / Tutela
+                      <small class="text-muted"><i class="bi bi-exclamation-circle me-2 text-warning"></i>Liminar / Tutela
                         Antecipada</small>
                       <span class="badge {{ 'bg-warning text-dark' if process.liminar_tutela else 'bg-secondary' }}">
                         {{ 'Sim' if process.liminar_tutela else 'Não' }}
@@ -602,7 +602,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                     {% endif %}
 
                     <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-person-check me-2"></i>Polo Ativo</small>
+                      <small class="text-muted"><i class="bi bi-person-check me-2 text-success"></i>Polo Ativo</small>
                       <strong class="text-end ms-3">{{ process.plaintiff_client.name if process.plaintiff_client else
                         'Não
                         informado'
@@ -610,13 +610,13 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                     </div>
 
                     <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-person-x me-2"></i>Polo Passivo</small>
+                      <small class="text-muted"><i class="bi bi-person-x me-2 text-danger"></i>Polo Passivo</small>
                       <strong class="text-end ms-3">{{ process.defendant.name if process.defendant else 'Não informado'
                         }}</strong>
                     </div>
 
                     <div class="d-flex justify-content-between align-items-start">
-                      <small class="text-muted"><i class="bi bi-calendar-event me-2"></i>Criado em</small>
+                      <small class="text-muted"><i class="bi bi-calendar-event me-2 text-primary"></i>Criado em</small>
                       <strong class="text-end ms-3">{{ process.created_at.strftime('%d/%m/%Y às %H:%M') }}</strong>
                     </div>
                   </div>
@@ -627,7 +627,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
               {% if process.description %}
               <div class="card card-light shadow-sm mt-3">
                 <div class="card-header">
-                  <h3 class="card-title"><i class="bi bi-card-text me-2"></i>Descrição</h3>
+                  <h3 class="card-title"><i class="bi bi-card-text me-2 text-secondary"></i>Descrição</h3>
                 </div>
                 <div class="card-body">
                   <p class="mb-0">{{ process.description }}</p>
@@ -643,13 +643,13 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                   <ul class="nav nav-tabs" role="tablist">
                     <li class="nav-item" role="presentation">
                       <a class="nav-link active" id="documents-tab" data-bs-toggle="tab" href="#documents" role="tab">
-                        <i class="bi bi-files me-2"></i>Documentos
+                        <i class="bi bi-files me-2 text-primary"></i>Documentos
                         <span class="badge bg-info ms-1">{{ stats.documents_count }}</span>
                       </a>
                     </li>
                     <li class="nav-item" role="presentation">
                       <a class="nav-link" id="analyses-tab" data-bs-toggle="tab" href="#analyses" role="tab">
-                        <i class="bi bi-file-earmark-text me-2"></i>Análises
+                        <i class="bi bi-file-earmark-text me-2 text-info"></i>Análises
                         <span class="badge bg-primary ms-1">{{ stats.analyses_count }}</span>
                         {% if analysis_status_summary.in_progress > 0 %}
                         <span class="badge bg-warning text-dark ms-1">
@@ -660,25 +660,25 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                     </li>
                     <li class="nav-item" role="presentation">
                       <a class="nav-link" id="appeals-tab" data-bs-toggle="tab" href="#appeals" role="tab">
-                        <i class="bi bi-arrow-up-circle me-2"></i>Recursos
+                        <i class="bi bi-arrow-up-circle me-2 text-success"></i>Recursos
                         <span class="badge bg-success ms-1">{{ stats.appeals_count }}</span>
                       </a>
                     </li>
                     {% if case %}
                     <li class="nav-item" role="presentation">
                       <a class="nav-link" id="case-tab" data-bs-toggle="tab" href="#case" role="tab">
-                        <i class="bi bi-briefcase me-2"></i>Caso
+                        <i class="bi bi-briefcase me-2 text-warning"></i>Caso
                       </a>
                     </li>
                     {% endif %}
                     <li class="nav-item" role="presentation">
                       <a class="nav-link" id="notes-tab" data-bs-toggle="tab" href="#notes" role="tab">
-                        <i class="bi bi-journal-text me-2"></i>Notas
+                        <i class="bi bi-journal-text me-2 text-secondary"></i>Notas
                       </a>
                     </li>
                     <li class="nav-item" role="presentation">
                       <a class="nav-link" id="phase-history-tab" data-bs-toggle="tab" href="#phase-history" role="tab">
-                        <i class="bi bi-clock-history me-2"></i>Histórico de Fases
+                        <i class="bi bi-clock-history me-2 text-secondary"></i>Histórico de Fases
                         <span class="badge bg-secondary ms-1">{{ phase_history|length }}</span>
                       </a>
                     </li>
@@ -763,25 +763,26 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                 {% if doc.knowledge_base_id %}
                                 <div class="d-flex gap-1 justify-content-end align-items-center">
                                   <a href="{{ url_for('knowledge_base.view', file_id=doc.knowledge_base_id) }}"
-                                    class="btn btn-sm bg-info-subtle text-info-emphasis" title="Visualizar documento" target="_blank"
+                                    class="btn btn-sm" style="background:#e0f2fe;color:#0369a1;" title="Visualizar documento" target="_blank"
                                     rel="noopener noreferrer">
                                     <i class="bi bi-eye"></i>
                                   </a>
                                   <a href="{{ url_for('knowledge_base.download', file_id=doc.knowledge_base_id) }}"
-                                    class="btn btn-sm bg-primary-subtle text-primary-emphasis" title="Baixar documento" target="_blank"
+                                    class="btn btn-sm" style="background:#e0f2fe;color:#0369a1;" title="Baixar documento" target="_blank"
                                     rel="noopener noreferrer">
                                     <i class="bi bi-download"></i>
                                   </a>
                                   {% if doc.judicial_document_id %}
                                   <button type="button" class="btn btn-sm" title="Ver resumo da IA"
-                                    style="background:rgba(111,66,193,0.12);color:#6f42c1;"
+                                    style="background:#ede9fe;color:#7c3aed;"
                                     data-bs-toggle="modal" data-bs-target="#documentSummaryModal"
                                     data-summary-url="{{ url_for('process_panel.get_process_document_summary', process_id=process.id, doc_id=doc.judicial_document_id) }}"
                                     data-doc-name="{{ doc.filename }}">
                                     <i class="bi bi-card-text"></i>
                                   </button>
                                   <span class="vr mx-1 opacity-25"></span>
-                                  <button type="button" class="btn btn-sm bg-danger-subtle text-danger-emphasis" title="Remover do processo"
+                                  <button type="button" class="btn btn-sm" title="Remover do processo"
+                                    style="background:#ffe4e6;color:#be123c;"
                                     data-delete-url="{{ url_for('process_panel.delete_process_document', process_id=process.id, doc_id=doc.judicial_document_id) }}"
                                     onclick="confirmDeleteDocument(this.dataset.deleteUrl)">
                                     <i class="bi bi-trash"></i>
@@ -1120,7 +1121,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
             <div class="col-12">
               <div class="card card-primary card-outline shadow-sm">
                 <div class="card-header">
-                  <h3 class="card-title mb-0"><i class="bi bi-clipboard2-pulse me-2"></i>Benefícios do Processo</h3>
+                  <h3 class="card-title mb-0"><i class="bi bi-clipboard2-pulse me-2 text-primary"></i>Benefícios do Processo</h3>
                   <div class="card-tools">
                     <span class="badge bg-info">{{ stats.benefits_count }}</span>
                   </div>
@@ -1138,21 +1139,21 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                       <button class="nav-link active" id="benefits-grouped-tab" data-bs-toggle="tab"
                         data-bs-target="#benefits-grouped-pane" type="button" role="tab"
                         aria-controls="benefits-grouped-pane" aria-selected="true">
-                        <i class="bi bi-collection me-1"></i>Agrupamento Detalhado
+                        <i class="bi bi-collection me-1 text-primary"></i>Agrupamento Detalhado
                       </button>
                     </li>
                     <li class="nav-item" role="presentation">
                       <button class="nav-link" id="benefits-summary-tab" data-bs-toggle="tab"
                         data-bs-target="#benefits-summary-pane" type="button" role="tab"
                         aria-controls="benefits-summary-pane" aria-selected="false">
-                        <i class="bi bi-table me-1"></i>Demonstrativo
+                        <i class="bi bi-table me-1 text-secondary"></i>Demonstrativo
                       </button>
                     </li>
                     <li class="nav-item" role="presentation">
                       <button class="nav-link" id="benefits-cited-tab" data-bs-toggle="tab"
                         data-bs-target="#benefits-cited-pane" type="button" role="tab"
                         aria-controls="benefits-cited-pane" aria-selected="false">
-                        <i class="bi bi-clipboard2 me-1"></i>Benefícios Citados
+                        <i class="bi bi-clipboard2 me-1 text-info"></i>Benefícios Citados
                         {% if cited_benefits %}<span class="badge bg-secondary ms-1">{{ cited_benefits|length
                           }}</span>{% endif %}
                       </button>
@@ -1308,7 +1309,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                             benefit.contestation_resultado_tecnico_json) %}
                                             {% if contestation_status_raw not in ['nao_localizado', 'nao_analisado'] and
                                             has_contestation_details %}
-                                            <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2"
+                                            <button type="button" class="btn btn-sm py-0 px-2"
+                                              style="background:#e0f2fe;color:#0369a1;"
                                               data-bs-toggle="modal" data-bs-target="#contestationDetailsModal"
                                               title="Ver detalhes da decisão da União"
                                               aria-label="Ver detalhes da decisão da União"
@@ -1355,8 +1357,9 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                         </div>
                                       </td>
                                       <td class="text-end">
-                                        <div class="btn-group btn-group-sm">
-                                          <button type="button" class="btn btn-outline-secondary js-tooltip"
+                                        <div class="d-flex gap-1 justify-content-end align-items-center">
+                                          <button type="button" class="btn btn-sm js-tooltip"
+                                            style="background:#e0f2fe;color:#0369a1;"
                                             data-bs-toggle="modal" data-bs-target="#benefitDocumentsModal"
                                             data-benefit-number="{{ benefit.benefit_number or '' }}"
                                             data-benefit-insured="{{ benefit.insured_name or '' }}"
@@ -1364,7 +1367,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                             title="Buscar nos documentos da base de conhecimento">
                                             <i class="fa-solid fa-file-lines"></i>
                                           </button>
-                                          <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal"
+                                          <button type="button" class="btn btn-sm" style="background:#e0f2fe;color:#0369a1;"
+                                            data-bs-toggle="modal"
                                             data-bs-target="#editBenefitLegalThesesModal"
                                             data-benefit-id="{{ benefit.id }}"
                                             data-benefit-number="{{ benefit.benefit_number or '-' }}"
