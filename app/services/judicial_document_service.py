@@ -142,6 +142,14 @@ class JudicialDocumentService:
         )
         return key_match or name_match
 
+    def _is_contestation_document(self, extraction_payload: dict) -> bool:
+        doc_type_key = str(extraction_payload.get('suggested_document_type_key', '') or '').strip().lower()
+        doc_type_name = str(extraction_payload.get('suggested_document_type_name', '') or '').strip().lower()
+
+        key_match = doc_type_key == 'contestacao' or 'contestacao' in doc_type_key
+        name_match = 'contestação' in doc_type_name or 'contestacao' in doc_type_name
+        return key_match or name_match
+
     @staticmethod
     def _normalize_party_name(value: str | None) -> str:
         if not value:
@@ -522,6 +530,26 @@ class JudicialDocumentService:
                 f'{cited_count} novo(s) / {len(cited)} extraído(s).'
             )
 
+    def _process_contestation_flow(
+        self,
+        process: JudicialProcess,
+        extractor_agent: AgentDocumentExtractor,
+        file_path: Path,
+    ) -> None:
+        """Executa o fluxo específico da contestação em uma única função."""
+        print(
+            f'Iniciando fluxo de contestação para o processo {process.process_number} '
+            f'(arquivo: {file_path.name}).'
+        )
+
+        cited = extractor_agent.extract_cited_benefits()
+        if cited:
+            cited_count = self._upsert_cited_benefits(process, cited)
+            print(
+                f'Benefícios citados da contestação vinculados ao processo {process.process_number}: '
+                f'{cited_count} novo(s) / {len(cited)} extraído(s).'
+            )
+
     def _extract_context_from_document(self, document: JudicialDocument, process: JudicialProcess) -> dict:
         file_path = Path(str(document.file_path or '').strip())
         if not file_path.exists():
@@ -596,6 +624,12 @@ class JudicialDocumentService:
 
         if self._is_initial_petition_document(extraction_payload):
             self._process_initial_petition_flow(
+                process=process,
+                extractor_agent=extractor_agent,
+                file_path=file_path,
+            )
+        elif self._is_contestation_document(extraction_payload):
+            self._process_contestation_flow(
                 process=process,
                 extractor_agent=extractor_agent,
                 file_path=file_path,
