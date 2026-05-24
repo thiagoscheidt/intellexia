@@ -21,6 +21,7 @@ from app.models import (
     JudicialPhase,
     JudicialProcess,
     JudicialProcessBenefit,
+    JudicialProcessBenefitThesisContestation,
     JudicialProcessCitedBenefit,
     JudicialSentenceAnalysis,
     db,
@@ -552,6 +553,7 @@ class JudicialDocumentService:
             return
 
         benefits_payload: list[dict] = []
+        benefits_by_id: dict[int, JudicialProcessBenefit] = {benefit.id: benefit for benefit in process_benefits}
         for benefit in process_benefits:
             legal_thesis_names = [
                 str(thesis.name or '').strip()
@@ -559,16 +561,31 @@ class JudicialDocumentService:
                 if thesis and str(thesis.name or '').strip()
             ]
 
-            primary_thesis = ''
+            if benefit.legal_theses:
+                for thesis in benefit.legal_theses:
+                    thesis_name = str(thesis.name or '').strip()
+                    if not thesis_name:
+                        continue
+                    benefits_payload.append(
+                        {
+                            'benefit_ref': f'{benefit.id}:{thesis.id}',
+                            'benefit_number': str(benefit.benefit_number or '').strip(),
+                            'thesis': thesis_name,
+                        }
+                    )
+                continue
+
+            fallback_thesis = ''
             if legal_thesis_names:
-                primary_thesis = '; '.join(sorted(set(legal_thesis_names)))
+                fallback_thesis = '; '.join(sorted(set(legal_thesis_names)))
             elif str(benefit.legal_thesis or '').strip():
-                primary_thesis = str(benefit.legal_thesis or '').strip()
+                fallback_thesis = str(benefit.legal_thesis or '').strip()
 
             benefits_payload.append(
                 {
+                    'benefit_ref': f'{benefit.id}:0',
                     'benefit_number': str(benefit.benefit_number or '').strip(),
-                    'thesis': primary_thesis,
+                    'thesis': fallback_thesis,
                 }
             )
 
@@ -584,31 +601,152 @@ class JudicialDocumentService:
         if not isinstance(analyses, list):
             analyses = []
 
-        updated = 0
+        grouped_by_benefit_id: dict[int, list[dict]] = {}
+        grouped_by_benefit_thesis: dict[tuple[int, int | None], dict] = {}
         for item in analyses:
             if not isinstance(item, dict):
                 continue
 
-            benefit_number = str(item.get('beneficio', '') or '').strip()
-            if not benefit_number:
-                continue
+            benefit_ref = str(item.get('benefit_ref', '') or '').strip()
+            benefit_id = None
+            legal_thesis_id: int | None = None
+            if ':' in benefit_ref:
+                raw_benefit_id, raw_legal_thesis_id = benefit_ref.split(':', 1)
+                try:
+                    benefit_id = int(raw_benefit_id)
+                except (TypeError, ValueError):
+                    benefit_id = None
+                try:
+                    parsed_legal_thesis_id = int(raw_legal_thesis_id)
+                    legal_thesis_id = parsed_legal_thesis_id if parsed_legal_thesis_id > 0 else None
+                except (TypeError, ValueError):
+                    legal_thesis_id = None
 
-            benefit = JudicialProcessBenefit.query.filter_by(
-                process_id=process.id,
-                benefit_number=benefit_number,
-            ).first()
+            if benefit_id is None:
+                benefit_number = str(item.get('beneficio', '') or '').strip()
+                if not benefit_number:
+                    continue
+                benefit = JudicialProcessBenefit.query.filter_by(
+                    process_id=process.id,
+                    benefit_number=benefit_number,
+                ).first()
+                if not benefit:
+                    continue
+                benefit_id = benefit.id
+
+            if benefit_id not in grouped_by_benefit_id:
+                grouped_by_benefit_id[benefit_id] = []
+            grouped_by_benefit_id[benefit_id].append(item)
+
+            grouped_by_benefit_thesis[(benefit_id, legal_thesis_id)] = item
+
+        thesis_rows_updated = 0
+        for (benefit_id, legal_thesis_id), thesis_item in grouped_by_benefit_thesis.items():
+            benefit = benefits_by_id.get(benefit_id)
             if not benefit:
                 continue
 
-            status = str(item.get('status', '') or '').strip()
-            status_label = str(item.get('status_label', '') or '').strip()
-            fundamento_uniao = str(item.get('fundamento_uniao', '') or '').strip()
-            efeito_fap = str(item.get('efeito_fap', '') or '').strip()
-            trecho_detectado = str(item.get('trecho_detectado', '') or '').strip()
-            trecho_completo = str(item.get('trecho_completo_contestacao', '') or '').strip()
-            resultado_tecnico = item.get('resultado_tecnico') or {}
+            thesis_row = JudicialProcessBenefitThesisContestation.query.filter_by(
+                process_benefit_id=benefit.id,
+                legal_thesis_id=legal_thesis_id,
+            ).first()
+
+            if thesis_row is None:
+                thesis_row = JudicialProcessBenefitThesisContestation(
+                    law_firm_id=process.law_firm_id,
+                    process_id=process.id,
+                    process_benefit_id=benefit.id,
+                    legal_thesis_id=legal_thesis_id,
+                )
+                db.session.add(thesis_row)
+
+            thesis_status = str(thesis_item.get('status', '') or '').strip()
+            thesis_status_label = str(thesis_item.get('status_label', '') or '').strip()
+            thesis_fundamento_uniao = str(thesis_item.get('fundamento_uniao', '') or '').strip()
+            thesis_efeito_fap = str(thesis_item.get('efeito_fap', '') or '').strip()
+            thesis_trecho_detectado = str(thesis_item.get('trecho_detectado', '') or '').strip()
+            thesis_trecho_completo = str(
+                thesis_item.get('trecho_completo_contestacao', '') or ''
+            ).strip()
+            thesis_resultado_tecnico = thesis_item.get('resultado_tecnico') or {}
+            if not isinstance(thesis_resultado_tecnico, dict):
+                thesis_resultado_tecnico = {}
+
+            thesis_row.contestation_decision = thesis_status_label or thesis_status or ''
+            thesis_row.contestation_status = thesis_status or None
+            thesis_row.contestation_status_label = thesis_status_label or None
+            thesis_row.contestation_fundamento_uniao = thesis_fundamento_uniao or None
+            thesis_row.contestation_efeito_fap = thesis_efeito_fap or None
+            thesis_row.contestation_trecho_detectado = thesis_trecho_detectado or None
+            thesis_row.contestation_trecho_completo = thesis_trecho_completo or None
+            thesis_row.contestation_resultado_tecnico_json = json.dumps(
+                {
+                    'recalcula_fap': bool(thesis_resultado_tecnico.get('recalcula_fap', False)),
+                    'mantem_no_fap': bool(thesis_resultado_tecnico.get('mantem_no_fap', False)),
+                    'depende_inss': bool(thesis_resultado_tecnico.get('depende_inss', False)),
+                    'depende_decisao_judicial': bool(
+                        thesis_resultado_tecnico.get('depende_decisao_judicial', False)
+                    ),
+                },
+                ensure_ascii=False,
+            )
+            thesis_row.updated_at = datetime.utcnow()
+            thesis_rows_updated += 1
+
+        updated = 0
+        for benefit_id, thesis_items in grouped_by_benefit_id.items():
+            benefit = benefits_by_id.get(benefit_id)
+            if not benefit:
+                continue
+
+            # Escolhe um item principal para manter compatibilidade dos campos legados por benefício.
+            principal_item = None
+            for candidate in thesis_items:
+                candidate_status = str(candidate.get('status', '') or '').strip().lower()
+                if candidate_status not in ('nao_localizado', 'nao_analisado'):
+                    principal_item = candidate
+                    break
+            if principal_item is None and thesis_items:
+                principal_item = thesis_items[0]
+            if principal_item is None:
+                continue
+
+            status = str(principal_item.get('status', '') or '').strip()
+            status_label = str(principal_item.get('status_label', '') or '').strip()
+            fundamento_uniao = str(principal_item.get('fundamento_uniao', '') or '').strip()
+            efeito_fap = str(principal_item.get('efeito_fap', '') or '').strip()
+            trecho_detectado = str(principal_item.get('trecho_detectado', '') or '').strip()
+            trecho_completo = str(principal_item.get('trecho_completo_contestacao', '') or '').strip()
+            resultado_tecnico = principal_item.get('resultado_tecnico') or {}
             if not isinstance(resultado_tecnico, dict):
                 resultado_tecnico = {}
+
+            per_thesis_analyses: list[dict] = []
+            for thesis_item in thesis_items:
+                thesis_result = thesis_item.get('resultado_tecnico') or {}
+                if not isinstance(thesis_result, dict):
+                    thesis_result = {}
+                per_thesis_analyses.append(
+                    {
+                        'benefit_ref': str(thesis_item.get('benefit_ref', '') or '').strip(),
+                        'beneficio': str(thesis_item.get('beneficio', '') or '').strip(),
+                        'tese': str(thesis_item.get('tese', '') or '').strip(),
+                        'status': str(thesis_item.get('status', '') or '').strip(),
+                        'status_label': str(thesis_item.get('status_label', '') or '').strip(),
+                        'fundamento_uniao': str(thesis_item.get('fundamento_uniao', '') or '').strip(),
+                        'efeito_fap': str(thesis_item.get('efeito_fap', '') or '').strip(),
+                        'trecho_detectado': str(thesis_item.get('trecho_detectado', '') or '').strip(),
+                        'trecho_completo_contestacao': str(
+                            thesis_item.get('trecho_completo_contestacao', '') or ''
+                        ).strip(),
+                        'resultado_tecnico': {
+                            'recalcula_fap': bool(thesis_result.get('recalcula_fap', False)),
+                            'mantem_no_fap': bool(thesis_result.get('mantem_no_fap', False)),
+                            'depende_inss': bool(thesis_result.get('depende_inss', False)),
+                            'depende_decisao_judicial': bool(thesis_result.get('depende_decisao_judicial', False)),
+                        },
+                    }
+                )
 
             benefit.contestation_decision = status_label or status or ''
             benefit.contestation_status = status or None
@@ -623,6 +761,7 @@ class JudicialDocumentService:
                     'mantem_no_fap': bool(resultado_tecnico.get('mantem_no_fap', False)),
                     'depende_inss': bool(resultado_tecnico.get('depende_inss', False)),
                     'depende_decisao_judicial': bool(resultado_tecnico.get('depende_decisao_judicial', False)),
+                    'analises_por_tese': per_thesis_analyses,
                 },
                 ensure_ascii=False,
             )
@@ -631,7 +770,8 @@ class JudicialDocumentService:
 
         print(
             f'Fluxo de contestação concluído para o processo {process.process_number}: '
-            f'{updated} benefício(s) atualizado(s) com análise da União.'
+            f'{updated} benefício(s) atualizado(s) com análise da União; '
+            f'{thesis_rows_updated} vínculo(s) benefício+tese persistido(s).'
         )
 
     def _extract_context_from_document(self, document: JudicialDocument, process: JudicialProcess) -> dict:

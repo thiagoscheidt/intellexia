@@ -1094,6 +1094,11 @@ class JudicialLegalThesis(db.Model):
         secondary=judicial_process_benefit_legal_theses,
         back_populates='legal_theses'
     )
+    benefit_contestation_analyses = db.relationship(
+        'JudicialProcessBenefitThesisContestation',
+        back_populates='legal_thesis',
+        cascade='all, delete-orphan'
+    )
 
     def __repr__(self):
         return f'<JudicialLegalThesis {self.key}>'
@@ -1405,9 +1410,55 @@ class JudicialProcessBenefit(db.Model):
         back_populates='benefits',
         order_by='JudicialLegalThesis.name.asc()'
     )
+    thesis_contestations = db.relationship(
+        'JudicialProcessBenefitThesisContestation',
+        back_populates='process_benefit',
+        cascade='all, delete-orphan'
+    )
 
     def __repr__(self):
         return f'<JudicialProcessBenefit {self.benefit_number} - Process {self.process_id}>'
+
+
+class JudicialProcessBenefitThesisContestation(db.Model):
+    """Análise da contestação da União por vínculo benefício+tese."""
+    __tablename__ = 'judicial_process_benefit_thesis_contestations'
+    __table_args__ = (
+        db.UniqueConstraint(
+            'process_benefit_id',
+            'legal_thesis_id',
+            name='uq_jpbtc_benefit_thesis'
+        ),
+        db.Index('ix_jpbtc_process', 'process_id'),
+        db.Index('ix_jpbtc_law_firm', 'law_firm_id'),
+        db.Index('ix_jpbtc_status', 'contestation_status'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    process_id = db.Column(db.Integer, db.ForeignKey('judicial_processes.id'), nullable=False, index=True)
+    process_benefit_id = db.Column(db.Integer, db.ForeignKey('judicial_process_benefits.id'), nullable=False, index=True)
+    legal_thesis_id = db.Column(db.Integer, db.ForeignKey('judicial_legal_theses.id'), index=True)
+
+    contestation_decision = db.Column(db.Text)
+    contestation_status = db.Column(db.String(40), index=True)
+    contestation_status_label = db.Column(db.String(120))
+    contestation_fundamento_uniao = db.Column(db.Text)
+    contestation_efeito_fap = db.Column(db.Text)
+    contestation_trecho_detectado = db.Column(db.Text)
+    contestation_trecho_completo = db.Column(db.Text)
+    contestation_resultado_tecnico_json = db.Column(db.Text)
+
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    law_firm = db.relationship('LawFirm')
+    process = db.relationship('JudicialProcess')
+    process_benefit = db.relationship('JudicialProcessBenefit', back_populates='thesis_contestations')
+    legal_thesis = db.relationship('JudicialLegalThesis', back_populates='benefit_contestation_analyses')
+
+    def __repr__(self):
+        return f'<JudicialProcessBenefitThesisContestation {self.process_benefit_id}:{self.legal_thesis_id}>'
 
 
 class FapContestationJudgmentReport(db.Model):

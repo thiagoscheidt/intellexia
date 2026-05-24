@@ -4,7 +4,8 @@ from app.models import (
     db, JudicialProcess, JudicialSentenceAnalysis, JudicialAppeal, 
     KnowledgeBase, Case, User, Court, JudicialPhase, JudicialDocumentType, JudicialEvent,
     JudicialProcessNote, Client, JudicialDefendant, JudicialDocument, JudicialDocumentSummary,
-    JudicialProcessBenefit, JudicialProcessPhaseHistory, JudicialLegalThesis, JudicialProcessCitedBenefit
+    JudicialProcessBenefit, JudicialProcessPhaseHistory, JudicialLegalThesis, JudicialProcessCitedBenefit,
+    JudicialProcessBenefitThesisContestation
 )
 from datetime import datetime
 from functools import wraps
@@ -1547,6 +1548,20 @@ def detail(process_id):
         is_active=True,
     ).order_by(JudicialLegalThesis.name.asc()).all()
 
+    benefit_thesis_contestation_map = {}
+    if process_benefits:
+        benefit_ids = [benefit.id for benefit in process_benefits]
+        contestation_rows = JudicialProcessBenefitThesisContestation.query.filter(
+            JudicialProcessBenefitThesisContestation.law_firm_id == law_firm_id,
+            JudicialProcessBenefitThesisContestation.process_id == process.id,
+            JudicialProcessBenefitThesisContestation.process_benefit_id.in_(benefit_ids),
+        ).all()
+
+        for row in contestation_rows:
+            if row.process_benefit_id not in benefit_thesis_contestation_map:
+                benefit_thesis_contestation_map[row.process_benefit_id] = {}
+            benefit_thesis_contestation_map[row.process_benefit_id][row.legal_thesis_id] = row
+
     benefits_grouped_by_thesis = []
     for thesis in legal_theses:
         thesis_benefits = [
@@ -1672,6 +1687,7 @@ def detail(process_id):
         'benefits_grouped_by_thesis': benefits_grouped_by_thesis,
         'cited_benefits': cited_benefits,
         'legal_theses': legal_theses,
+        'benefit_thesis_contestation_map': benefit_thesis_contestation_map,
         'kb_documents': kb_documents,
         'documents_list': documents_list,
         'case': process.case if process.case_id else None,

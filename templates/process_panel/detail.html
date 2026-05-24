@@ -575,7 +575,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
 
                     {% if process.segredo_justica is not none %}
                     <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-shield-lock me-2 text-warning"></i>Segredo de Justiça</small>
+                      <small class="text-muted"><i class="bi bi-shield-lock me-2 text-warning"></i>Segredo de
+                        Justiça</small>
                       <span class="badge {{ 'bg-danger' if process.segredo_justica else 'bg-success' }}">
                         {{ 'Sim' if process.segredo_justica else 'Não' }}
                       </span>
@@ -584,7 +585,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
 
                     {% if process.justica_gratuita is not none %}
                     <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-hand-thumbs-up me-2 text-success"></i>Justiça Gratuita</small>
+                      <small class="text-muted"><i class="bi bi-hand-thumbs-up me-2 text-success"></i>Justiça
+                        Gratuita</small>
                       <span class="badge {{ 'bg-success' if process.justica_gratuita else 'bg-secondary' }}">
                         {{ 'Sim' if process.justica_gratuita else 'Não' }}
                       </span>
@@ -593,7 +595,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
 
                     {% if process.liminar_tutela is not none %}
                     <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-exclamation-circle me-2 text-warning"></i>Liminar / Tutela
+                      <small class="text-muted"><i class="bi bi-exclamation-circle me-2 text-warning"></i>Liminar /
+                        Tutela
                         Antecipada</small>
                       <span class="badge {{ 'bg-warning text-dark' if process.liminar_tutela else 'bg-secondary' }}">
                         {{ 'Sim' if process.liminar_tutela else 'Não' }}
@@ -715,7 +718,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                   <i class="bi bi-file-earmark me-2"></i>
                                   <span>{{ doc.filename }}</span>
                                 </div>
-                                {% if doc.judicial_document_id and doc.processing_status not in ['pending', 'processing'] %}
+                                {% if doc.judicial_document_id and doc.processing_status not in ['pending',
+                                'processing'] %}
                                 <button type="submit" class="ai-status-inline mt-2"
                                   style="margin-left:0; cursor:pointer; background:none; border:1px solid rgba(111,66,193,0.25);"
                                   form="reprocess-doc-{{ doc.judicial_document_id }}"
@@ -763,18 +767,20 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                 {% if doc.knowledge_base_id %}
                                 <div class="d-flex gap-1 justify-content-end align-items-center">
                                   <a href="{{ url_for('knowledge_base.view', file_id=doc.knowledge_base_id) }}"
-                                    class="btn btn-sm" style="background:#e0f2fe;color:#0369a1;" title="Visualizar documento" target="_blank"
-                                    rel="noopener noreferrer">
+                                    class="btn btn-sm"
+                                    style="background:transparent;border:1.5px solid #94a3b8;color:#475569;"
+                                    title="Visualizar documento" target="_blank" rel="noopener noreferrer">
                                     <i class="bi bi-eye"></i>
                                   </a>
                                   <a href="{{ url_for('knowledge_base.download', file_id=doc.knowledge_base_id) }}"
-                                    class="btn btn-sm" style="background:#e0f2fe;color:#0369a1;" title="Baixar documento" target="_blank"
-                                    rel="noopener noreferrer">
+                                    class="btn btn-sm"
+                                    style="background:transparent;border:1.5px solid #94a3b8;color:#475569;"
+                                    title="Baixar documento" target="_blank" rel="noopener noreferrer">
                                     <i class="bi bi-download"></i>
                                   </a>
                                   {% if doc.judicial_document_id %}
                                   <button type="button" class="btn btn-sm" title="Ver resumo da IA"
-                                    style="background:#ede9fe;color:#7c3aed;"
+                                    style="background:transparent;border:1.5px solid #a78bfa;color:#7c3aed;"
                                     data-bs-toggle="modal" data-bs-target="#documentSummaryModal"
                                     data-summary-url="{{ url_for('process_panel.get_process_document_summary', process_id=process.id, doc_id=doc.judicial_document_id) }}"
                                     data-doc-name="{{ doc.filename }}">
@@ -782,7 +788,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                   </button>
                                   <span class="vr mx-1 opacity-25"></span>
                                   <button type="button" class="btn btn-sm" title="Remover do processo"
-                                    style="background:#ffe4e6;color:#be123c;"
+                                    style="background:transparent;border:1.5px solid #fca5a5;color:#dc2626;"
                                     data-delete-url="{{ url_for('process_panel.delete_process_document', process_id=process.id, doc_id=doc.judicial_document_id) }}"
                                     onclick="confirmDeleteDocument(this.dataset.deleteUrl)">
                                     <i class="bi bi-trash"></i>
@@ -1121,7 +1127,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
             <div class="col-12">
               <div class="card card-primary card-outline shadow-sm">
                 <div class="card-header">
-                  <h3 class="card-title mb-0"><i class="bi bi-clipboard2-pulse me-2 text-primary"></i>Benefícios do Processo</h3>
+                  <h3 class="card-title mb-0"><i class="bi bi-clipboard2-pulse me-2 text-primary"></i>Benefícios do
+                    Processo</h3>
                   <div class="card-tools">
                     <span class="badge bg-info">{{ stats.benefits_count }}</span>
                   </div>
@@ -1297,41 +1304,67 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                         {% endif %}
                                       </td>
                                       <td>
+                                        {% set contestation_key = thesis_group.id if thesis_group.id != 'unassigned'
+                                        else none %}
+                                        {% set thesis_contestation = (benefit_thesis_contestation_map.get(benefit.id,
+                                        {}) if benefit_thesis_contestation_map is defined else {}).get(contestation_key)
+                                        %}
+                                        {% set contestation_status_value = thesis_contestation.contestation_status if
+                                        thesis_contestation else benefit.contestation_status %}
+                                        {% set contestation_status_label_value =
+                                        thesis_contestation.contestation_status_label if thesis_contestation else
+                                        benefit.contestation_status_label %}
+                                        {% set contestation_fundamento_value =
+                                        thesis_contestation.contestation_fundamento_uniao if thesis_contestation else
+                                        benefit.contestation_fundamento_uniao %}
+                                        {% set contestation_efeito_value = thesis_contestation.contestation_efeito_fap
+                                        if thesis_contestation else benefit.contestation_efeito_fap %}
+                                        {% set contestation_trecho_value =
+                                        thesis_contestation.contestation_trecho_detectado if thesis_contestation else
+                                        benefit.contestation_trecho_detectado %}
+                                        {% set contestation_trecho_completo_value =
+                                        thesis_contestation.contestation_trecho_completo if thesis_contestation else
+                                        benefit.contestation_trecho_completo %}
+                                        {% set contestation_resultado_value =
+                                        thesis_contestation.contestation_resultado_tecnico_json if thesis_contestation
+                                        else benefit.contestation_resultado_tecnico_json %}
+                                        {% set contestation_decision_value = thesis_contestation.contestation_decision
+                                        if thesis_contestation else benefit.contestation_decision %}
                                         <div class="d-flex flex-column gap-1">
                                           <div class="d-flex align-items-center gap-2 flex-wrap">
-                                            {{ contestation_status_badge(benefit.contestation_status,
-                                            benefit.contestation_status_label) }}
-                                            {% set contestation_status_raw = (benefit.contestation_status or
+                                            {{ contestation_status_badge(contestation_status_value,
+                                            contestation_status_label_value) }}
+                                            {% set contestation_status_raw = (contestation_status_value or
                                             '')|trim|lower %}
-                                            {% set has_contestation_details = (benefit.contestation_fundamento_uniao or
-                                            benefit.contestation_efeito_fap or benefit.contestation_trecho_detectado or
-                                            benefit.contestation_trecho_completo or
-                                            benefit.contestation_resultado_tecnico_json) %}
+                                            {% set has_contestation_details = (contestation_fundamento_value or
+                                            contestation_efeito_value or contestation_trecho_value or
+                                            contestation_trecho_completo_value or
+                                            contestation_resultado_value) %}
                                             {% if contestation_status_raw not in ['nao_localizado', 'nao_analisado'] and
                                             has_contestation_details %}
                                             <button type="button" class="btn btn-sm py-0 px-2"
-                                              style="background:#e0f2fe;color:#0369a1;"
+                                              style="background:transparent;border:1.5px solid #94a3b8;color:#475569;"
                                               data-bs-toggle="modal" data-bs-target="#contestationDetailsModal"
                                               title="Ver detalhes da decisão da União"
                                               aria-label="Ver detalhes da decisão da União"
                                               data-benefit-number="{{ benefit.benefit_number or '-' }}"
-                                              data-contestation-status="{{ benefit.contestation_status or '' }}"
-                                              data-contestation-status-label="{{ benefit.contestation_status_label or benefit.contestation_status or '-' }}"
-                                              data-contestation-fundamento="{{ benefit.contestation_fundamento_uniao or '' }}"
-                                              data-contestation-efeito="{{ benefit.contestation_efeito_fap or '' }}"
-                                              data-contestation-trecho="{{ benefit.contestation_trecho_detectado or '' }}"
-                                              data-contestation-trecho-completo="{{ benefit.contestation_trecho_completo or '' }}"
-                                              data-contestation-resultado="{{ benefit.contestation_resultado_tecnico_json or '' }}">
+                                              data-contestation-status="{{ contestation_status_value or '' }}"
+                                              data-contestation-status-label="{{ contestation_status_label_value or contestation_status_value or '-' }}"
+                                              data-contestation-fundamento="{{ contestation_fundamento_value or '' }}"
+                                              data-contestation-efeito="{{ contestation_efeito_value or '' }}"
+                                              data-contestation-trecho="{{ contestation_trecho_value or '' }}"
+                                              data-contestation-trecho-completo="{{ contestation_trecho_completo_value or '' }}"
+                                              data-contestation-resultado="{{ contestation_resultado_value or '' }}">
                                               <i class="bi bi-eye"></i>
                                             </button>
                                             {% endif %}
                                           </div>
-                                          {% set contestation_decision_value = (benefit.contestation_decision or
+                                          {% set contestation_decision_value = (contestation_decision_value or
                                           '')|trim %}
                                           {% set contestation_decision_key = contestation_decision_value|lower %}
-                                          {% set contestation_status_label_key = (benefit.contestation_status_label or
+                                          {% set contestation_status_label_key = (contestation_status_label_value or
                                           '')|trim|lower %}
-                                          {% set contestation_status_key = (benefit.contestation_status or
+                                          {% set contestation_status_key = (contestation_status_value or
                                           '')|trim|lower %}
                                           {% if contestation_decision_value and contestation_decision_key !=
                                           contestation_status_label_key and contestation_decision_key !=
@@ -1359,7 +1392,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                       <td class="text-end">
                                         <div class="d-flex gap-1 justify-content-end align-items-center">
                                           <button type="button" class="btn btn-sm js-tooltip"
-                                            style="background:#e0f2fe;color:#0369a1;"
+                                            style="background:transparent;border:1.5px solid #94a3b8;color:#475569;"
                                             data-bs-toggle="modal" data-bs-target="#benefitDocumentsModal"
                                             data-benefit-number="{{ benefit.benefit_number or '' }}"
                                             data-benefit-insured="{{ benefit.insured_name or '' }}"
@@ -1367,9 +1400,9 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                             title="Buscar nos documentos da base de conhecimento">
                                             <i class="fa-solid fa-file-lines"></i>
                                           </button>
-                                          <button type="button" class="btn btn-sm" style="background:#e0f2fe;color:#0369a1;"
-                                            data-bs-toggle="modal"
-                                            data-bs-target="#editBenefitLegalThesesModal"
+                                          <button type="button" class="btn btn-sm"
+                                            style="background:transparent;border:1.5px solid #94a3b8;color:#475569;"
+                                            data-bs-toggle="modal" data-bs-target="#editBenefitLegalThesesModal"
                                             data-benefit-id="{{ benefit.id }}"
                                             data-benefit-number="{{ benefit.benefit_number or '-' }}"
                                             data-benefit-insured="{{ benefit.insured_name or '-' }}"

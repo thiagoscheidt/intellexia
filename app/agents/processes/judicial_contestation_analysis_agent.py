@@ -28,6 +28,7 @@ class ContestationTechnicalResult(BaseModel):
 
 
 class ContestationBenefitAnalysisItem(BaseModel):
+    benefit_ref: str = Field(default='', description='Identificador interno da linha beneficio+tese enviado pelo sistema.')
     beneficio: str = Field(default='', description='Numero do beneficio (NB).')
     tese: str = Field(default='', description='Tese juridica ja associada ao beneficio.')
     status: str = Field(default='nao_analisado', description='Status tecnico-processual padronizado.')
@@ -97,8 +98,10 @@ class JudicialContestationAnalysisAgent:
                 continue
 
             thesis = str(item.get('thesis', '') or '').strip()
+            benefit_ref = str(item.get('benefit_ref', '') or item.get('id', '') or '').strip()
             normalized.append(
                 {
+                    'benefit_ref': benefit_ref,
                     'benefit_number': benefit_number,
                     'thesis': thesis,
                 }
@@ -160,6 +163,12 @@ class JudicialContestationAnalysisAgent:
         ]
 
         for item in benefits:
+            benefit_ref = item.get('benefit_ref', '')
+            if benefit_ref:
+                lines.append(
+                    f"- REF: {benefit_ref} | NB: {item.get('benefit_number', '')} | Tese: {item.get('thesis', '') or '(nao informada)'}"
+                )
+                continue
             lines.append(
                 f"- NB: {item.get('benefit_number', '')} | Tese: {item.get('thesis', '') or '(nao informada)'}"
             )
@@ -167,6 +176,7 @@ class JudicialContestationAnalysisAgent:
         lines.extend(
             [
                 '',
+                'Cada item de resposta deve repetir exatamente benefit_ref quando REF for informado.',
                 'Cada item de resposta deve usar o numero exato do beneficio informado em beneficio.',
                 'Em resultado_tecnico, preencher booleans coerentes com a resposta da Uniao.',
             ]
@@ -221,26 +231,45 @@ class JudicialContestationAnalysisAgent:
             if isinstance(maybe, list):
                 analyses_raw = maybe
 
+        by_ref: dict[str, dict[str, Any]] = {}
+        by_number_and_thesis: dict[tuple[str, str], dict[str, Any]] = {}
         by_number: dict[str, dict[str, Any]] = {}
         for item in analyses_raw:
             if not isinstance(item, dict):
                 continue
+            item_ref = str(item.get('benefit_ref', '') or '').strip()
             number = str(item.get('beneficio', '') or '').strip()
+            thesis = str(item.get('tese', '') or '').strip().lower()
+            if item_ref:
+                by_ref[item_ref] = item
             if not number:
                 continue
+            if thesis:
+                by_number_and_thesis[(number, thesis)] = item
             by_number[number] = item
 
         normalized_items: list[dict[str, Any]] = []
         for requested in requested_benefits:
+            benefit_ref = requested.get('benefit_ref', '')
             number = requested.get('benefit_number', '')
             thesis = requested.get('thesis', '')
-            base_item = by_number.get(number, {})
+            thesis_key = str(thesis or '').strip().lower()
+
+            base_item = {}
+            if benefit_ref:
+                base_item = by_ref.get(benefit_ref, {})
+            if not base_item and number and thesis_key:
+                base_item = by_number_and_thesis.get((number, thesis_key), {})
+            if not base_item and number:
+                base_item = by_number.get(number, {})
+
             status = str(base_item.get('status', '') or 'nao_localizado').strip()
             if status not in JudicialContestationAnalysisAgent._ALLOWED_STATUS:
                 status = 'nao_analisado'
 
             normalized_items.append(
                 {
+                    'benefit_ref': str(base_item.get('benefit_ref', '') or benefit_ref).strip(),
                     'beneficio': number,
                     'tese': str(base_item.get('tese', '') or thesis).strip(),
                     'status': status,
