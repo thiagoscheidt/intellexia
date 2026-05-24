@@ -11,7 +11,7 @@ from langchain.agents import create_agent
 from langchain.agents.structured_output import ToolStrategy
 from langchain_openai import ChatOpenAI
 
-from app.agents.config import DEFAULT_MODEL_ROBUST
+from app.agents.config import DEFAULT_MODEL
 from app.agents.core.file_agent import FileAgent
 from app.services.agent_execution_history_service import AgentExecutionHistoryService
 from app.services.token_usage_service import TokenUsageService
@@ -44,7 +44,7 @@ class JudicialDocumentSummaryAgent:
     """Agente para gerar resumo de documentos judiciais durante o processamento."""
 
     def __init__(self, model_name: str | None = None):
-        self.model_name = model_name or os.getenv("JUDICIAL_DOCUMENT_SUMMARY_MODEL") or DEFAULT_MODEL_ROBUST
+        self.model_name = model_name or os.getenv("JUDICIAL_DOCUMENT_SUMMARY_MODEL") or DEFAULT_MODEL
         self.model_provider = os.getenv("JUDICIAL_DOCUMENT_SUMMARY_MODEL_PROVIDER", "openai")
         self.chat_model = ChatOpenAI(model=self.model_name, temperature=0.2)
         self.token_usage_service = TokenUsageService()

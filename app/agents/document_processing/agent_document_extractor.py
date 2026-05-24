@@ -670,11 +670,15 @@ class AgentDocumentExtractor:
         if not benefits:
             return benefits
 
+        table_context = self._build_benefit_context_lookup()
         last_values_by_thesis: dict[Any, dict[str, str]] = {}
-        normalized: list[dict[str, Any]] = []
+        merged_by_benefit_number: dict[str, dict[str, Any]] = {}
+        ordered_keys: list[str] = []
 
         for item in benefits:
             benefit = dict(item or {})
+            benefit_number = str(benefit.get("benefit_number") or "").strip()
+            normalized_benefit_number = re.sub(r"\D", "", benefit_number)
             thesis_key = benefit.get("legal_thesis_id")
             state = last_values_by_thesis.setdefault(thesis_key, {"nit": "", "insured_name": ""})
 
@@ -691,9 +695,203 @@ class AgentDocumentExtractor:
             elif self._looks_like_name_or_company(current_name):
                 state["insured_name"] = current_name
 
-            normalized.append(benefit)
+            if normalized_benefit_number and normalized_benefit_number in table_context:
+                table_payload = table_context[normalized_benefit_number]
+                for field_name in ("nit_number", "insured_name", "benefit_type", "fap_vigencia_year"):
+                    current_value = str(benefit.get(field_name) or "").strip()
+                    fallback_value = str(table_payload.get(field_name) or "").strip()
+                    if not current_value and fallback_value:
+                        benefit[field_name] = fallback_value
+
+            merge_key = normalized_benefit_number or benefit_number or str(len(ordered_keys))
+            existing = merged_by_benefit_number.get(merge_key)
+            if not existing:
+                merged_by_benefit_number[merge_key] = benefit
+                ordered_keys.append(merge_key)
+                continue
+
+            for field_name, value in benefit.items():
+                if field_name not in existing or not str(existing.get(field_name) or "").strip():
+                    if str(value or "").strip():
+                        existing[field_name] = value
+
+        normalized: list[dict[str, Any]] = [merged_by_benefit_number[key] for key in ordered_keys]
 
         return normalized
+
+    @staticmethod
+    def _extract_first_matching_cell(cells: list[str], predicate) -> str:
+        for cell in cells:
+            value = str(cell or "").strip()
+            if value and predicate(value):
+                return value
+        return ""
+
+    def _build_benefit_context_lookup(self) -> dict[str, dict[str, str]]:
+        lookup: dict[str, dict[str, str]] = {}
+        tables = self._get_document_data_tables()
+        if not tables:
+            return lookup
+
+        cnpj_re = re.compile(r"\b\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\b")
+        benefit_number_re = re.compile(r"\b\d{9,11}\b")
+        benefit_type_re = re.compile(r"\bB\d{2}\b", re.IGNORECASE)
+        year_re = re.compile(r"\b(20\d{2})\b")
+
+        for table in tables:
+            rows = table.get("rows", [])
+            if not rows or not isinstance(rows, list):
+                continue
+
+            first_row = str(rows[0] or "")
+            if "|" not in first_row:
+                continue
+
+            current_block_name = ""
+            current_block_nit = ""
+            current_block_cnpj = ""
+            current_block_vigencia = ""
+
+            for raw_row in rows[1:]:
+                row_text = str(raw_row or "")
+                if "|" not in row_text:
+                    continue
+
+                cells = self._split_pipe_row(row_text)
+
+                cnpj_match = cnpj_re.search(row_text)
+                cnpj_value = cnpj_match.group(0) if cnpj_match else ""
+                cnpj_idx = None
+                if cnpj_value:
+                    for idx, cell in enumerate(cells):
+                        if cnpj_re.fullmatch(str(cell or "").strip()):
+                            cnpj_idx = idx
+                            break
+
+                benefit_type = ""
+                benefit_type_idx = None
+                for idx, cell in enumerate(cells):
+                    value = str(cell or "").strip().upper()
+                    if benefit_type_re.fullmatch(value):
+                        benefit_type = value
+                        benefit_type_idx = idx
+                        break
+
+                benefit_number = ""
+                benefit_idx = None
+                if benefit_type_idx is not None:
+                    for idx in range(benefit_type_idx - 1, -1, -1):
+                        value = str(cells[idx] or "").strip()
+                        digits = re.sub(r"\D", "", value)
+                        if benefit_number_re.fullmatch(digits):
+                            benefit_number = digits
+                            benefit_idx = idx
+                            break
+
+                if not benefit_number:
+                    for idx, cell in enumerate(cells):
+                        value = str(cell or "").strip()
+                        digits = re.sub(r"\D", "", value)
+                        if benefit_number_re.fullmatch(digits):
+                            benefit_number = digits
+                            benefit_idx = idx
+                            break
+
+                if not benefit_number:
+                    continue
+
+                normalized_benefit_number = benefit_number
+
+                vigencia_limit = cnpj_idx if cnpj_idx is not None else (benefit_idx if benefit_idx is not None else len(cells))
+                vigencia_candidates: list[str] = []
+                for cell in cells[:vigencia_limit]:
+                    for year in year_re.findall(str(cell or "")):
+                        if year not in vigencia_candidates:
+                            vigencia_candidates.append(year)
+                        if len(vigencia_candidates) >= 2:
+                            break
+                    if len(vigencia_candidates) >= 2:
+                        break
+
+                if vigencia_candidates:
+                    fap_vigencia_year = ",".join(vigencia_candidates[:2])
+                    carryover_vigencia = fap_vigencia_year
+                else:
+                    fap_vigencia_year = carryover_vigencia
+
+                for idx in range((benefit_idx or 0) + 1, len(cells)):
+                    value = str(cells[idx] or "").strip()
+                    if benefit_type_re.fullmatch(value.upper()):
+                        benefit_type = value.upper()
+                        break
+
+                nit_number = ""
+                nit_candidates: list[str] = []
+                for idx, cell in enumerate(cells[: benefit_idx or len(cells)]):
+                    value = str(cell or "").strip()
+                    digits = re.sub(r"\D", "", value)
+                    if len(digits) == 11:
+                        nit_candidates.append(digits)
+                if nit_candidates:
+                    nit_number = nit_candidates[-1]
+                elif current_block_nit:
+                    nit_number = current_block_nit
+
+                insured_name = ""
+                name_candidates: list[str] = []
+                search_end = benefit_idx if benefit_idx is not None else len(cells)
+                for idx, cell in enumerate(cells[:search_end]):
+                    value = str(cell or "").strip()
+                    if not value:
+                        continue
+                    digits = re.sub(r"\D", "", value)
+                    if value == cnpj_value or len(digits) == 11 or len(digits) >= 9 or benefit_type_re.fullmatch(value):
+                        continue
+                    if re.search(r"[A-Za-zÀ-ÿ]", value):
+                        name_candidates.append(value)
+
+                if name_candidates:
+                    insured_name = name_candidates[-1]
+                elif current_block_name:
+                    insured_name = current_block_name
+
+                if cnpj_value:
+                    # Mantido apenas para viabilizar inferência quando o nome está em linha anterior.
+                    pass
+
+                if cnpj_value:
+                    current_block_cnpj = cnpj_value
+
+                # Quando a linha traz nome/NIT/CNPJ explicitamente, ela inicia um bloco novo.
+                if insured_name or nit_candidates or cnpj_value:
+                    if insured_name and self._looks_like_name_or_company(insured_name):
+                        current_block_name = insured_name
+                    if nit_candidates:
+                        current_block_nit = nit_candidates[-1]
+                    elif nit_number and self._looks_like_nit(nit_number):
+                        current_block_nit = nit_number
+                    if cnpj_value:
+                        current_block_cnpj = cnpj_value
+
+                if not insured_name and current_block_name:
+                    insured_name = current_block_name
+                if not nit_number and current_block_nit:
+                    nit_number = current_block_nit
+
+                if not cnpj_value and current_block_cnpj and current_block_name and insured_name == current_block_name:
+                    cnpj_value = current_block_cnpj
+
+                entry = lookup.setdefault(normalized_benefit_number, {})
+                if nit_number and not entry.get("nit_number"):
+                    entry["nit_number"] = nit_number
+                if insured_name and not entry.get("insured_name"):
+                    entry["insured_name"] = insured_name
+                if benefit_type and not entry.get("benefit_type"):
+                    entry["benefit_type"] = benefit_type
+                if fap_vigencia_year and not entry.get("fap_vigencia_year"):
+                    entry["fap_vigencia_year"] = fap_vigencia_year
+
+        return lookup
 
     def extract_document_data(
         self,
