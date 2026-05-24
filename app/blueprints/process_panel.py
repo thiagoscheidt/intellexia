@@ -3,8 +3,8 @@ from meilisearch_python_sdk import Client as MeilisearchClient
 from app.models import (
     db, JudicialProcess, JudicialSentenceAnalysis, JudicialAppeal, 
     KnowledgeBase, Case, User, Court, JudicialPhase, JudicialDocumentType, JudicialEvent,
-    JudicialProcessNote, Client, JudicialDefendant, JudicialDocument, JudicialProcessBenefit,
-    JudicialProcessPhaseHistory, JudicialLegalThesis, JudicialProcessCitedBenefit
+    JudicialProcessNote, Client, JudicialDefendant, JudicialDocument, JudicialDocumentSummary,
+    JudicialProcessBenefit, JudicialProcessPhaseHistory, JudicialLegalThesis, JudicialProcessCitedBenefit
 )
 from datetime import datetime
 from functools import wraps
@@ -2409,6 +2409,43 @@ def reprocess_process_document(process_id, doc_id):
         flash(f'Erro ao reenviar documento: {str(e)}', 'danger')
 
     return redirect(url_for('process_panel.detail', process_id=process.id) + '#documents')
+
+
+@process_panel_bp.route('/<int:process_id>/documentos/<int:doc_id>/resumo', methods=['GET'])
+@require_law_firm
+def get_process_document_summary(process_id, doc_id):
+    """Retorna o resumo de IA de um documento judicial."""
+    law_firm_id = get_current_law_firm_id()
+
+    JudicialProcess.query.filter_by(
+        id=process_id,
+        law_firm_id=law_firm_id,
+    ).first_or_404()
+
+    judicial_doc = JudicialDocument.query.filter_by(
+        id=doc_id,
+        process_id=process_id,
+    ).first_or_404()
+
+    summary = JudicialDocumentSummary.query.filter_by(
+        judicial_document_id=judicial_doc.id,
+        law_firm_id=law_firm_id,
+    ).first()
+
+    if not summary:
+        return jsonify({
+            'status': 'missing',
+            'summary_text': None,
+            'payload': None,
+        })
+
+    return jsonify({
+        'status': summary.status,
+        'summary_text': summary.summary_text,
+        'payload': summary.summary_payload,
+        'error_message': summary.error_message,
+        'processed_at': summary.processed_at.isoformat() if summary.processed_at else None,
+    })
 
 
 @process_panel_bp.route('/<int:process_id>/deletar', methods=['POST'])

@@ -4,7 +4,17 @@ from datetime import datetime
 
 from rich import print
 
-from app.models import db, JudicialDocument, JudicialDocumentType, JudicialEvent, JudicialPhase
+from app.models import (
+    db,
+    JudicialDocument,
+    JudicialDocumentSummary,
+    JudicialDocumentType,
+    JudicialEvent,
+    JudicialPhase,
+    KnowledgeBase,
+    KnowledgeSummary,
+)
+from app.agents.processes.judicial_document_summary_agent import JudicialDocumentSummaryAgent
 
 
 class JudicialDocumentService:
@@ -121,6 +131,12 @@ class JudicialDocumentService:
             db.session.commit()
             return False
 
+        kb_item = KnowledgeBase.query.filter_by(id=document.knowledge_base_id).first()
+        if not kb_item:
+            self._set_document_status(document, 'error', 'KnowledgeBase não encontrada para este documento.')
+            db.session.commit()
+            return False
+
         try:
             self._set_document_status(document, 'processing')
             db.session.commit()
@@ -138,6 +154,7 @@ class JudicialDocumentService:
                 if refreshed:
                     self._set_document_status(refreshed, 'completed')
                 db.session.commit()
+                self._summarize_judicial_document(refreshed or document, kb_item)
                 return True
 
             self._set_document_status(document, 'error', 'Falha no processamento da KnowledgeBase.')
@@ -152,6 +169,93 @@ class JudicialDocumentService:
                 db.session.rollback()
             print(f'Erro ao processar documento judicial ID {document.id}: {error}')
             return False
+
+    def _summarize_judicial_document(
+        self,
+        document: JudicialDocument,
+        kb_item: KnowledgeBase,
+    ) -> None:
+        if not document or not kb_item:
+            return
+
+        try:
+            doc_type = None
+            if document.type:
+                doc_type = JudicialDocumentType.query.filter_by(
+                    law_firm_id=kb_item.law_firm_id,
+                    key=document.type,
+                    is_active=True,
+                ).first()
+
+            doc_type_name = str(getattr(doc_type, 'name', '') or '').strip()
+            doc_type_key = str(document.type or '').strip()
+
+            knowledge_summary = KnowledgeSummary.query.filter_by(knowledge_base_id=kb_item.id).first()
+            summary_payload = knowledge_summary.payload if knowledge_summary and isinstance(knowledge_summary.payload, dict) else {}
+            sections_overview = summary_payload.get('sections_overview', [])
+            if not isinstance(sections_overview, list):
+                sections_overview = []
+            pedidos_excerpt = str(summary_payload.get('pedidos_excerpt', '') or '').strip()
+
+            summary_agent = JudicialDocumentSummaryAgent()
+            summary_result = summary_agent.summarize_document(
+                file_path=str(kb_item.file_path),
+                document_type_name=doc_type_name,
+                document_type_key=doc_type_key,
+                file_type=kb_item.file_type or '',
+                sections_overview=sections_overview,
+                pedidos_excerpt=pedidos_excerpt,
+                user_id=kb_item.user_id,
+                law_firm_id=kb_item.law_firm_id,
+            )
+
+            summary_text = ''
+            if isinstance(summary_result, dict):
+                summary_text = str(
+                    summary_result.get('summary_long')
+                    or summary_result.get('summary')
+                    or summary_result.get('summary_short')
+                    or ''
+                ).strip()
+            existing = JudicialDocumentSummary.query.filter_by(
+                judicial_document_id=document.id,
+                law_firm_id=kb_item.law_firm_id,
+            ).first()
+
+            if existing:
+                existing.summary_text = summary_text
+                existing.summary_payload = summary_result
+                existing.status = 'completed'
+                existing.error_message = None
+                existing.processed_at = datetime.utcnow()
+                existing.updated_at = datetime.utcnow()
+            else:
+                db.session.add(
+                    JudicialDocumentSummary(
+                        judicial_document_id=document.id,
+                        law_firm_id=kb_item.law_firm_id,
+                        summary_text=summary_text,
+                        summary_payload=summary_result,
+                        status='completed',
+                        processed_at=datetime.utcnow(),
+                    )
+                )
+            db.session.commit()
+        except Exception as error:
+            db.session.rollback()
+            try:
+                existing = JudicialDocumentSummary.query.filter_by(
+                    judicial_document_id=document.id,
+                    law_firm_id=kb_item.law_firm_id,
+                ).first()
+                if existing:
+                    existing.status = 'error'
+                    existing.error_message = str(error)
+                    existing.updated_at = datetime.utcnow()
+                    db.session.commit()
+            except Exception:
+                db.session.rollback()
+            print(f'Erro ao resumir documento judicial ID {document.id}: {error}')
 
     def process_pending_documents(
         self,

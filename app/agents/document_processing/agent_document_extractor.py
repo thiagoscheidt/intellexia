@@ -986,6 +986,25 @@ class AgentDocumentExtractor:
             return list(self.document_data.get("chunks_with_pages", []) or [])
         return list(getattr(self.document_data, "chunks_with_pages", []) or [])
 
+    def extract_sections_overview(self, max_sections: int = 12) -> list[str]:
+        """Retorna as seções detectadas em ordem de aparecimento (limitado)."""
+        sections: list[str] = []
+        seen: set[str] = set()
+
+        for chunk in self._get_document_data_chunks():
+            raw = str(chunk.get("section") or "").strip()
+            if not raw:
+                continue
+            normalized = self._normalize_text_token(raw)
+            if not normalized or normalized in seen:
+                continue
+            seen.add(normalized)
+            sections.append(raw)
+            if len(sections) >= max_sections:
+                break
+
+        return sections
+
     def _extract_pedidos_section_text(self) -> str:
         """
         Extrai o texto da seção de pedidos usando os dados já processados em document_data.
@@ -1012,6 +1031,10 @@ class AgentDocumentExtractor:
             parts.append(self._tables_to_prompt_text(pedidos_tables))
 
         return "\n\n---\n\n".join(parts)[:10000]
+
+    def extract_pedidos_section_text(self) -> str:
+        """Exposta publicamente para uso em outros serviços."""
+        return self._extract_pedidos_section_text()
 
     def extract_cited_benefits(self) -> list[dict]:
         """

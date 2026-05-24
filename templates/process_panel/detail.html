@@ -90,6 +90,78 @@
     animation: aiGlow 1.5s ease-in-out infinite;
   }
 
+  .summary-modal .modal-header {
+    background: linear-gradient(135deg, rgba(111, 66, 193, 0.16), rgba(13, 110, 253, 0.08));
+  }
+
+  .summary-modal .summary-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: .35rem;
+    padding: .2rem .65rem;
+    border-radius: 999px;
+    border: 1px solid rgba(111, 66, 193, 0.2);
+    background: rgba(111, 66, 193, 0.08);
+    color: #5a34a6;
+    font-size: .75rem;
+    white-space: nowrap;
+  }
+
+  .summary-modal .summary-section-title {
+    font-size: .8rem;
+    letter-spacing: .02em;
+    text-transform: uppercase;
+    color: var(--bs-secondary-color);
+  }
+
+  .summary-modal .summary-card {
+    border: 1px solid var(--bs-border-color);
+    border-radius: .75rem;
+    padding: 1rem;
+    background: var(--bs-body-bg);
+  }
+
+  .summary-modal .summary-keypoints li {
+    margin-bottom: .45rem;
+    padding-left: .2rem;
+  }
+
+  .summary-modal .summary-requests li {
+    margin-bottom: .55rem;
+  }
+
+  .summary-modal .summary-accordion .accordion-item {
+    border: 1px solid var(--bs-border-color);
+    border-radius: .75rem;
+    overflow: hidden;
+    margin-bottom: .75rem;
+  }
+
+  .summary-modal .summary-accordion .accordion-button {
+    font-weight: 600;
+    box-shadow: none;
+  }
+
+  .summary-modal .summary-accordion .accordion-button:not(.collapsed) {
+    color: var(--bs-emphasis-color);
+  }
+
+  .summary-modal .summary-acc-exec .accordion-button {
+    background: linear-gradient(135deg, rgba(13, 110, 253, 0.14), rgba(13, 202, 240, 0.12));
+  }
+
+  .summary-modal .summary-acc-full .accordion-button {
+    background: linear-gradient(135deg, rgba(111, 66, 193, 0.16), rgba(214, 51, 132, 0.12));
+  }
+
+  .summary-modal .summary-acc-requests .accordion-button {
+    background: linear-gradient(135deg, rgba(25, 135, 84, 0.14), rgba(255, 193, 7, 0.12));
+  }
+
+  .summary-modal .summary-acc-keypoints .accordion-button {
+    background: linear-gradient(135deg, rgba(220, 53, 69, 0.12), rgba(253, 126, 20, 0.14));
+  }
+
   @keyframes aiPulse {
     0% {
       transform: scale(0.95);
@@ -658,6 +730,12 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                     <i class="bi bi-download"></i>
                                   </a>
                                   {% if doc.judicial_document_id %}
+                                  <button type="button" class="btn btn-outline-secondary" title="Ver resumo da IA"
+                                    data-bs-toggle="modal" data-bs-target="#documentSummaryModal"
+                                    data-summary-url="{{ url_for('process_panel.get_process_document_summary', process_id=process.id, doc_id=doc.judicial_document_id) }}"
+                                    data-doc-name="{{ doc.filename }}">
+                                    <i class="bi bi-card-text"></i>
+                                  </button>
                                   <button type="submit" class="btn btn-outline-primary" title="Reprocessar IA"
                                     form="reprocess-doc-{{ doc.judicial_document_id }}"
                                     onclick="return confirm('Reprocessar este documento com IA?');">
@@ -1320,6 +1398,117 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
     </div>
   </div>
 
+  <!-- Modal: Resumo do Documento -->
+  <div class="modal fade summary-modal" id="documentSummaryModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header border-bottom">
+          <div class="d-flex align-items-start gap-3 flex-wrap">
+            <div class="rounded-circle bg-white shadow-sm d-flex align-items-center justify-content-center"
+              style="width:42px;height:42px;">
+              <i class="bi bi-card-text text-primary"></i>
+            </div>
+            <div>
+              <h5 class="modal-title fw-semibold mb-1">Resumo do documento</h5>
+              <small class="text-muted d-block" id="documentSummarySubtitle"></small>
+              <div class="d-flex align-items-center gap-2 flex-wrap mt-2">
+                <span class="summary-chip" id="documentSummaryStatus"></span>
+                <span class="summary-chip" id="documentSummaryType"></span>
+                <span class="summary-chip" id="documentSummaryFileType"></span>
+              </div>
+            </div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+
+        <div class="modal-body p-4">
+          <div id="documentSummaryLoading" class="text-center py-5">
+            <div class="spinner-border text-primary" style="width:2.5rem;height:2.5rem;" role="status"></div>
+            <p class="text-muted mt-3 mb-0">Carregando resumo...</p>
+          </div>
+          <div id="documentSummaryEmpty" class="text-center py-5 d-none">
+            <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
+            <p class="text-muted mt-3 mb-0 fw-semibold">Resumo ainda não disponível</p>
+            <small class="text-muted">O documento ainda não foi resumido pela IA.</small>
+          </div>
+          <div id="documentSummaryError" class="alert alert-danger d-none">
+            <i class="bi bi-exclamation-triangle me-2"></i><span id="documentSummaryErrorMsg"></span>
+          </div>
+          <div id="documentSummaryContent" class="d-none">
+            <div class="accordion summary-accordion" id="documentSummaryAccordion">
+              <div id="documentSummaryShortBlock" class="accordion-item summary-acc-exec">
+                <h2 class="accordion-header" id="summaryExecHeading">
+                  <button class="accordion-button" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#summaryExecCollapse" aria-expanded="true" aria-controls="summaryExecCollapse">
+                    <i class="bi bi-lightning-charge me-2"></i>Resumo curto
+                  </button>
+                </h2>
+                <div id="summaryExecCollapse" class="accordion-collapse collapse show"
+                  aria-labelledby="summaryExecHeading">
+                  <div class="accordion-body">
+                    <div class="summary-card" id="documentSummaryShort"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div id="documentSummaryFullBlock" class="accordion-item summary-acc-full">
+                <h2 class="accordion-header" id="summaryFullHeading">
+                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#summaryFullCollapse" aria-expanded="false" aria-controls="summaryFullCollapse">
+                    <i class="bi bi-journal-richtext me-2"></i>Resumo completo
+                  </button>
+                </h2>
+                <div id="summaryFullCollapse" class="accordion-collapse collapse" aria-labelledby="summaryFullHeading">
+                  <div class="accordion-body">
+                    <div class="summary-card mb-0">
+                      <div id="documentSummaryText" class="markdown-content"></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div id="documentSummaryRequestsBlock" class="accordion-item summary-acc-requests">
+                <h2 class="accordion-header" id="summaryRequestsHeading">
+                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#summaryRequestsCollapse" aria-expanded="false"
+                    aria-controls="summaryRequestsCollapse">
+                    <i class="bi bi-list-check me-2"></i>Pedidos identificados
+                  </button>
+                </h2>
+                <div id="summaryRequestsCollapse" class="accordion-collapse collapse"
+                  aria-labelledby="summaryRequestsHeading">
+                  <div class="accordion-body">
+                    <ul id="documentSummaryRequests" class="summary-requests mb-0"></ul>
+                  </div>
+                </div>
+              </div>
+
+              <div id="documentSummaryKeyPointsBlock" class="accordion-item summary-acc-keypoints">
+                <h2 class="accordion-header" id="summaryKeyPointsHeading">
+                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#summaryKeyPointsCollapse" aria-expanded="false"
+                    aria-controls="summaryKeyPointsCollapse">
+                    <i class="bi bi-pin-angle me-2"></i>Pontos-chave
+                  </button>
+                </h2>
+                <div id="summaryKeyPointsCollapse" class="accordion-collapse collapse"
+                  aria-labelledby="summaryKeyPointsHeading">
+                  <div class="accordion-body">
+                    <ul id="documentSummaryKeyPoints" class="summary-keypoints mb-0"></ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer border-top">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal Editar Teses do Benefício -->
   <div class="modal fade" id="editBenefitLegalThesesModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-lg">
@@ -1755,6 +1944,197 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
         listWrap.innerHTML = '';
         subtitle.textContent = '';
         countEl.textContent = '';
+        setState('loading');
+      });
+    })();
+
+    // Modal: resumo do documento judicial
+    (function () {
+      const modal = document.getElementById('documentSummaryModal');
+      if (!modal) return;
+
+      const subtitle = document.getElementById('documentSummarySubtitle');
+      const loading = document.getElementById('documentSummaryLoading');
+      const empty = document.getElementById('documentSummaryEmpty');
+      const errorBox = document.getElementById('documentSummaryError');
+      const errorMsg = document.getElementById('documentSummaryErrorMsg');
+      const content = document.getElementById('documentSummaryContent');
+      const summaryShort = document.getElementById('documentSummaryShort');
+      const summaryText = document.getElementById('documentSummaryText');
+      const summaryShortBlock = document.getElementById('documentSummaryShortBlock');
+      const summaryFullBlock = document.getElementById('documentSummaryFullBlock');
+      const requestsBlock = document.getElementById('documentSummaryRequestsBlock');
+      const requestsList = document.getElementById('documentSummaryRequests');
+      const keyPoints = document.getElementById('documentSummaryKeyPoints');
+      const keyPointsBlock = document.getElementById('documentSummaryKeyPointsBlock');
+      const statusChip = document.getElementById('documentSummaryStatus');
+      const typeChip = document.getElementById('documentSummaryType');
+      const fileTypeChip = document.getElementById('documentSummaryFileType');
+      const summaryExecCollapse = document.getElementById('summaryExecCollapse');
+      const summaryFullCollapse = document.getElementById('summaryFullCollapse');
+      const summaryRequestsCollapse = document.getElementById('summaryRequestsCollapse');
+      const summaryKeyPointsCollapse = document.getElementById('summaryKeyPointsCollapse');
+
+      if (!subtitle || !loading || !empty || !errorBox || !errorMsg || !content || !summaryShort || !summaryText || !keyPoints || !keyPointsBlock || !statusChip || !typeChip || !fileTypeChip) {
+        return;
+      }
+
+      function setState(state) {
+        loading.classList.add('d-none');
+        empty.classList.add('d-none');
+        errorBox.classList.add('d-none');
+        content.classList.add('d-none');
+        if (state === 'loading') loading.classList.remove('d-none');
+        else if (state === 'empty') empty.classList.remove('d-none');
+        else if (state === 'error') errorBox.classList.remove('d-none');
+        else if (state === 'content') content.classList.remove('d-none');
+      }
+
+      function resetAccordionToDefault() {
+        if (summaryExecCollapse) {
+          summaryExecCollapse.classList.add('show');
+        }
+        if (summaryFullCollapse) {
+          summaryFullCollapse.classList.remove('show');
+        }
+        if (summaryRequestsCollapse) {
+          summaryRequestsCollapse.classList.remove('show');
+        }
+        if (summaryKeyPointsCollapse) {
+          summaryKeyPointsCollapse.classList.remove('show');
+        }
+      }
+
+      modal.addEventListener('show.bs.modal', function (event) {
+        const btn = event.relatedTarget;
+        const summaryUrl = btn ? btn.getAttribute('data-summary-url') : '';
+        const docName = btn ? (btn.getAttribute('data-doc-name') || '') : '';
+
+        subtitle.textContent = docName;
+        statusChip.textContent = 'Resumo IA';
+        typeChip.textContent = '';
+        fileTypeChip.textContent = '';
+        summaryShort.textContent = '';
+        if (summaryShortBlock) summaryShortBlock.classList.remove('d-none');
+        if (summaryFullBlock) summaryFullBlock.classList.remove('d-none');
+        summaryText.innerHTML = '';
+        if (requestsList) requestsList.innerHTML = '';
+        keyPoints.innerHTML = '';
+        errorMsg.textContent = '';
+        if (requestsBlock) requestsBlock.classList.remove('d-none');
+        keyPointsBlock.classList.remove('d-none');
+        resetAccordionToDefault();
+        setState('loading');
+
+        if (!summaryUrl) {
+          errorMsg.textContent = 'Resumo indisponível para este documento.';
+          setState('error');
+          return;
+        }
+
+        fetch(summaryUrl)
+          .then(r => r.json())
+          .then(data => {
+            if (!data || data.status === 'missing') {
+              setState('empty');
+              return;
+            }
+            if (data.status === 'error') {
+              errorMsg.textContent = data.error_message || 'Erro ao gerar resumo.';
+              setState('error');
+              return;
+            }
+            if (data.status === 'pending' || data.status === 'processing') {
+              setState('empty');
+              return;
+            }
+
+            const payload = data.payload || {};
+            const shortText = payload.summary_short || '';
+            const fullText = data.summary_text || payload.summary_long || payload.summary || '';
+            const points = payload.summary_key_points || payload.key_points || [];
+            const requests = payload.requests || [];
+            const docType = payload.document_type || '';
+            const fileType = payload.file_type || '';
+
+            if (docType) {
+              typeChip.textContent = docType;
+            } else {
+              typeChip.textContent = 'Documento judicial';
+            }
+
+            if (fileType) {
+              fileTypeChip.textContent = fileType;
+            } else {
+              fileTypeChip.textContent = 'Arquivo';
+            }
+
+            if (shortText) {
+              summaryShort.innerHTML = '<div class="summary-section-title mb-2">Resumo curto</div>' +
+                '<div class="fw-semibold">' + shortText + '</div>';
+              if (summaryShortBlock) summaryShortBlock.classList.remove('d-none');
+            } else {
+              if (summaryShortBlock) summaryShortBlock.classList.add('d-none');
+            }
+
+            if (fullText) {
+              summaryText.innerHTML = window.marked ? window.marked.parse(fullText) : fullText;
+              if (summaryFullBlock) summaryFullBlock.classList.remove('d-none');
+            } else {
+              if (summaryFullBlock) summaryFullBlock.classList.add('d-none');
+            }
+
+            if (Array.isArray(requests) && requests.length && requestsList) {
+              requests.forEach(function (requestText) {
+                const li = document.createElement('li');
+                const textDiv = document.createElement('div');
+                textDiv.className = 'fw-semibold';
+                textDiv.textContent = String(requestText || '').trim();
+                li.appendChild(textDiv);
+                requestsList.appendChild(li);
+              });
+            } else if (requestsBlock) {
+              requestsBlock.classList.add('d-none');
+            }
+
+            if (Array.isArray(points) && points.length) {
+              points.forEach(point => {
+                const li = document.createElement('li');
+                li.textContent = point;
+                keyPoints.appendChild(li);
+              });
+            } else {
+              keyPointsBlock.classList.add('d-none');
+            }
+
+            if (!shortText && !fullText) {
+              setState('empty');
+              return;
+            }
+
+            setState('content');
+          })
+          .catch(err => {
+            errorMsg.textContent = 'Falha ao carregar resumo: ' + err.message;
+            setState('error');
+          });
+      });
+
+      modal.addEventListener('hidden.bs.modal', function () {
+        subtitle.textContent = '';
+        statusChip.textContent = '';
+        typeChip.textContent = '';
+        fileTypeChip.textContent = '';
+        summaryShort.textContent = '';
+        if (summaryShortBlock) summaryShortBlock.classList.remove('d-none');
+        if (summaryFullBlock) summaryFullBlock.classList.remove('d-none');
+        summaryText.innerHTML = '';
+        if (requestsList) requestsList.innerHTML = '';
+        keyPoints.innerHTML = '';
+        errorMsg.textContent = '';
+        if (requestsBlock) requestsBlock.classList.remove('d-none');
+        keyPointsBlock.classList.remove('d-none');
+        resetAccordionToDefault();
         setState('loading');
       });
     })();

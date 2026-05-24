@@ -713,6 +713,9 @@ class KnowledgeBaseProcessingService:
                 if not extraction_payload:
                     raise RuntimeError("Extração estruturada não retornou conteúdo.")
 
+                sections_overview = extractor_agent.extract_sections_overview(max_sections=12)
+                pedidos_excerpt = extractor_agent.extract_pedidos_section_text()
+
                 if isinstance(extraction_payload, dict):
                     is_fap_report = self._is_fap_benefits_report(item, extraction_payload)
                     extracted_process_number = str(extraction_payload.get("process_number", "") or "").strip()
@@ -807,8 +810,10 @@ class KnowledgeBaseProcessingService:
                                 )
 
                 summary_payload = extraction_payload if isinstance(extraction_payload, dict) else {}
+                summary_payload = dict(summary_payload)
+                summary_payload["sections_overview"] = sections_overview
+                summary_payload["pedidos_excerpt"] = pedidos_excerpt
                 if self._is_fap_benefits_report(item, summary_payload):
-                    summary_payload = dict(summary_payload)
                     summary_payload.pop("process_number", None)
                     item.lawsuit_number = None
 
@@ -832,6 +837,14 @@ class KnowledgeBaseProcessingService:
                         new_value = str(summary_payload.get(key, "") or "").strip()
                         if not current_value and new_value:
                             merged_payload[key] = new_value
+
+                    existing_sections = merged_payload.get("sections_overview")
+                    if (not isinstance(existing_sections, list) or not existing_sections) and sections_overview:
+                        merged_payload["sections_overview"] = sections_overview
+
+                    existing_pedidos = str(merged_payload.get("pedidos_excerpt", "") or "").strip()
+                    if not existing_pedidos and pedidos_excerpt:
+                        merged_payload["pedidos_excerpt"] = pedidos_excerpt
 
                     existing_summary.payload = merged_payload
                     existing_summary.updated_at = datetime.utcnow()

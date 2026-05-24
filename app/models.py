@@ -1330,6 +1330,36 @@ class JudicialDocument(db.Model):
         return f'<JudicialDocument {self.file_name} - Event {self.event_id}>'
 
 
+class JudicialDocumentSummary(db.Model):
+    """Tabela judicial_document_summaries - Resumos de documentos judiciais por IA."""
+    __tablename__ = 'judicial_document_summaries'
+
+    id = db.Column(db.Integer, primary_key=True)
+    judicial_document_id = db.Column(
+        db.Integer,
+        db.ForeignKey('judicial_documents.id'),
+        nullable=False,
+        index=True,
+        unique=True,
+    )
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+
+    summary_text = db.Column(db.Text)
+    summary_payload = db.Column(db.JSON)
+
+    status = db.Column(db.String(20), default='pending', nullable=False, index=True)
+    error_message = db.Column(db.Text)
+    processed_at = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    judicial_document = db.relationship('JudicialDocument')
+    law_firm = db.relationship('LawFirm')
+
+    def __repr__(self):
+        return f'<JudicialDocumentSummary {self.judicial_document_id}>'
+
+
 class JudicialProcessBenefit(db.Model):
     """Tabela judicial_process_benefits - Benefícios vinculados ao processo judicial."""
     __tablename__ = 'judicial_process_benefits'

@@ -6,6 +6,7 @@ Configure via variáveis de ambiente no .env:
     DEFAULT_MODEL=gpt-4o            # tarefas pesadas: geração de documentos, petições
     DEFAULT_MODEL_MINI=gpt-4o-mini  # tarefas médias: análise, extração, classificação, queries
     DEFAULT_MODEL_NANO=gpt-4o-mini  # tarefas leves: roteamento, extração de keywords, metadados
+    DEFAULT_MODEL_ROBUST=gpt-5-mini # tarefas críticas: maior qualidade de análise/síntese
 
 Para uso com OpenRouter, defina também:
     OPENAI_BASE_URL=https://openrouter.ai/api/v1
@@ -23,3 +24,6 @@ DEFAULT_MODEL_MINI: str = os.getenv("DEFAULT_MODEL_MINI", "gpt-4o-mini")
 
 # Tarefas leves: roteamento, extração de keywords, metadados simples
 DEFAULT_MODEL_NANO: str = os.getenv("DEFAULT_MODEL_NANO", "gpt-4o-mini")
+
+# Tarefas críticas: quando é necessário privilegiar qualidade sobre custo/latência.
+DEFAULT_MODEL_ROBUST: str = os.getenv("DEFAULT_MODEL_ROBUST", "gpt-5-mini")

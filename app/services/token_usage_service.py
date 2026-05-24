@@ -361,10 +361,11 @@ class TokenUsageService:
         status: str = "success",
         error_message: str | None = None,
         metadata_payload: dict[str, Any] | None = None,
-    ) -> None:
+        return_rows: bool = False,
+    ) -> list[Any] | None:
         if not entries:
             print(f"[TokenUsageService] persist_entries: sem entries para salvar")
-            return
+            return [] if return_rows else None
 
         # Buscar user_id e law_firm_id da sessão se não foram fornecidos
         if user_id is None or law_firm_id is None:
@@ -418,12 +419,14 @@ class TokenUsageService:
             db.session.add_all(rows)
             db.session.commit()
             print(f"[TokenUsageService] ✓ {len(rows)} registros salvos com sucesso no banco!")
+            return rows if return_rows else None
         except Exception as exc:
             db.session.rollback()
             error_msg = f"Falha ao persistir AgentTokenUsage: {exc}"
             logger.error(error_msg)
             print(f"[TokenUsageService] ✗ ERRO ao salvar no banco: {exc}")
             print(f"[TokenUsageService] Tipo do erro: {type(exc).__name__}")
+            return [] if return_rows else None
 
     def capture_and_store(
         self,
@@ -441,10 +444,11 @@ class TokenUsageService:
         status: str = "success",
         error_message: str | None = None,
         metadata_payload: dict[str, Any] | None = None,
-    ) -> int:
+        return_rows: bool = False,
+    ) -> int | tuple[int, list[Any]]:
         entries = self.extract_entries(response_payload, model_name=model_name)
         self.print_entries(entries, print_prefix)
-        self.persist_entries(
+        rows = self.persist_entries(
             entries,
             agent_name=agent_name,
             action_name=action_name,
@@ -457,5 +461,9 @@ class TokenUsageService:
             status=status,
             error_message=error_message,
             metadata_payload=metadata_payload,
+            return_rows=return_rows,
         )
-        return sum(entry.total_tokens for entry in entries)
+        total_tokens = sum(entry.total_tokens for entry in entries)
+        if return_rows:
+            return total_tokens, (rows or [])
+        return total_tokens
