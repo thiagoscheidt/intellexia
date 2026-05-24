@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import re
 from datetime import datetime
 from difflib import SequenceMatcher
@@ -8,6 +9,7 @@ from pathlib import Path
 from rich import print
 
 from app.agents.document_processing.agent_document_extractor import AgentDocumentExtractor
+from app.agents.processes.judicial_contestation_analysis_agent import JudicialContestationAnalysisAgent
 from app.agents.processes.judicial_document_summary_agent import JudicialDocumentSummaryAgent
 from app.models import (
     Client,
@@ -533,7 +535,6 @@ class JudicialDocumentService:
     def _process_contestation_flow(
         self,
         process: JudicialProcess,
-        extractor_agent: AgentDocumentExtractor,
         file_path: Path,
     ) -> None:
         """Executa o fluxo específico da contestação em uma única função."""
@@ -542,13 +543,96 @@ class JudicialDocumentService:
             f'(arquivo: {file_path.name}).'
         )
 
-        cited = extractor_agent.extract_cited_benefits()
-        if cited:
-            cited_count = self._upsert_cited_benefits(process, cited)
+        process_benefits = JudicialProcessBenefit.query.filter_by(process_id=process.id).all()
+        if not process_benefits:
             print(
-                f'Benefícios citados da contestação vinculados ao processo {process.process_number}: '
-                f'{cited_count} novo(s) / {len(cited)} extraído(s).'
+                f'Fluxo de contestação sem benefícios prévios no processo {process.process_number}. '
+                'Análise por benefício não executada.'
             )
+            return
+
+        benefits_payload: list[dict] = []
+        for benefit in process_benefits:
+            legal_thesis_names = [
+                str(thesis.name or '').strip()
+                for thesis in (benefit.legal_theses or [])
+                if thesis and str(thesis.name or '').strip()
+            ]
+
+            primary_thesis = ''
+            if legal_thesis_names:
+                primary_thesis = '; '.join(sorted(set(legal_thesis_names)))
+            elif str(benefit.legal_thesis or '').strip():
+                primary_thesis = str(benefit.legal_thesis or '').strip()
+
+            benefits_payload.append(
+                {
+                    'benefit_number': str(benefit.benefit_number or '').strip(),
+                    'thesis': primary_thesis,
+                }
+            )
+
+        analysis_agent = JudicialContestationAnalysisAgent()
+        analysis_payload = analysis_agent.analyze_contestation(
+            file_path=str(file_path),
+            benefits=benefits_payload,
+            user_id=process.user_id,
+            law_firm_id=process.law_firm_id,
+        )
+
+        analyses = analysis_payload.get('analises', []) if isinstance(analysis_payload, dict) else []
+        if not isinstance(analyses, list):
+            analyses = []
+
+        updated = 0
+        for item in analyses:
+            if not isinstance(item, dict):
+                continue
+
+            benefit_number = str(item.get('beneficio', '') or '').strip()
+            if not benefit_number:
+                continue
+
+            benefit = JudicialProcessBenefit.query.filter_by(
+                process_id=process.id,
+                benefit_number=benefit_number,
+            ).first()
+            if not benefit:
+                continue
+
+            status = str(item.get('status', '') or '').strip()
+            status_label = str(item.get('status_label', '') or '').strip()
+            fundamento_uniao = str(item.get('fundamento_uniao', '') or '').strip()
+            efeito_fap = str(item.get('efeito_fap', '') or '').strip()
+            trecho_detectado = str(item.get('trecho_detectado', '') or '').strip()
+            trecho_completo = str(item.get('trecho_completo_contestacao', '') or '').strip()
+            resultado_tecnico = item.get('resultado_tecnico') or {}
+            if not isinstance(resultado_tecnico, dict):
+                resultado_tecnico = {}
+
+            benefit.contestation_decision = status_label or status or ''
+            benefit.contestation_status = status or None
+            benefit.contestation_status_label = status_label or None
+            benefit.contestation_fundamento_uniao = fundamento_uniao or None
+            benefit.contestation_efeito_fap = efeito_fap or None
+            benefit.contestation_trecho_detectado = trecho_detectado or None
+            benefit.contestation_trecho_completo = trecho_completo or None
+            benefit.contestation_resultado_tecnico_json = json.dumps(
+                {
+                    'recalcula_fap': bool(resultado_tecnico.get('recalcula_fap', False)),
+                    'mantem_no_fap': bool(resultado_tecnico.get('mantem_no_fap', False)),
+                    'depende_inss': bool(resultado_tecnico.get('depende_inss', False)),
+                    'depende_decisao_judicial': bool(resultado_tecnico.get('depende_decisao_judicial', False)),
+                },
+                ensure_ascii=False,
+            )
+            benefit.updated_at = datetime.utcnow()
+            updated += 1
+
+        print(
+            f'Fluxo de contestação concluído para o processo {process.process_number}: '
+            f'{updated} benefício(s) atualizado(s) com análise da União.'
+        )
 
     def _extract_context_from_document(self, document: JudicialDocument, process: JudicialProcess) -> dict:
         file_path = Path(str(document.file_path or '').strip())
@@ -631,7 +715,6 @@ class JudicialDocumentService:
         elif self._is_contestation_document(extraction_payload):
             self._process_contestation_flow(
                 process=process,
-                extractor_agent=extractor_agent,
                 file_path=file_path,
             )
 

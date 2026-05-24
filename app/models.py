@@ -1384,6 +1384,17 @@ class JudicialProcessBenefit(db.Model):
     second_instance_decision = db.Column(db.Text)
     third_instance_decision = db.Column(db.Text)
 
+    # Campos específicos da análise de contestação da União (impugnação),
+    # separados das decisões por instância judicial.
+    contestation_decision = db.Column(db.Text)
+    contestation_status = db.Column(db.String(40), index=True)
+    contestation_status_label = db.Column(db.String(120))
+    contestation_fundamento_uniao = db.Column(db.Text)
+    contestation_efeito_fap = db.Column(db.Text)
+    contestation_trecho_detectado = db.Column(db.Text)
+    contestation_trecho_completo = db.Column(db.Text)
+    contestation_resultado_tecnico_json = db.Column(db.Text)
+
     created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 

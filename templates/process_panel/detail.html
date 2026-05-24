@@ -202,8 +202,47 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
 <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3 py-2">
   <i class="bi bi-dash-circle me-1"></i>{{ decision_value }}
 </span>
+{% elif not decision_key %}
+<span class="badge rounded-pill bg-light text-muted border px-3 py-2">
+  <i class="bi bi-dash-circle me-1"></i>Não teve decisão
+</span>
 {% else %}
-<span class="badge rounded-pill bg-light text-muted border px-3 py-2">-</span>
+<span class="badge rounded-pill bg-light text-muted border px-3 py-2">{{ decision_value }}</span>
+{% endif %}
+{% endmacro %}
+
+{% macro contestation_status_badge(status, status_label='') %}
+{% set raw_status = (status or '')|trim|lower %}
+{% set label = (status_label or status or '-')|trim %}
+{% if raw_status == 'nao_localizado' %}
+{% set label = 'Não mencionado' %}
+{% endif %}
+{% if raw_status == 'deferido' %}
+<span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-2 py-1">
+  <i class="bi bi-check-circle me-1"></i>{{ label }}
+</span>
+{% elif raw_status == 'deferido_parcial' %}
+<span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-2 py-1">
+  <i class="bi bi-dash-circle me-1"></i>{{ label }}
+</span>
+{% elif raw_status == 'indeferido' %}
+<span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-2 py-1">
+  <i class="bi bi-x-circle me-1"></i>{{ label }}
+</span>
+{% elif raw_status in ['ilegitimidade_passiva', 'depende_decisao_judicial'] %}
+<span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-2 py-1">
+  <i class="bi bi-exclamation-circle me-1"></i>{{ label }}
+</span>
+{% elif raw_status == 'recalculo_realizado' %}
+<span class="badge rounded-pill bg-info-subtle text-info-emphasis border border-info-subtle px-2 py-1">
+  <i class="bi bi-arrow-repeat me-1"></i>{{ label }}
+</span>
+{% elif raw_status in ['nao_localizado', 'nao_analisado'] %}
+<span class="badge rounded-pill bg-light text-muted border px-2 py-1">
+  <i class="bi bi-dash-circle me-1"></i>{{ label }}
+</span>
+{% else %}
+<span class="badge rounded-pill bg-light text-muted border px-2 py-1">-</span>
 {% endif %}
 {% endmacro %}
 
@@ -308,7 +347,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
         <div class="d-flex align-items-center gap-2">
           <span class="spinner-border spinner-border-sm ai-accent" role="status" aria-hidden="true"></span>
           <i class="bi bi-cpu ai-accent ai-glow"></i>
-          <span>O processo será atualizado automaticamente assim que todos os documentos forem processados pela inteligência artificial.</span>
+          <span>O processo será atualizado automaticamente assim que todos os documentos forem processados pela
+            inteligência artificial.</span>
         </div>
       </div>
       {% endif %}
@@ -675,6 +715,15 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                   <i class="bi bi-file-earmark me-2"></i>
                                   <span>{{ doc.filename }}</span>
                                 </div>
+                                {% if doc.judicial_document_id and doc.processing_status not in ['pending', 'processing'] %}
+                                <button type="submit" class="ai-status-inline mt-2"
+                                  style="margin-left:0; cursor:pointer; background:none; border:1px solid rgba(111,66,193,0.25);"
+                                  form="reprocess-doc-{{ doc.judicial_document_id }}"
+                                  title="Reanalisar este documento com inteligência artificial"
+                                  onclick="return confirm('Reanalisar este documento com IA?');">
+                                  <i class="bi bi-stars" style="font-size:.65rem;"></i>Reanalisar com IA
+                                </button>
+                                {% endif %}
                                 {% if doc.processing_status == 'pending' %}
                                 <div class="small text-muted mt-1 ai-status d-block">
                                   <span class="ai-pulse" aria-hidden="true"></span>
@@ -712,35 +761,27 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                               </td>
                               <td class="text-end text-nowrap">
                                 {% if doc.knowledge_base_id %}
-                                <div class="btn-group btn-group-sm" role="group" aria-label="Ações do documento">
-                                  <a href="{{ url_for('knowledge_base.details', file_id=doc.knowledge_base_id) }}"
-                                    class="btn btn-outline-secondary" title="Ver detalhes" target="_blank"
-                                    rel="noopener noreferrer">
-                                    <i class="bi bi-info-circle"></i>
-                                  </a>
+                                <div class="d-flex gap-1 justify-content-end align-items-center">
                                   <a href="{{ url_for('knowledge_base.view', file_id=doc.knowledge_base_id) }}"
-                                    class="btn btn-outline-info" title="Visualizar documento" target="_blank"
+                                    class="btn btn-sm bg-info-subtle text-info-emphasis" title="Visualizar documento" target="_blank"
                                     rel="noopener noreferrer">
                                     <i class="bi bi-eye"></i>
                                   </a>
                                   <a href="{{ url_for('knowledge_base.download', file_id=doc.knowledge_base_id) }}"
-                                    class="btn btn-outline-primary" title="Baixar documento" target="_blank"
+                                    class="btn btn-sm bg-primary-subtle text-primary-emphasis" title="Baixar documento" target="_blank"
                                     rel="noopener noreferrer">
                                     <i class="bi bi-download"></i>
                                   </a>
                                   {% if doc.judicial_document_id %}
-                                  <button type="button" class="btn btn-outline-secondary" title="Ver resumo da IA"
+                                  <button type="button" class="btn btn-sm" title="Ver resumo da IA"
+                                    style="background:rgba(111,66,193,0.12);color:#6f42c1;"
                                     data-bs-toggle="modal" data-bs-target="#documentSummaryModal"
                                     data-summary-url="{{ url_for('process_panel.get_process_document_summary', process_id=process.id, doc_id=doc.judicial_document_id) }}"
                                     data-doc-name="{{ doc.filename }}">
                                     <i class="bi bi-card-text"></i>
                                   </button>
-                                  <button type="submit" class="btn btn-outline-primary" title="Reprocessar IA"
-                                    form="reprocess-doc-{{ doc.judicial_document_id }}"
-                                    onclick="return confirm('Reprocessar este documento com IA?');">
-                                    <i class="bi bi-arrow-clockwise"></i>
-                                  </button>
-                                  <button type="button" class="btn btn-outline-danger" title="Remover do processo"
+                                  <span class="vr mx-1 opacity-25"></span>
+                                  <button type="button" class="btn btn-sm bg-danger-subtle text-danger-emphasis" title="Remover do processo"
                                     data-delete-url="{{ url_for('process_panel.delete_process_document', process_id=process.id, doc_id=doc.judicial_document_id) }}"
                                     onclick="confirmDeleteDocument(this.dataset.deleteUrl)">
                                     <i class="bi bi-trash"></i>
@@ -1214,16 +1255,15 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                 <table class="table table-hover table-striped align-middle mb-0">
                                   <thead class="table-light">
                                     <tr>
-                                      <th>NB</th>
-                                      <th>NIT</th>
-                                      <th>Segurado</th>
-                                      <th>Tipo</th>
-                                      <th>Vigência FAP</th>
-                                      <th>Tipo de Pedido</th>
-                                      <th>Decisão (1ª Instância)</th>
-                                      <th>Decisão (2ª Instância)</th>
-                                      <th>Decisão (3ª Instância)</th>
-                                      <th class="text-end">Ações</th>
+                                      <th><i class="bi bi-hash me-1"></i>NB</th>
+                                      <th><i class="bi bi-person-vcard me-1"></i>NIT</th>
+                                      <th><i class="bi bi-person-badge me-1"></i>Segurado</th>
+                                      <th><i class="bi bi-tag me-1"></i>Tipo</th>
+                                      <th><i class="bi bi-calendar-range me-1"></i>Vigência FAP</th>
+                                      <th><i class="bi bi-clipboard-check me-1"></i>Tipo de Pedido</th>
+                                      <th><i class="bi bi-shield-check me-1"></i>Decisão da União</th>
+                                      <th><i class="bi bi-bank2 me-1"></i>Decisões Judiciais</th>
+                                      <th class="text-end"><i class="bi bi-gear me-1"></i>Ações</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -1255,9 +1295,65 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                         <span class="badge bg-light text-muted border">-</span>
                                         {% endif %}
                                       </td>
-                                      <td>{{ decision_badge(benefit.first_instance_decision) }}</td>
-                                      <td>{{ decision_badge(benefit.second_instance_decision) }}</td>
-                                      <td>{{ decision_badge(benefit.third_instance_decision) }}</td>
+                                      <td>
+                                        <div class="d-flex flex-column gap-1">
+                                          <div class="d-flex align-items-center gap-2 flex-wrap">
+                                            {{ contestation_status_badge(benefit.contestation_status,
+                                            benefit.contestation_status_label) }}
+                                            {% set contestation_status_raw = (benefit.contestation_status or
+                                            '')|trim|lower %}
+                                            {% set has_contestation_details = (benefit.contestation_fundamento_uniao or
+                                            benefit.contestation_efeito_fap or benefit.contestation_trecho_detectado or
+                                            benefit.contestation_trecho_completo or
+                                            benefit.contestation_resultado_tecnico_json) %}
+                                            {% if contestation_status_raw not in ['nao_localizado', 'nao_analisado'] and
+                                            has_contestation_details %}
+                                            <button type="button" class="btn btn-xs btn-outline-secondary py-0 px-2"
+                                              data-bs-toggle="modal" data-bs-target="#contestationDetailsModal"
+                                              title="Ver detalhes da decisão da União"
+                                              aria-label="Ver detalhes da decisão da União"
+                                              data-benefit-number="{{ benefit.benefit_number or '-' }}"
+                                              data-contestation-status="{{ benefit.contestation_status or '' }}"
+                                              data-contestation-status-label="{{ benefit.contestation_status_label or benefit.contestation_status or '-' }}"
+                                              data-contestation-fundamento="{{ benefit.contestation_fundamento_uniao or '' }}"
+                                              data-contestation-efeito="{{ benefit.contestation_efeito_fap or '' }}"
+                                              data-contestation-trecho="{{ benefit.contestation_trecho_detectado or '' }}"
+                                              data-contestation-trecho-completo="{{ benefit.contestation_trecho_completo or '' }}"
+                                              data-contestation-resultado="{{ benefit.contestation_resultado_tecnico_json or '' }}">
+                                              <i class="bi bi-eye"></i>
+                                            </button>
+                                            {% endif %}
+                                          </div>
+                                          {% set contestation_decision_value = (benefit.contestation_decision or
+                                          '')|trim %}
+                                          {% set contestation_decision_key = contestation_decision_value|lower %}
+                                          {% set contestation_status_label_key = (benefit.contestation_status_label or
+                                          '')|trim|lower %}
+                                          {% set contestation_status_key = (benefit.contestation_status or
+                                          '')|trim|lower %}
+                                          {% if contestation_decision_value and contestation_decision_key !=
+                                          contestation_status_label_key and contestation_decision_key !=
+                                          contestation_status_key %}
+                                          <small class="text-muted">{{ benefit.contestation_decision }}</small>
+                                          {% endif %}
+                                        </div>
+                                      </td>
+                                      <td>
+                                        <div class="d-flex flex-column gap-2">
+                                          <div class="d-flex align-items-center gap-2">
+                                            <small class="text-muted" style="min-width: 1.6rem;">1ª</small>
+                                            {{ decision_badge(benefit.first_instance_decision) }}
+                                          </div>
+                                          <div class="d-flex align-items-center gap-2">
+                                            <small class="text-muted" style="min-width: 1.6rem;">2ª</small>
+                                            {{ decision_badge(benefit.second_instance_decision) }}
+                                          </div>
+                                          <div class="d-flex align-items-center gap-2">
+                                            <small class="text-muted" style="min-width: 1.6rem;">3ª</small>
+                                            {{ decision_badge(benefit.third_instance_decision) }}
+                                          </div>
+                                        </div>
+                                      </td>
                                       <td class="text-end">
                                         <div class="btn-group btn-group-sm">
                                           <button type="button" class="btn btn-outline-secondary js-tooltip"
@@ -1349,6 +1445,68 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
               </div>
             </div>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Detalhes da Decisão da União -->
+  <div class="modal fade" id="contestationDetailsModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header border-bottom">
+          <h5 class="modal-title fw-semibold"><i class="bi bi-shield-check me-2 text-primary"></i>Detalhes da Decisão da
+            União</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body p-4">
+          <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+            <div class="d-flex align-items-center gap-2">
+              <span class="text-muted small">Benefício</span>
+              <span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle"
+                id="contestationDetailsBenefit">-</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+              <span class="text-muted small">Status</span>
+              <span id="contestationDetailsStatus">-</span>
+            </div>
+          </div>
+
+          <div class="card border-0 bg-light-subtle mb-3">
+            <div class="card-body py-3">
+              <small class="text-muted d-block mb-1">Fundamento da União</small>
+              <div id="contestationDetailsFundamento" class="text-body"></div>
+            </div>
+          </div>
+
+          <div class="card border-0 bg-light-subtle mb-3">
+            <div class="card-body py-3">
+              <small class="text-muted d-block mb-1">Efeito no FAP</small>
+              <div id="contestationDetailsEfeito" class="text-body"></div>
+            </div>
+          </div>
+
+          <div class="card border-0 bg-light-subtle mb-3">
+            <div class="card-body py-3">
+              <small class="text-muted d-block mb-1">Trecho Detectado</small>
+              <div id="contestationDetailsTrecho" class="text-body"></div>
+            </div>
+          </div>
+
+          <details class="mb-3 d-none" id="contestationDetailsTrechoCompletoWrap">
+            <summary class="text-muted small" style="cursor: pointer;">Ver trecho completo da contestação</summary>
+            <div class="alert alert-secondary mt-2 mb-0" id="contestationDetailsTrechoCompleto"></div>
+          </details>
+
+          <div class="card border-0 bg-light-subtle mb-0">
+            <div class="card-body py-3">
+              <small class="text-muted d-block mb-2">Resultado Técnico</small>
+              <div id="contestationDetailsResultado" class="small"></div>
+            </div>
+          </div>
+        </div>
+        <div class="modal-footer border-top">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
         </div>
       </div>
     </div>
@@ -1843,7 +2001,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
         const actions = detailUrl ? `
           <div class="d-flex gap-2 flex-shrink-0">
             ${pageToggleBtn}
-            ${viewUrl ? `<a href="${viewUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-secondary" title="Visualizar"><i class="bi bi-eye"></i></a>` : ''}
+            ${viewUrl ? `<a href="${viewUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-secondary" title="Visualizar documento"><i class="bi bi-eye"></i></a>` : ''}
             <a href="${detailUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-sm btn-outline-primary" title="Ver detalhes">
               <i class="bi bi-box-arrow-up-right me-1"></i>Detalhes
             </a>
@@ -2147,5 +2305,98 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
         form.submit();
       }
     }
+
+    (function () {
+      const detailsModal = document.getElementById('contestationDetailsModal');
+      if (!detailsModal) return;
+
+      const benefitEl = document.getElementById('contestationDetailsBenefit');
+      const statusEl = document.getElementById('contestationDetailsStatus');
+      const fundamentoEl = document.getElementById('contestationDetailsFundamento');
+      const efeitoEl = document.getElementById('contestationDetailsEfeito');
+      const trechoEl = document.getElementById('contestationDetailsTrecho');
+      const resultadoEl = document.getElementById('contestationDetailsResultado');
+      const trechoCompletoWrap = document.getElementById('contestationDetailsTrechoCompletoWrap');
+      const trechoCompletoEl = document.getElementById('contestationDetailsTrechoCompleto');
+
+      function escapeHtml(value) {
+        return String(value || '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      }
+
+      function normalizeStatus(value) {
+        return String(value || '')
+          .trim()
+          .toLowerCase()
+          .normalize('NFD')
+          .replace(/[\u0300-\u036f]/g, '');
+      }
+
+      function getStatusBadgeHtml(statusRaw, statusLabel) {
+        const raw = normalizeStatus(statusRaw);
+        const label = (statusLabel || statusRaw || '-').trim();
+
+        let cls = 'bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle';
+        if (raw === 'deferido') {
+          cls = 'bg-success-subtle text-success-emphasis border border-success-subtle';
+        } else if (raw === 'indeferido') {
+          cls = 'bg-danger-subtle text-danger-emphasis border border-danger-subtle';
+        } else if (raw === 'parcialmente_deferido' || raw === 'parcialmente deferido') {
+          cls = 'bg-warning-subtle text-warning-emphasis border border-warning-subtle';
+        }
+
+        return '<span class="badge ' + cls + '">' + escapeHtml(label || '-') + '</span>';
+      }
+
+      detailsModal.addEventListener('show.bs.modal', function (event) {
+        const btn = event.relatedTarget;
+        if (!btn) return;
+
+        const benefit = (btn.getAttribute('data-benefit-number') || '-').trim();
+        const statusRaw = (btn.getAttribute('data-contestation-status') || '').trim();
+        const status = (btn.getAttribute('data-contestation-status-label') || '-').trim();
+        const fundamento = (btn.getAttribute('data-contestation-fundamento') || '').trim();
+        const efeito = (btn.getAttribute('data-contestation-efeito') || '').trim();
+        const trecho = (btn.getAttribute('data-contestation-trecho') || '').trim();
+        const trechoCompleto = (btn.getAttribute('data-contestation-trecho-completo') || '').trim();
+        const resultadoRaw = (btn.getAttribute('data-contestation-resultado') || '').trim();
+
+        benefitEl.textContent = benefit || '-';
+        statusEl.innerHTML = getStatusBadgeHtml(statusRaw || status, status);
+        fundamentoEl.textContent = fundamento || '-';
+        efeitoEl.textContent = efeito || '-';
+        trechoEl.textContent = trecho || '-';
+
+        trechoCompletoEl.textContent = trechoCompleto || '';
+        if (trechoCompleto) {
+          trechoCompletoWrap.classList.remove('d-none');
+        } else {
+          trechoCompletoWrap.classList.add('d-none');
+        }
+
+        if (!resultadoRaw) {
+          resultadoEl.innerHTML = '<span class="text-muted">-</span>';
+          return;
+        }
+
+        try {
+          const resultado = JSON.parse(resultadoRaw);
+          resultadoEl.innerHTML = `
+            <div class="d-flex flex-wrap gap-2">
+              <span class="badge ${resultado.recalcula_fap ? 'bg-success-subtle text-success-emphasis border border-success-subtle' : 'bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle'}">Recalcula FAP: ${resultado.recalcula_fap ? 'Sim' : 'Não'}</span>
+              <span class="badge ${resultado.mantem_no_fap ? 'bg-success-subtle text-success-emphasis border border-success-subtle' : 'bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle'}">Mantém no FAP: ${resultado.mantem_no_fap ? 'Sim' : 'Não'}</span>
+              <span class="badge ${resultado.depende_inss ? 'bg-warning-subtle text-warning-emphasis border border-warning-subtle' : 'bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle'}">Depende INSS: ${resultado.depende_inss ? 'Sim' : 'Não'}</span>
+              <span class="badge ${resultado.depende_decisao_judicial ? 'bg-warning-subtle text-warning-emphasis border border-warning-subtle' : 'bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle'}">Depende decisão judicial: ${resultado.depende_decisao_judicial ? 'Sim' : 'Não'}</span>
+            </div>
+          `;
+        } catch (_) {
+          resultadoEl.textContent = resultadoRaw;
+        }
+      });
+    })();
   </script>
   {% endblock %}
