@@ -39,16 +39,22 @@ class KnowledgeBaseProcessingService:
         if include_errors:
             statuses.append("error")
 
+        linked_judicial_kb_ids = db.session.query(JudicialDocument.knowledge_base_id).filter(
+            JudicialDocument.knowledge_base_id.isnot(None)
+        )
+
         if file_id:
             return KnowledgeBase.query.filter(
                 KnowledgeBase.id == file_id,
                 KnowledgeBase.is_active.is_(True),
                 KnowledgeBase.processing_status.in_(statuses),
+                ~KnowledgeBase.id.in_(linked_judicial_kb_ids),
             )
 
         return KnowledgeBase.query.filter(
             KnowledgeBase.is_active.is_(True),
             KnowledgeBase.processing_status.in_(statuses),
+            ~KnowledgeBase.id.in_(linked_judicial_kb_ids),
         ).order_by(KnowledgeBase.uploaded_at.desc())
 
     @staticmethod
@@ -660,6 +666,20 @@ class KnowledgeBaseProcessingService:
                 if not item:
                     print(f"Arquivo ID {item_id} não encontrado ou inativo.")
                     return False
+
+                linked_judicial_document = JudicialDocument.query.filter_by(
+                    knowledge_base_id=item.id,
+                ).first()
+                if linked_judicial_document:
+                    print(
+                        f"Arquivo ID {item.id} está vinculado ao documento judicial "
+                        f"ID {linked_judicial_document.id}. Processamento mantido apenas no fluxo judicial."
+                    )
+                    item.processing_status = "completed"
+                    item.processed_at = datetime.utcnow()
+                    item.processing_error_message = None
+                    db.session.commit()
+                    return True
 
                 print(f"Iniciando processamento: {item.id} - {item.original_filename}")
 
