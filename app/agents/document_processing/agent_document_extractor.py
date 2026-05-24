@@ -998,6 +998,38 @@ class AgentDocumentExtractor:
                 ordered_keys.append(merge_key)
                 continue
 
+            # Mescla listas acumuláveis quando o mesmo NB aparece em múltiplas linhas/seções.
+            merged_sections = self._coerce_sections_list(
+                self._coerce_sections_list(existing.get("source_sections"))
+                + self._coerce_sections_list(benefit.get("source_sections"))
+            )
+            if merged_sections:
+                existing["source_sections"] = merged_sections
+                existing["source_section"] = merged_sections[0]
+
+            existing_ids = existing.get("legal_thesis_ids")
+            incoming_ids = benefit.get("legal_thesis_ids")
+            normalized_ids: list[int] = []
+            for raw_id in (existing_ids if isinstance(existing_ids, list) else []):
+                try:
+                    thesis_id = int(raw_id)
+                except (TypeError, ValueError):
+                    continue
+                if thesis_id not in normalized_ids:
+                    normalized_ids.append(thesis_id)
+            for raw_id in (incoming_ids if isinstance(incoming_ids, list) else []):
+                try:
+                    thesis_id = int(raw_id)
+                except (TypeError, ValueError):
+                    continue
+                if thesis_id not in normalized_ids:
+                    normalized_ids.append(thesis_id)
+
+            if normalized_ids:
+                existing["legal_thesis_ids"] = normalized_ids
+                if not existing.get("legal_thesis_id"):
+                    existing["legal_thesis_id"] = normalized_ids[0]
+
             for field_name, value in benefit.items():
                 if field_name not in existing or not str(existing.get(field_name) or "").strip():
                     if str(value or "").strip():
