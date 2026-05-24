@@ -489,6 +489,39 @@ class JudicialDocumentService:
 
         return updated
 
+    def _process_initial_petition_flow(
+        self,
+        process: JudicialProcess,
+        extractor_agent: AgentDocumentExtractor,
+        file_path: Path,
+    ) -> None:
+        """Executa o fluxo específico da petição inicial em uma única função."""
+        benefits_payload = extractor_agent.extract_benefits_from_petition(file_path=str(file_path))
+        inserted_or_updated = self._upsert_process_benefits(process, benefits_payload)
+        if inserted_or_updated > 0:
+            print(
+                f'Benefícios vinculados ao processo {process.process_number}: '
+                f'{inserted_or_updated} registro(s).'
+            )
+
+        extracted_benefits = benefits_payload.get('benefits', []) if isinstance(benefits_payload, dict) else []
+        if extracted_benefits:
+            classification = extractor_agent.classify_benefit_request_types(extracted_benefits)
+            classified_count = self._apply_benefit_request_types(process, classification)
+            if classified_count > 0:
+                print(
+                    f'Tipos de pedido classificados no processo {process.process_number}: '
+                    f'{classified_count} benefício(s).'
+                )
+
+        cited = extractor_agent.extract_cited_benefits()
+        if cited:
+            cited_count = self._upsert_cited_benefits(process, cited)
+            print(
+                f'Benefícios citados vinculados ao processo {process.process_number}: '
+                f'{cited_count} novo(s) / {len(cited)} extraído(s).'
+            )
+
     def _extract_context_from_document(self, document: JudicialDocument, process: JudicialProcess) -> dict:
         file_path = Path(str(document.file_path or '').strip())
         if not file_path.exists():
@@ -562,31 +595,11 @@ class JudicialDocumentService:
             document.type = event_type
 
         if self._is_initial_petition_document(extraction_payload):
-            benefits_payload = extractor_agent.extract_benefits_from_petition(file_path=str(file_path))
-            inserted_or_updated = self._upsert_process_benefits(process, benefits_payload)
-            if inserted_or_updated > 0:
-                print(
-                    f'Benefícios vinculados ao processo {process.process_number}: '
-                    f'{inserted_or_updated} registro(s).'
-                )
-
-            extracted_benefits = benefits_payload.get('benefits', []) if isinstance(benefits_payload, dict) else []
-            if extracted_benefits:
-                classification = extractor_agent.classify_benefit_request_types(extracted_benefits)
-                classified_count = self._apply_benefit_request_types(process, classification)
-                if classified_count > 0:
-                    print(
-                        f'Tipos de pedido classificados no processo {process.process_number}: '
-                        f'{classified_count} benefício(s).'
-                    )
-
-            cited = extractor_agent.extract_cited_benefits()
-            if cited:
-                cited_count = self._upsert_cited_benefits(process, cited)
-                print(
-                    f'Benefícios citados vinculados ao processo {process.process_number}: '
-                    f'{cited_count} novo(s) / {len(cited)} extraído(s).'
-                )
+            self._process_initial_petition_flow(
+                process=process,
+                extractor_agent=extractor_agent,
+                file_path=file_path,
+            )
 
         process.updated_at = datetime.utcnow()
 
