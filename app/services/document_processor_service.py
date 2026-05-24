@@ -85,25 +85,17 @@ class DocumentProcessorService:
         if re.search(r'\.{3,}\s*\d+\s*$', title):
             return False
 
-        # Títulos reais de seção costumam ser curtos; citações tendem a ser longas.
-        if len(title) > 140:
+        # Aceita títulos longos (há seções reais extensas no domínio FAP);
+        # mantém apenas um limite de sanidade para evitar parágrafos inteiros.
+        if len(title) > 280:
             return False
 
         # Padrões comuns de citação/jurisprudência textual em linha corrida.
         if re.search(r'["“”]|\(p\.\s*\d+|RE\s*n[ºo]', title, re.IGNORECASE):
             return False
 
-        letters = [ch for ch in title if ch.isalpha()]
-        if letters:
-            upper_count = sum(1 for ch in letters if ch.isupper())
-            lower_count = sum(1 for ch in letters if ch.islower())
-    
-            # Se predomina minusculo em texto longo, tende a ser frase/citacao.
-            if len(letters) >= 20 and lower_count > upper_count:
-                return False
-
-        # Muitas virgulas em linha longa geralmente indicam paragrafo corrido.
-        if len(title) > 80 and title.count(",") >= 2:
+        # Muitas vírgulas em linha longa geralmente indicam parágrafo corrido.
+        if len(title) > 120 and title.count(",") >= 3:
             return False
 
         return True
@@ -132,11 +124,52 @@ class DocumentProcessorService:
     @staticmethod
     def _detect_sections(text: str) -> list[str]:
         """Retorna todas as seções numeradas detectadas em uma página (sem duplicar)."""
-        matches = re.findall(
-            r'^(?:#{1,3}[ \t]+)?(\d+\.[ \t]+[^\n]+)$',
-            text,
-            re.MULTILINE,
-        )
+        lines = [line.rstrip() for line in str(text or "").splitlines()]
+        matches: list[str] = []
+
+        i = 0
+        while i < len(lines):
+            line = lines[i].strip()
+            header_match = re.match(r'^(?:#{1,3}[ \t]+)?(\d+\.[ \t]+.+)$', line)
+            if not header_match:
+                i += 1
+                continue
+
+            # Junta continuação de título em linhas subsequentes quando o PDF quebra
+            # cabeçalho longo em múltiplas linhas (sem novo número de seção).
+            section_parts = [header_match.group(1).strip()]
+            j = i + 1
+            while j < len(lines):
+                next_line = lines[j].strip()
+                if not next_line:
+                    break
+                if re.match(r'^(?:#{1,3}[ \t]+)?\d+\.[ \t]+', next_line):
+                    break
+                if re.search(r'\.{3,}\s*\d+\s*$', next_line):
+                    break
+                if len(next_line) > 180:
+                    break
+                if next_line.startswith("-") or next_line.startswith("•"):
+                    break
+                if next_line.endswith('.'):
+                    break
+
+                letters = [ch for ch in next_line if ch.isalpha()]
+                if letters:
+                    upper_count = sum(1 for ch in letters if ch.isupper())
+                    lower_count = sum(1 for ch in letters if ch.islower())
+                    # Continuação de título normalmente vem em caixa alta na extração OCR/PDF.
+                    if lower_count > upper_count:
+                        break
+
+                section_parts.append(next_line)
+                if len(" ".join(section_parts)) > 260:
+                    break
+                j += 1
+
+            matches.append(" ".join(section_parts).strip())
+            i = j
+
         unique_sections: list[str] = []
         seen: set[str] = set()
         for item in matches:

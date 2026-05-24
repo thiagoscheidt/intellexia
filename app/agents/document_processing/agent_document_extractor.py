@@ -2,6 +2,7 @@ import re
 import os
 import time
 import unicodedata
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any, Optional, List
 from rich import print
@@ -43,7 +44,10 @@ class BenefitRequestItem(BaseModel):
     insured_name: str = Field(default="", description="Nome do segurado")
     benefit_type: str = Field(default="", description="Tipo do benefício (B91, B92, B93, B94, etc)")
     fap_vigencia_year: str = Field(default="", description="Ano(s) da vigência do FAP em CSV (ex: 2018,2019,2020)")
+    source_section: str = Field(default="", description="Seção da tabela onde o benefício foi encontrado")
     legal_thesis_id: int | None = Field(default=None, description="ID da tese jurídica associada à seção da tabela")
+    source_sections: List[str] = Field(default_factory=list, description="Lista de seções onde o benefício foi encontrado")
+    legal_thesis_ids: List[int] = Field(default_factory=list, description="Lista de IDs de teses jurídicas associadas às seções")
 
 
 class BenefitsRequestsExtractionResult(BaseModel):
@@ -319,6 +323,78 @@ class AgentDocumentExtractor:
         except Exception:
             return []
 
+    @staticmethod
+    def _normalize_thesis_section_text(value: str | None) -> str:
+        text = str(value or "").strip().lower()
+        text = unicodedata.normalize("NFKD", text)
+        text = "".join(ch for ch in text if not unicodedata.combining(ch))
+        text = re.sub(r"\s+", " ", text)
+        return text
+
+    def _infer_legal_thesis_id_from_section(self, section: str | None, legal_theses: list[dict[str, str | int]] | None = None) -> int | None:
+        normalized_section = self._normalize_thesis_section_text(section)
+        if not normalized_section:
+            return None
+
+        if legal_theses is None:
+            legal_theses = self._load_legal_theses_from_db(law_firm_id=self.law_firm_id)
+        if not legal_theses:
+            return None
+
+        best_id: int | None = None
+        best_score = 0.0
+
+        for thesis in legal_theses:
+            thesis_text = " ".join(
+                [
+                    str(thesis.get("key", "") or ""),
+                    str(thesis.get("name", "") or ""),
+                    str(thesis.get("description", "") or ""),
+                ]
+            )
+            normalized_thesis = self._normalize_thesis_section_text(thesis_text)
+            if not normalized_thesis:
+                continue
+
+            score = 0.0
+            if normalized_section == normalized_thesis:
+                score = 1.0
+            elif normalized_section in normalized_thesis or normalized_thesis in normalized_section:
+                score = 0.95
+            else:
+                score = SequenceMatcher(None, normalized_section, normalized_thesis).ratio()
+
+            if score > best_score:
+                best_score = score
+                try:
+                    best_id = int(thesis.get("id"))
+                except (TypeError, ValueError):
+                    best_id = None
+
+        return best_id if best_score >= 0.55 else None
+
+    def _infer_legal_thesis_ids_from_sections(
+        self,
+        sections: list[str] | None,
+        legal_theses: list[dict[str, str | int]] | None = None,
+    ) -> list[int]:
+        inferred_ids: list[int] = []
+        for section in sections or []:
+            inferred_id = self._infer_legal_thesis_id_from_section(section, legal_theses)
+            if inferred_id and inferred_id not in inferred_ids:
+                inferred_ids.append(inferred_id)
+        return inferred_ids
+
+    def _coerce_sections_list(self, raw_sections: Any) -> list[str]:
+        if isinstance(raw_sections, list):
+            values = [str(item or "").strip() for item in raw_sections]
+        elif isinstance(raw_sections, str):
+            values = [part.strip() for part in raw_sections.split("|")]
+        else:
+            values = []
+
+        return self._prioritize_sections(values)
+
     def _fallback_from_regex(self, text: str) -> DocumentExtractionResult:
         process_number_pattern = re.compile(r"\b\d{7}-\d{2}\.\d{4}\.\d\.\d{2}\.\d{4}\b")
         process_number = ""
@@ -505,6 +581,146 @@ class AgentDocumentExtractor:
         text = "".join(ch for ch in text if not unicodedata.combining(ch))
         return text
 
+    def _is_pedidos_section(self, section_name: str | None) -> bool:
+        normalized = self._normalize_text_token(str(section_name or ""))
+        return bool(re.search(r"\bpedidos\b", normalized))
+
+    @staticmethod
+    def _unique_preserve_order(values: list[str]) -> list[str]:
+        seen: set[str] = set()
+        result: list[str] = []
+        for value in values:
+            clean = str(value or "").strip()
+            if not clean:
+                continue
+            key = clean.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            result.append(clean)
+        return result
+
+    def _prioritize_sections(self, sections: list[str]) -> list[str]:
+        unique_sections = self._unique_preserve_order(sections)
+        if not unique_sections:
+            return []
+
+        non_pedidos = [section for section in unique_sections if not self._is_pedidos_section(section)]
+        pedidos = [section for section in unique_sections if self._is_pedidos_section(section)]
+        return non_pedidos + pedidos if non_pedidos else pedidos
+
+    def _extract_benefit_numbers_from_chunk_text(self, text: str) -> list[str]:
+        raw_text = str(text or "")
+        if not raw_text.strip():
+            return []
+
+        patterns = [
+            re.compile(r"(?:benef[ií]cio|nb)\s*(?:n[º°o]\s*)?(\d{9,11})", re.IGNORECASE),
+            re.compile(r"(?:benef[ií]cio|nb)[^\d]{0,20}(\d{9,11})", re.IGNORECASE),
+        ]
+
+        matches: list[str] = []
+        for pattern in patterns:
+            for match in pattern.findall(raw_text):
+                digits = re.sub(r"\D", "", str(match))
+                if len(digits) >= 9 and digits not in matches:
+                    matches.append(digits)
+
+        return matches
+
+    def _build_benefit_section_lookup_from_chunks(self) -> dict[str, list[str]]:
+        lookup: dict[str, list[str]] = {}
+        for chunk in self._get_document_data_chunks():
+            if not isinstance(chunk, dict):
+                continue
+
+            section = str(chunk.get("section") or "").strip()
+            if not section:
+                continue
+
+            text = str(chunk.get("text") or "")
+            numbers = self._extract_benefit_numbers_from_chunk_text(text)
+            if not numbers:
+                continue
+
+            for number in numbers:
+                bucket = lookup.setdefault(number, [])
+                if section.lower() not in {item.lower() for item in bucket}:
+                    bucket.append(section)
+
+        for number, sections in list(lookup.items()):
+            lookup[number] = self._prioritize_sections(sections)
+
+        return lookup
+
+    def _build_topic_number_to_section_map(self) -> dict[str, str]:
+        mapping: dict[str, str] = {}
+        for chunk in self._get_document_data_chunks():
+            if not isinstance(chunk, dict):
+                continue
+
+            section = str(chunk.get("section") or "").strip()
+            if not section:
+                continue
+
+            match = re.match(r"^\s*(\d{1,2})\s*[\.)-]?\s+", section)
+            if not match:
+                continue
+
+            topic_number = match.group(1)
+            if topic_number not in mapping:
+                mapping[topic_number] = section
+
+        return mapping
+
+    def _build_benefit_topic_reference_sections(self) -> dict[str, list[str]]:
+        """Mapeia NB -> seção referenciada por menção de TÓPICO no texto de pedidos."""
+        topic_map = self._build_topic_number_to_section_map()
+        if not topic_map:
+            return {}
+
+        pedidos_text = self._extract_pedidos_section_text()
+        if not pedidos_text:
+            return {}
+
+        benefit_re = re.compile(
+            r"(?:benef[ií]cio|nb)\s*(?:n[º°o]\s*)?(\d{9,11}).{0,220}?t[oó]pico\s*(\d{1,2})",
+            re.IGNORECASE | re.DOTALL,
+        )
+        benefit_re_rev = re.compile(
+            r"t[oó]pico\s*(\d{1,2}).{0,220}?(?:benef[ií]cio|nb)\s*(?:n[º°o]\s*)?(\d{9,11})",
+            re.IGNORECASE | re.DOTALL,
+        )
+
+        lookup: dict[str, list[str]] = {}
+
+        for benefit_number, topic_number in benefit_re.findall(pedidos_text):
+            section = topic_map.get(str(topic_number))
+            if not section:
+                continue
+            number = re.sub(r"\D", "", str(benefit_number))
+            if not number:
+                continue
+            bucket = lookup.setdefault(number, [])
+            if section.lower() not in {item.lower() for item in bucket}:
+                bucket.append(section)
+
+        for topic_number, benefit_number in benefit_re_rev.findall(pedidos_text):
+            section = topic_map.get(str(topic_number))
+            if not section:
+                continue
+            number = re.sub(r"\D", "", str(benefit_number))
+            if not number:
+                continue
+            bucket = lookup.setdefault(number, [])
+            if section.lower() not in {item.lower() for item in bucket}:
+                bucket.append(section)
+
+        for number, sections in list(lookup.items()):
+            lookup[number] = self._prioritize_sections(sections)
+
+        return lookup
+
     @staticmethod
     def _split_pipe_row(row: str) -> list[str]:
         return [cell.strip() for cell in str(row).split("|")]
@@ -671,6 +887,9 @@ class AgentDocumentExtractor:
             return benefits
 
         table_context = self._build_benefit_context_lookup()
+        chunk_section_context = self._build_benefit_section_lookup_from_chunks()
+        topic_reference_context = self._build_benefit_topic_reference_sections()
+        legal_theses = self._load_legal_theses_from_db(law_firm_id=self.law_firm_id)
         last_values_by_thesis: dict[Any, dict[str, str]] = {}
         merged_by_benefit_number: dict[str, dict[str, Any]] = {}
         ordered_keys: list[str] = []
@@ -697,11 +916,80 @@ class AgentDocumentExtractor:
 
             if normalized_benefit_number and normalized_benefit_number in table_context:
                 table_payload = table_context[normalized_benefit_number]
-                for field_name in ("nit_number", "insured_name", "benefit_type", "fap_vigencia_year"):
+                for field_name in ("source_section", "nit_number", "insured_name", "benefit_type", "fap_vigencia_year"):
                     current_value = str(benefit.get(field_name) or "").strip()
                     fallback_value = str(table_payload.get(field_name) or "").strip()
                     if not current_value and fallback_value:
                         benefit[field_name] = fallback_value
+
+                existing_sections = self._coerce_sections_list(benefit.get("source_sections"))
+                table_sections = self._coerce_sections_list(table_payload.get("source_sections"))
+                for section in table_sections:
+                    if section.lower() not in {s.lower() for s in existing_sections}:
+                        existing_sections.append(section)
+                if existing_sections:
+                    benefit["source_sections"] = existing_sections
+                    if not str(benefit.get("source_section") or "").strip():
+                        benefit["source_section"] = existing_sections[0]
+
+            chunk_sections = self._coerce_sections_list(chunk_section_context.get(normalized_benefit_number, []))
+            topic_sections = self._coerce_sections_list(topic_reference_context.get(normalized_benefit_number, []))
+            if chunk_sections:
+                existing_sections = self._coerce_sections_list(benefit.get("source_sections"))
+                # Chunks_with_pages vêm do DocumentProcessorService e devem ter prioridade sobre a seção da tabela.
+                merged_sections = self._coerce_sections_list(chunk_sections + existing_sections)
+                if merged_sections:
+                    benefit["source_sections"] = merged_sections
+                    benefit["source_section"] = merged_sections[0]
+
+            if topic_sections:
+                existing_sections = self._coerce_sections_list(benefit.get("source_sections"))
+                merged_sections = self._coerce_sections_list(topic_sections + existing_sections)
+                if merged_sections:
+                    benefit["source_sections"] = merged_sections
+                    benefit["source_section"] = merged_sections[0]
+
+            if not str(benefit.get("source_section") or "").strip():
+                inferred_section = str(table_context.get(normalized_benefit_number, {}).get("source_section") or "").strip()
+                if inferred_section:
+                    benefit["source_section"] = inferred_section
+
+            current_sections = self._coerce_sections_list(benefit.get("source_sections"))
+            source_section_single = str(benefit.get("source_section") or "").strip()
+            if source_section_single and source_section_single.lower() not in {s.lower() for s in current_sections}:
+                current_sections.append(source_section_single)
+            if current_sections:
+                benefit["source_sections"] = current_sections
+                benefit["source_section"] = current_sections[0]
+
+            existing_thesis_ids: list[int] = []
+            raw_legal_thesis_ids = benefit.get("legal_thesis_ids")
+            if isinstance(raw_legal_thesis_ids, list):
+                for raw_id in raw_legal_thesis_ids:
+                    try:
+                        thesis_id = int(raw_id)
+                    except (TypeError, ValueError):
+                        continue
+                    if thesis_id not in existing_thesis_ids:
+                        existing_thesis_ids.append(thesis_id)
+
+            raw_single_legal_thesis_id = benefit.get("legal_thesis_id")
+            try:
+                single_legal_thesis_id = int(raw_single_legal_thesis_id) if raw_single_legal_thesis_id not in (None, "") else None
+            except (TypeError, ValueError):
+                single_legal_thesis_id = None
+            if single_legal_thesis_id and single_legal_thesis_id not in existing_thesis_ids:
+                existing_thesis_ids.append(single_legal_thesis_id)
+
+            inferred_thesis_ids = self._infer_legal_thesis_ids_from_sections(current_sections, legal_theses)
+            for thesis_id in inferred_thesis_ids:
+                if thesis_id not in existing_thesis_ids:
+                    existing_thesis_ids.append(thesis_id)
+
+            if existing_thesis_ids:
+                benefit["legal_thesis_ids"] = existing_thesis_ids
+                if not benefit.get("legal_thesis_id"):
+                    benefit["legal_thesis_id"] = existing_thesis_ids[0]
 
             merge_key = normalized_benefit_number or benefit_number or str(len(ordered_keys))
             existing = merged_by_benefit_number.get(merge_key)
@@ -727,8 +1015,8 @@ class AgentDocumentExtractor:
                 return value
         return ""
 
-    def _build_benefit_context_lookup(self) -> dict[str, dict[str, str]]:
-        lookup: dict[str, dict[str, str]] = {}
+    def _build_benefit_context_lookup(self) -> dict[str, dict[str, Any]]:
+        lookup: dict[str, dict[str, Any]] = {}
         tables = self._get_document_data_tables()
         if not tables:
             return lookup
@@ -815,9 +1103,9 @@ class AgentDocumentExtractor:
 
                 if vigencia_candidates:
                     fap_vigencia_year = ",".join(vigencia_candidates[:2])
-                    carryover_vigencia = fap_vigencia_year
+                    current_block_vigencia = fap_vigencia_year
                 else:
-                    fap_vigencia_year = carryover_vigencia
+                    fap_vigencia_year = current_block_vigencia
 
                 for idx in range((benefit_idx or 0) + 1, len(cells)):
                     value = str(cells[idx] or "").strip()
@@ -881,7 +1169,14 @@ class AgentDocumentExtractor:
                 if not cnpj_value and current_block_cnpj and current_block_name and insured_name == current_block_name:
                     cnpj_value = current_block_cnpj
 
+                source_section = str(table.get("section") or "").strip()
                 entry = lookup.setdefault(normalized_benefit_number, {})
+                existing_sections = self._coerce_sections_list(entry.get("source_sections"))
+                if source_section and source_section.lower() not in {s.lower() for s in existing_sections}:
+                    existing_sections.append(source_section)
+                if existing_sections:
+                    entry["source_sections"] = existing_sections
+                    entry["source_section"] = existing_sections[0]
                 if nit_number and not entry.get("nit_number"):
                     entry["nit_number"] = nit_number
                 if insured_name and not entry.get("insured_name"):
@@ -1133,8 +1428,11 @@ class AgentDocumentExtractor:
             "- insured_name: nome completo do segurado/beneficiário\n"
             "- benefit_type: tipo do benefício (B91, B92, B93, B94, B31, B42, B46, etc)\n"
             "- fap_vigencia_year: ano(s) da vigência em CSV (ex: 2022,2023,2024)\n\n"
+            "A seção da tabela já vem no cabeçalho do bloco, por exemplo: [Página X | Seção: pedidos].\n"
+            "Use essa seção como contexto para identificar a tese jurídica, mas não a trate como dado de uma linha específica.\n\n"
             "Mapeamento de tese:\n"
             "- legal_thesis_id: escolha APENAS um id da lista de teses cadastradas, de acordo com a seção da tabela.\n"
+            "- priorize o nome da seção do bloco para mapear a tese jurídica.\n"
             "- Se não houver confiança suficiente para mapear, retorne null.\n\n"
             "Se não houver benefícios ou tabelas, retorne lista vazia em 'benefits'.\n"
             "Se algum campo não estiver disponível na tabela, deixe em branco (\"\").\n\n"
@@ -1296,6 +1594,9 @@ class AgentDocumentExtractor:
             return BenefitRequestTypeClassificationResult().model_dump()
 
         pedidos_context = self._extract_pedidos_section_text()
+        table_context_by_nb = self._build_benefit_context_lookup()
+        chunk_section_context = self._build_benefit_section_lookup_from_chunks()
+        topic_reference_context = self._build_benefit_topic_reference_sections()
 
         # Fallback: usa os últimos chunks do documento (pedidos aparecem no final da petição)
         if not pedidos_context:
@@ -1304,10 +1605,40 @@ class AgentDocumentExtractor:
                 last_chunks = chunks[-4:]
                 pedidos_context = "\n\n".join(str(c.get("text", "")) for c in last_chunks)[:6000]
 
-        benefits_list_text = "\n".join(
-            f"- NB: {b.get('benefit_number', '')} | Tipo: {b.get('benefit_type', '')} | Segurado: {b.get('insured_name', '')}"
-            for b in benefits
-        )
+        benefit_lines: list[str] = []
+        for b in benefits:
+            benefit_number = str(b.get("benefit_number", "") or "").strip()
+            normalized_nb = re.sub(r"\D", "", benefit_number)
+            table_payload = table_context_by_nb.get(normalized_nb, {})
+            fallback_section = str(table_payload.get("source_section") or "").strip()
+            fallback_sections = self._coerce_sections_list(table_payload.get("source_sections"))
+            benefit_sections = self._coerce_sections_list(b.get("source_sections"))
+            chunk_sections = self._coerce_sections_list(chunk_section_context.get(normalized_nb, []))
+            topic_sections = self._coerce_sections_list(topic_reference_context.get(normalized_nb, []))
+            source_section = str(b.get("source_section", "") or "").strip()
+            if source_section and source_section.lower() not in {s.lower() for s in benefit_sections}:
+                benefit_sections.append(source_section)
+            # Prioriza seções vindas dos chunks (DocumentProcessorService) em relação às seções de tabela/LLM.
+            for section in reversed(chunk_sections):
+                if section.lower() not in {s.lower() for s in benefit_sections}:
+                    benefit_sections.insert(0, section)
+            for section in topic_sections:
+                if section.lower() not in {s.lower() for s in benefit_sections}:
+                    benefit_sections.insert(0, section)
+            for section in fallback_sections:
+                if section.lower() not in {s.lower() for s in benefit_sections}:
+                    benefit_sections.append(section)
+            if not benefit_sections and fallback_section:
+                benefit_sections = [fallback_section]
+
+            prioritized_sections = self._coerce_sections_list(benefit_sections)
+            section_text = " | ".join(prioritized_sections) if prioritized_sections else "(não informada)"
+
+            benefit_lines.append(
+                f"- NB: {benefit_number} | Tipo: {b.get('benefit_type', '')} | Segurado: {b.get('insured_name', '')} | Seções: {section_text}"
+            )
+
+        benefits_list_text = "\n".join(benefit_lines)
 
         user_prompt = (
             "Com base no texto da seção de pedidos da petição abaixo, classifique o tipo de pedido feito para cada benefício.\n\n"
@@ -1317,6 +1648,7 @@ class AgentDocumentExtractor:
             "- 'revisao': revisão/recálculo sem indicar exclusão ou inclusão clara\n\n"
             "INSTRUÇÕES:\n"
             "- Analise o texto da seção de pedidos para identificar o que o autor pede para cada NB.\n"
+            "- Considere a seção informada em cada benefício como contexto lateral para desambiguar o cenário jurídico.\n"
             "- Retorne um item para CADA benefício da lista, mesmo que o tipo seja incerto (use 'revisao' como padrão).\n"
             "- O campo 'benefit_number' deve corresponder exatamente ao NB fornecido.\n\n"
             "BENEFÍCIOS A CLASSIFICAR:\n"

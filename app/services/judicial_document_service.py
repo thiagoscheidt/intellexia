@@ -354,9 +354,22 @@ class JudicialDocumentService:
             except (TypeError, ValueError):
                 legal_thesis_id = None
 
+            legal_thesis_ids_raw = benefit.get('legal_thesis_ids')
+            legal_thesis_ids: list[int] = []
+            if isinstance(legal_thesis_ids_raw, list):
+                for raw_id in legal_thesis_ids_raw:
+                    try:
+                        thesis_id = int(raw_id)
+                    except (TypeError, ValueError):
+                        continue
+                    if thesis_id not in legal_thesis_ids:
+                        legal_thesis_ids.append(thesis_id)
+            if legal_thesis_id and legal_thesis_id not in legal_thesis_ids:
+                legal_thesis_ids.append(legal_thesis_id)
+
             theses = self._load_valid_legal_theses_for_process(
                 process,
-                [legal_thesis_id] if legal_thesis_id else [],
+                legal_thesis_ids,
             )
             resolved_legal_thesis_id = theses[0].id if theses else None
 
@@ -377,8 +390,11 @@ class JudicialDocumentService:
                 if request_type and not str(existing_benefit.request_type or '').strip():
                     existing_benefit.request_type = request_type
                 if theses:
-                    existing_benefit.legal_theses = theses
-                    existing_benefit.legal_thesis_id = resolved_legal_thesis_id
+                    current_ids = [thesis.id for thesis in existing_benefit.legal_theses]
+                    merged_ids = sorted(set(current_ids + [thesis.id for thesis in theses]))
+                    merged_theses = self._load_valid_legal_theses_for_process(process, merged_ids)
+                    existing_benefit.legal_theses = merged_theses
+                    existing_benefit.legal_thesis_id = merged_theses[0].id if merged_theses else resolved_legal_thesis_id
                 elif resolved_legal_thesis_id is None and not existing_benefit.legal_theses:
                     existing_benefit.legal_thesis_id = None
                 existing_benefit.updated_at = datetime.utcnow()
