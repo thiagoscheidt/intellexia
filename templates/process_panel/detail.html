@@ -1277,7 +1277,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                   <tbody>
                                     {% for benefit in thesis_group.benefits %}
                                     <tr>
-                                      <td><strong>{{ benefit.benefit_number or '-' }}</strong></td>
+                                      <td><strong class="benefit-nb-label" data-benefit-nb="{{ benefit.benefit_number or '' }}">{{ benefit.benefit_number or '-' }}</strong></td>
                                       <td>{{ benefit.nit_number or '-' }}</td>
                                       <td>{{ benefit.insured_name or '-' }}</td>
                                       <td>{{ benefit.benefit_type or '-' }}</td>
@@ -1443,7 +1443,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                           <tbody>
                             {% for cb in cited_benefits %}
                             <tr>
-                              <td><strong>{{ cb.benefit_number or '-' }}</strong></td>
+                              <td><strong class="benefit-nb-label" data-benefit-nb="{{ cb.benefit_number or '' }}">{{ cb.benefit_number or '-' }}</strong></td>
                               <td>{{ cb.nit_number or '-' }}</td>
                               <td>{{ cb.insured_name or '-' }}</td>
                               <td>{{ cb.benefit_type or '-' }}</td>
@@ -2330,6 +2330,53 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
         keyPointsBlock.classList.remove('d-none');
         resetAccordionToDefault();
         setState('loading');
+      });
+    })();
+
+    // Pill colorido para NB duplicados entre teses
+    (function () {
+      const palette = [
+        { bg: 'rgba(13,110,253,0.12)',   color: '#0d6efd' },
+        { bg: 'rgba(25,135,84,0.12)',    color: '#198754' },
+        { bg: 'rgba(253,126,20,0.13)',   color: '#fd7e14' },
+        { bg: 'rgba(111,66,193,0.12)',   color: '#6f42c1' },
+        { bg: 'rgba(214,51,132,0.12)',   color: '#d63384' },
+        { bg: 'rgba(32,201,151,0.13)',   color: '#0aa87a' },
+        { bg: 'rgba(220,53,69,0.11)',    color: '#dc3545' },
+      ];
+
+      const labels = document.querySelectorAll('.benefit-nb-label[data-benefit-nb]');
+      const counts = {};
+      labels.forEach(function (el) {
+        const nb = el.dataset.benefitNb;
+        if (nb) counts[nb] = (counts[nb] || 0) + 1;
+      });
+
+      const nbColor = {};
+      let idx = 0;
+      Object.keys(counts).forEach(function (nb) {
+        if (counts[nb] > 1) {
+          nbColor[nb] = palette[idx % palette.length];
+          idx++;
+        }
+      });
+
+      labels.forEach(function (el) {
+        const nb = el.dataset.benefitNb;
+        const scheme = nb && nbColor[nb];
+        if (!scheme) return;
+        el.style.cssText = [
+          'display:inline-block',
+          'padding:.15rem .55rem',
+          'border-radius:999px',
+          'font-size:.8rem',
+          'font-weight:700',
+          'background:' + scheme.bg,
+          'color:' + scheme.color,
+          'border:1px solid ' + scheme.color.replace(')', ',0.25)').replace('rgb', 'rgba'),
+          'white-space:nowrap',
+        ].join(';');
+        el.title = 'Este benefício aparece em ' + counts[nb] + ' teses';
       });
     })();
 
