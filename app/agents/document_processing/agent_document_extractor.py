@@ -1654,9 +1654,12 @@ class AgentDocumentExtractor:
             for section in reversed(chunk_sections):
                 if section.lower() not in {s.lower() for s in benefit_sections}:
                     benefit_sections.insert(0, section)
-            for section in topic_sections:
-                if section.lower() not in {s.lower() for s in benefit_sections}:
-                    benefit_sections.insert(0, section)
+            # Seções inferidas por "tópico X" no texto de pedidos podem refletir citação e
+            # gerar falso positivo; só usa esse fallback quando não houver seção estrutural por chunk.
+            if not chunk_sections:
+                for section in topic_sections:
+                    if section.lower() not in {s.lower() for s in benefit_sections}:
+                        benefit_sections.append(section)
             for section in fallback_sections:
                 if section.lower() not in {s.lower() for s in benefit_sections}:
                     benefit_sections.append(section)

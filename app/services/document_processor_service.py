@@ -196,6 +196,23 @@ class DocumentProcessorService:
             return None
 
     @staticmethod
+    def _is_section_heading_near_page_start(page_text: str, section_title: str, max_non_empty_lines: int = 6) -> bool:
+        """Confirma se o heading aparece no início da página (sinal forte de seção real, não citação)."""
+        normalized_title = " ".join(str(section_title or "").split())
+        if not normalized_title:
+            return False
+
+        page_lines = [line.strip() for line in str(page_text or "").splitlines() if line.strip()]
+        if not page_lines:
+            return False
+
+        scan_lines = page_lines[:max_non_empty_lines]
+        joined_scan = " ".join(scan_lines)
+        # Remove prefixo markdown opcional para comparar contra texto extraído em linhas corridas.
+        title_without_hash = re.sub(r"^#{1,3}[ \t]+", "", normalized_title)
+        return bool(re.search(re.escape(title_without_hash), joined_scan, re.IGNORECASE))
+
+    @staticmethod
     def _extract_item_page(item: Any) -> int | None:
         if not hasattr(item, "prov") or not item.prov:
             return None
@@ -570,12 +587,13 @@ class DocumentProcessorService:
                         for candidate_section in detected_sections:
                             candidate_number = self._extract_section_number(candidate_section)
 
-                            # Ignora regressões numéricas fortes, comuns em citações transcritas
-                            # (ex.: documento está na seção 8 e aparece "4. ..." dentro de citação).
+                            # Ignora regressões numéricas espúrias no meio da página,
+                            # comuns em citações transcritas (ex.: seção 8 citando "4. ...").
                             if (
                                 current_section_number is not None
                                 and candidate_number is not None
-                                and candidate_number + 1 < current_section_number
+                                and candidate_number < current_section_number
+                                and not self._is_section_heading_near_page_start(page_text, candidate_section)
                             ):
                                 continue
 
