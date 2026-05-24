@@ -1030,7 +1030,7 @@ class AgentDocumentExtractor:
         if pedidos_tables:
             parts.append(self._tables_to_prompt_text(pedidos_tables))
 
-        return "\n\n---\n\n".join(parts)[:10000]
+        return "\n\n---\n\n".join(parts)
 
     def extract_pedidos_section_text(self) -> str:
         """Exposta publicamente para uso em outros serviços."""
