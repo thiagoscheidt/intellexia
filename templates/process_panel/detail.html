@@ -76,6 +76,27 @@
     white-space: nowrap;
   }
 
+  .attach-dropzone {
+    border: 2px dashed rgba(47, 108, 181, .35);
+    border-radius: .85rem;
+    background: linear-gradient(180deg, #f8fbff 0%, #f2f7ff 100%);
+    padding: 2rem 1.5rem;
+    text-align: center;
+    cursor: pointer;
+    transition: border-color .2s ease, background .2s ease;
+  }
+
+  .attach-dropzone:hover,
+  .attach-dropzone.dragover {
+    border-color: #2f6cb5;
+    background: #eaf3ff;
+  }
+
+  .attach-dropzone .attach-dropzone-icon {
+    font-size: 2.2rem;
+    color: #2f6cb5;
+  }
+
   .benefit-row-dim {
     opacity: .28;
     transition: opacity .15s ease;
@@ -828,31 +849,10 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
 
                     <!-- Tab: Anexos -->
                     <div class="tab-pane fade" id="attachments" role="tabpanel">
-                      <div class="card card-light shadow-sm mb-3">
-                        <div class="card-header">
-                          <h3 class="card-title mb-0"><i class="bi bi-paperclip me-2"></i>Novo Anexo</h3>
-                        </div>
-                        <div class="card-body">
-                          <form method="post" enctype="multipart/form-data"
-                            action="{{ url_for('process_panel.create_process_attachment', process_id=process.id) }}">
-                            <div class="row g-3 align-items-end">
-                              <div class="col-lg-5">
-                                <label class="form-label">Arquivo</label>
-                                <input type="file" class="form-control" name="attachment" required>
-                              </div>
-                              <div class="col-lg-5">
-                                <label class="form-label">Descrição <span class="text-muted fw-normal">(opcional)</span></label>
-                                <input type="text" class="form-control" name="description" maxlength="255"
-                                  placeholder="Ex.: Laudo médico, planilha de cálculo, parecer técnico...">
-                              </div>
-                              <div class="col-lg-2 d-grid">
-                                <button type="submit" class="btn btn-primary">
-                                  <i class="bi bi-upload me-1"></i>Enviar
-                                </button>
-                              </div>
-                            </div>
-                          </form>
-                        </div>
+                      <div class="d-flex justify-content-end mb-3">
+                        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#newAttachmentModal">
+                          <i class="bi bi-plus-circle me-2"></i>Adicionar Anexo
+                        </button>
                       </div>
 
                       {% if attachments_list %}
@@ -861,7 +861,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                           <thead class="table-light">
                             <tr>
                               <th><i class="bi bi-file-earmark me-1"></i>Arquivo</th>
-                              <th><i class="bi bi-card-text me-1"></i>Descrição</th>
+                              <th><i class="bi bi-link-45deg me-1"></i>Benefícios vinculados</th>
                               <th><i class="bi bi-hdd-stack me-1"></i>Tamanho</th>
                               <th><i class="bi bi-person me-1"></i>Enviado por</th>
                               <th><i class="bi bi-calendar me-1"></i>Enviado em</th>
@@ -873,41 +873,53 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                             <tr>
                               <td>
                                 <div class="d-flex align-items-center gap-2">
-                                  <i class="bi bi-file-earmark text-secondary"></i>
-                                  <span class="fw-medium">{{ attachment.original_filename }}</span>
+                                  <i class="bi bi-file-earmark text-secondary flex-shrink-0"></i>
+                                  <div>
+                                    <div class="fw-medium">{{ attachment.original_filename }}</div>
+                                    {% if attachment.description %}
+                                    <small class="text-muted">{{ attachment.description }}</small>
+                                    {% endif %}
+                                  </div>
                                 </div>
                               </td>
                               <td>
-                                {% if attachment.description %}
-                                {{ attachment.description }}
+                                {% if attachment.benefits %}
+                                <div class="d-flex flex-wrap gap-1">
+                                  {% for benefit in attachment.benefits %}
+                                  <span class="badge bg-light text-dark border">NB {{ benefit.benefit_number or '-' }}</span>
+                                  {% endfor %}
+                                </div>
                                 {% else %}
-                                <span class="text-muted fst-italic">Sem descrição</span>
+                                <span class="text-muted fst-italic">Não definido</span>
                                 {% endif %}
                               </td>
                               <td>
                                 {% if attachment.file_size %}
                                 <small class="text-muted">
-                                  {% if attachment.file_size >= 1048576 %}
-                                  {{ (attachment.file_size / 1048576)|round(1) }} MB
-                                  {% else %}
-                                  {{ (attachment.file_size / 1024)|round(1) }} KB
-                                  {% endif %}
+                                  {% if attachment.file_size >= 1048576 %}{{ (attachment.file_size / 1048576)|round(1) }} MB
+                                  {% else %}{{ (attachment.file_size / 1024)|round(1) }} KB{% endif %}
                                 </small>
-                                {% else %}
-                                <span class="text-muted">—</span>
-                                {% endif %}
+                                {% else %}<span class="text-muted">—</span>{% endif %}
                               </td>
-                              <td>
-                                <span class="small">{{ attachment.uploaded_by_user.name if attachment.uploaded_by_user else 'Usuário' }}</span>
-                              </td>
-                              <td>
-                                <small class="text-muted">{{ attachment.created_at.strftime('%d/%m/%Y às %H:%M') if attachment.created_at else '—' }}</small>
-                              </td>
+                              <td><span class="small">{{ attachment.uploaded_by_user.name if attachment.uploaded_by_user else 'Usuário' }}</span></td>
+                              <td><small class="text-muted">{{ attachment.created_at.strftime('%d/%m/%Y às %H:%M') if attachment.created_at else '—' }}</small></td>
                               <td class="text-end">
-                                <a href="{{ url_for('process_panel.download_process_attachment', process_id=process.id, attachment_id=attachment.id) }}"
-                                  class="btn btn-sm bg-primary-subtle text-primary-emphasis" title="Baixar anexo">
-                                  <i class="bi bi-download"></i>
-                                </a>
+                                <div class="d-flex gap-1 justify-content-end align-items-center">
+                                  <a href="{{ url_for('process_panel.download_process_attachment', process_id=process.id, attachment_id=attachment.id) }}"
+                                    class="btn btn-sm bg-primary-subtle text-primary-emphasis" title="Baixar anexo">
+                                    <i class="bi bi-download"></i>
+                                  </a>
+                                  <span class="vr mx-1 opacity-25"></span>
+                                  <button type="button" class="btn btn-sm bg-danger-subtle text-danger-emphasis"
+                                    title="Remover anexo"
+                                    data-delete-url="{{ url_for('process_panel.delete_process_attachment', process_id=process.id, attachment_id=attachment.id) }}"
+                                    onclick="confirmDeleteAttachment(this.dataset.deleteUrl)">
+                                    <i class="bi bi-trash"></i>
+                                  </button>
+                                </div>
+                                <form method="post" id="delete-attachment-{{ attachment.id }}"
+                                  action="{{ url_for('process_panel.delete_process_attachment', process_id=process.id, attachment_id=attachment.id) }}">
+                                </form>
                               </td>
                             </tr>
                             {% endfor %}
@@ -918,7 +930,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                       <div class="text-center py-5">
                         <i class="bi bi-paperclip text-muted" style="font-size: 2.5rem;"></i>
                         <p class="text-muted mt-3 mb-1 fw-medium">Nenhum arquivo anexado</p>
-                        <p class="text-muted small mb-0">Use o formulário acima para adicionar arquivos de apoio ao processo.</p>
+                        <p class="text-muted small mb-0">Clique em <strong>Adicionar Anexo</strong> para enviar arquivos de apoio ao processo.</p>
                       </div>
                       {% endif %}
                     </div>
@@ -1807,6 +1819,103 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
     </div>
   </div>
 
+  <!-- Modal: Adicionar Anexos (steps) -->
+  <div class="modal fade" id="newAttachmentModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+
+        <div class="modal-header border-bottom pb-3">
+          <div class="w-100">
+            <h5 class="modal-title fw-semibold mb-3">
+              <i class="bi bi-paperclip me-2"></i>Adicionar Anexos
+            </h5>
+            <!-- Step indicator -->
+            <div class="d-flex align-items-center gap-0">
+              <div class="d-flex align-items-center gap-2">
+                <div id="attachCircle1" class="rounded-circle d-flex align-items-center justify-content-center fw-bold text-white"
+                  style="width:28px;height:28px;min-width:28px;background:#0d6efd;font-size:.78rem;">1</div>
+                <span id="attachLabel1" class="small fw-semibold">Selecionar arquivos</span>
+              </div>
+              <div class="flex-grow-1 border-top mx-3" style="min-width:32px;"></div>
+              <div class="d-flex align-items-center gap-2">
+                <div id="attachCircle2" class="rounded-circle d-flex align-items-center justify-content-center fw-bold"
+                  style="width:28px;height:28px;min-width:28px;background:#e9ecef;color:#6c757d;font-size:.78rem;">2</div>
+                <span id="attachLabel2" class="small text-muted">Revisar e detalhar</span>
+              </div>
+            </div>
+          </div>
+          <button type="button" class="btn-close ms-3 align-self-start mt-1" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+
+        <div class="modal-body p-4">
+
+          <!-- Step 1 -->
+          <div id="attachStep1">
+            <div class="attach-dropzone mb-3" id="attachDropzone">
+              <i class="bi bi-cloud-arrow-up attach-dropzone-icon"></i>
+              <p class="mb-1 mt-2 fw-semibold">Arraste e solte os arquivos aqui</p>
+              <small class="text-muted">ou clique para selecionar múltiplos arquivos</small>
+              <input type="file" class="d-none" id="attachFileInput" multiple>
+            </div>
+            <div id="attachStep1Preview" class="d-none">
+              <div class="d-flex align-items-center justify-content-between mb-2">
+                <span class="small fw-semibold text-uppercase text-muted" style="letter-spacing:.04em;">Arquivos selecionados</span>
+                <span class="badge bg-primary-subtle text-primary-emphasis" id="attachFileCount"></span>
+              </div>
+              <div class="vstack gap-2" id="attachStep1List"></div>
+            </div>
+          </div>
+
+          <!-- Step 2 -->
+          <div id="attachStep2" class="d-none">
+            <p class="text-muted small mb-3">Revise os arquivos abaixo. Você pode adicionar uma descrição e vincular cada arquivo a um ou mais benefícios do processo — ambos são opcionais.</p>
+            <div class="vstack gap-3" id="attachStep2List"></div>
+          </div>
+
+          <!-- Feedback de envio -->
+          <div id="attachSending" class="d-none text-center py-4">
+            <div class="spinner-border text-primary mb-3" style="width:2rem;height:2rem;" role="status"></div>
+            <p class="text-muted mb-1">Enviando arquivos…</p>
+            <small class="text-muted" id="attachSendingProgress"></small>
+          </div>
+
+        </div>
+
+        <div class="modal-footer border-top">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal" id="attachBtnCancel">Cancelar</button>
+          <button type="button" class="btn btn-secondary d-none" id="attachBtnBack">
+            <i class="bi bi-arrow-left me-1"></i>Voltar
+          </button>
+          <button type="button" class="btn btn-primary" id="attachBtnNext" disabled>
+            Próximo <i class="bi bi-arrow-right ms-1"></i>
+          </button>
+          <button type="button" class="btn btn-primary d-none" id="attachBtnSubmit">
+            <i class="bi bi-upload me-1"></i><span id="attachBtnSubmitLabel">Enviar</span>
+          </button>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Template oculto: opções de benefícios para o step 2 -->
+  {% if process_benefits %}
+  <div id="attachBenefitOptionsTpl" class="d-none">
+    {% for benefit in process_benefits %}
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" value="{{ benefit.id }}"
+        id="attachBenefitTpl{{ benefit.id }}"
+        data-label="NB {{ benefit.benefit_number or '-' }}{% if benefit.insured_name %} — {{ benefit.insured_name }}{% endif %}">
+      <label class="form-check-label small" for="attachBenefitTpl{{ benefit.id }}">
+        <span class="fw-medium">NB {{ benefit.benefit_number or '-' }}</span>
+        {% if benefit.insured_name %}<span class="text-muted"> — {{ benefit.insured_name }}</span>{% endif %}
+        {% if benefit.benefit_type %}<span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle ms-1" style="font-size:.68rem;">{{ benefit.benefit_type }}</span>{% endif %}
+      </label>
+    </div>
+    {% endfor %}
+  </div>
+  {% endif %}
+
   {% endblock %}
 
   {% block extra_js %}
@@ -2449,6 +2558,199 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
 
       window._benefitNbScheme = function (nb) { return nb ? (nbColor[nb] || defaultScheme) : null; };
     })();
+
+    // Modal de anexos em steps
+    (function () {
+      const modal = document.getElementById('newAttachmentModal');
+      if (!modal) return;
+
+      const dropzone      = document.getElementById('attachDropzone');
+      const fileInput     = document.getElementById('attachFileInput');
+      const step1El       = document.getElementById('attachStep1');
+      const step2El       = document.getElementById('attachStep2');
+      const sendingEl     = document.getElementById('attachSending');
+      const step1Preview  = document.getElementById('attachStep1Preview');
+      const step1List     = document.getElementById('attachStep1List');
+      const step2List     = document.getElementById('attachStep2List');
+      const fileCountEl   = document.getElementById('attachFileCount');
+      const btnCancel     = document.getElementById('attachBtnCancel');
+      const btnBack       = document.getElementById('attachBtnBack');
+      const btnNext       = document.getElementById('attachBtnNext');
+      const btnSubmit     = document.getElementById('attachBtnSubmit');
+      const btnSubmitLbl  = document.getElementById('attachBtnSubmitLabel');
+      const sendingProg   = document.getElementById('attachSendingProgress');
+      const circle1       = document.getElementById('attachCircle1');
+      const circle2       = document.getElementById('attachCircle2');
+      const label1        = document.getElementById('attachLabel1');
+      const label2        = document.getElementById('attachLabel2');
+      const benefitsTpl   = document.getElementById('attachBenefitOptionsTpl');
+      const ACTION_URL    = "{{ url_for('process_panel.create_process_attachment', process_id=process.id) }}";
+
+      let currentStep = 1;
+      let selectedFiles = [];
+
+      function formatSize(bytes) {
+        if (!bytes) return '—';
+        return bytes >= 1048576 ? (bytes / 1048576).toFixed(1) + ' MB' : (bytes / 1024).toFixed(1) + ' KB';
+      }
+
+      function setStep(n) {
+        currentStep = n;
+        const active   = { background: '#0d6efd', color: '#fff', fontWeight: '700' };
+        const inactive = { background: '#e9ecef', color: '#6c757d', fontWeight: '600' };
+        Object.assign(circle1.style, n === 1 ? active : { background: '#198754', color: '#fff', fontWeight: '700' });
+        Object.assign(circle2.style, n === 2 ? active : inactive);
+        if (n === 2) circle1.innerHTML = '<i class="bi bi-check" style="font-size:.75rem;"></i>';
+        label1.className = 'small ' + (n === 1 ? 'fw-semibold' : 'text-success fw-semibold');
+        label2.className = 'small ' + (n === 2 ? 'fw-semibold' : 'text-muted');
+        step1El.classList.toggle('d-none', n !== 1);
+        step2El.classList.toggle('d-none', n !== 2);
+        sendingEl.classList.add('d-none');
+        btnBack.classList.toggle('d-none', n === 1);
+        btnNext.classList.toggle('d-none', n !== 1);
+        btnSubmit.classList.toggle('d-none', n !== 2);
+        btnCancel.classList.toggle('d-none', false);
+      }
+
+      function buildStep1Preview(files) {
+        step1List.innerHTML = '';
+        files.forEach(function (f) {
+          const row = document.createElement('div');
+          row.className = 'd-flex align-items-center gap-2 p-2 rounded border bg-light';
+          row.innerHTML = '<i class="bi bi-file-earmark text-secondary flex-shrink-0"></i>' +
+            '<span class="small fw-medium flex-grow-1 text-truncate">' + f.name + '</span>' +
+            '<span class="small text-muted text-nowrap">' + formatSize(f.size) + '</span>';
+          step1List.appendChild(row);
+        });
+        fileCountEl.textContent = files.length + ' arquivo' + (files.length !== 1 ? 's' : '');
+        step1Preview.classList.remove('d-none');
+        btnNext.disabled = false;
+      }
+
+      function buildStep2(files) {
+        step2List.innerHTML = '';
+        const hasBenefits = !!benefitsTpl;
+        files.forEach(function (f, idx) {
+          const card = document.createElement('div');
+          card.className = 'border rounded-3 p-3';
+          card.innerHTML =
+            '<div class="d-flex align-items-center gap-2 mb-3">' +
+              '<div class="rounded d-flex align-items-center justify-content-center bg-secondary-subtle" style="width:36px;height:36px;min-width:36px;">' +
+                '<i class="bi bi-file-earmark text-secondary"></i>' +
+              '</div>' +
+              '<div class="overflow-hidden">' +
+                '<div class="fw-semibold small text-truncate">' + f.name + '</div>' +
+                '<div class="text-muted" style="font-size:.72rem;">' + formatSize(f.size) + '</div>' +
+              '</div>' +
+            '</div>' +
+            '<div class="mb-3">' +
+              '<label class="form-label small fw-medium mb-1">Descrição <span class="text-muted fw-normal">(opcional)</span></label>' +
+              '<input type="text" class="form-control form-control-sm attach-desc-' + idx + '" maxlength="255" ' +
+                'placeholder="Ex.: Laudo médico, planilha de cálculo, parecer técnico...">' +
+            '</div>' +
+            (hasBenefits
+              ? '<div>' +
+                  '<label class="form-label small fw-medium mb-1">Benefícios vinculados <span class="text-muted fw-normal">(opcional)</span></label>' +
+                  '<div class="border rounded p-2 attach-benefits-' + idx + '" style="max-height:140px;overflow-y:auto;"></div>' +
+                '</div>'
+              : '');
+          step2List.appendChild(card);
+
+          if (hasBenefits) {
+            const container = card.querySelector('.attach-benefits-' + idx);
+            benefitsTpl.querySelectorAll('.form-check').forEach(function (tplCheck) {
+              const clone = tplCheck.cloneNode(true);
+              const inp = clone.querySelector('input');
+              const lbl = clone.querySelector('label');
+              const newId = 'ab_' + idx + '_' + inp.value;
+              inp.id = newId;
+              inp.name = 'benefit_ids';
+              lbl.setAttribute('for', newId);
+              container.appendChild(clone);
+            });
+          }
+        });
+        btnSubmitLbl.textContent = 'Enviar ' + files.length + ' arquivo' + (files.length !== 1 ? 's' : '');
+      }
+
+      function handleFiles(files) {
+        const incoming = Array.from(files).filter(function (f) {
+          return !selectedFiles.some(function (s) { return s.name === f.name && s.size === f.size; });
+        });
+        selectedFiles = selectedFiles.concat(incoming);
+        if (selectedFiles.length) buildStep1Preview(selectedFiles);
+        else { step1Preview.classList.add('d-none'); btnNext.disabled = true; }
+      }
+
+      dropzone.addEventListener('click', function () { fileInput.click(); });
+      dropzone.addEventListener('dragover', function (e) { e.preventDefault(); dropzone.classList.add('dragover'); });
+      dropzone.addEventListener('dragleave', function () { dropzone.classList.remove('dragover'); });
+      dropzone.addEventListener('drop', function (e) {
+        e.preventDefault();
+        dropzone.classList.remove('dragover');
+        handleFiles(e.dataTransfer.files);
+      });
+      fileInput.addEventListener('change', function () { handleFiles(fileInput.files); });
+
+      btnNext.addEventListener('click', function () {
+        if (!selectedFiles.length) return;
+        buildStep2(selectedFiles);
+        setStep(2);
+      });
+
+      btnBack.addEventListener('click', function () { setStep(1); });
+
+      btnSubmit.addEventListener('click', function () {
+        const cards = step2List.querySelectorAll(':scope > .border');
+        btnSubmit.classList.add('d-none');
+        btnBack.classList.add('d-none');
+        btnCancel.classList.add('d-none');
+        step2El.classList.add('d-none');
+        sendingEl.classList.remove('d-none');
+
+        const promises = selectedFiles.map(function (file, idx) {
+          const card = cards[idx];
+          const desc = card ? (card.querySelector('.attach-desc-' + idx) || {}).value || '' : '';
+          const benefitCheckboxes = card ? Array.from(card.querySelectorAll('input[name="benefit_ids"]:checked')) : [];
+          const fd = new FormData();
+          fd.append('attachment', file);
+          fd.append('description', desc);
+          benefitCheckboxes.forEach(function (cb) { fd.append('benefit_ids', cb.value); });
+          sendingProg.textContent = 'Enviando ' + (idx + 1) + ' de ' + selectedFiles.length + '…';
+          return fetch(ACTION_URL, { method: 'POST', body: fd });
+        });
+
+        Promise.all(promises)
+          .then(function () { window.location.reload(); })
+          .catch(function () {
+            sendingEl.innerHTML = '<div class="alert alert-danger mb-0">Erro ao enviar um ou mais arquivos. Tente novamente.</div>';
+            btnCancel.classList.remove('d-none');
+          });
+      });
+
+      modal.addEventListener('hidden.bs.modal', function () {
+        fileInput.value = '';
+        selectedFiles = [];
+        step1List.innerHTML = '';
+        step2List.innerHTML = '';
+        step1Preview.classList.add('d-none');
+        btnNext.disabled = true;
+        setStep(1);
+        circle1.innerHTML = '1';
+      });
+
+      setStep(1);
+    })();
+
+    function confirmDeleteAttachment(deleteUrl) {
+      if (confirm('Remover este anexo? Os vínculos com benefícios também serão excluídos.')) {
+        const form = document.createElement('form');
+        form.method = 'POST';
+        form.action = deleteUrl;
+        document.body.appendChild(form);
+        form.submit();
+      }
+    }
 
     function confirmDeleteDocument(deleteUrl) {
       if (confirm('Tem certeza que deseja remover este documento do processo?')) {

@@ -20,6 +20,20 @@ judicial_process_benefit_legal_theses = db.Table(
 )
 
 
+judicial_process_attachment_benefits = db.Table(
+    'judicial_process_attachment_benefits',
+    db.Column('id', db.Integer, primary_key=True),
+    db.Column('attachment_id', db.Integer, db.ForeignKey('judicial_process_attachments.id'), nullable=False, index=True),
+    db.Column('benefit_id', db.Integer, db.ForeignKey('judicial_process_benefits.id'), nullable=False, index=True),
+    db.Column('created_at', db.DateTime, default=datetime.now, nullable=False),
+    db.UniqueConstraint(
+        'attachment_id',
+        'benefit_id',
+        name='uq_judicial_process_attachment_benefits'
+    ),
+)
+
+
 class LawFirm(db.Model):
     """Tabela law_firms - Escritórios de advocacia que usam o sistema"""
     __tablename__ = 'law_firms'
@@ -1396,6 +1410,12 @@ class JudicialProcessAttachment(db.Model):
     law_firm = db.relationship('LawFirm')
     process = db.relationship('JudicialProcess', back_populates='attachments')
     uploaded_by_user = db.relationship('User', foreign_keys=[uploaded_by_user_id])
+    benefits = db.relationship(
+        'JudicialProcessBenefit',
+        secondary=judicial_process_attachment_benefits,
+        back_populates='attachments',
+        order_by='JudicialProcessBenefit.benefit_number.asc()'
+    )
 
     def __repr__(self):
         return f'<JudicialProcessAttachment {self.original_filename} - Process {self.process_id}>'
@@ -1450,6 +1470,11 @@ class JudicialProcessBenefit(db.Model):
         'JudicialProcessBenefitThesisContestation',
         back_populates='process_benefit',
         cascade='all, delete-orphan'
+    )
+    attachments = db.relationship(
+        'JudicialProcessAttachment',
+        secondary=judicial_process_attachment_benefits,
+        back_populates='benefits'
     )
 
     def __repr__(self):

@@ -1640,7 +1640,9 @@ def detail(process_id):
         )
     )
 
-    attachments_list = JudicialProcessAttachment.query.filter_by(
+    attachments_list = JudicialProcessAttachment.query.options(
+        selectinload(JudicialProcessAttachment.benefits)
+    ).filter_by(
         process_id=process.id,
         law_firm_id=law_firm_id,
         is_active=True,
@@ -1690,6 +1692,22 @@ def create_process_attachment(process_id):
 
     file = request.files.get('attachment')
     description = request.form.get('description', '').strip()
+    benefit_ids = sorted({
+        benefit_id
+        for benefit_id in request.form.getlist('benefit_ids', type=int)
+        if benefit_id
+    })
+
+    selected_benefits = []
+    if benefit_ids:
+        selected_benefits = JudicialProcessBenefit.query.filter(
+            JudicialProcessBenefit.id.in_(benefit_ids),
+            JudicialProcessBenefit.process_id == process.id,
+        ).order_by(JudicialProcessBenefit.benefit_number.asc()).all()
+
+        if len(selected_benefits) != len(benefit_ids):
+            flash('Um ou mais benefícios selecionados são inválidos para este processo.', 'danger')
+            return redirect(url_for('process_panel.detail', process_id=process.id) + '#attachments')
 
     if not file or not file.filename or not file.filename.strip():
         flash('Selecione um arquivo de anexo para upload.', 'danger')
@@ -1727,6 +1745,7 @@ def create_process_attachment(process_id):
             description=description or None,
             is_active=True,
         )
+        attachment.benefits = selected_benefits
 
         db.session.add(attachment)
         process.updated_at = datetime.utcnow()
@@ -1770,6 +1789,40 @@ def download_process_attachment(process_id, attachment_id):
         as_attachment=True,
         download_name=attachment.original_filename,
     )
+
+
+@process_panel_bp.route('/<int:process_id>/anexos/<int:attachment_id>/excluir', methods=['POST'])
+@require_law_firm
+def delete_process_attachment(process_id, attachment_id):
+    """Remove um anexo do processo e seus vínculos com benefícios."""
+    law_firm_id = get_current_law_firm_id()
+
+    process = JudicialProcess.query.filter_by(
+        id=process_id,
+        law_firm_id=law_firm_id,
+    ).first_or_404()
+
+    attachment = JudicialProcessAttachment.query.filter_by(
+        id=attachment_id,
+        process_id=process.id,
+        law_firm_id=law_firm_id,
+    ).first_or_404()
+
+    try:
+        attachment.benefits.clear()
+
+        file_path = str(attachment.file_path or '').strip()
+        if file_path and os.path.exists(file_path):
+            os.remove(file_path)
+
+        db.session.delete(attachment)
+        db.session.commit()
+        flash('Anexo removido com sucesso.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao remover o anexo: {str(e)}', 'danger')
+
+    return redirect(url_for('process_panel.detail', process_id=process.id) + '#attachments')
 
 
 @process_panel_bp.route('/<int:process_id>/documentos/novo', methods=['GET', 'POST'])
