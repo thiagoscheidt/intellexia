@@ -397,35 +397,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
             <div class="col-lg-3 col-6">
               <div class="info-box shadow-sm">
                 <span class="info-box-icon bg-primary bg-opacity-10">
-                  <i class="bi bi-file-earmark-text text-primary" style="font-size: 2rem;"></i>
-                </span>
-                <div class="info-box-content">
-                  <span class="info-box-text">Análises</span>
-                  <span class="info-box-number">{{ stats.analyses_count }}</span>
-                  {% if analysis_status_summary.in_progress > 0 %}
-                  <small class="text-warning d-block mt-1">
-                    <i class="bi bi-hourglass-split me-1"></i>
-                    {{ analysis_status_summary.in_progress }} em andamento
-                  </small>
-                  {% endif %}
-                </div>
-              </div>
-            </div>
-            <div class="col-lg-3 col-6">
-              <div class="info-box shadow-sm">
-                <span class="info-box-icon bg-success bg-opacity-10">
-                  <i class="bi bi-arrow-up-circle text-success" style="font-size: 2rem;"></i>
-                </span>
-                <div class="info-box-content">
-                  <span class="info-box-text">Recursos</span>
-                  <span class="info-box-number">{{ stats.appeals_count }}</span>
-                </div>
-              </div>
-            </div>
-            <div class="col-lg-3 col-6">
-              <div class="info-box shadow-sm">
-                <span class="info-box-icon bg-info bg-opacity-10">
-                  <i class="bi bi-files text-info" style="font-size: 2rem;"></i>
+                  <i class="bi bi-files text-primary" style="font-size: 2rem;"></i>
                 </span>
                 <div class="info-box-content">
                   <span class="info-box-text">Documentos</span>
@@ -435,12 +407,34 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
             </div>
             <div class="col-lg-3 col-6">
               <div class="info-box shadow-sm">
-                <span class="info-box-icon bg-warning bg-opacity-10">
-                  <i class="bi bi-briefcase text-warning" style="font-size: 2rem;"></i>
+                <span class="info-box-icon bg-success bg-opacity-10">
+                  <i class="bi bi-clipboard2-pulse text-success" style="font-size: 2rem;"></i>
                 </span>
                 <div class="info-box-content">
-                  <span class="info-box-text">Casos</span>
-                  <span class="info-box-number">{% if case %}1{% else %}0{% endif %}</span>
+                  <span class="info-box-text">Benefícios</span>
+                  <span class="info-box-number">{{ stats.benefits_count }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="col-lg-3 col-6">
+              <div class="info-box shadow-sm">
+                <span class="info-box-icon bg-info bg-opacity-10">
+                  <i class="bi bi-journal-text text-info" style="font-size: 2rem;"></i>
+                </span>
+                <div class="info-box-content">
+                  <span class="info-box-text">Anotações</span>
+                  <span class="info-box-number">{{ notes|length }}</span>
+                </div>
+              </div>
+            </div>
+            <div class="col-lg-3 col-6">
+              <div class="info-box shadow-sm">
+                <span class="info-box-icon bg-warning bg-opacity-10">
+                  <i class="bi bi-clock-history text-warning" style="font-size: 2rem;"></i>
+                </span>
+                <div class="info-box-content">
+                  <span class="info-box-text">Histórico de Fases</span>
+                  <span class="info-box-number">{{ phase_history|length }}</span>
                 </div>
               </div>
             </div>
@@ -492,22 +486,6 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
               </div>
             </div>
           </div>
-
-          {% if analysis_status_summary.in_progress > 0 %}
-          <div class="alert alert-warning py-2 px-3 mb-4" role="status">
-            <div class="d-flex flex-wrap align-items-center gap-2">
-              <i class="bi bi-hourglass-split"></i>
-              <span class="fw-semibold">Análises em andamento:</span>
-              {% if analysis_status_summary.processing > 0 %}
-              <span class="badge bg-info">{{ analysis_status_summary.processing }} processando</span>
-              {% endif %}
-              {% if analysis_status_summary.pending > 0 %}
-              <span class="badge bg-secondary">{{ analysis_status_summary.pending }} aguardando fila</span>
-              {% endif %}
-              <small class="text-muted">Acompanhe na aba Análises.</small>
-            </div>
-          </div>
-          {% endif %}
 
           <div class="row">
             <!-- Informações Principais -->
@@ -688,23 +666,6 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                         <span class="badge bg-info ms-1">{{ stats.documents_count }}</span>
                       </a>
                     </li>
-                    <li class="nav-item" role="presentation">
-                      <a class="nav-link" id="analyses-tab" data-bs-toggle="tab" href="#analyses" role="tab">
-                        <i class="bi bi-file-earmark-text me-2 text-info"></i>Análises
-                        <span class="badge bg-primary ms-1">{{ stats.analyses_count }}</span>
-                        {% if analysis_status_summary.in_progress > 0 %}
-                        <span class="badge bg-warning text-dark ms-1">
-                          <i class="bi bi-hourglass-split me-1"></i>{{ analysis_status_summary.in_progress }}
-                        </span>
-                        {% endif %}
-                      </a>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                      <a class="nav-link" id="appeals-tab" data-bs-toggle="tab" href="#appeals" role="tab">
-                        <i class="bi bi-arrow-up-circle me-2 text-success"></i>Recursos
-                        <span class="badge bg-success ms-1">{{ stats.appeals_count }}</span>
-                      </a>
-                    </li>
                     {% if case %}
                     <li class="nav-item" role="presentation">
                       <a class="nav-link" id="case-tab" data-bs-toggle="tab" href="#case" role="tab">
@@ -855,116 +816,6 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                           class="btn btn-primary btn-sm" target="_blank" rel="noopener noreferrer">
                           <i class="bi bi-plus-circle me-2"></i>Adicionar Documento
                         </a>
-                      </div>
-                      {% endif %}
-                    </div>
-
-                    <!-- Tab: Análises de Sentença -->
-                    <div class="tab-pane fade" id="analyses" role="tabpanel">
-                      {% if sentence_analyses %}
-                      <div class="table-responsive">
-                        <table class="table table-hover table-striped align-middle">
-                          <thead class="table-light">
-                            <tr>
-                              <th><i class="bi bi-file-earmark-pdf"></i> Arquivo</th>
-                              <th><i class="bi bi-flag"></i> Status</th>
-                              <th><i class="bi bi-calendar"></i> Criado em</th>
-                              <th class="text-end">Ações</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {% for analysis in sentence_analyses %}
-                            <tr>
-                              <td>
-                                <i class="bi bi-file-earmark-pdf text-danger me-2"></i>
-                                {{ analysis.original_filename }}
-                              </td>
-                              <td>
-                                {% if analysis.status == 'completed' %}
-                                <span class="badge bg-success"><i class="bi bi-check-circle"></i> Concluído</span>
-                                {% elif analysis.status == 'processing' %}
-                                <span class="badge bg-info"><i class="bi bi-hourglass-split"></i> Processando</span>
-                                {% elif analysis.status == 'pending' %}
-                                <span class="badge bg-warning text-dark"><i class="bi bi-clock"></i> Aguardando
-                                  fila</span>
-                                {% elif analysis.status == 'error' %}
-                                <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Erro</span>
-                                {% else %}
-                                <span class="badge bg-secondary">{{ analysis.status }}</span>
-                                {% endif %}
-                              </td>
-                              <td><small class="text-muted">{{ analysis.uploaded_at.strftime('%d/%m/%Y') }}</small></td>
-                              <td class="text-end">
-                                <a href="{{ url_for('tools.judicial_sentence_analysis_detail', sentence_id=analysis.id) }}"
-                                  class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener noreferrer">
-                                  <i class="bi bi-eye"></i> Ver
-                                </a>
-                              </td>
-                            </tr>
-                            {% endfor %}
-                          </tbody>
-                        </table>
-                      </div>
-                      {% else %}
-                      <div class="text-center py-5">
-                        <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
-                        <p class="text-muted mt-3 mb-3">Nenhuma análise de sentença encontrada</p>
-                        <form method="post"
-                          action="{{ url_for('process_panel.queue_sentence_analyses_for_process', process_id=process.id) }}"
-                          class="d-inline">
-                          <button type="submit" class="btn btn-primary btn-sm">
-                            <i class="bi bi-cpu me-2"></i>Criar e enfileirar análises
-                          </button>
-                        </form>
-                      </div>
-                      {% endif %}
-                    </div>
-
-                    <!-- Tab: Recursos Judiciais -->
-                    <div class="tab-pane fade" id="appeals" role="tabpanel">
-                      {% if appeals %}
-                      <div class="table-responsive">
-                        <table class="table table-hover table-striped align-middle">
-                          <thead class="table-light">
-                            <tr>
-                              <th><i class="bi bi-arrow-up-circle"></i> Tipo de Recurso</th>
-                              <th><i class="bi bi-flag"></i> Status</th>
-                              <th><i class="bi bi-calendar"></i> Data de Criação</th>
-                              <th class="text-end">Ações</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {% for appeal in appeals %}
-                            <tr>
-                              <td><strong>{{ appeal.appeal_type }}</strong></td>
-                              <td>
-                                {% if appeal.status == 'completed' %}
-                                <span class="badge bg-success"><i class="bi bi-check-circle"></i> Concluído</span>
-                                {% elif appeal.status == 'processing' %}
-                                <span class="badge bg-info"><i class="bi bi-hourglass-split"></i> Processando</span>
-                                {% elif appeal.status == 'error' %}
-                                <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Erro</span>
-                                {% else %}
-                                <span class="badge bg-secondary">{{ appeal.status }}</span>
-                                {% endif %}
-                              </td>
-                              <td><small class="text-muted">{{ appeal.created_at.strftime('%d/%m/%Y') }}</small></td>
-                              <td class="text-end">
-                                <a href="{{ url_for('tools.appeal_detail', appeal_id=appeal.id) }}"
-                                  class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener noreferrer">
-                                  <i class="bi bi-eye"></i> Ver
-                                </a>
-                              </td>
-                            </tr>
-                            {% endfor %}
-                          </tbody>
-                        </table>
-                      </div>
-                      {% else %}
-                      <div class="text-center py-5">
-                        <i class="bi bi-inbox text-muted" style="font-size: 3rem;"></i>
-                        <p class="text-muted mt-3 mb-0">Nenhum recurso judicial encontrado</p>
-                        <p class="text-muted small">Crie um a partir de uma análise de sentença</p>
                       </div>
                       {% endif %}
                     </div>
@@ -1317,7 +1168,9 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                   <tbody>
                                     {% for benefit in thesis_group.benefits %}
                                     <tr class="benefit-row" data-benefit-nb="{{ benefit.benefit_number or '' }}">
-                                      <td><strong class="benefit-nb-label" data-benefit-nb="{{ benefit.benefit_number or '' }}">{{ benefit.benefit_number or '-' }}</strong></td>
+                                      <td><strong class="benefit-nb-label"
+                                          data-benefit-nb="{{ benefit.benefit_number or '' }}">{{ benefit.benefit_number
+                                          or '-' }}</strong></td>
                                       <td>{{ benefit.nit_number or '-' }}</td>
                                       <td>{{ benefit.insured_name or '-' }}</td>
                                       <td>{{ benefit.benefit_type or '-' }}</td>
@@ -1483,7 +1336,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                           <tbody>
                             {% for cb in cited_benefits %}
                             <tr>
-                              <td><strong class="benefit-nb-label" data-benefit-nb="{{ cb.benefit_number or '' }}">{{ cb.benefit_number or '-' }}</strong></td>
+                              <td><strong class="benefit-nb-label" data-benefit-nb="{{ cb.benefit_number or '' }}">{{
+                                  cb.benefit_number or '-' }}</strong></td>
                               <td>{{ cb.nit_number or '-' }}</td>
                               <td>{{ cb.insured_name or '-' }}</td>
                               <td>{{ cb.benefit_type or '-' }}</td>
@@ -2376,13 +2230,13 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
     // Summary de NB + pills coloridos para duplicados + hover highlight
     (function () {
       const palette = [
-        { bg: 'rgba(13,110,253,0.12)',  color: '#0d6efd' },
-        { bg: 'rgba(25,135,84,0.12)',   color: '#198754' },
-        { bg: 'rgba(253,126,20,0.13)',  color: '#fd7e14' },
-        { bg: 'rgba(111,66,193,0.12)',  color: '#6f42c1' },
+        { bg: 'rgba(13,110,253,0.12)', color: '#0d6efd' },
+        { bg: 'rgba(25,135,84,0.12)', color: '#198754' },
+        { bg: 'rgba(253,126,20,0.13)', color: '#fd7e14' },
+        { bg: 'rgba(111,66,193,0.12)', color: '#6f42c1' },
         { bg: 'rgba(214,51,132,0.12)', color: '#d63384' },
         { bg: 'rgba(32,201,151,0.13)', color: '#0aa87a' },
-        { bg: 'rgba(220,53,69,0.11)',  color: '#dc3545' },
+        { bg: 'rgba(220,53,69,0.11)', color: '#dc3545' },
       ];
       const defaultScheme = { bg: 'rgba(108,117,125,0.1)', color: '#6c757d' };
 

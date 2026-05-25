@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, session, jsonify, redirect, url_for, flash
 from meilisearch_python_sdk import Client as MeilisearchClient
 from app.models import (
-    db, JudicialProcess, JudicialSentenceAnalysis, JudicialAppeal, 
+    db, JudicialProcess,
     KnowledgeBase, Case, User, Court, JudicialPhase, JudicialDocumentType, JudicialEvent,
     JudicialProcessNote, Client, JudicialDefendant, JudicialDocument, JudicialDocumentSummary,
     JudicialProcessBenefit, JudicialProcessPhaseHistory, JudicialLegalThesis, JudicialProcessCitedBenefit,
@@ -1499,16 +1499,6 @@ def detail(process_id):
         id=process_id,
         law_firm_id=law_firm_id
     ).first_or_404()
-    
-    # Buscar analyses de sentença relacionadas
-    sentence_analyses = JudicialSentenceAnalysis.query.filter(
-        JudicialSentenceAnalysis.user_id == session.get('user_id')
-    ).all()
-    
-    # Buscar appeals relacionados
-    appeals = JudicialAppeal.query.filter(
-        JudicialAppeal.user_id == session.get('user_id')
-    ).all()
 
     latest_event = JudicialEvent.query.filter_by(process_id=process.id).order_by(
         JudicialEvent.event_date.desc(),
@@ -1650,33 +1640,11 @@ def detail(process_id):
         )
     )
     
-    # Filtrar analyses e appeals por process_number
-    related_analyses = [a for a in sentence_analyses if hasattr(a, 'process_number') and a.process_number == process.process_number]
-    related_appeals = [a for a in appeals if a.sentence_analysis and (hasattr(a.sentence_analysis, 'process_number') and a.sentence_analysis.process_number == process.process_number)]
-
-    analysis_status_summary = {
-        'pending': 0,
-        'processing': 0,
-        'in_progress': 0,
-    }
-    for analysis in related_analyses:
-        status = str(getattr(analysis, 'status', '') or '').strip().lower()
-        if status == 'pending':
-            analysis_status_summary['pending'] += 1
-        elif status == 'processing':
-            analysis_status_summary['processing'] += 1
-
-    analysis_status_summary['in_progress'] = (
-        analysis_status_summary['pending'] + analysis_status_summary['processing']
-    )
-    
     # Dados para a dashboard
     data = {
         'process': process,
         'current_phase_key': current_phase_key,
         'current_phase_label': current_phase_label,
-        'sentence_analyses': related_analyses,
-        'appeals': related_appeals,
         'notes': notes,
         'phase_history': phase_history,
         'phase_options': sorted(
@@ -1692,131 +1660,12 @@ def detail(process_id):
         'documents_list': documents_list,
         'case': process.case if process.case_id else None,
         'stats': {
-            'analyses_count': len(related_analyses),
-            'appeals_count': len(related_appeals),
             'documents_count': len(documents_list),
             'benefits_count': len(process_benefits),
         },
-        'analysis_status_summary': analysis_status_summary,
     }
     
     return render_template('process_panel/detail.html', **data)
-
-
-@process_panel_bp.route('/<int:process_id>/analises-sentenca/enfileirar', methods=['POST'])
-@require_law_firm
-def queue_sentence_analyses_for_process(process_id):
-    """Enfileira sentenças do processo atual para análise de IA."""
-    law_firm_id = get_current_law_firm_id()
-    process = JudicialProcess.query.filter_by(
-        id=process_id,
-        law_firm_id=law_firm_id,
-    ).first_or_404()
-
-    def _normalize_doc_type(value: str | None) -> str:
-        normalized = unicodedata.normalize('NFKD', str(value or '').strip().lower())
-        return ''.join(ch for ch in normalized if not unicodedata.combining(ch))
-
-    def _is_sentence_document(doc_type: str | None) -> bool:
-        normalized = _normalize_doc_type(doc_type)
-        return 'sentenca' in normalized
-
-    def _is_initial_petition_document(doc_type: str | None) -> bool:
-        normalized = _normalize_doc_type(doc_type)
-        return 'peticao' in normalized and 'inicial' in normalized
-
-    def _resolve_existing_file_path(doc: JudicialDocument) -> str | None:
-        current_path = str(doc.file_path or '').strip()
-        if current_path and os.path.exists(current_path):
-            return current_path
-
-        if doc.knowledge_base and doc.knowledge_base.file_path:
-            kb_path = str(doc.knowledge_base.file_path).strip()
-            if kb_path and os.path.exists(kb_path):
-                doc.file_path = kb_path
-                return kb_path
-
-        return None
-
-    try:
-        process_documents = JudicialDocument.query.filter_by(process_id=process.id).order_by(
-            JudicialDocument.created_at.desc()
-        ).all()
-
-        sentence_docs = [doc for doc in process_documents if _is_sentence_document(doc.type)]
-        petition_doc = next((doc for doc in process_documents if _is_initial_petition_document(doc.type)), None)
-
-        if not sentence_docs:
-            flash('Este processo não possui documentos do tipo sentença para análise.', 'warning')
-            return redirect(url_for('process_panel.detail', process_id=process.id) + '#analyses')
-
-        queued = 0
-        skipped = 0
-        skipped_missing = 0
-        skipped_existing = 0
-
-        for sentence_doc in sentence_docs:
-            sentence_path = _resolve_existing_file_path(sentence_doc)
-            if not sentence_path:
-                skipped += 1
-                skipped_missing += 1
-                continue
-
-            existing = JudicialSentenceAnalysis.query.filter_by(
-                law_firm_id=law_firm_id,
-                file_path=sentence_path,
-            ).first()
-            if existing:
-                skipped += 1
-                skipped_existing += 1
-                continue
-
-            file_size = os.path.getsize(sentence_path)
-            extension = os.path.splitext(sentence_doc.file_name or '')[1].lower().replace('.', '')
-            sentence = JudicialSentenceAnalysis(
-                user_id=session.get('user_id'),
-                law_firm_id=law_firm_id,
-                original_filename=sentence_doc.file_name,
-                file_path=sentence_path,
-                file_size=file_size,
-                file_type=extension.upper() if extension else '',
-                process_number=process.process_number,
-                status='pending',
-            )
-
-            petition_path = _resolve_existing_file_path(petition_doc) if petition_doc else None
-            if petition_doc and petition_path:
-                petition_ext = os.path.splitext(petition_doc.file_name or '')[1].lower().replace('.', '')
-                sentence.petition_filename = petition_doc.file_name
-                sentence.petition_file_path = petition_path
-                sentence.petition_file_size = os.path.getsize(petition_path)
-                sentence.petition_file_type = petition_ext.upper() if petition_ext else ''
-
-            db.session.add(sentence)
-            queued += 1
-
-        if queued == 0:
-            db.session.rollback()
-            flash(
-                'Nenhuma nova sentença foi enfileirada. '
-                f'Ignoradas por arquivo ausente: {skipped_missing}. '
-                f'Ignoradas por já cadastradas: {skipped_existing}.',
-                'info'
-            )
-            return redirect(url_for('process_panel.detail', process_id=process.id) + '#analyses')
-
-        db.session.commit()
-        flash(
-            f'Processo enviado para análise! {queued} sentença(s) enfileirada(s) '
-            f'e {skipped} arquivo(s) ignorado(s).',
-            'success'
-        )
-        return redirect(url_for('process_panel.detail', process_id=process.id) + '#analyses')
-
-    except Exception as e:
-        db.session.rollback()
-        flash(f'Erro ao enfileirar análises do processo: {str(e)}', 'danger')
-        return redirect(url_for('process_panel.detail', process_id=process.id) + '#analyses')
 
 
 @process_panel_bp.route('/<int:process_id>/documentos/novo', methods=['GET', 'POST'])
