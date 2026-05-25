@@ -666,6 +666,12 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                         <span class="badge bg-info ms-1">{{ stats.documents_count }}</span>
                       </a>
                     </li>
+                    <li class="nav-item" role="presentation">
+                      <a class="nav-link" id="attachments-tab" data-bs-toggle="tab" href="#attachments" role="tab">
+                        <i class="bi bi-paperclip me-2"></i>Anexos
+                        <span class="badge bg-secondary ms-1">{{ attachments_list|length }}</span>
+                      </a>
+                    </li>
                     {% if case %}
                     <li class="nav-item" role="presentation">
                       <a class="nav-link" id="case-tab" data-bs-toggle="tab" href="#case" role="tab">
@@ -816,6 +822,103 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                           class="btn btn-primary btn-sm" target="_blank" rel="noopener noreferrer">
                           <i class="bi bi-plus-circle me-2"></i>Adicionar Documento
                         </a>
+                      </div>
+                      {% endif %}
+                    </div>
+
+                    <!-- Tab: Anexos -->
+                    <div class="tab-pane fade" id="attachments" role="tabpanel">
+                      <div class="card card-light shadow-sm mb-3">
+                        <div class="card-header">
+                          <h3 class="card-title mb-0"><i class="bi bi-paperclip me-2"></i>Novo Anexo</h3>
+                        </div>
+                        <div class="card-body">
+                          <form method="post" enctype="multipart/form-data"
+                            action="{{ url_for('process_panel.create_process_attachment', process_id=process.id) }}">
+                            <div class="row g-3 align-items-end">
+                              <div class="col-lg-5">
+                                <label class="form-label">Arquivo</label>
+                                <input type="file" class="form-control" name="attachment" required>
+                              </div>
+                              <div class="col-lg-5">
+                                <label class="form-label">Descrição <span class="text-muted fw-normal">(opcional)</span></label>
+                                <input type="text" class="form-control" name="description" maxlength="255"
+                                  placeholder="Ex.: Laudo médico, planilha de cálculo, parecer técnico...">
+                              </div>
+                              <div class="col-lg-2 d-grid">
+                                <button type="submit" class="btn btn-primary">
+                                  <i class="bi bi-upload me-1"></i>Enviar
+                                </button>
+                              </div>
+                            </div>
+                          </form>
+                        </div>
+                      </div>
+
+                      {% if attachments_list %}
+                      <div class="table-responsive">
+                        <table class="table table-hover table-striped align-middle mb-0">
+                          <thead class="table-light">
+                            <tr>
+                              <th><i class="bi bi-file-earmark me-1"></i>Arquivo</th>
+                              <th><i class="bi bi-card-text me-1"></i>Descrição</th>
+                              <th><i class="bi bi-hdd-stack me-1"></i>Tamanho</th>
+                              <th><i class="bi bi-person me-1"></i>Enviado por</th>
+                              <th><i class="bi bi-calendar me-1"></i>Enviado em</th>
+                              <th class="text-end">Ações</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {% for attachment in attachments_list %}
+                            <tr>
+                              <td>
+                                <div class="d-flex align-items-center gap-2">
+                                  <i class="bi bi-file-earmark text-secondary"></i>
+                                  <span class="fw-medium">{{ attachment.original_filename }}</span>
+                                </div>
+                              </td>
+                              <td>
+                                {% if attachment.description %}
+                                {{ attachment.description }}
+                                {% else %}
+                                <span class="text-muted fst-italic">Sem descrição</span>
+                                {% endif %}
+                              </td>
+                              <td>
+                                {% if attachment.file_size %}
+                                <small class="text-muted">
+                                  {% if attachment.file_size >= 1048576 %}
+                                  {{ (attachment.file_size / 1048576)|round(1) }} MB
+                                  {% else %}
+                                  {{ (attachment.file_size / 1024)|round(1) }} KB
+                                  {% endif %}
+                                </small>
+                                {% else %}
+                                <span class="text-muted">—</span>
+                                {% endif %}
+                              </td>
+                              <td>
+                                <span class="small">{{ attachment.uploaded_by_user.name if attachment.uploaded_by_user else 'Usuário' }}</span>
+                              </td>
+                              <td>
+                                <small class="text-muted">{{ attachment.created_at.strftime('%d/%m/%Y às %H:%M') if attachment.created_at else '—' }}</small>
+                              </td>
+                              <td class="text-end">
+                                <a href="{{ url_for('process_panel.download_process_attachment', process_id=process.id, attachment_id=attachment.id) }}"
+                                  class="btn btn-sm bg-primary-subtle text-primary-emphasis" title="Baixar anexo">
+                                  <i class="bi bi-download"></i>
+                                </a>
+                              </td>
+                            </tr>
+                            {% endfor %}
+                          </tbody>
+                        </table>
+                      </div>
+                      {% else %}
+                      <div class="text-center py-5">
+                        <i class="bi bi-paperclip text-muted" style="font-size: 2.5rem;"></i>
+                        <p class="text-muted mt-3 mb-1 fw-medium">Nenhum arquivo anexado</p>
+                        <p class="text-muted small mb-0">Use o formulário acima para adicionar arquivos de apoio ao processo.</p>
                       </div>
                       {% endif %}
                     </div>

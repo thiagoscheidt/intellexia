@@ -1167,6 +1167,12 @@ class JudicialProcess(db.Model):
         cascade='all, delete-orphan',
         order_by='JudicialProcessPhaseHistory.occurred_at.desc()'
     )
+    attachments = db.relationship(
+        'JudicialProcessAttachment',
+        back_populates='process',
+        cascade='all, delete-orphan',
+        order_by='JudicialProcessAttachment.created_at.desc()'
+    )
     sentence_analyses = db.relationship('JudicialSentenceAnalysis', 
                                        primaryjoin='JudicialProcess.process_number==foreign(JudicialSentenceAnalysis.process_number)',
                                        foreign_keys='[JudicialSentenceAnalysis.process_number]',
@@ -1363,6 +1369,36 @@ class JudicialDocumentSummary(db.Model):
 
     def __repr__(self):
         return f'<JudicialDocumentSummary {self.judicial_document_id}>'
+
+
+class JudicialProcessAttachment(db.Model):
+    """Tabela judicial_process_attachments - Anexos auxiliares de um processo judicial."""
+    __tablename__ = 'judicial_process_attachments'
+    __table_args__ = (
+        db.Index('ix_jpa_process_created_at', 'process_id', 'created_at'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    process_id = db.Column(db.Integer, db.ForeignKey('judicial_processes.id'), nullable=False, index=True)
+    uploaded_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+
+    original_filename = db.Column(db.String(255), nullable=False)
+    file_path = db.Column(db.String(500), nullable=False)
+    file_size = db.Column(db.Integer)
+    file_type = db.Column(db.String(50))
+    description = db.Column(db.Text)
+    is_active = db.Column(db.Boolean, default=True, nullable=False, index=True)
+
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    law_firm = db.relationship('LawFirm')
+    process = db.relationship('JudicialProcess', back_populates='attachments')
+    uploaded_by_user = db.relationship('User', foreign_keys=[uploaded_by_user_id])
+
+    def __repr__(self):
+        return f'<JudicialProcessAttachment {self.original_filename} - Process {self.process_id}>'
 
 
 class JudicialProcessBenefit(db.Model):

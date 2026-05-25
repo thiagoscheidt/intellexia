@@ -1,11 +1,11 @@
-from flask import Blueprint, render_template, request, session, jsonify, redirect, url_for, flash
+from flask import Blueprint, render_template, request, session, jsonify, redirect, url_for, flash, send_file
 from meilisearch_python_sdk import Client as MeilisearchClient
 from app.models import (
     db, JudicialProcess,
     KnowledgeBase, Case, User, Court, JudicialPhase, JudicialDocumentType, JudicialEvent,
     JudicialProcessNote, Client, JudicialDefendant, JudicialDocument, JudicialDocumentSummary,
     JudicialProcessBenefit, JudicialProcessPhaseHistory, JudicialLegalThesis, JudicialProcessCitedBenefit,
-    JudicialProcessBenefitThesisContestation
+    JudicialProcessBenefitThesisContestation, JudicialProcessAttachment
 )
 from datetime import datetime
 from functools import wraps
@@ -1639,6 +1639,12 @@ def detail(process_id):
             (item.get('filename') or '').lower(),
         )
     )
+
+    attachments_list = JudicialProcessAttachment.query.filter_by(
+        process_id=process.id,
+        law_firm_id=law_firm_id,
+        is_active=True,
+    ).order_by(JudicialProcessAttachment.created_at.desc(), JudicialProcessAttachment.id.desc()).all()
     
     # Dados para a dashboard
     data = {
@@ -1658,14 +1664,112 @@ def detail(process_id):
         'benefit_thesis_contestation_map': benefit_thesis_contestation_map,
         'kb_documents': kb_documents,
         'documents_list': documents_list,
+        'attachments_list': attachments_list,
         'case': process.case if process.case_id else None,
         'stats': {
             'documents_count': len(documents_list),
             'benefits_count': len(process_benefits),
+            'attachments_count': len(attachments_list),
         },
     }
     
     return render_template('process_panel/detail.html', **data)
+
+
+@process_panel_bp.route('/<int:process_id>/anexos', methods=['POST'])
+@require_law_firm
+def create_process_attachment(process_id):
+    """Adiciona um anexo auxiliar ao processo judicial."""
+    law_firm_id = get_current_law_firm_id()
+    user_id = session.get('user_id')
+
+    process = JudicialProcess.query.filter_by(
+        id=process_id,
+        law_firm_id=law_firm_id,
+    ).first_or_404()
+
+    file = request.files.get('attachment')
+    description = request.form.get('description', '').strip()
+
+    if not file or not file.filename or not file.filename.strip():
+        flash('Selecione um arquivo de anexo para upload.', 'danger')
+        return redirect(url_for('process_panel.detail', process_id=process.id) + '#attachments')
+
+    safe_filename = secure_filename(file.filename)
+    if not safe_filename:
+        flash('Nome de arquivo inválido para o anexo.', 'danger')
+        return redirect(url_for('process_panel.detail', process_id=process.id) + '#attachments')
+
+    saved_file_path = None
+
+    try:
+        upload_dir = os.path.join('uploads', 'process_attachments', str(law_firm_id), f'process_{process.id}')
+        os.makedirs(upload_dir, exist_ok=True)
+
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S_%f')
+        name, ext = os.path.splitext(safe_filename)
+        filename_with_timestamp = f"{name}_{timestamp}{ext}"
+        saved_file_path = os.path.join(upload_dir, filename_with_timestamp)
+
+        file.save(saved_file_path)
+
+        file_size = os.path.getsize(saved_file_path)
+        file_type = ext.lstrip('.').upper() if ext else 'DESCONHECIDO'
+
+        attachment = JudicialProcessAttachment(
+            law_firm_id=law_firm_id,
+            process_id=process.id,
+            uploaded_by_user_id=user_id,
+            original_filename=safe_filename,
+            file_path=saved_file_path,
+            file_size=file_size,
+            file_type=file_type,
+            description=description or None,
+            is_active=True,
+        )
+
+        db.session.add(attachment)
+        process.updated_at = datetime.utcnow()
+        db.session.commit()
+
+        flash('Anexo adicionado ao processo com sucesso.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        if saved_file_path and os.path.exists(saved_file_path):
+            os.remove(saved_file_path)
+        flash(f'Erro ao adicionar anexo: {str(e)}', 'danger')
+
+    return redirect(url_for('process_panel.detail', process_id=process.id) + '#attachments')
+
+
+@process_panel_bp.route('/<int:process_id>/anexos/<int:attachment_id>/download', methods=['GET'])
+@require_law_firm
+def download_process_attachment(process_id, attachment_id):
+    """Baixa um anexo auxiliar do processo judicial."""
+    law_firm_id = get_current_law_firm_id()
+
+    process = JudicialProcess.query.filter_by(
+        id=process_id,
+        law_firm_id=law_firm_id,
+    ).first_or_404()
+
+    attachment = JudicialProcessAttachment.query.filter_by(
+        id=attachment_id,
+        process_id=process.id,
+        law_firm_id=law_firm_id,
+        is_active=True,
+    ).first_or_404()
+
+    file_path = str(attachment.file_path or '').strip()
+    if not file_path or not os.path.exists(file_path):
+        flash('Arquivo de anexo não encontrado no servidor.', 'warning')
+        return redirect(url_for('process_panel.detail', process_id=process.id) + '#attachments')
+
+    return send_file(
+        file_path,
+        as_attachment=True,
+        download_name=attachment.original_filename,
+    )
 
 
 @process_panel_bp.route('/<int:process_id>/documentos/novo', methods=['GET', 'POST'])
