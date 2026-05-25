@@ -2489,6 +2489,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
           applyVisuals();
         });
       });
+
+      window._benefitNbScheme = function (nb) { return nb ? (nbColor[nb] || defaultScheme) : null; };
     })();
 
     function confirmDeleteDocument(deleteUrl) {
@@ -2561,6 +2563,14 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
         const resultadoRaw = (btn.getAttribute('data-contestation-resultado') || '').trim();
 
         benefitEl.textContent = benefit || '-';
+        const _scheme = typeof window._benefitNbScheme === 'function' ? window._benefitNbScheme(benefit) : null;
+        if (_scheme) {
+          benefitEl.className = 'badge';
+          benefitEl.style.cssText = 'background:' + _scheme.bg + ';color:' + _scheme.color + ';border:1px solid ' + _scheme.color.replace('rgb(', 'rgba(').replace(')', ',0.25)') + ';font-size:.8rem;font-weight:700;';
+        } else {
+          benefitEl.className = 'badge bg-primary-subtle text-primary-emphasis border border-primary-subtle';
+          benefitEl.style.cssText = '';
+        }
         statusEl.innerHTML = getStatusBadgeHtml(statusRaw || status, status);
         fundamentoEl.textContent = fundamento || '-';
         efeitoEl.textContent = efeito || '-';
