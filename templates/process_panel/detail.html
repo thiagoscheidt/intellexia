@@ -711,6 +711,14 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                         <span class="badge bg-secondary ms-1">{{ phase_history|length }}</span>
                       </a>
                     </li>
+                    <li class="nav-item" role="presentation">
+                      <a class="nav-link" id="generated-docs-tab" data-bs-toggle="tab" href="#generated-docs" role="tab">
+                        <i class="bi bi-stars me-2 text-primary"></i>Documentos Gerados
+                        {% if stats.generated_documents_count %}
+                        <span class="badge bg-primary ms-1">{{ stats.generated_documents_count }}</span>
+                        {% endif %}
+                      </a>
+                    </li>
                   </ul>
                 </div>
 
@@ -1121,6 +1129,91 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                         </div>
                       </div>
                     </div>
+
+                    <!-- Tab: Documentos Gerados -->
+                    <div class="tab-pane fade" id="generated-docs" role="tabpanel">
+                      <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="text-muted small">Documentos criados pela IA para este processo.</div>
+                        <a href="{{ url_for('process_panel.generated_document_new', process_id=process.id) }}"
+                           class="btn btn-primary btn-sm">
+                          <i class="bi bi-stars me-1"></i> Gerar Documento
+                        </a>
+                      </div>
+
+                      {% if generated_documents %}
+                      <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                          <thead class="table-light">
+                            <tr>
+                              <th>Documento</th>
+                              <th>Tipo</th>
+                              <th>Versões</th>
+                              <th>Status</th>
+                              <th>Criado em</th>
+                              <th></th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {% for gdoc in generated_documents %}
+                            {% set cv = gdoc.current_version %}
+                            <tr>
+                              <td>
+                                <a href="{{ url_for('process_panel.generated_document_detail', process_id=process.id, doc_id=gdoc.id) }}"
+                                   class="fw-semibold text-body text-decoration-none">
+                                  {{ gdoc.title }}
+                                </a>
+                              </td>
+                              <td>
+                                <span class="badge bg-secondary-subtle text-secondary-emphasis">
+                                  {{ document_type_labels.get(gdoc.document_type, gdoc.document_type) }}
+                                </span>
+                              </td>
+                              <td class="text-muted small">{{ gdoc.versions | list | length }}</td>
+                              <td>
+                                {% if not cv %}
+                                  <span class="badge bg-secondary-subtle text-secondary-emphasis">Aguardando</span>
+                                {% elif cv.generation_status == 'processing' %}
+                                  <span class="badge bg-warning-subtle text-warning-emphasis">
+                                    <span class="spinner-border spinner-border-sm me-1" style="width:.6rem;height:.6rem;"></span>
+                                    Processando
+                                  </span>
+                                {% elif cv.generation_status == 'failed' %}
+                                  <span class="badge bg-danger-subtle text-danger-emphasis">Falhou</span>
+                                {% else %}
+                                  <span class="badge bg-success-subtle text-success-emphasis">Concluído</span>
+                                {% endif %}
+                              </td>
+                              <td class="text-muted small">{{ gdoc.created_at.strftime('%d/%m/%Y às %H:%M') if gdoc.created_at else '—' }}</td>
+                              <td class="text-end">
+                                <a href="{{ url_for('process_panel.generated_document_detail', process_id=process.id, doc_id=gdoc.id) }}"
+                                   class="btn btn-sm bg-primary-subtle text-primary-emphasis border-0">
+                                  <i class="bi bi-eye"></i>
+                                </a>
+                                {% if cv and cv.generation_status == 'completed' %}
+                                <a href="{{ url_for('process_panel.generated_document_download', process_id=process.id, doc_id=gdoc.id) }}"
+                                   class="btn btn-sm bg-success-subtle text-success-emphasis border-0">
+                                  <i class="bi bi-download"></i>
+                                </a>
+                                {% endif %}
+                              </td>
+                            </tr>
+                            {% endfor %}
+                          </tbody>
+                        </table>
+                      </div>
+                      {% else %}
+                      <div class="text-center py-5">
+                        <i class="bi bi-stars text-muted" style="font-size:2.5rem;"></i>
+                        <p class="text-muted mt-3 mb-1 fw-semibold">Nenhum documento gerado ainda.</p>
+                        <p class="text-muted small mb-3">Use a IA para criar peças jurídicas diretamente deste processo.</p>
+                        <a href="{{ url_for('process_panel.generated_document_new', process_id=process.id) }}"
+                           class="btn btn-primary btn-sm">
+                          <i class="bi bi-stars me-1"></i> Gerar primeiro documento
+                        </a>
+                      </div>
+                      {% endif %}
+                    </div>
+
                   </div>
                 </div>
               </div>

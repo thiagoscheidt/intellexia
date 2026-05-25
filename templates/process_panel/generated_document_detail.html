@@ -1,0 +1,414 @@
+{% extends "layout/base.html" %}
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}{{ generated_doc.title }} — {{ process.process_number }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+  crossorigin="anonymous" />
+<style>
+  .doc-toolbar {
+    background: var(--bs-body-bg);
+    border-bottom: 1px solid rgba(15, 23, 42, .08);
+    padding: .65rem 1.25rem;
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    flex-wrap: wrap;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .doc-toolbar .toolbar-left { display: flex; gap: .4rem; flex: 1; }
+  .doc-toolbar .toolbar-right { display: flex; gap: .4rem; }
+
+  .doc-main-card {
+    border: 1px solid rgba(15, 23, 42, .07);
+    border-radius: .95rem;
+    box-shadow: 0 4px 18px rgba(15, 23, 42, .05);
+    overflow: hidden;
+  }
+
+  /* Preview mode */
+  #docPreview {
+    padding: 2rem 2.5rem;
+    min-height: 60vh;
+    font-family: Georgia, 'Times New Roman', serif;
+    font-size: .93rem;
+    line-height: 1.8;
+    color: var(--bs-body-color);
+  }
+
+  #docPreview h1 {
+    font-size: 1.15rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    text-align: center;
+    margin-bottom: 1.5rem;
+    margin-top: 1rem;
+  }
+
+  #docPreview h2 {
+    font-size: .97rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .03em;
+    margin-top: 1.5rem;
+    margin-bottom: .5rem;
+    color: var(--bs-emphasis-color);
+  }
+
+  #docPreview h3 {
+    font-size: .9rem;
+    font-weight: 600;
+    margin-top: 1.2rem;
+    margin-bottom: .35rem;
+  }
+
+  #docPreview p { margin-bottom: .75rem; text-align: justify; }
+  #docPreview hr { border-color: rgba(15,23,42,.12); margin: 1.5rem 0; }
+
+  /* Editor mode */
+  #docEditor {
+    display: none;
+    width: 100%;
+    min-height: 65vh;
+    padding: 2rem 2.5rem;
+    border: none;
+    outline: none;
+    resize: vertical;
+    font-family: 'Courier New', monospace;
+    font-size: .88rem;
+    line-height: 1.7;
+    background: var(--bs-body-bg);
+    color: var(--bs-body-color);
+  }
+
+  /* Failed / pending states */
+  .status-panel {
+    padding: 3rem 2rem;
+    text-align: center;
+    color: var(--bs-secondary-color);
+  }
+
+  /* Versions sidebar */
+  .version-item {
+    padding: .65rem .85rem;
+    border-radius: .6rem;
+    cursor: pointer;
+    transition: background .15s;
+    border-left: 3px solid transparent;
+  }
+
+  .version-item:hover { background: var(--bs-secondary-bg); }
+
+  .version-item.current {
+    background: #eef3ff;
+    border-left-color: #0d6efd;
+  }
+
+  .version-badge {
+    font-size: .72rem;
+    padding: .15em .5em;
+    border-radius: 10px;
+  }
+
+  .version-source-ai {
+    background: rgba(13,110,253,.12);
+    color: #0d6efd;
+  }
+
+  .version-source-manual {
+    background: rgba(25,135,84,.12);
+    color: #198754;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{{ page_hero(
+  title=generated_doc.title,
+  subtitle=process.title or process.process_number,
+  breadcrumbs=[
+    ('Painel de Processos', url_for('process_panel.list_processes')),
+    (process.title or process.process_number, url_for('process_panel.detail', process_id=process.id)),
+    (generated_doc.title, None),
+  ]
+) }}
+
+<div class="container-fluid pb-5">
+  {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+      <div class="alert alert-{{ 'success' if category == 'success' else 'danger' if category == 'danger' else 'warning' }} alert-dismissible fade show mb-3" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+      </div>
+    {% endfor %}
+  {% endwith %}
+
+  <div class="row g-3">
+    <!-- Main document column -->
+    <div class="col-xl-9 col-lg-8">
+      <div class="doc-main-card">
+
+        <!-- Toolbar -->
+        <div class="doc-toolbar">
+          <div class="toolbar-left">
+            {% set cv = generated_doc.current_version %}
+            {% if cv and cv.generation_status == 'completed' %}
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="btnToggleEdit" onclick="toggleEditMode()">
+                <i class="bi bi-pencil me-1"></i> Editar
+              </button>
+              <form method="POST"
+                    action="{{ url_for('process_panel.generated_document_save', process_id=process.id, doc_id=generated_doc.id) }}"
+                    id="saveForm" class="d-none">
+                <input type="hidden" name="content" id="saveContent">
+                <button type="submit" class="btn btn-sm btn-success">
+                  <i class="bi bi-floppy me-1"></i> Salvar versão
+                </button>
+              </form>
+              <button type="button" class="btn btn-sm btn-outline-secondary" id="btnCancelEdit"
+                      class="d-none" onclick="cancelEdit()">
+                Cancelar
+              </button>
+            {% endif %}
+          </div>
+
+          <div class="toolbar-right">
+            <!-- Regerar -->
+            <button type="button" class="btn btn-sm btn-outline-primary"
+                    data-bs-toggle="modal" data-bs-target="#regenerateModal">
+              <i class="bi bi-stars me-1"></i> Regerar
+            </button>
+            <!-- Download -->
+            <a href="{{ url_for('process_panel.generated_document_download', process_id=process.id, doc_id=generated_doc.id) }}"
+               class="btn btn-sm btn-outline-success">
+              <i class="bi bi-download me-1"></i> Download .docx
+            </a>
+            <!-- Delete -->
+            <form method="POST"
+                  action="{{ url_for('process_panel.generated_document_delete', process_id=process.id, doc_id=generated_doc.id) }}"
+                  id="deleteForm">
+              <button type="button" class="btn btn-sm btn-outline-danger"
+                      onclick="confirmDelete()">
+                <i class="bi bi-trash3 me-1"></i>
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- Document content -->
+        {% set cv = generated_doc.current_version %}
+        {% if not cv %}
+          <div class="status-panel">
+            <i class="bi bi-hourglass-split fs-2 d-block mb-2"></i>
+            <div class="fw-semibold">Aguardando geração…</div>
+          </div>
+        {% elif cv.generation_status == 'processing' %}
+          <div class="status-panel">
+            <div class="spinner-border text-primary mb-3" style="width:2.5rem;height:2.5rem;"></div>
+            <div class="fw-semibold">Gerando documento com IA…</div>
+            <div class="small text-muted mt-1">Isso pode levar alguns instantes.</div>
+          </div>
+        {% elif cv.generation_status == 'failed' %}
+          <div class="status-panel">
+            <i class="bi bi-exclamation-triangle-fill text-danger fs-2 d-block mb-2"></i>
+            <div class="fw-semibold text-danger">Falha na geração</div>
+            {% if cv.error_message %}
+              <div class="small text-muted mt-2 font-monospace">{{ cv.error_message }}</div>
+            {% endif %}
+            <button type="button" class="btn btn-sm btn-outline-primary mt-3"
+                    data-bs-toggle="modal" data-bs-target="#regenerateModal">
+              <i class="bi bi-arrow-repeat me-1"></i> Tentar novamente
+            </button>
+          </div>
+        {% else %}
+          <!-- Preview rendered -->
+          <div id="docPreview"></div>
+          <!-- Editor textarea -->
+          <textarea id="docEditor">{{ cv.content or '' }}</textarea>
+        {% endif %}
+
+      </div><!-- /.doc-main-card -->
+    </div><!-- /main col -->
+
+    <!-- Sidebar: versions + meta -->
+    <div class="col-xl-3 col-lg-4">
+
+      <!-- Meta card -->
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-body p-3">
+          <div class="small text-muted mb-1">Tipo</div>
+          <div class="fw-semibold small mb-2">
+            {{ document_type_labels.get(generated_doc.document_type, generated_doc.document_type) }}
+          </div>
+          <div class="small text-muted mb-1">Benefícios / Teses</div>
+          <div class="d-flex flex-wrap gap-1 mb-2">
+            {% for sel in generated_doc.selections %}
+              <span class="badge rounded-pill text-bg-secondary" style="font-size:.73rem;"
+                    title="{{ sel.legal_thesis.name if sel.legal_thesis else 'Sem tese' }}">
+                {{ sel.benefit.benefit_number if sel.benefit else '?' }}
+                {% if sel.legal_thesis %}
+                  <i class="bi bi-tag-fill ms-1" style="font-size:.65rem;"></i>
+                {% endif %}
+              </span>
+            {% else %}
+              <span class="text-muted small fst-italic">Nenhum</span>
+            {% endfor %}
+          </div>
+          <div class="small text-muted mb-1">Criado em</div>
+          <div class="small">{{ generated_doc.created_at.strftime('%d/%m/%Y às %H:%M') if generated_doc.created_at else '—' }}</div>
+        </div>
+      </div>
+
+      <!-- Versions card -->
+      <div class="card border-0 shadow-sm">
+        <div class="card-header bg-transparent border-0 pb-0 pt-3 px-3">
+          <div class="fw-semibold small">
+            <i class="bi bi-clock-history me-1 text-muted"></i> Versões
+          </div>
+        </div>
+        <div class="card-body p-2">
+          {% set versions = generated_doc.versions | sort(attribute='version_number', reverse=True) %}
+          {% if versions %}
+            {% for v in versions %}
+            <div class="version-item {% if generated_doc.current_version_id == v.id %}current{% endif %}"
+                 id="vitem-{{ v.id }}">
+              <div class="d-flex justify-content-between align-items-center mb-1">
+                <span class="fw-semibold small">v{{ v.version_number }}</span>
+                <span class="version-badge {% if v.source == 'ai_generated' %}version-source-ai{% else %}version-source-manual{% endif %}">
+                  {% if v.source == 'ai_generated' %}
+                    <i class="bi bi-stars"></i> IA
+                  {% else %}
+                    <i class="bi bi-pencil"></i> Manual
+                  {% endif %}
+                </span>
+              </div>
+              <div class="text-muted" style="font-size:.73rem;">
+                {{ v.created_at.strftime('%d/%m/%Y às %H:%M') if v.created_at else '—' }}
+              </div>
+              {% if v.generation_status == 'failed' %}
+                <div class="text-danger" style="font-size:.72rem; margin-top:.2rem;">
+                  <i class="bi bi-exclamation-circle"></i> Falha
+                </div>
+              {% endif %}
+              {% if generated_doc.current_version_id != v.id and v.generation_status == 'completed' %}
+              <form method="POST"
+                    action="{{ url_for('process_panel.generated_document_restore_version', process_id=process.id, doc_id=generated_doc.id, version_id=v.id) }}"
+                    class="mt-1">
+                <button type="submit" class="btn btn-xs btn-outline-secondary"
+                        style="font-size:.72rem; padding:.15rem .5rem;">
+                  Restaurar
+                </button>
+              </form>
+              {% endif %}
+            </div>
+            {% endfor %}
+          {% else %}
+            <div class="text-muted small fst-italic px-2 py-2">Sem versões.</div>
+          {% endif %}
+        </div>
+      </div>
+
+    </div><!-- /sidebar -->
+  </div><!-- /row -->
+</div>
+
+<!-- ── Regenerate Modal ────────────────────────────────────────────────── -->
+<div class="modal fade" id="regenerateModal" tabindex="-1" aria-labelledby="regenerateModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <form method="POST"
+            action="{{ url_for('process_panel.generated_document_regenerate', process_id=process.id, doc_id=generated_doc.id) }}">
+        <div class="modal-header border-0 pb-0">
+          <h6 class="modal-title fw-semibold" id="regenerateModalLabel">
+            <i class="bi bi-stars text-primary me-1"></i> Regerar documento
+          </h6>
+          <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        </div>
+        <div class="modal-body pt-2">
+          <p class="text-muted small mb-3">
+            Uma nova versão será gerada pela IA. A versão atual será preservada no histórico.
+          </p>
+          <label class="form-label fw-semibold small">
+            Instruções adicionais <span class="text-muted fw-normal">(opcional)</span>
+          </label>
+          <textarea name="instructions" class="form-control form-control-sm" rows="3"
+            placeholder="Ex: Reforçar o argumento sobre o período de carência, incluir menção ao acórdão X…"></textarea>
+        </div>
+        <div class="modal-footer border-0 pt-0">
+          <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-sm btn-primary">
+            <i class="bi bi-stars me-1"></i> Regerar
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<!-- marked.js for markdown rendering -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+(function () {
+  const rawContent = document.getElementById('docEditor')
+    ? document.getElementById('docEditor').value
+    : '';
+  const preview = document.getElementById('docPreview');
+  const editor = document.getElementById('docEditor');
+  const btnToggle = document.getElementById('btnToggleEdit');
+  const btnCancelEdit = document.getElementById('btnCancelEdit');
+  const saveForm = document.getElementById('saveForm');
+  const saveContent = document.getElementById('saveContent');
+  let editMode = false;
+  let originalContent = rawContent;
+
+  // Render markdown on load
+  if (preview && rawContent) {
+    preview.innerHTML = marked.parse(rawContent);
+  }
+
+  window.toggleEditMode = function () {
+    editMode = true;
+    preview.style.display = 'none';
+    editor.style.display = 'block';
+    editor.focus();
+
+    if (btnToggle) btnToggle.classList.add('d-none');
+    if (saveForm) saveForm.classList.remove('d-none');
+    if (btnCancelEdit) {
+      btnCancelEdit.classList.remove('d-none');
+      // move to toolbar
+    }
+  };
+
+  window.cancelEdit = function () {
+    editMode = false;
+    editor.value = originalContent;
+    editor.style.display = 'none';
+    preview.style.display = 'block';
+    if (btnToggle) btnToggle.classList.remove('d-none');
+    if (saveForm) saveForm.classList.add('d-none');
+    if (btnCancelEdit) btnCancelEdit.classList.add('d-none');
+  };
+
+  // Before save, copy editor content into hidden input
+  if (saveForm) {
+    saveForm.addEventListener('submit', function () {
+      saveContent.value = editor.value;
+    });
+  }
+
+  // Delete confirmation
+  window.confirmDelete = function () {
+    if (confirm('Remover este documento permanentemente? Esta ação não pode ser desfeita.')) {
+      document.getElementById('deleteForm').submit();
+    }
+  };
+})();
+</script>
+{% endblock %}

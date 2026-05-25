@@ -2724,3 +2724,149 @@ class FapReviewAuditLog(db.Model):
 
     def __repr__(self):
         return f'<FapReviewAuditLog action={self.action} entity={self.entity_type}>'
+
+
+# ── Documentos Gerados por IA ──────────────────────────────────────────────
+
+
+class JudicialProcessGeneratedDocument(db.Model):
+    """Tabela judicial_process_generated_documents — Container de documentos gerados por IA."""
+    __tablename__ = 'judicial_process_generated_documents'
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    process_id = db.Column(db.Integer, db.ForeignKey('judicial_processes.id'), nullable=False, index=True)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
+
+    document_type = db.Column(db.String(60), nullable=False, index=True)
+    # ex: 'impugnacao_contestacao', 'manifestacao', 'recurso_ordinario'
+    title = db.Column(db.String(255), nullable=False)
+
+    current_version_id = db.Column(
+        db.Integer,
+        db.ForeignKey('judicial_process_generated_document_versions.id', use_alter=True),
+        nullable=True,
+    )
+
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    law_firm = db.relationship('LawFirm')
+    process = db.relationship(
+        'JudicialProcess',
+        backref=db.backref('generated_documents', lazy='dynamic', cascade='all, delete-orphan'),
+    )
+    created_by = db.relationship('User', foreign_keys=[created_by_id])
+    current_version = db.relationship(
+        'JudicialProcessGeneratedDocumentVersion',
+        foreign_keys=[current_version_id],
+        post_update=True,
+    )
+    versions = db.relationship(
+        'JudicialProcessGeneratedDocumentVersion',
+        primaryjoin='JudicialProcessGeneratedDocument.id == JudicialProcessGeneratedDocumentVersion.generated_document_id',
+        back_populates='generated_document',
+        cascade='all, delete-orphan',
+        order_by='JudicialProcessGeneratedDocumentVersion.version_number.asc()',
+        foreign_keys='JudicialProcessGeneratedDocumentVersion.generated_document_id',
+    )
+    selections = db.relationship(
+        'JudicialProcessGeneratedDocumentSelection',
+        back_populates='generated_document',
+        cascade='all, delete-orphan',
+        order_by='JudicialProcessGeneratedDocumentSelection.id.asc()',
+    )
+
+    def __repr__(self):
+        return f'<JudicialProcessGeneratedDocument {self.document_type} - Process {self.process_id}>'
+
+
+class JudicialProcessGeneratedDocumentVersion(db.Model):
+    """Tabela judicial_process_generated_document_versions — Versões de cada documento gerado."""
+    __tablename__ = 'judicial_process_generated_document_versions'
+
+    id = db.Column(db.Integer, primary_key=True)
+    generated_document_id = db.Column(
+        db.Integer,
+        db.ForeignKey('judicial_process_generated_documents.id'),
+        nullable=False,
+        index=True,
+    )
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
+
+    version_number = db.Column(db.Integer, nullable=False, default=1)
+    content = db.Column(db.Text)  # markdown
+    source = db.Column(db.String(20), default='ai_generated', index=True)
+    # ai_generated | manually_edited
+
+    generation_status = db.Column(db.String(20), default='pending', index=True)
+    # pending | processing | completed | failed
+    error_message = db.Column(db.Text)
+
+    model_used = db.Column(db.String(80))
+    token_usage_json = db.Column(db.Text)
+    prompt_used = db.Column(db.Text)
+
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+
+    generated_document = db.relationship(
+        'JudicialProcessGeneratedDocument',
+        foreign_keys=[generated_document_id],
+        back_populates='versions',
+    )
+    created_by = db.relationship('User', foreign_keys=[created_by_id])
+
+    def __repr__(self):
+        return f'<JudicialProcessGeneratedDocumentVersion v{self.version_number} doc={self.generated_document_id}>'
+
+
+class JudicialProcessGeneratedDocumentSelection(db.Model):
+    """Tabela judicial_process_generated_document_selections.
+
+    Registra quais pares (benefício, tese) foram selecionados para geração do documento.
+    legal_thesis_id pode ser NULL quando o benefício não possui tese vinculada.
+    """
+    __tablename__ = 'judicial_process_generated_document_selections'
+    __table_args__ = (
+        db.UniqueConstraint(
+            'generated_document_id', 'benefit_id', 'legal_thesis_id',
+            name='uq_jpgds_doc_benefit_thesis',
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    generated_document_id = db.Column(
+        db.Integer,
+        db.ForeignKey('judicial_process_generated_documents.id'),
+        nullable=False,
+        index=True,
+    )
+    benefit_id = db.Column(
+        db.Integer,
+        db.ForeignKey('judicial_process_benefits.id'),
+        nullable=False,
+        index=True,
+    )
+    legal_thesis_id = db.Column(
+        db.Integer,
+        db.ForeignKey('judicial_legal_theses.id'),
+        nullable=True,
+        index=True,
+    )
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+
+    generated_document = db.relationship(
+        'JudicialProcessGeneratedDocument',
+        back_populates='selections',
+    )
+    benefit = db.relationship('JudicialProcessBenefit')
+    legal_thesis = db.relationship('JudicialLegalThesis')
+
+    def __repr__(self):
+        return (
+            f'<JudicialProcessGeneratedDocumentSelection '
+            f'doc={self.generated_document_id} benefit={self.benefit_id} thesis={self.legal_thesis_id}>'
+        )
+
+    def __repr__(self):
+        return f'<JudicialProcessGeneratedDocumentVersion v{self.version_number} doc={self.generated_document_id}>'

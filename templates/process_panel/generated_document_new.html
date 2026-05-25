@@ -1,0 +1,596 @@
+{% extends "layout/base.html" %}
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}Gerar Documento — {{ process.title or process.process_number }}{% endblock %}
+
+{% block extra_css %}
+<style>
+  .wizard-card {
+    border: 1px solid rgba(15, 23, 42, .07);
+    border-radius: .95rem;
+    box-shadow: 0 6px 22px rgba(15, 23, 42, .06);
+  }
+
+  .wizard-steps {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 2rem;
+    position: relative;
+  }
+
+  .wizard-steps::before {
+    content: '';
+    position: absolute;
+    top: 20px;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: #e9ecef;
+    z-index: 0;
+  }
+
+  .wizard-step {
+    flex: 1;
+    text-align: center;
+    position: relative;
+    z-index: 1;
+  }
+
+  .wizard-step-circle {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: #e9ecef;
+    color: #6c757d;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto .5rem;
+    font-weight: bold;
+    transition: all .3s;
+  }
+
+  .wizard-step-label {
+    font-size: .875rem;
+    color: #6c757d;
+  }
+
+  .wizard-step.active .wizard-step-circle {
+    background: #0d6efd;
+    color: #fff;
+  }
+
+  .wizard-step.completed .wizard-step-circle {
+    background: #198754;
+    color: #fff;
+  }
+
+  .wizard-step.active .wizard-step-label {
+    color: #0d6efd;
+    font-weight: 600;
+  }
+
+  .wizard-step.completed .wizard-step-label {
+    color: #198754;
+  }
+
+  .wizard-panel { display: none; }
+  .wizard-panel.active { display: block; }
+
+  .step-actions {
+    border-top: 1px solid rgba(15, 23, 42, .08);
+    padding-top: 1.25rem;
+    margin-top: 1.5rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  /* Tipo de documento */
+  .doc-type-card {
+    border: 2px solid rgba(15, 23, 42, .1);
+    border-radius: .85rem;
+    padding: 1.1rem 1.2rem;
+    cursor: pointer;
+    transition: border-color .2s, box-shadow .2s, background .2s;
+    height: 100%;
+  }
+
+  .doc-type-card:hover {
+    border-color: #0d6efd;
+    background: #f8f9ff;
+  }
+
+  .doc-type-card.selected {
+    border-color: #0d6efd;
+    background: #eef3ff;
+    box-shadow: 0 0 0 3px rgba(13, 110, 253, .15);
+  }
+
+  .doc-type-card input[type="radio"] { display: none; }
+
+  .doc-type-icon {
+    font-size: 1.6rem;
+    margin-bottom: .5rem;
+  }
+
+  /* Benefícios */
+  .benefit-check-card {
+    border: 1px solid rgba(15, 23, 42, .1);
+    border-radius: .8rem;
+    padding: .85rem 1rem;
+    cursor: pointer;
+    transition: border-color .2s, background .2s;
+    margin-bottom: .6rem;
+  }
+
+  .benefit-check-card:hover { border-color: #0d6efd; }
+
+  .benefit-check-card.checked {
+    border-color: #0d6efd;
+    background: #f8f9ff;
+  }
+
+  .benefit-check-card input[type="checkbox"] { display: none; }
+
+  .benefit-nb-badge {
+    display: inline-block;
+    padding: .2em .6em;
+    border-radius: 20px;
+    font-size: .78rem;
+    font-weight: 600;
+    color: #fff;
+    margin-right: .4rem;
+  }
+
+  .contestation-fields {
+    margin-top: .75rem;
+    padding: .75rem;
+    background: rgba(255,193,7,.06);
+    border-left: 3px solid #ffc107;
+    border-radius: 0 .5rem .5rem 0;
+    display: none;
+  }
+
+  .contestation-fields.show { display: block; }
+
+  .contestation-label {
+    font-size: .72rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--bs-secondary-color);
+    margin-bottom: .15rem;
+  }
+
+  .contestation-value {
+    font-size: .83rem;
+    color: var(--bs-body-color);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  /* Resumo */
+  .summary-box {
+    border: 1px solid rgba(15, 23, 42, .08);
+    border-radius: .8rem;
+    background: var(--bs-secondary-bg);
+    padding: .85rem;
+  }
+
+  .summary-line {
+    display: flex;
+    justify-content: space-between;
+    gap: .75rem;
+    padding: .35rem 0;
+    border-bottom: 1px solid rgba(15, 23, 42, .08);
+    font-size: .83rem;
+  }
+
+  .summary-line:last-child { border-bottom: none; padding-bottom: 0; }
+</style>
+{% endblock %}
+
+{% block content %}
+{{ page_hero(
+  title='Gerar Documento',
+  subtitle=process.title or process.process_number,
+  breadcrumbs=[
+    ('Painel de Processos', url_for('process_panel.list_processes')),
+    (process.title or process.process_number, url_for('process_panel.detail', process_id=process.id)),
+    ('Gerar Documento', None),
+  ]
+) }}
+
+<div class="container-fluid pb-5">
+  <div class="row justify-content-center">
+    <div class="col-xl-8 col-lg-10">
+      <div class="card wizard-card">
+        <div class="card-body p-4">
+
+          <!-- Steps -->
+          <div class="wizard-steps mb-4" id="wizardSteps">
+            <div class="wizard-step active" id="step-ind-1">
+              <div class="wizard-step-circle">1</div>
+              <div class="wizard-step-label">Tipo</div>
+            </div>
+            <div class="wizard-step" id="step-ind-2">
+              <div class="wizard-step-circle">2</div>
+              <div class="wizard-step-label">Benefícios</div>
+            </div>
+            <div class="wizard-step" id="step-ind-3">
+              <div class="wizard-step-circle">3</div>
+              <div class="wizard-step-label">Revisão</div>
+            </div>
+          </div>
+
+          <form method="POST" action="{{ url_for('process_panel.generated_document_create', process_id=process.id) }}" id="generateForm">
+
+            <!-- ── Step 1: Tipo ───────────────────────────────────────── -->
+            <div class="wizard-panel active" id="panel-1">
+              <h6 class="fw-semibold mb-1">Selecione o tipo de documento</h6>
+              <p class="text-muted small mb-3">Cada tipo possui estrutura e fundamentação específica gerada pela IA.</p>
+
+              <div class="row g-3">
+                <div class="col-md-6">
+                  <label class="doc-type-card d-block" id="card-impugnacao_contestacao">
+                    <input type="radio" name="document_type" value="impugnacao_contestacao">
+                    <div class="doc-type-icon text-warning">
+                      <i class="bi bi-shield-exclamation"></i>
+                    </div>
+                    <div class="fw-semibold mb-1">Impugnação à Contestação da União</div>
+                    <div class="text-muted small">
+                      Refuta os fundamentos apresentados pela União na contestação, benefício por benefício.
+                    </div>
+                  </label>
+                </div>
+                <div class="col-md-6">
+                  <label class="doc-type-card d-block" id="card-manifestacao">
+                    <input type="radio" name="document_type" value="manifestacao">
+                    <div class="doc-type-icon text-primary">
+                      <i class="bi bi-chat-square-text"></i>
+                    </div>
+                    <div class="fw-semibold mb-1">Manifestação</div>
+                    <div class="text-muted small">
+                      Manifestação judicial sobre ato processual, documento juntado ou decisão.
+                    </div>
+                  </label>
+                </div>
+                <div class="col-md-6">
+                  <label class="doc-type-card d-block" id="card-peticao_intermediaria">
+                    <input type="radio" name="document_type" value="peticao_intermediaria">
+                    <div class="doc-type-icon text-success">
+                      <i class="bi bi-file-earmark-text"></i>
+                    </div>
+                    <div class="fw-semibold mb-1">Petição Intermediária</div>
+                    <div class="text-muted small">
+                      Petição incidental para requerimentos em curso do processo.
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              <p class="text-danger small mt-2 d-none" id="err-type">Selecione um tipo de documento para continuar.</p>
+
+              <div class="step-actions">
+                <a href="{{ url_for('process_panel.detail', process_id=process.id) }}" class="btn btn-outline-secondary btn-sm">
+                  <i class="bi bi-arrow-left me-1"></i> Cancelar
+                </a>
+                <button type="button" class="btn btn-primary btn-sm" onclick="goToStep(2)">
+                  Próximo <i class="bi bi-arrow-right ms-1"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- ── Step 2: Benefícios + Teses ────────────────────────── -->
+            <div class="wizard-panel" id="panel-2">
+              <h6 class="fw-semibold mb-1">Selecione os benefícios e teses</h6>
+              <p class="text-muted small mb-3" id="step2-hint">
+                Cada linha representa um par <strong>benefício + tese</strong>. Selecione individualmente —
+                teses com resultados diferentes geram argumentos distintos.
+              </p>
+
+              {% if benefits %}
+                {% for b in benefits %}
+                {% set b_theses = thesis_contestation_map.get(b.id, {}) %}
+
+                <!-- Benefício header -->
+                <div class="mb-1 mt-3 d-flex align-items-center gap-2">
+                  <span class="benefit-nb-badge" id="nb-badge-{{ b.id }}" style="background:#6c757d;">
+                    {{ b.benefit_number }}
+                  </span>
+                  {% if b.insured_name %}
+                    <span class="fw-semibold small">{{ b.insured_name }}</span>
+                  {% endif %}
+                  {% if b.benefit_type %}
+                    <span class="badge bg-secondary-subtle text-secondary-emphasis" style="font-size:.72rem;">{{ b.benefit_type }}</span>
+                  {% endif %}
+                  {% if b.fap_vigencia_year %}
+                    <span class="badge bg-light text-muted border" style="font-size:.72rem;">{{ b.fap_vigencia_year }}</span>
+                  {% endif %}
+                </div>
+
+                {% if b_theses %}
+                  <!-- Rows per thesis -->
+                  {% for thesis_id, cont in b_theses.items() %}
+                  {# thesis_id pode ser None — usar string vazia para evitar "None" no form value #}
+                  {% set sel_key = b.id|string + ':' + (thesis_id|string if thesis_id is not none else '') %}
+                  {% set thesis_label = cont.legal_thesis.name if cont.legal_thesis else (cont.contestation_status_label or 'Contestação geral') %}
+                  <div class="benefit-check-card benefit-thesis-row ms-3"
+                       id="bcard-{{ sel_key | replace(':', '-') }}"
+                       data-sel="{{ sel_key }}"
+                       onclick="toggleSelection(this)">
+                    <div class="d-flex align-items-start gap-2">
+                      <div class="pt-1">
+                        <input type="checkbox" name="selections[]" value="{{ sel_key }}"
+                               id="bchk-{{ sel_key | replace(':', '-') }}">
+                        <div class="form-check-indicator" id="bchk-vis-{{ sel_key | replace(':', '-') }}"
+                             style="width:18px;height:18px;border:2px solid #dee2e6;border-radius:4px;
+                                    display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;"></div>
+                      </div>
+                      <div class="flex-grow-1">
+                        <div class="fw-semibold small mb-1">
+                          <i class="bi bi-tag me-1 text-muted"></i>
+                          {{ thesis_label }}
+                        </div>
+                        <!-- Contestation fields (shown for impugnacao type) -->
+                        <div class="contestation-fields" id="cont-fields-{{ sel_key | replace(':', '-') }}">
+                          {% if cont.contestation_status_label %}
+                          <div class="mb-1 d-flex align-items-center gap-2">
+                            <span class="contestation-label" style="min-width:fit-content;">Status:</span>
+                            <span class="badge
+                              {% if cont.contestation_status == 'procedente' %}bg-success-subtle text-success-emphasis
+                              {% elif cont.contestation_status == 'improcedente' %}bg-danger-subtle text-danger-emphasis
+                              {% else %}bg-secondary-subtle text-secondary-emphasis{% endif %}">
+                              {{ cont.contestation_status_label }}
+                            </span>
+                          </div>
+                          {% endif %}
+                          {% if cont.contestation_fundamento_uniao %}
+                          <div class="mb-1">
+                            <span class="contestation-label">Fundamento da União:</span>
+                            <div class="contestation-value">{{ cont.contestation_fundamento_uniao }}</div>
+                          </div>
+                          {% endif %}
+                          {% if cont.contestation_efeito_fap %}
+                          <div class="mb-1">
+                            <span class="contestation-label">Efeito no FAP:</span>
+                            <div class="contestation-value">{{ cont.contestation_efeito_fap }}</div>
+                          </div>
+                          {% endif %}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  {% endfor %}
+                {% else %}
+                  <!-- Benefit without theses — select as benefit only -->
+                  {% set sel_key = b.id|string + ':' %}
+                  <div class="benefit-check-card benefit-thesis-row ms-3"
+                       id="bcard-{{ b.id }}-nothesis"
+                       data-sel="{{ sel_key }}"
+                       onclick="toggleSelection(this)">
+                    <div class="d-flex align-items-start gap-2">
+                      <div class="pt-1">
+                        <input type="checkbox" name="selections[]" value="{{ sel_key }}"
+                               id="bchk-{{ b.id }}-nothesis">
+                        <div class="form-check-indicator" id="bchk-vis-{{ b.id }}-nothesis"
+                             style="width:18px;height:18px;border:2px solid #dee2e6;border-radius:4px;
+                                    display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;"></div>
+                      </div>
+                      <div class="flex-grow-1">
+                        <div class="small text-muted fst-italic">Sem tese vinculada — incluir benefício sem tese específica</div>
+                      </div>
+                    </div>
+                  </div>
+                {% endif %}
+                {% endfor %}
+              {% else %}
+                <div class="text-center py-4 text-muted">
+                  <i class="bi bi-inbox fs-3 d-block mb-2"></i>
+                  Nenhum benefício vinculado a este processo.
+                </div>
+              {% endif %}
+
+              <p class="text-danger small mt-2 d-none" id="err-benefits">
+                Selecione ao menos um item para continuar.
+              </p>
+
+              <div class="step-actions">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="goToStep(1)">
+                  <i class="bi bi-arrow-left me-1"></i> Anterior
+                </button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="goToStep(3)">
+                  Próximo <i class="bi bi-arrow-right ms-1"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- ── Step 3: Revisão ────────────────────────────────────── -->
+            <div class="wizard-panel" id="panel-3">
+              <h6 class="fw-semibold mb-1">Revisão e geração</h6>
+              <p class="text-muted small mb-3">Confirme os dados e clique em <strong>Gerar Documento</strong>.</p>
+
+              <div class="summary-box mb-3">
+                <div class="summary-line">
+                  <span class="text-muted">Processo</span>
+                  <span class="fw-semibold text-end">{{ process.process_number or process.title }}</span>
+                </div>
+                <div class="summary-line">
+                  <span class="text-muted">Tipo de documento</span>
+                  <span class="fw-semibold" id="summary-type">—</span>
+                </div>
+                <div class="summary-line">
+                  <span class="text-muted">Benefícios selecionados</span>
+                  <span class="fw-semibold" id="summary-benefits">—</span>
+                </div>
+              </div>
+
+              <div class="mb-3">
+                <label class="form-label fw-semibold small">
+                  Instruções adicionais
+                  <span class="text-muted fw-normal">(opcional)</span>
+                </label>
+                <textarea name="instructions" class="form-control form-control-sm" rows="4"
+                  placeholder="Ex: Enfatizar o impacto econômico, incluir referência à decisão de 2023, etc."></textarea>
+                <div class="form-text">A IA usará essas instruções como orientação complementar.</div>
+              </div>
+
+              <div class="step-actions">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="goToStep(2)">
+                  <i class="bi bi-arrow-left me-1"></i> Anterior
+                </button>
+                <button type="submit" class="btn btn-success btn-sm" id="btnGenerate">
+                  <span class="spinner-border spinner-border-sm d-none me-1" id="genSpinner"></span>
+                  <i class="bi bi-stars me-1" id="genIcon"></i>
+                  Gerar Documento
+                </button>
+              </div>
+            </div>
+
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const NB_COLORS = [
+    '#3b82f6','#10b981','#f59e0b','#ef4444','#8b5cf6','#06b6d4','#f97316',
+    '#84cc16','#ec4899','#14b8a6',
+  ];
+  const benefitNbMap = {};
+  let colorIdx = 0;
+
+  function getNbColor(nb) {
+    if (!benefitNbMap[nb]) benefitNbMap[nb] = NB_COLORS[colorIdx++ % NB_COLORS.length];
+    return benefitNbMap[nb];
+  }
+
+  // Color NB badges by benefit number text
+  document.querySelectorAll('[id^="nb-badge-"]').forEach(el => {
+    el.style.background = getNbColor(el.textContent.trim());
+  });
+
+  // ── Step management ──────────────────────────────────────────────────
+  let currentStep = 1;
+
+  window.goToStep = function (step) {
+    if (step === 2 && currentStep === 1 && !validateStep1()) return;
+    if (step === 3 && currentStep === 2 && !validateStep2()) return;
+    if (step === 3) buildSummary();
+
+    document.getElementById('step-ind-' + currentStep).classList.replace('active', 'completed') ||
+      document.getElementById('step-ind-' + currentStep).classList.add('completed');
+    document.getElementById('panel-' + currentStep).classList.remove('active');
+
+    currentStep = step;
+    document.getElementById('step-ind-' + currentStep).classList.remove('completed');
+    document.getElementById('step-ind-' + currentStep).classList.add('active');
+    document.getElementById('panel-' + currentStep).classList.add('active');
+
+    for (let i = currentStep + 1; i <= 3; i++) {
+      document.getElementById('step-ind-' + i).classList.remove('active', 'completed');
+    }
+  };
+
+  // ── Step 1 validation ────────────────────────────────────────────────
+  function validateStep1() {
+    const selected = document.querySelector('input[name="document_type"]:checked');
+    const err = document.getElementById('err-type');
+    if (!selected) { err.classList.remove('d-none'); return false; }
+    err.classList.add('d-none');
+    return true;
+  }
+
+  // ── Step 2 validation ────────────────────────────────────────────────
+  function validateStep2() {
+    const checked = document.querySelectorAll('input[name="selections[]"]:checked');
+    const err = document.getElementById('err-benefits');
+    if (checked.length === 0) { err.classList.remove('d-none'); return false; }
+    err.classList.add('d-none');
+    return true;
+  }
+
+  // ── Doc type card interaction ─────────────────────────────────────────
+  document.querySelectorAll('.doc-type-card').forEach(card => {
+    card.addEventListener('click', function () {
+      document.querySelectorAll('.doc-type-card').forEach(c => c.classList.remove('selected'));
+      this.classList.add('selected');
+      this.querySelector('input[type="radio"]').checked = true;
+      document.getElementById('err-type').classList.add('d-none');
+      updateContestationFields();
+    });
+  });
+
+  // ── Selection toggle (benefit+thesis rows) ────────────────────────────
+  const CHECK_SVG = '<svg width="11" height="9" viewBox="0 0 11 9" fill="none"><path d="M1 4L4 7L10 1" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  window.toggleSelection = function (card) {
+    const chk = card.querySelector('input[type="checkbox"]');
+    const visId = chk.id.replace('bchk-', 'bchk-vis-');
+    const vis = document.getElementById(visId);
+    chk.checked = !chk.checked;
+    if (chk.checked) {
+      card.classList.add('checked');
+      if (vis) { vis.style.background = '#0d6efd'; vis.style.borderColor = '#0d6efd'; vis.innerHTML = CHECK_SVG; }
+    } else {
+      card.classList.remove('checked');
+      if (vis) { vis.style.background = ''; vis.style.borderColor = '#dee2e6'; vis.innerHTML = ''; }
+    }
+    document.getElementById('err-benefits').classList.add('d-none');
+  };
+
+  // ── Show contestation fields only for impugnacao_contestacao ─────────
+  function updateContestationFields() {
+    const selectedType = document.querySelector('input[name="document_type"]:checked');
+    const isImpugnacao = selectedType && selectedType.value === 'impugnacao_contestacao';
+    document.querySelectorAll('[id^="cont-fields-"]').forEach(el => {
+      el.classList.toggle('show', isImpugnacao);
+    });
+  }
+
+  // ── Summary ───────────────────────────────────────────────────────────
+  const TYPE_LABELS = {{ document_type_labels | tojson }};
+
+  function buildSummary() {
+    const selectedType = document.querySelector('input[name="document_type"]:checked');
+    document.getElementById('summary-type').textContent =
+      selectedType ? (TYPE_LABELS[selectedType.value] || selectedType.value) : '—';
+
+    const checked = document.querySelectorAll('input[name="selections[]"]:checked');
+    const el = document.getElementById('summary-benefits');
+    if (checked.length === 0) {
+      el.textContent = '—';
+    } else {
+      // Build "NB 123 / Tese X" labels from the card text
+      const labels = Array.from(checked).map(c => {
+        const card = c.closest('.benefit-check-card');
+        // Find NB from preceding header badge
+        const parentGroup = card.closest('[id^="nb-badge-"]') ||
+          card.previousElementSibling?.querySelector('[id^="nb-badge-"]') ||
+          card.parentElement?.querySelector('[id^="nb-badge-"]');
+        const nb = parentGroup ? parentGroup.textContent.trim() : c.value.split(':')[0];
+        const thesisEl = card.querySelector('.fw-semibold.small');
+        const thesis = thesisEl ? thesisEl.textContent.replace(/^\s*\S+\s*/, '').trim() : '';
+        return thesis ? `${nb} / ${thesis}` : `NB ${nb}`;
+      });
+      el.textContent = labels.slice(0, 4).join(', ') + (labels.length > 4 ? ` +${labels.length - 4}` : '') + ` (${labels.length})`;
+    }
+  }
+
+  // ── Loading state on submit ───────────────────────────────────────────
+  document.getElementById('generateForm').addEventListener('submit', function () {
+    const btn = document.getElementById('btnGenerate');
+    btn.disabled = true;
+    document.getElementById('genSpinner').classList.remove('d-none');
+    document.getElementById('genIcon').classList.add('d-none');
+    btn.childNodes[btn.childNodes.length - 1].textContent = ' Gerando…';
+  });
+})();
+</script>
+{% endblock %}

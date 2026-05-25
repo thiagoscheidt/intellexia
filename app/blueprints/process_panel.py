@@ -5,8 +5,11 @@ from app.models import (
     KnowledgeBase, Case, User, Court, JudicialPhase, JudicialDocumentType, JudicialEvent,
     JudicialProcessNote, Client, JudicialDefendant, JudicialDocument, JudicialDocumentSummary,
     JudicialProcessBenefit, JudicialProcessPhaseHistory, JudicialLegalThesis, JudicialProcessCitedBenefit,
-    JudicialProcessBenefitThesisContestation, JudicialProcessAttachment
+    JudicialProcessBenefitThesisContestation, JudicialProcessAttachment,
+    JudicialProcessGeneratedDocument, JudicialProcessGeneratedDocumentVersion,
+    JudicialProcessGeneratedDocumentSelection,
 )
+from app.agents.legal_drafting.agent_generated_document import AgentGeneratedDocument, DOCUMENT_TYPE_LABELS
 from datetime import datetime
 from functools import wraps
 from sqlalchemy import or_, and_
@@ -1648,6 +1651,13 @@ def detail(process_id):
         is_active=True,
     ).order_by(JudicialProcessAttachment.created_at.desc(), JudicialProcessAttachment.id.desc()).all()
     
+    generated_documents = (
+        JudicialProcessGeneratedDocument.query
+        .filter_by(process_id=process.id, law_firm_id=law_firm_id)
+        .order_by(JudicialProcessGeneratedDocument.created_at.desc())
+        .all()
+    )
+
     # Dados para a dashboard
     data = {
         'process': process,
@@ -1667,11 +1677,14 @@ def detail(process_id):
         'kb_documents': kb_documents,
         'documents_list': documents_list,
         'attachments_list': attachments_list,
+        'generated_documents': generated_documents,
+        'document_type_labels': DOCUMENT_TYPE_LABELS,
         'case': process.case if process.case_id else None,
         'stats': {
             'documents_count': len(documents_list),
             'benefits_count': len(process_benefits),
             'attachments_count': len(attachments_list),
+            'generated_documents_count': len(generated_documents),
         },
     }
     
@@ -2609,6 +2622,440 @@ def api_search():
     
     return jsonify(results)
 
+
+# ── Documentos Gerados ────────────────────────────────────────────────────
+
+
+@process_panel_bp.route('/<int:process_id>/documentos-gerados/novo', methods=['GET'])
+@require_law_firm
+def generated_document_new(process_id):
+    law_firm_id = get_current_law_firm_id()
+    process = JudicialProcess.query.filter_by(
+        id=process_id, law_firm_id=law_firm_id
+    ).first_or_404()
+    benefits = (
+        JudicialProcessBenefit.query
+        .filter_by(process_id=process.id)
+        .order_by(JudicialProcessBenefit.benefit_number.asc())
+        .all()
+    )
+    # Build map: benefit_id → { thesis_id → JudicialProcessBenefitThesisContestation }
+    benefit_ids = [b.id for b in benefits]
+    thesis_contestation_map = {}
+    if benefit_ids:
+        rows = JudicialProcessBenefitThesisContestation.query.filter(
+            JudicialProcessBenefitThesisContestation.process_benefit_id.in_(benefit_ids)
+        ).all()
+        for row in rows:
+            thesis_contestation_map.setdefault(row.process_benefit_id, {})[row.legal_thesis_id] = row
+
+    return render_template(
+        'process_panel/generated_document_new.html',
+        process=process,
+        benefits=benefits,
+        thesis_contestation_map=thesis_contestation_map,
+        document_type_labels=DOCUMENT_TYPE_LABELS,
+    )
+
+
+@process_panel_bp.route('/<int:process_id>/documentos-gerados/gerar', methods=['POST'])
+@require_law_firm
+def generated_document_create(process_id):
+    law_firm_id = get_current_law_firm_id()
+    user_id = session.get('user_id')
+
+    process = JudicialProcess.query.filter_by(
+        id=process_id, law_firm_id=law_firm_id
+    ).first_or_404()
+
+    document_type = request.form.get('document_type', '').strip()
+    if document_type not in DOCUMENT_TYPE_LABELS:
+        flash('Tipo de documento inválido.', 'danger')
+        return redirect(url_for('process_panel.generated_document_new', process_id=process_id))
+
+    # selections[] values are "benefit_id:thesis_id" or "benefit_id:" for no thesis
+    raw_selections = request.form.getlist('selections[]')
+    instructions = request.form.get('instructions', '').strip() or None
+    model_name = request.form.get('model_name') or None
+
+    # Parse and validate selections
+    parsed = []  # list of (benefit_id, thesis_id_or_None)
+    for raw in raw_selections:
+        parts = raw.split(':', 1)
+        try:
+            b_id = int(parts[0])
+            t_id = int(parts[1]) if len(parts) > 1 and parts[1] else None
+            parsed.append((b_id, t_id))
+        except (ValueError, IndexError):
+            continue
+
+    if not parsed:
+        flash('Selecione ao menos um benefício/tese para gerar o documento.', 'warning')
+        return redirect(url_for('process_panel.generated_document_new', process_id=process_id))
+
+    # Load benefits (validate ownership)
+    benefit_id_set = {b_id for b_id, _ in parsed}
+    benefits_by_id = {
+        b.id: b for b in JudicialProcessBenefit.query.filter(
+            JudicialProcessBenefit.id.in_(benefit_id_set),
+            JudicialProcessBenefit.process_id == process.id,
+        ).all()
+    }
+
+    # Load thesis contestations
+    thesis_id_set = {t_id for _, t_id in parsed if t_id}
+    contestations_by_key = {}
+    if thesis_id_set:
+        rows = JudicialProcessBenefitThesisContestation.query.filter(
+            JudicialProcessBenefitThesisContestation.process_benefit_id.in_(benefit_id_set),
+            JudicialProcessBenefitThesisContestation.legal_thesis_id.in_(thesis_id_set),
+        ).all()
+        for row in rows:
+            contestations_by_key[(row.process_benefit_id, row.legal_thesis_id)] = row
+
+    # Build agent input: list of dicts with benefit + contestation data
+    agent_selections = []
+    for b_id, t_id in parsed:
+        benefit = benefits_by_id.get(b_id)
+        if not benefit:
+            continue
+        contestation = contestations_by_key.get((b_id, t_id)) if t_id else None
+        agent_selections.append({
+            'benefit': benefit,
+            'thesis': contestation.legal_thesis if contestation and contestation.legal_thesis else None,
+            'contestation': contestation,
+        })
+
+    title = DOCUMENT_TYPE_LABELS.get(document_type, document_type)
+
+    generated_doc = JudicialProcessGeneratedDocument(
+        law_firm_id=law_firm_id,
+        process_id=process.id,
+        created_by_id=user_id,
+        document_type=document_type,
+        title=title,
+    )
+    db.session.add(generated_doc)
+    db.session.flush()
+
+    # Persist selections
+    for b_id, t_id in parsed:
+        if b_id in benefits_by_id:
+            db.session.add(JudicialProcessGeneratedDocumentSelection(
+                generated_document_id=generated_doc.id,
+                benefit_id=b_id,
+                legal_thesis_id=t_id,
+            ))
+
+    version = JudicialProcessGeneratedDocumentVersion(
+        generated_document_id=generated_doc.id,
+        created_by_id=user_id,
+        version_number=1,
+        source='ai_generated',
+        generation_status='processing',
+        model_used=model_name,
+    )
+    db.session.add(version)
+    db.session.flush()
+
+    generated_doc.current_version_id = version.id
+    db.session.commit()
+
+    try:
+        agent = AgentGeneratedDocument(model_name=model_name)
+        result_dict, full_text = agent.dispatch(document_type, process, agent_selections, instructions)
+
+        version.content = full_text
+        version.generation_status = 'completed'
+        db.session.commit()
+
+        flash('Documento gerado com sucesso!', 'success')
+    except Exception as e:
+        version.generation_status = 'failed'
+        version.error_message = str(e)
+        db.session.commit()
+        flash(f'Erro ao gerar o documento: {str(e)}', 'danger')
+
+    return redirect(url_for(
+        'process_panel.generated_document_detail',
+        process_id=process.id,
+        doc_id=generated_doc.id,
+    ))
+
+
+@process_panel_bp.route('/<int:process_id>/documentos-gerados/<int:doc_id>', methods=['GET'])
+@require_law_firm
+def generated_document_detail(process_id, doc_id):
+    law_firm_id = get_current_law_firm_id()
+    process = JudicialProcess.query.filter_by(
+        id=process_id, law_firm_id=law_firm_id
+    ).first_or_404()
+    generated_doc = JudicialProcessGeneratedDocument.query.filter_by(
+        id=doc_id, process_id=process.id, law_firm_id=law_firm_id
+    ).first_or_404()
+    return render_template(
+        'process_panel/generated_document_detail.html',
+        process=process,
+        generated_doc=generated_doc,
+        document_type_labels=DOCUMENT_TYPE_LABELS,
+    )
+
+
+@process_panel_bp.route('/<int:process_id>/documentos-gerados/<int:doc_id>/salvar', methods=['POST'])
+@require_law_firm
+def generated_document_save(process_id, doc_id):
+    law_firm_id = get_current_law_firm_id()
+    user_id = session.get('user_id')
+
+    process = JudicialProcess.query.filter_by(
+        id=process_id, law_firm_id=law_firm_id
+    ).first_or_404()
+    generated_doc = JudicialProcessGeneratedDocument.query.filter_by(
+        id=doc_id, process_id=process.id, law_firm_id=law_firm_id
+    ).first_or_404()
+
+    content = request.form.get('content', '').strip()
+    if not content:
+        flash('O conteúdo não pode estar vazio.', 'warning')
+        return redirect(url_for(
+            'process_panel.generated_document_detail',
+            process_id=process_id, doc_id=doc_id,
+        ))
+
+    last_version = (
+        JudicialProcessGeneratedDocumentVersion.query
+        .filter_by(generated_document_id=generated_doc.id)
+        .order_by(JudicialProcessGeneratedDocumentVersion.version_number.desc())
+        .first()
+    )
+    next_version_number = (last_version.version_number + 1) if last_version else 1
+
+    version = JudicialProcessGeneratedDocumentVersion(
+        generated_document_id=generated_doc.id,
+        created_by_id=user_id,
+        version_number=next_version_number,
+        content=content,
+        source='manually_edited',
+        generation_status='completed',
+    )
+    db.session.add(version)
+    db.session.flush()
+
+    generated_doc.current_version_id = version.id
+    db.session.commit()
+
+    flash('Alterações salvas como nova versão.', 'success')
+    return redirect(url_for(
+        'process_panel.generated_document_detail',
+        process_id=process_id, doc_id=doc_id,
+    ))
+
+
+@process_panel_bp.route('/<int:process_id>/documentos-gerados/<int:doc_id>/regerar', methods=['POST'])
+@require_law_firm
+def generated_document_regenerate(process_id, doc_id):
+    law_firm_id = get_current_law_firm_id()
+    user_id = session.get('user_id')
+
+    process = JudicialProcess.query.filter_by(
+        id=process_id, law_firm_id=law_firm_id
+    ).first_or_404()
+    generated_doc = JudicialProcessGeneratedDocument.query.filter_by(
+        id=doc_id, process_id=process.id, law_firm_id=law_firm_id
+    ).first_or_404()
+
+    instructions = request.form.get('instructions', '').strip() or None
+    model_name = request.form.get('model_name') or None
+
+    last_version = (
+        JudicialProcessGeneratedDocumentVersion.query
+        .filter_by(generated_document_id=generated_doc.id)
+        .order_by(JudicialProcessGeneratedDocumentVersion.version_number.desc())
+        .first()
+    )
+    next_version_number = (last_version.version_number + 1) if last_version else 1
+
+    version = JudicialProcessGeneratedDocumentVersion(
+        generated_document_id=generated_doc.id,
+        created_by_id=user_id,
+        version_number=next_version_number,
+        source='ai_generated',
+        generation_status='processing',
+        model_used=model_name,
+    )
+    db.session.add(version)
+    db.session.flush()
+    generated_doc.current_version_id = version.id
+    db.session.commit()
+
+    try:
+        # Rebuild agent_selections from persisted selections
+        sel_benefit_ids = {s.benefit_id for s in generated_doc.selections}
+        sel_thesis_ids = {s.legal_thesis_id for s in generated_doc.selections if s.legal_thesis_id}
+        benefits_by_id = {
+            b.id: b for b in JudicialProcessBenefit.query.filter(
+                JudicialProcessBenefit.id.in_(sel_benefit_ids)
+            ).all()
+        }
+        contestations_by_key = {}
+        if sel_thesis_ids:
+            for row in JudicialProcessBenefitThesisContestation.query.filter(
+                JudicialProcessBenefitThesisContestation.process_benefit_id.in_(sel_benefit_ids),
+                JudicialProcessBenefitThesisContestation.legal_thesis_id.in_(sel_thesis_ids),
+            ).all():
+                contestations_by_key[(row.process_benefit_id, row.legal_thesis_id)] = row
+
+        agent_selections = []
+        for sel in generated_doc.selections:
+            benefit = benefits_by_id.get(sel.benefit_id)
+            if not benefit:
+                continue
+            contestation = contestations_by_key.get((sel.benefit_id, sel.legal_thesis_id))
+            agent_selections.append({
+                'benefit': benefit,
+                'thesis': contestation.legal_thesis if contestation and contestation.legal_thesis else None,
+                'contestation': contestation,
+            })
+
+        agent = AgentGeneratedDocument(model_name=model_name)
+        _, full_text = agent.dispatch(
+            generated_doc.document_type,
+            process,
+            agent_selections,
+            instructions,
+        )
+        version.content = full_text
+        version.generation_status = 'completed'
+        db.session.commit()
+        flash('Documento regerado com sucesso!', 'success')
+    except Exception as e:
+        version.generation_status = 'failed'
+        version.error_message = str(e)
+        db.session.commit()
+        flash(f'Erro ao regerar o documento: {str(e)}', 'danger')
+
+    return redirect(url_for(
+        'process_panel.generated_document_detail',
+        process_id=process_id, doc_id=doc_id,
+    ))
+
+
+@process_panel_bp.route('/<int:process_id>/documentos-gerados/<int:doc_id>/versoes/<int:version_id>/restaurar', methods=['POST'])
+@require_law_firm
+def generated_document_restore_version(process_id, doc_id, version_id):
+    law_firm_id = get_current_law_firm_id()
+
+    process = JudicialProcess.query.filter_by(
+        id=process_id, law_firm_id=law_firm_id
+    ).first_or_404()
+    generated_doc = JudicialProcessGeneratedDocument.query.filter_by(
+        id=doc_id, process_id=process.id, law_firm_id=law_firm_id
+    ).first_or_404()
+    version = JudicialProcessGeneratedDocumentVersion.query.filter_by(
+        id=version_id, generated_document_id=generated_doc.id
+    ).first_or_404()
+
+    generated_doc.current_version_id = version.id
+    db.session.commit()
+
+    flash(f'Versão {version.version_number} restaurada.', 'success')
+    return redirect(url_for(
+        'process_panel.generated_document_detail',
+        process_id=process_id, doc_id=doc_id,
+    ))
+
+
+@process_panel_bp.route('/<int:process_id>/documentos-gerados/<int:doc_id>/download', methods=['GET'])
+@require_law_firm
+def generated_document_download(process_id, doc_id):
+    import io
+    from docx import Document as DocxDocument
+    from docx.shared import Pt, Inches
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+
+    law_firm_id = get_current_law_firm_id()
+    process = JudicialProcess.query.filter_by(
+        id=process_id, law_firm_id=law_firm_id
+    ).first_or_404()
+    generated_doc = JudicialProcessGeneratedDocument.query.filter_by(
+        id=doc_id, process_id=process.id, law_firm_id=law_firm_id
+    ).first_or_404()
+
+    version = generated_doc.current_version
+    if not version or not version.content:
+        flash('Não há conteúdo disponível para download.', 'warning')
+        return redirect(url_for(
+            'process_panel.generated_document_detail',
+            process_id=process_id, doc_id=doc_id,
+        ))
+
+    doc = DocxDocument()
+
+    # Margens
+    for section in doc.sections:
+        section.top_margin = Inches(1)
+        section.bottom_margin = Inches(1)
+        section.left_margin = Inches(1.25)
+        section.right_margin = Inches(1.25)
+
+    for line in version.content.splitlines():
+        line = line.strip()
+        if not line:
+            doc.add_paragraph('')
+            continue
+        if line.startswith('# '):
+            p = doc.add_heading(line[2:], level=1)
+        elif line.startswith('## '):
+            p = doc.add_heading(line[3:], level=2)
+        elif line.startswith('### '):
+            p = doc.add_heading(line[4:], level=3)
+        elif line.startswith('---'):
+            doc.add_paragraph('_' * 60)
+        else:
+            p = doc.add_paragraph(line)
+            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+
+    buf = io.BytesIO()
+    doc.save(buf)
+    buf.seek(0)
+
+    safe_title = re.sub(r'[^\w\s-]', '', generated_doc.title).strip().replace(' ', '_')
+    filename = f"{safe_title}_v{version.version_number}.docx"
+
+    return send_file(
+        buf,
+        mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        as_attachment=True,
+        download_name=filename,
+    )
+
+
+@process_panel_bp.route('/<int:process_id>/documentos-gerados/<int:doc_id>/excluir', methods=['POST'])
+@require_law_firm
+def generated_document_delete(process_id, doc_id):
+    law_firm_id = get_current_law_firm_id()
+
+    process = JudicialProcess.query.filter_by(
+        id=process_id, law_firm_id=law_firm_id
+    ).first_or_404()
+    generated_doc = JudicialProcessGeneratedDocument.query.filter_by(
+        id=doc_id, process_id=process.id, law_firm_id=law_firm_id
+    ).first_or_404()
+
+    try:
+        generated_doc.current_version_id = None
+        db.session.flush()
+        db.session.delete(generated_doc)
+        db.session.commit()
+        flash('Documento removido com sucesso.', 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao remover o documento: {str(e)}', 'danger')
+
+    return redirect(url_for('process_panel.detail', process_id=process_id) + '#generated-docs')
+
+
+# ── Status do processo ─────────────────────────────────────────────────────
 
 @process_panel_bp.route('/<int:process_id>/status', methods=['POST'])
 @require_law_firm

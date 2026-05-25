@@ -510,4 +510,4 @@ Este projeto é proprietário. Todos os direitos reservados.
 ## Conctar claude ao MCP:
 ```
 claude mcp add-json intellexia '{"type":"http","url":"http://127.0.0.1:8001/mcp","headers":{"Authorization":"Bearer c048a4c192958164fe6dc5259f272341a2ea3c597281b9292fe51ad90478721a"}}' --scope user
-```
+```# intellexia-site
