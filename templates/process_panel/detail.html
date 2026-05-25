@@ -108,6 +108,12 @@
     transform: translateY(-1px);
   }
 
+  .benefit-nb-summary-pill.is-selected {
+    filter: brightness(.85);
+    transform: translateY(-1px);
+    box-shadow: 0 0 0 2px currentColor;
+  }
+
   .ai-pulse {
     display: inline-block;
     width: .55rem;
@@ -2440,43 +2446,48 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
         summary.appendChild(pill);
       });
 
-      // Hover: highlight rows / dim demais
+      // Seleção (click) + hover (preview) com múltipla seleção
       const allRows = Array.from(document.querySelectorAll('.benefit-row[data-benefit-nb]'));
-      let activePill = null;
+      const selected = new Set();
+      let hoveredNb = null;
 
-      function activate(nb, pill) {
-        if (activePill) activePill.classList.remove('is-active');
-        activePill = pill;
-        pill.classList.add('is-active');
-        const s = nbColor[nb] || defaultScheme;
+      function applyVisuals() {
+        const visible = new Set(selected);
+        if (hoveredNb) visible.add(hoveredNb);
+        const hasFocus = visible.size > 0;
+
         allRows.forEach(function (row) {
-          if (row.dataset.benefitNb === nb) {
-            row.classList.remove('benefit-row-dim');
-            row.classList.add('benefit-row-highlight');
-            row.style.boxShadow = 'inset 3px 0 0 ' + s.color;
-            row.style.background = s.bg;
-          } else {
-            row.classList.add('benefit-row-dim');
-            row.classList.remove('benefit-row-highlight');
-            row.style.boxShadow = '';
-            row.style.background = '';
-          }
+          const nb = row.dataset.benefitNb;
+          const active = hasFocus && visible.has(nb);
+          const s = nbColor[nb] || defaultScheme;
+          row.classList.toggle('benefit-row-highlight', active);
+          row.classList.toggle('benefit-row-dim', hasFocus && !active);
+          row.style.boxShadow = active ? 'inset 3px 0 0 ' + s.color : '';
+          row.style.background = active ? s.bg : '';
         });
-      }
 
-      function deactivate() {
-        if (activePill) activePill.classList.remove('is-active');
-        activePill = null;
-        allRows.forEach(function (row) {
-          row.classList.remove('benefit-row-dim', 'benefit-row-highlight');
-          row.style.boxShadow = '';
-          row.style.background = '';
+        summary.querySelectorAll('.benefit-nb-summary-pill').forEach(function (p) {
+          const isSelected = selected.has(p.dataset.summaryNb);
+          p.classList.toggle('is-selected', isSelected);
+          p.classList.toggle('is-active', !isSelected && hoveredNb === p.dataset.summaryNb);
         });
       }
 
       summary.querySelectorAll('.benefit-nb-summary-pill').forEach(function (pill) {
-        pill.addEventListener('mouseenter', function () { activate(pill.dataset.summaryNb, pill); });
-        pill.addEventListener('mouseleave', deactivate);
+        pill.addEventListener('mouseenter', function () {
+          hoveredNb = pill.dataset.summaryNb;
+          applyVisuals();
+        });
+        pill.addEventListener('mouseleave', function () {
+          hoveredNb = null;
+          applyVisuals();
+        });
+        pill.addEventListener('click', function () {
+          const nb = pill.dataset.summaryNb;
+          if (selected.has(nb)) selected.delete(nb);
+          else selected.add(nb);
+          applyVisuals();
+        });
       });
     })();
 
