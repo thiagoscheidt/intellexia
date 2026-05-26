@@ -60,6 +60,38 @@ _SECTION_KIND_HINTS = [
     ("closing", r"termos\s+em\s+que|nestes\s+termos|p\.\s*deferimento|encerr|conclus"),
 ]
 
+# Padrões mais específicos para classificação por página (evita falsos positivos).
+_INTRO_HEADING_RE = re.compile(r"introdu|s[ií]ntese|relat[oó]rio", re.IGNORECASE)
+_PRELIM_HEADING_RE = re.compile(r"preliminar|prejudicial", re.IGNORECASE)
+_MERIT_HEADING_RE = re.compile(r"m[eé]rito|tese", re.IGNORECASE)
+_JURIS_HEADING_RE = re.compile(r"jurisprud|precedent|s[uú]mula", re.IGNORECASE)
+_REQUESTS_HEADING_RE = re.compile(r"\bdos\s+pedidos\b|\bpedidos\b", re.IGNORECASE)
+_CLOSING_HEADING_RE = re.compile(r"fecho|conclus[aã]o|termos\s+em\s+que", re.IGNORECASE)
+
+_INTRO_BODY_RE = re.compile(
+    r"excelent[ií]ssim|processo\s*n[ºo]|vem,?\s+respeitosamente|apresentar\s+impugna(?:ç|c)[aã]o\s+[àa]\s+contesta(?:ç|c)[aã]o|trata-se\s+de\s+a[cç][aã]o",
+    re.IGNORECASE,
+)
+_PRELIM_BODY_RE = re.compile(
+    r"ilegitimidade\s+passiva|prescri(?:ç|c)[aã]o\s+quinquenal|preliminar|prejudicial\s+de\s+m[eé]rito|incompet[êe]ncia|car[êe]ncia\s+de\s+a[cç][aã]o",
+    re.IGNORECASE,
+)
+_MERIT_BODY_RE = re.compile(
+    r"\bm[eé]rito\b|\btese\b|refuta(?:ç|c)[aã]o|impugna(?:ç|c)[aã]o\s+espec[ií]fica|n[aã]o\s+se\s+sustenta|v[ií]cios\s+concretos",
+    re.IGNORECASE,
+)
+_JURIS_BODY_RE = re.compile(
+    r"\btrf\d?\b|\bstj\b|\bresp\b|\bac\b|jurisprud[eê]ncia|precedente|s[uú]mula",
+    re.IGNORECASE,
+)
+_REQUESTS_BODY_RE = re.compile(
+    r"diante\s+do\s+exposto,?\s+requer|ante\s+o\s+exposto,?\s+requer|requer\s+seja|dos\s+pedidos|pedido\s+de\s+condena(?:ç|c)[aã]o",
+    re.IGNORECASE,
+)
+_CLOSING_BODY_RE = re.compile(
+    r"nestes\s+termos|pede\s+deferimento|termos\s+em\s+que", re.IGNORECASE
+)
+
 
 class ImpugnacaoReferenceIngestor:
     """Recebe DOCX/PDF de peça-modelo e indexa em coleção Qdrant dedicada."""
@@ -109,7 +141,7 @@ class ImpugnacaoReferenceIngestor:
             page_no = chunk.get('page')
             section_label = str(chunk.get('section') or '').strip()
             heading = section_label or (f'Página {page_no}' if page_no is not None else '')
-            section_kind = cls._classify_section_kind(heading, page_text)
+            section_kind = cls._classify_section_kind(heading, page_text, page_no=page_no)
 
             segments.append({
                 'heading': heading,
@@ -129,15 +161,80 @@ class ImpugnacaoReferenceIngestor:
     # ── Segmentação ────────────────────────────────────────────────────
 
     @classmethod
-    def _classify_section_kind(cls, heading: str, text: str = "") -> str:
-        # Prioriza sinais do heading; se não houver match, usa início do texto.
-        normalized_heading = (heading or "").lower()
-        normalized_text = (text or "")[:1200].lower()
+    def _classify_section_kind(cls, heading: str, text: str = "", page_no: Optional[int] = None) -> str:
+        """Classifica a seção com base em heading + conteúdo + posição da página.
+
+        Regras:
+        - Dá mais peso a headings explícitos.
+        - Evita marcar `requests` apenas porque apareceu a palavra "pedido" em páginas de introdução/mérito.
+        - Em primeira página com abertura típica de petição, prioriza `introduction`.
+        """
+        normalized_heading = (heading or "").strip()
+        normalized_text = (text or "")[:6000]
+
+        # 1) Fecho tem precedência alta por ser muito específico.
+        if _CLOSING_HEADING_RE.search(normalized_heading) or _CLOSING_BODY_RE.search(normalized_text):
+            return "closing"
+
+        # 2) Primeira página com abertura típica -> introdução.
+        if page_no in (0, 1):
+            intro_hits = 0
+            if _INTRO_HEADING_RE.search(normalized_heading):
+                intro_hits += 1
+            if _INTRO_BODY_RE.search(normalized_text):
+                intro_hits += 1
+            if re.search(r"impugna(?:ç|c)[aã]o\s+[àa]\s+contesta(?:ç|c)[aã]o", normalized_text, re.IGNORECASE):
+                intro_hits += 1
+            if intro_hits >= 2:
+                return "introduction"
+
+        # 3) Pontuação por sinais de heading + corpo.
+        scores = {
+            "introduction": 0,
+            "preliminary": 0,
+            "merit_by_thesis": 0,
+            "jurisprudence": 0,
+            "requests": 0,
+        }
+
+        if _INTRO_HEADING_RE.search(normalized_heading):
+            scores["introduction"] += 5
+        if _PRELIM_HEADING_RE.search(normalized_heading):
+            scores["preliminary"] += 5
+        if _MERIT_HEADING_RE.search(normalized_heading):
+            scores["merit_by_thesis"] += 5
+        if _JURIS_HEADING_RE.search(normalized_heading):
+            scores["jurisprudence"] += 5
+        if _REQUESTS_HEADING_RE.search(normalized_heading):
+            scores["requests"] += 6
+
+        if _INTRO_BODY_RE.search(normalized_text):
+            scores["introduction"] += 2
+        if _PRELIM_BODY_RE.search(normalized_text):
+            scores["preliminary"] += 2
+        if _MERIT_BODY_RE.search(normalized_text):
+            scores["merit_by_thesis"] += 2
+        if _JURIS_BODY_RE.search(normalized_text):
+            scores["jurisprudence"] += 2
+        if _REQUESTS_BODY_RE.search(normalized_text):
+            scores["requests"] += 2
+
+        # Penalização leve para "requests" em páginas iniciais sem heading de pedidos.
+        if page_no in (0, 1, 2) and not _REQUESTS_HEADING_RE.search(normalized_heading):
+            scores["requests"] = max(0, scores["requests"] - 2)
+
+        best_kind, best_score = max(scores.items(), key=lambda item: item[1])
+        if best_score >= 2:
+            return best_kind
+
+        # 4) Fallback legado (mantém compatibilidade para textos atípicos).
+        lower_heading = normalized_heading.lower()
+        lower_text = normalized_text.lower()
         for kind, pattern in _SECTION_KIND_HINTS:
-            if re.search(pattern, normalized_heading):
+            if re.search(pattern, lower_heading):
                 return kind
         for kind, pattern in _SECTION_KIND_HINTS:
-            if re.search(pattern, normalized_text):
+            if re.search(pattern, lower_text):
                 return kind
         return "general"
 
