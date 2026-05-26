@@ -1,18 +1,41 @@
 {% extends "layout/base.html" %}
-
 {% from "partials/page_hero.html" import page_hero %}
 
 {% block title %}{{ reference.title }} - Peça-Modelo{% endblock %}
 
+{% block extra_css %}
+<style>
+.chunk-text {
+    display: -webkit-box;
+    -webkit-line-clamp: 4;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.58;
+    font-size: .82rem;
+    transition: none;
+}
+.chunk-text.expanded {
+    display: block;
+    overflow: visible;
+    -webkit-line-clamp: unset;
+}
+.chunk-card {
+    background: #fff;
+    border-radius: .5rem;
+    transition: box-shadow 0.15s ease;
+}
+.chunk-card:hover { box-shadow: 0 3px 10px rgba(0,0,0,0.08); }
+.chunk-filter-btn { border-radius: 20px !important; font-size: .78rem; padding: .2rem .7rem; }
+.meta-icon { width: 20px; flex-shrink: 0; text-align: center; }
+</style>
+{% endblock %}
+
 {% block content %}
-{% call page_hero(title=reference.title, subtitle='Detalhes e trechos indexados da peça-modelo.', icon='bi
-bi-file-earmark-text') %}
+{% call page_hero(title=reference.title, subtitle='Peça-Modelo · Trechos e metadados de indexação.', icon='bi bi-file-earmark-richtext') %}
 <nav aria-label="breadcrumb">
     <ol class="breadcrumb mb-0 bg-transparent small">
-        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a>
-        </li>
-        <li class="breadcrumb-item"><a href="{{ url_for('impugnacao_references.list_references') }}">Peças-Modelo</a>
-        </li>
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('impugnacao_references.list_references') }}">Peças-Modelo</a></li>
         <li class="breadcrumb-item active">{{ reference.title }}</li>
     </ol>
 </nav>
@@ -29,108 +52,384 @@ bi-file-earmark-text') %}
         {% endfor %}{% endif %}
         {% endwith %}
 
-        <div class="row">
+        <!-- Métricas rápidas -->
+        <div class="row g-3 mb-4">
+            <div class="col-6 col-md-3">
+                <div class="card border-0 h-100" style="background:rgba(13,110,253,.07)">
+                    <div class="card-body py-3 px-3 d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center"
+                            style="width:40px;height:40px;flex-shrink:0;background:rgba(13,110,253,.15)">
+                            <i class="bi bi-layers text-primary"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold fs-4 lh-1 text-primary">{{ chunks|length }}</div>
+                            <div class="small text-muted">Trechos</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card border-0 h-100" style="background:rgba(255,193,7,.08)">
+                    <div class="card-body py-3 px-3 d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center"
+                            style="width:40px;height:40px;flex-shrink:0;background:rgba(255,193,7,.2)">
+                            <i class="bi bi-star-fill text-warning"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold fs-4 lh-1 text-warning">
+                                {{ '%.1f'|format(reference.quality_score) if reference.quality_score is not none else '—' }}
+                            </div>
+                            <div class="small text-muted">Qualidade</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                <div class="card border-0 h-100" style="background:rgba(13,202,240,.08)">
+                    <div class="card-body py-3 px-3 d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center"
+                            style="width:40px;height:40px;flex-shrink:0;background:rgba(13,202,240,.2)">
+                            <i class="bi bi-building text-info"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold lh-1 text-info" style="font-size:1.1rem">{{ reference.trf_region or '—' }}</div>
+                            <div class="small text-muted">TRF</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-6 col-md-3">
+                {% if reference.status == 'active' %}
+                <div class="card border-0 h-100" style="background:rgba(25,135,84,.07)">
+                    <div class="card-body py-3 px-3 d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center"
+                            style="width:40px;height:40px;flex-shrink:0;background:rgba(25,135,84,.15)">
+                            <i class="bi bi-check-circle-fill text-success"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold lh-1 text-success" style="font-size:1.1rem">Ativa</div>
+                            <div class="small text-muted">Status</div>
+                        </div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="card border-0 h-100" style="background:rgba(108,117,125,.07)">
+                    <div class="card-body py-3 px-3 d-flex align-items-center gap-3">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center"
+                            style="width:40px;height:40px;flex-shrink:0;background:rgba(108,117,125,.15)">
+                            <i class="bi bi-archive text-secondary"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold lh-1 text-secondary" style="font-size:1.1rem">Arquivada</div>
+                            <div class="small text-muted">Status</div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="row g-4">
+            <!-- Coluna esquerda: metadados + ações -->
             <div class="col-lg-4">
-                <div class="card card-primary card-outline shadow-sm mb-3">
-                    <div class="card-header">
-                        <h5 class="mb-0"><i class="bi bi-info-circle"></i> Metadados</h5>
+                <div class="card border-0 shadow-sm rounded-3">
+                    <div class="card-header border-0 py-3 px-4 rounded-top-3"
+                        style="background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);">
+                        <h5 class="mb-0 text-white"><i class="bi bi-info-circle-fill me-2"></i>Metadados</h5>
                     </div>
-                    <div class="card-body">
-                        <dl class="row mb-0 small">
-                            <dt class="col-5">Caso</dt>
-                            <dd class="col-7">{{ reference.case_name or '—' }}</dd>
-                            <dt class="col-5">TRF</dt>
-                            <dd class="col-7">{{ reference.trf_region or '—' }}</dd>
-                            <dt class="col-5">Modo</dt>
-                            <dd class="col-7">
-                                {% if reference.generation_mode == 'A' %}A · Mérito
-                                {% elif reference.generation_mode == 'B' %}B · Defesa
-                                {% else %}—{% endif %}
-                            </dd>
-                            <dt class="col-5">Qualidade</dt>
-                            <dd class="col-7">
-                                {{ '%.2f'|format(reference.quality_score) if reference.quality_score is not none else
-                                '—' }}
-                            </dd>
-                            <dt class="col-5">Arquivo</dt>
-                            <dd class="col-7">{{ reference.original_filename or '—' }}</dd>
-                            <dt class="col-5">Tipo</dt>
-                            <dd class="col-7">{{ reference.file_type or '—' }}</dd>
-                            <dt class="col-5">Tamanho</dt>
-                            <dd class="col-7">{{ (reference.file_size/1024)|round(1) if reference.file_size else 0 }} KB
-                            </dd>
-                            <dt class="col-5">Trechos</dt>
-                            <dd class="col-7"><span class="badge bg-primary">{{ reference.chunks_count or 0 }}</span>
-                            </dd>
-                            <dt class="col-5">Coleção</dt>
-                            <dd class="col-7 small text-muted">{{ reference.qdrant_collection or '—' }}</dd>
-                            <dt class="col-5">Status</dt>
-                            <dd class="col-7">
-                                {% if reference.status == 'active' %}<span class="badge bg-success">Ativa</span>
-                                {% else %}<span class="badge bg-secondary">Arquivada</span>{% endif %}
-                            </dd>
-                            <dt class="col-5">Criada em</dt>
-                            <dd class="col-7">{{ reference.created_at|datetime_sp if reference.created_at else '—' }}
-                            </dd>
-                        </dl>
+                    <div class="card-body px-4 py-2">
+                        <ul class="list-unstyled mb-0">
+                            {% if reference.case_name %}
+                            <li class="d-flex gap-3 py-2 border-bottom align-items-start">
+                                <i class="bi bi-briefcase text-muted mt-1 meta-icon"></i>
+                                <div>
+                                    <div class="small text-muted">Caso</div>
+                                    <div class="small fw-medium">{{ reference.case_name }}</div>
+                                </div>
+                            </li>
+                            {% endif %}
+                            <li class="d-flex gap-3 py-2 border-bottom align-items-start">
+                                <i class="bi bi-globe2 text-muted mt-1 meta-icon"></i>
+                                <div>
+                                    <div class="small text-muted">TRF</div>
+                                    {% if reference.trf_region %}
+                                    <span class="badge bg-info text-dark">{{ reference.trf_region }}</span>
+                                    {% else %}<span class="small text-muted">—</span>{% endif %}
+                                </div>
+                            </li>
+                            <li class="d-flex gap-3 py-2 border-bottom align-items-start">
+                                <i class="bi bi-diagram-3 text-muted mt-1 meta-icon"></i>
+                                <div>
+                                    <div class="small text-muted">Modo de geração</div>
+                                    {% if reference.generation_mode == 'A' %}
+                                    <span class="badge bg-success">A · Mérito</span>
+                                    {% elif reference.generation_mode == 'B' %}
+                                    <span class="badge bg-warning text-dark">B · Defesa</span>
+                                    {% else %}<span class="small text-muted">—</span>{% endif %}
+                                </div>
+                            </li>
+                            <li class="d-flex gap-3 py-2 border-bottom align-items-start">
+                                <i class="bi bi-star-fill text-warning mt-1 meta-icon"></i>
+                                <div>
+                                    <div class="small text-muted">Qualidade</div>
+                                    {% if reference.quality_score is not none %}
+                                    {% set q = reference.quality_score|float %}
+                                    {% set q_int = q|int %}
+                                    {% set q_frac = q - q|int %}
+                                    <div class="d-flex align-items-center gap-1">
+                                        {% for i in range(1, 6) %}
+                                            {% if i <= q_int %}
+                                            <i class="bi bi-star-fill text-warning" style="font-size:.82rem"></i>
+                                            {% elif i == q_int + 1 and q_frac >= 0.5 %}
+                                            <i class="bi bi-star-half text-warning" style="font-size:.82rem"></i>
+                                            {% else %}
+                                            <i class="bi bi-star text-muted" style="font-size:.82rem"></i>
+                                            {% endif %}
+                                        {% endfor %}
+                                        <span class="small text-muted ms-1">({{ '%.1f'|format(q) }})</span>
+                                    </div>
+                                    {% else %}<span class="small text-muted">—</span>{% endif %}
+                                </div>
+                            </li>
+                            <li class="d-flex gap-3 py-2 border-bottom align-items-start">
+                                <i class="bi bi-file-earmark text-muted mt-1 meta-icon"></i>
+                                <div>
+                                    <div class="small text-muted">Arquivo original</div>
+                                    <div class="small text-break" style="word-break:break-all">{{ reference.original_filename or '—' }}</div>
+                                </div>
+                            </li>
+                            <li class="d-flex gap-3 py-2 border-bottom align-items-start">
+                                <i class="bi bi-hdd text-muted mt-1 meta-icon"></i>
+                                <div>
+                                    <div class="small text-muted">Tipo · Tamanho</div>
+                                    <div class="small">
+                                        {% if reference.file_type %}
+                                        <span class="badge bg-light text-dark border me-1">{{ reference.file_type|upper }}</span>
+                                        {% endif %}
+                                        {{ (reference.file_size / 1024)|round(1) if reference.file_size else 0 }} KB
+                                    </div>
+                                </div>
+                            </li>
+                            <li class="d-flex gap-3 py-2 border-bottom align-items-start">
+                                <i class="bi bi-layers text-muted mt-1 meta-icon"></i>
+                                <div>
+                                    <div class="small text-muted">Trechos indexados</div>
+                                    <span class="badge bg-primary rounded-pill">{{ reference.chunks_count or 0 }}</span>
+                                </div>
+                            </li>
+                            <li class="d-flex gap-3 py-2 border-bottom align-items-start">
+                                <i class="bi bi-database text-muted mt-1 meta-icon"></i>
+                                <div>
+                                    <div class="small text-muted">Coleção Qdrant</div>
+                                    <code class="small text-muted" style="font-size:.72rem">{{ reference.qdrant_collection or '—' }}</code>
+                                </div>
+                            </li>
+                            <li class="d-flex gap-3 py-2 align-items-start">
+                                <i class="bi bi-calendar3 text-muted mt-1 meta-icon"></i>
+                                <div>
+                                    <div class="small text-muted">Criada em</div>
+                                    <div class="small">{{ reference.created_at|datetime_sp if reference.created_at else '—' }}</div>
+                                </div>
+                            </li>
+                        </ul>
                         {% if reference.notes %}
-                        <hr>
-                        <p class="small mb-0"><strong>Notas:</strong> {{ reference.notes }}</p>
+                        <div class="alert alert-light border-start border-warning border-3 mt-3 py-2 mb-0 small">
+                            <i class="bi bi-sticky me-1 text-warning"></i>
+                            <strong>Notas:</strong> {{ reference.notes }}
+                        </div>
                         {% endif %}
                     </div>
-                    <div class="card-footer d-flex flex-wrap gap-2">
-                        <form method="POST"
-                            action="{{ url_for('impugnacao_references.reindex_reference', ref_id=reference.id) }}"
-                            onsubmit="return confirm('Reindexar este arquivo? Os trechos antigos serão substituídos.');">
-                            <button class="btn btn-sm btn-outline-primary"><i class="bi bi-arrow-repeat"></i>
-                                Reindexar</button>
-                        </form>
-                        {% if reference.status == 'active' %}
-                        <form method="POST"
-                            action="{{ url_for('impugnacao_references.archive_reference', ref_id=reference.id) }}">
-                            <button class="btn btn-sm btn-outline-warning"><i class="bi bi-archive"></i>
-                                Arquivar</button>
-                        </form>
-                        {% else %}
-                        <form method="POST"
-                            action="{{ url_for('impugnacao_references.reactivate_reference', ref_id=reference.id) }}">
-                            <button class="btn btn-sm btn-outline-success"><i class="bi bi-arrow-counterclockwise"></i>
-                                Reativar</button>
-                        </form>
-                        {% endif %}
-                        <form method="POST"
-                            action="{{ url_for('impugnacao_references.delete_reference', ref_id=reference.id) }}"
-                            onsubmit="return confirm('Excluir permanentemente?');">
-                            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Excluir</button>
-                        </form>
+                    <div class="card-footer border-0 bg-light px-4 py-3 rounded-bottom-3">
+                        <div class="d-grid gap-2">
+                            <form method="POST"
+                                action="{{ url_for('impugnacao_references.reindex_reference', ref_id=reference.id) }}"
+                                onsubmit="return confirm('Reindexar este arquivo? Os trechos antigos serão substituídos.');">
+                                <button class="btn btn-outline-primary btn-sm w-100">
+                                    <i class="bi bi-arrow-repeat me-1"></i> Reindexar trechos
+                                </button>
+                            </form>
+                            {% if reference.status == 'active' %}
+                            <form method="POST"
+                                action="{{ url_for('impugnacao_references.archive_reference', ref_id=reference.id) }}">
+                                <button class="btn btn-outline-warning btn-sm w-100">
+                                    <i class="bi bi-archive me-1"></i> Arquivar peça
+                                </button>
+                            </form>
+                            {% else %}
+                            <form method="POST"
+                                action="{{ url_for('impugnacao_references.reactivate_reference', ref_id=reference.id) }}">
+                                <button class="btn btn-outline-success btn-sm w-100">
+                                    <i class="bi bi-arrow-counterclockwise me-1"></i> Reativar peça
+                                </button>
+                            </form>
+                            {% endif %}
+                            <form method="POST"
+                                action="{{ url_for('impugnacao_references.delete_reference', ref_id=reference.id) }}"
+                                onsubmit="return confirm('Excluir permanentemente esta peça-modelo e todos os seus trechos?');">
+                                <button class="btn btn-outline-danger btn-sm w-100">
+                                    <i class="bi bi-trash me-1"></i> Excluir permanentemente
+                                </button>
+                            </form>
+                        </div>
                     </div>
                 </div>
             </div>
 
+            <!-- Coluna direita: trechos indexados -->
             <div class="col-lg-8">
-                <div class="card card-primary card-outline shadow-sm">
-                    <div class="card-header">
-                        <h5 class="mb-0"><i class="bi bi-list-task"></i> Trechos indexados ({{ chunks|length }})</h5>
+                <div class="card border-0 shadow-sm rounded-3">
+                    <div class="card-header border-0 py-3 px-4 d-flex justify-content-between align-items-center rounded-top-3"
+                        style="background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);">
+                        <h5 class="mb-0 text-white">
+                            <i class="bi bi-list-task me-2"></i>Trechos indexados
+                        </h5>
+                        <span class="badge bg-white text-primary rounded-pill fw-bold px-3">{{ chunks|length }}</span>
                     </div>
-                    <div class="card-body">
-                        {% if chunks %}
+
+                    {% if chunks %}
+                    {% set ns = namespace(seen=[]) %}
+                    {% for chunk in chunks %}
+                        {% set k = chunk.section_kind or 'general' %}
+                        {% if k not in ns.seen %}{% set ns.seen = ns.seen + [k] %}{% endif %}
+                    {% endfor %}
+
+                    <!-- Filtros por section_kind -->
+                    <div class="px-4 pt-3 pb-2 bg-light border-bottom">
+                        <div class="d-flex gap-1 flex-wrap">
+                            <button class="btn btn-sm btn-primary chunk-filter-btn" data-filter="all"
+                                onclick="filterChunks('all')">
+                                <i class="bi bi-grid-3x3-gap-fill me-1"></i>Todos
+                            </button>
+                            {% for k in ns.seen %}
+                            {% if k == 'introduction' %}
+                                {% set btn_label = 'Introdução' %}{% set btn_icon = 'bi-type-h1' %}
+                            {% elif k == 'preliminary' %}
+                                {% set btn_label = 'Preliminar' %}{% set btn_icon = 'bi-flag' %}
+                            {% elif k == 'merit_by_thesis' %}
+                                {% set btn_label = 'Mérito / Tese' %}{% set btn_icon = 'bi-balance-scale' %}
+                            {% elif k == 'jurisprudence' %}
+                                {% set btn_label = 'Jurisprudência' %}{% set btn_icon = 'bi-book' %}
+                            {% elif k == 'requests' %}
+                                {% set btn_label = 'Pedidos' %}{% set btn_icon = 'bi-check2-square' %}
+                            {% elif k == 'closing' %}
+                                {% set btn_label = 'Encerramento' %}{% set btn_icon = 'bi-door-closed' %}
+                            {% else %}
+                                {% set btn_label = 'Geral' %}{% set btn_icon = 'bi-three-dots' %}
+                            {% endif %}
+                            <button class="btn btn-sm btn-outline-secondary chunk-filter-btn" data-filter="{{ k }}"
+                                onclick="filterChunks('{{ k }}')">
+                                <i class="bi {{ btn_icon }} me-1"></i>{{ btn_label }}
+                            </button>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                    <!-- Lista de trechos -->
+                    <div class="card-body px-3 py-3" style="max-height:72vh; overflow-y:auto" id="chunksContainer">
                         {% for chunk in chunks %}
-                        <div class="border rounded p-3 mb-2">
-                            <div class="d-flex justify-content-between align-items-center mb-1">
-                                <span class="badge bg-info">{{ chunk.section_kind or 'general' }}</span>
-                                <small class="text-muted">#{{ chunk.order_in_doc }} · {{ chunk.chunk_chars }}
-                                    chars</small>
+                        {% set k = chunk.section_kind or 'general' %}
+                        {% if k == 'introduction' %}
+                            {% set strip = '#6c757d' %}
+                            {% set badge_cls = 'bg-secondary' %}
+                            {% set badge_lbl = 'Introdução' %}
+                        {% elif k == 'preliminary' %}
+                            {% set strip = '#ffc107' %}
+                            {% set badge_cls = 'bg-warning text-dark' %}
+                            {% set badge_lbl = 'Preliminar' %}
+                        {% elif k == 'merit_by_thesis' %}
+                            {% set strip = '#0d6efd' %}
+                            {% set badge_cls = 'bg-primary' %}
+                            {% set badge_lbl = 'Mérito / Tese' %}
+                        {% elif k == 'jurisprudence' %}
+                            {% set strip = '#0dcaf0' %}
+                            {% set badge_cls = 'bg-info text-dark' %}
+                            {% set badge_lbl = 'Jurisprudência' %}
+                        {% elif k == 'requests' %}
+                            {% set strip = '#198754' %}
+                            {% set badge_cls = 'bg-success' %}
+                            {% set badge_lbl = 'Pedidos' %}
+                        {% elif k == 'closing' %}
+                            {% set strip = '#343a40' %}
+                            {% set badge_cls = 'bg-dark' %}
+                            {% set badge_lbl = 'Encerramento' %}
+                        {% else %}
+                            {% set strip = '#adb5bd' %}
+                            {% set badge_cls = 'bg-light text-dark border' %}
+                            {% set badge_lbl = 'Geral' %}
+                        {% endif %}
+
+                        <div class="chunk-item mb-2" data-kind="{{ k }}">
+                            <div class="chunk-card d-flex"
+                                style="border-left: 4px solid {{ strip }}; border: 1px solid #e9ecef; border-left: 4px solid {{ strip }}">
+                                <div class="p-3 flex-grow-1 min-w-0">
+                                    <div class="d-flex justify-content-between align-items-start mb-2 gap-2">
+                                        <span class="badge {{ badge_cls }} flex-shrink-0" style="font-size:.75rem">{{ badge_lbl }}</span>
+                                        <div class="d-flex gap-1 align-items-center flex-shrink-0">
+                                            <span class="badge bg-light text-muted border" style="font-size:.7rem">
+                                                #{{ chunk.order_in_doc + 1 }}
+                                            </span>
+                                            <span class="badge bg-light text-muted border" style="font-size:.7rem">
+                                                {{ chunk.chunk_chars }} chars
+                                            </span>
+                                        </div>
+                                    </div>
+                                    <p class="mb-1 text-muted chunk-text" id="chunk-{{ loop.index }}">{{ chunk.full_text or chunk.preview_text or '—' }}</p>
+                                    {% if chunk.chunk_chars and chunk.chunk_chars > 300 %}
+                                    <button type="button"
+                                        class="btn btn-link btn-sm p-0 text-primary"
+                                        style="font-size:.72rem; text-decoration:none"
+                                        onclick="toggleChunk(this, 'chunk-{{ loop.index }}')">
+                                        <i class="bi bi-chevron-down me-1"></i>Ver mais
+                                    </button>
+                                    {% endif %}
+                                </div>
                             </div>
-                            <p class="small mb-0 text-muted">{{ chunk.preview_text or '—' }}</p>
                         </div>
                         {% endfor %}
-                        {% else %}
-                        <p class="text-muted text-center py-4">Nenhum trecho indexado.</p>
-                        {% endif %}
                     </div>
+
+                    {% else %}
+                    <!-- Estado vazio -->
+                    <div class="card-body text-center py-5">
+                        <div class="rounded-circle bg-light d-flex align-items-center justify-content-center mx-auto mb-3"
+                            style="width:64px;height:64px">
+                            <i class="bi bi-layers display-6 text-muted"></i>
+                        </div>
+                        <p class="text-muted mb-1 fw-medium">Nenhum trecho indexado</p>
+                        <p class="small text-muted mb-4">Use o botão "Reindexar" para gerar os trechos desta peça.</p>
+                        <form method="POST"
+                            action="{{ url_for('impugnacao_references.reindex_reference', ref_id=reference.id) }}"
+                            onsubmit="return confirm('Indexar os trechos desta peça?');">
+                            <button class="btn btn-primary btn-sm">
+                                <i class="bi bi-arrow-repeat me-1"></i> Indexar agora
+                            </button>
+                        </form>
+                    </div>
+                    {% endif %}
                 </div>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+function filterChunks(kind) {
+    document.querySelectorAll('.chunk-item').forEach(function(item) {
+        item.style.display = (kind === 'all' || item.dataset.kind === kind) ? '' : 'none';
+    });
+    document.querySelectorAll('.chunk-filter-btn').forEach(function(btn) {
+        var isActive = btn.dataset.filter === kind;
+        btn.classList.toggle('btn-primary', isActive);
+        btn.classList.toggle('btn-outline-secondary', !isActive);
+    });
+}
+
+function toggleChunk(btn, previewId) {
+    var el = document.getElementById(previewId);
+    var expanded = el.classList.toggle('expanded');
+    btn.innerHTML = expanded
+        ? '<i class="bi bi-chevron-up me-1"></i>Ver menos'
+        : '<i class="bi bi-chevron-down me-1"></i>Ver mais';
+}
+</script>
 {% endblock %}

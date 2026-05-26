@@ -1,18 +1,35 @@
 {% extends "layout/base.html" %}
-
 {% from "partials/page_hero.html" import page_hero %}
 
 {% block title %}Nova Peça-Modelo - IntellexIA{% endblock %}
 
+{% block extra_css %}
+<style>
+.upload-zone {
+    border: 2px dashed #c5cfe8;
+    border-radius: .75rem;
+    background: #f8faff;
+    transition: border-color .2s ease, background .2s ease;
+    cursor: pointer;
+}
+.upload-zone:hover,
+.upload-zone.drag-over {
+    border-color: #0d6efd;
+    background: rgba(13,110,253,.04);
+}
+.upload-zone.has-file {
+    border-color: #198754;
+    background: rgba(25,135,84,.04);
+}
+</style>
+{% endblock %}
+
 {% block content %}
-{% call page_hero(title='Nova Peça-Modelo', subtitle='Cadastre uma peça premium do escritório para servir como
-referência de estilo.', icon='bi bi-file-earmark-plus') %}
+{% call page_hero(title='Nova Peça-Modelo', subtitle='Cadastre uma peça premium do escritório para servir como referência de estilo.', icon='bi bi-file-earmark-plus') %}
 <nav aria-label="breadcrumb">
     <ol class="breadcrumb mb-0 bg-transparent small">
-        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a>
-        </li>
-        <li class="breadcrumb-item"><a href="{{ url_for('impugnacao_references.list_references') }}">Peças-Modelo</a>
-        </li>
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('impugnacao_references.list_references') }}">Peças-Modelo</a></li>
         <li class="breadcrumb-item active" aria-current="page">Nova</li>
     </ol>
 </nav>
@@ -21,49 +38,95 @@ referência de estilo.', icon='bi bi-file-earmark-plus') %}
 <div class="app-content">
     <div class="container-fluid">
         <div class="row justify-content-center">
-            <div class="col-lg-8">
-                <div class="card card-primary card-outline shadow-sm">
-                    <div class="card-header bg-gradient bg-primary text-white border-0">
-                        <h3 class="card-title mb-0"><i class="bi bi-upload"></i> Upload de peça-modelo</h3>
+            <div class="col-lg-8 col-xl-7">
+
+                <!-- Avisos informativos -->
+                <div class="row g-3 mb-4">
+                    <div class="col-sm-6">
+                        <div class="d-flex gap-3 p-3 rounded-3 border bg-white shadow-sm h-100">
+                            <div class="rounded-circle bg-info bg-opacity-10 d-flex align-items-center justify-content-center flex-shrink-0"
+                                style="width:42px;height:42px">
+                                <i class="bi bi-shield-check text-info fs-5"></i>
+                            </div>
+                            <div>
+                                <div class="fw-medium small mb-1">Apenas estilo</div>
+                                <div class="small text-muted">O agente usa trechos somente como inspiração estilística.
+                                    Dados como nomes, CNPJs e NITs <strong>nunca</strong> são reaproveitados.</div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <div class="alert alert-info small">
-                            <i class="bi bi-info-circle"></i>
-                            O agente usará trechos desta peça <strong>apenas como inspiração estilística</strong>.
-                            Os dados concretos (nomes, CNPJs, NITs, números) <strong>nunca</strong> serão
-                            reaproveitados.
+                    <div class="col-sm-6">
+                        <div class="d-flex gap-3 p-3 rounded-3 border bg-white shadow-sm h-100">
+                            <div class="rounded-circle bg-warning bg-opacity-10 d-flex align-items-center justify-content-center flex-shrink-0"
+                                style="width:42px;height:42px">
+                                <i class="bi bi-stars text-warning fs-5"></i>
+                            </div>
+                            <div>
+                                <div class="fw-medium small mb-1">Cadastro automático</div>
+                                <div class="small text-muted">Um agente de IA lê o arquivo e preenche
+                                    <em>título, TRF, modo e qualidade</em> automaticamente. Revise na tela de detalhe.
+                                </div>
+                            </div>
                         </div>
+                    </div>
+                </div>
 
-                        <div class="alert alert-light border small">
-                            <i class="bi bi-magic"></i>
-                            <strong>Cadastro automático:</strong> ao enviar o arquivo, um agente de IA lê o início
-                            da peça e preenche sozinho o <em>título</em>, <em>TRF</em>, <em>modo</em> (mérito/defesa)
-                            e <em>qualidade</em>. Você pode revisar tudo na tela de detalhe depois.
-                        </div>
+                <div class="card border-0 shadow-sm rounded-3">
+                    <div class="card-header border-0 py-3 px-4 rounded-top-3"
+                        style="background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%);">
+                        <h5 class="mb-0 text-white"><i class="bi bi-cloud-arrow-up me-2"></i>Upload de peça-modelo</h5>
+                    </div>
+                    <div class="card-body p-4">
+                        <form method="POST" enctype="multipart/form-data" id="uploadForm">
 
-                        <form method="POST" enctype="multipart/form-data">
-                            <div class="mb-3">
-                                <label class="form-label">Arquivo (PDF, DOCX, TXT) <span
-                                        class="text-danger">*</span></label>
-                                <input type="file" class="form-control" name="file" required
-                                    accept=".pdf,.docx,.doc,.txt,.md">
-                                <div class="form-text">
+                            <!-- Zona de upload drag-and-drop -->
+                            <div class="mb-4">
+                                <label class="form-label fw-medium">
+                                    Arquivo <span class="text-danger">*</span>
+                                    <span class="text-muted fw-normal">(PDF, DOCX, TXT, MD)</span>
+                                </label>
+                                <div class="upload-zone text-center p-5" id="dropZone"
+                                    onclick="document.getElementById('fileInput').click()">
+                                    <input type="file" class="d-none" id="fileInput" name="file" required
+                                        accept=".pdf,.docx,.doc,.txt,.md">
+
+                                    <div id="uploadPrompt">
+                                        <i class="bi bi-cloud-arrow-up-fill display-4 text-primary d-block mb-3"></i>
+                                        <p class="fw-medium mb-1">Arraste o arquivo aqui ou clique para selecionar</p>
+                                        <p class="small text-muted mb-0">PDF, DOCX, DOC, TXT, MD</p>
+                                    </div>
+
+                                    <div id="fileSelected" class="d-none">
+                                        <i class="bi bi-file-earmark-check-fill display-4 text-success d-block mb-3"></i>
+                                        <p class="fw-medium mb-1 text-success">Arquivo selecionado</p>
+                                        <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2"
+                                            id="selectedFileName" style="font-size:.85rem"></span>
+                                        <p class="small text-muted mt-2 mb-0">Clique para trocar</p>
+                                    </div>
+                                </div>
+                                <div class="form-text mt-2">
+                                    <i class="bi bi-lightbulb text-warning me-1"></i>
                                     Use uma peça já elaborada pelo escritório que represente bem o estilo desejado.
                                 </div>
                             </div>
 
-                            <div class="mb-3">
-                                <label class="form-label">Notas internas <span
-                                        class="text-muted">(opcional)</span></label>
+                            <!-- Notas internas -->
+                            <div class="mb-4">
+                                <label class="form-label fw-medium">
+                                    Notas internas
+                                    <span class="text-muted fw-normal">(opcional)</span>
+                                </label>
                                 <textarea class="form-control" name="notes" rows="3"
-                                    placeholder="Observações sobre estilo, contexto, peculiaridades..."></textarea>
+                                    placeholder="Observações sobre estilo, contexto ou peculiaridades da peça..."></textarea>
                             </div>
 
                             <div class="d-flex justify-content-end gap-2">
                                 <a href="{{ url_for('impugnacao_references.list_references') }}"
-                                    class="btn btn-light">Cancelar</a>
-                                <button type="submit" class="btn btn-primary">
-                                    <i class="bi bi-cloud-upload"></i> Enviar e indexar
+                                    class="btn btn-light px-4">
+                                    <i class="bi bi-x me-1"></i>Cancelar
+                                </a>
+                                <button type="submit" class="btn btn-primary px-4" id="submitBtn">
+                                    <i class="bi bi-cloud-upload me-2"></i>Enviar e indexar
                                 </button>
                             </div>
                         </form>
@@ -73,4 +136,48 @@ referência de estilo.', icon='bi bi-file-earmark-plus') %}
         </div>
     </div>
 </div>
+
+<script>
+(function () {
+    var dropZone = document.getElementById('dropZone');
+    var fileInput = document.getElementById('fileInput');
+    var uploadPrompt = document.getElementById('uploadPrompt');
+    var fileSelected = document.getElementById('fileSelected');
+    var selectedFileName = document.getElementById('selectedFileName');
+
+    function showFile(file) {
+        selectedFileName.textContent = file.name;
+        uploadPrompt.classList.add('d-none');
+        fileSelected.classList.remove('d-none');
+        dropZone.classList.add('has-file');
+    }
+
+    fileInput.addEventListener('change', function () {
+        if (fileInput.files[0]) showFile(fileInput.files[0]);
+    });
+
+    dropZone.addEventListener('dragover', function (e) {
+        e.preventDefault();
+        dropZone.classList.add('drag-over');
+    });
+    dropZone.addEventListener('dragleave', function () {
+        dropZone.classList.remove('drag-over');
+    });
+    dropZone.addEventListener('drop', function (e) {
+        e.preventDefault();
+        dropZone.classList.remove('drag-over');
+        var dt = e.dataTransfer;
+        if (dt.files[0]) {
+            fileInput.files = dt.files;
+            showFile(dt.files[0]);
+        }
+    });
+
+    document.getElementById('uploadForm').addEventListener('submit', function () {
+        var btn = document.getElementById('submitBtn');
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Enviando e indexando...';
+    });
+})();
+</script>
 {% endblock %}

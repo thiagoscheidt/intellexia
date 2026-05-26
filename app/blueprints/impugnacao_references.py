@@ -203,6 +203,7 @@ def new_reference():
                 chunk_chars=chunk.get('chunk_chars', 0),
                 order_in_doc=chunk.get('order_in_doc', 0),
                 preview_text=chunk.get('preview_text'),
+                full_text=chunk.get('full_text'),
             ))
         db.session.commit()
         meta_bits = []
@@ -376,6 +377,7 @@ def reindex_reference(ref_id):
                 chunk_chars=chunk.get('chunk_chars', 0),
                 order_in_doc=chunk.get('order_in_doc', 0),
                 preview_text=chunk.get('preview_text'),
+                full_text=chunk.get('full_text'),
             ))
         db.session.commit()
         flash(f'Reindexado: {len(chunks_meta)} trechos.', 'success')

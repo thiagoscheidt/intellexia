@@ -329,6 +329,7 @@ class ImpugnacaoReferenceIngestor:
                 "chunk_chars": len(chunk_text),
                 "order_in_doc": order,
                 "preview_text": chunk_text[:280],
+                "full_text": chunk_text,
             })
 
         if points:

@@ -2939,6 +2939,7 @@ class ImpugnacaoReferenceChunk(db.Model):
     chunk_chars = db.Column(db.Integer, default=0)
     order_in_doc = db.Column(db.Integer, default=0)
     preview_text = db.Column(db.Text)
+    full_text = db.Column(db.Text)
 
     created_at = db.Column(db.DateTime, default=datetime.now)
 
