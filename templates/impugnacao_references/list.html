@@ -1,0 +1,105 @@
+{% extends "layout/base.html" %}
+
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}Peças-Modelo de Impugnação - IntellexIA{% endblock %}
+
+{% block content %}
+{% call page_hero(title='Peças-Modelo de Impugnação', subtitle='Base de referências de estilo do escritório usada pelo
+agente gerador de impugnação à contestação.', icon='bi bi-collection') %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-0 bg-transparent small">
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">Peças-Modelo</li>
+    </ol>
+</nav>
+{% endcall %}
+
+<div class="app-content">
+    <div class="container-fluid">
+        <div class="card card-primary card-outline shadow-sm">
+            <div
+                class="card-header bg-gradient bg-primary text-white border-0 d-flex justify-content-between align-items-center">
+                <h3 class="card-title mb-0"><i class="bi bi-list-ul"></i> Peças cadastradas</h3>
+                <a href="{{ url_for('impugnacao_references.new_reference') }}" class="btn btn-light btn-sm">
+                    <i class="bi bi-plus-circle"></i> Nova Peça-Modelo
+                </a>
+            </div>
+            <div class="card-body">
+                {% with messages = get_flashed_messages(with_categories=true) %}
+                {% if messages %}{% for category, message in messages %}
+                <div class="alert alert-{{ category }} alert-dismissible fade show">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+                {% endfor %}{% endif %}
+                {% endwith %}
+
+                <div class="btn-group mb-3" role="group">
+                    <a href="?status=active"
+                        class="btn btn-sm {% if status_filter=='active' %}btn-primary{% else %}btn-outline-primary{% endif %}">Ativas</a>
+                    <a href="?status=archived"
+                        class="btn btn-sm {% if status_filter=='archived' %}btn-secondary{% else %}btn-outline-secondary{% endif %}">Arquivadas</a>
+                </div>
+
+                {% if references %}
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle">
+                        <thead>
+                            <tr>
+                                <th>Título</th>
+                                <th>Caso</th>
+                                <th>TRF</th>
+                                <th>Modo</th>
+                                <th>Qualidade</th>
+                                <th>Trechos</th>
+                                <th>Status</th>
+                                <th>Criado em</th>
+                                <th class="text-end">Ações</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for ref in references %}
+                            <tr>
+                                <td><strong>{{ ref.title }}</strong></td>
+                                <td class="text-muted small">{{ ref.case_name or '—' }}</td>
+                                <td><span class="badge bg-info">{{ ref.trf_region or '—' }}</span></td>
+                                <td>
+                                    {% if ref.generation_mode == 'A' %}<span class="badge bg-success">A · Mérito</span>
+                                    {% elif ref.generation_mode == 'B' %}<span class="badge bg-warning">B ·
+                                        Defesa</span>
+                                    {% else %}<span class="badge bg-light text-dark">—</span>{% endif %}
+                                </td>
+                                <td>{{ '%.1f'|format(ref.quality_score) if ref.quality_score is not none else '—' }}
+                                </td>
+                                <td><span class="badge bg-primary">{{ ref.chunks_count or 0 }}</span></td>
+                                <td>
+                                    {% if ref.status == 'active' %}<span class="badge bg-success">Ativa</span>
+                                    {% else %}<span class="badge bg-secondary">Arquivada</span>{% endif %}
+                                </td>
+                                <td class="text-muted small">{{ ref.created_at|datetime_sp if ref.created_at else '—' }}
+                                </td>
+                                <td class="text-end">
+                                    <a href="{{ url_for('impugnacao_references.reference_detail', ref_id=ref.id) }}"
+                                        class="btn btn-sm btn-outline-primary"><i class="bi bi-eye"></i></a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-5">
+                    <i class="bi bi-collection display-4 d-block mb-2"></i>
+                    <p>Nenhuma peça-modelo cadastrada.</p>
+                    <a href="{{ url_for('impugnacao_references.new_reference') }}" class="btn btn-primary">
+                        <i class="bi bi-plus-circle"></i> Cadastrar a primeira
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

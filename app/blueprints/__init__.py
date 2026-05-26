@@ -19,6 +19,7 @@ from app.blueprints.process_panel import process_panel_bp
 from app.blueprints.disputes_center import disputes_center_bp
 from app.blueprints.fap_panel import fap_panel_bp
 from app.blueprints.fap_review import fap_review_bp
+from app.blueprints.impugnacao_references import impugnacao_references_bp
 
 __all__ = [
     'auth_bp',
@@ -39,4 +40,5 @@ __all__ = [
     'disputes_center_bp',
     'fap_panel_bp',
     'fap_review_bp',
+    'impugnacao_references_bp',
 ]

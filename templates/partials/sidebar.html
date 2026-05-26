@@ -234,9 +234,9 @@
         </li>
 
         <li
-          class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('process_panel.') else '' }}">
+          class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint.startswith('process_panel.') or request.endpoint.startswith('impugnacao_references.')) else '' }}">
           <a href="#"
-            class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('process_panel.') else '' }}">
+            class="nav-link {{ 'active' if request.endpoint and (request.endpoint.startswith('process_panel.') or request.endpoint.startswith('impugnacao_references.')) else '' }}">
             <i class="nav-icon bi bi-diagram-3-fill"></i>
             <p>
               Painel de Processos
@@ -266,6 +266,14 @@
                 style="font-size: 0.9em;">
                 <i class="nav-icon bi bi-card-list" style="margin-right: 8px; color: #6c757d;"></i>
                 <p style="margin-left: 15px;">Benefícios dos Processos</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('impugnacao_references.list_references') }}"
+                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('impugnacao_references.') else '' }}"
+                style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-journal-bookmark" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Peças-Modelo (Impugnação)</p>
               </a>
             </li>
           </ul>

@@ -15,15 +15,20 @@ Isso permite argumentação específica por par (benefício, tese).
 from pathlib import Path
 from typing import Optional
 import re
+import time
+import logging
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from app.agents.core.file_agent import FileAgent
+from app.services.token_usage_service import TokenUsageService
+from app.services.agent_execution_history_service import AgentExecutionHistoryService
 
 load_dotenv()
 from app.agents.config import DEFAULT_MODEL_LEGAL_DRAFTING
 
 _PROMPTS_DIR = Path(__file__).parent.parent.parent / "prompts"
+logger = logging.getLogger(__name__)
 
 
 def _load_prompt(filename: str) -> str:
@@ -235,6 +240,7 @@ class AgentGeneratedDocument:
         selections: list[dict],
         instructions: Optional[str] = None,
         contestation_file_path: Optional[str] = None,
+        law_firm_id: Optional[int] = None,
     ) -> GeneratedImpugnacaoContestacao:
         """
         Gera Impugnação à Contestação da União.
@@ -253,12 +259,20 @@ class AgentGeneratedDocument:
         regional_jurisprudence_hint = self._build_regional_jurisprudence_hint(process)
         instructions_block = f"\n\n=== INSTRUÇÕES ADICIONAIS DO ADVOGADO ===\n{instructions}\n" if instructions else ""
 
+        style_references_block = self._build_style_references_block(
+            process=process,
+            selections=selections,
+            law_firm_id=law_firm_id,
+        )
+
         user_prompt_sections = [
             process_ctx,
             selections_ctx,
         ]
         if regional_jurisprudence_hint:
             user_prompt_sections.append(regional_jurisprudence_hint)
+        if style_references_block:
+            user_prompt_sections.append(style_references_block)
 
         user_prompt = "\n\n".join(section for section in user_prompt_sections if section)
         user_prompt = (
@@ -275,12 +289,7 @@ class AgentGeneratedDocument:
             )
 
         file_part = FileAgent().build_openrouter_file_part(normalized_contestation_path)
-
-        llm = ChatOpenAI(model=self.model_name, temperature=0.3).with_structured_output(
-            GeneratedImpugnacaoContestacao
-        )
-        print("[AgentGeneratedDocument] Gerando Impugnação à Contestação (prompt v2.5.1)...")
-        return llm.invoke([
+        llm_messages = [
             {
                 "role": "system",
                 "content": f"{_IMPUGNACAO_SYSTEM_PROMPT}\n\n{_IMPUGNACAO_INTERNAL_GUARDRAILS}",
@@ -292,7 +301,110 @@ class AgentGeneratedDocument:
                     file_part,
                 ],
             },
-        ])
+        ]
+
+        system_content = f"{_IMPUGNACAO_SYSTEM_PROMPT}\n\n{_IMPUGNACAO_INTERNAL_GUARDRAILS}"
+
+        print("\n[AgentGeneratedDocument] === PROMPT FINAL (SYSTEM) ===")
+        print(system_content)
+        print("[AgentGeneratedDocument] === FIM PROMPT FINAL (SYSTEM) ===\n")
+
+        print("\n[AgentGeneratedDocument] === PROMPT FINAL (USER) ===")
+        print(user_prompt)
+        print("[AgentGeneratedDocument] === FIM PROMPT FINAL (USER) ===")
+        print(f"[AgentGeneratedDocument] Tamanho prompt user: {len(user_prompt)} chars")
+
+        llm = ChatOpenAI(model=self.model_name, temperature=0.3).with_structured_output(
+            GeneratedImpugnacaoContestacao,
+            include_raw=True,
+        )
+        print("[AgentGeneratedDocument] Gerando Impugnação à Contestação (prompt v2.5.4)...")
+        started_at = time.perf_counter()
+        try:
+            llm_output = llm.invoke(llm_messages)
+            parsed_result = llm_output.get("parsed") if isinstance(llm_output, dict) else None
+            raw_message = llm_output.get("raw") if isinstance(llm_output, dict) else None
+
+            # Fallback para ambientes onde include_raw não retorna o envelope esperado.
+            if parsed_result is None:
+                fallback_llm = ChatOpenAI(
+                    model=self.model_name,
+                    temperature=0.3,
+                ).with_structured_output(GeneratedImpugnacaoContestacao)
+                parsed_result = fallback_llm.invoke(llm_messages)
+                raw_message = None
+        except Exception as error:
+            elapsed_s = time.perf_counter() - started_at
+            try:
+                AgentExecutionHistoryService.save_execution_history(
+                    agent_name="AgentGeneratedDocument",
+                    action_name="generate_impugnacao_contestacao",
+                    agent_type="legal_drafting",
+                    system_prompt=system_content,
+                    user_prompt=user_prompt,
+                    model_response=None,
+                    full_messages_history=llm_messages,
+                    result_data=None,
+                    model_name=self.model_name,
+                    model_provider="openai",
+                    status="error",
+                    error_message=str(error),
+                    law_firm_id=law_firm_id,
+                )
+            except Exception:
+                logger.exception("Falha ao persistir histórico de erro da geração")
+            raise
+
+        elapsed_s = time.perf_counter() - started_at
+        print(f"[AgentGeneratedDocument] LLM concluída em {elapsed_s:.2f}s")
+
+        token_usage_id = None
+        try:
+            token_usage_service = TokenUsageService()
+            response_payload = {
+                "messages": [raw_message] if raw_message is not None else [],
+            }
+            _, token_rows = token_usage_service.capture_and_store(
+                response_payload=response_payload,
+                agent_name="AgentGeneratedDocument",
+                action_name="generate_impugnacao_contestacao",
+                print_prefix="[AgentGeneratedDocument][TokenUsage]",
+                model_name=self.model_name,
+                model_provider="openai",
+                law_firm_id=law_firm_id,
+                latency_ms=int(elapsed_s * 1000),
+                status="success",
+                metadata_payload={
+                    "document_type": "impugnacao_contestacao",
+                    "has_style_references": bool(style_references_block),
+                },
+                return_rows=True,
+            )
+            if token_rows:
+                token_usage_id = token_rows[0].id
+        except Exception:
+            logger.exception("Falha ao persistir token usage da geração de impugnação")
+
+        try:
+            AgentExecutionHistoryService.save_execution_history(
+                agent_name="AgentGeneratedDocument",
+                action_name="generate_impugnacao_contestacao",
+                agent_type="legal_drafting",
+                system_prompt=system_content,
+                user_prompt=user_prompt,
+                model_response=parsed_result.to_full_text() if hasattr(parsed_result, "to_full_text") else str(parsed_result),
+                full_messages_history=[llm_messages[0], llm_messages[1], raw_message] if raw_message is not None else llm_messages,
+                result_data=parsed_result.to_dict() if hasattr(parsed_result, "to_dict") else None,
+                model_name=self.model_name,
+                model_provider="openai",
+                status="success",
+                law_firm_id=law_firm_id,
+                agent_token_usage_id=token_usage_id,
+            )
+        except Exception:
+            logger.exception("Falha ao persistir execution history da geração de impugnação")
+
+        return parsed_result
 
     # ── Manifestação ─────────────────────────────────────────────────────
 
@@ -431,6 +543,56 @@ class AgentGeneratedDocument:
 
         return "\n".join(lines)
 
+    def _build_style_references_block(
+        self,
+        process,
+        selections: list[dict],
+        law_firm_id: Optional[int],
+    ) -> str:
+        """Recupera trechos da base de peças-modelo do escritório e formata
+        como bloco de inspiração de estilo no user_prompt.
+
+        Falhas (Qdrant indisponível, sem referências, etc.) não devem
+        interromper a geração — retornamos string vazia.
+        """
+        if not law_firm_id:
+            return ""
+        try:
+            from app.agents.legal_drafting.impugnacao_reference_retriever import (
+                ImpugnacaoReferenceRetriever,
+            )
+
+            query_parts = []
+            process_number = getattr(process, 'process_number', None) or getattr(process, 'number', None)
+            if process_number:
+                query_parts.append(f"Processo {process_number}")
+            for sel in (selections or [])[:6]:
+                benefit = sel.get('benefit') if isinstance(sel, dict) else None
+                thesis = sel.get('thesis') if isinstance(sel, dict) else None
+                if thesis is not None and getattr(thesis, 'title', None):
+                    query_parts.append(thesis.title)
+                elif benefit is not None and getattr(benefit, 'request_type', None):
+                    query_parts.append(str(benefit.request_type))
+            query_text = " | ".join(query_parts) or "impugnação à contestação FAP"
+
+            trf_region = None
+            court_name = getattr(getattr(process, 'court', None), 'name', '') or ''
+            for region in ('TRF1', 'TRF2', 'TRF3', 'TRF4', 'TRF5', 'TRF6'):
+                if region.lower() in court_name.lower():
+                    trf_region = region
+                    break
+
+            retriever = ImpugnacaoReferenceRetriever()
+            chunks = retriever.fetch_style_references(
+                law_firm_id=law_firm_id,
+                query_text=query_text,
+                trf_region=trf_region,
+            )
+            return retriever.format_block(chunks)
+        except Exception as error:
+            print(f"[AgentGeneratedDocument] Falha ao carregar referências de estilo: {error}")
+            return ""
+
     def _build_regional_jurisprudence_hint(self, process) -> str:
         """Sugere priorização de jurisprudência do TRF regional conforme foro identificado no processo."""
         region_source = " ".join(
@@ -468,6 +630,7 @@ class AgentGeneratedDocument:
         selections: list[dict],
         instructions: Optional[str] = None,
         contestation_file_path: Optional[str] = None,
+        law_firm_id: Optional[int] = None,
     ):
         """
         Despacha para o método correto e retorna (result_dict, full_text).
@@ -479,6 +642,7 @@ class AgentGeneratedDocument:
                 selections,
                 instructions,
                 contestation_file_path=contestation_file_path,
+                law_firm_id=law_firm_id,
             )
         elif document_type == "manifestacao":
             result = self.generate_manifestacao(process, selections, instructions)

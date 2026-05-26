@@ -1,0 +1,136 @@
+{% extends "layout/base.html" %}
+
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}{{ reference.title }} - Peça-Modelo{% endblock %}
+
+{% block content %}
+{% call page_hero(title=reference.title, subtitle='Detalhes e trechos indexados da peça-modelo.', icon='bi
+bi-file-earmark-text') %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-0 bg-transparent small">
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a>
+        </li>
+        <li class="breadcrumb-item"><a href="{{ url_for('impugnacao_references.list_references') }}">Peças-Modelo</a>
+        </li>
+        <li class="breadcrumb-item active">{{ reference.title }}</li>
+    </ol>
+</nav>
+{% endcall %}
+
+<div class="app-content">
+    <div class="container-fluid">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}{% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}{% endif %}
+        {% endwith %}
+
+        <div class="row">
+            <div class="col-lg-4">
+                <div class="card card-primary card-outline shadow-sm mb-3">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-info-circle"></i> Metadados</h5>
+                    </div>
+                    <div class="card-body">
+                        <dl class="row mb-0 small">
+                            <dt class="col-5">Caso</dt>
+                            <dd class="col-7">{{ reference.case_name or '—' }}</dd>
+                            <dt class="col-5">TRF</dt>
+                            <dd class="col-7">{{ reference.trf_region or '—' }}</dd>
+                            <dt class="col-5">Modo</dt>
+                            <dd class="col-7">
+                                {% if reference.generation_mode == 'A' %}A · Mérito
+                                {% elif reference.generation_mode == 'B' %}B · Defesa
+                                {% else %}—{% endif %}
+                            </dd>
+                            <dt class="col-5">Qualidade</dt>
+                            <dd class="col-7">
+                                {{ '%.2f'|format(reference.quality_score) if reference.quality_score is not none else
+                                '—' }}
+                            </dd>
+                            <dt class="col-5">Arquivo</dt>
+                            <dd class="col-7">{{ reference.original_filename or '—' }}</dd>
+                            <dt class="col-5">Tipo</dt>
+                            <dd class="col-7">{{ reference.file_type or '—' }}</dd>
+                            <dt class="col-5">Tamanho</dt>
+                            <dd class="col-7">{{ (reference.file_size/1024)|round(1) if reference.file_size else 0 }} KB
+                            </dd>
+                            <dt class="col-5">Trechos</dt>
+                            <dd class="col-7"><span class="badge bg-primary">{{ reference.chunks_count or 0 }}</span>
+                            </dd>
+                            <dt class="col-5">Coleção</dt>
+                            <dd class="col-7 small text-muted">{{ reference.qdrant_collection or '—' }}</dd>
+                            <dt class="col-5">Status</dt>
+                            <dd class="col-7">
+                                {% if reference.status == 'active' %}<span class="badge bg-success">Ativa</span>
+                                {% else %}<span class="badge bg-secondary">Arquivada</span>{% endif %}
+                            </dd>
+                            <dt class="col-5">Criada em</dt>
+                            <dd class="col-7">{{ reference.created_at|datetime_sp if reference.created_at else '—' }}
+                            </dd>
+                        </dl>
+                        {% if reference.notes %}
+                        <hr>
+                        <p class="small mb-0"><strong>Notas:</strong> {{ reference.notes }}</p>
+                        {% endif %}
+                    </div>
+                    <div class="card-footer d-flex flex-wrap gap-2">
+                        <form method="POST"
+                            action="{{ url_for('impugnacao_references.reindex_reference', ref_id=reference.id) }}"
+                            onsubmit="return confirm('Reindexar este arquivo? Os trechos antigos serão substituídos.');">
+                            <button class="btn btn-sm btn-outline-primary"><i class="bi bi-arrow-repeat"></i>
+                                Reindexar</button>
+                        </form>
+                        {% if reference.status == 'active' %}
+                        <form method="POST"
+                            action="{{ url_for('impugnacao_references.archive_reference', ref_id=reference.id) }}">
+                            <button class="btn btn-sm btn-outline-warning"><i class="bi bi-archive"></i>
+                                Arquivar</button>
+                        </form>
+                        {% else %}
+                        <form method="POST"
+                            action="{{ url_for('impugnacao_references.reactivate_reference', ref_id=reference.id) }}">
+                            <button class="btn btn-sm btn-outline-success"><i class="bi bi-arrow-counterclockwise"></i>
+                                Reativar</button>
+                        </form>
+                        {% endif %}
+                        <form method="POST"
+                            action="{{ url_for('impugnacao_references.delete_reference', ref_id=reference.id) }}"
+                            onsubmit="return confirm('Excluir permanentemente?');">
+                            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i> Excluir</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-lg-8">
+                <div class="card card-primary card-outline shadow-sm">
+                    <div class="card-header">
+                        <h5 class="mb-0"><i class="bi bi-list-task"></i> Trechos indexados ({{ chunks|length }})</h5>
+                    </div>
+                    <div class="card-body">
+                        {% if chunks %}
+                        {% for chunk in chunks %}
+                        <div class="border rounded p-3 mb-2">
+                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                <span class="badge bg-info">{{ chunk.section_kind or 'general' }}</span>
+                                <small class="text-muted">#{{ chunk.order_in_doc }} · {{ chunk.chunk_chars }}
+                                    chars</small>
+                            </div>
+                            <p class="small mb-0 text-muted">{{ chunk.preview_text or '—' }}</p>
+                        </div>
+                        {% endfor %}
+                        {% else %}
+                        <p class="text-muted text-center py-4">Nenhum trecho indexado.</p>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -2810,6 +2810,7 @@ def generated_document_create(process_id):
             agent_selections,
             instructions,
             contestation_file_path=contestation_file_path,
+            law_firm_id=law_firm_id,
         )
 
         version.content = full_text
@@ -2975,6 +2976,7 @@ def generated_document_regenerate(process_id, doc_id):
             agent_selections,
             instructions,
             contestation_file_path=contestation_file_path,
+            law_firm_id=law_firm_id,
         )
         version.content = full_text
         version.generation_status = 'completed'

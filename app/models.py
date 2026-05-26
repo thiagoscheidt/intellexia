@@ -2870,3 +2870,79 @@ class JudicialProcessGeneratedDocumentSelection(db.Model):
 
     def __repr__(self):
         return f'<JudicialProcessGeneratedDocumentVersion v{self.version_number} doc={self.generated_document_id}>'
+
+
+class ImpugnacaoReferenceModel(db.Model):
+    """Peça-modelo de impugnação usada como referência de estilo pelo agente gerador.
+
+    Multi-tenant: sempre filtrar por law_firm_id.
+    Coleção Qdrant separada da knowledge_base normal (configurada via env
+    IMPUGNACAO_REFERENCES_COLLECTION).
+    """
+    __tablename__ = 'impugnacao_reference_models'
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
+
+    title = db.Column(db.String(255), nullable=False)
+    case_name = db.Column(db.String(255))
+    trf_region = db.Column(db.String(10))         # 'TRF1'..'TRF6' ou vazio
+    generation_mode = db.Column(db.String(1))     # 'A' (mérito) ou 'B' (defesa)
+    quality_score = db.Column(db.Numeric(3, 2), default=Decimal('3.00'))
+
+    original_filename = db.Column(db.String(255))
+    file_path = db.Column(db.String(500))
+    file_size = db.Column(db.Integer)
+    file_type = db.Column(db.String(20))
+
+    qdrant_collection = db.Column(db.String(120))
+    chunks_count = db.Column(db.Integer, default=0)
+
+    status = db.Column(db.String(20), default='active', index=True)  # 'active' | 'archived'
+    notes = db.Column(db.Text)
+
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    law_firm = db.relationship('LawFirm')
+    user = db.relationship('User')
+    chunks = db.relationship(
+        'ImpugnacaoReferenceChunk',
+        back_populates='reference',
+        cascade='all, delete-orphan',
+    )
+
+    def __repr__(self):
+        return f'<ImpugnacaoReferenceModel {self.id} {self.title}>'
+
+
+class ImpugnacaoReferenceChunk(db.Model):
+    """Chunk segmentado de uma peça-modelo, indexado no Qdrant."""
+    __tablename__ = 'impugnacao_reference_chunks'
+
+    id = db.Column(db.Integer, primary_key=True)
+    reference_id = db.Column(
+        db.Integer,
+        db.ForeignKey('impugnacao_reference_models.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+
+    section_kind = db.Column(db.String(60), index=True)
+    thesis_catalog_id = db.Column(db.String(20))
+    benefit_type = db.Column(db.String(10))
+
+    qdrant_point_id = db.Column(db.String(64))
+    chunk_chars = db.Column(db.Integer, default=0)
+    order_in_doc = db.Column(db.Integer, default=0)
+    preview_text = db.Column(db.Text)
+
+    created_at = db.Column(db.DateTime, default=datetime.now)
+
+    reference = db.relationship('ImpugnacaoReferenceModel', back_populates='chunks')
+    law_firm = db.relationship('LawFirm')
+
+    def __repr__(self):
+        return f'<ImpugnacaoReferenceChunk ref={self.reference_id} kind={self.section_kind}>'
