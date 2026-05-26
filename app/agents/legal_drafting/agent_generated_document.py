@@ -14,9 +14,11 @@ Isso permite argumentação específica por par (benefício, tese).
 
 from pathlib import Path
 from typing import Optional
+import re
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
+from app.agents.core.file_agent import FileAgent
 
 load_dotenv()
 from app.agents.config import DEFAULT_MODEL_LEGAL_DRAFTING
@@ -30,6 +32,24 @@ def _load_prompt(filename: str) -> str:
 
 
 _IMPUGNACAO_SYSTEM_PROMPT = _load_prompt("system_prompt_impugnacao_v2.md")
+
+_IMPUGNACAO_INTERNAL_GUARDRAILS = """
+=== REFORÇO INTERNO DE EXECUÇÃO (RUNTIME) ===
+
+1) Numeração arábica e hierárquica é obrigatória na peça final.
+- Seções principais no Modo A: 1., 2., 3., 4., 5.
+- Subseções: 1.1, 1.2, 4.1, 4.2, etc.
+- No bloco de mérito, nunca use 1., 2., 3. como nível principal; use 4.1, 4.2, 4.3...
+
+2) Campos macro do schema não podem aparecer como bloco solto sem título.
+- `general_legal_grounds` e `jurisprudence` são campos de consolidação interna.
+- No texto final da peça, integre esse conteúdo aos blocos já existentes (introdução, insuficiência técnica e mérito).
+- Se houver seção separada, ela deve ter título explícito e numeração hierárquica coerente.
+
+3) Prioridade para jurisprudência regional quando disponível no catálogo.
+- Se o foro do processo indicar região específica (ex.: JFSP/TRF3), priorize ao menos uma citação inline do tribunal regional correspondente.
+- Jurisprudência de outras regiões deve ser complementar quando houver precedente regional validado.
+""".strip()
 
 
 # ── Impugnação à Contestação da União ─────────────────────────────────────
@@ -214,6 +234,7 @@ class AgentGeneratedDocument:
         process,
         selections: list[dict],
         instructions: Optional[str] = None,
+        contestation_file_path: Optional[str] = None,
     ) -> GeneratedImpugnacaoContestacao:
         """
         Gera Impugnação à Contestação da União.
@@ -229,22 +250,48 @@ class AgentGeneratedDocument:
         """
         process_ctx = self._build_process_context(process)
         selections_ctx = self._build_selections_context(selections, include_contestation=True)
+        regional_jurisprudence_hint = self._build_regional_jurisprudence_hint(process)
         instructions_block = f"\n\n=== INSTRUÇÕES ADICIONAIS DO ADVOGADO ===\n{instructions}\n" if instructions else ""
 
+        user_prompt_sections = [
+            process_ctx,
+            selections_ctx,
+        ]
+        if regional_jurisprudence_hint:
+            user_prompt_sections.append(regional_jurisprudence_hint)
+
+        user_prompt = "\n\n".join(section for section in user_prompt_sections if section)
         user_prompt = (
-            f"{process_ctx}"
-            f"\n\n{selections_ctx}"
+            f"{user_prompt}"
             f"{instructions_block}\n\n"
             "Com base nos dados acima, gere a Impugnação à Contestação da União seguindo rigorosamente as instruções do sistema."
         )
 
+        normalized_contestation_path = str(contestation_file_path or '').strip()
+        if not normalized_contestation_path:
+            raise ValueError(
+                'Nenhum PDF de contestação foi localizado para este processo. '
+                'Faça o upload de uma contestação em PDF antes de gerar a impugnação.'
+            )
+
+        file_part = FileAgent().build_openrouter_file_part(normalized_contestation_path)
+
         llm = ChatOpenAI(model=self.model_name, temperature=0.3).with_structured_output(
             GeneratedImpugnacaoContestacao
         )
-        print("[AgentGeneratedDocument] Gerando Impugnação à Contestação (prompt v2.0)...")
+        print("[AgentGeneratedDocument] Gerando Impugnação à Contestação (prompt v2.5.1)...")
         return llm.invoke([
-            {"role": "system", "content": _IMPUGNACAO_SYSTEM_PROMPT},
-            {"role": "user", "content": user_prompt},
+            {
+                "role": "system",
+                "content": f"{_IMPUGNACAO_SYSTEM_PROMPT}\n\n{_IMPUGNACAO_INTERNAL_GUARDRAILS}",
+            },
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": user_prompt},
+                    file_part,
+                ],
+            },
         ])
 
     # ── Manifestação ─────────────────────────────────────────────────────
@@ -384,13 +431,55 @@ class AgentGeneratedDocument:
 
         return "\n".join(lines)
 
-    def dispatch(self, document_type: str, process, selections: list[dict], instructions: Optional[str] = None):
+    def _build_regional_jurisprudence_hint(self, process) -> str:
+        """Sugere priorização de jurisprudência do TRF regional conforme foro identificado no processo."""
+        region_source = " ".join(
+            [
+                str(getattr(process, "tribunal_name", "") or ""),
+                str(getattr(process, "section", "") or ""),
+                str(getattr(process, "origin_unit", "") or ""),
+            ]
+        ).lower()
+
+        # Mapeamento simples por indícios textuais do foro/região.
+        region_patterns = [
+            ("TRF1", r"\btrf\s*1\b|1[ªa]?\s*regi[aã]o"),
+            ("TRF2", r"\btrf\s*2\b|2[ªa]?\s*regi[aã]o"),
+            ("TRF3", r"\btrf\s*3\b|3[ªa]?\s*regi[aã]o|s[aã]o\s*paulo|jfsp"),
+            ("TRF4", r"\btrf\s*4\b|4[ªa]?\s*regi[aã]o|rio\s*grande\s*do\s*sul|paran[aá]|santa\s*catarina"),
+            ("TRF5", r"\btrf\s*5\b|5[ªa]?\s*regi[aã]o"),
+            ("TRF6", r"\btrf\s*6\b|6[ªa]?\s*regi[aã]o|minas\s*gerais"),
+        ]
+
+        for region_label, pattern in region_patterns:
+            if re.search(pattern, region_source, flags=re.IGNORECASE):
+                return (
+                    f"=== DIRETRIZ REGIONAL DE JURISPRUDÊNCIA ===\n"
+                    f"O foro indica {region_label}. Quando houver precedente desse tribunal no catálogo, "
+                    f"priorize ao menos uma citação inline regional na tese/preliminar correspondente."
+                )
+
+        return ""
+
+    def dispatch(
+        self,
+        document_type: str,
+        process,
+        selections: list[dict],
+        instructions: Optional[str] = None,
+        contestation_file_path: Optional[str] = None,
+    ):
         """
         Despacha para o método correto e retorna (result_dict, full_text).
         Levanta ValueError para tipos desconhecidos.
         """
         if document_type == "impugnacao_contestacao":
-            result = self.generate_impugnacao_contestacao(process, selections, instructions)
+            result = self.generate_impugnacao_contestacao(
+                process,
+                selections,
+                instructions,
+                contestation_file_path=contestation_file_path,
+            )
         elif document_type == "manifestacao":
             result = self.generate_manifestacao(process, selections, instructions)
         elif document_type == "peticao_intermediaria":

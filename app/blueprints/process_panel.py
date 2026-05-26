@@ -143,6 +143,43 @@ def _compute_file_hash(file_storage):
     return hasher.hexdigest()
 
 
+def _resolve_latest_contestation_pdf_path(process):
+    """Retorna o caminho do PDF de contestação mais recente do processo."""
+    contestation_doc = JudicialDocument.query.filter_by(
+        process_id=process.id,
+        type='contestacao',
+    ).order_by(JudicialDocument.created_at.desc(), JudicialDocument.id.desc()).first()
+
+    if not contestation_doc:
+        raise ValueError(
+            'Não foi encontrado documento de contestação no processo. '
+            'Faça o upload da contestação em PDF antes de gerar a impugnação.'
+        )
+
+    primary_path = str(contestation_doc.file_path or '').strip()
+    if primary_path and os.path.exists(primary_path):
+        resolved_path = primary_path
+    else:
+        kb_path = ''
+        if contestation_doc.knowledge_base and contestation_doc.knowledge_base.file_path:
+            kb_path = str(contestation_doc.knowledge_base.file_path or '').strip()
+
+        if kb_path and os.path.exists(kb_path):
+            resolved_path = kb_path
+        else:
+            raise FileNotFoundError(
+                'Arquivo de contestação não encontrado no servidor para este processo.'
+            )
+
+    extension = os.path.splitext(resolved_path)[1].lower()
+    if extension != '.pdf':
+        raise ValueError(
+            'A contestação vinculada ao processo precisa estar em PDF para geração da impugnação.'
+        )
+
+    return resolved_path
+
+
 def _normalize_slug(value):
     """Normaliza texto para chave em snake_case."""
     value = (value or '').strip().lower()
@@ -2762,8 +2799,18 @@ def generated_document_create(process_id):
     db.session.commit()
 
     try:
+        contestation_file_path = None
+        if document_type == 'impugnacao_contestacao':
+            contestation_file_path = _resolve_latest_contestation_pdf_path(process)
+
         agent = AgentGeneratedDocument(model_name=model_name)
-        result_dict, full_text = agent.dispatch(document_type, process, agent_selections, instructions)
+        result_dict, full_text = agent.dispatch(
+            document_type,
+            process,
+            agent_selections,
+            instructions,
+            contestation_file_path=contestation_file_path,
+        )
 
         version.content = full_text
         version.generation_status = 'completed'
@@ -2917,12 +2964,17 @@ def generated_document_regenerate(process_id, doc_id):
                 'contestation': contestation,
             })
 
+        contestation_file_path = None
+        if generated_doc.document_type == 'impugnacao_contestacao':
+            contestation_file_path = _resolve_latest_contestation_pdf_path(process)
+
         agent = AgentGeneratedDocument(model_name=model_name)
         _, full_text = agent.dispatch(
             generated_doc.document_type,
             process,
             agent_selections,
             instructions,
+            contestation_file_path=contestation_file_path,
         )
         version.content = full_text
         version.generation_status = 'completed'
