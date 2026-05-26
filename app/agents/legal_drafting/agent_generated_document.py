@@ -57,6 +57,10 @@ _IMPUGNACAO_INTERNAL_GUARDRAILS = """
 - No Modo A, a seção de mérito deve ser construída por TESE, não por par benefício+tese.
 - Para cada tese, agrupe todos os benefícios correspondentes em um único tópico/subseção.
 - Em `benefit_sections`, cada item representa uma tese e deve trazer a lista `benefits[]`.
+
+5) Marcadores internos NÃO podem ir para o texto final.
+- NÃO inserir no corpo da peça: "⚠️", "nota ao revisor", "placeholder", "dados pendentes".
+- Qualquer alerta/recomendação interna deve ir em `internal_review_notes`.
 """.strip()
 
 
@@ -130,6 +134,13 @@ class GeneratedImpugnacaoContestacao(BaseModel):
     )
     requests: str = Field(description="Pedidos finais conforme template da Seção 9 (Modo A) ou Seção 5.10 (Modo B)")
     closing: str = Field(description="Fecho único: 'Nestes termos, pede deferimento. Florianópolis/SC, [data].'")
+    internal_review_notes: str = Field(
+        default="",
+        description=(
+            "Observações internas para revisão humana/UI. "
+            "NÃO incluir no corpo da peça final; este campo é exibido separadamente."
+        ),
+    )
 
     def to_full_text(self) -> str:
         parts = []
@@ -185,6 +196,63 @@ class GeneratedImpugnacaoContestacao(BaseModel):
 
     def to_dict(self) -> dict:
         return self.model_dump()
+
+
+def _sanitize_generated_impugnacao(
+    result: GeneratedImpugnacaoContestacao,
+) -> GeneratedImpugnacaoContestacao:
+    """Remove marcadores internos do texto final e consolida notas para revisão."""
+    notes: list[str] = []
+
+    def _clean(text: str) -> str:
+        if not text:
+            return ""
+
+        cleaned_lines: list[str] = []
+        for raw_line in str(text).splitlines():
+            line = raw_line.strip()
+            if not line:
+                cleaned_lines.append(raw_line)
+                continue
+
+            if re.search(
+                r"⚠️|nota\s+ao\s+revisor|placeholder|dados\s+pendentes|revis[aã]o\s+humana\s+recomendada",
+                line,
+                flags=re.IGNORECASE,
+            ):
+                notes.append(line)
+                continue
+
+            cleaned_lines.append(raw_line)
+
+        cleaned = "\n".join(cleaned_lines)
+        cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
+        return cleaned.strip()
+
+    result.introduction = _clean(result.introduction)
+    result.preliminary_notes = _clean(result.preliminary_notes)
+    result.general_legal_grounds = _clean(result.general_legal_grounds)
+    result.jurisprudence = _clean(result.jurisprudence)
+    result.requests = _clean(result.requests)
+    result.closing = _clean(result.closing)
+
+    for section in result.benefit_sections:
+        section.argument = _clean(section.argument)
+
+    if result.internal_review_notes:
+        notes.append(result.internal_review_notes.strip())
+
+    dedup: list[str] = []
+    seen = set()
+    for item in notes:
+        key = re.sub(r"\s+", " ", item).strip().lower()
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        dedup.append(item.strip())
+
+    result.internal_review_notes = "\n".join(dedup)[:4000]
+    return result
 
 
 # ── Manifestação ───────────────────────────────────────────────────────────
@@ -461,6 +529,9 @@ class AgentGeneratedDocument:
                 except Exception:
                     logger.exception("Falha ao persistir histórico de erro da geração")
                 raise
+
+        if isinstance(parsed_result, GeneratedImpugnacaoContestacao):
+            parsed_result = _sanitize_generated_impugnacao(parsed_result)
 
         elapsed_s = time.perf_counter() - started_at
         print(f"[AgentGeneratedDocument] LLM concluída em {elapsed_s:.2f}s")

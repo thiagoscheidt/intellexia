@@ -2813,7 +2813,12 @@ def generated_document_create(process_id):
             law_firm_id=law_firm_id,
         )
 
+        internal_notes = None
+        if isinstance(result_dict, dict):
+            internal_notes = (result_dict.get('internal_review_notes') or '').strip() or None
+
         version.content = full_text
+        version.internal_notes = internal_notes
         version.generation_status = 'completed'
         db.session.commit()
 
@@ -2883,6 +2888,7 @@ def generated_document_save(process_id, doc_id):
         created_by_id=user_id,
         version_number=next_version_number,
         content=content,
+        internal_notes=(generated_doc.current_version.internal_notes if generated_doc.current_version else None),
         source='manually_edited',
         generation_status='completed',
     )
@@ -2970,7 +2976,7 @@ def generated_document_regenerate(process_id, doc_id):
             contestation_file_path = _resolve_latest_contestation_pdf_path(process)
 
         agent = AgentGeneratedDocument(model_name=model_name)
-        _, full_text = agent.dispatch(
+        result_dict, full_text = agent.dispatch(
             generated_doc.document_type,
             process,
             agent_selections,
@@ -2978,7 +2984,13 @@ def generated_document_regenerate(process_id, doc_id):
             contestation_file_path=contestation_file_path,
             law_firm_id=law_firm_id,
         )
+
+        internal_notes = None
+        if isinstance(result_dict, dict):
+            internal_notes = (result_dict.get('internal_review_notes') or '').strip() or None
+
         version.content = full_text
+        version.internal_notes = internal_notes
         version.generation_status = 'completed'
         db.session.commit()
         flash('Documento regerado com sucesso!', 'success')

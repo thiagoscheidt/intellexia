@@ -2806,6 +2806,7 @@ class JudicialProcessGeneratedDocumentVersion(db.Model):
     model_used = db.Column(db.String(80))
     token_usage_json = db.Column(db.Text)
     prompt_used = db.Column(db.Text)
+    internal_notes = db.Column(db.Text)
 
     created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
 
