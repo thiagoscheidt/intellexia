@@ -2,7 +2,8 @@
 
 Coleção Qdrant DEDICADA (independente da knowledge_base normal).
 Sem anonimização (decisão do usuário).
-Segmentação por regex de headings + fallback por chunk_size.
+Segmentação prioritária por página (1 página = 1 chunk), com fallback
+por regex de headings + chunk_size.
 
 Multi-tenancy: law_firm_id sempre persistido no payload do Qdrant para
 permitir filtro hard nas buscas.
@@ -87,10 +88,42 @@ class ImpugnacaoReferenceIngestor:
     # ── Extração de texto ──────────────────────────────────────────────
 
     @staticmethod
-    def _extract_text(file_path: str | Path) -> str:
+    def _process_document(file_path: str | Path):
         path = Path(file_path)
         processor = DocumentProcessorService()
-        result = processor.process_document(str(path))
+        return processor.process_document(str(path))
+
+    @classmethod
+    def _build_segments_from_pages(cls, processed_document) -> list[dict]:
+        chunks_with_pages = getattr(processed_document, 'chunks_with_pages', None) or []
+        segments: list[dict] = []
+
+        for chunk in chunks_with_pages:
+            if not isinstance(chunk, dict):
+                continue
+
+            page_text = str(chunk.get('text') or '').strip()
+            if not page_text:
+                continue
+
+            page_no = chunk.get('page')
+            section_label = str(chunk.get('section') or '').strip()
+            heading = section_label or (f'Página {page_no}' if page_no is not None else '')
+            section_kind = cls._classify_section_kind(heading, page_text)
+
+            segments.append({
+                'heading': heading,
+                'text': page_text,
+                'section_kind': section_kind,
+                'page': page_no,
+                'section': section_label or None,
+            })
+
+        return segments
+
+    @staticmethod
+    def _extract_text(file_path: str | Path) -> str:
+        result = ImpugnacaoReferenceIngestor._process_document(file_path)
         return (result.full_text or "").strip()
 
     # ── Segmentação ────────────────────────────────────────────────────
@@ -207,6 +240,7 @@ class ImpugnacaoReferenceIngestor:
         generation_mode: Optional[str] = None,
         quality_score: Optional[float] = None,
         text: Optional[str] = None,
+        processed_document=None,
     ) -> list[dict]:
         """Processa o arquivo e indexa todos os chunks no Qdrant.
 
@@ -214,21 +248,47 @@ class ImpugnacaoReferenceIngestor:
         Retorna lista de metadados por chunk (para persistir em
         impugnacao_reference_chunks).
         """
-        text = (text or "").strip() or self._extract_text(file_path)
-        if not text:
-            print(f"[ImpugnacaoReferenceIngestor] Texto vazio em {file_path}")
+        provided_text = (text or '').strip()
+
+        if processed_document is None:
+            try:
+                processed_document = self._process_document(file_path)
+            except Exception as error:
+                print(f"[ImpugnacaoReferenceIngestor] Falha ao processar com paginação: {error}")
+
+        page_segments: list[dict] = []
+        if processed_document is not None:
+            page_segments = self._build_segments_from_pages(processed_document)
+
+        if page_segments:
+            segments = page_segments
+            segmentation_mode = 'page'
+        else:
+            fallback_text = provided_text
+            if not fallback_text and processed_document is not None:
+                fallback_text = str(getattr(processed_document, 'full_text', '') or '').strip()
+            if not fallback_text:
+                fallback_text = self._extract_text(file_path)
+
+            if not fallback_text:
+                print(f"[ImpugnacaoReferenceIngestor] Texto vazio em {file_path}")
+                return []
+
+            raw_segments = self._split_by_headings(fallback_text)
+
+            # Fallback: quebrar segmentos muito grandes
+            segments = []
+            for seg in raw_segments:
+                segments.extend(self._split_long_segment(seg, IMPUGNACAO_REFERENCES_MAX_CHUNK_CHARS))
+            segmentation_mode = 'heading'
+
+        if not segments:
+            print(f"[ImpugnacaoReferenceIngestor] Nenhum segmento válido em {file_path}")
             return []
-
-        raw_segments = self._split_by_headings(text)
-
-        # Quebrar segmentos muito grandes
-        segments: list[dict] = []
-        for seg in raw_segments:
-            segments.extend(self._split_long_segment(seg, IMPUGNACAO_REFERENCES_MAX_CHUNK_CHARS))
 
         print(
             f"[ImpugnacaoReferenceIngestor] {len(segments)} chunks segmentados "
-            f"para reference_id={reference_id}"
+            f"para reference_id={reference_id} (modo={segmentation_mode})"
         )
 
         chunk_records: list[dict] = []
@@ -247,6 +307,8 @@ class ImpugnacaoReferenceIngestor:
                 "text": chunk_text,
                 "heading": seg.get("heading", ""),
                 "section_kind": seg.get("section_kind", "general"),
+                "page": seg.get("page"),
+                "section": seg.get("section"),
                 "reference_id": int(reference_id),
                 "law_firm_id": int(law_firm_id),
                 "reference_title": title,

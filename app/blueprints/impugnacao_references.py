@@ -122,6 +122,8 @@ def new_reference():
     trf_region = None
     generation_mode = None
     quality_score = 3.0
+    processed_document = None
+    ingestor = None
 
     try:
         from app.agents.legal_drafting.impugnacao_reference_ingestor import (
@@ -131,7 +133,9 @@ def new_reference():
             ImpugnacaoReferenceMetadataAgent,
         )
 
-        extracted_text = ImpugnacaoReferenceIngestor._extract_text(file_path)
+        ingestor = ImpugnacaoReferenceIngestor()
+        processed_document = ingestor._process_document(file_path)
+        extracted_text = str(getattr(processed_document, 'full_text', '') or '').strip()
 
         meta = ImpugnacaoReferenceMetadataAgent().extract(
             extracted_text, original_filename=upload.filename,
@@ -167,11 +171,12 @@ def new_reference():
 
     # Ingestão no Qdrant (não bloquear a criação se falhar)
     try:
-        from app.agents.legal_drafting.impugnacao_reference_ingestor import (
-            ImpugnacaoReferenceIngestor,
-        )
+        if ingestor is None:
+            from app.agents.legal_drafting.impugnacao_reference_ingestor import (
+                ImpugnacaoReferenceIngestor,
+            )
+            ingestor = ImpugnacaoReferenceIngestor()
 
-        ingestor = ImpugnacaoReferenceIngestor()
         chunks_meta = ingestor.ingest_file(
             file_path=file_path,
             reference_id=reference.id,
@@ -181,6 +186,7 @@ def new_reference():
             generation_mode=generation_mode,
             quality_score=quality_score,
             text=extracted_text,
+            processed_document=processed_document,
         )
 
         reference.qdrant_collection = ingestor.collection
@@ -354,6 +360,7 @@ def reindex_reference(ref_id):
             trf_region=reference.trf_region,
             generation_mode=reference.generation_mode,
             quality_score=float(reference.quality_score) if reference.quality_score is not None else None,
+            processed_document=ingestor._process_document(reference.file_path),
         )
 
         reference.qdrant_collection = ingestor.collection
