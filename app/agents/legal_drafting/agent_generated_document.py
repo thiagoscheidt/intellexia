@@ -12,13 +12,24 @@ As funções recebem `selections`: lista de dicts no formato:
 Isso permite argumentação específica por par (benefício, tese).
 """
 
+from pathlib import Path
 from typing import Optional
 from pydantic import BaseModel, Field
 from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 
 load_dotenv()
-from app.agents.config import DEFAULT_MODEL
+from app.agents.config import DEFAULT_MODEL_LEGAL_DRAFTING
+
+_PROMPTS_DIR = Path(__file__).parent.parent.parent / "prompts"
+
+
+def _load_prompt(filename: str) -> str:
+    path = _PROMPTS_DIR / filename
+    return path.read_text(encoding="utf-8")
+
+
+_IMPUGNACAO_SYSTEM_PROMPT = _load_prompt("system_prompt_impugnacao_v2.md")
 
 
 # ── Impugnação à Contestação da União ─────────────────────────────────────
@@ -29,41 +40,82 @@ class ImpugnacaoBenefitThesisSection(BaseModel):
     thesis_name: str = Field(description="Nome da tese jurídica contestada, ou 'Geral' se não houver tese específica")
     argument: str = Field(
         description=(
-            "Argumentação jurídica específica para este par benefício+tese, "
-            "refutando o fundamento apresentado pela União. "
-            "Se o status da contestação for 'procedente', reforce que a União reconheceu a procedência."
+            "Argumentação jurídica para este par benefício+tese, seguindo a estrutura: "
+            "identificação do pedido + tabela do benefício + síntese do fundamento da União "
+            "+ refutação técnica (premissa normativa + premissa fática + conclusão) "
+            "+ citação jurisprudencial inline obrigatória (TRF/STJ do catálogo ou transversal) "
+            "+ pedido de exclusão padrão. "
+            "Se o status for 'procedente', reforce o reconhecimento da União. "
+            "OBRIGATÓRIO: ao menos uma citação de TRF/STJ dentro do argumento."
         )
     )
 
 
 class GeneratedImpugnacaoContestacao(BaseModel):
+    generation_mode: str = Field(
+        default="A",
+        description=(
+            "Modo de redação selecionado conforme Seção 0 do system prompt: "
+            "'A' = Mérito por Tese (padrão — contestação com argumentos específicos por benefício); "
+            "'B' = Defesa Processual (contestação integralmente genérica — peça curta sem catálogo de teses). "
+            "Use os critérios da tabela da Seção 0.3 para decidir."
+        ),
+    )
     introduction: str = Field(description="Qualificação das partes, identificação do processo e contexto da impugnação")
-    preliminary_notes: str = Field(description="Observações preliminares sobre a contestação da União e seus fundamentos gerais")
+    preliminary_notes: str = Field(
+        description=(
+            "Modo A: Seções 1 (Preliminares, se houver) + 3 (Insuficiência técnica da contestação). "
+            "Modo B: todo o conteúdo argumentativo — mérito sintético + subseção 1.1 (reconhecimento de erros em situações similares) "
+            "+ subseção 1.2 (revelia e ausência de impugnação específica). "
+            "No Modo B não há desenvolvimento por tese; toda a argumentação vai aqui."
+        )
+    )
     benefit_sections: list[ImpugnacaoBenefitThesisSection] = Field(
-        description="Argumentação individual por par (benefício, tese) contestado"
+        default_factory=list,
+        description=(
+            "Modo A: uma entrada por par benefício+tese na Seção 4 (Mérito). "
+            "Modo B: deixar VAZIO [] — não há mérito por tese na defesa processual."
+        ),
     )
     general_legal_grounds: str = Field(description="Fundamentos legais e doutrinários gerais aplicáveis")
-    jurisprudence: str = Field(default="", description="Jurisprudências e precedentes favoráveis")
-    requests: str = Field(description="Pedidos finais: rejeição integral ou parcial da contestação e demais requerimentos")
-    closing: str = Field(description="Fecho padrão com data, local e solicitação de deferimento")
+    jurisprudence: str = Field(
+        default="",
+        description=(
+            "Modo A: apenas jurisprudência macro/transversal adicional, distinta das citações inline já feitas em cada argument. "
+            "Modo B: deixar VAZIO — o Modo B não cita jurisprudência de TRF/STJ."
+        ),
+    )
+    requests: str = Field(description="Pedidos finais conforme template da Seção 9 (Modo A) ou Seção 5.10 (Modo B)")
+    closing: str = Field(description="Fecho único: 'Nestes termos, pede deferimento. Florianópolis/SC, [data].'")
 
     def to_full_text(self) -> str:
         parts = []
-        parts.append("# IMPUGNAÇÃO À CONTESTAÇÃO DA UNIÃO\n")
-        parts.append("## I. INTRODUÇÃO\n")
+        is_mode_b = self.generation_mode == "B"
+
+        if is_mode_b:
+            parts.append("# IMPUGNAÇÃO À CONTESTAÇÃO DA UNIÃO\n")
+            parts.append("> **Modo de redação: B — Defesa Processual** *(auditoria interna)*\n\n")
+        else:
+            parts.append("# IMPUGNAÇÃO À CONTESTAÇÃO DA UNIÃO\n")
+
         parts.append(self.introduction + "\n")
-        parts.append("\n## II. NOTAS PRELIMINARES\n")
+        parts.append("\n---\n")
         parts.append(self.preliminary_notes + "\n")
-        parts.append("\n## III. DOS BENEFÍCIOS E TESES CONTESTADOS\n")
-        for i, sec in enumerate(self.benefit_sections, 1):
-            parts.append(f"\n### {i}. NB {sec.benefit_number} — {sec.insured_name} | Tese: {sec.thesis_name}\n")
-            parts.append(sec.argument + "\n")
-        parts.append("\n## IV. DOS FUNDAMENTOS JURÍDICOS\n")
+
+        if self.benefit_sections:
+            parts.append("\n## DO MÉRITO\n")
+            for i, sec in enumerate(self.benefit_sections, 1):
+                parts.append(f"\n### {i}. NB {sec.benefit_number} — {sec.insured_name} | Tese: {sec.thesis_name}\n")
+                parts.append(sec.argument + "\n")
+
+        parts.append("\n---\n")
         parts.append(self.general_legal_grounds + "\n")
+
         if self.jurisprudence:
-            parts.append("\n## V. DA JURISPRUDÊNCIA\n")
+            parts.append("\n---\n")
             parts.append(self.jurisprudence + "\n")
-        parts.append("\n## VI. DOS PEDIDOS\n")
+
+        parts.append("\n---\n")
         parts.append(self.requests + "\n")
         parts.append("\n---\n")
         parts.append(self.closing + "\n")
@@ -153,7 +205,7 @@ class AgentGeneratedDocument:
     """
 
     def __init__(self, model_name: str | None = None):
-        self.model_name = model_name or DEFAULT_MODEL
+        self.model_name = model_name or DEFAULT_MODEL_LEGAL_DRAFTING
 
     # ── Impugnação à Contestação ──────────────────────────────────────────
 
@@ -180,35 +232,18 @@ class AgentGeneratedDocument:
         instructions_block = f"\n\n=== INSTRUÇÕES ADICIONAIS DO ADVOGADO ===\n{instructions}\n" if instructions else ""
 
         user_prompt = (
-            "Você é um advogado especializado em direito previdenciário e FAP (Fator Acidentário de Prevenção). "
-            "Gere uma Impugnação à Contestação da União completa e tecnicamente fundamentada.\n\n"
             f"{process_ctx}"
-            f"\n{selections_ctx}"
+            f"\n\n{selections_ctx}"
             f"{instructions_block}\n\n"
-            "=== INSTRUÇÕES ESPECÍFICAS ===\n"
-            "1. Gere uma seção argumentativa individual para CADA par (benefício+tese) listado:\n"
-            "   - Identifique o fundamento da União ('Fundamento da União') e o rebata tecnicamente\n"
-            "   - Cite o trecho literal detectado ('Trecho Detectado') quando disponível\n"
-            "   - Contextualize o efeito no FAP ('Efeito no FAP') para demonstrar o prejuízo ao autor\n"
-            "   - Se o status for 'procedente', enfatize que a própria União reconheceu a procedência\n"
-            "   - Se o status for 'improcedente', construa refutação técnica com base na legislação\n"
-            "2. Use linguagem técnica, formal e objetiva\n"
-            "3. Cite artigos da Lei 8.213/91, Decreto 3.048/99 e precedentes do STJ/TRF quando cabível\n"
-            "4. Os pedidos devem requerer a rejeição da contestação da União para cada par benefício+tese\n"
+            "Com base nos dados acima, gere a Impugnação à Contestação da União seguindo rigorosamente as instruções do sistema."
         )
 
         llm = ChatOpenAI(model=self.model_name, temperature=0.3).with_structured_output(
             GeneratedImpugnacaoContestacao
         )
-        print("[AgentGeneratedDocument] Gerando Impugnação à Contestação...")
+        print("[AgentGeneratedDocument] Gerando Impugnação à Contestação (prompt v2.0)...")
         return llm.invoke([
-            {
-                "role": "system",
-                "content": (
-                    "Você é um advogado experiente em direito previdenciário, especialista em FAP. "
-                    "Gere peças jurídicas tecnicamente precisas, fundamentadas e persuasivas."
-                ),
-            },
+            {"role": "system", "content": _IMPUGNACAO_SYSTEM_PROMPT},
             {"role": "user", "content": user_prompt},
         ])
 
