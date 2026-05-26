@@ -28,29 +28,24 @@ IMPUGNACAO_REFERENCES_MAX_CHARS = int(os.getenv("IMPUGNACAO_REFERENCES_MAX_CHARS
 IMPUGNACAO_REFERENCES_ENABLED = os.getenv("IMPUGNACAO_REFERENCES_ENABLED", "true").lower() == "true"
 
 
-# Ordem preferencial de seções a buscar — espelha a arquitetura argumentativa
-# da peça (introdução → preliminares → mérito por tese → jurisprudência →
-# pedidos → encerramento).
+# Ordem preferencial de seções com foco prático para impugnação:
+# primeiro mérito por tese e jurisprudência, depois apoio complementar.
 DEFAULT_KIND_PLAN = [
-    ("introduction", 1),
+    ("merit_by_thesis", 3),
+    ("jurisprudence", 2),
     ("preliminary", 1),
-    ("merit_by_thesis", 2),
-    ("jurisprudence", 1),
     ("requests", 1),
-    ("closing", 1),
-    ("general", 2),
+    ("general", 1),
 ]
 
 
 class ImpugnacaoReferenceRetriever:
-    """Recupera blocos de inspiração de estilo do escritório."""
+    """Recupera blocos de inspiração do escritório para impugnação."""
 
     def __init__(self, collection_name: Optional[str] = None):
         self.collection = collection_name or IMPUGNACAO_REFERENCES_COLLECTION
         self.qdrant = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=30)
         self.openai = OpenAI()
-
-    # ── Helpers ────────────────────────────────────────────────────────
 
     def _embed(self, text: str) -> list[float]:
         response = self.openai.embeddings.create(input=text, model=EMBEDDING_MODEL)
@@ -74,24 +69,33 @@ class ImpugnacaoReferenceRetriever:
             rest.FieldCondition(key="law_firm_id", match=rest.MatchValue(value=int(law_firm_id))),
             rest.FieldCondition(key="status", match=rest.MatchValue(value="active")),
         ]
+
         if section_kind:
-            must.append(rest.FieldCondition(
-                key="section_kind", match=rest.MatchValue(value=section_kind)
-            ))
+            must.append(
+                rest.FieldCondition(
+                    key="section_kind",
+                    match=rest.MatchValue(value=section_kind),
+                )
+            )
+
         if generation_mode:
-            must.append(rest.FieldCondition(
-                key="generation_mode", match=rest.MatchValue(value=generation_mode.upper())
-            ))
+            must.append(
+                rest.FieldCondition(
+                    key="generation_mode",
+                    match=rest.MatchValue(value=generation_mode.upper()),
+                )
+            )
 
         should = []
         if trf_region:
-            should.append(rest.FieldCondition(
-                key="trf_region", match=rest.MatchValue(value=trf_region.upper())
-            ))
+            should.append(
+                rest.FieldCondition(
+                    key="trf_region",
+                    match=rest.MatchValue(value=trf_region.upper()),
+                )
+            )
 
         return rest.Filter(must=must, should=should or None)
-
-    # ── API pública ────────────────────────────────────────────────────
 
     def fetch_style_references(
         self,
@@ -104,11 +108,10 @@ class ImpugnacaoReferenceRetriever:
         max_chunks: Optional[int] = None,
         max_chars: Optional[int] = None,
     ) -> list[dict]:
-        """Retorna lista de chunks (dicts) prontos para compor o bloco de
-        inspiração no user_prompt.
+        """Retorna lista de chunks para compor bloco de referência.
 
         Cada item: {section_kind, heading, reference_title, trf_region,
-                    quality_score, text}.
+        quality_score, text}.
         """
         if not IMPUGNACAO_REFERENCES_ENABLED:
             return []
@@ -122,7 +125,7 @@ class ImpugnacaoReferenceRetriever:
         cap_chars = max_chars or IMPUGNACAO_REFERENCES_MAX_CHARS
 
         try:
-            vector = self._embed(query_text or "impugnação à contestação FAP")
+            vector = self._embed(query_text or "impugnacao a contestacao FAP")
         except Exception as error:
             print(f"[ImpugnacaoReferenceRetriever] Falha no embedding: {error}")
             return []
@@ -135,9 +138,9 @@ class ImpugnacaoReferenceRetriever:
             if len(collected) >= cap_chunks or total_chars >= cap_chars:
                 break
             try:
-                results = self.qdrant.search(
+                response = self.qdrant.query_points(
                     collection_name=self.collection,
-                    query_vector=vector,
+                    query=vector,
                     query_filter=self._build_filter(
                         law_firm_id=law_firm_id,
                         section_kind=kind,
@@ -151,7 +154,7 @@ class ImpugnacaoReferenceRetriever:
                 print(f"[ImpugnacaoReferenceRetriever] Falha ao buscar kind={kind}: {error}")
                 continue
 
-            for hit in results:
+            for hit in response.points:
                 if hit.id in seen_ids:
                     continue
                 payload = hit.payload or {}
@@ -160,27 +163,27 @@ class ImpugnacaoReferenceRetriever:
                     continue
                 if total_chars + len(text) > cap_chars and collected:
                     continue
-                collected.append({
-                    "section_kind": payload.get("section_kind") or kind,
-                    "heading": payload.get("heading") or "",
-                    "reference_title": payload.get("reference_title") or "",
-                    "trf_region": payload.get("trf_region") or "",
-                    "quality_score": payload.get("quality_score"),
-                    "text": text,
-                })
+                collected.append(
+                    {
+                        "section_kind": payload.get("section_kind") or kind,
+                        "heading": payload.get("heading") or "",
+                        "reference_title": payload.get("reference_title") or "",
+                        "trf_region": payload.get("trf_region") or "",
+                        "quality_score": payload.get("quality_score"),
+                        "text": text,
+                    }
+                )
                 seen_ids.add(hit.id)
                 total_chars += len(text)
                 if len(collected) >= cap_chunks or total_chars >= cap_chars:
                     break
 
-        # Fallback: se nenhum chunk foi encontrado por section_kind,
-        # faz uma busca ampla sem filtrar seção para aproveitar bases que
-        # ainda estejam majoritariamente classificadas como "general".
+        # Fallback amplo apenas quando nada foi encontrado no plano principal.
         if not collected and cap_chunks > 0 and total_chars < cap_chars:
             try:
-                broad_results = self.qdrant.search(
+                broad_response = self.qdrant.query_points(
                     collection_name=self.collection,
-                    query_vector=vector,
+                    query=vector,
                     query_filter=self._build_filter(
                         law_firm_id=law_firm_id,
                         section_kind=None,
@@ -192,9 +195,9 @@ class ImpugnacaoReferenceRetriever:
                 )
             except Exception as error:
                 print(f"[ImpugnacaoReferenceRetriever] Falha no fallback amplo: {error}")
-                broad_results = []
+                broad_response = None
 
-            for hit in broad_results:
+            for hit in (broad_response.points if broad_response else []):
                 if hit.id in seen_ids:
                     continue
                 payload = hit.payload or {}
@@ -203,14 +206,16 @@ class ImpugnacaoReferenceRetriever:
                     continue
                 if total_chars + len(text) > cap_chars and collected:
                     continue
-                collected.append({
-                    "section_kind": payload.get("section_kind") or "general",
-                    "heading": payload.get("heading") or "",
-                    "reference_title": payload.get("reference_title") or "",
-                    "trf_region": payload.get("trf_region") or "",
-                    "quality_score": payload.get("quality_score"),
-                    "text": text,
-                })
+                collected.append(
+                    {
+                        "section_kind": payload.get("section_kind") or "general",
+                        "heading": payload.get("heading") or "",
+                        "reference_title": payload.get("reference_title") or "",
+                        "trf_region": payload.get("trf_region") or "",
+                        "quality_score": payload.get("quality_score"),
+                        "text": text,
+                    }
+                )
                 seen_ids.add(hit.id)
                 total_chars += len(text)
                 if len(collected) >= cap_chunks or total_chars >= cap_chars:
@@ -219,38 +224,84 @@ class ImpugnacaoReferenceRetriever:
         return collected
 
     @staticmethod
-    def format_block(chunks: list[dict]) -> str:
-        """Formata o bloco de referências para injetar no user_prompt."""
+    def format_block(chunks: list[dict], include_header: bool = True) -> str:
+        """Formata bloco de referências em tags úteis ao prompt de geração."""
         if not chunks:
             return ""
 
-        header = (
-            "=== REFERÊNCIAS DE ESTILO DO ESCRITÓRIO ===\n"
-            "Os trechos abaixo são EXEMPLOS de tom, estrutura e ritmo argumentativo "
-            "de peças premium do escritório. Use APENAS como inspiração estilística.\n"
-            "REGRAS ABSOLUTAS:\n"
-            "  • NÃO copie literalmente nenhum trecho.\n"
-            "  • NÃO reutilize fatos, nomes de empresas/segurados, CNPJs, NITs, "
-            "números de processo, NB ou datas que apareçam nos exemplos.\n"
-            "  • Os dados concretos da peça atual são APENAS os fornecidos nas "
-            "seções 'DADOS DO PROCESSO' e 'BENEFÍCIOS E TESES'.\n"
-            "  • Se um exemplo trouxer um fato que não está no caso atual, ignore-o.\n"
-        )
+        categories = {
+            "EXEMPLO_ESTRUTURA_TESE": [],
+            "JURISPRUDENCIA_REGIONAL": [],
+            "JURISPRUDENCIA_COMPLEMENTAR": [],
+            "PADRAO_PEDIDO_DA_TESE": [],
+            "REFERENCIAS_COMPLEMENTARES": [],
+        }
 
-        parts = [header]
-        for idx, chunk in enumerate(chunks, start=1):
-            meta = []
-            if chunk.get("section_kind"):
-                meta.append(f"seção: {chunk['section_kind']}")
-            if chunk.get("trf_region"):
-                meta.append(chunk["trf_region"])
-            if chunk.get("quality_score") is not None:
-                meta.append(f"qualidade {chunk['quality_score']}")
-            meta_str = " | ".join(meta) if meta else "—"
-            parts.append(f"\n--- Referência {idx} ({meta_str}) ---")
-            heading = (chunk.get("heading") or "").strip()
-            if heading:
-                parts.append(f"[heading original: {heading}]")
-            parts.append(chunk["text"])
+        for chunk in chunks:
+            kind = (chunk.get("section_kind") or "").strip().lower()
+            region = (chunk.get("trf_region") or "").strip().upper()
+
+            if kind == "merit_by_thesis":
+                categories["EXEMPLO_ESTRUTURA_TESE"].append(chunk)
+            elif kind == "jurisprudence":
+                if region.startswith("TRF"):
+                    categories["JURISPRUDENCIA_REGIONAL"].append(chunk)
+                else:
+                    categories["JURISPRUDENCIA_COMPLEMENTAR"].append(chunk)
+            elif kind == "requests":
+                categories["PADRAO_PEDIDO_DA_TESE"].append(chunk)
+            else:
+                categories["REFERENCIAS_COMPLEMENTARES"].append(chunk)
+
+        parts = []
+        if include_header:
+            parts.extend([
+                "=== REFERENCIAS JURIDICAS RELEVANTES PARA A TESE DO CASO ===",
+                "Use os trechos abaixo como orientacao de estrutura argumentativa e precedentes.",
+                "NAO copiar literal e NAO reaproveitar fatos especificos de outros casos.",
+            ])
+
+        def _append_tag_block(tag_name: str, tag_chunks: list[dict]) -> None:
+            if not tag_chunks:
+                return
+            parts.append(f"\n<{tag_name}>")
+            for idx, chunk in enumerate(tag_chunks, start=1):
+                meta = []
+                section_kind = chunk.get("section_kind")
+                trf_region = chunk.get("trf_region")
+                quality = chunk.get("quality_score")
+                heading = (chunk.get("heading") or "").strip()
+
+                if section_kind:
+                    meta.append(f"secao: {section_kind}")
+                if trf_region:
+                    meta.append(f"regiao: {trf_region}")
+                if quality is not None:
+                    meta.append(f"qualidade: {quality}")
+
+                meta_str = " | ".join(meta) if meta else "sem metadados"
+                parts.append(f"[item {idx} | {meta_str}]")
+                if heading:
+                    parts.append(f"[heading original: {heading}]")
+                parts.append(chunk["text"])
+                parts.append("")
+            parts.append(f"</{tag_name}>")
+
+        _append_tag_block("EXEMPLO_ESTRUTURA_TESE", categories["EXEMPLO_ESTRUTURA_TESE"])
+        _append_tag_block("JURISPRUDENCIA_REGIONAL", categories["JURISPRUDENCIA_REGIONAL"])
+        _append_tag_block("JURISPRUDENCIA_COMPLEMENTAR", categories["JURISPRUDENCIA_COMPLEMENTAR"])
+        _append_tag_block("PADRAO_PEDIDO_DA_TESE", categories["PADRAO_PEDIDO_DA_TESE"])
+        _append_tag_block("REFERENCIAS_COMPLEMENTARES", categories["REFERENCIAS_COMPLEMENTARES"])
+
+        if not any(categories.values()):
+            return ""
+
+        parts.append(
+            "\n<INSTRUCAO_DE_USO>"
+            "Priorize EXEMPLO_ESTRUTURA_TESE e JURISPRUDENCIA_REGIONAL na redacao do merito. "
+            "Use JURISPRUDENCIA_COMPLEMENTAR apenas como reforco. "
+            "PADRAO_PEDIDO_DA_TESE deve orientar o fechamento dos pedidos."
+            "</INSTRUCAO_DE_USO>"
+        )
 
         return "\n".join(parts)

@@ -18,13 +18,11 @@ import re
 import time
 import logging
 from pydantic import BaseModel, Field
-from dotenv import load_dotenv
 from langchain_openai import ChatOpenAI
 from app.agents.core.file_agent import FileAgent
 from app.services.token_usage_service import TokenUsageService
 from app.services.agent_execution_history_service import AgentExecutionHistoryService
 
-load_dotenv()
 from app.agents.config import DEFAULT_MODEL_LEGAL_DRAFTING
 
 _PROMPTS_DIR = Path(__file__).parent.parent.parent / "prompts"
@@ -54,19 +52,39 @@ _IMPUGNACAO_INTERNAL_GUARDRAILS = """
 3) Prioridade para jurisprudência regional quando disponível no catálogo.
 - Se o foro do processo indicar região específica (ex.: JFSP/TRF3), priorize ao menos uma citação inline do tribunal regional correspondente.
 - Jurisprudência de outras regiões deve ser complementar quando houver precedente regional validado.
+
+4) Agrupamento obrigatório por tese no mérito.
+- No Modo A, a seção de mérito deve ser construída por TESE, não por par benefício+tese.
+- Para cada tese, agrupe todos os benefícios correspondentes em um único tópico/subseção.
+- Em `benefit_sections`, cada item representa uma tese e deve trazer a lista `benefits[]`.
 """.strip()
 
 
 # ── Impugnação à Contestação da União ─────────────────────────────────────
 
 class ImpugnacaoBenefitThesisSection(BaseModel):
-    benefit_number: str = Field(description="Número do benefício (NB)")
-    insured_name: str = Field(description="Nome do segurado")
-    thesis_name: str = Field(description="Nome da tese jurídica contestada, ou 'Geral' se não houver tese específica")
+    thesis_name: str = Field(description="Nome da tese jurídica (um tópico de mérito por tese)")
+    benefit_number: str = Field(
+        default="",
+        description="[LEGADO] Mantido por compatibilidade. Preferir campo benefits[].",
+    )
+    insured_name: str = Field(
+        default="",
+        description="[LEGADO] Mantido por compatibilidade. Preferir campo benefits[].",
+    )
+    benefits: list[dict] = Field(
+        default_factory=list,
+        description=(
+            "Lista de benefícios desta tese. Cada item deve conter, quando disponível: "
+            "benefit_number, nit_number, insured_name, benefit_type, fap_vigencia_year, "
+            "request_type, contestation_status_label, judicial_decisions (lista de strings)."
+        ),
+    )
     argument: str = Field(
         description=(
-            "Argumentação jurídica para este par benefício+tese, seguindo a estrutura: "
-            "identificação do pedido + tabela do benefício + síntese do fundamento da União "
+            "Argumentação jurídica para esta tese (agrupando todos os benefícios da tese), "
+            "seguindo a estrutura: identificação do pedido + tabela consolidada dos benefícios "
+            "da tese + síntese do fundamento da União "
             "+ refutação técnica (premissa normativa + premissa fática + conclusão) "
             "+ citação jurisprudencial inline obrigatória (TRF/STJ do catálogo ou transversal) "
             "+ pedido de exclusão padrão. "
@@ -98,7 +116,7 @@ class GeneratedImpugnacaoContestacao(BaseModel):
     benefit_sections: list[ImpugnacaoBenefitThesisSection] = Field(
         default_factory=list,
         description=(
-            "Modo A: uma entrada por par benefício+tese na Seção 4 (Mérito). "
+            "Modo A: uma entrada por TESE na Seção 4 (Mérito), com benefícios agrupados em benefits[]. "
             "Modo B: deixar VAZIO [] — não há mérito por tese na defesa processual."
         ),
     )
@@ -130,7 +148,26 @@ class GeneratedImpugnacaoContestacao(BaseModel):
         if self.benefit_sections:
             parts.append("\n## DO MÉRITO\n")
             for i, sec in enumerate(self.benefit_sections, 1):
-                parts.append(f"\n### {i}. NB {sec.benefit_number} — {sec.insured_name} | Tese: {sec.thesis_name}\n")
+                parts.append(f"\n### {i}. {sec.thesis_name}\n")
+
+                if sec.benefits:
+                    parts.append("\nBenefícios desta tese:\n")
+                    for b in sec.benefits:
+                        parts.append(
+                            f"- NB {b.get('benefit_number', '-') or '-'} | "
+                            f"NIT {b.get('nit_number', '-') or '-'} | "
+                            f"Segurado: {b.get('insured_name', '-') or '-'} | "
+                            f"Tipo: {b.get('benefit_type', '-') or '-'} | "
+                            f"Vigência FAP: {b.get('fap_vigencia_year', '-') or '-'} | "
+                            f"Tipo de Pedido: {b.get('request_type', '-') or '-'} | "
+                            f"Decisão da União: {b.get('contestation_status_label', '-') or '-'}\n"
+                        )
+                elif sec.benefit_number or sec.insured_name:
+                    parts.append(
+                        f"\nBenefício: NB {sec.benefit_number or '-'} — "
+                        f"{sec.insured_name or '-'}\n"
+                    )
+
                 parts.append(sec.argument + "\n")
 
         parts.append("\n---\n")
@@ -265,6 +302,7 @@ class AgentGeneratedDocument:
             law_firm_id=law_firm_id,
         )
 
+        print(style_references_block)
         user_prompt_sections = [
             process_ctx,
             selections_ctx,
@@ -278,8 +316,12 @@ class AgentGeneratedDocument:
         user_prompt = (
             f"{user_prompt}"
             f"{instructions_block}\n\n"
-            "Com base nos dados acima, gere a Impugnação à Contestação da União seguindo rigorosamente as instruções do sistema."
+            "Com base nos dados acima, gere a Impugnação à Contestação da União seguindo rigorosamente as instruções do sistema.\n"
+            "Priorize objetividade: sem repetições, sem transcrever blocos longos e com redação técnica concisa.\n"
+            "Mantenha o conteúdo completo, mas com parágrafos curtos e foco nos pontos essenciais."
         )
+
+        user_prompt = self._shrink_user_prompt(user_prompt)
 
         normalized_contestation_path = str(contestation_file_path or '').strip()
         if not normalized_contestation_path:
@@ -289,6 +331,7 @@ class AgentGeneratedDocument:
             )
 
         file_part = FileAgent().build_openrouter_file_part(normalized_contestation_path)
+
         llm_messages = [
             {
                 "role": "system",
@@ -313,8 +356,12 @@ class AgentGeneratedDocument:
         print(user_prompt)
         print("[AgentGeneratedDocument] === FIM PROMPT FINAL (USER) ===")
         print(f"[AgentGeneratedDocument] Tamanho prompt user: {len(user_prompt)} chars")
+        print("[AgentGeneratedDocument] Anexo PDF na chamada: SIM")
 
-        llm = ChatOpenAI(model=self.model_name, temperature=0.3).with_structured_output(
+        llm = ChatOpenAI(
+            model=self.model_name,
+            temperature=0.3
+        ).with_structured_output(
             GeneratedImpugnacaoContestacao,
             include_raw=True,
         )
@@ -334,26 +381,86 @@ class AgentGeneratedDocument:
                 parsed_result = fallback_llm.invoke(llm_messages)
                 raw_message = None
         except Exception as error:
-            elapsed_s = time.perf_counter() - started_at
-            try:
-                AgentExecutionHistoryService.save_execution_history(
-                    agent_name="AgentGeneratedDocument",
-                    action_name="generate_impugnacao_contestacao",
-                    agent_type="legal_drafting",
-                    system_prompt=system_content,
-                    user_prompt=user_prompt,
-                    model_response=None,
-                    full_messages_history=llm_messages,
-                    result_data=None,
-                    model_name=self.model_name,
-                    model_provider="openai",
-                    status="error",
-                    error_message=str(error),
-                    law_firm_id=law_firm_id,
-                )
-            except Exception:
-                logger.exception("Falha ao persistir histórico de erro da geração")
-            raise
+            # Erro comum: JSON truncado/inválido quando a saída fica longa.
+            # Fazemos 1 retry com contenção de tokens e instrução de concisão.
+            err_text = str(error or "")
+            if "json_invalid" in err_text.lower() or "invalid json" in err_text.lower():
+                try:
+                    print("[AgentGeneratedDocument] JSON inválido detectado; retry com contenção de tokens...")
+                    compact_user_prompt = (
+                        f"{user_prompt}\n\n"
+                        "=== MODO DE CONTENÇÃO DE TOKENS ===\n"
+                        "Retorne JSON VÁLIDO e COMPLETO no schema. "
+                        "Seja objetivo: parágrafos mais curtos, sem repetições, "
+                        "mantendo qualidade técnica e todos os campos obrigatórios. "
+                        "Reduza o volume total de texto e elimine redundâncias."
+                    )
+                    compact_user_prompt = self._shrink_user_prompt(compact_user_prompt)
+
+                    compact_messages = [
+                        {
+                            "role": "system",
+                            "content": system_content,
+                        },
+                        {
+                            "role": "user",
+                            "content": [
+                                {"type": "text", "text": compact_user_prompt},
+                                file_part,
+                            ],
+                        },
+                    ]
+                    retry_llm = ChatOpenAI(
+                        model=self.model_name,
+                        temperature=0.2,
+                    ).with_structured_output(GeneratedImpugnacaoContestacao)
+                    parsed_result = retry_llm.invoke(compact_messages)
+                    raw_message = None
+                    llm_messages = compact_messages
+                    user_prompt = compact_user_prompt
+                    print("[AgentGeneratedDocument] Retry concluído com sucesso.")
+                except Exception:
+                    elapsed_s = time.perf_counter() - started_at
+                    try:
+                        AgentExecutionHistoryService.save_execution_history(
+                            agent_name="AgentGeneratedDocument",
+                            action_name="generate_impugnacao_contestacao",
+                            agent_type="legal_drafting",
+                            system_prompt=system_content,
+                            user_prompt=user_prompt,
+                            model_response=None,
+                            full_messages_history=llm_messages,
+                            result_data=None,
+                            model_name=self.model_name,
+                            model_provider="openai",
+                            status="error",
+                            error_message=str(error),
+                            law_firm_id=law_firm_id,
+                        )
+                    except Exception:
+                        logger.exception("Falha ao persistir histórico de erro da geração")
+                    raise
+            else:
+                elapsed_s = time.perf_counter() - started_at
+                try:
+                    AgentExecutionHistoryService.save_execution_history(
+                        agent_name="AgentGeneratedDocument",
+                        action_name="generate_impugnacao_contestacao",
+                        agent_type="legal_drafting",
+                        system_prompt=system_content,
+                        user_prompt=user_prompt,
+                        model_response=None,
+                        full_messages_history=llm_messages,
+                        result_data=None,
+                        model_name=self.model_name,
+                        model_provider="openai",
+                        status="error",
+                        error_message=str(error),
+                        law_firm_id=law_firm_id,
+                    )
+                except Exception:
+                    logger.exception("Falha ao persistir histórico de erro da geração")
+                raise
 
         elapsed_s = time.perf_counter() - started_at
         print(f"[AgentGeneratedDocument] LLM concluída em {elapsed_s:.2f}s")
@@ -507,10 +614,22 @@ class AgentGeneratedDocument:
         return "\n".join(lines)
 
     def _build_selections_context(self, selections: list[dict], include_contestation: bool = False) -> str:
-        """Constrói contexto textual a partir da lista de selections (benefit+thesis+contestation)."""
+        """Constrói contexto textual agrupado por tese (múltiplos benefícios por tese)."""
         if not selections:
             return ""
-        lines = ["=== BENEFÍCIOS E TESES SELECIONADOS ==="]
+
+        original_count = len(selections)
+        if original_count > 40:
+            selections = selections[:40]
+
+        lines = ["=== BENEFÍCIOS E TESES SELECIONADOS (AGRUPADO POR TESE) ==="]
+        if original_count > len(selections):
+            lines.append(
+                f"Observação: contexto resumido para {len(selections)} de {original_count} seleções "
+                "(limite configurado em 40)."
+            )
+
+        grouped: dict[str, list[dict]] = {}
         for sel in selections:
             benefit = sel.get('benefit')
             thesis = sel.get('thesis')
@@ -518,28 +637,60 @@ class AgentGeneratedDocument:
             if not benefit:
                 continue
 
-            thesis_label = thesis.name if thesis else "Sem tese específica"
-            lines.append(f"\n--- NB {benefit.benefit_number} | Tese: {thesis_label} ---")
-            if benefit.insured_name:
-                lines.append(f"Segurado: {benefit.insured_name}")
-            if benefit.benefit_type:
-                lines.append(f"Tipo de benefício: {benefit.benefit_type}")
-            if benefit.fap_vigencia_year:
-                lines.append(f"Vigência FAP: {benefit.fap_vigencia_year}")
-            if benefit.request_type:
-                lines.append(f"Tipo de pedido: {benefit.request_type}")
+            thesis_label = (thesis.name if thesis else "Sem tese específica").strip()
+            grouped.setdefault(thesis_label, []).append({
+                'benefit': benefit,
+                'contestation': contestation,
+            })
 
-            if include_contestation and contestation:
-                if contestation.contestation_status_label:
-                    lines.append(f"Status da Contestação: {contestation.contestation_status_label} ({contestation.contestation_status})")
-                if contestation.contestation_fundamento_uniao:
-                    lines.append(f"Fundamento da União: {contestation.contestation_fundamento_uniao}")
-                if contestation.contestation_efeito_fap:
-                    lines.append(f"Efeito no FAP: {contestation.contestation_efeito_fap}")
-                if contestation.contestation_trecho_detectado:
-                    lines.append(f"Trecho Detectado: {contestation.contestation_trecho_detectado}")
-            elif include_contestation and not contestation:
-                lines.append("Contestação da União: não registrada para esta tese")
+        for thesis_label, rows in grouped.items():
+            count = len(rows)
+            lines.append(f"\n{count} {'benefício' if count == 1 else 'benefícios'}")
+            lines.append(thesis_label.upper())
+            lines.append(
+                "NB\tNIT\tSegurado\tTipo\tVigência FAP\tTipo de Pedido\t"
+                "Decisão da União\tDecisões Judiciais"
+            )
+
+            for row in rows:
+                benefit = row['benefit']
+                contestation = row.get('contestation')
+
+                status_uniao = "—"
+                if include_contestation and contestation:
+                    status_uniao = (
+                        contestation.contestation_status_label
+                        or contestation.contestation_status
+                        or "—"
+                    )
+
+                decisions = "Não teve decisão"
+                if include_contestation and contestation and contestation.contestation_decision:
+                    compact = " ".join(str(contestation.contestation_decision).split())
+                    decisions = compact[:240] + ("..." if len(compact) > 240 else "")
+
+                lines.append(
+                    f"{benefit.benefit_number or '—'}\t"
+                    f"{benefit.nit_number or '—'}\t"
+                    f"{benefit.insured_name or '—'}\t"
+                    f"{benefit.benefit_type or '—'}\t"
+                    f"{benefit.fap_vigencia_year or '—'}\t"
+                    f"{benefit.request_type or '—'}\t"
+                    f"{status_uniao}\t"
+                    f"{decisions}"
+                )
+
+                if include_contestation and contestation:
+                    if contestation.contestation_fundamento_uniao:
+                        lines.append(
+                            f"Fundamento da União: {self._clip_text(contestation.contestation_fundamento_uniao)}"
+                        )
+                    if contestation.contestation_efeito_fap:
+                        lines.append(f"Efeito no FAP: {self._clip_text(contestation.contestation_efeito_fap)}")
+                    if contestation.contestation_trecho_detectado:
+                        lines.append(
+                            f"Trecho Detectado: {self._clip_text(contestation.contestation_trecho_detectado)}"
+                        )
 
         return "\n".join(lines)
 
@@ -562,36 +713,373 @@ class AgentGeneratedDocument:
                 ImpugnacaoReferenceRetriever,
             )
 
-            query_parts = []
-            process_number = getattr(process, 'process_number', None) or getattr(process, 'number', None)
-            if process_number:
-                query_parts.append(f"Processo {process_number}")
-            for sel in (selections or [])[:6]:
-                benefit = sel.get('benefit') if isinstance(sel, dict) else None
-                thesis = sel.get('thesis') if isinstance(sel, dict) else None
-                if thesis is not None and getattr(thesis, 'title', None):
-                    query_parts.append(thesis.title)
-                elif benefit is not None and getattr(benefit, 'request_type', None):
-                    query_parts.append(str(benefit.request_type))
-            query_text = " | ".join(query_parts) or "impugnação à contestação FAP"
-
             trf_region = None
             court_name = getattr(getattr(process, 'court', None), 'name', '') or ''
+            if not court_name:
+                court_name = str(getattr(process, 'tribunal_name', '') or '')
             for region in ('TRF1', 'TRF2', 'TRF3', 'TRF4', 'TRF5', 'TRF6'):
                 if region.lower() in court_name.lower():
                     trf_region = region
                     break
 
+            focused_kind_plan = [
+                ('merit_by_thesis', 3),
+                ('jurisprudence', 2),
+                ('requests', 1),
+                ('preliminary', 1),
+            ]
+
+            grouped: dict[str, list[dict]] = {}
+            for sel in (selections or []):
+                if not isinstance(sel, dict):
+                    continue
+                thesis = sel.get('thesis')
+                thesis_name = None
+                if thesis is not None:
+                    thesis_name = getattr(thesis, 'title', None) or getattr(thesis, 'name', None)
+                thesis_label = (str(thesis_name).strip() if thesis_name else 'Sem tese específica')
+                grouped.setdefault(thesis_label, []).append(sel)
+
+            if not grouped:
+                return ""
+
             retriever = ImpugnacaoReferenceRetriever()
-            chunks = retriever.fetch_style_references(
-                law_firm_id=law_firm_id,
-                query_text=query_text,
-                trf_region=trf_region,
-            )
-            return retriever.format_block(chunks)
+
+            thesis_blocks: list[str] = [
+                "=== REFERENCIAS JURIDICAS POR TESE DO CASO ===",
+                "Cada bloco abaixo corresponde a uma tese selecionada no processo atual.",
+                "Priorize o uso de jurisprudencia regional quando houver.",
+            ]
+
+            max_total_chars = 20000
+            max_thesis_chars = 4500
+
+            for thesis_label, thesis_rows in grouped.items():
+                query_parts = [f"Tese: {thesis_label}"]
+
+                for sel in thesis_rows[:6]:
+                    benefit = sel.get('benefit')
+                    contestation = sel.get('contestation')
+
+                    if benefit is not None:
+                        if getattr(benefit, 'request_type', None):
+                            query_parts.append(f"Pedido: {benefit.request_type}")
+                        if getattr(benefit, 'benefit_type', None):
+                            query_parts.append(f"Tipo benefício: {benefit.benefit_type}")
+                        if getattr(benefit, 'fap_vigencia_year', None):
+                            query_parts.append(f"Vigência FAP: {benefit.fap_vigencia_year}")
+
+                    if contestation is not None:
+                        status_label = (
+                            getattr(contestation, 'contestation_status_label', None)
+                            or getattr(contestation, 'contestation_status', None)
+                        )
+                        if status_label:
+                            query_parts.append(f"Status União: {status_label}")
+
+                        fundamento = getattr(contestation, 'contestation_fundamento_uniao', None)
+                        if fundamento:
+                            query_parts.append(
+                                "Fundamento União: "
+                                f"{self._clip_text(fundamento, max_chars=180)}"
+                            )
+
+                query_text = " | ".join(query_parts) or f"Tese: {thesis_label}"
+
+                chunks = retriever.fetch_style_references(
+                    law_firm_id=law_firm_id,
+                    query_text=query_text,
+                    trf_region=trf_region,
+                    kind_plan=focused_kind_plan,
+                    max_chunks=6,
+                )
+                if not chunks:
+                    continue
+
+                thesis_block = self._build_budgeted_thesis_reference_block(
+                    thesis_label=thesis_label,
+                    chunks=chunks,
+                    trf_region=trf_region,
+                    max_chars=max_thesis_chars,
+                )
+                if not thesis_block:
+                    continue
+
+                # Evita estourar contexto global do bloco de referências.
+                projected_size = len("\n".join(thesis_blocks)) + len(thesis_block) + 2
+                if projected_size > max_total_chars and len(thesis_blocks) > 3:
+                    break
+
+                thesis_blocks.append(thesis_block)
+
+            if len(thesis_blocks) <= 3:
+                return ""
+
+            block = "\n".join(thesis_blocks)
+            if len(block) > max_total_chars:
+                block = self._prune_rag_block(block, max_chars=max_total_chars)
+
+            return block
         except Exception as error:
             print(f"[AgentGeneratedDocument] Falha ao carregar referências de estilo: {error}")
             return ""
+
+    def _build_budgeted_thesis_reference_block(
+        self,
+        *,
+        thesis_label: str,
+        chunks: list[dict],
+        trf_region: Optional[str],
+        max_chars: int,
+    ) -> str:
+        """Monta bloco de referência por tese com orçamento por seção."""
+        if not chunks:
+            return ""
+
+        budgets = {
+            "EXEMPLO_ESTRUTURA_TESE": 1600,
+            "JURISPRUDENCIA_REGIONAL": 1800,
+            "JURISPRUDENCIA_COMPLEMENTAR": 900,
+            "PADRAO_PEDIDO_DA_TESE": 900,
+            "REFERENCIAS_COMPLEMENTARES": 600,
+        }
+
+        regional = (trf_region or "").strip().upper()
+        categories = {
+            "EXEMPLO_ESTRUTURA_TESE": [],
+            "JURISPRUDENCIA_REGIONAL": [],
+            "JURISPRUDENCIA_COMPLEMENTAR": [],
+            "PADRAO_PEDIDO_DA_TESE": [],
+            "REFERENCIAS_COMPLEMENTARES": [],
+        }
+
+        for chunk in chunks:
+            kind = (chunk.get("section_kind") or "").strip().lower()
+            chunk_region = (chunk.get("trf_region") or "").strip().upper()
+
+            if kind == "merit_by_thesis":
+                categories["EXEMPLO_ESTRUTURA_TESE"].append(chunk)
+            elif kind == "jurisprudence":
+                if regional and chunk_region == regional:
+                    categories["JURISPRUDENCIA_REGIONAL"].append(chunk)
+                elif chunk_region.startswith("TRF"):
+                    categories["JURISPRUDENCIA_REGIONAL"].append(chunk)
+                else:
+                    categories["JURISPRUDENCIA_COMPLEMENTAR"].append(chunk)
+            elif kind == "requests":
+                categories["PADRAO_PEDIDO_DA_TESE"].append(chunk)
+            else:
+                categories["REFERENCIAS_COMPLEMENTARES"].append(chunk)
+
+        parts = [f"\n<TESE nome=\"{thesis_label}\">"]
+        total_chars = len(parts[0])
+
+        def append_section(tag_name: str, section_chunks: list[dict], max_items: int, budget: int) -> None:
+            nonlocal total_chars
+            if not section_chunks or budget <= 0 or max_items <= 0:
+                return
+
+            local_parts = [f"<{tag_name}>"]
+            used_chars = 0
+            seen = set()
+            item_count = 0
+
+            for chunk in section_chunks:
+                if item_count >= max_items:
+                    break
+                text = self._compact_reference_text(
+                    chunk.get("text") or "",
+                    max_chars=max(250, budget // max_items),
+                )
+                if not text:
+                    continue
+
+                normalized_key = re.sub(r"\s+", " ", text).strip().lower()
+                if normalized_key in seen:
+                    continue
+                seen.add(normalized_key)
+
+                heading = (chunk.get("heading") or "").strip()
+                meta = []
+                if chunk.get("section_kind"):
+                    meta.append(f"secao: {chunk['section_kind']}")
+                if chunk.get("trf_region"):
+                    meta.append(f"regiao: {chunk['trf_region']}")
+                if chunk.get("quality_score") is not None:
+                    meta.append(f"qualidade: {chunk['quality_score']}")
+                meta_str = " | ".join(meta) if meta else "sem metadados"
+
+                entry_lines = [f"[item {item_count + 1} | {meta_str}]"]
+                if heading:
+                    entry_lines.append(f"[heading original: {heading}]")
+                entry_lines.append(text)
+                entry_lines.append("")
+
+                entry_text = "\n".join(entry_lines)
+                if used_chars + len(entry_text) > budget and item_count > 0:
+                    break
+
+                local_parts.append(entry_text)
+                used_chars += len(entry_text)
+                item_count += 1
+
+            if item_count == 0:
+                return
+
+            local_parts.append(f"</{tag_name}>")
+            section_text = "\n".join(local_parts)
+            if total_chars + len(section_text) <= max_chars:
+                parts.append(section_text)
+                total_chars += len(section_text)
+
+        append_section(
+            "EXEMPLO_ESTRUTURA_TESE",
+            categories["EXEMPLO_ESTRUTURA_TESE"],
+            max_items=1,
+            budget=budgets["EXEMPLO_ESTRUTURA_TESE"],
+        )
+        append_section(
+            "JURISPRUDENCIA_REGIONAL",
+            categories["JURISPRUDENCIA_REGIONAL"],
+            max_items=2,
+            budget=budgets["JURISPRUDENCIA_REGIONAL"],
+        )
+        append_section(
+            "JURISPRUDENCIA_COMPLEMENTAR",
+            categories["JURISPRUDENCIA_COMPLEMENTAR"],
+            max_items=1,
+            budget=budgets["JURISPRUDENCIA_COMPLEMENTAR"],
+        )
+        append_section(
+            "PADRAO_PEDIDO_DA_TESE",
+            categories["PADRAO_PEDIDO_DA_TESE"],
+            max_items=1,
+            budget=budgets["PADRAO_PEDIDO_DA_TESE"],
+        )
+        append_section(
+            "REFERENCIAS_COMPLEMENTARES",
+            categories["REFERENCIAS_COMPLEMENTARES"],
+            max_items=1,
+            budget=budgets["REFERENCIAS_COMPLEMENTARES"],
+        )
+
+        parts.append(
+            "<INSTRUCAO_DE_USO>"
+            "Priorize EXEMPLO_ESTRUTURA_TESE e JURISPRUDENCIA_REGIONAL na redacao do merito desta tese."
+            "</INSTRUCAO_DE_USO>"
+        )
+        parts.append("</TESE>")
+
+        return "\n".join(parts)
+
+    def _compact_reference_text(self, text: str, max_chars: int = 1000) -> str:
+        """Compacta texto de referência preservando conteúdo jurídico útil."""
+        normalized = re.sub(r"\s+", " ", str(text or "")).strip()
+        if not normalized:
+            return ""
+        if len(normalized) <= max_chars:
+            return normalized
+
+        # Prioriza sentenças com sinais de jurisprudência/fundamento.
+        sentences = re.split(r"(?<=[.!?])\s+", normalized)
+        if len(sentences) <= 1:
+            return normalized[:max_chars].rstrip() + "..."
+
+        priority_patterns = [
+            r"\bTRF\b|\bSTJ\b|\bREsp\b|\bAC\b|\bprocesso\b",
+            r"\bart\.\b|\bCPC\b|\bLINDB\b|\blei\b|\bônus\b",
+            r"\bfap\b|\bbenef[ií]cio\b|\bnexo\b|\bc[aá]lculo\b",
+        ]
+
+        prioritized: list[str] = []
+        others: list[str] = []
+        for sentence in sentences:
+            s = sentence.strip()
+            if not s:
+                continue
+            if any(re.search(pattern, s, flags=re.IGNORECASE) for pattern in priority_patterns):
+                prioritized.append(s)
+            else:
+                others.append(s)
+
+        ordered = prioritized + others
+        result = []
+        total = 0
+        for sentence in ordered:
+            add_len = len(sentence) + (1 if result else 0)
+            if total + add_len > max_chars:
+                break
+            result.append(sentence)
+            total += add_len
+
+        if not result:
+            return normalized[:max_chars].rstrip() + "..."
+
+        compacted = " ".join(result).strip()
+        if len(compacted) < len(normalized):
+            compacted = compacted.rstrip() + "..."
+        return compacted
+
+    def _prune_rag_block(self, block: str, max_chars: int = 20000) -> str:
+        """Poda bloco RAG com prioridade semântica antes de corte cego."""
+        text = str(block or "")
+        if len(text) <= max_chars:
+            return text
+
+        # Primeiro remove seções complementares menos críticas.
+        text = re.sub(
+            r"\n<REFERENCIAS_COMPLEMENTARES>.*?</REFERENCIAS_COMPLEMENTARES>",
+            "",
+            text,
+            flags=re.DOTALL,
+        )
+        if len(text) <= max_chars:
+            return text
+
+        text = re.sub(
+            r"\n<JURISPRUDENCIA_COMPLEMENTAR>.*?</JURISPRUDENCIA_COMPLEMENTAR>",
+            "",
+            text,
+            flags=re.DOTALL,
+        )
+        if len(text) <= max_chars:
+            return text
+
+        # Como último recurso, corte controlado sem inserir aviso extra.
+        return text[:max_chars]
+
+    def _clip_text(self, value: str, max_chars: Optional[int] = None) -> str:
+        text = " ".join(str(value or "").split())
+        limit = max_chars or 400
+        if len(text) <= limit:
+            return text
+        return text[:limit] + "..."
+
+    def _shrink_user_prompt(self, prompt: str) -> str:
+        """Reduz o prompt de usuário para evitar estouro de contexto/tokens."""
+        text = str(prompt or "")
+        if len(text) <= 60000:
+            return text
+
+        marker = "=== REFERÊNCIAS DE ESTILO"
+        marker_index = text.find(marker)
+        if marker_index > 0:
+            head = text[:marker_index]
+            tail = text[marker_index:]
+            keep_tail = int(60000 * 0.35)
+            keep_head = 60000 - keep_tail
+            shrunk = (
+                head[:keep_head]
+                + "\n\n[Contexto intermediário truncado por limite de tamanho.]\n\n"
+                + tail[:keep_tail]
+            )
+            if len(shrunk) <= 60000:
+                return shrunk
+
+        return (
+            text[:60000]
+            + "\n\n[Prompt truncado automaticamente para respeitar o limite de contexto.]"
+        )
 
     def _build_regional_jurisprudence_hint(self, process) -> str:
         """Sugere priorização de jurisprudência do TRF regional conforme foro identificado no processo."""
