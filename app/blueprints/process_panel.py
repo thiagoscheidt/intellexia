@@ -2728,6 +2728,7 @@ def generated_document_new(process_id):
     benefits = (
         JudicialProcessBenefit.query
         .filter_by(process_id=process.id)
+        .options(selectinload(JudicialProcessBenefit.legal_theses))
         .order_by(JudicialProcessBenefit.benefit_number.asc())
         .all()
     )
@@ -2741,11 +2742,40 @@ def generated_document_new(process_id):
         for row in rows:
             thesis_contestation_map.setdefault(row.process_benefit_id, {})[row.legal_thesis_id] = row
 
+    # Agrupa por tese usando benefit.legal_theses como fonte de verdade.
+    # Contestation data enriquece onde existir, mas não é obrigatória.
+    from collections import OrderedDict
+    thesis_groups_map = OrderedDict()
+    no_thesis_entries = []
+    for b in benefits:
+        if b.legal_theses:
+            b_conts = thesis_contestation_map.get(b.id, {})
+            for thesis in b.legal_theses:
+                # Apenas contestação específica da tese; fallback para campos diretos do benefit no template
+                cont = b_conts.get(thesis.id)
+                if thesis.id not in thesis_groups_map:
+                    thesis_groups_map[thesis.id] = {'label': thesis.name, 'entries': []}
+                thesis_groups_map[thesis.id]['entries'].append({'benefit': b, 'cont': cont})
+        else:
+            no_thesis_entries.append({'benefit': b, 'cont': None})
+
+    thesis_groups = [
+        {'thesis_id': tid, 'label': data['label'], 'entries': data['entries']}
+        for tid, data in thesis_groups_map.items()
+    ]
+    if no_thesis_entries:
+        thesis_groups.append({
+            'thesis_id': None,
+            'label': 'Sem tese vinculada',
+            'entries': no_thesis_entries,
+        })
+
     return render_template(
         'process_panel/generated_document_new.html',
         process=process,
         benefits=benefits,
         thesis_contestation_map=thesis_contestation_map,
+        thesis_groups=thesis_groups,
         document_type_labels=DOCUMENT_TYPE_LABELS,
     )
 

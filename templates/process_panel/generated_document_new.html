@@ -114,21 +114,49 @@
     margin-bottom: .5rem;
   }
 
-  /* Benefícios */
-  .benefit-check-card {
+  /* Teses e Benefícios */
+  .thesis-group {
     border: 1px solid rgba(15, 23, 42, .1);
-    border-radius: .8rem;
-    padding: .85rem 1rem;
-    cursor: pointer;
-    transition: border-color .2s, background .2s;
-    margin-bottom: .6rem;
+    border-radius: .85rem;
+    overflow: hidden;
+    margin-bottom: 1rem;
   }
 
-  .benefit-check-card:hover { border-color: #0d6efd; }
+  .thesis-group-header {
+    background: linear-gradient(90deg, rgba(13,110,253,.07) 0%, rgba(13,110,253,.02) 100%);
+    border-bottom: 1px solid rgba(13,110,253,.12);
+    padding: .7rem 1rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem;
+  }
+
+  .thesis-group-header.no-thesis {
+    background: rgba(108,117,125,.06);
+    border-bottom-color: rgba(108,117,125,.15);
+  }
+
+  .thesis-group-body { padding: .5rem .75rem .75rem; }
+
+  .benefit-check-card {
+    border: 1px solid rgba(15, 23, 42, .08);
+    border-radius: .65rem;
+    padding: .75rem .9rem;
+    cursor: pointer;
+    transition: border-color .2s, background .2s, box-shadow .15s;
+    margin-top: .5rem;
+  }
+
+  .benefit-check-card:hover {
+    border-color: #0d6efd;
+    box-shadow: 0 0 0 2px rgba(13,110,253,.08);
+  }
 
   .benefit-check-card.checked {
     border-color: #0d6efd;
-    background: #f8f9ff;
+    background: #f4f7ff;
+    box-shadow: 0 0 0 2px rgba(13,110,253,.12);
   }
 
   .benefit-check-card input[type="checkbox"] { display: none; }
@@ -141,21 +169,22 @@
     font-weight: 600;
     color: #fff;
     margin-right: .4rem;
+    flex-shrink: 0;
   }
 
   .contestation-fields {
-    margin-top: .75rem;
-    padding: .75rem;
+    margin-top: .6rem;
+    padding: .6rem .75rem;
     background: rgba(255,193,7,.06);
     border-left: 3px solid #ffc107;
-    border-radius: 0 .5rem .5rem 0;
+    border-radius: 0 .45rem .45rem 0;
     display: none;
   }
 
   .contestation-fields.show { display: block; }
 
   .contestation-label {
-    font-size: .72rem;
+    font-size: .71rem;
     font-weight: 600;
     text-transform: uppercase;
     letter-spacing: .04em;
@@ -164,7 +193,7 @@
   }
 
   .contestation-value {
-    font-size: .83rem;
+    font-size: .82rem;
     color: var(--bs-body-color);
     white-space: pre-wrap;
     word-break: break-word;
@@ -282,108 +311,121 @@
               </div>
             </div>
 
-            <!-- ── Step 2: Benefícios + Teses ────────────────────────── -->
+            <!-- ── Step 2: Teses → Benefícios ───────────────────────── -->
             <div class="wizard-panel" id="panel-2">
-              <h6 class="fw-semibold mb-1">Selecione os benefícios e teses</h6>
+              <h6 class="fw-semibold mb-1">Selecione os benefícios por tese</h6>
               <p class="text-muted small mb-3" id="step2-hint">
-                Cada linha representa um par <strong>benefício + tese</strong>. Selecione individualmente —
-                teses com resultados diferentes geram argumentos distintos.
+                Cada grupo corresponde a uma <strong>tese jurídica</strong>. Selecione os benefícios individualmente
+                ou use <em>Selecionar todos</em> para marcar todos de uma tese.
               </p>
 
-              {% if benefits %}
-                {% for b in benefits %}
-                {% set b_theses = thesis_contestation_map.get(b.id, {}) %}
+              {% if thesis_groups %}
+                {% for group in thesis_groups %}
+                {% set gid = group.thesis_id|string if group.thesis_id is not none else 'none' %}
 
-                <!-- Benefício header -->
-                <div class="mb-1 mt-3 d-flex align-items-center gap-2">
-                  <span class="benefit-nb-badge" id="nb-badge-{{ b.id }}" style="background:#6c757d;">
-                    {{ b.benefit_number }}
-                  </span>
-                  {% if b.insured_name %}
-                    <span class="fw-semibold small">{{ b.insured_name }}</span>
-                  {% endif %}
-                  {% if b.benefit_type %}
-                    <span class="badge bg-secondary-subtle text-secondary-emphasis" style="font-size:.72rem;">{{ b.benefit_type }}</span>
-                  {% endif %}
-                  {% if b.fap_vigencia_year %}
-                    <span class="badge bg-light text-muted border" style="font-size:.72rem;">{{ b.fap_vigencia_year }}</span>
-                  {% endif %}
-                </div>
+                <div class="thesis-group">
+                  <!-- Cabeçalho da tese -->
+                  <div class="thesis-group-header {% if group.thesis_id is none %}no-thesis{% endif %}">
+                    <div class="d-flex align-items-center gap-2 min-w-0">
+                      <i class="bi {% if group.thesis_id is not none %}bi-balance-scale text-primary{% else %}bi-dash-circle text-secondary{% endif %} flex-shrink-0"></i>
+                      <span class="fw-semibold small text-truncate" title="{{ group.label }}">{{ group.label }}</span>
+                      <span class="badge bg-secondary-subtle text-secondary-emphasis ms-1 flex-shrink-0"
+                            style="font-size:.7rem">{{ group.entries|length }} benef.</span>
+                    </div>
+                    <button type="button"
+                            class="btn btn-outline-primary btn-sm flex-shrink-0"
+                            style="font-size:.72rem; padding:.2rem .6rem; border-radius:20px"
+                            onclick="toggleAllInGroup(this, '{{ gid }}')">
+                      Selecionar todos
+                    </button>
+                  </div>
 
-                {% if b_theses %}
-                  <!-- Rows per thesis -->
-                  {% for thesis_id, cont in b_theses.items() %}
-                  {# thesis_id pode ser None — usar string vazia para evitar "None" no form value #}
-                  {% set sel_key = b.id|string + ':' + (thesis_id|string if thesis_id is not none else '') %}
-                  {% set thesis_label = cont.legal_thesis.name if cont.legal_thesis else (cont.contestation_status_label or 'Contestação geral') %}
-                  <div class="benefit-check-card benefit-thesis-row ms-3"
-                       id="bcard-{{ sel_key | replace(':', '-') }}"
-                       data-sel="{{ sel_key }}"
-                       onclick="toggleSelection(this)">
-                    <div class="d-flex align-items-start gap-2">
-                      <div class="pt-1">
-                        <input type="checkbox" name="selections[]" value="{{ sel_key }}"
-                               id="bchk-{{ sel_key | replace(':', '-') }}">
-                        <div class="form-check-indicator" id="bchk-vis-{{ sel_key | replace(':', '-') }}"
-                             style="width:18px;height:18px;border:2px solid #dee2e6;border-radius:4px;
-                                    display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;"></div>
-                      </div>
-                      <div class="flex-grow-1">
-                        <div class="fw-semibold small mb-1">
-                          <i class="bi bi-tag me-1 text-muted"></i>
-                          {{ thesis_label }}
+                  <!-- Benefícios do grupo -->
+                  <div class="thesis-group-body">
+                    {% for item in group.entries %}
+                    {% set b = item.benefit %}
+                    {% set cont = item.cont %}
+                    {% set thesis_id = group.thesis_id %}
+                    {% set sel_key = b.id|string + ':' + (thesis_id|string if thesis_id is not none else '') %}
+                    {% set card_id = 'bcard-' + sel_key | replace(':', '-') %}
+                    {% set chk_id  = 'bchk-'  + sel_key | replace(':', '-') %}
+                    {% set vis_id  = 'bchk-vis-' + sel_key | replace(':', '-') %}
+
+                    <div class="benefit-check-card"
+                         id="{{ card_id }}"
+                         data-sel="{{ sel_key }}"
+                         data-group="{{ gid }}"
+                         data-nb="{{ b.benefit_number }}"
+                         onclick="toggleSelection(this)">
+                      <div class="d-flex align-items-start gap-2">
+                        <!-- Checkbox visual -->
+                        <div class="pt-1 flex-shrink-0">
+                          <input type="checkbox" name="selections[]" value="{{ sel_key }}" id="{{ chk_id }}">
+                          <div id="{{ vis_id }}"
+                               style="width:18px;height:18px;border:2px solid #dee2e6;border-radius:4px;
+                                      display:flex;align-items:center;justify-content:center;transition:all .15s;"></div>
                         </div>
-                        <!-- Contestation fields (shown for impugnacao type) -->
-                        <div class="contestation-fields" id="cont-fields-{{ sel_key | replace(':', '-') }}">
-                          {% if cont.contestation_status_label %}
-                          <div class="mb-1 d-flex align-items-center gap-2">
-                            <span class="contestation-label" style="min-width:fit-content;">Status:</span>
-                            <span class="badge
-                              {% if cont.contestation_status == 'procedente' %}bg-success-subtle text-success-emphasis
-                              {% elif cont.contestation_status == 'improcedente' %}bg-danger-subtle text-danger-emphasis
-                              {% else %}bg-secondary-subtle text-secondary-emphasis{% endif %}">
-                              {{ cont.contestation_status_label }}
+                        <!-- Benefício info -->
+                        <div class="flex-grow-1 min-w-0">
+                          <div class="d-flex align-items-center gap-2 flex-wrap">
+                            <span class="benefit-nb-badge nb-badge-{{ b.id }}" style="background:#6c757d;">
+                              {{ b.benefit_number }}
                             </span>
+                            {% if b.insured_name %}
+                            <span class="fw-semibold small text-truncate">{{ b.insured_name }}</span>
+                            {% endif %}
+                            {% if b.benefit_type %}
+                            <span class="badge bg-secondary-subtle text-secondary-emphasis" style="font-size:.7rem;">{{ b.benefit_type }}</span>
+                            {% endif %}
+                            {% if b.fap_vigencia_year %}
+                            <span class="badge bg-light text-muted border" style="font-size:.7rem;">{{ b.fap_vigencia_year }}</span>
+                            {% endif %}
                           </div>
-                          {% endif %}
-                          {% if cont.contestation_fundamento_uniao %}
-                          <div class="mb-1">
-                            <span class="contestation-label">Fundamento da União:</span>
-                            <div class="contestation-value">{{ cont.contestation_fundamento_uniao }}</div>
+                          <!-- Detalhes da contestação (visíveis apenas para impugnação).
+                               Fonte primária: JudicialProcessBenefitThesisContestation (cont).
+                               Fallback: campos diretos do benefit. -->
+                          {% set c_status       = cont.contestation_status             if cont else b.contestation_status %}
+                          {% set c_status_label = cont.contestation_status_label       if cont else b.contestation_status_label %}
+                          {% set c_fundamento   = cont.contestation_fundamento_uniao   if cont else b.contestation_fundamento_uniao %}
+                          {% set c_efeito       = cont.contestation_efeito_fap         if cont else b.contestation_efeito_fap %}
+                          {% set c_trecho       = cont.contestation_trecho_detectado   if cont else b.contestation_trecho_detectado %}
+                          <div class="contestation-fields" id="cont-fields-{{ sel_key | replace(':', '-') }}">
+                            {% if c_status_label %}
+                            <div class="mb-1 d-flex align-items-center gap-2">
+                              <span class="contestation-label" style="min-width:fit-content;">Status:</span>
+                              <span class="badge
+                                {% if c_status == 'procedente' %}bg-success-subtle text-success-emphasis
+                                {% elif c_status == 'improcedente' %}bg-danger-subtle text-danger-emphasis
+                                {% else %}bg-secondary-subtle text-secondary-emphasis{% endif %}">
+                                {{ c_status_label }}
+                              </span>
+                            </div>
+                            {% endif %}
+                            {% if c_fundamento %}
+                            <div class="mb-1">
+                              <span class="contestation-label">Fundamento da União:</span>
+                              <div class="contestation-value">{{ c_fundamento }}</div>
+                            </div>
+                            {% endif %}
+                            {% if c_efeito %}
+                            <div class="mb-1">
+                              <span class="contestation-label">Efeito no FAP:</span>
+                              <div class="contestation-value">{{ c_efeito }}</div>
+                            </div>
+                            {% endif %}
+                            {% if c_trecho %}
+                            <div class="mb-1">
+                              <span class="contestation-label">Trecho Detectado:</span>
+                              <div class="contestation-value fst-italic">{{ c_trecho }}</div>
+                            </div>
+                            {% endif %}
                           </div>
-                          {% endif %}
-                          {% if cont.contestation_efeito_fap %}
-                          <div class="mb-1">
-                            <span class="contestation-label">Efeito no FAP:</span>
-                            <div class="contestation-value">{{ cont.contestation_efeito_fap }}</div>
-                          </div>
-                          {% endif %}
                         </div>
                       </div>
                     </div>
+                    {% endfor %}
                   </div>
-                  {% endfor %}
-                {% else %}
-                  <!-- Benefit without theses — select as benefit only -->
-                  {% set sel_key = b.id|string + ':' %}
-                  <div class="benefit-check-card benefit-thesis-row ms-3"
-                       id="bcard-{{ b.id }}-nothesis"
-                       data-sel="{{ sel_key }}"
-                       onclick="toggleSelection(this)">
-                    <div class="d-flex align-items-start gap-2">
-                      <div class="pt-1">
-                        <input type="checkbox" name="selections[]" value="{{ sel_key }}"
-                               id="bchk-{{ b.id }}-nothesis">
-                        <div class="form-check-indicator" id="bchk-vis-{{ b.id }}-nothesis"
-                             style="width:18px;height:18px;border:2px solid #dee2e6;border-radius:4px;
-                                    display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:all .15s;"></div>
-                      </div>
-                      <div class="flex-grow-1">
-                        <div class="small text-muted fst-italic">Sem tese vinculada — incluir benefício sem tese específica</div>
-                      </div>
-                    </div>
-                  </div>
-                {% endif %}
+                </div>
                 {% endfor %}
               {% else %}
                 <div class="text-center py-4 text-muted">
@@ -393,7 +435,7 @@
               {% endif %}
 
               <p class="text-danger small mt-2 d-none" id="err-benefits">
-                Selecione ao menos um item para continuar.
+                Selecione ao menos um benefício para continuar.
               </p>
 
               <div class="step-actions">
@@ -471,8 +513,8 @@
     return benefitNbMap[nb];
   }
 
-  // Color NB badges by benefit number text
-  document.querySelectorAll('[id^="nb-badge-"]').forEach(el => {
+  // Colorir badges NB por número de benefício
+  document.querySelectorAll('.benefit-nb-badge').forEach(el => {
     el.style.background = getNbColor(el.textContent.trim());
   });
 
@@ -484,13 +526,15 @@
     if (step === 3 && currentStep === 2 && !validateStep2()) return;
     if (step === 3) buildSummary();
 
-    document.getElementById('step-ind-' + currentStep).classList.replace('active', 'completed') ||
-      document.getElementById('step-ind-' + currentStep).classList.add('completed');
+    const prevInd = document.getElementById('step-ind-' + currentStep);
+    prevInd.classList.remove('active');
+    prevInd.classList.add('completed');
     document.getElementById('panel-' + currentStep).classList.remove('active');
 
     currentStep = step;
-    document.getElementById('step-ind-' + currentStep).classList.remove('completed');
-    document.getElementById('step-ind-' + currentStep).classList.add('active');
+    const curInd = document.getElementById('step-ind-' + currentStep);
+    curInd.classList.remove('completed');
+    curInd.classList.add('active');
     document.getElementById('panel-' + currentStep).classList.add('active');
 
     for (let i = currentStep + 1; i <= 3; i++) {
@@ -527,25 +571,38 @@
     });
   });
 
-  // ── Selection toggle (benefit+thesis rows) ────────────────────────────
+  // ── Selection toggle ──────────────────────────────────────────────────
   const CHECK_SVG = '<svg width="11" height="9" viewBox="0 0 11 9" fill="none"><path d="M1 4L4 7L10 1" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 
-  window.toggleSelection = function (card) {
+  function setCardChecked(card, checked) {
     const chk = card.querySelector('input[type="checkbox"]');
-    const visId = chk.id.replace('bchk-', 'bchk-vis-');
-    const vis = document.getElementById(visId);
-    chk.checked = !chk.checked;
-    if (chk.checked) {
+    const vis = card.querySelector('[id^="bchk-vis-"]');
+    chk.checked = checked;
+    if (checked) {
       card.classList.add('checked');
       if (vis) { vis.style.background = '#0d6efd'; vis.style.borderColor = '#0d6efd'; vis.innerHTML = CHECK_SVG; }
     } else {
       card.classList.remove('checked');
       if (vis) { vis.style.background = ''; vis.style.borderColor = '#dee2e6'; vis.innerHTML = ''; }
     }
+  }
+
+  window.toggleSelection = function (card) {
+    const chk = card.querySelector('input[type="checkbox"]');
+    setCardChecked(card, !chk.checked);
     document.getElementById('err-benefits').classList.add('d-none');
   };
 
-  // ── Show contestation fields only for impugnacao_contestacao ─────────
+  // ── Selecionar / desmarcar todos de uma tese ──────────────────────────
+  window.toggleAllInGroup = function (btn, groupId) {
+    const cards = document.querySelectorAll(`.benefit-check-card[data-group="${groupId}"]`);
+    const allChecked = Array.from(cards).every(c => c.querySelector('input[type="checkbox"]').checked);
+    cards.forEach(card => setCardChecked(card, !allChecked));
+    btn.textContent = allChecked ? 'Selecionar todos' : 'Desmarcar todos';
+    document.getElementById('err-benefits').classList.add('d-none');
+  };
+
+  // ── Mostrar campos de contestação apenas para impugnação ──────────────
   function updateContestationFields() {
     const selectedType = document.querySelector('input[name="document_type"]:checked');
     const isImpugnacao = selectedType && selectedType.value === 'impugnacao_contestacao';
@@ -567,19 +624,15 @@
     if (checked.length === 0) {
       el.textContent = '—';
     } else {
-      // Build "NB 123 / Tese X" labels from the card text
       const labels = Array.from(checked).map(c => {
         const card = c.closest('.benefit-check-card');
-        // Find NB from preceding header badge
-        const parentGroup = card.closest('[id^="nb-badge-"]') ||
-          card.previousElementSibling?.querySelector('[id^="nb-badge-"]') ||
-          card.parentElement?.querySelector('[id^="nb-badge-"]');
-        const nb = parentGroup ? parentGroup.textContent.trim() : c.value.split(':')[0];
-        const thesisEl = card.querySelector('.fw-semibold.small');
-        const thesis = thesisEl ? thesisEl.textContent.replace(/^\s*\S+\s*/, '').trim() : '';
-        return thesis ? `${nb} / ${thesis}` : `NB ${nb}`;
+        const nb = card ? card.dataset.nb : c.value.split(':')[0];
+        return `NB ${nb}`;
       });
-      el.textContent = labels.slice(0, 4).join(', ') + (labels.length > 4 ? ` +${labels.length - 4}` : '') + ` (${labels.length})`;
+      const unique = [...new Set(labels)];
+      el.textContent = unique.slice(0, 5).join(', ') +
+        (unique.length > 5 ? ` +${unique.length - 5}` : '') +
+        ` (${checked.length} seleç.)`;
     }
   }
 
