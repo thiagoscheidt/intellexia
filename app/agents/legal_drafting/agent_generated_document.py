@@ -20,6 +20,7 @@ import logging
 from pydantic import BaseModel, Field, ConfigDict
 from langchain_openai import ChatOpenAI
 from app.agents.core.file_agent import FileAgent
+from app.utils.timezone import now_sp
 from app.services.token_usage_service import TokenUsageService
 from app.services.agent_execution_history_service import AgentExecutionHistoryService
 
@@ -27,6 +28,51 @@ from app.agents.config import DEFAULT_MODEL_LEGAL_DRAFTING
 
 _PROMPTS_DIR = Path(__file__).parent.parent.parent / "prompts"
 logger = logging.getLogger(__name__)
+
+_PT_BR_MONTHS = {
+    1: "janeiro",
+    2: "fevereiro",
+    3: "marco",
+    4: "abril",
+    5: "maio",
+    6: "junho",
+    7: "julho",
+    8: "agosto",
+    9: "setembro",
+    10: "outubro",
+    11: "novembro",
+    12: "dezembro",
+}
+
+
+def _format_current_date_extenso_sp() -> str:
+    """Retorna data corrente de Sao Paulo em formato por extenso."""
+    current = now_sp()
+    month_name = _PT_BR_MONTHS.get(current.month, str(current.month))
+    return f"{current.day} de {month_name} de {current.year}"
+
+
+def _normalize_closing_with_current_date(closing_text: str) -> str:
+    """Forca o fecho a usar a data corrente, preservando cidade/UF quando informado."""
+    current_date = _format_current_date_extenso_sp()
+    text = str(closing_text or "").strip()
+    if not text:
+        return (
+            "Nestes termos,\n\n"
+            "Pede deferimento.\n\n"
+            f"Florianopolis/SC, {current_date}."
+        )
+
+    location_pattern = r"([A-Za-zÀ-ÿ\s\.\-]+/[A-Z]{2})\s*,\s*[^.\n]+\.?"
+    location_match = re.search(location_pattern, text)
+    location = location_match.group(1).strip() if location_match else "Florianopolis/SC"
+
+    text_without_date = re.sub(location_pattern, "", text).strip()
+    text_without_date = re.sub(r"\n{3,}", "\n\n", text_without_date).rstrip()
+
+    if text_without_date:
+        return f"{text_without_date}\n\n{location}, {current_date}."
+    return f"{location}, {current_date}."
 
 
 def _load_prompt(filename: str) -> str:
@@ -255,7 +301,7 @@ def _sanitize_generated_impugnacao(
     result.general_legal_grounds = _clean(result.general_legal_grounds)
     result.jurisprudence = _clean(result.jurisprudence)
     result.requests = _clean(result.requests)
-    result.closing = _clean(result.closing)
+    result.closing = _normalize_closing_with_current_date(_clean(result.closing))
 
     for section in result.benefit_sections:
         section.argument = _clean(section.argument)

@@ -5,31 +5,36 @@
 
 {% block extra_css %}
 <style>
-.upload-zone {
-    border: 2px dashed #c5cfe8;
-    border-radius: .75rem;
-    background: #f8faff;
-    transition: border-color .2s ease, background .2s ease;
-    cursor: pointer;
-}
-.upload-zone:hover,
-.upload-zone.drag-over {
-    border-color: #0d6efd;
-    background: rgba(13,110,253,.04);
-}
-.upload-zone.has-file {
-    border-color: #198754;
-    background: rgba(25,135,84,.04);
-}
+    .upload-zone {
+        border: 2px dashed #c5cfe8;
+        border-radius: .75rem;
+        background: #f8faff;
+        transition: border-color .2s ease, background .2s ease;
+        cursor: pointer;
+    }
+
+    .upload-zone:hover,
+    .upload-zone.drag-over {
+        border-color: #0d6efd;
+        background: rgba(13, 110, 253, .04);
+    }
+
+    .upload-zone.has-file {
+        border-color: #198754;
+        background: rgba(25, 135, 84, .04);
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-{% call page_hero(title='Nova Peça-Modelo', subtitle='Cadastre uma peça premium do escritório para servir como referência de estilo.', icon='bi bi-file-earmark-plus') %}
+{% call page_hero(title='Nova Peça-Modelo', subtitle='Cadastre uma peça premium do escritório para servir como
+referência de estilo.', icon='bi bi-file-earmark-plus') %}
 <nav aria-label="breadcrumb">
     <ol class="breadcrumb mb-0 bg-transparent small">
-        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
-        <li class="breadcrumb-item"><a href="{{ url_for('impugnacao_references.list_references') }}">Peças-Modelo</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a>
+        </li>
+        <li class="breadcrumb-item"><a href="{{ url_for('impugnacao_references.list_references') }}">Peças-Modelo</a>
+        </li>
         <li class="breadcrumb-item active" aria-current="page">Nova</li>
     </ol>
 </nav>
@@ -97,9 +102,11 @@
                                     </div>
 
                                     <div id="fileSelected" class="d-none">
-                                        <i class="bi bi-file-earmark-check-fill display-4 text-success d-block mb-3"></i>
+                                        <i
+                                            class="bi bi-file-earmark-check-fill display-4 text-success d-block mb-3"></i>
                                         <p class="fw-medium mb-1 text-success">Arquivo selecionado</p>
-                                        <span class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2"
+                                        <span
+                                            class="badge bg-success-subtle text-success border border-success-subtle px-3 py-2"
                                             id="selectedFileName" style="font-size:.85rem"></span>
                                         <p class="small text-muted mt-2 mb-0">Clique para trocar</p>
                                     </div>
@@ -138,46 +145,46 @@
 </div>
 
 <script>
-(function () {
-    var dropZone = document.getElementById('dropZone');
-    var fileInput = document.getElementById('fileInput');
-    var uploadPrompt = document.getElementById('uploadPrompt');
-    var fileSelected = document.getElementById('fileSelected');
-    var selectedFileName = document.getElementById('selectedFileName');
+    (function () {
+        var dropZone = document.getElementById('dropZone');
+        var fileInput = document.getElementById('fileInput');
+        var uploadPrompt = document.getElementById('uploadPrompt');
+        var fileSelected = document.getElementById('fileSelected');
+        var selectedFileName = document.getElementById('selectedFileName');
 
-    function showFile(file) {
-        selectedFileName.textContent = file.name;
-        uploadPrompt.classList.add('d-none');
-        fileSelected.classList.remove('d-none');
-        dropZone.classList.add('has-file');
-    }
-
-    fileInput.addEventListener('change', function () {
-        if (fileInput.files[0]) showFile(fileInput.files[0]);
-    });
-
-    dropZone.addEventListener('dragover', function (e) {
-        e.preventDefault();
-        dropZone.classList.add('drag-over');
-    });
-    dropZone.addEventListener('dragleave', function () {
-        dropZone.classList.remove('drag-over');
-    });
-    dropZone.addEventListener('drop', function (e) {
-        e.preventDefault();
-        dropZone.classList.remove('drag-over');
-        var dt = e.dataTransfer;
-        if (dt.files[0]) {
-            fileInput.files = dt.files;
-            showFile(dt.files[0]);
+        function showFile(file) {
+            selectedFileName.textContent = file.name;
+            uploadPrompt.classList.add('d-none');
+            fileSelected.classList.remove('d-none');
+            dropZone.classList.add('has-file');
         }
-    });
 
-    document.getElementById('uploadForm').addEventListener('submit', function () {
-        var btn = document.getElementById('submitBtn');
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Enviando e indexando...';
-    });
-})();
+        fileInput.addEventListener('change', function () {
+            if (fileInput.files[0]) showFile(fileInput.files[0]);
+        });
+
+        dropZone.addEventListener('dragover', function (e) {
+            e.preventDefault();
+            dropZone.classList.add('drag-over');
+        });
+        dropZone.addEventListener('dragleave', function () {
+            dropZone.classList.remove('drag-over');
+        });
+        dropZone.addEventListener('drop', function (e) {
+            e.preventDefault();
+            dropZone.classList.remove('drag-over');
+            var dt = e.dataTransfer;
+            if (dt.files[0]) {
+                fileInput.files = dt.files;
+                showFile(dt.files[0]);
+            }
+        });
+
+        document.getElementById('uploadForm').addEventListener('submit', function () {
+            var btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Enviando e indexando...';
+        });
+    })();
 </script>
 {% endblock %}
