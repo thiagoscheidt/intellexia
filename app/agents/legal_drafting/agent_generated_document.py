@@ -965,7 +965,10 @@ class AgentGeneratedDocument:
             style_blocks: list[str] = [
                 "=== REFERENCIAS JURIDICAS DE ESTILO (POR SECAO E POR TESE) ===",
                 "Use os exemplos abaixo como guia de escrita do escritório.",
-                "Nao copie fatos de outros casos. Reaproveite apenas padrao argumentativo, estrutura e estilo.",
+                "Nao copie fatos concretos de outros casos (nomes, NITs, CNPJs, datas de acidente).",
+                "EXCECAO OBRIGATORIA: blocos JURISPRUDENCIA_REGIONAL e JURISPRUDENCIA_COMPLEMENTAR "
+                "sao decisoes reais — cite-as INLINE no texto da tese correspondente, "
+                "usando o numero do processo, o tribunal e o relator exatamente como aparecem no bloco.",
             ]
 
             max_total_chars = 22000
@@ -1291,7 +1294,12 @@ class AgentGeneratedDocument:
 
         parts.append(
             "<INSTRUCAO_DE_USO>"
-            "Priorize EXEMPLO_ESTRUTURA_TESE e JURISPRUDENCIA_REGIONAL na redacao do merito desta tese."
+            "Priorize EXEMPLO_ESTRUTURA_TESE para estrutura argumentativa. "
+            "Para JURISPRUDENCIA_REGIONAL e JURISPRUDENCIA_COMPLEMENTAR: "
+            "incorpore cada decisao como citacao inline real na tese — "
+            "mencione o tribunal, o numero do processo e o relator exatamente como estao no bloco. "
+            "Formato sugerido: 'Conforme [Tribunal], [tipo] n. [numero], Rel. [Relator]: [trecho da ementa]'. "
+            "Nao apenas mencione que existe jurisprudencia — transcreva a essencia da decisao."
             "</INSTRUCAO_DE_USO>"
         )
         parts.append("</TESE>")

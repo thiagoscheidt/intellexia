@@ -128,6 +128,16 @@ _RELATOR_RE = re.compile(
     re.IGNORECASE,
 )
 
+# Detecta rodapés de citação: (GN), (grifo nosso), (...) (TRF4, AC ...) ou (TRF4, AC ..., Rel. ...)
+_JURIS_FOOTER_RE = re.compile(
+    r'\(GN\)'
+    r'|\(grifo\s+nosso\)'
+    r'|\(negrito\s+nosso\)'
+    r'|\(\.\.\.\)\s*\((?:TRF\s*\d+|STJ|STF|TST)[^)]{5,250}\)'
+    r'|\((?:TRF\s*\d+|STJ|STF|TST),\s*\w+\s+\d[\d\-\.]{5,}[^)]{5,250}\)',
+    re.IGNORECASE,
+)
+
 
 class ImpugnacaoReferenceIngestor:
     """Recebe DOCX/PDF de peça-modelo e indexa em coleção Qdrant dedicada."""
@@ -492,67 +502,106 @@ class ImpugnacaoReferenceIngestor:
     # ── Extração de jurisprudência embutida ────────────────────────────
 
     @classmethod
+    def _is_citation_para(cls, para: str) -> bool:
+        """Retorna True se o parágrafo parece conteúdo de citação jurisprudencial."""
+        para = para.strip()
+        if not para:
+            return False
+        first_line = para.split('\n')[0].strip()
+        # Linha predominantemente em CAIXA ALTA (cabeçalho de ementa)
+        alpha_chars = [c for c in first_line if c.isalpha()]
+        if alpha_chars and sum(1 for c in alpha_chars if c.isupper()) / len(alpha_chars) > 0.65 and len(first_line) > 20:
+            return True
+        # Ratio decidendi numerado
+        if re.match(r'^\d+\.', para):
+            return True
+        # Rodapé de atribuição: (...) (TRF4...) ou (TRF4, AC...)
+        if re.match(r'^\(\.\.\.', para) or re.match(r'^\((?:TRF|STJ|STF)', para, re.IGNORECASE):
+            return True
+        # Contém referência de tribunal + número de processo
+        if re.search(r'\bTRF\d?\b|\bSTJ\b|\bAC\s+\d|\bREsp\b', para[:200], re.IGNORECASE):
+            return True
+        return False
+
+    @classmethod
     def _extract_embedded_jurisprudence(cls, text: str) -> list[dict]:
         """Detecta e extrai blocos de citações jurisprudenciais embutidos no texto.
 
-        Retorna lista de dicts com: text, tribunal, case_number, relator.
-        Cada bloco começa no cabeçalho da decisão e vai até o próximo cabeçalho
-        ou até o fim de parágrafo (dupla quebra de linha).
-        Blocos muito curtos (<120 chars) são descartados.
+        Usa duas estratégias:
+        - Header-first: detecta início de citação pelo tribunal/AC no começo da linha.
+        - Footer-first: detecta (GN) / (...) (TRF...) no final e caminha de volta.
+
+        Retorna lista de dicts: text, tribunal, case_number, relator.
         """
+        found_ranges: list[tuple[int, int]] = []
+
+        def _overlaps(s: int, e: int) -> bool:
+            return any(s < fe and e > fs for fs, fe in found_ranges)
+
+        def _make_block(block_start: int, block_end: int) -> Optional[dict]:
+            if _overlaps(block_start, block_end):
+                return None
+            block_text = text[block_start:block_end].strip()
+            if len(block_text) < 120:
+                return None
+            tribunal_m = _TRIBUNAL_RE.search(block_text[:400])
+            tribunal = tribunal_m.group(1).upper().replace(' ', '') if tribunal_m else None
+            case_m = _CASE_NUMBER_RE.search(block_text[:600])
+            case_number = case_m.group(1) if case_m else None
+            relator_m = _RELATOR_RE.search(block_text)
+            relator = relator_m.group(1).strip().upper() if relator_m else None
+            found_ranges.append((block_start, block_end))
+            return {'text': block_text, 'tribunal': tribunal, 'case_number': case_number, 'relator': relator}
+
         results: list[dict] = []
-        matches = list(_JURIS_CITATION_HEADER_RE.finditer(text))
-        if not matches:
-            return results
 
-        def _paragraph_end_after(pos: int) -> int:
-            """Encontra o fim do bloco a partir de 'pos': próxima dupla quebra ou EOT."""
-            idx = text.find('\n\n', pos)
-            if idx < 0:
-                return len(text)
-            # Se houver mais parágrafos após, inclui até 2 quebras extras (ementa multi-§)
-            lookahead = text[idx + 2: idx + 600]
-            # Se o próximo parágrafo ainda parece parte da ementa (ALL-CAPS ou relatoria), avança
-            next_para = lookahead.lstrip()
-            if next_para and (
-                re.match(r'^[A-ZÁÉÍÓÚÂÊÔÃÕÇ\s\d,\.\-–:;]{20,}$', next_para[:80])
-                or re.match(r'^Rel', next_para[:10], re.IGNORECASE)
-                or re.match(r'^(?:Acórdão|Julgamento|Votação)', next_para[:20], re.IGNORECASE)
-                or re.match(r'^\(GN\)|\(grifo', next_para[:20], re.IGNORECASE)
-            ):
-                end2 = text.find('\n\n', idx + 2)
-                return end2 if end2 > 0 else len(text)
-            return idx
-
+        # ── Estratégia 1: header-first ─────────────────────────────────
         seen_starts: set[int] = set()
-        for match in matches:
-            # Recua até início da linha
+        for match in _JURIS_CITATION_HEADER_RE.finditer(text):
             line_start = text.rfind('\n', 0, match.start())
             block_start = (line_start + 1) if line_start >= 0 else 0
             if block_start in seen_starts:
                 continue
             seen_starts.add(block_start)
 
-            block_end = _paragraph_end_after(match.end())
-            block_text = text[block_start:block_end].strip()
-            if len(block_text) < 120:
-                continue
+            # Avança para incluir parágrafos contíguos que ainda parecem citação
+            pos = match.end()
+            for _ in range(6):
+                sep = text.find('\n\n', pos)
+                if sep < 0:
+                    pos = len(text)
+                    break
+                next_para = text[sep + 2: sep + 400].lstrip('\n')
+                if cls._is_citation_para(next_para):
+                    pos = sep + 2
+                else:
+                    pos = sep
+                    break
 
-            tribunal_m = _TRIBUNAL_RE.search(block_text[:200])
-            tribunal = tribunal_m.group(1).upper().replace(' ', '') if tribunal_m else None
+            block = _make_block(block_start, pos)
+            if block:
+                results.append(block)
 
-            case_m = _CASE_NUMBER_RE.search(block_text[:400])
-            case_number = case_m.group(1) if case_m else None
+        # ── Estratégia 2: footer-first (GN / (...)(TRF...) no rodapé) ──
+        for match in _JURIS_FOOTER_RE.finditer(text):
+            block_end = match.end()
+            search_from = max(0, match.start() - 3500)
+            window = text[search_from:match.start()]
 
-            relator_m = _RELATOR_RE.search(block_text[:600])
-            relator = relator_m.group(1).strip().upper() if relator_m else None
+            # Encontra separadores \n\n de trás para frente
+            seps = [m.start() for m in re.finditer(r'\n\n', window)]
+            citation_start_in_window = 0  # fallback: início da janela
 
-            results.append({
-                'text': block_text,
-                'tribunal': tribunal,
-                'case_number': case_number,
-                'relator': relator,
-            })
+            for sep in reversed(seps):
+                after_sep = window[sep + 2: sep + 400].lstrip('\n')
+                if cls._is_citation_para(after_sep):
+                    citation_start_in_window = sep + 2
+                else:
+                    break  # chegou no texto argumentativo, para
+
+            block = _make_block(search_from + citation_start_in_window, block_end)
+            if block:
+                results.append(block)
 
         return results
 

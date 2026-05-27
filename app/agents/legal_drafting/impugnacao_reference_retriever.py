@@ -183,6 +183,9 @@ class ImpugnacaoReferenceRetriever:
                         "thesis_catalog_id": payload.get("thesis_catalog_id") or "",
                         "thesis_catalog_ids": payload.get("thesis_catalog_ids") or [],
                         "quality_score": payload.get("quality_score"),
+                        "tribunal": payload.get("tribunal") or "",
+                        "case_number": payload.get("case_number") or "",
+                        "relator": payload.get("relator") or "",
                         "text": text,
                     }
                 )
