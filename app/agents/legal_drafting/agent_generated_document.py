@@ -85,10 +85,20 @@ _IMPUGNACAO_SYSTEM_PROMPT = _load_prompt("system_prompt_impugnacao_v2.md")
 _IMPUGNACAO_INTERNAL_GUARDRAILS = """
 === REFORÇO INTERNO DE EXECUÇÃO (RUNTIME) ===
 
-1) Numeração arábica e hierárquica é obrigatória na peça final.
-- Seções principais no Modo A: 1., 2., 3., 4., 5.
-- Subseções: 1.1, 1.2, 4.1, 4.2, etc.
-- No bloco de mérito, nunca use 1., 2., 3. como nível principal; use 4.1, 4.2, 4.3...
+1) Numeração arábica SEQUENCIAL é obrigatória — nunca romana (I., II., III.).
+- A numeração reflete o documento REAL: conte apenas as seções que efetivamente aparecem.
+- Estrutura típica Modo A (com PRELIMINARES, sem PEDIDO RECONHECIDO):
+    1. PRELIMINARES  →  1.1, 1.2...
+    2. DA INSUFICIÊNCIA TÉCNICA E JURÍDICA DA CONTESTAÇÃO  →  2.1, 2.2...
+    3. DO MÉRITO PROPRIAMENTE DITO  →  3.1, 3.2, 3.3...
+    4. PEDIDOS (e eventuais seções condicionais antes)
+- Se PEDIDO(S) RECONHECIDO(S) presente: acrescenta +1 a todos os números após ele.
+- Se PRELIMINARES ausente: todos os números seguintes recuam em 1.
+- Defina `merit_section_number` = número real da seção DO MÉRITO no documento.
+- O campo `argument` de cada `ImpugnacaoBenefitThesisSection` DEVE começar DIRETAMENTE
+  com o cabeçalho no formato `[merit_section_number].[i]. TITULO_EM_MAIÚSCULAS`
+  (ex.: `3.1. ACIDENTE DE TRAJETO`) — sem linha em branco nem markdown antes.
+  O sistema de renderização NÃO adiciona cabeçalho separado; o `argument` é exibido diretamente.
 
 2) Campos macro do schema não podem aparecer como bloco solto sem título.
 - `general_legal_grounds` e `jurisprudence` são campos de consolidação interna.
@@ -114,7 +124,16 @@ _IMPUGNACAO_INTERNAL_GUARDRAILS = """
 - Um mesmo benefício pode aparecer em múltiplas teses; isso é esperado e não é motivo para
   colapsar seções.
 
-5) Marcadores internos NÃO podem ir para o texto final.
+5) Subseção COMPENSAÇÃO E RESTITUIÇÃO – PROCEDIMENTOS.
+- Preencher o campo `compensation_section` SEMPRE que o processo incluir pedido de
+  restituição ou compensação tributária (presente em quase todos os casos FAP).
+- NÃO incluir o cabeçalho da subseção no texto — o sistema renderiza automaticamente
+  '[merit_section_number].[n]. COMPENSAÇÃO E RESTITUIÇÃO – PROCEDIMENTOS'.
+- NÃO colocar esse conteúdo dentro de `benefit_sections` nem em `general_legal_grounds`.
+- Conteúdo obrigatório: direito à repetição do indébito (arts. 165 e 170 CTN) +
+  procedimento de compensação (art. 89 § 4º Lei 8.212/1991) + atualização pela SELIC.
+
+6) Marcadores internos NÃO podem ir para o texto final.
 - NÃO inserir no corpo da peça: "⚠️", "nota ao revisor", "placeholder", "dados pendentes".
 - Qualquer alerta/recomendação interna deve ir em `internal_review_notes`.
 """.strip()
@@ -181,20 +200,47 @@ class GeneratedImpugnacaoContestacao(BaseModel):
             "Use os critérios da tabela da Seção 0.3 para decidir."
         ),
     )
+    merit_section_number: int = Field(
+        default=3,
+        description=(
+            "Número SEQUENCIAL real da seção 'DO MÉRITO PROPRIAMENTE DITO' no documento final. "
+            "Compute contando apenas as seções que efetivamente aparecem: "
+            "1 = PRELIMINARES (se presente); +1 = PEDIDO(S) RECONHECIDO(S) (se presente); "
+            "+1 = DA INSUFICIÊNCIA TÉCNICA (sempre no Modo A); +1 = DO MÉRITO. "
+            "Exemplos: com PRELIMINARES + sem PEDIDO RECONHECIDO → 3; "
+            "sem PRELIMINARES → 2; com PRELIMINARES + PEDIDO RECONHECIDO → 4."
+        ),
+    )
     introduction: str = Field(description="Qualificação das partes, identificação do processo e contexto da impugnação")
     preliminary_notes: str = Field(
         description=(
-            "Modo A: Seções 1 (Preliminares, se houver) + 3 (Insuficiência técnica da contestação). "
-            "Modo B: todo o conteúdo argumentativo — mérito sintético + subseção 1.1 (reconhecimento de erros em situações similares) "
-            "+ subseção 1.2 (revelia e ausência de impugnação específica). "
+            "Modo A: seções antes do mérito (PRELIMINARES se houver, numeradas a partir de 1; "
+            "DA INSUFICIÊNCIA TÉCNICA no número sequencial correto). "
+            "A última linha deve ser a frase de transição 'À luz desses parâmetros, passa-se à análise específica...'. "
+            "Modo B: todo o conteúdo argumentativo — mérito sintético + subseção 1.1 + subseção 1.2. "
             "No Modo B não há desenvolvimento por tese; toda a argumentação vai aqui."
         )
     )
     benefit_sections: list[ImpugnacaoBenefitThesisSection] = Field(
         default_factory=list,
         description=(
-            "Modo A: uma entrada por TESE na Seção 4 (Mérito), com benefícios agrupados em benefits[]. "
+            "Modo A: uma entrada por TESE na seção DO MÉRITO (número = merit_section_number), "
+            "com benefícios agrupados em benefits[]. "
+            "Cada `argument` DEVE começar com o cabeçalho '[merit_section_number].[i]. NOME_EM_MAIÚSCULAS' "
+            "(ex.: '3.1. ACIDENTE DE TRAJETO') — sem linha em branco antes. "
             "Modo B: deixar VAZIO [] — não há mérito por tese na defesa processual."
+        ),
+    )
+    compensation_section: str = Field(
+        default="",
+        description=(
+            "Conteúdo da subseção 'COMPENSAÇÃO E RESTITUIÇÃO – PROCEDIMENTOS', "
+            "renderizada como ÚLTIMA subseção de DO MÉRITO (após todas as teses). "
+            "Preencher SEMPRE que o processo incluir pedido de restituição ou compensação tributária. "
+            "NÃO incluir o cabeçalho da subseção aqui — ele é adicionado automaticamente pelo sistema. "
+            "Conteúdo esperado: direito à repetição do indébito (arts. 165 e 170 CTN), "
+            "procedimento de compensação (art. 89 § 4º Lei 8.212/1991), atualização pela SELIC. "
+            "Deixar VAZIO apenas se não houver pedido de restituição/compensação no processo."
         ),
     )
     general_legal_grounds: str = Field(description="Fundamentos legais e doutrinários gerais aplicáveis")
@@ -229,34 +275,17 @@ class GeneratedImpugnacaoContestacao(BaseModel):
         parts.append("\n---\n")
         parts.append(self.preliminary_notes + "\n")
 
-        if self.benefit_sections:
-            parts.append("\n## DO MÉRITO\n")
-            for i, sec in enumerate(self.benefit_sections, 1):
-                parts.append(f"\n### {i}. {sec.thesis_name}\n")
-
-                if sec.benefits:
-                    parts.append("\nBenefícios desta tese:\n")
-                    for b in sec.benefits:
-                        if isinstance(b, dict):
-                            get_val = lambda key: b.get(key, '-')
-                        else:
-                            get_val = lambda key: getattr(b, key, '-')
-                        parts.append(
-                            f"- NB {get_val('benefit_number') or '-'} | "
-                            f"NIT {get_val('nit_number') or '-'} | "
-                            f"Segurado: {get_val('insured_name') or '-'} | "
-                            f"Tipo: {get_val('benefit_type') or '-'} | "
-                            f"Vigência FAP: {get_val('fap_vigencia_year') or '-'} | "
-                            f"Tipo de Pedido: {get_val('request_type') or '-'} | "
-                            f"Decisão da União: {get_val('contestation_status_label') or '-'}\n"
-                        )
-                elif sec.benefit_number or sec.insured_name:
-                    parts.append(
-                        f"\nBenefício: NB {sec.benefit_number or '-'} — "
-                        f"{sec.insured_name or '-'}\n"
-                    )
-
-                parts.append(sec.argument + "\n")
+        if self.benefit_sections or self.compensation_section:
+            merit_num = getattr(self, 'merit_section_number', 3)
+            parts.append(f"\n## {merit_num}. DO MÉRITO PROPRIAMENTE DITO\n")
+            for sec in self.benefit_sections:
+                parts.append("\n" + sec.argument + "\n")
+            if self.compensation_section:
+                comp_idx = len(self.benefit_sections) + 1
+                parts.append(
+                    f"\n{merit_num}.{comp_idx}. COMPENSAÇÃO E RESTITUIÇÃO – PROCEDIMENTOS\n\n"
+                )
+                parts.append(self.compensation_section + "\n")
 
         parts.append("\n---\n")
         parts.append(self.general_legal_grounds + "\n")
