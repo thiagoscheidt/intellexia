@@ -793,11 +793,33 @@ class AgentGeneratedDocument:
                     trf_region = region
                     break
 
+            section_plans = [
+                (
+                    "INTRODUCAO",
+                    [('introduction', 3), ('general', 1), ('preliminary', 1)],
+                    "Abertura da peça, qualificação das partes e síntese da controvérsia.",
+                ),
+                (
+                    "PRELIMINARES",
+                    [('preliminary', 3), ('jurisprudence', 2), ('general', 1)],
+                    "Preliminares, prejudiciais e vícios processuais da contestação.",
+                ),
+                (
+                    "MERITO",
+                    [('merit_by_thesis', 4), ('jurisprudence', 2), ('general', 1)],
+                    "Estrutura argumentativa de mérito e refutação técnica por tese.",
+                ),
+                (
+                    "PEDIDOS",
+                    [('requests', 3), ('general', 1), ('jurisprudence', 1)],
+                    "Fechamento dos pedidos, procedência, provas, honorários e intimações.",
+                ),
+            ]
+
             focused_kind_plan = [
-                ('merit_by_thesis', 3),
+                ('merit_by_thesis', 5),
                 ('jurisprudence', 2),
                 ('requests', 1),
-                ('preliminary', 1),
             ]
 
             grouped: dict[str, list[dict]] = {}
@@ -811,22 +833,60 @@ class AgentGeneratedDocument:
                 thesis_label = (str(thesis_name).strip() if thesis_name else 'Sem tese específica')
                 grouped.setdefault(thesis_label, []).append(sel)
 
-            if not grouped:
-                return ""
-
             retriever = ImpugnacaoReferenceRetriever()
 
-            thesis_blocks: list[str] = [
-                "=== REFERENCIAS JURIDICAS POR TESE DO CASO ===",
-                "Cada bloco abaixo corresponde a uma tese selecionada no processo atual.",
-                "Priorize o uso de jurisprudencia regional quando houver.",
+            style_blocks: list[str] = [
+                "=== REFERENCIAS JURIDICAS DE ESTILO (POR SECAO E POR TESE) ===",
+                "Use os exemplos abaixo como guia de escrita do escritório.",
+                "Nao copie fatos de outros casos. Reaproveite apenas padrao argumentativo, estrutura e estilo.",
             ]
 
-            max_total_chars = 20000
+            max_total_chars = 22000
+            max_section_chars = 2200
             max_thesis_chars = 4500
 
+            process_summary = self._clip_text(self._build_process_context(process), max_chars=700)
+            selections_summary = self._clip_text(
+                self._build_selections_context(selections, include_contestation=True),
+                max_chars=1600,
+            )
+
+            # 1) Busca por seção da peça (introdução, preliminares, mérito e pedidos).
+            for section_label, kind_plan, section_focus in section_plans:
+                section_query = (
+                    f"Seção da peça: {section_label} | "
+                    f"Objetivo: {section_focus} | "
+                    f"Contexto do processo: {process_summary} | "
+                    f"Seleções do caso: {selections_summary}"
+                )
+                section_chunks = retriever.fetch_style_references(
+                    law_firm_id=law_firm_id,
+                    query_text=section_query,
+                    trf_region=trf_region,
+                    kind_plan=kind_plan,
+                    max_chunks=5,
+                    max_chars=max_section_chars,
+                )
+                section_block = self._build_section_style_reference_block(
+                    section_label=section_label,
+                    chunks=section_chunks,
+                    max_chars=max_section_chars,
+                )
+                if not section_block:
+                    continue
+
+                projected_size = len("\n".join(style_blocks)) + len(section_block) + 2
+                if projected_size > max_total_chars and len(style_blocks) > 3:
+                    break
+                style_blocks.append(section_block)
+
+            # 2) Busca equivalente por tese (núcleo do mérito).
             for thesis_label, thesis_rows in grouped.items():
-                query_parts = [f"Tese: {thesis_label}"]
+                query_parts = [
+                    f"Tese principal do caso: {thesis_label}",
+                    "Buscar exemplos EQUIVALENTES de redação e fundamentação para essa tese.",
+                    "Priorizar padrão de mérito por tese do escritório.",
+                ]
 
                 for sel in thesis_rows[:6]:
                     benefit = sel.get('benefit')
@@ -877,16 +937,16 @@ class AgentGeneratedDocument:
                     continue
 
                 # Evita estourar contexto global do bloco de referências.
-                projected_size = len("\n".join(thesis_blocks)) + len(thesis_block) + 2
-                if projected_size > max_total_chars and len(thesis_blocks) > 3:
+                projected_size = len("\n".join(style_blocks)) + len(thesis_block) + 2
+                if projected_size > max_total_chars and len(style_blocks) > 3:
                     break
 
-                thesis_blocks.append(thesis_block)
+                style_blocks.append(thesis_block)
 
-            if len(thesis_blocks) <= 3:
+            if len(style_blocks) <= 3:
                 return ""
 
-            block = "\n".join(thesis_blocks)
+            block = "\n".join(style_blocks)
             if len(block) > max_total_chars:
                 block = self._prune_rag_block(block, max_chars=max_total_chars)
 
@@ -894,6 +954,62 @@ class AgentGeneratedDocument:
         except Exception as error:
             print(f"[AgentGeneratedDocument] Falha ao carregar referências de estilo: {error}")
             return ""
+
+    def _build_section_style_reference_block(
+        self,
+        *,
+        section_label: str,
+        chunks: list[dict],
+        max_chars: int,
+    ) -> str:
+        """Monta bloco de referências de estilo para uma seção específica da peça."""
+        if not chunks:
+            return ""
+
+        parts = [f"\n<SECAO nome=\"{section_label}\">"]
+        total_chars = len(parts[0])
+        seen = set()
+        item_count = 0
+
+        for chunk in chunks:
+            text = self._compact_reference_text(chunk.get("text") or "", max_chars=700)
+            if not text:
+                continue
+
+            normalized_key = re.sub(r"\s+", " ", text).strip().lower()
+            if normalized_key in seen:
+                continue
+            seen.add(normalized_key)
+
+            item_count += 1
+            meta = []
+            if chunk.get("section_kind"):
+                meta.append(f"secao: {chunk['section_kind']}")
+            if chunk.get("trf_region"):
+                meta.append(f"regiao: {chunk['trf_region']}")
+            if chunk.get("quality_score") is not None:
+                meta.append(f"qualidade: {chunk['quality_score']}")
+            meta_str = " | ".join(meta) if meta else "sem metadados"
+
+            heading = (chunk.get("heading") or "").strip()
+            entry_lines = [f"[item {item_count} | {meta_str}]"]
+            if heading:
+                entry_lines.append(f"[heading original: {heading}]")
+            entry_lines.append(text)
+            entry_lines.append("")
+            entry_text = "\n".join(entry_lines)
+
+            if total_chars + len(entry_text) > max_chars and item_count > 1:
+                break
+
+            parts.append(entry_text)
+            total_chars += len(entry_text)
+
+        if item_count == 0:
+            return ""
+
+        parts.append("</SECAO>")
+        return "\n".join(parts)
 
     def _build_budgeted_thesis_reference_block(
         self,
