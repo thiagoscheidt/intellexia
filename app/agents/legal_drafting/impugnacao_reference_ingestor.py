@@ -29,6 +29,9 @@ from app.services.document_processor_service import DocumentProcessorService
 from app.agents.legal_drafting.impugnacao_reference_thesis_classifier_agent import (
     ImpugnacaoReferenceThesisClassifierAgent,
 )
+from app.agents.legal_drafting.impugnacao_jurisprudencia_extractor_agent import (
+    ImpugnacaoJurisprudenciaExtractorAgent,
+)
 
 
 load_dotenv()
@@ -99,44 +102,6 @@ _CLOSING_BODY_RE = re.compile(
     r"nestes\s+termos|pede\s+deferimento|termos\s+em\s+que", re.IGNORECASE
 )
 
-# ── Padrões para extração de blocos de jurisprudência embutidos ────────
-
-# Detecta cabeçalhos típicos de citações jurisprudenciais
-_JURIS_CITATION_HEADER_RE = re.compile(
-    r'(?:'
-    # "TRF4, AC 5015482-..." / "TRF 4 – Ap. nº ..."
-    r'TRF\s*\d+\s*[,\-–]?\s*[A-Z]{1,5}\s+(?:n[ºo°]?\s*)?\d[\d\-\.]+'
-    r'|'
-    # "STJ/STF/TST/TRT – REsp nº ..." / "STJ, AgRg..."
-    r'(?:STJ|STF|TST|TRT\s*\d*)\s*[,\-–]?\s*[A-Z]{1,5}\s+(?:n[ºo°]?\s*)?\d[\d\-\.]+'
-    r'|'
-    # "EMENTA:" no início de linha
-    r'^EMENTA:'
-    r'|'
-    # "AC nº / REsp nº / AMS nº" no início de linha
-    r'^(?:AC|APELAÇÃO\s+CÍVEL|AGRAVO\s+DE\s+INSTRUMENTO|RESp|REsp|RESP|AMS)\s+(?:n[ºo°]?\s*)?\d[\d\-\.]+'
-    r')',
-    re.IGNORECASE | re.MULTILINE,
-)
-
-_TRIBUNAL_RE = re.compile(r'\b(TRF\s*\d+|STJ|STF|TST|TRT\s*\d*)\b', re.IGNORECASE)
-_CASE_NUMBER_RE = re.compile(
-    r'\b(\d{7}-\d{2}\.\d{4}\.\d{1,2}\.\d{2}\.\d{4}|\d{1,10}[-/]\d{4}[-/]\d{1,2}(?:[-/]\d+)+)\b'
-)
-_RELATOR_RE = re.compile(
-    r'Rel(?:\.|ator(?:a)?)?[:\s]+(?:Des(?:embargador(?:a)?)?\.?\s+)?([A-ZÁÉÍÓÚÂÊÔÃÕÇ][A-ZÁÉÍÓÚÂÊÔÃÕÇa-záéíóúâêôãõç\s\.]{3,60}?)(?:\s*[,\n\r])',
-    re.IGNORECASE,
-)
-
-# Detecta rodapés de citação: (GN), (grifo nosso), (...) (TRF4, AC ...) ou (TRF4, AC ..., Rel. ...)
-_JURIS_FOOTER_RE = re.compile(
-    r'\(GN\)'
-    r'|\(grifo\s+nosso\)'
-    r'|\(negrito\s+nosso\)'
-    r'|\(\.\.\.\)\s*\((?:TRF\s*\d+|STJ|STF|TST)[^)]{5,250}\)'
-    r'|\((?:TRF\s*\d+|STJ|STF|TST),\s*\w+\s+\d[\d\-\.]{5,}[^)]{5,250}\)',
-    re.IGNORECASE,
-)
 
 
 class ImpugnacaoReferenceIngestor:
@@ -153,6 +118,7 @@ class ImpugnacaoReferenceIngestor:
         self.openai = OpenAI()
         self.last_document_thesis_catalog_ids: list[str] = []
         self.thesis_classifier_agent = ImpugnacaoReferenceThesisClassifierAgent()
+        self.jurisprudencia_extractor = ImpugnacaoJurisprudenciaExtractorAgent()
         self._ensure_collection()
 
     @staticmethod
@@ -499,111 +465,6 @@ class ImpugnacaoReferenceIngestor:
             print(f"[ImpugnacaoReferenceIngestor] Falha na classificação IA de teses: {error}")
             return [], {}
 
-    # ── Extração de jurisprudência embutida ────────────────────────────
-
-    @classmethod
-    def _is_citation_para(cls, para: str) -> bool:
-        """Retorna True se o parágrafo parece conteúdo de citação jurisprudencial."""
-        para = para.strip()
-        if not para:
-            return False
-        first_line = para.split('\n')[0].strip()
-        # Linha predominantemente em CAIXA ALTA (cabeçalho de ementa)
-        alpha_chars = [c for c in first_line if c.isalpha()]
-        if alpha_chars and sum(1 for c in alpha_chars if c.isupper()) / len(alpha_chars) > 0.65 and len(first_line) > 20:
-            return True
-        # Ratio decidendi numerado
-        if re.match(r'^\d+\.', para):
-            return True
-        # Rodapé de atribuição: (...) (TRF4...) ou (TRF4, AC...)
-        if re.match(r'^\(\.\.\.', para) or re.match(r'^\((?:TRF|STJ|STF)', para, re.IGNORECASE):
-            return True
-        # Contém referência de tribunal + número de processo
-        if re.search(r'\bTRF\d?\b|\bSTJ\b|\bAC\s+\d|\bREsp\b', para[:200], re.IGNORECASE):
-            return True
-        return False
-
-    @classmethod
-    def _extract_embedded_jurisprudence(cls, text: str) -> list[dict]:
-        """Detecta e extrai blocos de citações jurisprudenciais embutidos no texto.
-
-        Usa duas estratégias:
-        - Header-first: detecta início de citação pelo tribunal/AC no começo da linha.
-        - Footer-first: detecta (GN) / (...) (TRF...) no final e caminha de volta.
-
-        Retorna lista de dicts: text, tribunal, case_number, relator.
-        """
-        found_ranges: list[tuple[int, int]] = []
-
-        def _overlaps(s: int, e: int) -> bool:
-            return any(s < fe and e > fs for fs, fe in found_ranges)
-
-        def _make_block(block_start: int, block_end: int) -> Optional[dict]:
-            if _overlaps(block_start, block_end):
-                return None
-            block_text = text[block_start:block_end].strip()
-            if len(block_text) < 120:
-                return None
-            tribunal_m = _TRIBUNAL_RE.search(block_text[:400])
-            tribunal = tribunal_m.group(1).upper().replace(' ', '') if tribunal_m else None
-            case_m = _CASE_NUMBER_RE.search(block_text[:600])
-            case_number = case_m.group(1) if case_m else None
-            relator_m = _RELATOR_RE.search(block_text)
-            relator = relator_m.group(1).strip().upper() if relator_m else None
-            found_ranges.append((block_start, block_end))
-            return {'text': block_text, 'tribunal': tribunal, 'case_number': case_number, 'relator': relator}
-
-        results: list[dict] = []
-
-        # ── Estratégia 1: header-first ─────────────────────────────────
-        seen_starts: set[int] = set()
-        for match in _JURIS_CITATION_HEADER_RE.finditer(text):
-            line_start = text.rfind('\n', 0, match.start())
-            block_start = (line_start + 1) if line_start >= 0 else 0
-            if block_start in seen_starts:
-                continue
-            seen_starts.add(block_start)
-
-            # Avança para incluir parágrafos contíguos que ainda parecem citação
-            pos = match.end()
-            for _ in range(6):
-                sep = text.find('\n\n', pos)
-                if sep < 0:
-                    pos = len(text)
-                    break
-                next_para = text[sep + 2: sep + 400].lstrip('\n')
-                if cls._is_citation_para(next_para):
-                    pos = sep + 2
-                else:
-                    pos = sep
-                    break
-
-            block = _make_block(block_start, pos)
-            if block:
-                results.append(block)
-
-        # ── Estratégia 2: footer-first (GN / (...)(TRF...) no rodapé) ──
-        for match in _JURIS_FOOTER_RE.finditer(text):
-            block_end = match.end()
-            search_from = max(0, match.start() - 3500)
-            window = text[search_from:match.start()]
-
-            # Encontra separadores \n\n de trás para frente
-            seps = [m.start() for m in re.finditer(r'\n\n', window)]
-            citation_start_in_window = 0  # fallback: início da janela
-
-            for sep in reversed(seps):
-                after_sep = window[sep + 2: sep + 400].lstrip('\n')
-                if cls._is_citation_para(after_sep):
-                    citation_start_in_window = sep + 2
-                else:
-                    break  # chegou no texto argumentativo, para
-
-            block = _make_block(search_from + citation_start_in_window, block_end)
-            if block:
-                results.append(block)
-
-        return results
 
     # ── Ingestão principal ─────────────────────────────────────────────
 
@@ -690,17 +551,19 @@ class ImpugnacaoReferenceIngestor:
             )
         self.last_document_thesis_catalog_ids = document_thesis_catalog_ids
 
+        # ── Extração de jurisprudências via agente (uma chamada por documento) ──
+        juris_items = self.jurisprudencia_extractor.extract(str(file_path))
         print(
             f"[ImpugnacaoReferenceIngestor] {len(segments)} chunks segmentados "
-            f"para reference_id={reference_id} (modo={segmentation_mode})"
+            f"para reference_id={reference_id} (modo={segmentation_mode}) | "
+            f"{len(juris_items)} jurisprudência(s) extraída(s)"
         )
 
         chunk_records: list[dict] = []
         points: list[rest.PointStruct] = []
         ingested_at = datetime.utcnow().isoformat() + "Z"
-        # Extracted jurisprudence blocks get order numbers starting after all main segments.
-        extracted_juris_order = len(segments) * 2
 
+        # ── Índice dos chunks principais ───────────────────────────────
         for order, seg in enumerate(segments):
             chunk_text = seg["text"]
             if not chunk_text or len(chunk_text) < 40:
@@ -761,57 +624,59 @@ class ImpugnacaoReferenceIngestor:
                 "full_text": chunk_text,
             })
 
-            # Extract embedded jurisprudence citations from mérito/general chunks.
-            # These produce *additional* jurisprudence chunks alongside the original.
-            if seg.get("section_kind") in ("merit_by_thesis", "general", "preliminary"):
-                juris_blocks = self._extract_embedded_jurisprudence(chunk_text)
-                for jblock in juris_blocks:
-                    jtext = jblock["text"]
-                    jpoint_id = str(uuid.uuid4())
-                    jvector = self._embed(jtext)
-                    jpayload = {
-                        "text": jtext,
-                        "heading": jblock.get("case_number") or "jurisprudência",
-                        "section_kind": "jurisprudence",
-                        "page": seg.get("page"),
-                        "section": seg.get("section"),
-                        "reference_id": int(reference_id),
-                        "law_firm_id": int(law_firm_id),
-                        "reference_title": title,
-                        "trf_region": (trf_region or "").upper() or None,
-                        "generation_mode": (generation_mode or "").upper() or None,
-                        "quality_score": float(quality_score) if quality_score is not None else None,
-                        "thesis_catalog_ids": chunk_thesis_catalog_ids,
-                        "thesis_catalog_id": primary_thesis_catalog_id,
-                        "document_thesis_catalog_ids": document_thesis_catalog_ids,
-                        "tribunal": jblock.get("tribunal"),
-                        "case_number": jblock.get("case_number"),
-                        "relator": jblock.get("relator"),
-                        "is_extracted_juris": True,
-                        "parent_order_in_doc": order,
-                        "status": "active",
-                        "order_in_doc": extracted_juris_order,
-                        "ingested_at": ingested_at,
-                    }
-                    points.append(rest.PointStruct(id=jpoint_id, vector=jvector, payload=jpayload))
-                    chunk_records.append({
-                        "qdrant_point_id": jpoint_id,
-                        "section_kind": "jurisprudence",
-                        "thesis_catalog_id": primary_thesis_catalog_id,
-                        "thesis_catalog_ids": chunk_thesis_catalog_ids,
-                        "document_thesis_catalog_ids": document_thesis_catalog_ids,
-                        "benefit_type": None,
-                        "chunk_chars": len(jtext),
-                        "order_in_doc": extracted_juris_order,
-                        "preview_text": jtext[:280],
-                        "full_text": jtext,
-                    })
-                    extracted_juris_order += 1
-                if juris_blocks:
-                    print(
-                        f"[ImpugnacaoReferenceIngestor] {len(juris_blocks)} bloco(s) de "
-                        f"jurisprudência extraído(s) do chunk #{order} (section_kind={seg.get('section_kind')})"
-                    )
+        # ── Chunks de jurisprudência extraídos pelo agente ─────────────
+        # Numeração começa após todos os chunks principais.
+        juris_order_base = len(segments) * 2
+        doc_primary_thesis = document_thesis_catalog_ids[0] if document_thesis_catalog_ids else None
+
+        for j_idx, jitem in enumerate(juris_items):
+            jtext = (jitem.texto_integral or "").strip()
+            if not jtext:
+                continue
+
+            jpoint_id = str(uuid.uuid4())
+            jvector = self._embed(jtext)
+
+            jpayload = {
+                "text": jtext,
+                "heading": jitem.processo or jitem.tribunal or "jurisprudência",
+                "section_kind": "jurisprudence",
+                "reference_id": int(reference_id),
+                "law_firm_id": int(law_firm_id),
+                "reference_title": title,
+                "trf_region": (trf_region or "").upper() or None,
+                "generation_mode": (generation_mode or "").upper() or None,
+                "quality_score": float(quality_score) if quality_score is not None else None,
+                "thesis_catalog_ids": document_thesis_catalog_ids,
+                "thesis_catalog_id": doc_primary_thesis,
+                "document_thesis_catalog_ids": document_thesis_catalog_ids,
+                "tribunal": jitem.tribunal,
+                "case_number": jitem.processo,
+                "relator": jitem.relator,
+                "orgao_julgador": jitem.orgao_julgador,
+                "data_julgamento": jitem.data_julgamento,
+                "tipo_juris": jitem.tipo,
+                "fundamento_principal": jitem.fundamento_principal,
+                "palavras_chave": jitem.palavras_chave,
+                "is_extracted_juris": True,
+                "status": "active",
+                "order_in_doc": juris_order_base + j_idx,
+                "ingested_at": ingested_at,
+            }
+
+            points.append(rest.PointStruct(id=jpoint_id, vector=jvector, payload=jpayload))
+            chunk_records.append({
+                "qdrant_point_id": jpoint_id,
+                "section_kind": "jurisprudence",
+                "thesis_catalog_id": doc_primary_thesis,
+                "thesis_catalog_ids": document_thesis_catalog_ids,
+                "document_thesis_catalog_ids": document_thesis_catalog_ids,
+                "benefit_type": None,
+                "chunk_chars": len(jtext),
+                "order_in_doc": juris_order_base + j_idx,
+                "preview_text": jtext[:280],
+                "full_text": jtext,
+            })
 
         if points:
             self.qdrant.upsert(collection_name=self.collection, points=points, wait=True)

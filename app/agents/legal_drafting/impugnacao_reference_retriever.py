@@ -186,6 +186,10 @@ class ImpugnacaoReferenceRetriever:
                         "tribunal": payload.get("tribunal") or "",
                         "case_number": payload.get("case_number") or "",
                         "relator": payload.get("relator") or "",
+                        "orgao_julgador": payload.get("orgao_julgador") or "",
+                        "data_julgamento": payload.get("data_julgamento") or "",
+                        "tipo_juris": payload.get("tipo_juris") or "",
+                        "fundamento_principal": payload.get("fundamento_principal") or "",
                         "text": text,
                     }
                 )

@@ -1236,6 +1236,12 @@ class AgentGeneratedDocument:
                     meta.append(f"processo: {chunk['case_number']}")
                 if chunk.get("relator"):
                     meta.append(f"relator: {chunk['relator']}")
+                if chunk.get("orgao_julgador"):
+                    meta.append(f"orgao: {chunk['orgao_julgador']}")
+                if chunk.get("data_julgamento"):
+                    meta.append(f"julgado_em: {chunk['data_julgamento']}")
+                if chunk.get("fundamento_principal"):
+                    meta.append(f"fundamento: {chunk['fundamento_principal']}")
                 meta_str = " | ".join(meta) if meta else "sem metadados"
 
                 entry_lines = [f"[item {item_count + 1} | {meta_str}]"]
