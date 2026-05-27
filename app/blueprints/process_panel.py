@@ -180,6 +180,61 @@ def _resolve_latest_contestation_pdf_path(process):
     return resolved_path
 
 
+def _resolve_latest_contestation_summary_payload(process, law_firm_id):
+    """Retorna payload estruturado do resumo da contestação mais recente."""
+    contestation_doc = JudicialDocument.query.filter_by(
+        process_id=process.id,
+        type='contestacao',
+    ).order_by(JudicialDocument.created_at.desc(), JudicialDocument.id.desc()).first()
+
+    if not contestation_doc:
+        raise ValueError(
+            'Não foi encontrado documento de contestação no processo. '
+            'Faça o upload da contestação para gerar o resumo e então criar a impugnação.'
+        )
+
+    summary = JudicialDocumentSummary.query.filter_by(
+        judicial_document_id=contestation_doc.id,
+        law_firm_id=law_firm_id,
+    ).first()
+
+    if not summary:
+        raise ValueError(
+            'Resumo da contestação não encontrado. '
+            'Gere o resumo da contestação antes de criar a impugnação.'
+        )
+
+    payload = summary.summary_payload if isinstance(summary.summary_payload, dict) else {}
+    summary_text = str(summary.summary_text or '').strip()
+    summary_short = str(payload.get('summary_short') or '').strip()
+    summary_long = str(payload.get('summary_long') or payload.get('summary') or '').strip()
+    requests = [str(item).strip() for item in (payload.get('requests') or []) if str(item).strip()]
+    key_points = [str(item).strip() for item in (payload.get('key_points') or []) if str(item).strip()]
+    union_arguments_by_thesis = payload.get('union_arguments_by_thesis')
+    if not isinstance(union_arguments_by_thesis, list):
+        union_arguments_by_thesis = []
+    notes = str(payload.get('notes') or '').strip()
+
+    has_minimum_context = bool(summary_text or summary_short or summary_long or requests or key_points)
+    if not has_minimum_context:
+        raise ValueError(
+            'Resumo da contestação ainda está vazio. '
+            'Finalize o processamento da contestação e tente novamente.'
+        )
+
+    return {
+        'summary_text': summary_text,
+        'summary_short': summary_short,
+        'summary_long': summary_long,
+        'requests': requests,
+        'key_points': key_points,
+        'union_arguments_by_thesis': union_arguments_by_thesis,
+        'notes': notes,
+        'summary_status': summary.status,
+        'judicial_document_id': contestation_doc.id,
+    }
+
+
 def _normalize_slug(value):
     """Normaliza texto para chave em snake_case."""
     value = (value or '').strip().lower()
@@ -2800,8 +2855,12 @@ def generated_document_create(process_id):
 
     try:
         contestation_file_path = None
+        contestation_summary_payload = None
         if document_type == 'impugnacao_contestacao':
-            contestation_file_path = _resolve_latest_contestation_pdf_path(process)
+            contestation_summary_payload = _resolve_latest_contestation_summary_payload(
+                process,
+                law_firm_id,
+            )
 
         agent = AgentGeneratedDocument(model_name=model_name)
         result_dict, full_text = agent.dispatch(
@@ -2810,6 +2869,7 @@ def generated_document_create(process_id):
             agent_selections,
             instructions,
             contestation_file_path=contestation_file_path,
+            contestation_summary_payload=contestation_summary_payload,
             law_firm_id=law_firm_id,
         )
 
@@ -2972,8 +3032,12 @@ def generated_document_regenerate(process_id, doc_id):
             })
 
         contestation_file_path = None
+        contestation_summary_payload = None
         if generated_doc.document_type == 'impugnacao_contestacao':
-            contestation_file_path = _resolve_latest_contestation_pdf_path(process)
+            contestation_summary_payload = _resolve_latest_contestation_summary_payload(
+                process,
+                law_firm_id,
+            )
 
         agent = AgentGeneratedDocument(model_name=model_name)
         result_dict, full_text = agent.dispatch(
@@ -2982,6 +3046,7 @@ def generated_document_regenerate(process_id, doc_id):
             agent_selections,
             instructions,
             contestation_file_path=contestation_file_path,
+            contestation_summary_payload=contestation_summary_payload,
             law_firm_id=law_firm_id,
         )
 

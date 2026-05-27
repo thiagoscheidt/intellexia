@@ -712,7 +712,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                       </a>
                     </li>
                     <li class="nav-item" role="presentation">
-                      <a class="nav-link" id="generated-docs-tab" data-bs-toggle="tab" href="#generated-docs" role="tab">
+                      <a class="nav-link" id="generated-docs-tab" data-bs-toggle="tab" href="#generated-docs"
+                        role="tab">
                         <i class="bi bi-stars me-2 text-primary"></i>Documentos Gerados
                         {% if stats.generated_documents_count %}
                         <span class="badge bg-primary ms-1">{{ stats.generated_documents_count }}</span>
@@ -858,7 +859,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                     <!-- Tab: Anexos -->
                     <div class="tab-pane fade" id="attachments" role="tabpanel">
                       <div class="d-flex justify-content-end mb-3">
-                        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#newAttachmentModal">
+                        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal"
+                          data-bs-target="#newAttachmentModal">
                           <i class="bi bi-plus-circle me-2"></i>Adicionar Anexo
                         </button>
                       </div>
@@ -894,7 +896,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                 {% if attachment.benefits %}
                                 <div class="d-flex flex-wrap gap-1">
                                   {% for benefit in attachment.benefits %}
-                                  <span class="badge bg-light text-dark border">NB {{ benefit.benefit_number or '-' }}</span>
+                                  <span class="badge bg-light text-dark border">NB {{ benefit.benefit_number or '-'
+                                    }}</span>
                                   {% endfor %}
                                 </div>
                                 {% else %}
@@ -904,13 +907,16 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                               <td>
                                 {% if attachment.file_size %}
                                 <small class="text-muted">
-                                  {% if attachment.file_size >= 1048576 %}{{ (attachment.file_size / 1048576)|round(1) }} MB
+                                  {% if attachment.file_size >= 1048576 %}{{ (attachment.file_size / 1048576)|round(1)
+                                  }} MB
                                   {% else %}{{ (attachment.file_size / 1024)|round(1) }} KB{% endif %}
                                 </small>
                                 {% else %}<span class="text-muted">—</span>{% endif %}
                               </td>
-                              <td><span class="small">{{ attachment.uploaded_by_user.name if attachment.uploaded_by_user else 'Usuário' }}</span></td>
-                              <td><small class="text-muted">{{ attachment.created_at.strftime('%d/%m/%Y às %H:%M') if attachment.created_at else '—' }}</small></td>
+                              <td><span class="small">{{ attachment.uploaded_by_user.name if attachment.uploaded_by_user
+                                  else 'Usuário' }}</span></td>
+                              <td><small class="text-muted">{{ attachment.created_at.strftime('%d/%m/%Y às %H:%M') if
+                                  attachment.created_at else '—' }}</small></td>
                               <td class="text-end">
                                 <div class="d-flex gap-1 justify-content-end align-items-center">
                                   <a href="{{ url_for('process_panel.download_process_attachment', process_id=process.id, attachment_id=attachment.id) }}"
@@ -938,7 +944,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                       <div class="text-center py-5">
                         <i class="bi bi-paperclip text-muted" style="font-size: 2.5rem;"></i>
                         <p class="text-muted mt-3 mb-1 fw-medium">Nenhum arquivo anexado</p>
-                        <p class="text-muted small mb-0">Clique em <strong>Adicionar Anexo</strong> para enviar arquivos de apoio ao processo.</p>
+                        <p class="text-muted small mb-0">Clique em <strong>Adicionar Anexo</strong> para enviar arquivos
+                          de apoio ao processo.</p>
                       </div>
                       {% endif %}
                     </div>
@@ -1135,7 +1142,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                       <div class="d-flex justify-content-between align-items-center mb-3">
                         <div class="text-muted small">Documentos criados pela IA para este processo.</div>
                         <a href="{{ url_for('process_panel.generated_document_new', process_id=process.id) }}"
-                           class="btn btn-primary btn-sm">
+                          class="btn btn-primary btn-sm">
                           <i class="bi bi-stars me-1"></i> Gerar Documento
                         </a>
                       </div>
@@ -1159,7 +1166,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                             <tr>
                               <td>
                                 <a href="{{ url_for('process_panel.generated_document_detail', process_id=process.id, doc_id=gdoc.id) }}"
-                                   class="fw-semibold text-body text-decoration-none">
+                                  class="fw-semibold text-body text-decoration-none">
                                   {{ gdoc.title }}
                                 </a>
                               </td>
@@ -1171,27 +1178,29 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                               <td class="text-muted small">{{ gdoc.versions | list | length }}</td>
                               <td>
                                 {% if not cv %}
-                                  <span class="badge bg-secondary-subtle text-secondary-emphasis">Aguardando</span>
+                                <span class="badge bg-secondary-subtle text-secondary-emphasis">Aguardando</span>
                                 {% elif cv.generation_status == 'processing' %}
-                                  <span class="badge bg-warning-subtle text-warning-emphasis">
-                                    <span class="spinner-border spinner-border-sm me-1" style="width:.6rem;height:.6rem;"></span>
-                                    Processando
-                                  </span>
+                                <span class="badge bg-warning-subtle text-warning-emphasis">
+                                  <span class="spinner-border spinner-border-sm me-1"
+                                    style="width:.6rem;height:.6rem;"></span>
+                                  Processando
+                                </span>
                                 {% elif cv.generation_status == 'failed' %}
-                                  <span class="badge bg-danger-subtle text-danger-emphasis">Falhou</span>
+                                <span class="badge bg-danger-subtle text-danger-emphasis">Falhou</span>
                                 {% else %}
-                                  <span class="badge bg-success-subtle text-success-emphasis">Concluído</span>
+                                <span class="badge bg-success-subtle text-success-emphasis">Concluído</span>
                                 {% endif %}
                               </td>
-                              <td class="text-muted small">{{ gdoc.created_at.strftime('%d/%m/%Y às %H:%M') if gdoc.created_at else '—' }}</td>
+                              <td class="text-muted small">{{ gdoc.created_at.strftime('%d/%m/%Y às %H:%M') if
+                                gdoc.created_at else '—' }}</td>
                               <td class="text-end">
                                 <a href="{{ url_for('process_panel.generated_document_detail', process_id=process.id, doc_id=gdoc.id) }}"
-                                   class="btn btn-sm bg-primary-subtle text-primary-emphasis border-0">
+                                  class="btn btn-sm bg-primary-subtle text-primary-emphasis border-0">
                                   <i class="bi bi-eye"></i>
                                 </a>
                                 {% if cv and cv.generation_status == 'completed' %}
                                 <a href="{{ url_for('process_panel.generated_document_download', process_id=process.id, doc_id=gdoc.id) }}"
-                                   class="btn btn-sm bg-success-subtle text-success-emphasis border-0">
+                                  class="btn btn-sm bg-success-subtle text-success-emphasis border-0">
                                   <i class="bi bi-download"></i>
                                 </a>
                                 {% endif %}
@@ -1205,9 +1214,10 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                       <div class="text-center py-5">
                         <i class="bi bi-stars text-muted" style="font-size:2.5rem;"></i>
                         <p class="text-muted mt-3 mb-1 fw-semibold">Nenhum documento gerado ainda.</p>
-                        <p class="text-muted small mb-3">Use a IA para criar peças jurídicas diretamente deste processo.</p>
+                        <p class="text-muted small mb-3">Use a IA para criar peças jurídicas diretamente deste processo.
+                        </p>
                         <a href="{{ url_for('process_panel.generated_document_new', process_id=process.id) }}"
-                           class="btn btn-primary btn-sm">
+                          class="btn btn-primary btn-sm">
                           <i class="bi bi-stars me-1"></i> Gerar primeiro documento
                         </a>
                       </div>
@@ -1794,6 +1804,22 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                   </div>
                 </div>
               </div>
+
+              <div id="documentSummaryUnionArgumentsBlock" class="accordion-item summary-acc-union-arguments">
+                <h2 class="accordion-header" id="summaryUnionArgumentsHeading">
+                  <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#summaryUnionArgumentsCollapse" aria-expanded="false"
+                    aria-controls="summaryUnionArgumentsCollapse">
+                    <i class="bi bi-diagram-3 me-2"></i>Argumentos da União por tese
+                  </button>
+                </h2>
+                <div id="summaryUnionArgumentsCollapse" class="accordion-collapse collapse"
+                  aria-labelledby="summaryUnionArgumentsHeading">
+                  <div class="accordion-body">
+                    <div id="documentSummaryUnionArguments" class="summary-keypoints mb-0"></div>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -1925,19 +1951,22 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
             <!-- Step indicator -->
             <div class="d-flex align-items-center gap-0">
               <div class="d-flex align-items-center gap-2">
-                <div id="attachCircle1" class="rounded-circle d-flex align-items-center justify-content-center fw-bold text-white"
+                <div id="attachCircle1"
+                  class="rounded-circle d-flex align-items-center justify-content-center fw-bold text-white"
                   style="width:28px;height:28px;min-width:28px;background:#0d6efd;font-size:.78rem;">1</div>
                 <span id="attachLabel1" class="small fw-semibold">Selecionar arquivos</span>
               </div>
               <div class="flex-grow-1 border-top mx-3" style="min-width:32px;"></div>
               <div class="d-flex align-items-center gap-2">
                 <div id="attachCircle2" class="rounded-circle d-flex align-items-center justify-content-center fw-bold"
-                  style="width:28px;height:28px;min-width:28px;background:#e9ecef;color:#6c757d;font-size:.78rem;">2</div>
+                  style="width:28px;height:28px;min-width:28px;background:#e9ecef;color:#6c757d;font-size:.78rem;">2
+                </div>
                 <span id="attachLabel2" class="small text-muted">Revisar e detalhar</span>
               </div>
             </div>
           </div>
-          <button type="button" class="btn-close ms-3 align-self-start mt-1" data-bs-dismiss="modal" aria-label="Fechar"></button>
+          <button type="button" class="btn-close ms-3 align-self-start mt-1" data-bs-dismiss="modal"
+            aria-label="Fechar"></button>
         </div>
 
         <div class="modal-body p-4">
@@ -1952,7 +1981,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
             </div>
             <div id="attachStep1Preview" class="d-none">
               <div class="d-flex align-items-center justify-content-between mb-2">
-                <span class="small fw-semibold text-uppercase text-muted" style="letter-spacing:.04em;">Arquivos selecionados</span>
+                <span class="small fw-semibold text-uppercase text-muted" style="letter-spacing:.04em;">Arquivos
+                  selecionados</span>
                 <span class="badge bg-primary-subtle text-primary-emphasis" id="attachFileCount"></span>
               </div>
               <div class="vstack gap-2" id="attachStep1List"></div>
@@ -1961,7 +1991,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
 
           <!-- Step 2 -->
           <div id="attachStep2" class="d-none">
-            <p class="text-muted small mb-3">Revise os arquivos abaixo. Você pode adicionar uma descrição e vincular cada arquivo a um ou mais benefícios do processo — ambos são opcionais.</p>
+            <p class="text-muted small mb-3">Revise os arquivos abaixo. Você pode adicionar uma descrição e vincular
+              cada arquivo a um ou mais benefícios do processo — ambos são opcionais.</p>
             <div class="vstack gap-3" id="attachStep2List"></div>
           </div>
 
@@ -1996,13 +2027,14 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
   <div id="attachBenefitOptionsTpl" class="d-none">
     {% for benefit in process_benefits %}
     <div class="form-check">
-      <input class="form-check-input" type="checkbox" value="{{ benefit.id }}"
-        id="attachBenefitTpl{{ benefit.id }}"
+      <input class="form-check-input" type="checkbox" value="{{ benefit.id }}" id="attachBenefitTpl{{ benefit.id }}"
         data-label="NB {{ benefit.benefit_number or '-' }}{% if benefit.insured_name %} — {{ benefit.insured_name }}{% endif %}">
       <label class="form-check-label small" for="attachBenefitTpl{{ benefit.id }}">
         <span class="fw-medium">NB {{ benefit.benefit_number or '-' }}</span>
         {% if benefit.insured_name %}<span class="text-muted"> — {{ benefit.insured_name }}</span>{% endif %}
-        {% if benefit.benefit_type %}<span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle ms-1" style="font-size:.68rem;">{{ benefit.benefit_type }}</span>{% endif %}
+        {% if benefit.benefit_type %}<span
+          class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle ms-1"
+          style="font-size:.68rem;">{{ benefit.benefit_type }}</span>{% endif %}
       </label>
     </div>
     {% endfor %}
@@ -2360,6 +2392,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
       const requestsList = document.getElementById('documentSummaryRequests');
       const keyPoints = document.getElementById('documentSummaryKeyPoints');
       const keyPointsBlock = document.getElementById('documentSummaryKeyPointsBlock');
+      const unionArgumentsWrap = document.getElementById('documentSummaryUnionArguments');
+      const unionArgumentsBlock = document.getElementById('documentSummaryUnionArgumentsBlock');
       const statusChip = document.getElementById('documentSummaryStatus');
       const typeChip = document.getElementById('documentSummaryType');
       const fileTypeChip = document.getElementById('documentSummaryFileType');
@@ -2367,8 +2401,9 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
       const summaryFullCollapse = document.getElementById('summaryFullCollapse');
       const summaryRequestsCollapse = document.getElementById('summaryRequestsCollapse');
       const summaryKeyPointsCollapse = document.getElementById('summaryKeyPointsCollapse');
+      const summaryUnionArgumentsCollapse = document.getElementById('summaryUnionArgumentsCollapse');
 
-      if (!subtitle || !loading || !empty || !errorBox || !errorMsg || !content || !summaryShort || !summaryText || !keyPoints || !keyPointsBlock || !statusChip || !typeChip || !fileTypeChip) {
+      if (!subtitle || !loading || !empty || !errorBox || !errorMsg || !content || !summaryShort || !summaryText || !keyPoints || !keyPointsBlock || !unionArgumentsWrap || !unionArgumentsBlock || !statusChip || !typeChip || !fileTypeChip) {
         return;
       }
 
@@ -2396,6 +2431,9 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
         if (summaryKeyPointsCollapse) {
           summaryKeyPointsCollapse.classList.remove('show');
         }
+        if (summaryUnionArgumentsCollapse) {
+          summaryUnionArgumentsCollapse.classList.remove('show');
+        }
       }
 
       modal.addEventListener('show.bs.modal', function (event) {
@@ -2413,9 +2451,11 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
         summaryText.innerHTML = '';
         if (requestsList) requestsList.innerHTML = '';
         keyPoints.innerHTML = '';
+        unionArgumentsWrap.innerHTML = '';
         errorMsg.textContent = '';
         if (requestsBlock) requestsBlock.classList.remove('d-none');
         keyPointsBlock.classList.remove('d-none');
+        unionArgumentsBlock.classList.remove('d-none');
         resetAccordionToDefault();
         setState('loading');
 
@@ -2447,6 +2487,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
             const fullText = data.summary_text || payload.summary_long || payload.summary || '';
             const points = payload.summary_key_points || payload.key_points || [];
             const requests = payload.requests || [];
+            const unionArgumentsByThesis = payload.union_arguments_by_thesis || [];
             const docType = payload.document_type || '';
             const fileType = payload.file_type || '';
 
@@ -2500,6 +2541,44 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
               keyPointsBlock.classList.add('d-none');
             }
 
+            if (Array.isArray(unionArgumentsByThesis) && unionArgumentsByThesis.length) {
+              unionArgumentsByThesis.forEach(function (item) {
+                if (!item || typeof item !== 'object') return;
+
+                const thesis = String(item.thesis || 'Tese não identificada').trim();
+                const status = String(item.status || 'não identificado').trim();
+                const args = Array.isArray(item.arguments) ? item.arguments : [];
+
+                const wrapper = document.createElement('div');
+                wrapper.className = 'mb-3 pb-2 border-bottom';
+
+                const title = document.createElement('div');
+                title.className = 'fw-semibold';
+                title.textContent = thesis;
+                wrapper.appendChild(title);
+
+                const statusEl = document.createElement('small');
+                statusEl.className = 'text-muted d-block mb-2';
+                statusEl.textContent = 'Status: ' + status;
+                wrapper.appendChild(statusEl);
+
+                if (args.length) {
+                  const list = document.createElement('ul');
+                  list.className = 'summary-keypoints mb-0';
+                  args.forEach(function (argText) {
+                    const li = document.createElement('li');
+                    li.textContent = String(argText || '').trim();
+                    list.appendChild(li);
+                  });
+                  wrapper.appendChild(list);
+                }
+
+                unionArgumentsWrap.appendChild(wrapper);
+              });
+            } else {
+              unionArgumentsBlock.classList.add('d-none');
+            }
+
             if (!shortText && !fullText) {
               setState('empty');
               return;
@@ -2524,9 +2603,11 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
         summaryText.innerHTML = '';
         if (requestsList) requestsList.innerHTML = '';
         keyPoints.innerHTML = '';
+        unionArgumentsWrap.innerHTML = '';
         errorMsg.textContent = '';
         if (requestsBlock) requestsBlock.classList.remove('d-none');
         keyPointsBlock.classList.remove('d-none');
+        unionArgumentsBlock.classList.remove('d-none');
         resetAccordionToDefault();
         setState('loading');
       });
@@ -2657,27 +2738,27 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
       const modal = document.getElementById('newAttachmentModal');
       if (!modal) return;
 
-      const dropzone      = document.getElementById('attachDropzone');
-      const fileInput     = document.getElementById('attachFileInput');
-      const step1El       = document.getElementById('attachStep1');
-      const step2El       = document.getElementById('attachStep2');
-      const sendingEl     = document.getElementById('attachSending');
-      const step1Preview  = document.getElementById('attachStep1Preview');
-      const step1List     = document.getElementById('attachStep1List');
-      const step2List     = document.getElementById('attachStep2List');
-      const fileCountEl   = document.getElementById('attachFileCount');
-      const btnCancel     = document.getElementById('attachBtnCancel');
-      const btnBack       = document.getElementById('attachBtnBack');
-      const btnNext       = document.getElementById('attachBtnNext');
-      const btnSubmit     = document.getElementById('attachBtnSubmit');
-      const btnSubmitLbl  = document.getElementById('attachBtnSubmitLabel');
-      const sendingProg   = document.getElementById('attachSendingProgress');
-      const circle1       = document.getElementById('attachCircle1');
-      const circle2       = document.getElementById('attachCircle2');
-      const label1        = document.getElementById('attachLabel1');
-      const label2        = document.getElementById('attachLabel2');
-      const benefitsTpl   = document.getElementById('attachBenefitOptionsTpl');
-      const ACTION_URL    = "{{ url_for('process_panel.create_process_attachment', process_id=process.id) }}";
+      const dropzone = document.getElementById('attachDropzone');
+      const fileInput = document.getElementById('attachFileInput');
+      const step1El = document.getElementById('attachStep1');
+      const step2El = document.getElementById('attachStep2');
+      const sendingEl = document.getElementById('attachSending');
+      const step1Preview = document.getElementById('attachStep1Preview');
+      const step1List = document.getElementById('attachStep1List');
+      const step2List = document.getElementById('attachStep2List');
+      const fileCountEl = document.getElementById('attachFileCount');
+      const btnCancel = document.getElementById('attachBtnCancel');
+      const btnBack = document.getElementById('attachBtnBack');
+      const btnNext = document.getElementById('attachBtnNext');
+      const btnSubmit = document.getElementById('attachBtnSubmit');
+      const btnSubmitLbl = document.getElementById('attachBtnSubmitLabel');
+      const sendingProg = document.getElementById('attachSendingProgress');
+      const circle1 = document.getElementById('attachCircle1');
+      const circle2 = document.getElementById('attachCircle2');
+      const label1 = document.getElementById('attachLabel1');
+      const label2 = document.getElementById('attachLabel2');
+      const benefitsTpl = document.getElementById('attachBenefitOptionsTpl');
+      const ACTION_URL = "{{ url_for('process_panel.create_process_attachment', process_id=process.id) }}";
 
       let currentStep = 1;
       let selectedFiles = [];
@@ -2689,7 +2770,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
 
       function setStep(n) {
         currentStep = n;
-        const active   = { background: '#0d6efd', color: '#fff', fontWeight: '700' };
+        const active = { background: '#0d6efd', color: '#fff', fontWeight: '700' };
         const inactive = { background: '#e9ecef', color: '#6c757d', fontWeight: '600' };
         Object.assign(circle1.style, n === 1 ? active : { background: '#198754', color: '#fff', fontWeight: '700' });
         Object.assign(circle2.style, n === 2 ? active : inactive);
@@ -2728,24 +2809,24 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
           card.className = 'border rounded-3 p-3';
           card.innerHTML =
             '<div class="d-flex align-items-center gap-2 mb-3">' +
-              '<div class="rounded d-flex align-items-center justify-content-center bg-secondary-subtle" style="width:36px;height:36px;min-width:36px;">' +
-                '<i class="bi bi-file-earmark text-secondary"></i>' +
-              '</div>' +
-              '<div class="overflow-hidden">' +
-                '<div class="fw-semibold small text-truncate">' + f.name + '</div>' +
-                '<div class="text-muted" style="font-size:.72rem;">' + formatSize(f.size) + '</div>' +
-              '</div>' +
+            '<div class="rounded d-flex align-items-center justify-content-center bg-secondary-subtle" style="width:36px;height:36px;min-width:36px;">' +
+            '<i class="bi bi-file-earmark text-secondary"></i>' +
+            '</div>' +
+            '<div class="overflow-hidden">' +
+            '<div class="fw-semibold small text-truncate">' + f.name + '</div>' +
+            '<div class="text-muted" style="font-size:.72rem;">' + formatSize(f.size) + '</div>' +
+            '</div>' +
             '</div>' +
             '<div class="mb-3">' +
-              '<label class="form-label small fw-medium mb-1">Descrição <span class="text-muted fw-normal">(opcional)</span></label>' +
-              '<input type="text" class="form-control form-control-sm attach-desc-' + idx + '" maxlength="255" ' +
-                'placeholder="Ex.: Laudo médico, planilha de cálculo, parecer técnico...">' +
+            '<label class="form-label small fw-medium mb-1">Descrição <span class="text-muted fw-normal">(opcional)</span></label>' +
+            '<input type="text" class="form-control form-control-sm attach-desc-' + idx + '" maxlength="255" ' +
+            'placeholder="Ex.: Laudo médico, planilha de cálculo, parecer técnico...">' +
             '</div>' +
             (hasBenefits
               ? '<div>' +
-                  '<label class="form-label small fw-medium mb-1">Benefícios vinculados <span class="text-muted fw-normal">(opcional)</span></label>' +
-                  '<div class="border rounded p-2 attach-benefits-' + idx + '" style="max-height:140px;overflow-y:auto;"></div>' +
-                '</div>'
+              '<label class="form-label small fw-medium mb-1">Benefícios vinculados <span class="text-muted fw-normal">(opcional)</span></label>' +
+              '<div class="border rounded p-2 attach-benefits-' + idx + '" style="max-height:140px;overflow-y:auto;"></div>' +
+              '</div>'
               : '');
           step2List.appendChild(card);
 

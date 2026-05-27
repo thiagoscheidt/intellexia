@@ -19,7 +19,6 @@ import time
 import logging
 from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
-from app.agents.core.file_agent import FileAgent
 from app.services.token_usage_service import TokenUsageService
 from app.services.agent_execution_history_service import AgentExecutionHistoryService
 
@@ -345,6 +344,7 @@ class AgentGeneratedDocument:
         selections: list[dict],
         instructions: Optional[str] = None,
         contestation_file_path: Optional[str] = None,
+        contestation_summary_payload: Optional[dict] = None,
         law_firm_id: Optional[int] = None,
     ) -> GeneratedImpugnacaoContestacao:
         """
@@ -362,6 +362,7 @@ class AgentGeneratedDocument:
         process_ctx = self._build_process_context(process)
         selections_ctx = self._build_selections_context(selections, include_contestation=True)
         regional_jurisprudence_hint = self._build_regional_jurisprudence_hint(process)
+        contestation_summary_ctx = self._build_contestation_summary_context(contestation_summary_payload)
         instructions_block = f"\n\n=== INSTRUÇÕES ADICIONAIS DO ADVOGADO ===\n{instructions}\n" if instructions else ""
 
         style_references_block = self._build_style_references_block(
@@ -375,6 +376,8 @@ class AgentGeneratedDocument:
             process_ctx,
             selections_ctx,
         ]
+        if contestation_summary_ctx:
+            user_prompt_sections.append(contestation_summary_ctx)
         if regional_jurisprudence_hint:
             user_prompt_sections.append(regional_jurisprudence_hint)
         if style_references_block:
@@ -391,15 +394,6 @@ class AgentGeneratedDocument:
 
         user_prompt = self._shrink_user_prompt(user_prompt)
 
-        normalized_contestation_path = str(contestation_file_path or '').strip()
-        if not normalized_contestation_path:
-            raise ValueError(
-                'Nenhum PDF de contestação foi localizado para este processo. '
-                'Faça o upload de uma contestação em PDF antes de gerar a impugnação.'
-            )
-
-        file_part = FileAgent().build_openrouter_file_part(normalized_contestation_path)
-
         llm_messages = [
             {
                 "role": "system",
@@ -407,10 +401,7 @@ class AgentGeneratedDocument:
             },
             {
                 "role": "user",
-                "content": [
-                    {"type": "text", "text": user_prompt},
-                    file_part,
-                ],
+                "content": user_prompt,
             },
         ]
 
@@ -424,7 +415,8 @@ class AgentGeneratedDocument:
         print(user_prompt)
         print("[AgentGeneratedDocument] === FIM PROMPT FINAL (USER) ===")
         print(f"[AgentGeneratedDocument] Tamanho prompt user: {len(user_prompt)} chars")
-        print("[AgentGeneratedDocument] Anexo PDF na chamada: SIM")
+        print("[AgentGeneratedDocument] Resumo da contestação na chamada: SIM")
+        print("[AgentGeneratedDocument] Anexo PDF na chamada: NÃO")
 
         llm = ChatOpenAI(
             model=self.model_name,
@@ -472,10 +464,7 @@ class AgentGeneratedDocument:
                         },
                         {
                             "role": "user",
-                            "content": [
-                                {"type": "text", "text": compact_user_prompt},
-                                file_part,
-                            ],
+                            "content": compact_user_prompt,
                         },
                     ]
                     retry_llm = ChatOpenAI(
@@ -555,6 +544,7 @@ class AgentGeneratedDocument:
                 metadata_payload={
                     "document_type": "impugnacao_contestacao",
                     "has_style_references": bool(style_references_block),
+                    "has_contestation_summary": bool(contestation_summary_ctx),
                 },
                 return_rows=True,
             )
@@ -1207,6 +1197,71 @@ class AgentGeneratedDocument:
             compacted = compacted.rstrip() + "..."
         return compacted
 
+    def _build_contestation_summary_context(self, contestation_summary_payload: Optional[dict]) -> str:
+        """Monta bloco textual do resumo estruturado da contestação para reduzir custo de contexto."""
+        payload = contestation_summary_payload if isinstance(contestation_summary_payload, dict) else {}
+        summary_text = self._clip_text(payload.get("summary_text") or "", max_chars=3500)
+        summary_short = self._clip_text(payload.get("summary_short") or "", max_chars=900)
+        summary_long = self._clip_text(payload.get("summary_long") or "", max_chars=5500)
+        key_points = [str(item).strip() for item in (payload.get("key_points") or []) if str(item).strip()][:18]
+        requests = [str(item).strip() for item in (payload.get("requests") or []) if str(item).strip()][:20]
+        union_arguments_by_thesis = payload.get("union_arguments_by_thesis")
+        if not isinstance(union_arguments_by_thesis, list):
+            union_arguments_by_thesis = []
+        notes = self._clip_text(payload.get("notes") or "", max_chars=1200)
+
+        if not any([
+            summary_text,
+            summary_short,
+            summary_long,
+            key_points,
+            requests,
+            union_arguments_by_thesis,
+            notes,
+        ]):
+            return ""
+
+        lines = [
+            "=== RESUMO ESTRUTURADO DA CONTESTACAO (FONTE PRINCIPAL) ===",
+            "Use este resumo como base central para identificar argumentos, pedidos e pontos controvertidos da contestação.",
+            "Nao invente fatos fora deste bloco e dos dados estruturados de benefícios/teses.",
+        ]
+
+        if summary_short:
+            lines.append("\nResumo executivo:")
+            lines.append(summary_short)
+        if summary_long:
+            lines.append("\nResumo completo:")
+            lines.append(summary_long)
+        if summary_text and summary_text not in (summary_short, summary_long):
+            lines.append("\nResumo adicional:")
+            lines.append(summary_text)
+        if key_points:
+            lines.append("\nPontos-chave identificados:")
+            lines.extend([f"- {item}" for item in key_points])
+        if requests:
+            lines.append("\nPedidos identificados na contestação:")
+            lines.extend([f"- {item}" for item in requests])
+        if union_arguments_by_thesis:
+            lines.append("\nArgumentos da União por tese:")
+            for item in union_arguments_by_thesis[:18]:
+                if not isinstance(item, dict):
+                    continue
+                thesis_name = self._clip_text(item.get("thesis") or "Tese não identificada", max_chars=180)
+                status = self._clip_text(item.get("status") or "nao identificado", max_chars=80)
+                lines.append(f"- Tese: {thesis_name} | Status: {status}")
+                arguments = item.get("arguments") or []
+                if isinstance(arguments, list):
+                    for argument in arguments[:5]:
+                        argument_text = self._clip_text(str(argument or "").strip(), max_chars=320)
+                        if argument_text:
+                            lines.append(f"  - {argument_text}")
+        if notes:
+            lines.append("\nObservações técnicas:")
+            lines.append(notes)
+
+        return "\n".join(lines)
+
     def _prune_rag_block(self, block: str, max_chars: int = 20000) -> str:
         """Poda bloco RAG com prioridade semântica antes de corte cego."""
         text = str(block or "")
@@ -1250,6 +1305,8 @@ class AgentGeneratedDocument:
 
         marker = "=== REFERÊNCIAS DE ESTILO"
         marker_index = text.find(marker)
+        if marker_index < 0:
+            marker_index = text.find("=== REFERENCIAS JURIDICAS DE ESTILO")
         if marker_index > 0:
             head = text[:marker_index]
             tail = text[marker_index:]
@@ -1305,6 +1362,7 @@ class AgentGeneratedDocument:
         selections: list[dict],
         instructions: Optional[str] = None,
         contestation_file_path: Optional[str] = None,
+        contestation_summary_payload: Optional[dict] = None,
         law_firm_id: Optional[int] = None,
     ):
         """
@@ -1317,6 +1375,7 @@ class AgentGeneratedDocument:
                 selections,
                 instructions,
                 contestation_file_path=contestation_file_path,
+                contestation_summary_payload=contestation_summary_payload,
                 law_firm_id=law_firm_id,
             )
         elif document_type == "manifestacao":

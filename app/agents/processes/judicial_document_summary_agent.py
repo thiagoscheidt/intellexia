@@ -26,6 +26,13 @@ class JudicialDocumentSummarySchema(BaseModel):
     summary_long: str = Field(default="", description="Resumo completo: 4-7 parágrafos detalhados, com contexto fático, fundamentos, pedidos, provas e impactos processuais")
     key_points: List[str] = Field(default_factory=list, description="Pontos-chave do documento")
     requests: List[str] = Field(default_factory=list, description="Pedidos identificados no documento")
+    union_arguments_by_thesis: List[dict] = Field(
+        default_factory=list,
+        description=(
+            "Argumentos da União por tese para documentos de contestação. "
+            "Cada item: {thesis: str, status: str, arguments: list[str]}."
+        ),
+    )
     document_type: str = Field(default="", description="Tipo do documento judicial")
     file_type: str = Field(default="", description="Tipo de arquivo (PDF, DOCX, etc.)")
     notes: str = Field(default="", description="Observacoes adicionais")
@@ -86,6 +93,9 @@ class JudicialDocumentSummaryAgent:
             "Se houver dados quantificaveis (valores, prazos, indices), inclua no resumo.\n"
             "Se o trecho de pedidos existir, priorize-o para detalhar o que foi requerido ao juizo.\n"
             "Em requests, retorne cada pedido de forma clara e separada, mantendo a redação juridica quando ela for importante.\n"
+            "Se for documento de contestacao, preencha union_arguments_by_thesis com os argumentos da Uniao por tese/tema.\n"
+            "Formato de union_arguments_by_thesis: lista de objetos com thesis (nome da tese/tema), status (procedente, improcedente, parcial ou nao identificado) e arguments (lista de fundamentos objetivos da Uniao).\n"
+            "Evite argumentos genericos: cada item deve refletir o conteudo efetivamente identificado na contestacao.\n"
         )
 
     @staticmethod
