@@ -39,6 +39,9 @@ IMPUGNACAO_REFERENCES_COLLECTION = os.getenv(
 IMPUGNACAO_REFERENCES_MAX_CHUNK_CHARS = int(
     os.getenv("IMPUGNACAO_REFERENCES_MAX_CHUNK_CHARS", "2200")
 )
+IMPUGNACAO_REFERENCES_PAGE_OVERLAP_CHARS = int(
+    os.getenv("IMPUGNACAO_REFERENCES_PAGE_OVERLAP_CHARS", "240")
+)
 
 
 # Headings típicos de peças do escritório: "1.", "1.1", "2.1.3", "I -", "II.",
@@ -129,6 +132,7 @@ class ImpugnacaoReferenceIngestor:
     def _build_segments_from_pages(cls, processed_document) -> list[dict]:
         chunks_with_pages = getattr(processed_document, 'chunks_with_pages', None) or []
         segments: list[dict] = []
+        previous_page_text = ""
 
         for chunk in chunks_with_pages:
             if not isinstance(chunk, dict):
@@ -143,13 +147,22 @@ class ImpugnacaoReferenceIngestor:
             heading = section_label or (f'Página {page_no}' if page_no is not None else '')
             section_kind = cls._classify_section_kind(heading, page_text, page_no=page_no)
 
+            merged_text = page_text
+            overlap_chars = max(0, IMPUGNACAO_REFERENCES_PAGE_OVERLAP_CHARS)
+            if overlap_chars and previous_page_text:
+                previous_tail = previous_page_text[-overlap_chars:].strip()
+                if previous_tail:
+                    merged_text = f"{previous_tail}\n\n{page_text}".strip()
+
             segments.append({
                 'heading': heading,
-                'text': page_text,
+                'text': merged_text,
                 'section_kind': section_kind,
                 'page': page_no,
                 'section': section_label or None,
             })
+
+            previous_page_text = page_text
 
         return segments
 
