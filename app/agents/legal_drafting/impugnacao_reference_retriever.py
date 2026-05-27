@@ -64,6 +64,7 @@ class ImpugnacaoReferenceRetriever:
         section_kind: Optional[str],
         generation_mode: Optional[str],
         trf_region: Optional[str],
+        thesis_catalog_id: Optional[str],
     ) -> rest.Filter:
         must: list[rest.FieldCondition] = [
             rest.FieldCondition(key="law_firm_id", match=rest.MatchValue(value=int(law_firm_id))),
@@ -86,6 +87,14 @@ class ImpugnacaoReferenceRetriever:
                 )
             )
 
+        if thesis_catalog_id:
+            must.append(
+                rest.FieldCondition(
+                    key="thesis_catalog_id",
+                    match=rest.MatchValue(value=thesis_catalog_id),
+                )
+            )
+
         should = []
         if trf_region:
             should.append(
@@ -104,6 +113,7 @@ class ImpugnacaoReferenceRetriever:
         query_text: str,
         generation_mode: Optional[str] = None,
         trf_region: Optional[str] = None,
+        thesis_catalog_id: Optional[str] = None,
         kind_plan: Optional[list[tuple[str, int]]] = None,
         max_chunks: Optional[int] = None,
         max_chars: Optional[int] = None,
@@ -146,6 +156,7 @@ class ImpugnacaoReferenceRetriever:
                         section_kind=kind,
                         generation_mode=generation_mode,
                         trf_region=trf_region,
+                        thesis_catalog_id=thesis_catalog_id,
                     ),
                     limit=top_k,
                     with_payload=True,
@@ -169,6 +180,8 @@ class ImpugnacaoReferenceRetriever:
                         "heading": payload.get("heading") or "",
                         "reference_title": payload.get("reference_title") or "",
                         "trf_region": payload.get("trf_region") or "",
+                        "thesis_catalog_id": payload.get("thesis_catalog_id") or "",
+                        "thesis_catalog_ids": payload.get("thesis_catalog_ids") or [],
                         "quality_score": payload.get("quality_score"),
                         "text": text,
                     }
@@ -189,6 +202,7 @@ class ImpugnacaoReferenceRetriever:
                         section_kind=None,
                         generation_mode=generation_mode,
                         trf_region=trf_region,
+                        thesis_catalog_id=thesis_catalog_id,
                     ),
                     limit=cap_chunks,
                     with_payload=True,
@@ -212,6 +226,8 @@ class ImpugnacaoReferenceRetriever:
                         "heading": payload.get("heading") or "",
                         "reference_title": payload.get("reference_title") or "",
                         "trf_region": payload.get("trf_region") or "",
+                        "thesis_catalog_id": payload.get("thesis_catalog_id") or "",
+                        "thesis_catalog_ids": payload.get("thesis_catalog_ids") or [],
                         "quality_score": payload.get("quality_score"),
                         "text": text,
                     }

@@ -26,6 +26,9 @@ from qdrant_client.http import models as rest
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from app.services.document_processor_service import DocumentProcessorService
+from app.agents.legal_drafting.impugnacao_reference_thesis_classifier_agent import (
+    ImpugnacaoReferenceThesisClassifierAgent,
+)
 
 
 load_dotenv()
@@ -110,6 +113,7 @@ class ImpugnacaoReferenceIngestor:
         self.qdrant = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=60)
         self.openai = OpenAI()
         self.last_document_thesis_catalog_ids: list[str] = []
+        self.thesis_classifier_agent = ImpugnacaoReferenceThesisClassifierAgent()
         self._ensure_collection()
 
     @staticmethod
@@ -426,6 +430,36 @@ class ImpugnacaoReferenceIngestor:
         response = self.openai.embeddings.create(input=text, model=EMBEDDING_MODEL)
         return response.data[0].embedding
 
+    def _classify_theses_with_ai(
+        self,
+        *,
+        file_path: str | Path,
+        thesis_catalog: list[dict],
+        segments: list[dict],
+    ) -> tuple[list[str], dict[int, list[str]]]:
+        if not thesis_catalog or not segments:
+            return [], {}
+
+        try:
+            result = self.thesis_classifier_agent.classify(
+                file_path=str(file_path),
+                thesis_catalog=thesis_catalog,
+                segments=segments,
+            )
+            document_ids = result.document_thesis_catalog_ids or []
+            by_chunk: dict[int, list[str]] = {}
+            for chunk in result.chunk_classifications or []:
+                by_chunk[int(chunk.order_in_doc)] = list(chunk.thesis_catalog_ids or [])
+
+            print(
+                "[ImpugnacaoReferenceIngestor] Classificação IA de teses concluída "
+                f"(documento={len(document_ids)} | chunks={len(by_chunk)})."
+            )
+            return document_ids, by_chunk
+        except Exception as error:
+            print(f"[ImpugnacaoReferenceIngestor] Falha na classificação IA de teses: {error}")
+            return [], {}
+
     # ── Ingestão principal ─────────────────────────────────────────────
 
     def ingest_file(
@@ -495,12 +529,20 @@ class ImpugnacaoReferenceIngestor:
             full_document_text = '\n\n'.join(seg.get('text') or '' for seg in segments)
 
         catalog = thesis_catalog or []
-        document_thesis_catalog_ids = self._match_thesis_catalog_ids(
-            full_document_text,
-            catalog,
-            max_items=10,
-            minimum_score=3,
+        document_thesis_catalog_ids, ai_chunk_thesis_map = self._classify_theses_with_ai(
+            file_path=file_path,
+            thesis_catalog=catalog,
+            segments=segments,
         )
+
+        # Fallback determinístico para cenários de falha no agente.
+        if not document_thesis_catalog_ids:
+            document_thesis_catalog_ids = self._match_thesis_catalog_ids(
+                full_document_text,
+                catalog,
+                max_items=10,
+                minimum_score=3,
+            )
         self.last_document_thesis_catalog_ids = document_thesis_catalog_ids
 
         print(
@@ -518,12 +560,15 @@ class ImpugnacaoReferenceIngestor:
                 continue
 
             chunk_scope = f"{seg.get('heading', '')}\n\n{chunk_text}".strip()
-            chunk_thesis_catalog_ids = self._match_thesis_catalog_ids(
-                chunk_scope,
-                catalog,
-                max_items=5,
-                minimum_score=3,
-            )
+            chunk_thesis_catalog_ids = list(ai_chunk_thesis_map.get(order) or [])
+
+            if not chunk_thesis_catalog_ids:
+                chunk_thesis_catalog_ids = self._match_thesis_catalog_ids(
+                    chunk_scope,
+                    catalog,
+                    max_items=5,
+                    minimum_score=3,
+                )
             if not chunk_thesis_catalog_ids and document_thesis_catalog_ids:
                 chunk_thesis_catalog_ids = document_thesis_catalog_ids[:2]
             primary_thesis_catalog_id = (

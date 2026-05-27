@@ -17,7 +17,7 @@ from typing import Optional
 import re
 import time
 import logging
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from langchain_openai import ChatOpenAI
 from app.services.token_usage_service import TokenUsageService
 from app.services.agent_execution_history_service import AgentExecutionHistoryService
@@ -65,7 +65,22 @@ _IMPUGNACAO_INTERNAL_GUARDRAILS = """
 
 # ── Impugnação à Contestação da União ─────────────────────────────────────
 
+class ImpugnacaoBenefitItem(BaseModel):
+    """Benefício consolidado dentro de uma tese de mérito."""
+    model_config = ConfigDict(extra='forbid')
+
+    benefit_number: str = ""
+    nit_number: str = ""
+    insured_name: str = ""
+    benefit_type: str = ""
+    fap_vigencia_year: str = ""
+    request_type: str = ""
+    contestation_status_label: str = ""
+    judicial_decisions: list[str] = Field(default_factory=list)
+
 class ImpugnacaoBenefitThesisSection(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
     thesis_name: str = Field(description="Nome da tese jurídica (um tópico de mérito por tese)")
     benefit_number: str = Field(
         default="",
@@ -75,7 +90,7 @@ class ImpugnacaoBenefitThesisSection(BaseModel):
         default="",
         description="[LEGADO] Mantido por compatibilidade. Preferir campo benefits[].",
     )
-    benefits: list[dict] = Field(
+    benefits: list[ImpugnacaoBenefitItem] = Field(
         default_factory=list,
         description=(
             "Lista de benefícios desta tese. Cada item deve conter, quando disponível: "
@@ -98,6 +113,8 @@ class ImpugnacaoBenefitThesisSection(BaseModel):
 
 
 class GeneratedImpugnacaoContestacao(BaseModel):
+    model_config = ConfigDict(extra='forbid')
+
     generation_mode: str = Field(
         default="A",
         description=(
@@ -163,14 +180,18 @@ class GeneratedImpugnacaoContestacao(BaseModel):
                 if sec.benefits:
                     parts.append("\nBenefícios desta tese:\n")
                     for b in sec.benefits:
+                        if isinstance(b, dict):
+                            get_val = lambda key: b.get(key, '-')
+                        else:
+                            get_val = lambda key: getattr(b, key, '-')
                         parts.append(
-                            f"- NB {b.get('benefit_number', '-') or '-'} | "
-                            f"NIT {b.get('nit_number', '-') or '-'} | "
-                            f"Segurado: {b.get('insured_name', '-') or '-'} | "
-                            f"Tipo: {b.get('benefit_type', '-') or '-'} | "
-                            f"Vigência FAP: {b.get('fap_vigencia_year', '-') or '-'} | "
-                            f"Tipo de Pedido: {b.get('request_type', '-') or '-'} | "
-                            f"Decisão da União: {b.get('contestation_status_label', '-') or '-'}\n"
+                            f"- NB {get_val('benefit_number') or '-'} | "
+                            f"NIT {get_val('nit_number') or '-'} | "
+                            f"Segurado: {get_val('insured_name') or '-'} | "
+                            f"Tipo: {get_val('benefit_type') or '-'} | "
+                            f"Vigência FAP: {get_val('fap_vigencia_year') or '-'} | "
+                            f"Tipo de Pedido: {get_val('request_type') or '-'} | "
+                            f"Decisão da União: {get_val('contestation_status_label') or '-'}\n"
                         )
                 elif sec.benefit_number or sec.insured_name:
                     parts.append(
@@ -813,15 +834,20 @@ class AgentGeneratedDocument:
             ]
 
             grouped: dict[str, list[dict]] = {}
+            thesis_key_by_label: dict[str, str] = {}
             for sel in (selections or []):
                 if not isinstance(sel, dict):
                     continue
                 thesis = sel.get('thesis')
                 thesis_name = None
+                thesis_key = None
                 if thesis is not None:
                     thesis_name = getattr(thesis, 'title', None) or getattr(thesis, 'name', None)
+                    thesis_key = getattr(thesis, 'key', None)
                 thesis_label = (str(thesis_name).strip() if thesis_name else 'Sem tese específica')
                 grouped.setdefault(thesis_label, []).append(sel)
+                if thesis_key and thesis_label not in thesis_key_by_label:
+                    thesis_key_by_label[thesis_label] = str(thesis_key).strip()
 
             retriever = ImpugnacaoReferenceRetriever()
 
@@ -872,11 +898,14 @@ class AgentGeneratedDocument:
 
             # 2) Busca equivalente por tese (núcleo do mérito).
             for thesis_label, thesis_rows in grouped.items():
+                thesis_catalog_tag = thesis_key_by_label.get(thesis_label)
                 query_parts = [
                     f"Tese principal do caso: {thesis_label}",
                     "Buscar exemplos EQUIVALENTES de redação e fundamentação para essa tese.",
                     "Priorizar padrão de mérito por tese do escritório.",
                 ]
+                if thesis_catalog_tag:
+                    query_parts.append(f"Tag de tese categorizada no RAG: {thesis_catalog_tag}")
 
                 for sel in thesis_rows[:6]:
                     benefit = sel.get('benefit')
@@ -911,6 +940,7 @@ class AgentGeneratedDocument:
                     law_firm_id=law_firm_id,
                     query_text=query_text,
                     trf_region=trf_region,
+                    thesis_catalog_id=thesis_catalog_tag,
                     kind_plan=focused_kind_plan,
                     max_chunks=6,
                 )
@@ -1082,6 +1112,8 @@ class AgentGeneratedDocument:
                     meta.append(f"secao: {chunk['section_kind']}")
                 if chunk.get("trf_region"):
                     meta.append(f"regiao: {chunk['trf_region']}")
+                if chunk.get("thesis_catalog_id"):
+                    meta.append(f"tese_tag: {chunk['thesis_catalog_id']}")
                 if chunk.get("quality_score") is not None:
                     meta.append(f"qualidade: {chunk['quality_score']}")
                 meta_str = " | ".join(meta) if meta else "sem metadados"
