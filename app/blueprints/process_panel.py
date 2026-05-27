@@ -2857,6 +2857,7 @@ def generated_document_create(process_id):
         contestation_file_path = None
         contestation_summary_payload = None
         if document_type == 'impugnacao_contestacao':
+            contestation_file_path = _resolve_latest_contestation_pdf_path(process)
             contestation_summary_payload = _resolve_latest_contestation_summary_payload(
                 process,
                 law_firm_id,
@@ -3034,6 +3035,7 @@ def generated_document_regenerate(process_id, doc_id):
         contestation_file_path = None
         contestation_summary_payload = None
         if generated_doc.document_type == 'impugnacao_contestacao':
+            contestation_file_path = _resolve_latest_contestation_pdf_path(process)
             contestation_summary_payload = _resolve_latest_contestation_summary_payload(
                 process,
                 law_firm_id,

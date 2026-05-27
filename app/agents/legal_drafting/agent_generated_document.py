@@ -19,6 +19,7 @@ import time
 import logging
 from pydantic import BaseModel, Field, ConfigDict
 from langchain_openai import ChatOpenAI
+from app.agents.core.file_agent import FileAgent
 from app.services.token_usage_service import TokenUsageService
 from app.services.agent_execution_history_service import AgentExecutionHistoryService
 
@@ -415,6 +416,14 @@ class AgentGeneratedDocument:
 
         user_prompt = self._shrink_user_prompt(user_prompt)
 
+        file_part = None
+        normalized_contestation_path = str(contestation_file_path or '').strip()
+        if normalized_contestation_path:
+            try:
+                file_part = FileAgent().build_openrouter_file_part(normalized_contestation_path)
+            except Exception as error:
+                print(f"[AgentGeneratedDocument] Falha ao anexar arquivo da contestação: {error}")
+
         llm_messages = [
             {
                 "role": "system",
@@ -422,7 +431,11 @@ class AgentGeneratedDocument:
             },
             {
                 "role": "user",
-                "content": user_prompt,
+                "content": (
+                    [{"type": "text", "text": user_prompt}, file_part]
+                    if file_part is not None
+                    else user_prompt
+                ),
             },
         ]
 
@@ -437,7 +450,7 @@ class AgentGeneratedDocument:
         print("[AgentGeneratedDocument] === FIM PROMPT FINAL (USER) ===")
         print(f"[AgentGeneratedDocument] Tamanho prompt user: {len(user_prompt)} chars")
         print("[AgentGeneratedDocument] Resumo da contestação na chamada: SIM")
-        print("[AgentGeneratedDocument] Anexo PDF na chamada: NÃO")
+        print(f"[AgentGeneratedDocument] Anexo PDF na chamada: {'SIM' if file_part is not None else 'NÃO'}")
 
         llm = ChatOpenAI(
             model=self.model_name,
@@ -485,7 +498,11 @@ class AgentGeneratedDocument:
                         },
                         {
                             "role": "user",
-                            "content": compact_user_prompt,
+                            "content": (
+                                [{"type": "text", "text": compact_user_prompt}, file_part]
+                                if file_part is not None
+                                else compact_user_prompt
+                            ),
                         },
                     ]
                     retry_llm = ChatOpenAI(
@@ -566,6 +583,7 @@ class AgentGeneratedDocument:
                     "document_type": "impugnacao_contestacao",
                     "has_style_references": bool(style_references_block),
                     "has_contestation_summary": bool(contestation_summary_ctx),
+                    "has_contestation_file": bool(file_part),
                 },
                 return_rows=True,
             )
