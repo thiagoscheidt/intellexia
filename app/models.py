@@ -2899,6 +2899,7 @@ class ImpugnacaoReferenceModel(db.Model):
 
     qdrant_collection = db.Column(db.String(120))
     chunks_count = db.Column(db.Integer, default=0)
+    thesis_catalog_ids = db.Column(db.JSON)
 
     status = db.Column(db.String(20), default='active', index=True)  # 'active' | 'archived'
     notes = db.Column(db.Text)
@@ -2932,7 +2933,7 @@ class ImpugnacaoReferenceChunk(db.Model):
     law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
 
     section_kind = db.Column(db.String(60), index=True)
-    thesis_catalog_id = db.Column(db.String(20))
+    thesis_catalog_id = db.Column(db.String(120))
     benefit_type = db.Column(db.String(10))
 
     qdrant_point_id = db.Column(db.String(64))

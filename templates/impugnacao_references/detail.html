@@ -5,37 +5,55 @@
 
 {% block extra_css %}
 <style>
-.chunk-text {
-    display: -webkit-box;
-    -webkit-line-clamp: 4;
-    -webkit-box-orient: vertical;
-    overflow: hidden;
-    line-height: 1.58;
-    font-size: .82rem;
-    transition: none;
-}
-.chunk-text.expanded {
-    display: block;
-    overflow: visible;
-    -webkit-line-clamp: unset;
-}
-.chunk-card {
-    background: #fff;
-    border-radius: .5rem;
-    transition: box-shadow 0.15s ease;
-}
-.chunk-card:hover { box-shadow: 0 3px 10px rgba(0,0,0,0.08); }
-.chunk-filter-btn { border-radius: 20px !important; font-size: .78rem; padding: .2rem .7rem; }
-.meta-icon { width: 20px; flex-shrink: 0; text-align: center; }
+    .chunk-text {
+        display: -webkit-box;
+        -webkit-line-clamp: 4;
+        -webkit-box-orient: vertical;
+        overflow: hidden;
+        line-height: 1.58;
+        font-size: .82rem;
+        transition: none;
+    }
+
+    .chunk-text.expanded {
+        display: block;
+        overflow: visible;
+        -webkit-line-clamp: unset;
+    }
+
+    .chunk-card {
+        background: #fff;
+        border-radius: .5rem;
+        transition: box-shadow 0.15s ease;
+    }
+
+    .chunk-card:hover {
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.08);
+    }
+
+    .chunk-filter-btn {
+        border-radius: 20px !important;
+        font-size: .78rem;
+        padding: .2rem .7rem;
+    }
+
+    .meta-icon {
+        width: 20px;
+        flex-shrink: 0;
+        text-align: center;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-{% call page_hero(title=reference.title, subtitle='Peça-Modelo · Trechos e metadados de indexação.', icon='bi bi-file-earmark-richtext') %}
+{% call page_hero(title=reference.title, subtitle='Peça-Modelo · Trechos e metadados de indexação.', icon='bi
+bi-file-earmark-richtext') %}
 <nav aria-label="breadcrumb">
     <ol class="breadcrumb mb-0 bg-transparent small">
-        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
-        <li class="breadcrumb-item"><a href="{{ url_for('impugnacao_references.list_references') }}">Peças-Modelo</a></li>
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a>
+        </li>
+        <li class="breadcrumb-item"><a href="{{ url_for('impugnacao_references.list_references') }}">Peças-Modelo</a>
+        </li>
         <li class="breadcrumb-item active">{{ reference.title }}</li>
     </ol>
 </nav>
@@ -77,7 +95,8 @@
                         </div>
                         <div>
                             <div class="fw-bold fs-4 lh-1 text-warning">
-                                {{ '%.1f'|format(reference.quality_score) if reference.quality_score is not none else '—' }}
+                                {{ '%.1f'|format(reference.quality_score) if reference.quality_score is not none else
+                                '—' }}
                             </div>
                             <div class="small text-muted">Qualidade</div>
                         </div>
@@ -92,7 +111,8 @@
                             <i class="bi bi-building text-info"></i>
                         </div>
                         <div>
-                            <div class="fw-bold lh-1 text-info" style="font-size:1.1rem">{{ reference.trf_region or '—' }}</div>
+                            <div class="fw-bold lh-1 text-info" style="font-size:1.1rem">{{ reference.trf_region or '—'
+                                }}</div>
                             <div class="small text-muted">TRF</div>
                         </div>
                     </div>
@@ -169,6 +189,21 @@
                                 </div>
                             </li>
                             <li class="d-flex gap-3 py-2 border-bottom align-items-start">
+                                <i class="bi bi-tags text-muted mt-1 meta-icon"></i>
+                                <div>
+                                    <div class="small text-muted">Teses categorizadas</div>
+                                    {% if reference.thesis_catalog_ids %}
+                                    <div class="d-flex flex-wrap gap-1 mt-1">
+                                        {% for thesis_key in reference.thesis_catalog_ids %}
+                                        <span class="badge bg-light text-dark border">{{ thesis_key }}</span>
+                                        {% endfor %}
+                                    </div>
+                                    {% else %}
+                                    <span class="small text-muted">Não categorizado</span>
+                                    {% endif %}
+                                </div>
+                            </li>
+                            <li class="d-flex gap-3 py-2 border-bottom align-items-start">
                                 <i class="bi bi-star-fill text-warning mt-1 meta-icon"></i>
                                 <div>
                                     <div class="small text-muted">Qualidade</div>
@@ -178,15 +213,15 @@
                                     {% set q_frac = q - q|int %}
                                     <div class="d-flex align-items-center gap-1">
                                         {% for i in range(1, 6) %}
-                                            {% if i <= q_int %}
-                                            <i class="bi bi-star-fill text-warning" style="font-size:.82rem"></i>
+                                        {% if i <= q_int %} <i class="bi bi-star-fill text-warning"
+                                            style="font-size:.82rem"></i>
                                             {% elif i == q_int + 1 and q_frac >= 0.5 %}
                                             <i class="bi bi-star-half text-warning" style="font-size:.82rem"></i>
                                             {% else %}
                                             <i class="bi bi-star text-muted" style="font-size:.82rem"></i>
                                             {% endif %}
-                                        {% endfor %}
-                                        <span class="small text-muted ms-1">({{ '%.1f'|format(q) }})</span>
+                                            {% endfor %}
+                                            <span class="small text-muted ms-1">({{ '%.1f'|format(q) }})</span>
                                     </div>
                                     {% else %}<span class="small text-muted">—</span>{% endif %}
                                 </div>
@@ -195,7 +230,8 @@
                                 <i class="bi bi-file-earmark text-muted mt-1 meta-icon"></i>
                                 <div>
                                     <div class="small text-muted">Arquivo original</div>
-                                    <div class="small text-break" style="word-break:break-all">{{ reference.original_filename or '—' }}</div>
+                                    <div class="small text-break" style="word-break:break-all">{{
+                                        reference.original_filename or '—' }}</div>
                                 </div>
                             </li>
                             <li class="d-flex gap-3 py-2 border-bottom align-items-start">
@@ -204,7 +240,8 @@
                                     <div class="small text-muted">Tipo · Tamanho</div>
                                     <div class="small">
                                         {% if reference.file_type %}
-                                        <span class="badge bg-light text-dark border me-1">{{ reference.file_type|upper }}</span>
+                                        <span class="badge bg-light text-dark border me-1">{{ reference.file_type|upper
+                                            }}</span>
                                         {% endif %}
                                         {{ (reference.file_size / 1024)|round(1) if reference.file_size else 0 }} KB
                                     </div>
@@ -221,14 +258,16 @@
                                 <i class="bi bi-database text-muted mt-1 meta-icon"></i>
                                 <div>
                                     <div class="small text-muted">Coleção Qdrant</div>
-                                    <code class="small text-muted" style="font-size:.72rem">{{ reference.qdrant_collection or '—' }}</code>
+                                    <code class="small text-muted"
+                                        style="font-size:.72rem">{{ reference.qdrant_collection or '—' }}</code>
                                 </div>
                             </li>
                             <li class="d-flex gap-3 py-2 align-items-start">
                                 <i class="bi bi-calendar3 text-muted mt-1 meta-icon"></i>
                                 <div>
                                     <div class="small text-muted">Criada em</div>
-                                    <div class="small">{{ reference.created_at|datetime_sp if reference.created_at else '—' }}</div>
+                                    <div class="small">{{ reference.created_at|datetime_sp if reference.created_at else
+                                        '—' }}</div>
                                 </div>
                             </li>
                         </ul>
@@ -289,8 +328,8 @@
                     {% if chunks %}
                     {% set ns = namespace(seen=[]) %}
                     {% for chunk in chunks %}
-                        {% set k = chunk.section_kind or 'general' %}
-                        {% if k not in ns.seen %}{% set ns.seen = ns.seen + [k] %}{% endif %}
+                    {% set k = chunk.section_kind or 'general' %}
+                    {% if k not in ns.seen %}{% set ns.seen = ns.seen + [k] %}{% endif %}
                     {% endfor %}
 
                     <!-- Filtros por section_kind -->
@@ -302,19 +341,19 @@
                             </button>
                             {% for k in ns.seen %}
                             {% if k == 'introduction' %}
-                                {% set btn_label = 'Introdução' %}{% set btn_icon = 'bi-type-h1' %}
+                            {% set btn_label = 'Introdução' %}{% set btn_icon = 'bi-type-h1' %}
                             {% elif k == 'preliminary' %}
-                                {% set btn_label = 'Preliminar' %}{% set btn_icon = 'bi-flag' %}
+                            {% set btn_label = 'Preliminar' %}{% set btn_icon = 'bi-flag' %}
                             {% elif k == 'merit_by_thesis' %}
-                                {% set btn_label = 'Mérito / Tese' %}{% set btn_icon = 'bi-balance-scale' %}
+                            {% set btn_label = 'Mérito / Tese' %}{% set btn_icon = 'bi-balance-scale' %}
                             {% elif k == 'jurisprudence' %}
-                                {% set btn_label = 'Jurisprudência' %}{% set btn_icon = 'bi-book' %}
+                            {% set btn_label = 'Jurisprudência' %}{% set btn_icon = 'bi-book' %}
                             {% elif k == 'requests' %}
-                                {% set btn_label = 'Pedidos' %}{% set btn_icon = 'bi-check2-square' %}
+                            {% set btn_label = 'Pedidos' %}{% set btn_icon = 'bi-check2-square' %}
                             {% elif k == 'closing' %}
-                                {% set btn_label = 'Encerramento' %}{% set btn_icon = 'bi-door-closed' %}
+                            {% set btn_label = 'Encerramento' %}{% set btn_icon = 'bi-door-closed' %}
                             {% else %}
-                                {% set btn_label = 'Geral' %}{% set btn_icon = 'bi-three-dots' %}
+                            {% set btn_label = 'Geral' %}{% set btn_icon = 'bi-three-dots' %}
                             {% endif %}
                             <button class="btn btn-sm btn-outline-secondary chunk-filter-btn" data-filter="{{ k }}"
                                 onclick="filterChunks('{{ k }}')">
@@ -329,33 +368,33 @@
                         {% for chunk in chunks %}
                         {% set k = chunk.section_kind or 'general' %}
                         {% if k == 'introduction' %}
-                            {% set strip = '#6c757d' %}
-                            {% set badge_cls = 'bg-secondary' %}
-                            {% set badge_lbl = 'Introdução' %}
+                        {% set strip = '#6c757d' %}
+                        {% set badge_cls = 'bg-secondary' %}
+                        {% set badge_lbl = 'Introdução' %}
                         {% elif k == 'preliminary' %}
-                            {% set strip = '#ffc107' %}
-                            {% set badge_cls = 'bg-warning text-dark' %}
-                            {% set badge_lbl = 'Preliminar' %}
+                        {% set strip = '#ffc107' %}
+                        {% set badge_cls = 'bg-warning text-dark' %}
+                        {% set badge_lbl = 'Preliminar' %}
                         {% elif k == 'merit_by_thesis' %}
-                            {% set strip = '#0d6efd' %}
-                            {% set badge_cls = 'bg-primary' %}
-                            {% set badge_lbl = 'Mérito / Tese' %}
+                        {% set strip = '#0d6efd' %}
+                        {% set badge_cls = 'bg-primary' %}
+                        {% set badge_lbl = 'Mérito / Tese' %}
                         {% elif k == 'jurisprudence' %}
-                            {% set strip = '#0dcaf0' %}
-                            {% set badge_cls = 'bg-info text-dark' %}
-                            {% set badge_lbl = 'Jurisprudência' %}
+                        {% set strip = '#0dcaf0' %}
+                        {% set badge_cls = 'bg-info text-dark' %}
+                        {% set badge_lbl = 'Jurisprudência' %}
                         {% elif k == 'requests' %}
-                            {% set strip = '#198754' %}
-                            {% set badge_cls = 'bg-success' %}
-                            {% set badge_lbl = 'Pedidos' %}
+                        {% set strip = '#198754' %}
+                        {% set badge_cls = 'bg-success' %}
+                        {% set badge_lbl = 'Pedidos' %}
                         {% elif k == 'closing' %}
-                            {% set strip = '#343a40' %}
-                            {% set badge_cls = 'bg-dark' %}
-                            {% set badge_lbl = 'Encerramento' %}
+                        {% set strip = '#343a40' %}
+                        {% set badge_cls = 'bg-dark' %}
+                        {% set badge_lbl = 'Encerramento' %}
                         {% else %}
-                            {% set strip = '#adb5bd' %}
-                            {% set badge_cls = 'bg-light text-dark border' %}
-                            {% set badge_lbl = 'Geral' %}
+                        {% set strip = '#adb5bd' %}
+                        {% set badge_cls = 'bg-light text-dark border' %}
+                        {% set badge_lbl = 'Geral' %}
                         {% endif %}
 
                         <div class="chunk-item mb-2" data-kind="{{ k }}">
@@ -363,7 +402,8 @@
                                 style="border-left: 4px solid {{ strip }}; border: 1px solid #e9ecef; border-left: 4px solid {{ strip }}">
                                 <div class="p-3 flex-grow-1 min-w-0">
                                     <div class="d-flex justify-content-between align-items-start mb-2 gap-2">
-                                        <span class="badge {{ badge_cls }} flex-shrink-0" style="font-size:.75rem">{{ badge_lbl }}</span>
+                                        <span class="badge {{ badge_cls }} flex-shrink-0" style="font-size:.75rem">{{
+                                            badge_lbl }}</span>
                                         <div class="d-flex gap-1 align-items-center flex-shrink-0">
                                             <span class="badge bg-light text-muted border" style="font-size:.7rem">
                                                 #{{ chunk.order_in_doc + 1 }}
@@ -373,10 +413,10 @@
                                             </span>
                                         </div>
                                     </div>
-                                    <p class="mb-1 text-muted chunk-text" id="chunk-{{ loop.index }}">{{ chunk.full_text or chunk.preview_text or '—' }}</p>
+                                    <p class="mb-1 text-muted chunk-text" id="chunk-{{ loop.index }}">{{ chunk.full_text
+                                        or chunk.preview_text or '—' }}</p>
                                     {% if chunk.chunk_chars and chunk.chunk_chars > 300 %}
-                                    <button type="button"
-                                        class="btn btn-link btn-sm p-0 text-primary"
+                                    <button type="button" class="btn btn-link btn-sm p-0 text-primary"
                                         style="font-size:.72rem; text-decoration:none"
                                         onclick="toggleChunk(this, 'chunk-{{ loop.index }}')">
                                         <i class="bi bi-chevron-down me-1"></i>Ver mais
@@ -413,23 +453,23 @@
 </div>
 
 <script>
-function filterChunks(kind) {
-    document.querySelectorAll('.chunk-item').forEach(function(item) {
-        item.style.display = (kind === 'all' || item.dataset.kind === kind) ? '' : 'none';
-    });
-    document.querySelectorAll('.chunk-filter-btn').forEach(function(btn) {
-        var isActive = btn.dataset.filter === kind;
-        btn.classList.toggle('btn-primary', isActive);
-        btn.classList.toggle('btn-outline-secondary', !isActive);
-    });
-}
+    function filterChunks(kind) {
+        document.querySelectorAll('.chunk-item').forEach(function (item) {
+            item.style.display = (kind === 'all' || item.dataset.kind === kind) ? '' : 'none';
+        });
+        document.querySelectorAll('.chunk-filter-btn').forEach(function (btn) {
+            var isActive = btn.dataset.filter === kind;
+            btn.classList.toggle('btn-primary', isActive);
+            btn.classList.toggle('btn-outline-secondary', !isActive);
+        });
+    }
 
-function toggleChunk(btn, previewId) {
-    var el = document.getElementById(previewId);
-    var expanded = el.classList.toggle('expanded');
-    btn.innerHTML = expanded
-        ? '<i class="bi bi-chevron-up me-1"></i>Ver menos'
-        : '<i class="bi bi-chevron-down me-1"></i>Ver mais';
-}
+    function toggleChunk(btn, previewId) {
+        var el = document.getElementById(previewId);
+        var expanded = el.classList.toggle('expanded');
+        btn.innerHTML = expanded
+            ? '<i class="bi bi-chevron-up me-1"></i>Ver menos'
+            : '<i class="bi bi-chevron-down me-1"></i>Ver mais';
+    }
 </script>
 {% endblock %}

@@ -14,6 +14,7 @@ from __future__ import annotations
 import os
 import re
 import uuid
+import unicodedata
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
@@ -108,7 +109,95 @@ class ImpugnacaoReferenceIngestor:
         self.collection = collection_name or IMPUGNACAO_REFERENCES_COLLECTION
         self.qdrant = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=60)
         self.openai = OpenAI()
+        self.last_document_thesis_catalog_ids: list[str] = []
         self._ensure_collection()
+
+    @staticmethod
+    def _normalize_for_match(text: str) -> str:
+        normalized = unicodedata.normalize('NFKD', str(text or ''))
+        normalized = ''.join(ch for ch in normalized if not unicodedata.combining(ch))
+        normalized = normalized.lower()
+        normalized = re.sub(r'[^a-z0-9]+', ' ', normalized)
+        return re.sub(r'\s+', ' ', normalized).strip()
+
+    @classmethod
+    def _extract_thesis_tokens(cls, thesis: dict) -> list[str]:
+        raw_parts = [
+            thesis.get('key') or '',
+            thesis.get('name') or '',
+        ]
+        token_set = set()
+        for part in raw_parts:
+            normalized = cls._normalize_for_match(part)
+            for token in normalized.split():
+                if len(token) < 3:
+                    continue
+                if token in {'de', 'do', 'da', 'dos', 'das', 'com', 'sem', 'para', 'por', 'que'}:
+                    continue
+                token_set.add(token)
+        return sorted(token_set)
+
+    @classmethod
+    def _score_thesis_match(cls, normalized_text: str, thesis: dict) -> int:
+        if not normalized_text:
+            return 0
+
+        score = 0
+        key_phrase = cls._normalize_for_match((thesis.get('key') or '').replace('_', ' '))
+        name_phrase = cls._normalize_for_match(thesis.get('name') or '')
+
+        if name_phrase and len(name_phrase) >= 8 and name_phrase in normalized_text:
+            score += 12
+        if key_phrase and len(key_phrase) >= 8 and key_phrase in normalized_text:
+            score += 10
+
+        tokens = cls._extract_thesis_tokens(thesis)
+        token_hits = sum(1 for token in tokens if token in normalized_text)
+        if token_hits:
+            score += min(6, token_hits)
+
+        # Reforço para teses com sinal forte de acidente/benefício/FAP.
+        if re.search(r'\bacidente\b|\bbeneficio\b|\bfap\b|\bcat\b|\bnexo\b', normalized_text):
+            score += 1
+
+        return score
+
+    @classmethod
+    def _match_thesis_catalog_ids(
+        cls,
+        text: str,
+        thesis_catalog: list[dict],
+        max_items: int = 6,
+        minimum_score: int = 3,
+    ) -> list[str]:
+        if not text or not thesis_catalog:
+            return []
+
+        normalized_text = cls._normalize_for_match(text)
+        if not normalized_text:
+            return []
+
+        scored: list[tuple[int, str]] = []
+        for thesis in thesis_catalog:
+            key = str(thesis.get('key') or '').strip()
+            if not key:
+                continue
+            score = cls._score_thesis_match(normalized_text, thesis)
+            if score >= minimum_score:
+                scored.append((score, key))
+
+        scored.sort(key=lambda item: (-item[0], item[1]))
+
+        matched: list[str] = []
+        seen = set()
+        for _, key in scored:
+            if key in seen:
+                continue
+            seen.add(key)
+            matched.append(key)
+            if len(matched) >= max_items:
+                break
+        return matched
 
     # ── Setup ──────────────────────────────────────────────────────────
 
@@ -349,6 +438,7 @@ class ImpugnacaoReferenceIngestor:
         trf_region: Optional[str] = None,
         generation_mode: Optional[str] = None,
         quality_score: Optional[float] = None,
+        thesis_catalog: Optional[list[dict]] = None,
         text: Optional[str] = None,
         processed_document=None,
     ) -> list[dict]:
@@ -396,6 +486,23 @@ class ImpugnacaoReferenceIngestor:
             print(f"[ImpugnacaoReferenceIngestor] Nenhum segmento válido em {file_path}")
             return []
 
+        full_document_text = ''
+        if processed_document is not None:
+            full_document_text = str(getattr(processed_document, 'full_text', '') or '').strip()
+        if not full_document_text and provided_text:
+            full_document_text = provided_text
+        if not full_document_text:
+            full_document_text = '\n\n'.join(seg.get('text') or '' for seg in segments)
+
+        catalog = thesis_catalog or []
+        document_thesis_catalog_ids = self._match_thesis_catalog_ids(
+            full_document_text,
+            catalog,
+            max_items=10,
+            minimum_score=3,
+        )
+        self.last_document_thesis_catalog_ids = document_thesis_catalog_ids
+
         print(
             f"[ImpugnacaoReferenceIngestor] {len(segments)} chunks segmentados "
             f"para reference_id={reference_id} (modo={segmentation_mode})"
@@ -409,6 +516,21 @@ class ImpugnacaoReferenceIngestor:
             chunk_text = seg["text"]
             if not chunk_text or len(chunk_text) < 40:
                 continue
+
+            chunk_scope = f"{seg.get('heading', '')}\n\n{chunk_text}".strip()
+            chunk_thesis_catalog_ids = self._match_thesis_catalog_ids(
+                chunk_scope,
+                catalog,
+                max_items=5,
+                minimum_score=3,
+            )
+            if not chunk_thesis_catalog_ids and document_thesis_catalog_ids:
+                chunk_thesis_catalog_ids = document_thesis_catalog_ids[:2]
+            primary_thesis_catalog_id = (
+                chunk_thesis_catalog_ids[0]
+                if chunk_thesis_catalog_ids
+                else (document_thesis_catalog_ids[0] if document_thesis_catalog_ids else None)
+            )
 
             point_id = str(uuid.uuid4())
             vector = self._embed(chunk_text)
@@ -425,6 +547,9 @@ class ImpugnacaoReferenceIngestor:
                 "trf_region": (trf_region or "").upper() or None,
                 "generation_mode": (generation_mode or "").upper() or None,
                 "quality_score": float(quality_score) if quality_score is not None else None,
+                "thesis_catalog_ids": chunk_thesis_catalog_ids,
+                "thesis_catalog_id": primary_thesis_catalog_id,
+                "document_thesis_catalog_ids": document_thesis_catalog_ids,
                 "status": "active",
                 "order_in_doc": order,
                 "ingested_at": ingested_at,
@@ -434,7 +559,9 @@ class ImpugnacaoReferenceIngestor:
             chunk_records.append({
                 "qdrant_point_id": point_id,
                 "section_kind": payload["section_kind"],
-                "thesis_catalog_id": None,
+                "thesis_catalog_id": primary_thesis_catalog_id,
+                "thesis_catalog_ids": chunk_thesis_catalog_ids,
+                "document_thesis_catalog_ids": document_thesis_catalog_ids,
                 "benefit_type": None,
                 "chunk_chars": len(chunk_text),
                 "order_in_doc": order,

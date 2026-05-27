@@ -30,6 +30,7 @@ from app.models import (
     db,
     ImpugnacaoReferenceModel,
     ImpugnacaoReferenceChunk,
+    JudicialLegalThesis,
 )
 
 
@@ -59,6 +60,24 @@ def require_law_firm(f):
 
 def _allowed_file(filename: str) -> bool:
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
+
+def _load_thesis_catalog(law_firm_id: int) -> list[dict]:
+    theses = (
+        JudicialLegalThesis.query
+        .filter_by(law_firm_id=law_firm_id, is_active=True)
+        .order_by(JudicialLegalThesis.name.asc())
+        .all()
+    )
+    return [
+        {
+            'id': thesis.id,
+            'key': thesis.key,
+            'name': thesis.name,
+        }
+        for thesis in theses
+        if thesis.key and thesis.name
+    ]
 
 
 # ── Listagem ──────────────────────────────────────────────────────────
@@ -124,6 +143,7 @@ def new_reference():
     quality_score = 3.0
     processed_document = None
     ingestor = None
+    thesis_catalog = _load_thesis_catalog(law_firm_id)
 
     try:
         from app.agents.legal_drafting.impugnacao_reference_ingestor import (
@@ -185,12 +205,14 @@ def new_reference():
             trf_region=trf_region,
             generation_mode=generation_mode,
             quality_score=quality_score,
+            thesis_catalog=thesis_catalog,
             text=extracted_text,
             processed_document=processed_document,
         )
 
         reference.qdrant_collection = ingestor.collection
         reference.chunks_count = len(chunks_meta)
+        reference.thesis_catalog_ids = ingestor.last_document_thesis_catalog_ids or []
 
         for chunk in chunks_meta:
             db.session.add(ImpugnacaoReferenceChunk(
@@ -347,6 +369,7 @@ def reindex_reference(ref_id):
             ImpugnacaoReferenceIngestor,
         )
         ingestor = ImpugnacaoReferenceIngestor()
+        thesis_catalog = _load_thesis_catalog(law_firm_id)
 
         # Limpa vetores antigos e chunks antigos
         ingestor.delete_by_reference_id(ref_id)
@@ -361,11 +384,13 @@ def reindex_reference(ref_id):
             trf_region=reference.trf_region,
             generation_mode=reference.generation_mode,
             quality_score=float(reference.quality_score) if reference.quality_score is not None else None,
+            thesis_catalog=thesis_catalog,
             processed_document=ingestor._process_document(reference.file_path),
         )
 
         reference.qdrant_collection = ingestor.collection
         reference.chunks_count = len(chunks_meta)
+        reference.thesis_catalog_ids = ingestor.last_document_thesis_catalog_ids or []
         for chunk in chunks_meta:
             db.session.add(ImpugnacaoReferenceChunk(
                 reference_id=reference.id,

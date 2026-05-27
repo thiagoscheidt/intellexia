@@ -88,7 +88,7 @@ def create_tables():
                     reference_id INTEGER NOT NULL,
                     law_firm_id INTEGER NOT NULL,
                     section_kind VARCHAR(60),
-                    thesis_catalog_id VARCHAR(20),
+                    thesis_catalog_id VARCHAR(120),
                     benefit_type VARCHAR(10),
                     qdrant_point_id VARCHAR(64),
                     chunk_chars INTEGER DEFAULT 0,
