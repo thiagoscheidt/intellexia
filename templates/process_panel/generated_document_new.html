@@ -130,12 +130,23 @@
     align-items: center;
     justify-content: space-between;
     gap: .5rem;
+    cursor: pointer;
+    user-select: none;
   }
 
   .thesis-group-header.no-thesis {
     background: rgba(108,117,125,.06);
     border-bottom-color: rgba(108,117,125,.15);
   }
+
+  .thesis-chevron {
+    transition: transform .2s ease;
+    flex-shrink: 0;
+    color: #6c757d;
+    font-size: .8rem;
+  }
+
+  .thesis-group-header.collapsed .thesis-chevron { transform: rotate(-90deg); }
 
   .thesis-group-body { padding: .5rem .75rem .75rem; }
 
@@ -325,23 +336,28 @@
 
                 <div class="thesis-group">
                   <!-- Cabeçalho da tese -->
-                  <div class="thesis-group-header {% if group.thesis_id is none %}no-thesis{% endif %}">
+                  <div class="thesis-group-header {% if group.thesis_id is none %}no-thesis{% endif %}"
+                       data-bs-toggle="collapse"
+                       data-bs-target="#group-body-{{ gid }}">
                     <div class="d-flex align-items-center gap-2 min-w-0">
                       <i class="bi {% if group.thesis_id is not none %}bi-balance-scale text-primary{% else %}bi-dash-circle text-secondary{% endif %} flex-shrink-0"></i>
                       <span class="fw-semibold small text-truncate" title="{{ group.label }}">{{ group.label }}</span>
                       <span class="badge bg-secondary-subtle text-secondary-emphasis ms-1 flex-shrink-0"
                             style="font-size:.7rem">{{ group.entries|length }} benef.</span>
                     </div>
-                    <button type="button"
-                            class="btn btn-outline-primary btn-sm flex-shrink-0"
-                            style="font-size:.72rem; padding:.2rem .6rem; border-radius:20px"
-                            onclick="toggleAllInGroup(this, '{{ gid }}')">
-                      Selecionar todos
-                    </button>
+                    <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                      <button type="button"
+                              class="btn btn-outline-primary btn-sm"
+                              style="font-size:.72rem; padding:.2rem .6rem; border-radius:20px"
+                              onclick="toggleAllInGroup(this, '{{ gid }}'); event.stopPropagation();">
+                        Selecionar todos
+                      </button>
+                      <i class="bi bi-chevron-down thesis-chevron"></i>
+                    </div>
                   </div>
 
                   <!-- Benefícios do grupo -->
-                  <div class="thesis-group-body">
+                  <div class="thesis-group-body collapse show" id="group-body-{{ gid }}">
                     {% for item in group.entries %}
                     {% set b = item.benefit %}
                     {% set cont = item.cont %}
@@ -600,6 +616,10 @@
     cards.forEach(card => setCardChecked(card, !allChecked));
     btn.textContent = allChecked ? 'Selecionar todos' : 'Desmarcar todos';
     document.getElementById('err-benefits').classList.add('d-none');
+    if (!allChecked) {
+      const groupBody = document.getElementById('group-body-' + groupId);
+      if (groupBody) bootstrap.Collapse.getOrCreateInstance(groupBody).hide();
+    }
   };
 
   // ── Mostrar campos de contestação apenas para impugnação ──────────────
