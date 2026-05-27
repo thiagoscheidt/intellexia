@@ -401,9 +401,27 @@ bi-file-earmark-richtext') %}
                             <div class="chunk-card d-flex"
                                 style="border-left: 4px solid {{ strip }}; border: 1px solid #e9ecef; border-left: 4px solid {{ strip }}">
                                 <div class="p-3 flex-grow-1 min-w-0">
-                                    <div class="d-flex justify-content-between align-items-start mb-2 gap-2">
-                                        <span class="badge {{ badge_cls }} flex-shrink-0" style="font-size:.75rem">{{
-                                            badge_lbl }}</span>
+                                    <div class="d-flex justify-content-between align-items-start mb-2 gap-2 flex-wrap">
+                                        <div class="d-flex gap-1 align-items-center flex-wrap">
+                                            <span class="badge {{ badge_cls }} flex-shrink-0" style="font-size:.75rem">{{
+                                                badge_lbl }}</span>
+                                            {# Badge de seção de origem para jurisprudências #}
+                                            {% if k == 'jurisprudence' and chunk.secao_origem and chunk.secao_origem != 'general' %}
+                                            {% if chunk.secao_origem == 'preliminary' %}
+                                            <span class="badge bg-warning text-dark" style="font-size:.68rem"><i class="bi bi-shield-exclamation me-1"></i>Preliminar</span>
+                                            {% elif chunk.secao_origem == 'merit_by_thesis' %}
+                                            <span class="badge bg-primary" style="font-size:.68rem"><i class="bi bi-journal-text me-1"></i>Mérito</span>
+                                            {% elif chunk.secao_origem == 'introduction' %}
+                                            <span class="badge bg-secondary" style="font-size:.68rem"><i class="bi bi-file-text me-1"></i>Introdução</span>
+                                            {% elif chunk.secao_origem == 'requests' %}
+                                            <span class="badge bg-success" style="font-size:.68rem"><i class="bi bi-check2-circle me-1"></i>Pedidos</span>
+                                            {% endif %}
+                                            {% endif %}
+                                            {# Badge de tipo da jurisprudência #}
+                                            {% if k == 'jurisprudence' and chunk.tipo_juris %}
+                                            <span class="badge bg-light text-secondary border" style="font-size:.68rem">{{ chunk.tipo_juris | replace('_', ' ') }}</span>
+                                            {% endif %}
+                                        </div>
                                         <div class="d-flex gap-1 align-items-center flex-shrink-0">
                                             <span class="badge bg-light text-muted border" style="font-size:.7rem">
                                                 #{{ chunk.order_in_doc + 1 }}
@@ -413,6 +431,23 @@ bi-file-earmark-richtext') %}
                                             </span>
                                         </div>
                                     </div>
+                                    {# Metadados da jurisprudência #}
+                                    {% if k == 'jurisprudence' and (chunk.tribunal or chunk.processo or chunk.relator) %}
+                                    <div class="d-flex gap-2 flex-wrap mb-2" style="font-size:.72rem">
+                                        {% if chunk.tribunal %}
+                                        <span class="text-info fw-semibold"><i class="bi bi-bank me-1"></i>{{ chunk.tribunal }}</span>
+                                        {% endif %}
+                                        {% if chunk.processo %}
+                                        <span class="text-muted font-monospace">{{ chunk.processo }}</span>
+                                        {% endif %}
+                                        {% if chunk.relator %}
+                                        <span class="text-muted"><i class="bi bi-person me-1"></i>{{ chunk.relator }}</span>
+                                        {% endif %}
+                                    </div>
+                                    {% endif %}
+                                    {% if k == 'jurisprudence' and chunk.fundamento_principal %}
+                                    <p class="mb-1 text-secondary fst-italic" style="font-size:.78rem">{{ chunk.fundamento_principal }}</p>
+                                    {% endif %}
                                     <p class="mb-1 text-muted chunk-text" id="chunk-{{ loop.index }}">{{ chunk.full_text
                                         or chunk.preview_text or '—' }}</p>
                                     {% if chunk.chunk_chars and chunk.chunk_chars > 300 %}

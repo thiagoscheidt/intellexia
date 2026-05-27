@@ -226,6 +226,12 @@ def new_reference():
                 order_in_doc=chunk.get('order_in_doc', 0),
                 preview_text=chunk.get('preview_text'),
                 full_text=chunk.get('full_text'),
+                secao_origem=chunk.get('secao_origem'),
+                tribunal=chunk.get('tribunal'),
+                processo=chunk.get('processo'),
+                relator=chunk.get('relator'),
+                tipo_juris=chunk.get('tipo_juris'),
+                fundamento_principal=chunk.get('fundamento_principal'),
             ))
         db.session.commit()
         meta_bits = []
@@ -403,6 +409,12 @@ def reindex_reference(ref_id):
                 order_in_doc=chunk.get('order_in_doc', 0),
                 preview_text=chunk.get('preview_text'),
                 full_text=chunk.get('full_text'),
+                secao_origem=chunk.get('secao_origem'),
+                tribunal=chunk.get('tribunal'),
+                processo=chunk.get('processo'),
+                relator=chunk.get('relator'),
+                tipo_juris=chunk.get('tipo_juris'),
+                fundamento_principal=chunk.get('fundamento_principal'),
             ))
         db.session.commit()
         flash(f'Reindexado: {len(chunks_meta)} trechos.', 'success')

@@ -26,6 +26,14 @@ TIPOS_VALIDOS = {
     "fundamento_jurisprudencial",
 }
 
+SECOES_VALIDAS = {
+    "introduction",
+    "preliminary",
+    "merit_by_thesis",
+    "requests",
+    "general",
+}
+
 
 class JurisprudenciaExtraida(BaseModel):
     texto_integral: str = Field(
@@ -57,6 +65,17 @@ class JurisprudenciaExtraida(BaseModel):
             "ementa | trecho_recuado | citacao_indireta | acordao_transcrito | "
             "ratio_decidendi | fundamento_jurisprudencial"
         )
+    )
+    secao_origem: str = Field(
+        default="general",
+        description=(
+            "Seção da peça de onde a jurisprudência foi extraída. Use um dos valores: "
+            "introduction (qualificação, abertura, síntese dos fatos) | "
+            "preliminary (preliminares, ilegitimidade, prescrição, prejudiciais) | "
+            "merit_by_thesis (mérito, teses de impugnação, fundamentos de direito) | "
+            "requests (pedidos, requerimentos finais) | "
+            "general (não identificado ou transversal)"
+        ),
     )
     fundamento_principal: Optional[str] = Field(
         default=None,
@@ -185,6 +204,12 @@ class ImpugnacaoJurisprudenciaExtractorAgent:
             if tipo not in TIPOS_VALIDOS:
                 tipo = "fundamento_jurisprudencial"
             item.tipo = tipo
+
+            # Normaliza secao_origem
+            secao = (item.secao_origem or "").strip().lower()
+            if secao not in SECOES_VALIDAS:
+                secao = "general"
+            item.secao_origem = secao
 
             # Limpa campos opcionais
             item.tribunal = (item.tribunal or "").strip().upper() or None

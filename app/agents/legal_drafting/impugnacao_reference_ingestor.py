@@ -656,6 +656,7 @@ class ImpugnacaoReferenceIngestor:
                 "orgao_julgador": jitem.orgao_julgador,
                 "data_julgamento": jitem.data_julgamento,
                 "tipo_juris": jitem.tipo,
+                "secao_origem": jitem.secao_origem,
                 "fundamento_principal": jitem.fundamento_principal,
                 "palavras_chave": jitem.palavras_chave,
                 "is_extracted_juris": True,
@@ -676,6 +677,12 @@ class ImpugnacaoReferenceIngestor:
                 "order_in_doc": juris_order_base + j_idx,
                 "preview_text": jtext[:280],
                 "full_text": jtext,
+                "secao_origem": jitem.secao_origem,
+                "tribunal": jitem.tribunal,
+                "processo": jitem.processo,
+                "relator": jitem.relator,
+                "tipo_juris": jitem.tipo,
+                "fundamento_principal": jitem.fundamento_principal,
             })
 
         if points:

@@ -1123,6 +1123,14 @@ class AgentGeneratedDocument:
                 meta.append(f"regiao: {chunk['trf_region']}")
             if chunk.get("quality_score") is not None:
                 meta.append(f"qualidade: {chunk['quality_score']}")
+            if chunk.get("secao_origem") and chunk["secao_origem"] != "general":
+                meta.append(f"secao_modelo: {chunk['secao_origem']}")
+            if chunk.get("tribunal"):
+                meta.append(f"tribunal: {chunk['tribunal']}")
+            if chunk.get("case_number"):
+                meta.append(f"processo: {chunk['case_number']}")
+            if chunk.get("fundamento_principal"):
+                meta.append(f"fundamento: {chunk['fundamento_principal']}")
             meta_str = " | ".join(meta) if meta else "sem metadados"
 
             heading = (chunk.get("heading") or "").strip()
@@ -1177,11 +1185,16 @@ class AgentGeneratedDocument:
         for chunk in chunks:
             kind = (chunk.get("section_kind") or "").strip().lower()
             chunk_region = (chunk.get("trf_region") or "").strip().upper()
+            secao_origem = (chunk.get("secao_origem") or "general").strip().lower()
 
             if kind == "merit_by_thesis":
                 categories["EXEMPLO_ESTRUTURA_TESE"].append(chunk)
             elif kind == "jurisprudence":
-                if regional and chunk_region == regional:
+                # Jurisprudências de seções não-mérito (intro, pedidos, geral) vão
+                # para complementar — não poluem o bloco principal de mérito.
+                if secao_origem not in ("merit_by_thesis", "preliminary", "general", ""):
+                    categories["JURISPRUDENCIA_COMPLEMENTAR"].append(chunk)
+                elif regional and chunk_region == regional:
                     categories["JURISPRUDENCIA_REGIONAL"].append(chunk)
                 elif chunk_region.startswith("TRF"):
                     categories["JURISPRUDENCIA_REGIONAL"].append(chunk)
@@ -1242,6 +1255,8 @@ class AgentGeneratedDocument:
                     meta.append(f"julgado_em: {chunk['data_julgamento']}")
                 if chunk.get("fundamento_principal"):
                     meta.append(f"fundamento: {chunk['fundamento_principal']}")
+                if chunk.get("secao_origem") and chunk["secao_origem"] != "general":
+                    meta.append(f"secao_modelo: {chunk['secao_origem']}")
                 meta_str = " | ".join(meta) if meta else "sem metadados"
 
                 entry_lines = [f"[item {item_count + 1} | {meta_str}]"]

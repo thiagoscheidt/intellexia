@@ -2942,6 +2942,14 @@ class ImpugnacaoReferenceChunk(db.Model):
     preview_text = db.Column(db.Text)
     full_text = db.Column(db.Text)
 
+    # Campos de jurisprudência (preenchidos apenas quando section_kind='jurisprudence')
+    secao_origem = db.Column(db.String(60))
+    tribunal = db.Column(db.String(60))
+    processo = db.Column(db.String(120))
+    relator = db.Column(db.String(255))
+    tipo_juris = db.Column(db.String(60))
+    fundamento_principal = db.Column(db.Text)
+
     created_at = db.Column(db.DateTime, default=datetime.now)
 
     reference = db.relationship('ImpugnacaoReferenceModel', back_populates='chunks')
