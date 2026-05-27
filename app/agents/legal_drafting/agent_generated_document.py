@@ -99,10 +99,20 @@ _IMPUGNACAO_INTERNAL_GUARDRAILS = """
 - Se o foro do processo indicar região específica (ex.: JFSP/TRF3), priorize ao menos uma citação inline do tribunal regional correspondente.
 - Jurisprudência de outras regiões deve ser complementar quando houver precedente regional validado.
 
-4) Agrupamento obrigatório por tese no mérito.
+4) Agrupamento obrigatório por tese no mérito — PROIBIDO mesclar ou omitir teses.
 - No Modo A, a seção de mérito deve ser construída por TESE, não por par benefício+tese.
 - Para cada tese, agrupe todos os benefícios correspondentes em um único tópico/subseção.
 - Em `benefit_sections`, cada item representa uma tese e deve trazer a lista `benefits[]`.
+- CRÍTICO: gere EXATAMENTE uma entrada em `benefit_sections` para CADA tese presente no bloco
+  "=== BENEFÍCIOS E TESES SELECIONADOS ===". Conte as teses listadas e confirme internamente
+  que o número de entradas em `benefit_sections` é igual ao número de teses recebidas.
+- É PROIBIDO mesclar duas teses em uma única seção, mesmo que compartilhem benefícios ou
+  fundamentos parecidos. Cada rótulo de tese do input gera sua própria seção independente.
+- É PROIBIDO omitir uma tese sob qualquer justificativa (redundância, similaridade, ausência
+  de argumento específico da União). Se a União não individualizou a tese, isso é argumento
+  a seu favor — registre a omissão e construa a argumentação de refutação normalmente.
+- Um mesmo benefício pode aparecer em múltiplas teses; isso é esperado e não é motivo para
+  colapsar seções.
 
 5) Marcadores internos NÃO podem ir para o texto final.
 - NÃO inserir no corpo da peça: "⚠️", "nota ao revisor", "placeholder", "dados pendentes".
@@ -439,7 +449,6 @@ class AgentGeneratedDocument:
             law_firm_id=law_firm_id,
         )
 
-        print(style_references_block)
         user_prompt_sections = [
             process_ctx,
             selections_ctx,
@@ -802,11 +811,21 @@ class AgentGeneratedDocument:
                 benefit = row['benefit']
                 contestation = row.get('contestation')
 
+                # Helpers: prefer contestation record; fall back to benefit direct fields
+                def _cont_val(cont_attr: str, ben_attr: str | None = None):
+                    if contestation:
+                        v = getattr(contestation, cont_attr, None)
+                        if v:
+                            return v
+                    if ben_attr:
+                        return getattr(benefit, ben_attr, None) or None
+                    return None
+
                 status_uniao = "—"
-                if include_contestation and contestation:
+                if include_contestation:
                     status_uniao = (
-                        contestation.contestation_status_label
-                        or contestation.contestation_status
+                        _cont_val('contestation_status_label', 'contestation_status_label')
+                        or _cont_val('contestation_status', 'contestation_status')
                         or "—"
                     )
 
@@ -826,17 +845,16 @@ class AgentGeneratedDocument:
                     f"{decisions}"
                 )
 
-                if include_contestation and contestation:
-                    if contestation.contestation_fundamento_uniao:
-                        lines.append(
-                            f"Fundamento da União: {self._clip_text(contestation.contestation_fundamento_uniao)}"
-                        )
-                    if contestation.contestation_efeito_fap:
-                        lines.append(f"Efeito no FAP: {self._clip_text(contestation.contestation_efeito_fap)}")
-                    if contestation.contestation_trecho_detectado:
-                        lines.append(
-                            f"Trecho Detectado: {self._clip_text(contestation.contestation_trecho_detectado)}"
-                        )
+                if include_contestation:
+                    fundamento = _cont_val('contestation_fundamento_uniao', 'contestation_fundamento_uniao')
+                    efeito = _cont_val('contestation_efeito_fap', 'contestation_efeito_fap')
+                    trecho = _cont_val('contestation_trecho_detectado', 'contestation_trecho_detectado')
+                    if fundamento:
+                        lines.append(f"Fundamento da União: {self._clip_text(fundamento)}")
+                    if efeito:
+                        lines.append(f"Efeito no FAP: {self._clip_text(efeito)}")
+                    if trecho:
+                        lines.append(f"Trecho Detectado: {self._clip_text(trecho)}")
 
         return "\n".join(lines)
 

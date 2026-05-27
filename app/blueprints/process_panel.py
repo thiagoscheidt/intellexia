@@ -2835,6 +2835,15 @@ def generated_document_create(process_id):
         for row in rows:
             contestations_by_key[(row.process_benefit_id, row.legal_thesis_id)] = row
 
+    # Load theses by ID as fallback for benefits without contestation records
+    theses_by_id = {}
+    if thesis_id_set:
+        theses_by_id = {
+            t.id: t for t in JudicialLegalThesis.query.filter(
+                JudicialLegalThesis.id.in_(thesis_id_set)
+            ).all()
+        }
+
     # Build agent input: list of dicts with benefit + contestation data
     agent_selections = []
     for b_id, t_id in parsed:
@@ -2842,9 +2851,14 @@ def generated_document_create(process_id):
         if not benefit:
             continue
         contestation = contestations_by_key.get((b_id, t_id)) if t_id else None
+        thesis = (
+            contestation.legal_thesis
+            if contestation and contestation.legal_thesis
+            else theses_by_id.get(t_id) if t_id else None
+        )
         agent_selections.append({
             'benefit': benefit,
-            'thesis': contestation.legal_thesis if contestation and contestation.legal_thesis else None,
+            'thesis': thesis,
             'contestation': contestation,
         })
 
@@ -3050,15 +3064,28 @@ def generated_document_regenerate(process_id, doc_id):
             ).all():
                 contestations_by_key[(row.process_benefit_id, row.legal_thesis_id)] = row
 
+        theses_by_id = {}
+        if sel_thesis_ids:
+            theses_by_id = {
+                t.id: t for t in JudicialLegalThesis.query.filter(
+                    JudicialLegalThesis.id.in_(sel_thesis_ids)
+                ).all()
+            }
+
         agent_selections = []
         for sel in generated_doc.selections:
             benefit = benefits_by_id.get(sel.benefit_id)
             if not benefit:
                 continue
             contestation = contestations_by_key.get((sel.benefit_id, sel.legal_thesis_id))
+            thesis = (
+                contestation.legal_thesis
+                if contestation and contestation.legal_thesis
+                else theses_by_id.get(sel.legal_thesis_id) if sel.legal_thesis_id else None
+            )
             agent_selections.append({
                 'benefit': benefit,
-                'thesis': contestation.legal_thesis if contestation and contestation.legal_thesis else None,
+                'thesis': thesis,
                 'contestation': contestation,
             })
 
