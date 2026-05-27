@@ -1227,6 +1227,12 @@ class AgentGeneratedDocument:
                     meta.append(f"tese_tag: {chunk['thesis_catalog_id']}")
                 if chunk.get("quality_score") is not None:
                     meta.append(f"qualidade: {chunk['quality_score']}")
+                if chunk.get("tribunal"):
+                    meta.append(f"tribunal: {chunk['tribunal']}")
+                if chunk.get("case_number"):
+                    meta.append(f"processo: {chunk['case_number']}")
+                if chunk.get("relator"):
+                    meta.append(f"relator: {chunk['relator']}")
                 meta_str = " | ".join(meta) if meta else "sem metadados"
 
                 entry_lines = [f"[item {item_count + 1} | {meta_str}]"]
