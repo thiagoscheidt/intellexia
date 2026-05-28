@@ -228,6 +228,48 @@
   }
 
   .summary-line:last-child { border-bottom: none; padding-bottom: 0; }
+
+  .review-section-label {
+    font-size: .75rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+    color: var(--bs-secondary-color);
+  }
+
+  .review-benefit-card {
+    border: 1px solid rgba(15, 23, 42, .09);
+    border-radius: .7rem;
+    padding: .7rem .9rem;
+    background: var(--bs-body-bg);
+    font-size: .82rem;
+  }
+
+  .review-benefit-card .benefit-meta {
+    color: var(--bs-secondary-color);
+    font-size: .76rem;
+  }
+
+  .review-benefit-card .cont-fundamento {
+    margin-top: .45rem;
+    padding: .4rem .6rem;
+    background: rgba(255,193,7,.07);
+    border-left: 3px solid #ffc107;
+    border-radius: 0 .4rem .4rem 0;
+    font-size: .77rem;
+    color: var(--bs-body-color);
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+
+  .review-benefit-card .cont-fundamento-label {
+    font-size: .69rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: var(--bs-secondary-color);
+    margin-bottom: .2rem;
+  }
 </style>
 {% endblock %}
 
@@ -372,6 +414,10 @@
                          data-sel="{{ sel_key }}"
                          data-group="{{ gid }}"
                          data-nb="{{ b.benefit_number }}"
+                         data-insured="{{ b.insured_name or '' }}"
+                         data-btype="{{ b.benefit_type or '' }}"
+                         data-vigencia="{{ b.fap_vigencia_year or '' }}"
+                         data-thesis="{{ group.label }}"
                          onclick="toggleSelection(this)">
                       <div class="d-flex align-items-start gap-2">
                         <!-- Checkbox visual -->
@@ -467,23 +513,73 @@
             <!-- ── Step 3: Revisão ────────────────────────────────────── -->
             <div class="wizard-panel" id="panel-3">
               <h6 class="fw-semibold mb-1">Revisão e geração</h6>
-              <p class="text-muted small mb-3">Confirme os dados e clique em <strong>Gerar Documento</strong>.</p>
+              <p class="text-muted small mb-3">Confirme os dados abaixo e clique em <strong>Gerar Documento</strong>.</p>
 
-              <div class="summary-box mb-3">
-                <div class="summary-line">
-                  <span class="text-muted">Processo</span>
-                  <span class="fw-semibold text-end">{{ process.process_number or process.title }}</span>
+              <!-- Dados do processo -->
+              <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <span class="review-section-label">
+                    <i class="bi bi-folder2-open me-1"></i>Dados do Processo
+                  </span>
+                  <a href="{{ url_for('process_panel.edit', process_id=process.id) }}"
+                     target="_blank"
+                     class="btn btn-link btn-sm p-0 text-decoration-none small">
+                    <i class="bi bi-pencil-square me-1"></i>Editar processo
+                  </a>
                 </div>
-                <div class="summary-line">
-                  <span class="text-muted">Tipo de documento</span>
-                  <span class="fw-semibold" id="summary-type">—</span>
-                </div>
-                <div class="summary-line">
-                  <span class="text-muted">Benefícios selecionados</span>
-                  <span class="fw-semibold" id="summary-benefits">—</span>
+                <div class="summary-box">
+                  <div class="summary-line">
+                    <span class="text-muted">Número</span>
+                    <span class="fw-semibold text-end">{{ process.process_number or process.title or '—' }}</span>
+                  </div>
+                  <div class="summary-line">
+                    <span class="text-muted">Tipo de documento</span>
+                    <span class="fw-semibold" id="summary-type">—</span>
+                  </div>
+                  {% if process.tribunal_name %}
+                  <div class="summary-line">
+                    <span class="text-muted">Tribunal</span>
+                    <span class="fw-semibold text-end">{{ process.tribunal_name }}</span>
+                  </div>
+                  {% endif %}
+                  {% if process.origin_unit %}
+                  <div class="summary-line">
+                    <span class="text-muted">Vara / Órgão</span>
+                    <span class="fw-semibold text-end">{{ process.origin_unit }}</span>
+                  </div>
+                  {% endif %}
+                  {% if process.judge_name %}
+                  <div class="summary-line">
+                    <span class="text-muted">Juiz(a)</span>
+                    <span class="fw-semibold text-end">{{ process.judge_name }}</span>
+                  </div>
+                  {% endif %}
+                  {% if process.plaintiff_client %}
+                  <div class="summary-line">
+                    <span class="text-muted">Parte Autora</span>
+                    <span class="fw-semibold text-end">{{ process.plaintiff_client.name }}</span>
+                  </div>
+                  {% endif %}
                 </div>
               </div>
 
+              <!-- Benefícios selecionados (detalhado) -->
+              <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <span class="review-section-label">
+                    <i class="bi bi-people me-1"></i>Benefícios Selecionados
+                    <span id="summary-count" class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1" style="font-size:.7rem">0</span>
+                  </span>
+                  <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none small" onclick="goToStep(2)">
+                    <i class="bi bi-pencil-square me-1"></i>Alterar seleção
+                  </button>
+                </div>
+                <div id="summary-benefits-detail" class="d-flex flex-column gap-2">
+                  <div class="text-muted small fst-italic ps-1" id="summary-empty-msg">Nenhum benefício selecionado.</div>
+                </div>
+              </div>
+
+              <!-- Instruções adicionais -->
               <div class="mb-3">
                 <label class="form-label fw-semibold small">
                   Instruções adicionais
@@ -636,24 +732,68 @@
 
   function buildSummary() {
     const selectedType = document.querySelector('input[name="document_type"]:checked');
-    document.getElementById('summary-type').textContent =
-      selectedType ? (TYPE_LABELS[selectedType.value] || selectedType.value) : '—';
+    const typeLabel = selectedType ? (TYPE_LABELS[selectedType.value] || selectedType.value) : '—';
+    document.getElementById('summary-type').textContent = typeLabel;
+    const isImpugnacao = selectedType && selectedType.value === 'impugnacao_contestacao';
 
     const checked = document.querySelectorAll('input[name="selections[]"]:checked');
-    const el = document.getElementById('summary-benefits');
+    const container = document.getElementById('summary-benefits-detail');
+    const emptyMsg = document.getElementById('summary-empty-msg');
+    const countBadge = document.getElementById('summary-count');
+
+    countBadge.textContent = checked.length;
+    container.querySelectorAll('.review-benefit-card').forEach(el => el.remove());
+
     if (checked.length === 0) {
-      el.textContent = '—';
-    } else {
-      const labels = Array.from(checked).map(c => {
-        const card = c.closest('.benefit-check-card');
-        const nb = card ? card.dataset.nb : c.value.split(':')[0];
-        return `NB ${nb}`;
-      });
-      const unique = [...new Set(labels)];
-      el.textContent = unique.slice(0, 5).join(', ') +
-        (unique.length > 5 ? ` +${unique.length - 5}` : '') +
-        ` (${checked.length} seleç.)`;
+      emptyMsg.classList.remove('d-none');
+      return;
     }
+    emptyMsg.classList.add('d-none');
+
+    checked.forEach(c => {
+      const card = c.closest('.benefit-check-card');
+      if (!card) return;
+
+      const nb       = card.dataset.nb || '';
+      const insured  = card.dataset.insured || '';
+      const btype    = card.dataset.btype || '';
+      const vigencia = card.dataset.vigencia || '';
+      const thesis   = card.dataset.thesis || '';
+      const nbColor  = getNbColor(nb);
+
+      // Fundamento da contestação (só aparece para impugnação)
+      let fundamento = '';
+      if (isImpugnacao) {
+        const contFields = card.querySelector('[id^="cont-fields-"]');
+        if (contFields) {
+          const values = contFields.querySelectorAll('.contestation-value');
+          if (values.length > 0) fundamento = values[0].textContent.trim();
+        }
+      }
+
+      const metaParts = [];
+      if (btype)    metaParts.push(btype);
+      if (vigencia) metaParts.push(`Vigência ${vigencia}`);
+      if (thesis)   metaParts.push(thesis);
+
+      const row = document.createElement('div');
+      row.className = 'review-benefit-card';
+      row.innerHTML = `
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <span style="background:${nbColor};color:#fff;padding:.2em .65em;border-radius:20px;font-size:.78rem;font-weight:600;white-space:nowrap;">
+            NB ${nb}
+          </span>
+          ${insured ? `<span class="fw-semibold">${insured}</span>` : ''}
+        </div>
+        ${metaParts.length ? `<div class="benefit-meta mt-1">${metaParts.join(' · ')}</div>` : ''}
+        ${fundamento ? `
+          <div class="cont-fundamento">
+            <div class="cont-fundamento-label">Fundamento da União</div>
+            ${fundamento}
+          </div>` : ''}
+      `;
+      container.appendChild(row);
+    });
   }
 
   // ── Loading state on submit ───────────────────────────────────────────
