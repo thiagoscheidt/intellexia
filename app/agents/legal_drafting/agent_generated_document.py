@@ -136,6 +136,25 @@ _IMPUGNACAO_INTERNAL_GUARDRAILS = """
 6) Marcadores internos NÃO podem ir para o texto final.
 - NÃO inserir no corpo da peça: "⚠️", "nota ao revisor", "placeholder", "dados pendentes".
 - Qualquer alerta/recomendação interna deve ir em `internal_review_notes`.
+
+7) Hierarquia de fontes quando houver resumo estruturado + contestação completa.
+- O resumo estruturado da contestação é a representação PRINCIPAL e PRIORITÁRIA da controvérsia.
+- A contestação completa deve ser usada apenas como fonte secundária para:
+    a) refinamento dialético;
+    b) validação contextual;
+    c) extração de trechos específicos;
+    d) identificação de argumentos defensivos não resumidos;
+    e) aumento de aderência processual.
+- NÃO reestruturar a peça com base no texto bruto da contestação.
+- NÃO replicar argumentos repetitivos da defesa.
+- NÃO aumentar prolixidade.
+- NÃO transformar a peça em resposta integral à contestação.
+- Use o resumo como núcleo narrativo, lógico e estrutural da impugnação.
+- Use a contestação bruta apenas para:
+    a) enriquecer impugnações específicas;
+    b) detectar contradições;
+    c) melhorar aderência argumentativa;
+    d) aumentar materialidade documental.
 """.strip()
 
 
