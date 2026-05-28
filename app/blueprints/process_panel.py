@@ -10,6 +10,7 @@ from app.models import (
     JudicialProcessGeneratedDocumentSelection,
 )
 from app.agents.legal_drafting.agent_generated_document import AgentGeneratedDocument, DOCUMENT_TYPE_LABELS
+from app.agents.legal_drafting.document_docx_export_agent import OfficeDocxExportAgent
 from app.agents.legal_drafting.impugnacao_enrichment_agent import ImpugnacaoEnrichmentAgent
 from datetime import datetime
 from functools import wraps
@@ -3248,11 +3249,6 @@ def generated_document_restore_version(process_id, doc_id, version_id):
 @process_panel_bp.route('/<int:process_id>/documentos-gerados/<int:doc_id>/download', methods=['GET'])
 @require_law_firm
 def generated_document_download(process_id, doc_id):
-    import io
-    from docx import Document as DocxDocument
-    from docx.shared import Pt, Inches
-    from docx.enum.text import WD_ALIGN_PARAGRAPH
-
     law_firm_id = get_current_law_firm_id()
     process = JudicialProcess.query.filter_by(
         id=process_id, law_firm_id=law_firm_id
@@ -3269,35 +3265,20 @@ def generated_document_download(process_id, doc_id):
             process_id=process_id, doc_id=doc_id,
         ))
 
-    doc = DocxDocument()
-
-    # Margens
-    for section in doc.sections:
-        section.top_margin = Inches(1)
-        section.bottom_margin = Inches(1)
-        section.left_margin = Inches(1.25)
-        section.right_margin = Inches(1.25)
-
-    for line in version.content.splitlines():
-        line = line.strip()
-        if not line:
-            doc.add_paragraph('')
-            continue
-        if line.startswith('# '):
-            p = doc.add_heading(line[2:], level=1)
-        elif line.startswith('## '):
-            p = doc.add_heading(line[3:], level=2)
-        elif line.startswith('### '):
-            p = doc.add_heading(line[4:], level=3)
-        elif line.startswith('---'):
-            doc.add_paragraph('_' * 60)
-        else:
-            p = doc.add_paragraph(line)
-            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
-
-    buf = io.BytesIO()
-    doc.save(buf)
-    buf.seek(0)
+    try:
+        export_agent = OfficeDocxExportAgent()
+        buf = export_agent.export_generated_document(
+            document_title=generated_doc.title or 'DOCUMENTO GERADO',
+            document_text=version.content,
+            run_ai_normalization=True,
+            law_firm_id=law_firm_id,
+        )
+    except Exception as error:
+        flash(f'Erro ao gerar DOCX para download: {str(error)}', 'danger')
+        return redirect(url_for(
+            'process_panel.generated_document_detail',
+            process_id=process_id, doc_id=doc_id,
+        ))
 
     safe_title = re.sub(r'[^\w\s-]', '', generated_doc.title).strip().replace(' ', '_')
     filename = f"{safe_title}_v{version.version_number}.docx"
