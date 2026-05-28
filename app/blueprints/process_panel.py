@@ -1426,6 +1426,7 @@ def new_process():
             saved_file_paths = []
             duplicates_count = 0
             uploaded_count = 0
+            reused_count = 0
             seen_file_hashes = set()
 
             for index, file in enumerate(uploaded_files):
@@ -1456,7 +1457,51 @@ def new_process():
                 ).first()
 
                 if duplicate:
-                    duplicates_count += 1
+                    event_date = datetime.utcnow()
+                    event = JudicialEvent(
+                        process_id=new_proc.id,
+                        type=document_type.key,
+                        phase=document_type.phase.key,
+                        description=(
+                            f'Documento {document_type.name} vinculado no cadastro inicial do processo '
+                            'a partir de arquivo já existente na base de conhecimento.'
+                        ),
+                        event_date=event_date,
+                    )
+                    db.session.add(event)
+                    db.session.flush()
+
+                    _register_phase_history(
+                        process=new_proc,
+                        phase=document_type.phase,
+                        occurred_at=event_date,
+                        entered_by_user_id=user_id,
+                        source_event_id=event.id,
+                        notes=(
+                            'Fase registrada automaticamente no cadastro inicial '
+                            f'via documento vinculado: {document_type.name}.'
+                        ),
+                        location_text='Cadastro inicial',
+                        metadata_payload={
+                            'origin': 'new_process_initial_linked_existing_kb',
+                            'document_type_key': document_type.key,
+                            'knowledge_base_id': duplicate.id,
+                        },
+                    )
+
+                    db.session.add(
+                        JudicialDocument(
+                            process_id=new_proc.id,
+                            event_id=event.id,
+                            knowledge_base_id=duplicate.id,
+                            type=document_type.key,
+                            file_name=duplicate.original_filename or file.filename,
+                            file_path=duplicate.file_path,
+                            file_hash=file_hash,
+                            uploaded_by=user_id,
+                        )
+                    )
+                    reused_count += 1
                     continue
 
                 filename = secure_filename(file.filename)
@@ -1532,7 +1577,7 @@ def new_process():
                 )
                 uploaded_count += 1
 
-            if uploaded_count == 0:
+            if uploaded_count == 0 and reused_count == 0:
                 db.session.rollback()
                 flash('Nenhum arquivo novo foi enviado (todos os arquivos já existem na base).', 'warning')
                 return redirect(url_for('process_panel.new_process'))
@@ -1540,9 +1585,14 @@ def new_process():
             new_proc.updated_at = datetime.utcnow()
             db.session.commit()
 
-            if duplicates_count > 0:
+            if duplicates_count > 0 or reused_count > 0:
                 flash(
-                    f'Processo {process_label} criado. {uploaded_count} documento(s) enviado(s) e {duplicates_count} duplicado(s) ignorado(s).',
+                    (
+                        f'Processo {process_label} criado. '
+                        f'{uploaded_count} documento(s) enviado(s), '
+                        f'{reused_count} documento(s) reaproveitado(s) da base e '
+                        f'{duplicates_count} duplicado(s) ignorado(s).'
+                    ),
                     'success'
                 )
             else:

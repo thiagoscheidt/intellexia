@@ -95,6 +95,175 @@ class JudicialDocumentService:
             return ''
         return ''.join(char for char in str(value) if char.isdigit())
 
+    @staticmethod
+    def _is_placeholder_process_title(title: str | None, previous_process_number: str = '') -> bool:
+        normalized_title = str(title or '').strip()
+        if not normalized_title:
+            return True
+
+        lowered = normalized_title.lower()
+        if lowered in {'(sem número)', '(sem numero)', 'sem número', 'sem numero'}:
+            return True
+
+        if normalized_title.startswith('TEMP-'):
+            return True
+
+        previous_number = str(previous_process_number or '').strip()
+        if previous_number.startswith('TEMP-') and normalized_title == previous_number:
+            return True
+
+        return False
+
+    def _build_auto_process_title(self, process: JudicialProcess, extraction_payload: dict) -> str:
+        active_pole = str(extraction_payload.get('active_pole', '') or '').strip()
+        passive_pole = str(extraction_payload.get('passive_pole', '') or '').strip()
+
+        plaintiff_name = ''
+        if process.plaintiff_client:
+            plaintiff_name = str(process.plaintiff_client.name or '').strip()
+
+        defendant_name = ''
+        if process.defendant:
+            defendant_name = str(process.defendant.name or '').strip()
+
+        author_label = active_pole or plaintiff_name
+        defendant_label = passive_pole or defendant_name
+        process_class = str(extraction_payload.get('classe') or process.process_class or '').strip()
+
+        if author_label and defendant_label:
+            title = f'{author_label} x {defendant_label}'
+        elif author_label:
+            title = author_label
+        elif defendant_label:
+            title = defendant_label
+        elif process.process_number:
+            title = f'Processo {process.process_number}'
+        else:
+            title = 'Processo Judicial'
+
+        if process_class and process_class.lower() not in title.lower():
+            title = f'{title} - {process_class}'
+
+        return title[:255]
+
+    @staticmethod
+    def _clean_judge_name(value: str | None) -> str:
+        text = str(value or '').strip()
+        if not text:
+            return ''
+
+        text = re.sub(r'\s+', ' ', text)
+        text = re.sub(
+            r'^(?:mm\.?\s*)?(?:ju[ií]z(?:a)?(?:\s+federal)?(?:\s+substituto(?:a)?)?)\s*[:\-]?\s*',
+            '',
+            text,
+            flags=re.IGNORECASE,
+        )
+        text = text.strip(' ,.;:-')
+        return text[:255]
+
+    def _extract_judge_name(self, extraction_payload: dict, document_text: str = '') -> str:
+        candidate_fields = [
+            extraction_payload.get('judge_name'),
+            extraction_payload.get('juiz_nome'),
+            extraction_payload.get('nome_juiz'),
+            extraction_payload.get('magistrate_name'),
+        ]
+
+        for candidate in candidate_fields:
+            cleaned = self._clean_judge_name(candidate)
+            if cleaned:
+                return cleaned
+
+        header_slice = str(document_text or '')[:9000]
+        if not header_slice:
+            return ''
+
+        patterns = [
+            r'(?im)ju[ií]z(?:a)?(?:\s+federal)?(?:\s+substituto(?:a)?)?\s*[:\-]\s*([^\n\r,;]{4,120})',
+            r'(?im)(?:mm\.?\s*)?ju[ií]z(?:a)?(?:\s+federal)?(?:\s+substituto(?:a)?)?\s+([^\n\r,;]{4,120})',
+            r'(?im)assinado\s+por\s*[:\-]?\s*([^\n\r,;]{4,120})',
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, header_slice)
+            if not match:
+                continue
+            cleaned = self._clean_judge_name(match.group(1))
+            if cleaned:
+                return cleaned
+
+        return ''
+
+    @staticmethod
+    def _normalize_cnpj(value: str | None) -> str:
+        digits = re.sub(r'\D', '', str(value or ''))
+        return digits if len(digits) == 14 else ''
+
+    @staticmethod
+    def _is_placeholder_cnpj(value: str | None) -> bool:
+        return JudicialDocumentService._normalize_cnpj(value) == '00000000000000'
+
+    @staticmethod
+    def _extract_cnpjs_from_text(text: str | None) -> list[str]:
+        if not text:
+            return []
+        pattern = re.compile(r'\b\d{2}\.?\d{3}\.?\d{3}/?\d{4}-?\d{2}\b')
+        found: list[str] = []
+        for raw in pattern.findall(str(text)):
+            normalized = JudicialDocumentService._normalize_cnpj(raw)
+            if normalized and normalized not in found:
+                found.append(normalized)
+        return found
+
+    def _extract_plaintiff_cnpj(self, extraction_payload: dict, document_text: str = '') -> str:
+        """Resolve CNPJ da autora usando payload estruturado e fallback no texto."""
+        candidate_fields = [
+            extraction_payload.get('active_pole_cnpj'),
+            extraction_payload.get('plaintiff_cnpj'),
+            extraction_payload.get('author_cnpj'),
+            extraction_payload.get('company_cnpj'),
+            extraction_payload.get('cnpj'),
+        ]
+
+        active_pole = str(extraction_payload.get('active_pole', '') or '').strip()
+        if active_pole:
+            candidate_fields.extend(self._extract_cnpjs_from_text(active_pole))
+
+        for candidate in candidate_fields:
+            normalized = self._normalize_cnpj(str(candidate or ''))
+            if normalized:
+                return normalized
+
+        header_slice = str(document_text or '')[:7000]
+        header_cnpjs = self._extract_cnpjs_from_text(header_slice)
+        if len(header_cnpjs) == 1:
+            return header_cnpjs[0]
+
+        return ''
+
+    def _apply_plaintiff_cnpj_to_client(self, process: JudicialProcess, plaintiff_cnpj: str) -> None:
+        normalized_cnpj = self._normalize_cnpj(plaintiff_cnpj)
+        if not normalized_cnpj:
+            return
+
+        client = process.plaintiff_client
+        if not client and process.plaintiff_client_id:
+            client = Client.query.filter_by(id=process.plaintiff_client_id).first()
+        if not client:
+            return
+
+        current_cnpj = self._normalize_cnpj(client.cnpj)
+        if current_cnpj == normalized_cnpj:
+            return
+
+        # Evita sobrescrever CNPJ já definido com outro valor sem intervenção humana.
+        if current_cnpj and not self._is_placeholder_cnpj(current_cnpj):
+            return
+
+        client.cnpj = normalized_cnpj
+        client.updated_at = datetime.utcnow()
+
     def _extract_primary_process_number(self, value: str | None) -> str:
         if not value:
             return ''
@@ -231,19 +400,31 @@ class JudicialDocumentService:
 
         return best_defendant if best_score >= 0.86 else None
 
-    def _resolve_or_create_client(self, law_firm_id: int, party_name: str) -> Client | None:
+    def _resolve_or_create_client(
+        self,
+        law_firm_id: int,
+        party_name: str,
+        cnpj: str | None = None,
+    ) -> Client | None:
         clean_name = str(party_name or '').strip()
         if not clean_name:
             return None
 
+        normalized_cnpj = self._normalize_cnpj(cnpj)
+
         client = self._find_similar_client(law_firm_id, clean_name)
         if client:
+            if normalized_cnpj:
+                current_cnpj = self._normalize_cnpj(client.cnpj)
+                if (not current_cnpj or self._is_placeholder_cnpj(current_cnpj)) and current_cnpj != normalized_cnpj:
+                    client.cnpj = normalized_cnpj
+                    client.updated_at = datetime.utcnow()
             return client
 
         client = Client(
             law_firm_id=law_firm_id,
             name=clean_name,
-            cnpj='00000000000000',
+            cnpj=normalized_cnpj or '00000000000000',
         )
         db.session.add(client)
         db.session.flush()
@@ -271,15 +452,24 @@ class JudicialDocumentService:
         self,
         process: JudicialProcess,
         extraction_payload: dict,
+        document_text: str = '',
         force_update: bool = False,
     ) -> None:
         active_pole = str(extraction_payload.get('active_pole', '') or '').strip()
         passive_pole = str(extraction_payload.get('passive_pole', '') or '').strip()
+        plaintiff_cnpj = self._extract_plaintiff_cnpj(extraction_payload, document_text=document_text)
 
         if (force_update or not process.plaintiff_client_id) and active_pole:
-            client = self._resolve_or_create_client(law_firm_id=process.law_firm_id, party_name=active_pole)
+            client = self._resolve_or_create_client(
+                law_firm_id=process.law_firm_id,
+                party_name=active_pole,
+                cnpj=plaintiff_cnpj,
+            )
             if client:
                 process.plaintiff_client_id = client.id
+
+        if plaintiff_cnpj:
+            self._apply_plaintiff_cnpj_to_client(process, plaintiff_cnpj)
 
         if (force_update or not process.defendant_id) and passive_pole:
             defendant = self._resolve_or_create_defendant(law_firm_id=process.law_firm_id, party_name=passive_pole)
@@ -809,6 +999,7 @@ class JudicialDocumentService:
         self._apply_parties_from_extraction(
             process=process,
             extraction_payload=extraction_payload,
+            document_text=document_full_text,
             force_update=False,
         )
         self._apply_extra_info_from_extraction(
@@ -817,6 +1008,7 @@ class JudicialDocumentService:
             force_update=False,
         )
 
+        previous_process_number = str(process.process_number or '').strip()
         extracted_process_number = str(extraction_payload.get('process_number', '') or '').strip()
         if extracted_process_number and str(process.process_number or '').startswith('TEMP-'):
             real_number = self._extract_primary_process_number(extracted_process_number)
@@ -842,11 +1034,24 @@ class JudicialDocumentService:
                         'Número temporário mantido.'
                     )
 
+        is_initial_document = self._is_initial_petition_document(extraction_payload)
+
+        if is_initial_document and self._is_placeholder_process_title(process.title, previous_process_number):
+            process.title = self._build_auto_process_title(process, extraction_payload)
+
         event_type, _, _ = self.resolve_type_and_phase(process.law_firm_id, extraction_payload)
         if event_type and not str(document.type or '').strip():
             document.type = event_type
 
-        if self._is_initial_petition_document(extraction_payload):
+        if not is_initial_document:
+            extracted_judge_name = self._extract_judge_name(
+                extraction_payload,
+                document_text=document_full_text,
+            )
+            if extracted_judge_name and not str(process.judge_name or '').strip():
+                process.judge_name = extracted_judge_name
+
+        if is_initial_document:
             self._process_initial_petition_flow(
                 process=process,
                 extractor_agent=extractor_agent,
