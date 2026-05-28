@@ -785,16 +785,38 @@ class AgentGeneratedDocument:
             lines.append(f"Título: {process.title}")
         if process.tribunal_name:
             lines.append(f"Tribunal/Vara: {process.tribunal_name}")
+        if process.section:
+            lines.append(f"Seção judiciária: {process.section}")
+        if process.origin_unit:
+            lines.append(f"Unidade de origem: {process.origin_unit}")
         if process.judge_name:
             lines.append(f"Juiz(a): {process.judge_name}")
         if process.plaintiff_client:
             lines.append(f"Autor: {process.plaintiff_client.name}")
+            plaintiff_cnpj = str(getattr(process.plaintiff_client, 'cnpj', '') or '').strip()
+            if plaintiff_cnpj:
+                lines.append(f"CNPJ do autor: {plaintiff_cnpj}")
         if process.defendant:
             lines.append(f"Réu: {process.defendant.name}")
         if process.process_class:
             lines.append(f"Classe processual: {process.process_class}")
+        if process.valor_causa_texto:
+            lines.append(f"Valor da causa: {process.valor_causa_texto}")
+        assuntos = getattr(process, 'assuntos', None)
+        if isinstance(assuntos, list):
+            assuntos_norm = [str(item).strip() for item in assuntos if str(item).strip()]
+            if assuntos_norm:
+                lines.append(f"Assuntos: {', '.join(assuntos_norm[:12])}")
+        if process.segredo_justica is not None:
+            lines.append(f"Segredo de justiça: {'Sim' if process.segredo_justica else 'Não'}")
+        if process.justica_gratuita is not None:
+            lines.append(f"Justiça gratuita: {'Sim' if process.justica_gratuita else 'Não'}")
+        if process.liminar_tutela is not None:
+            lines.append(f"Pedido de liminar/tutela: {'Sim' if process.liminar_tutela else 'Não'}")
         if process.filing_date:
             lines.append(f"Data de distribuição: {process.filing_date.strftime('%d/%m/%Y')}")
+        if process.description:
+            lines.append(f"Descrição do processo: {self._clip_text(process.description, max_chars=700)}")
         return "\n".join(lines)
 
     def _build_selections_context(self, selections: list[dict], include_contestation: bool = False) -> str:
@@ -1378,6 +1400,15 @@ class AgentGeneratedDocument:
     def _build_contestation_summary_context(self, contestation_summary_payload: Optional[dict]) -> str:
         """Monta bloco textual do resumo estruturado da contestação para reduzir custo de contexto."""
         payload = contestation_summary_payload if isinstance(contestation_summary_payload, dict) else {}
+        source_filename = self._clip_text(payload.get("source_filename") or "", max_chars=220)
+        source_document_type_key = self._clip_text(payload.get("source_document_type_key") or "", max_chars=90)
+        source_document_kind = self._clip_text(payload.get("source_document_kind") or "", max_chars=90)
+        source_origin = self._clip_text(payload.get("source_origin") or "", max_chars=60)
+        summary_document_type = self._clip_text(payload.get("summary_document_type") or "", max_chars=140)
+        summary_file_type = self._clip_text(payload.get("summary_file_type") or "", max_chars=40)
+        summary_status = self._clip_text(payload.get("summary_status") or "", max_chars=40)
+        summary_processed_at = self._clip_text(payload.get("summary_processed_at") or "", max_chars=64)
+        judicial_document_id = self._clip_text(payload.get("judicial_document_id") or "", max_chars=24)
         summary_text = self._clip_text(payload.get("summary_text") or "", max_chars=3500)
         summary_short = self._clip_text(payload.get("summary_short") or "", max_chars=900)
         summary_long = self._clip_text(payload.get("summary_long") or "", max_chars=5500)
@@ -1387,6 +1418,10 @@ class AgentGeneratedDocument:
         if not isinstance(union_arguments_by_thesis, list):
             union_arguments_by_thesis = []
         notes = self._clip_text(payload.get("notes") or "", max_chars=1200)
+        event_identifier = self._clip_text(
+            payload.get("document_event_identifier") or payload.get("event_identifier") or "",
+            max_chars=64,
+        )
 
         if not any([
             summary_text,
@@ -1396,6 +1431,9 @@ class AgentGeneratedDocument:
             requests,
             union_arguments_by_thesis,
             notes,
+            event_identifier,
+            source_filename,
+            summary_document_type,
         ]):
             return ""
 
@@ -1405,9 +1443,32 @@ class AgentGeneratedDocument:
             "Nao invente fatos fora deste bloco e dos dados estruturados de benefícios/teses.",
         ]
 
+        lines.append("\nMetadados do documento fonte:")
+        if source_filename:
+            lines.append(f"- Arquivo: {source_filename}")
+        if source_document_kind:
+            lines.append(f"- Documento: {source_document_kind}")
+        if source_origin:
+            lines.append(f"- Origem: {source_origin}")
+        if source_document_type_key:
+            lines.append(f"- Chave tipo do documento: {source_document_type_key}")
+        if summary_document_type:
+            lines.append(f"- Tipo no resumo IA: {summary_document_type}")
+        if summary_file_type:
+            lines.append(f"- Tipo de arquivo: {summary_file_type}")
+        if summary_status:
+            lines.append(f"- Status do resumo: {summary_status}")
+        if summary_processed_at:
+            lines.append(f"- Resumo processado em: {summary_processed_at}")
+        if judicial_document_id:
+            lines.append(f"- ID do documento judicial: {judicial_document_id}")
+
         if summary_short:
             lines.append("\nResumo executivo:")
             lines.append(summary_short)
+        if event_identifier:
+            lines.append("\nID do evento da contestação:")
+            lines.append(event_identifier)
         if summary_long:
             lines.append("\nResumo completo:")
             lines.append(summary_long)

@@ -96,6 +96,47 @@ class JudicialDocumentService:
         return ''.join(char for char in str(value) if char.isdigit())
 
     @staticmethod
+    def _normalize_event_identifier(value: str | None) -> str:
+        if not value:
+            return ''
+        digits = ''.join(char for char in str(value) if char.isdigit())
+        if len(digits) < 6:
+            return ''
+        return digits[:50]
+
+    def _extract_event_identifier(self, extraction_payload: dict, document_text: str = '') -> str:
+        candidates = [
+            extraction_payload.get('event_identifier'),
+            extraction_payload.get('event_id'),
+            extraction_payload.get('id_evento'),
+            extraction_payload.get('document_event_id'),
+        ]
+
+        for candidate in candidates:
+            normalized = self._normalize_event_identifier(candidate)
+            if normalized:
+                return normalized
+
+        header_slice = str(document_text or '')[:12000]
+        if not header_slice:
+            return ''
+
+        patterns = [
+            r'(?im)\bid\.?\s*(?:do\s+evento|evento)?\s*[:\-]?\s*(\d{6,20})\b',
+            r'(?im)^\s*(\d{6,20})\s+\d{2}/\d{2}/\d{4}',
+        ]
+
+        for pattern in patterns:
+            match = re.search(pattern, header_slice)
+            if not match:
+                continue
+            normalized = self._normalize_event_identifier(match.group(1))
+            if normalized:
+                return normalized
+
+        return ''
+
+    @staticmethod
     def _is_placeholder_process_title(title: str | None, previous_process_number: str = '') -> bool:
         normalized_title = str(title or '').strip()
         if not normalized_title:
@@ -1036,6 +1077,13 @@ class JudicialDocumentService:
 
         is_initial_document = self._is_initial_petition_document(extraction_payload)
 
+        extracted_event_identifier = self._extract_event_identifier(
+            extraction_payload,
+            document_text=document_full_text,
+        )
+        if extracted_event_identifier and extracted_event_identifier != str(document.event_identifier or '').strip():
+            document.event_identifier = extracted_event_identifier
+
         if is_initial_document and self._is_placeholder_process_title(process.title, previous_process_number):
             process.title = self._build_auto_process_title(process, extraction_payload)
 
@@ -1068,6 +1116,7 @@ class JudicialDocumentService:
         return {
             'sections_overview': sections_overview if isinstance(sections_overview, list) else [],
             'pedidos_excerpt': str(pedidos_excerpt or '').strip(),
+            'document_event_identifier': str(document.event_identifier or '').strip(),
         }
 
     def _summarize_judicial_document(
@@ -1094,8 +1143,12 @@ class JudicialDocumentService:
             if not isinstance(sections_overview, list):
                 sections_overview = []
             pedidos_excerpt = ''
+            document_event_identifier = str(document.event_identifier or '').strip()
             if isinstance(context_payload, dict):
                 pedidos_excerpt = str(context_payload.get('pedidos_excerpt', '') or '').strip()
+                context_event_identifier = str(context_payload.get('document_event_identifier', '') or '').strip()
+                if context_event_identifier:
+                    document_event_identifier = context_event_identifier
 
             summary_agent = JudicialDocumentSummaryAgent()
             summary_result = summary_agent.summarize_document(
@@ -1105,9 +1158,13 @@ class JudicialDocumentService:
                 file_type='',
                 sections_overview=sections_overview,
                 pedidos_excerpt=pedidos_excerpt,
+                document_event_identifier=document_event_identifier,
                 user_id=document.uploaded_by,
                 law_firm_id=process.law_firm_id,
             )
+
+            if isinstance(summary_result, dict) and document_event_identifier:
+                summary_result['document_event_identifier'] = document_event_identifier
 
             summary_text = ''
             if isinstance(summary_result, dict):

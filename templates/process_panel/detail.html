@@ -753,6 +753,11 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                   <i class="bi bi-file-earmark me-2"></i>
                                   <span>{{ doc.filename }}</span>
                                 </div>
+                                {% if doc.event_identifier %}
+                                <div class="small text-muted mt-1">
+                                  <strong>Id.</strong> {{ doc.event_identifier }}
+                                </div>
+                                {% endif %}
                                 {% if doc.judicial_document_id and doc.processing_status not in ['pending',
                                 'processing'] %}
                                 <button type="submit" class="ai-status-inline mt-2"

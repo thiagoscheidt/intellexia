@@ -1338,6 +1338,7 @@ class JudicialDocument(db.Model):
     file_name = db.Column(db.String(255), nullable=False)
     file_path = db.Column(db.String(500), nullable=False)
     file_hash = db.Column(db.String(64), index=True)
+    event_identifier = db.Column(db.String(50), index=True)
     uploaded_by = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
     status = db.Column(db.String(20), default='pending', nullable=False, index=True)
     error_message = db.Column(db.Text)

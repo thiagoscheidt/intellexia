@@ -63,11 +63,13 @@ class JudicialDocumentSummaryAgent:
         file_type: str,
         sections_overview: List[str] | None,
         pedidos_excerpt: str | None,
+        document_event_identifier: str | None,
     ) -> str:
         safe_doc_type = (document_type_name or document_type_key or "documento judicial").strip()
         safe_file_type = (file_type or "").strip()
         safe_sections = sections_overview or []
         safe_pedidos_excerpt = (pedidos_excerpt or "").strip()
+        safe_event_identifier = (document_event_identifier or "").strip()
 
         sections_block = "\n".join(f"- {section}" for section in safe_sections) if safe_sections else "(nao identificado)"
         pedidos_block = safe_pedidos_excerpt if safe_pedidos_excerpt else "(nao identificado)"
@@ -81,6 +83,7 @@ class JudicialDocumentSummaryAgent:
             f"TIPO DE DOCUMENTO: {safe_doc_type}\n"
             f"CHAVE DO TIPO: {document_type_key or ''}\n"
             f"TIPO DE ARQUIVO: {safe_file_type}\n\n"
+            f"ID DO EVENTO PROCESSUAL (se identificado): {safe_event_identifier or '(nao identificado)'}\n\n"
             f"SECOES IDENTIFICADAS NO DOCUMENTO:\n{sections_block}\n\n"
             f"TRECHO DOS PEDIDOS (SE HOUVER):\n{pedidos_block}\n\n"
             "DIFERENCIACAO OBRIGATORIA:\n"
@@ -92,6 +95,7 @@ class JudicialDocumentSummaryAgent:
             "riscos/fragilidades; oportunidades processuais; prazos e proximos passos.\n"
             "Se houver dados quantificaveis (valores, prazos, indices), inclua no resumo.\n"
             "Se o trecho de pedidos existir, priorize-o para detalhar o que foi requerido ao juizo.\n"
+            "Se o ID DO EVENTO PROCESSUAL estiver identificado, cite esse id explicitamente no summary_short e no summary_long.\n"
             "Em requests, retorne cada pedido de forma clara e separada, mantendo a redação juridica quando ela for importante.\n"
             "Se for documento de contestacao, preencha union_arguments_by_thesis com os argumentos da Uniao por tese/tema.\n"
             "Formato de union_arguments_by_thesis: lista de objetos com thesis (nome da tese/tema), status (procedente, improcedente, parcial ou nao identificado) e arguments (lista de fundamentos objetivos da Uniao).\n"
@@ -157,6 +161,7 @@ class JudicialDocumentSummaryAgent:
         file_type: str = "",
         sections_overview: List[str] | None = None,
         pedidos_excerpt: str | None = None,
+        document_event_identifier: str = "",
         user_id: Optional[int] = None,
         law_firm_id: Optional[int] = None,
     ) -> dict:
@@ -181,6 +186,7 @@ class JudicialDocumentSummaryAgent:
             file_type,
             sections_overview,
             pedidos_excerpt,
+            document_event_identifier,
         )
 
         agent = create_agent(
@@ -196,6 +202,7 @@ class JudicialDocumentSummaryAgent:
             "document_type": document_type_name or document_type_key,
             "file_type": file_type,
             "file_name": Path(normalized_path).name if normalized_path else "",
+            "document_event_identifier": document_event_identifier,
         }
         history_messages = self._build_messages_for_history(user_prompt, file_part)
 

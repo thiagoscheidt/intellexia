@@ -23,6 +23,7 @@ load_dotenv()
 
 class DocumentExtractionResult(BaseModel):
     process_number: str = Field(default="", description="Número do processo, se encontrado")
+    event_identifier: str = Field(default="", description="ID do evento processual/documento, quando presente")
     judicial_court: str = Field(default="", description="Vara/juízo/tribunal identificado")
     active_pole: str = Field(default="", description="Polo ativo identificado")
     passive_pole: str = Field(default="", description="Polo passivo identificado")
@@ -208,6 +209,35 @@ class AgentDocumentExtractor:
             doc.page_content for doc in documents[:max_chunks]
         )
         return initial_text[:max_chars]
+
+    def _first_page_context(self, max_chars: int = 3500) -> str:
+        """Retorna contexto da primeira página (texto + tabelas) para campos de cabeçalho."""
+        parts: list[str] = []
+
+        first_page_chunks = [
+            chunk for chunk in self._get_document_data_chunks()
+            if str(chunk.get("page") or "").strip() == "1"
+        ]
+        if first_page_chunks:
+            chunk_text = "\n\n".join(
+                str(chunk.get("text") or "").strip()
+                for chunk in first_page_chunks
+                if str(chunk.get("text") or "").strip()
+            )
+            if chunk_text:
+                parts.append(chunk_text)
+
+        first_page_tables = [
+            table for table in self._get_document_data_tables()
+            if str(table.get("page") or "").strip() == "1"
+        ]
+        if first_page_tables:
+            tables_text = self._tables_to_prompt_text(first_page_tables)
+            if tables_text:
+                parts.append(tables_text)
+
+        merged = "\n\n---\n\n".join(parts).strip()
+        return merged[:max_chars]
 
     def _semantic_search(self, vectorstore, query: str, k: int = 6) -> str:
         if vectorstore is None:
@@ -1281,6 +1311,7 @@ class AgentDocumentExtractor:
             max_chunks=6,
             max_chars=8000,
         )
+        first_page_context = self._first_page_context(max_chars=3500)
 
         doc_type_context = self._semantic_search(
             vectorstore,
@@ -1310,6 +1341,12 @@ class AgentDocumentExtractor:
             "NÚMERO DO PROCESSO:\n"
             "- Normalmente segue o padrão CNJ:\n"
             "0000000-00.0000.0.00.0000\n\n"
+
+            "ID DO EVENTO (event_identifier):\n"
+            "- Procure principalmente na primeira página, em tabelas/listas de documentos, coluna 'Id.' ou 'Id do evento'.\n"
+            "- Exemplo comum: 473958985.\n"
+            "- Retorne somente dígitos, sem pontos/traços/espaços.\n"
+            "- Se não encontrar com segurança, retorne string vazia.\n\n"
             "VARA / JUÍZO:\n"
             "- Pode aparecer como Vara, Juízo, Tribunal ou Seção Judiciária.\n\n"
             "CLASSE PROCESSUAL (classe):\n"
@@ -1345,11 +1382,16 @@ class AgentDocumentExtractor:
             f"{categories_prompt}\n\n"
             "TRECHO DO DOCUMENTO:\n"
             f"{header_context}\n\n"
+
+            "TRECHO DA PRIMEIRA PAGINA (priorize para event_identifier):\n"
+            f"{first_page_context}\n\n"
+
             "TRECHO SEMÂNTICO PARA TIPO/CATEGORIA:\n"
             f"{doc_type_context}\n\n"
             "Retorne o resultado no seguinte formato JSON:\n"
             "{\n"
             '  "process_number": "",\n'
+            '  "event_identifier": "",\n'
             '  "judicial_court": "",\n'
             '  "active_pole": "",\n'
             '  "passive_pole": "",\n'

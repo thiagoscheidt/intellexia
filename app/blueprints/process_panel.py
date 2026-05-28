@@ -224,14 +224,26 @@ def _resolve_latest_contestation_summary_payload(process, law_firm_id):
         )
 
     return {
+        'source_filename': str(contestation_doc.file_name or '').strip(),
+        'source_document_type_key': str(contestation_doc.type or '').strip(),
+        'source_document_kind': 'Contestação',
+        'source_origin': 'Arquivo',
         'summary_text': summary_text,
         'summary_short': summary_short,
         'summary_long': summary_long,
         'requests': requests,
         'key_points': key_points,
         'union_arguments_by_thesis': union_arguments_by_thesis,
+        'summary_document_type': str(payload.get('document_type') or '').strip(),
+        'summary_file_type': str(payload.get('file_type') or '').strip(),
         'notes': notes,
+        'document_event_identifier': str(
+            payload.get('document_event_identifier')
+            or contestation_doc.event_identifier
+            or ''
+        ).strip(),
         'summary_status': summary.status,
+        'summary_processed_at': summary.processed_at.isoformat() if summary.processed_at else None,
         'judicial_document_id': contestation_doc.id,
     }
 
@@ -1773,6 +1785,7 @@ def detail(process_id):
             'uploaded_at': judicial_doc.created_at,
             'phase_label': phase_label,
             'doc_type_label': doc_type_label,
+            'event_identifier': str(judicial_doc.event_identifier or '').strip(),
             'knowledge_base_id': judicial_doc.knowledge_base_id,
             'processing_status': (judicial_doc.status or '').strip().lower(),
             'judicial_document_id': judicial_doc.id,
