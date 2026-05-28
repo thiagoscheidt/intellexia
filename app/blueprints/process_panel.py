@@ -10,6 +10,7 @@ from app.models import (
     JudicialProcessGeneratedDocumentSelection,
 )
 from app.agents.legal_drafting.agent_generated_document import AgentGeneratedDocument, DOCUMENT_TYPE_LABELS
+from app.agents.legal_drafting.impugnacao_enrichment_agent import ImpugnacaoEnrichmentAgent
 from datetime import datetime
 from functools import wraps
 from sqlalchemy import or_, and_
@@ -2918,6 +2919,19 @@ def generated_document_create(process_id):
             law_firm_id=law_firm_id,
         )
 
+        # Enriquecimento jurisprudencial (apenas para impugnação)
+        if document_type == 'impugnacao_contestacao':
+            try:
+                trf_region = getattr(process, 'trf_region', None) or ''
+                full_text = ImpugnacaoEnrichmentAgent().enrich(
+                    document_text=full_text,
+                    selections=agent_selections,
+                    law_firm_id=law_firm_id,
+                    trf_region=trf_region,
+                )
+            except Exception as enrich_err:
+                print(f'[EnrichmentAgent] Falha silenciosa: {enrich_err}')
+
         internal_notes = None
         if isinstance(result_dict, dict):
             internal_notes = (result_dict.get('internal_review_notes') or '').strip() or None
@@ -3108,6 +3122,19 @@ def generated_document_regenerate(process_id, doc_id):
             contestation_summary_payload=contestation_summary_payload,
             law_firm_id=law_firm_id,
         )
+
+        # Enriquecimento jurisprudencial (apenas para impugnação)
+        if generated_doc.document_type == 'impugnacao_contestacao':
+            try:
+                trf_region = getattr(process, 'trf_region', None) or ''
+                full_text = ImpugnacaoEnrichmentAgent().enrich(
+                    document_text=full_text,
+                    selections=agent_selections,
+                    law_firm_id=law_firm_id,
+                    trf_region=trf_region,
+                )
+            except Exception as enrich_err:
+                print(f'[EnrichmentAgent] Falha silenciosa: {enrich_err}')
 
         internal_notes = None
         if isinstance(result_dict, dict):
