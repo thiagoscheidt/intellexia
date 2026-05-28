@@ -3,6 +3,7 @@ Agente de IA para geração de recursos judiciais
 """
 
 import os
+import re
 from datetime import datetime
 from typing import Optional, List
 from pydantic import BaseModel, Field
@@ -33,43 +34,75 @@ class GeneratedAppeal(BaseModel):
     requests: str = Field(description="Dos pedidos - o que se pretende com o recurso")
     conclusion: str = Field(description="Conclusão do recurso")
     additional_sections: List[AppealSection] = Field(default_factory=list, description="Seções adicionais conforme tipo de recurso")
+
+    @staticmethod
+    def _clean_section_content(content: str) -> str:
+        """Remove cabeçalhos duplicados no início da seção para preservar a hierarquia do documento."""
+        text = str(content or "").strip()
+        if not text:
+            return ""
+
+        # Remove markdown heading no início do texto do campo
+        text = re.sub(r"^#{1,6}\s+", "", text).strip()
+
+        # Remove numeração jurídica no início (I., II., 1., 1.1. etc.)
+        text = re.sub(r"^(?:[IVXLCDM]{1,8}|\d+(?:\.\d+)*)\.\s+", "", text, flags=re.IGNORECASE).strip()
+
+        # Remove rótulos de seção comuns quando retornados pelo modelo
+        text = re.sub(
+            r"^(?:DA|DO|DOS|DAS)?\s*"
+            r"(INTRODUÇÃO|FATOS|FUNDAMENTOS|JURISPRUD[ÊE]NCIA|PEDIDOS|CONCLUS[ÃA]O)\s*[:\-]?\s*",
+            "",
+            text,
+            flags=re.IGNORECASE,
+        ).strip()
+
+        return text
+
+    @staticmethod
+    def _clean_section_title(title: str) -> str:
+        text = str(title or "").strip()
+        text = re.sub(r"^#{1,6}\s+", "", text).strip()
+        text = re.sub(r"^(?:[IVXLCDM]{1,8}|\d+(?:\.\d+)*)\.\s+", "", text, flags=re.IGNORECASE).strip()
+        return text.upper()
     
     def to_full_text(self) -> str:
-        """Converte o recurso estruturado em texto completo formatado"""
+        """Converte o recurso estruturado em texto completo formatado com hierarquia clara de títulos."""
         sections = []
-        
-        sections.append(f"RECURSO: {self.appeal_type.upper()}\n")
-        sections.append("=" * 80 + "\n")
+
+        sections.append(f"# RECURSO: {self.appeal_type.upper()}\n")
         
         if self.introduction:
-            sections.append("I. INTRODUÇÃO\n")
-            sections.append(self.introduction + "\n\n")
+            sections.append("## I. INTRODUÇÃO\n")
+            sections.append(self._clean_section_content(self.introduction) + "\n\n")
         
         if self.facts:
-            sections.append("II. DOS FATOS\n")
-            sections.append(self.facts + "\n\n")
+            sections.append("## II. DOS FATOS\n")
+            sections.append(self._clean_section_content(self.facts) + "\n\n")
         
         if self.grounds:
-            sections.append("III. DOS FUNDAMENTOS\n")
-            sections.append(self.grounds + "\n\n")
+            sections.append("## III. DOS FUNDAMENTOS\n")
+            sections.append(self._clean_section_content(self.grounds) + "\n\n")
         
         if self.jurisprudence:
-            sections.append("IV. DA JURISPRUDÊNCIA\n")
-            sections.append(self.jurisprudence + "\n\n")
+            sections.append("## IV. DA JURISPRUDÊNCIA\n")
+            sections.append(self._clean_section_content(self.jurisprudence) + "\n\n")
         
         section_num = 5
         for section in self.additional_sections:
-            sections.append(f"{section_num}. {section.title.upper()}\n")
-            sections.append(section.content + "\n\n")
+            clean_title = self._clean_section_title(section.title)
+            if clean_title:
+                sections.append(f"## {section_num}. {clean_title}\n")
+                sections.append(self._clean_section_content(section.content) + "\n\n")
             section_num += 1
         
         if self.requests:
-            sections.append(f"{section_num}. DOS PEDIDOS\n")
-            sections.append(self.requests + "\n\n")
+            sections.append(f"## {section_num}. DOS PEDIDOS\n")
+            sections.append(self._clean_section_content(self.requests) + "\n\n")
         
         if self.conclusion:
-            sections.append("CONCLUSÃO\n")
-            sections.append(self.conclusion + "\n")
+            sections.append("## CONCLUSÃO\n")
+            sections.append(self._clean_section_content(self.conclusion) + "\n")
         
         return "".join(sections)
     
@@ -188,6 +221,8 @@ class AgentAppealGenerator:
             "- Evite argumentos genéricos ou vagos\n"
             "- Estruture o texto de forma lógica e progressiva\n"
             "- Cite artigos de lei, súmulas e precedentes sempre que possível\n"
+            "- Em cada campo da saída estruturada, retorne apenas o conteúdo da seção, sem repetir títulos como 'I. INTRODUÇÃO'\n"
+            "- Não inclua markdown ou numeração de título no início dos campos (o sistema monta a hierarquia final)\n"
         )
         
         print("[Agente] Gerando recurso judicial com IA...")

@@ -3246,10 +3246,11 @@ def generated_document_restore_version(process_id, doc_id, version_id):
     ))
 
 
-@process_panel_bp.route('/<int:process_id>/documentos-gerados/<int:doc_id>/download', methods=['GET'])
+@process_panel_bp.route('/<int:process_id>/documentos-gerados/<int:doc_id>/download', methods=['GET', 'POST'])
 @require_law_firm
 def generated_document_download(process_id, doc_id):
     law_firm_id = get_current_law_firm_id()
+    user_id = session.get('user_id')
     process = JudicialProcess.query.filter_by(
         id=process_id, law_firm_id=law_firm_id
     ).first_or_404()
@@ -3265,13 +3266,49 @@ def generated_document_download(process_id, doc_id):
             process_id=process_id, doc_id=doc_id,
         ))
 
+    posted_content = request.form.get('content') if request.method == 'POST' else None
+    content_to_export = posted_content if posted_content is not None else version.content
+    if not str(content_to_export or '').strip():
+        flash('O conteúdo para download está vazio.', 'warning')
+        return redirect(url_for(
+            'process_panel.generated_document_detail',
+            process_id=process_id, doc_id=doc_id,
+        ))
+
+    # A cada download, cria uma nova versão com snapshot do conteúdo atual.
+    last_version = (
+        JudicialProcessGeneratedDocumentVersion.query
+        .filter_by(generated_document_id=generated_doc.id)
+        .order_by(JudicialProcessGeneratedDocumentVersion.version_number.desc())
+        .first()
+    )
+    next_version_number = (last_version.version_number + 1) if last_version else 1
+
+    new_version = JudicialProcessGeneratedDocumentVersion(
+        generated_document_id=generated_doc.id,
+        created_by_id=user_id,
+        version_number=next_version_number,
+        content=content_to_export,
+        internal_notes=version.internal_notes,
+        source='manually_edited' if request.method == 'POST' else (version.source or 'manually_edited'),
+        generation_status='completed',
+        model_used=version.model_used,
+        token_usage_json=version.token_usage_json,
+        prompt_used=version.prompt_used,
+    )
+    db.session.add(new_version)
+    db.session.flush()
+    generated_doc.current_version_id = new_version.id
+    db.session.commit()
+
     try:
         export_agent = OfficeDocxExportAgent()
         buf = export_agent.export_generated_document(
             document_title=generated_doc.title or 'DOCUMENTO GERADO',
-            document_text=version.content,
-            run_ai_normalization=True,
+            document_text=new_version.content,
+            run_ai_normalization=False,
             law_firm_id=law_firm_id,
+            include_document_title=(generated_doc.document_type != 'impugnacao_contestacao'),
         )
     except Exception as error:
         flash(f'Erro ao gerar DOCX para download: {str(error)}', 'danger')
@@ -3281,7 +3318,7 @@ def generated_document_download(process_id, doc_id):
         ))
 
     safe_title = re.sub(r'[^\w\s-]', '', generated_doc.title).strip().replace(' ', '_')
-    filename = f"{safe_title}_v{version.version_number}.docx"
+    filename = f"{safe_title}_v{new_version.version_number}.docx"
 
     return send_file(
         buf,

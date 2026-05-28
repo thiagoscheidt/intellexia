@@ -1205,7 +1205,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                 </a>
                                 {% if cv and cv.generation_status == 'completed' %}
                                 <a href="{{ url_for('process_panel.generated_document_download', process_id=process.id, doc_id=gdoc.id) }}"
-                                  class="btn btn-sm bg-success-subtle text-success-emphasis border-0">
+                                  class="btn btn-sm bg-success-subtle text-success-emphasis border-0 js-generated-doc-download"
+                                  data-download-label="Baixar DOCX">
                                   <i class="bi bi-download"></i>
                                 </a>
                                 {% endif %}
@@ -2045,6 +2046,20 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
     {% endfor %}
   </div>
   {% endif %}
+
+  <div class="modal fade" id="downloadDocLoadingModalList" tabindex="-1"
+    aria-labelledby="downloadDocLoadingModalListLabel" aria-hidden="true" data-bs-backdrop="static"
+    data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered modal-sm">
+      <div class="modal-content border-0 shadow">
+        <div class="modal-body text-center p-4">
+          <div class="spinner-border text-primary mb-3" role="status" style="width:2rem;height:2rem;"></div>
+          <h6 class="mb-2 fw-semibold" id="downloadDocLoadingModalListLabel">Gerando documento</h6>
+          <p class="text-muted small mb-0" id="downloadDocLoadingStatusList">Preparando versão mais recente...</p>
+        </div>
+      </div>
+    </div>
+  </div>
 
   {% endblock %}
 
@@ -3041,5 +3056,73 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
         }
       });
     })();
+  </script>
+  <script>
+    document.addEventListener('DOMContentLoaded', function () {
+      const downloadModalEl = document.getElementById('downloadDocLoadingModalList');
+      const downloadStatusEl = document.getElementById('downloadDocLoadingStatusList');
+      const downloadButtons = document.querySelectorAll('.js-generated-doc-download');
+
+      if (!downloadModalEl || !downloadButtons.length) {
+        return;
+      }
+
+      const downloadModal = new bootstrap.Modal(downloadModalEl);
+
+      downloadButtons.forEach(function (button) {
+        button.addEventListener('click', function (event) {
+          if (button.dataset.loading === '1') {
+            event.preventDefault();
+            return;
+          }
+
+          event.preventDefault();
+          button.dataset.loading = '1';
+          button.dataset.originalHtml = button.innerHTML;
+          button.classList.add('disabled');
+          button.setAttribute('aria-disabled', 'true');
+          button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>';
+
+          const statusSteps = [
+            'Preparando versão mais recente...',
+            'Formatando DOCX no padrão do escritório...',
+            'Iniciando download...'
+          ];
+          let stepIndex = 0;
+
+          if (downloadStatusEl) {
+            downloadStatusEl.textContent = statusSteps[stepIndex];
+          }
+
+          downloadModal.show();
+
+          const intervalId = setInterval(function () {
+            stepIndex = Math.min(stepIndex + 1, statusSteps.length - 1);
+            if (downloadStatusEl) {
+              downloadStatusEl.textContent = statusSteps[stepIndex];
+            }
+            if (stepIndex === statusSteps.length - 1) {
+              clearInterval(intervalId);
+            }
+          }, 900);
+
+          const targetUrl = button.getAttribute('href');
+          setTimeout(function () {
+            window.location.href = targetUrl;
+          }, 180);
+
+          setTimeout(function () {
+            clearInterval(intervalId);
+            downloadModal.hide();
+            button.dataset.loading = '0';
+            button.classList.remove('disabled');
+            button.removeAttribute('aria-disabled');
+            if (button.dataset.originalHtml) {
+              button.innerHTML = button.dataset.originalHtml;
+            }
+          }, 6500);
+        });
+      });
+    });
   </script>
   {% endblock %}

@@ -280,43 +280,119 @@ class GeneratedImpugnacaoContestacao(BaseModel):
         ),
     )
 
+    @staticmethod
+    def _ensure_formal_opening(introduction_text: str) -> str:
+        """Garante abertura forense da peça com endereçamento formal."""
+        intro = str(introduction_text or "").strip()
+        if not intro:
+            intro = (
+                "EXCELENTÍSSIMO(A) SENHOR(A) DOUTOR(A) JUIZ(A) FEDERAL "
+                "DA ___ VARA FEDERAL DA SUBSEÇÃO JUDICIÁRIA DE ___/___."
+            )
+
+        intro_upper = intro.upper()
+        if intro_upper.startswith("EXCELENT"):
+            return intro
+
+        opening = (
+            "EXCELENTÍSSIMO(A) SENHOR(A) DOUTOR(A) JUIZ(A) FEDERAL "
+            "DA ___ VARA FEDERAL DA SUBSEÇÃO JUDICIÁRIA DE ___/___."
+        )
+        return f"{opening}\n\n{intro}"
+
+    @staticmethod
+    def _extract_max_top_level_heading_number(text: str) -> int:
+        """Extrai o maior número de heading de 1º nível no texto informado."""
+        if not text:
+            return 0
+
+        max_number = 0
+        for line in str(text).splitlines():
+            match = re.match(r"^\s*(?:#{1,2}\s*)?(\d+)\.\s+", line)
+            if not match:
+                continue
+            try:
+                current = int(match.group(1))
+            except ValueError:
+                continue
+            if current > max_number:
+                max_number = current
+        return max_number
+
+    @staticmethod
+    def _normalize_requests_heading_number(requests_text: str, expected_number: int) -> str:
+        """Ajusta numeração do heading de pedidos quando vier desalinhada do documento real."""
+        if not requests_text or expected_number <= 0:
+            return requests_text
+
+        lines = str(requests_text).splitlines()
+        for idx, line in enumerate(lines):
+            match = re.match(r"^(\s*)(#{1,2}\s*)?(\d+)\.\s+(.*)$", line)
+            if not match:
+                continue
+
+            tail_upper = match.group(4).strip().upper()
+            if "PEDIDO" not in tail_upper:
+                continue
+
+            indent = match.group(1) or ""
+            hashes = match.group(2) or ""
+            title = match.group(4)
+            lines[idx] = f"{indent}{hashes}{expected_number}. {title}"
+            return "\n".join(lines)
+
+        return requests_text
+
     def to_full_text(self) -> str:
         parts = []
-        is_mode_b = self.generation_mode == "B"
+        parts.append(self._ensure_formal_opening(self.introduction) + "\n")
 
-        if is_mode_b:
-            parts.append("# IMPUGNAÇÃO À CONTESTAÇÃO DA UNIÃO\n")
-            parts.append("> **Modo de redação: B — Defesa Processual** *(auditoria interna)*\n\n")
-        else:
-            parts.append("# IMPUGNAÇÃO À CONTESTAÇÃO DA UNIÃO\n")
+        max_heading_before_requests = 0
 
-        parts.append(self.introduction + "\n")
-        parts.append("\n---\n")
-        parts.append(self.preliminary_notes + "\n")
+        if self.preliminary_notes:
+            parts.append("\n" + self.preliminary_notes.strip() + "\n")
+            max_heading_before_requests = max(
+                max_heading_before_requests,
+                self._extract_max_top_level_heading_number(self.preliminary_notes),
+            )
 
         if self.benefit_sections or self.compensation_section:
             merit_num = getattr(self, 'merit_section_number', 3)
             parts.append(f"\n## {merit_num}. DO MÉRITO PROPRIAMENTE DITO\n")
+            max_heading_before_requests = max(max_heading_before_requests, merit_num)
             for sec in self.benefit_sections:
                 parts.append("\n" + sec.argument + "\n")
             if self.compensation_section:
                 comp_idx = len(self.benefit_sections) + 1
                 parts.append(
-                    f"\n{merit_num}.{comp_idx}. COMPENSAÇÃO E RESTITUIÇÃO – PROCEDIMENTOS\n\n"
+                    f"\n### {merit_num}.{comp_idx}. COMPENSAÇÃO E RESTITUIÇÃO – PROCEDIMENTOS\n\n"
                 )
                 parts.append(self.compensation_section + "\n")
 
-        parts.append("\n---\n")
-        parts.append(self.general_legal_grounds + "\n")
+        if self.general_legal_grounds:
+            parts.append("\n" + self.general_legal_grounds.strip() + "\n")
+            max_heading_before_requests = max(
+                max_heading_before_requests,
+                self._extract_max_top_level_heading_number(self.general_legal_grounds),
+            )
 
         if self.jurisprudence:
-            parts.append("\n---\n")
-            parts.append(self.jurisprudence + "\n")
+            parts.append("\n" + self.jurisprudence.strip() + "\n")
+            max_heading_before_requests = max(
+                max_heading_before_requests,
+                self._extract_max_top_level_heading_number(self.jurisprudence),
+            )
 
-        parts.append("\n---\n")
-        parts.append(self.requests + "\n")
-        parts.append("\n---\n")
-        parts.append(self.closing + "\n")
+        if self.requests:
+            expected_requests_number = max_heading_before_requests + 1 if max_heading_before_requests else 0
+            requests_text = self._normalize_requests_heading_number(
+                self.requests.strip(),
+                expected_requests_number,
+            )
+            parts.append("\n" + requests_text + "\n")
+
+        if self.closing:
+            parts.append("\n" + self.closing.strip() + "\n")
         return "".join(parts)
 
     def to_dict(self) -> dict:

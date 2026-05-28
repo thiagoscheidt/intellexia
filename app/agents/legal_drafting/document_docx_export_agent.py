@@ -46,7 +46,7 @@ _SYSTEM_PROMPT = (
     "Preserve tabelas markdown com pipes exatamente como tabelas estruturadas."
 )
 
-_BOLD_MARKDOWN_RE = re.compile(r"(\*\*([^*]+)\*\*|__([^_]+)__)" )
+_BOLD_MARKDOWN_RE = re.compile(r"(\*\*([^*]+)\*\*|__([^_]+)__)")
 _PLAIN_HEADING_RE = re.compile(
     r"^(?:"
     r"(?:[IVXLCDM]{1,8}|\d+(?:\.\d+)*)\.\s+[A-ZÁÉÍÓÚÀÂÊÔÃÕÇ0-9][A-ZÁÉÍÓÚÀÂÊÔÃÕÇ0-9\s\-/,&().]{2,}"
@@ -91,6 +91,40 @@ class OfficeDocxExportAgent:
         value = value.replace("**", "")
         value = value.replace("__", "")
         return value
+
+    @staticmethod
+    def _unwrap_bold_heading_candidate(text: str) -> str:
+        value = str(text or "").strip()
+        if (value.startswith("**") and value.endswith("**") and len(value) > 4) or (
+            value.startswith("__") and value.endswith("__") and len(value) > 4
+        ):
+            return value[2:-2].strip()
+        return value
+
+    @staticmethod
+    def _clean_section_content(content: str) -> str:
+        """Remove cabeçalhos duplicados no início da seção para preservar hierarquia."""
+        text = str(content or "").strip()
+        if not text:
+            return ""
+
+        text = re.sub(r"^#{1,6}\s+", "", text).strip()
+        text = re.sub(r"^(?:[IVXLCDM]{1,8}|\d+(?:\.\d+)*)\.\s+", "", text, flags=re.IGNORECASE).strip()
+        text = re.sub(
+            r"^(?:DA|DO|DOS|DAS)?\s*"
+            r"(INTRODUÇÃO|FATOS|FUNDAMENTOS|JURISPRUD[ÊE]NCIA|PEDIDOS|CONCLUS[ÃA]O)\s*[:\-]?\s*",
+            "",
+            text,
+            flags=re.IGNORECASE,
+        ).strip()
+        return text
+
+    @staticmethod
+    def _clean_section_title(title: str) -> str:
+        text = str(title or "").strip()
+        text = re.sub(r"^#{1,6}\s+", "", text).strip()
+        text = re.sub(r"^(?:[IVXLCDM]{1,8}|\d+(?:\.\d+)*)\.\s+", "", text, flags=re.IGNORECASE).strip()
+        return text.upper()
 
     @classmethod
     def _is_plain_heading(cls, line: str) -> bool:
@@ -194,20 +228,12 @@ class OfficeDocxExportAgent:
         return paragraph
 
     def _append_heading(self, doc, heading: str, level: int, title_style: str | None, subtitle_style: str | None):
-        clean_heading = self._normalize_md_emphasis(self._strip_heading_number(heading))
+        # Preserva numeração já existente no heading para evitar "reset" do índice.
+        clean_heading = self._normalize_md_emphasis(heading).strip()
 
-        if level == 1:
-            if title_style:
-                paragraph = doc.add_paragraph(clean_heading, style=title_style)
-            else:
-                paragraph = doc.add_heading(clean_heading, level=1)
-            target_size = 16
-        else:
-            if subtitle_style:
-                paragraph = doc.add_paragraph(clean_heading, style=subtitle_style)
-            else:
-                paragraph = doc.add_heading(clean_heading, level=2)
-            target_size = 13
+        # Evita estilos numerados do template que podem reiniciar a contagem.
+        paragraph = doc.add_paragraph(clean_heading)
+        target_size = 16 if level == 1 else 13
 
         if not paragraph.runs:
             paragraph.add_run(clean_heading)
@@ -217,8 +243,93 @@ class OfficeDocxExportAgent:
             run.font.size = Pt(target_size)
             run.bold = True
 
+        paragraph.paragraph_format.space_before = Pt(12 if level == 1 else 8)
+        paragraph.paragraph_format.space_after = Pt(6)
         paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
         return paragraph
+
+    @staticmethod
+    def _should_page_break_before_heading(heading: str) -> bool:
+        normalized = str(heading or "").upper()
+        normalized = (
+            normalized.replace("Ç", "C")
+            .replace("Ã", "A")
+            .replace("Á", "A")
+            .replace("À", "A")
+            .replace("Â", "A")
+            .replace("É", "E")
+            .replace("Ê", "E")
+            .replace("Í", "I")
+            .replace("Ó", "O")
+            .replace("Ô", "O")
+            .replace("Õ", "O")
+            .replace("Ú", "U")
+        )
+        return ("PEDIDOS" in normalized) or ("PRELIMINAR" in normalized)
+
+    def _sanitize_redundant_section_leads(self, document_text: str) -> str:
+        """Remove repetição de rótulo de seção logo após o heading."""
+        lines = str(document_text or "").splitlines()
+        if not lines:
+            return ""
+
+        section_tokens = (
+            "INTRODUCAO",
+            "FATOS",
+            "FUNDAMENTOS",
+            "JURISPRUDENCIA",
+            "PEDIDOS",
+            "CONCLUSAO",
+        )
+
+        def normalize_heading_key(raw: str) -> str:
+            value = self._normalize_md_emphasis(self._strip_heading_number(raw or "")).upper().strip()
+            value = (
+                value.replace("Ç", "C")
+                .replace("Ã", "A")
+                .replace("Á", "A")
+                .replace("À", "A")
+                .replace("Â", "A")
+                .replace("É", "E")
+                .replace("Ê", "E")
+                .replace("Í", "I")
+                .replace("Ó", "O")
+                .replace("Ô", "O")
+                .replace("Õ", "O")
+                .replace("Ú", "U")
+            )
+            value = re.sub(r"\s+", " ", value)
+            return value
+
+        for idx, raw_line in enumerate(lines):
+            line = raw_line.strip()
+            if not line:
+                continue
+
+            heading_text = None
+            if line.startswith("#"):
+                heading_text = re.sub(r"^#{1,6}\s*", "", line).strip()
+            elif self._is_plain_heading(line):
+                heading_text = line
+
+            if not heading_text:
+                continue
+
+            normalized = normalize_heading_key(heading_text)
+            if not any(token in normalized for token in section_tokens):
+                continue
+
+            next_idx = idx + 1
+            while next_idx < len(lines) and not lines[next_idx].strip():
+                next_idx += 1
+            if next_idx >= len(lines):
+                continue
+
+            cleaned_next = self._clean_section_content(lines[next_idx])
+            if cleaned_next and cleaned_next != lines[next_idx].strip():
+                lines[next_idx] = cleaned_next
+
+        return "\n".join(lines)
 
     def _normalize_for_docx(self, document_title: str, document_text: str, law_firm_id: Optional[int] = None) -> str:
         """Normaliza o texto com LLM mini. Em falha, retorna texto original."""
@@ -277,7 +388,12 @@ class OfficeDocxExportAgent:
             except Exception:
                 pass
 
-    def _render_docx_with_template(self, document_title: str, document_text: str) -> BytesIO:
+    def _render_docx_with_template(
+        self,
+        document_title: str,
+        document_text: str,
+        include_document_title: bool = True,
+    ) -> BytesIO:
         template_path = self._template_path()
 
         if template_path.exists():
@@ -306,21 +422,22 @@ class OfficeDocxExportAgent:
             paragraph = doc.paragraphs[0]
             paragraph._element.getparent().remove(paragraph._element)
 
-        if title_style:
-            title_paragraph = doc.add_paragraph(str(document_title or "DOCUMENTO GERADO").upper(), style=title_style)
-        else:
-            title_paragraph = doc.add_paragraph()
-            title_run = title_paragraph.add_run(str(document_title or "DOCUMENTO GERADO").upper())
-            title_run.font.name = "Segoe UI"
-            title_run.font.size = Pt(16)
-            title_run.bold = True
-        if not title_paragraph.runs:
-            title_paragraph.add_run(str(document_title or "DOCUMENTO GERADO").upper())
-        for run in title_paragraph.runs:
-            run.font.name = "Segoe UI"
-            run.font.size = Pt(16)
-            run.bold = True
-        title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        if include_document_title:
+            if title_style:
+                title_paragraph = doc.add_paragraph(str(document_title or "DOCUMENTO GERADO").upper(), style=title_style)
+            else:
+                title_paragraph = doc.add_paragraph()
+                title_run = title_paragraph.add_run(str(document_title or "DOCUMENTO GERADO").upper())
+                title_run.font.name = "Segoe UI"
+                title_run.font.size = Pt(16)
+                title_run.bold = True
+            if not title_paragraph.runs:
+                title_paragraph.add_run(str(document_title or "DOCUMENTO GERADO").upper())
+            for run in title_paragraph.runs:
+                run.font.name = "Segoe UI"
+                run.font.size = Pt(16)
+                run.bold = True
+            title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
         text = str(document_text or "")
         lines = text.splitlines()
@@ -341,6 +458,21 @@ class OfficeDocxExportAgent:
                 doc.add_paragraph("")
                 continue
 
+            bold_heading_candidate = self._unwrap_bold_heading_candidate(line)
+            if bold_heading_candidate and self._is_plain_heading(bold_heading_candidate):
+                flush_table()
+                heading_level = 1 if bold_heading_candidate.upper().startswith("RECURSO:") else 2
+                if self._should_page_break_before_heading(bold_heading_candidate) and doc.paragraphs:
+                    doc.add_page_break()
+                self._append_heading(
+                    doc,
+                    bold_heading_candidate,
+                    level=heading_level,
+                    title_style=title_style,
+                    subtitle_style=subtitle_style,
+                )
+                continue
+
             if self._is_separator_row(line):
                 continue
 
@@ -354,16 +486,23 @@ class OfficeDocxExportAgent:
             flush_table()
 
             if line.startswith("# "):
-                self._append_heading(doc, line[2:].strip(), level=1, title_style=title_style, subtitle_style=subtitle_style)
+                heading_value = line[2:].strip()
+                if self._should_page_break_before_heading(heading_value) and doc.paragraphs:
+                    doc.add_page_break()
+                self._append_heading(doc, heading_value, level=1, title_style=title_style, subtitle_style=subtitle_style)
                 continue
 
             if line.startswith("## ") or line.startswith("### "):
                 heading = line[3:].strip() if line.startswith("## ") else line[4:].strip()
+                if self._should_page_break_before_heading(heading) and doc.paragraphs:
+                    doc.add_page_break()
                 self._append_heading(doc, heading, level=2, title_style=title_style, subtitle_style=subtitle_style)
                 continue
 
             if self._is_plain_heading(line):
                 heading_level = 1 if line.upper().startswith("RECURSO:") else 2
+                if self._should_page_break_before_heading(line) and doc.paragraphs:
+                    doc.add_page_break()
                 self._append_heading(doc, line, level=heading_level, title_style=title_style, subtitle_style=subtitle_style)
                 continue
 
@@ -391,6 +530,7 @@ class OfficeDocxExportAgent:
         document_text: str,
         run_ai_normalization: bool = True,
         law_firm_id: Optional[int] = None,
+        include_document_title: bool = True,
     ) -> BytesIO:
         """Exporta documento gerado para DOCX no padrão do escritório."""
         text = str(document_text or "")
@@ -400,7 +540,12 @@ class OfficeDocxExportAgent:
                 document_text=text,
                 law_firm_id=law_firm_id,
             )
-        return self._render_docx_with_template(document_title=document_title, document_text=text)
+        text = self._sanitize_redundant_section_leads(text)
+        return self._render_docx_with_template(
+            document_title=document_title,
+            document_text=text,
+            include_document_title=include_document_title,
+        )
 
     def export_appeal_content(
         self,
@@ -415,24 +560,24 @@ class OfficeDocxExportAgent:
 
         if appeal_content.get("introduction"):
             sections.append("## I. INTRODUÇÃO")
-            sections.append(str(appeal_content["introduction"]))
+            sections.append(self._clean_section_content(str(appeal_content["introduction"])))
 
         if appeal_content.get("facts"):
             sections.append("## II. DOS FATOS")
-            sections.append(str(appeal_content["facts"]))
+            sections.append(self._clean_section_content(str(appeal_content["facts"])))
 
         if appeal_content.get("grounds"):
             sections.append("## III. DOS FUNDAMENTOS")
-            sections.append(str(appeal_content["grounds"]))
+            sections.append(self._clean_section_content(str(appeal_content["grounds"])))
 
         if appeal_content.get("jurisprudence"):
             sections.append("## IV. DA JURISPRUDÊNCIA")
-            sections.append(str(appeal_content["jurisprudence"]))
+            sections.append(self._clean_section_content(str(appeal_content["jurisprudence"])))
 
         section_num = 5
         for section in appeal_content.get("additional_sections", []) or []:
-            title = str(section.get("title") or "SEÇÃO ADICIONAL").strip().upper()
-            content = str(section.get("content") or "").strip()
+            title = self._clean_section_title(str(section.get("title") or "SEÇÃO ADICIONAL"))
+            content = self._clean_section_content(str(section.get("content") or ""))
             if content:
                 sections.append(f"## {section_num}. {title}")
                 sections.append(content)
@@ -440,11 +585,11 @@ class OfficeDocxExportAgent:
 
         if appeal_content.get("requests"):
             sections.append(f"## {section_num}. DOS PEDIDOS")
-            sections.append(str(appeal_content["requests"]))
+            sections.append(self._clean_section_content(str(appeal_content["requests"])))
 
         if appeal_content.get("conclusion"):
             sections.append("## CONCLUSÃO")
-            sections.append(str(appeal_content["conclusion"]))
+            sections.append(self._clean_section_content(str(appeal_content["conclusion"])))
 
         merged_text = "\n\n".join(part for part in sections if part)
         return self.export_generated_document(
