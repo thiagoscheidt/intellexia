@@ -9,6 +9,7 @@ Responsabilidades:
 from __future__ import annotations
 
 import os
+import re
 import shutil
 import tempfile
 import time
@@ -41,7 +42,17 @@ _SYSTEM_PROMPT = (
     "Você normaliza textos jurídicos para exportação DOCX. "
     "Preserve conteúdo e sentido jurídico integralmente, sem resumir nem omitir seções. "
     "Apenas padronize quebras de linha, títulos e legibilidade. "
-    "Nunca altere pedidos, fundamentos, valores, NBs, NITs, CNPJs ou números processuais."
+    "Nunca altere pedidos, fundamentos, valores, NBs, NITs, CNPJs ou números processuais. "
+    "Preserve tabelas markdown com pipes exatamente como tabelas estruturadas."
+)
+
+_BOLD_MARKDOWN_RE = re.compile(r"(\*\*([^*]+)\*\*|__([^_]+)__)" )
+_PLAIN_HEADING_RE = re.compile(
+    r"^(?:"
+    r"(?:[IVXLCDM]{1,8}|\d+(?:\.\d+)*)\.\s+[A-ZÁÉÍÓÚÀÂÊÔÃÕÇ0-9][A-ZÁÉÍÓÚÀÂÊÔÃÕÇ0-9\s\-/,&().]{2,}"
+    r"|"
+    r"[A-ZÁÉÍÓÚÀÂÊÔÃÕÇ0-9][A-ZÁÉÍÓÚÀÂÊÔÃÕÇ0-9\s\-/,&().]{3,}"
+    r")$"
 )
 
 
@@ -67,6 +78,147 @@ class OfficeDocxExportAgent:
             if candidate in style_names:
                 return candidate
         return None
+
+    @staticmethod
+    def _strip_heading_number(text: str) -> str:
+        value = str(text or "").strip()
+        value = re.sub(r"^\d+(?:\.\d+)*\.?\s+", "", value)
+        return value.strip()
+
+    @staticmethod
+    def _normalize_md_emphasis(text: str) -> str:
+        value = str(text or "")
+        value = value.replace("**", "")
+        value = value.replace("__", "")
+        return value
+
+    @classmethod
+    def _is_plain_heading(cls, line: str) -> bool:
+        value = str(line or "").strip()
+        if not value or len(value) > 120:
+            return False
+        if value.startswith(("-", "*", ">", "|")):
+            return False
+        if value.startswith("RECURSO:"):
+            return True
+        if re.fullmatch(r"(?:[IVXLCDM]{1,8}|\d+(?:\.\d+)*)\.\s+.+", value):
+            return True
+        if value.isupper() and _PLAIN_HEADING_RE.fullmatch(value):
+            return True
+        return False
+
+    @staticmethod
+    def _is_table_row(line: str) -> bool:
+        stripped = str(line or "").strip()
+        return stripped.startswith("|") and stripped.endswith("|") and stripped.count("|") >= 2
+
+    @staticmethod
+    def _parse_table_cells(line: str) -> list[str]:
+        stripped = str(line or "").strip().strip("|")
+        return [cell.strip() for cell in stripped.split("|")]
+
+    @staticmethod
+    def _is_separator_row(line: str) -> bool:
+        stripped = str(line or "").strip()
+        return bool(re.fullmatch(r"\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?", stripped))
+
+    def _flush_markdown_table(self, doc, table_rows: list[list[str]], body_style: str | None) -> None:
+        if not table_rows:
+            return
+
+        max_cols = max(len(row) for row in table_rows)
+        if max_cols == 0:
+            return
+
+        table = doc.add_table(rows=len(table_rows), cols=max_cols)
+        table.style = "Table Grid" if "Table Grid" in [s.name for s in doc.styles] else table.style
+
+        for row_index, row_values in enumerate(table_rows):
+            for col_index in range(max_cols):
+                cell = table.rows[row_index].cells[col_index]
+                cell_text = row_values[col_index] if col_index < len(row_values) else ""
+                cell.text = self._normalize_md_emphasis(cell_text)
+                for paragraph in cell.paragraphs:
+                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER if row_index == 0 else WD_ALIGN_PARAGRAPH.LEFT
+                    for run in paragraph.runs:
+                        run.font.name = "Segoe UI"
+                        run.font.size = Pt(10)
+                        if row_index == 0:
+                            run.bold = True
+
+        doc.add_paragraph("")
+
+    def _append_plain_line(self, doc, line: str, body_style: str | None) -> None:
+        line = self._normalize_md_emphasis(line)
+        if body_style:
+            p = doc.add_paragraph(line, style=body_style)
+        else:
+            p = doc.add_paragraph(line)
+            run = p.runs[0] if p.runs else p.add_run(line)
+            run.font.name = "Segoe UI"
+            run.font.size = Pt(11)
+        p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+
+    def _append_rich_line(self, doc, line: str, body_style: str | None) -> None:
+        paragraph = doc.add_paragraph(style=body_style) if body_style else doc.add_paragraph()
+        paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+
+        text = str(line or "")
+        cursor = 0
+        has_content = False
+
+        for match in _BOLD_MARKDOWN_RE.finditer(text):
+            before = text[cursor:match.start()]
+            if before:
+                run = paragraph.add_run(before)
+                run.font.name = "Segoe UI"
+                run.font.size = Pt(11)
+                has_content = True
+
+            bold_text = match.group(2) or match.group(3) or ""
+            if bold_text:
+                run = paragraph.add_run(bold_text)
+                run.font.name = "Segoe UI"
+                run.font.size = Pt(11)
+                run.bold = True
+                has_content = True
+
+            cursor = match.end()
+
+        remaining = text[cursor:]
+        if remaining or not has_content:
+            run = paragraph.add_run(remaining if remaining else text)
+            run.font.name = "Segoe UI"
+            run.font.size = Pt(11)
+
+        return paragraph
+
+    def _append_heading(self, doc, heading: str, level: int, title_style: str | None, subtitle_style: str | None):
+        clean_heading = self._normalize_md_emphasis(self._strip_heading_number(heading))
+
+        if level == 1:
+            if title_style:
+                paragraph = doc.add_paragraph(clean_heading, style=title_style)
+            else:
+                paragraph = doc.add_heading(clean_heading, level=1)
+            target_size = 16
+        else:
+            if subtitle_style:
+                paragraph = doc.add_paragraph(clean_heading, style=subtitle_style)
+            else:
+                paragraph = doc.add_heading(clean_heading, level=2)
+            target_size = 13
+
+        if not paragraph.runs:
+            paragraph.add_run(clean_heading)
+
+        for run in paragraph.runs:
+            run.font.name = "Segoe UI"
+            run.font.size = Pt(target_size)
+            run.bold = True
+
+        paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
+        return paragraph
 
     def _normalize_for_docx(self, document_title: str, document_text: str, law_firm_id: Optional[int] = None) -> str:
         """Normaliza o texto com LLM mini. Em falha, retorna texto original."""
@@ -162,31 +314,57 @@ class OfficeDocxExportAgent:
             title_run.font.name = "Segoe UI"
             title_run.font.size = Pt(16)
             title_run.bold = True
+        if not title_paragraph.runs:
+            title_paragraph.add_run(str(document_title or "DOCUMENTO GERADO").upper())
+        for run in title_paragraph.runs:
+            run.font.name = "Segoe UI"
+            run.font.size = Pt(16)
+            run.bold = True
         title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
         text = str(document_text or "")
-        for raw_line in text.splitlines():
+        lines = text.splitlines()
+        pending_table: list[list[str]] = []
+        in_table = False
+
+        def flush_table() -> None:
+            nonlocal pending_table, in_table
+            if pending_table:
+                self._flush_markdown_table(doc, pending_table, body_style)
+            pending_table = []
+            in_table = False
+
+        for raw_line in lines:
             line = raw_line.strip()
             if not line:
+                flush_table()
                 doc.add_paragraph("")
                 continue
 
+            if self._is_separator_row(line):
+                continue
+
+            if self._is_table_row(line):
+                cells = self._parse_table_cells(line)
+                if cells:
+                    pending_table.append(cells)
+                    in_table = True
+                continue
+
+            flush_table()
+
             if line.startswith("# "):
-                heading = line[2:].strip()
-                if title_style:
-                    p = doc.add_paragraph(heading, style=title_style)
-                else:
-                    p = doc.add_heading(heading, level=1)
-                p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                self._append_heading(doc, line[2:].strip(), level=1, title_style=title_style, subtitle_style=subtitle_style)
                 continue
 
             if line.startswith("## ") or line.startswith("### "):
                 heading = line[3:].strip() if line.startswith("## ") else line[4:].strip()
-                if subtitle_style:
-                    p = doc.add_paragraph(heading, style=subtitle_style)
-                else:
-                    p = doc.add_heading(heading, level=2)
-                p.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                self._append_heading(doc, heading, level=2, title_style=title_style, subtitle_style=subtitle_style)
+                continue
+
+            if self._is_plain_heading(line):
+                heading_level = 1 if line.upper().startswith("RECURSO:") else 2
+                self._append_heading(doc, line, level=heading_level, title_style=title_style, subtitle_style=subtitle_style)
                 continue
 
             if line.startswith("---"):
@@ -194,14 +372,12 @@ class OfficeDocxExportAgent:
                 p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 continue
 
-            if body_style:
-                p = doc.add_paragraph(line, style=body_style)
+            if "**" in line or "__" in line:
+                self._append_rich_line(doc, line, body_style)
             else:
-                p = doc.add_paragraph(line)
-                run = p.runs[0] if p.runs else p.add_run(line)
-                run.font.name = "Segoe UI"
-                run.font.size = Pt(11)
-            p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+                self._append_plain_line(doc, line, body_style)
+
+        flush_table()
 
         output = BytesIO()
         doc.save(output)
