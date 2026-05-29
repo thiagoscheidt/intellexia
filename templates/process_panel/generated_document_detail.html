@@ -164,6 +164,64 @@
     font-family: var(--bs-font-monospace);
     font-size: .88rem;
   }
+
+  /* Observações Internas da IA */
+  .ia-notes-list {
+    padding: 0;
+    margin: 0;
+  }
+
+  .ia-notes-item {
+    display: flex;
+    align-items: flex-start;
+    gap: .55rem;
+    padding: .5rem .65rem;
+    border-radius: .5rem;
+    margin-bottom: .35rem;
+    font-size: .79rem;
+    line-height: 1.55;
+    background: rgba(255, 193, 7, .05);
+    border: 1px solid rgba(255, 193, 7, .2);
+  }
+
+  .ia-notes-item:last-child { margin-bottom: 0; }
+
+  .ia-notes-item.ia-warning {
+    background: rgba(220, 53, 69, .05);
+    border-color: rgba(220, 53, 69, .2);
+  }
+
+  .ia-notes-item.ia-checked {
+    background: rgba(25, 135, 84, .04);
+    border-color: rgba(25, 135, 84, .15);
+    opacity: .75;
+  }
+
+  .ia-checkbox {
+    flex-shrink: 0;
+    width: 17px;
+    height: 17px;
+    border: 2px solid #e0a800;
+    border-radius: 4px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-top: .15rem;
+    font-size: .65rem;
+    color: transparent;
+  }
+
+  .ia-notes-item.ia-warning .ia-checkbox {
+    border-color: #dc3545;
+  }
+
+  .ia-notes-item.ia-checked .ia-checkbox {
+    background: #198754;
+    border-color: #198754;
+    color: #fff;
+  }
+
+  .ia-notes-text { flex: 1; color: var(--bs-body-color); }
 </style>
 {% endblock %}
 
@@ -321,15 +379,70 @@ breadcrumbs=[
             <i class="bi bi-exclamation-triangle me-1 text-warning"></i> Observações Internas da IA
           </div>
         </div>
-        <div class="card-body p-3">
-          <div class="small text-muted mb-2">
-            Notas de revisão separadas do corpo da peça.
-          </div>
-          <div class="small" style="white-space: pre-wrap; line-height: 1.5;">
-            {{ cv_sidebar.internal_notes }}
-          </div>
+        <div class="card-body p-3 pt-2">
+          <ul class="ia-notes-list list-unstyled" id="ia-notes-rendered"
+              data-notes='{{ cv_sidebar.internal_notes | tojson }}'></ul>
         </div>
       </div>
+      <script>
+        (function () {
+          const container = document.getElementById('ia-notes-rendered');
+          if (!container) return;
+          const raw = JSON.parse(container.dataset.notes || 'null');
+          if (!raw) return;
+
+          const WARNING_KEYWORDS = ['revisão humana', 'sem peça-modelo', 'não possui peça-modelo', 'validar', 'conferir', 'confirmar'];
+
+          function escapeHtml(t) {
+            return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+          }
+
+          function renderInline(text) {
+            return escapeHtml(text).replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+          }
+
+          function isWarning(text) {
+            const lower = text.toLowerCase();
+            return WARNING_KEYWORDS.some(kw => lower.includes(kw));
+          }
+
+          const lines = raw.split('\n');
+          const items = [];
+          for (const line of lines) {
+            const t = line.trim();
+            if (!t) continue;
+            // Normaliza duplos colchetes: - [ ] [ ] → - [ ]
+            const norm = t.replace(/^-\s+\[\s*\]\s+\[\s*\]/, '- [ ]')
+                          .replace(/^-\s+\[x\]\s+\[\s*\]/i, '- [x]');
+            const m = norm.match(/^-\s+\[(\s|x)\]\s+(.*)/i);
+            if (m) {
+              items.push({ checked: m[1].toLowerCase() === 'x', text: m[2] });
+            } else {
+              const plain = norm.startsWith('- ') ? norm.slice(2) : norm;
+              items.push({ checked: null, text: plain });
+            }
+          }
+
+          const html = items.map(item => {
+            if (item.checked !== null) {
+              const warn  = !item.checked && isWarning(item.text);
+              const cls   = item.checked ? 'ia-checked' : (warn ? 'ia-warning' : '');
+              const check = item.checked
+                ? '<i class="bi bi-check2" style="font-size:.7rem"></i>'
+                : (warn ? '<i class="bi bi-exclamation" style="font-size:.75rem;color:#dc3545"></i>' : '');
+              return `<li class="ia-notes-item ${cls}">
+                <span class="ia-checkbox">${check}</span>
+                <span class="ia-notes-text">${renderInline(item.text)}</span>
+              </li>`;
+            }
+            return `<li class="ia-notes-item" style="background:transparent;border-color:transparent;padding-left:.2rem;">
+              <span class="ia-notes-text text-muted">${renderInline(item.text)}</span>
+            </li>`;
+          }).join('');
+
+          container.innerHTML = html;
+        })();
+      </script>
       {% endif %}
 
       <!-- Versions card -->
