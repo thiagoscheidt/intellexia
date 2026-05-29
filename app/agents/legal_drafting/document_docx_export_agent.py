@@ -18,7 +18,7 @@ from pathlib import Path
 from typing import Optional
 
 from docx import Document
-from docx.enum.table import WD_TABLE_ALIGNMENT
+from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -250,8 +250,11 @@ class OfficeDocxExportAgent:
                 cell = table.rows[row_index].cells[col_index]
                 cell_text = row_values[col_index] if col_index < len(row_values) else ""
                 cell.text = self._normalize_md_emphasis(cell_text)
+                cell.vertical_alignment = WD_CELL_VERTICAL_ALIGNMENT.CENTER
                 for paragraph in cell.paragraphs:
                     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+                    paragraph.paragraph_format.space_before = Pt(0)
+                    paragraph.paragraph_format.space_after = Pt(0)
                     for run in paragraph.runs:
                         run.font.name = "Avenir Next LT Pro"
                         run.font.size = Pt(7)
