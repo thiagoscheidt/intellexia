@@ -27,6 +27,7 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
 
 from app.agents.config import DEFAULT_MODEL_MINI
+from app.models import JudicialProcessAttachment
 from app.services.token_usage_service import TokenUsageService
 
 
@@ -62,6 +63,8 @@ _PLAIN_HEADING_RE = re.compile(
 
 class OfficeDocxExportAgent:
     """Padroniza texto e exporta DOCX com template do escritório."""
+
+    _ANEXO_RE = re.compile(r"\{\{ANEXO\|([^}]+)\}\}")
 
     def __init__(self, model_name: Optional[str] = None, temperature: float = 0.0):
         self.model_name = model_name or os.getenv("DOCX_EXPORT_NORMALIZER_MODEL", DEFAULT_MODEL_MINI)
@@ -201,6 +204,161 @@ class OfficeDocxExportAgent:
                     continue
             result.append(line)
         return "".join(result)
+
+    @staticmethod
+    def _parse_anexo_params(raw: str) -> dict[str, str]:
+        params: dict[str, str] = {}
+        for part in str(raw or "").split("|"):
+            if "=" not in part:
+                continue
+            key, value = part.split("=", 1)
+            params[key.strip()] = value.strip()
+        return params
+
+    @classmethod
+    def _extract_anexo_params(cls, line: str) -> dict[str, str] | None:
+        match = cls._ANEXO_RE.fullmatch(str(line or "").strip())
+        if not match:
+            return None
+        return cls._parse_anexo_params(match.group(1))
+
+    @staticmethod
+    def _format_anexo_reference(params: dict[str, str]) -> str:
+        titulo = str(params.get("titulo") or "").strip()
+        arquivo = str(params.get("arquivo") or "").strip()
+        if titulo and arquivo:
+            return f"[Anexo: {titulo} ({arquivo})]"
+        if titulo:
+            return f"[Anexo: {titulo}]"
+        if arquivo:
+            return f"[Anexo: {arquivo}]"
+        return "[Anexo]"
+
+    @staticmethod
+    def _format_anexo_caption(params: dict[str, str]) -> str:
+        titulo = str(params.get("titulo") or "").strip()
+        arquivo = str(params.get("arquivo") or "").strip()
+        if titulo and arquivo:
+            return f"Anexo: {titulo} ({arquivo})"
+        if titulo:
+            return f"Anexo: {titulo}"
+        if arquivo:
+            return f"Anexo: {arquivo}"
+        return "Anexo"
+
+    @classmethod
+    def _replace_inline_anexo_placeholders(cls, text: str) -> str:
+        def _replace(match: re.Match) -> str:
+            params = cls._parse_anexo_params(match.group(1))
+            return cls._format_anexo_reference(params)
+
+        return cls._ANEXO_RE.sub(_replace, str(text or ""))
+
+    @staticmethod
+    def _append_anexo_reference(doc, text: str) -> None:
+        paragraph = doc.add_paragraph()
+        run = paragraph.add_run(text)
+        run.font.name = "Segoe UI"
+        run.font.size = Pt(10)
+        run.italic = True
+        paragraph.paragraph_format.left_indent = Inches(0.3)
+        paragraph.paragraph_format.space_before = Pt(4)
+        paragraph.paragraph_format.space_after = Pt(4)
+        paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
+
+    @staticmethod
+    def _content_max_width(doc):
+        section = doc.sections[-1] if doc.sections else None
+        if not section:
+            return Inches(6)
+        return section.page_width - section.left_margin - section.right_margin
+
+    def _append_picture_stream(self, doc, image_stream: BytesIO) -> None:
+        paragraph = doc.add_paragraph()
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = paragraph.add_run()
+        image_stream.seek(0)
+        run.add_picture(image_stream, width=self._content_max_width(doc))
+
+    def _append_pdf_pages(self, doc, file_path: str) -> bool:
+        try:
+            import fitz
+        except Exception:
+            return False
+
+        pdf_doc = None
+        try:
+            pdf_doc = fitz.open(file_path)
+            for page in pdf_doc:
+                pix = page.get_pixmap(matrix=fitz.Matrix(1.5, 1.5), colorspace=fitz.csRGB, alpha=False)
+                image_stream = BytesIO(pix.tobytes("png"))
+                self._append_picture_stream(doc, image_stream)
+            return True
+        except Exception:
+            return False
+        finally:
+            if pdf_doc is not None:
+                pdf_doc.close()
+
+    def _append_image_file(self, doc, file_path: str) -> bool:
+        try:
+            from PIL import Image, ImageOps
+        except Exception:
+            return False
+
+        try:
+            with Image.open(file_path) as image:
+                image = ImageOps.exif_transpose(image)
+                if image.mode not in ("RGB", "RGBA"):
+                    image = image.convert("RGB")
+                image_stream = BytesIO()
+                image.save(image_stream, format="PNG")
+            self._append_picture_stream(doc, image_stream)
+            return True
+        except Exception:
+            return False
+
+    def _append_anexo_attachment(self, doc, params: dict[str, str], law_firm_id: Optional[int] = None) -> None:
+        reference_text = self._format_anexo_reference(params)
+        caption_text = self._format_anexo_caption(params)
+
+        attachment_id_raw = str(params.get("id") or "").strip()
+        if not law_firm_id or not attachment_id_raw.isdigit():
+            self._append_anexo_reference(doc, reference_text)
+            return
+
+        attachment = JudicialProcessAttachment.query.filter_by(
+            id=int(attachment_id_raw),
+            law_firm_id=law_firm_id,
+            is_active=True,
+        ).first()
+        if not attachment:
+            self._append_anexo_reference(doc, reference_text)
+            return
+
+        file_path = str(attachment.file_path or "").strip()
+        if not file_path or not os.path.exists(file_path):
+            self._append_anexo_reference(doc, reference_text)
+            return
+
+        suffix = Path(file_path).suffix.lower()
+        if suffix == ".pdf":
+            if self._append_pdf_pages(doc, file_path):
+                self._append_anexo_reference(doc, caption_text)
+                doc.add_paragraph("")
+            else:
+                self._append_anexo_reference(doc, reference_text)
+            return
+
+        if suffix in {".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tif", ".tiff", ".webp"}:
+            if self._append_image_file(doc, file_path):
+                self._append_anexo_reference(doc, caption_text)
+                doc.add_paragraph("")
+            else:
+                self._append_anexo_reference(doc, reference_text)
+            return
+
+        self._append_anexo_reference(doc, reference_text)
 
     @staticmethod
     def _is_table_row(line: str) -> bool:
@@ -534,6 +692,7 @@ class OfficeDocxExportAgent:
         document_title: str,
         document_text: str,
         include_document_title: bool = True,
+        law_firm_id: Optional[int] = None,
     ) -> BytesIO:
         template_path = self._template_path()
 
@@ -625,6 +784,12 @@ class OfficeDocxExportAgent:
                 doc.add_paragraph("")
                 continue
 
+            anexo_params = self._extract_anexo_params(line)
+            if anexo_params:
+                flush_table()
+                self._append_anexo_attachment(doc, anexo_params, law_firm_id=law_firm_id)
+                continue
+
             bold_heading_candidate = self._unwrap_bold_heading_candidate(line)
             if bold_heading_candidate and self._is_plain_heading(bold_heading_candidate):
                 flush_table()
@@ -696,17 +861,11 @@ class OfficeDocxExportAgent:
                 p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 continue
 
+            line = self._replace_inline_anexo_placeholders(line)
+
             # Linha que é APENAS uma referência de anexo
             if re.fullmatch(r"\[Anexo:[^\]]+\]", line):
-                p = doc.add_paragraph()
-                run = p.add_run(line)
-                run.font.name = "Segoe UI"
-                run.font.size = Pt(10)
-                run.italic = True
-                p.paragraph_format.left_indent = Inches(0.3)
-                p.paragraph_format.space_before = Pt(4)
-                p.paragraph_format.space_after = Pt(4)
-                p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                self._append_anexo_reference(doc, line)
                 continue
 
             if "**" in line or "__" in line:
@@ -721,25 +880,10 @@ class OfficeDocxExportAgent:
         output.seek(0)
         return output
 
-    _ANEXO_RE = re.compile(r"\{\{ANEXO\|([^}]+)\}\}")
-
     def _strip_anexo_placeholders(self, text: str) -> str:
         """Converte {{ANEXO|...}} em referência textual legível para o DOCX."""
         def _replace(m: re.Match) -> str:
-            params: dict[str, str] = {}
-            for part in m.group(1).split("|"):
-                if "=" in part:
-                    k, v = part.split("=", 1)
-                    params[k.strip()] = v.strip()
-            titulo = params.get("titulo", "")
-            arquivo = params.get("arquivo", "")
-            if titulo and arquivo:
-                return f"[Anexo: {titulo} ({arquivo})]"
-            if titulo:
-                return f"[Anexo: {titulo}]"
-            if arquivo:
-                return f"[Anexo: {arquivo}]"
-            return ""
+            return self._format_anexo_reference(self._parse_anexo_params(m.group(1)))
 
         return self._ANEXO_RE.sub(_replace, text)
 
@@ -754,11 +898,11 @@ class OfficeDocxExportAgent:
     ) -> BytesIO:
         """Exporta documento gerado para DOCX no padrão do escritório."""
         text = str(document_text or "")
-        # Strip ANEXO placeholders before LLM normalization — the pipe-heavy
-        # {{ANEXO|key=val|...}} syntax confuses the normalizer and corrupts nearby
-        # markdown tables and heading structure.
-        text = self._strip_anexo_placeholders(text)
         if run_ai_normalization:
+            # Strip ANEXO placeholders before LLM normalization — the pipe-heavy
+            # {{ANEXO|key=val|...}} syntax confuses the normalizer and corrupts nearby
+            # markdown tables and heading structure.
+            text = self._strip_anexo_placeholders(text)
             text = self._normalize_for_docx(
                 document_title=document_title,
                 document_text=text,
@@ -769,6 +913,7 @@ class OfficeDocxExportAgent:
             document_title=document_title,
             document_text=text,
             include_document_title=include_document_title,
+            law_firm_id=law_firm_id,
         )
 
     def export_appeal_content(
