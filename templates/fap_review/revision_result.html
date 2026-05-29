@@ -306,6 +306,74 @@
     .debug-json-viewer .json-number { color: #b5cea8; }
     .debug-json-viewer .json-boolean { color: #569cd6; }
     .debug-json-viewer .json-null { color: #569cd6; }
+
+    /* ── Check button ────────────────────────────────────────────── */
+    .finding-check-btn {
+        background: none;
+        border: 1.5px solid rgba(15, 23, 42, .18);
+        border-radius: 50%;
+        width: 2rem;
+        height: 2rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: #adb5bd;
+        font-size: .9rem;
+        transition: all 0.18s ease;
+        flex-shrink: 0;
+        align-self: center;
+        padding: 0;
+    }
+
+    .finding-check-btn:hover {
+        border-color: #198754;
+        color: #198754;
+        background: rgba(25, 135, 84, .08);
+    }
+
+    .finding-check-btn.is-checked {
+        background: rgba(25, 135, 84, .14);
+        border-color: #198754;
+        color: #198754;
+    }
+
+    /* Checked card visual state */
+    .finding-card.is-checked {
+        opacity: .55;
+        transition: opacity 0.2s ease;
+    }
+
+    .finding-card.is-checked .finding-card-header {
+        background: rgba(25, 135, 84, .06) !important;
+        border-bottom-color: rgba(25, 135, 84, .14) !important;
+    }
+
+    .finding-card.is-checked .finding-num-badge {
+        background: rgba(25, 135, 84, .14) !important;
+        color: #198754 !important;
+        border-color: rgba(25, 135, 84, .25) !important;
+    }
+
+    .finding-card.is-checked .finding-header-title {
+        text-decoration: line-through;
+        color: var(--bs-secondary-color);
+    }
+
+    /* Progress bar container */
+    .findings-progress-bar {
+        height: 6px;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, .07);
+        overflow: hidden;
+    }
+
+    .findings-progress-bar .bar-fill {
+        height: 100%;
+        border-radius: 999px;
+        background: #198754;
+        transition: width 0.3s ease;
+    }
 </style>
 {% endblock %}
 
@@ -564,7 +632,7 @@
                         </div>
 
                         <!-- Navegação Rápida com círculos numerados por cor -->
-                        <div class="mb-4 p-3 rounded" style="background: var(--bs-secondary-bg); border: 1px solid rgba(15,23,42,.07);">
+                        <div class="mb-3 p-3 rounded" style="background: var(--bs-secondary-bg); border: 1px solid rgba(15,23,42,.07);">
                             <div class="small fw-semibold text-muted mb-2">
                                 <i class="bi bi-list-ol me-1"></i> Navegação Rápida
                             </div>
@@ -572,10 +640,26 @@
                                 {% for finding in result_data.findings %}
                                 <a href="#ponto-{{ loop.index }}"
                                     class="finding-nav-pill {% if finding.severity == 'CRÍTICO' %}fnp-critical{% elif finding.severity == 'MODERADO' %}fnp-moderate{% else %}fnp-formal{% endif %}"
-                                    title="Ponto {{ loop.index }} – {{ finding.severity }}">
+                                    title="Ponto {{ loop.index }} – {{ finding.severity }}"
+                                    id="nav-pill-{{ loop.index }}">
                                     {{ loop.index }}
                                 </a>
                                 {% endfor %}
+                            </div>
+                        </div>
+
+                        <!-- Barra de Progresso de Revisão -->
+                        <div class="mb-4 p-3 rounded" style="background: var(--bs-secondary-bg); border: 1px solid rgba(15,23,42,.07);">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <span class="small fw-semibold text-muted">
+                                    <i class="bi bi-check2-square me-1"></i> Progresso de revisão
+                                </span>
+                                <span class="small fw-semibold" id="findingsProgressText" style="color: #198754;">
+                                    0 de {{ result_data.findings|length }} revisados
+                                </span>
+                            </div>
+                            <div class="findings-progress-bar">
+                                <div class="bar-fill" id="findingsProgressBar" style="width: 0%;"></div>
                             </div>
                         </div>
 
@@ -585,7 +669,9 @@
                         {% set show_category = normalized_category and normalized_category not in ['CRITICAL', 'MODERATE', 'FORMAL', 'CRÍTICO', 'MODERADO'] %}
                         {% set sev_class = 'sev-critical' if finding.severity == 'CRÍTICO' else ('sev-moderate' if finding.severity == 'MODERADO' else 'sev-formal') %}
 
-                        <div id="ponto-{{ loop.index }}" class="finding-card {{ sev_class }}" style="scroll-margin-top: 80px;">
+                        <div id="ponto-{{ loop.index }}" class="finding-card {{ sev_class }}"
+                             data-finding-index="{{ loop.index }}"
+                             style="scroll-margin-top: 80px;">
 
                             <!-- Cabeçalho colorido por severidade -->
                             <div class="finding-card-header {{ sev_class }}">
@@ -616,8 +702,8 @@
                                         {% endif %}
                                     </div>
                                 </div>
-                                {% if finding.location %}
-                                <div class="flex-shrink-0 align-self-center">
+                                <div class="d-flex align-items-center gap-2 flex-shrink-0">
+                                    {% if finding.location %}
                                     <button type="button"
                                         class="btn btn-sm btn-outline-primary view-finding-page-btn"
                                         data-bs-toggle="modal" data-bs-target="#findingPageModal"
@@ -626,8 +712,13 @@
                                         title="Visualizar no documento">
                                         <i class="bi bi-eye me-1"></i> Ver Página
                                     </button>
+                                    {% endif %}
+                                    <button type="button"
+                                        class="finding-check-btn"
+                                        title="Marcar como revisado">
+                                        <i class="bi bi-check"></i>
+                                    </button>
                                 </div>
-                                {% endif %}
                             </div>
 
                             <!-- Corpo do card -->
@@ -1072,6 +1163,76 @@
             });
         }
     });
+
+    // ── Check / progresso de revisão ─────────────────────────────
+    (function () {
+        const STORAGE_KEY = 'fap_checked_{{ execution.id }}';
+        const TOTAL = document.querySelectorAll('.finding-card').length;
+
+        function load() {
+            try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
+            catch { return {}; }
+        }
+
+        function save(state) {
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+        }
+
+        function updateProgress(state) {
+            const done = Object.values(state).filter(Boolean).length;
+            const pct = TOTAL ? Math.round(done / TOTAL * 100) : 0;
+            const bar = document.getElementById('findingsProgressBar');
+            const txt = document.getElementById('findingsProgressText');
+            if (bar) bar.style.width = pct + '%';
+            if (txt) txt.textContent = done + ' de ' + TOTAL + ' revisados';
+        }
+
+        function applyState(state) {
+            document.querySelectorAll('.finding-card').forEach(function (card) {
+                const idx = card.dataset.findingIndex;
+                const btn = card.querySelector('.finding-check-btn');
+                const numBadge = card.querySelector('.finding-num-badge');
+                const navPill = document.getElementById('nav-pill-' + idx);
+
+                if (state[idx]) {
+                    card.classList.add('is-checked');
+                    btn.classList.add('is-checked');
+                    btn.title = 'Desmarcar';
+                    btn.innerHTML = '<i class="bi bi-check-lg"></i>';
+                    if (navPill) {
+                        navPill.style.opacity = '.4';
+                        navPill.innerHTML = '✓';
+                    }
+                } else {
+                    card.classList.remove('is-checked');
+                    btn.classList.remove('is-checked');
+                    btn.title = 'Marcar como revisado';
+                    btn.innerHTML = '<i class="bi bi-check"></i>';
+                    if (navPill) {
+                        navPill.style.opacity = '';
+                        navPill.textContent = idx;
+                    }
+                }
+            });
+            updateProgress(state);
+        }
+
+        document.addEventListener('DOMContentLoaded', function () {
+            var state = load();
+            applyState(state);
+
+            document.querySelectorAll('.finding-check-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var card = this.closest('.finding-card');
+                    var idx = card.dataset.findingIndex;
+                    var state = load();
+                    state[idx] = !state[idx];
+                    save(state);
+                    applyState(state);
+                });
+            });
+        });
+    })();
 
     function copyToClipboard(elementId) {
         const element = document.getElementById(elementId);
