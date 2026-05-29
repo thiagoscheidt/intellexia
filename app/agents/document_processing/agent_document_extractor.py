@@ -73,6 +73,10 @@ class BenefitRequestTypeItem(BaseModel):
         default="",
         description="Seção principal do documento usada para classificar o pedido deste benefício",
     )
+    legal_thesis_id: int | None = Field(
+        default=None,
+        description="ID da tese jurídica principal associada à seção usada na classificação",
+    )
 
 
 class BenefitRequestTypeClassificationResult(BaseModel):
@@ -1675,6 +1679,14 @@ class AgentDocumentExtractor:
         table_context_by_nb = self._build_benefit_context_lookup()
         chunk_section_context = self._build_benefit_section_lookup_from_chunks()
         topic_reference_context = self._build_benefit_topic_reference_sections()
+        legal_theses = self._load_legal_theses_from_db(law_firm_id=self.law_firm_id)
+        legal_theses_by_id: dict[int, dict[str, str | int]] = {}
+        for thesis in legal_theses:
+            try:
+                thesis_id = int(thesis.get("id"))
+            except (TypeError, ValueError):
+                continue
+            legal_theses_by_id[thesis_id] = thesis
 
         # Fallback: usa os últimos chunks do documento (pedidos aparecem no final da petição)
         if not pedidos_context:
@@ -1684,6 +1696,8 @@ class AgentDocumentExtractor:
                 pedidos_context = "\n\n".join(str(c.get("text", "")) for c in last_chunks)[:6000]
 
         benefit_lines: list[str] = []
+        targets: list[dict[str, Any]] = []
+        benefit_context_by_key: dict[str, dict[str, Any]] = {}
         for b in benefits:
             benefit_number = str(b.get("benefit_number", "") or "").strip()
             normalized_nb = re.sub(r"\D", "", benefit_number)
@@ -1715,9 +1729,135 @@ class AgentDocumentExtractor:
             prioritized_sections = self._coerce_sections_list(benefit_sections)
             section_text = " | ".join(prioritized_sections) if prioritized_sections else "(não informada)"
 
-            benefit_lines.append(
-                f"- NB: {benefit_number} | Tipo: {b.get('benefit_type', '')} | Segurado: {b.get('insured_name', '')} | Seções: {section_text}"
-            )
+            preferred_source_section = ""
+            for section in prioritized_sections:
+                if not self._is_pedidos_section(section):
+                    preferred_source_section = section
+                    break
+            if not preferred_source_section and prioritized_sections:
+                preferred_source_section = prioritized_sections[0]
+
+            legal_thesis_id: int | None = None
+            raw_single_legal_thesis_id = b.get("legal_thesis_id")
+            try:
+                if raw_single_legal_thesis_id not in (None, ""):
+                    legal_thesis_id = int(raw_single_legal_thesis_id)
+            except (TypeError, ValueError):
+                legal_thesis_id = None
+
+            if legal_thesis_id is None:
+                raw_ids = b.get("legal_thesis_ids")
+                if isinstance(raw_ids, list):
+                    for raw_id in raw_ids:
+                        try:
+                            parsed_id = int(raw_id)
+                        except (TypeError, ValueError):
+                            continue
+                        legal_thesis_id = parsed_id
+                        break
+
+            if preferred_source_section:
+                inferred_legal_thesis_id = self._infer_legal_thesis_id_from_section(
+                    preferred_source_section,
+                    legal_theses=legal_theses,
+                )
+                if inferred_legal_thesis_id:
+                    legal_thesis_id = inferred_legal_thesis_id
+
+            thesis_ids: list[int | None] = []
+            raw_legal_thesis_ids = b.get("legal_thesis_ids")
+            if isinstance(raw_legal_thesis_ids, list):
+                for raw_id in raw_legal_thesis_ids:
+                    try:
+                        parsed_id = int(raw_id)
+                    except (TypeError, ValueError):
+                        continue
+                    if parsed_id not in thesis_ids:
+                        thesis_ids.append(parsed_id)
+            if legal_thesis_id and legal_thesis_id not in thesis_ids:
+                thesis_ids.append(legal_thesis_id)
+            if not thesis_ids:
+                thesis_ids = [None]
+
+            for thesis_id in thesis_ids:
+                thesis_name = ""
+                thesis_key = ""
+                if thesis_id is not None:
+                    thesis_payload = legal_theses_by_id.get(int(thesis_id), {})
+                    thesis_name = str(thesis_payload.get("name", "") or "").strip()
+                    thesis_key = str(thesis_payload.get("key", "") or "").strip()
+
+                preferred_section_for_target = preferred_source_section
+                if prioritized_sections and thesis_key:
+                    topic_prefix = thesis_key.split(".", 1)[0].strip()
+                    if topic_prefix:
+                        for section in prioritized_sections:
+                            sec_match = re.match(r"^\s*(\d{1,2})(?:\.\d+)?\b", str(section or "").strip())
+                            sec_topic = sec_match.group(1) if sec_match else ""
+                            if sec_topic and sec_topic == topic_prefix:
+                                preferred_section_for_target = section
+                                break
+
+                # Fallback semântico: quando a key não ajuda, escolhe a seção mais aderente ao nome da tese.
+                if prioritized_sections and thesis_name:
+                    normalized_thesis_name = self._normalize_text_token(thesis_name)
+                    thesis_tokens = {
+                        token for token in re.split(r"\W+", normalized_thesis_name)
+                        if len(token) >= 4
+                    }
+
+                    best_section = preferred_section_for_target
+                    best_score = 0.0
+                    for section in prioritized_sections:
+                        if self._is_pedidos_section(section):
+                            continue
+
+                        normalized_section = self._normalize_text_token(section)
+                        if not normalized_section:
+                            continue
+
+                        section_tokens = {
+                            token for token in re.split(r"\W+", normalized_section)
+                            if len(token) >= 4
+                        }
+                        overlap_score = 0.0
+                        if thesis_tokens and section_tokens:
+                            overlap_score = len(thesis_tokens.intersection(section_tokens)) / max(len(thesis_tokens), 1)
+
+                        ratio_score = SequenceMatcher(None, normalized_thesis_name, normalized_section).ratio()
+                        combined_score = (overlap_score * 0.65) + (ratio_score * 0.35)
+
+                        if combined_score > best_score:
+                            best_score = combined_score
+                            best_section = section
+
+                    if best_section and best_score >= 0.18:
+                        preferred_section_for_target = best_section
+
+                target_key = f"{normalized_nb or benefit_number}|{int(thesis_id) if thesis_id is not None else 0}"
+                target_payload = {
+                    "target_key": target_key,
+                    "benefit_number": benefit_number,
+                    "benefit_type": str(b.get("benefit_type", "") or ""),
+                    "insured_name": str(b.get("insured_name", "") or ""),
+                    "legal_thesis_id": int(thesis_id) if thesis_id is not None else None,
+                    "thesis_name": thesis_name,
+                    "preferred_source_section": str(preferred_section_for_target or "").strip(),
+                    "section_text": section_text,
+                }
+                targets.append(target_payload)
+                benefit_context_by_key[target_key] = target_payload
+
+                benefit_lines.append(
+                    "- NB: "
+                    f"{benefit_number} | "
+                    f"Tese ID: {int(thesis_id) if thesis_id is not None else '-'} | "
+                    f"Tese: {thesis_name or '-'} | "
+                    f"Tipo: {b.get('benefit_type', '')} | "
+                    f"Segurado: {b.get('insured_name', '')} | "
+                    f"Seção preferencial: {str(preferred_section_for_target or '(não informada)')} | "
+                    f"Seções: {section_text}"
+                )
 
         benefits_list_text = "\n".join(benefit_lines)
 
@@ -1730,8 +1870,8 @@ class AgentDocumentExtractor:
             "INSTRUÇÕES:\n"
             "- Analise o texto da seção de pedidos para identificar o que o autor pede para cada NB.\n"
             "- Considere a seção informada em cada benefício como contexto lateral para desambiguar o cenário jurídico.\n"
-            "- Retorne também source_section com a seção principal usada no raciocínio (preferir a primeira da lista de seções do benefício).\n"
-            "- Retorne um item para CADA benefício da lista, mesmo que o tipo seja incerto (use 'revisao' como padrão).\n"
+            "- Retorne também source_section com a seção principal usada no raciocínio, priorizando seção de mérito/preliminar e evitando 'PEDIDOS' quando houver alternativa.\n"
+            "- Retorne um item para CADA linha da lista (NB + Tese ID), mesmo que o tipo seja incerto (use 'revisao' como padrão).\n"
             "- O campo 'benefit_number' deve corresponder exatamente ao NB fornecido.\n\n"
             "BENEFÍCIOS A CLASSIFICAR:\n"
             f"{benefits_list_text}\n\n"
@@ -1770,14 +1910,60 @@ class AgentDocumentExtractor:
             print(structured_response)
             if not structured_response:
                 raise RuntimeError("Resposta estruturada não retornada pelo agente")
-            return structured_response.model_dump()
+
+            payload = structured_response.model_dump()
+            model_items = payload.get("benefits", []) if isinstance(payload, dict) else []
+            model_by_nb: dict[str, dict[str, Any]] = {}
+            for model_item in model_items:
+                if not isinstance(model_item, dict):
+                    continue
+                model_nb = str(model_item.get("benefit_number", "") or "").strip()
+                normalized_model_nb = re.sub(r"\D", "", model_nb)
+                raw_model_thesis_id = model_item.get("legal_thesis_id")
+                model_thesis_id: int | None = None
+                try:
+                    if raw_model_thesis_id not in (None, ""):
+                        model_thesis_id = int(raw_model_thesis_id)
+                except (TypeError, ValueError):
+                    model_thesis_id = None
+
+                nb_key = normalized_model_nb or model_nb
+                if nb_key:
+                    model_by_nb[nb_key] = model_item
+                    composite_key = f"{nb_key}|{int(model_thesis_id) if model_thesis_id is not None else 0}"
+                    model_by_nb[composite_key] = model_item
+
+            normalized_items: list[BenefitRequestTypeItem] = []
+            for target in targets:
+                benefit_number = str(target.get("benefit_number", "") or "").strip()
+                target_key = str(target.get("target_key", "") or "")
+                model_item = model_by_nb.get(target_key)
+                if not model_item:
+                    fallback_nb_key = re.sub(r"\D", "", benefit_number) or benefit_number
+                    model_item = model_by_nb.get(fallback_nb_key, {})
+
+                request_type = str(model_item.get("request_type", "") or "").strip().lower()
+                if request_type not in {"exclusao", "inclusao", "revisao"}:
+                    request_type = "revisao"
+
+                normalized_items.append(
+                    BenefitRequestTypeItem(
+                        benefit_number=benefit_number,
+                        request_type=request_type,
+                        source_section=str(target.get("preferred_source_section", "") or "").strip(),
+                        legal_thesis_id=target.get("legal_thesis_id"),
+                    )
+                )
+
+            return BenefitRequestTypeClassificationResult(benefits=normalized_items).model_dump()
         except Exception:
             fallback = [
                 BenefitRequestTypeItem(
-                    benefit_number=str(b.get("benefit_number", "")),
+                    benefit_number=str(t.get("benefit_number", "")),
                     request_type="revisao",
-                    source_section=str(b.get("source_section", "") or ""),
+                    source_section=str(t.get("preferred_source_section", "") or ""),
+                    legal_thesis_id=t.get("legal_thesis_id"),
                 )
-                for b in benefits
+                for t in targets
             ]
             return BenefitRequestTypeClassificationResult(benefits=fallback).model_dump()

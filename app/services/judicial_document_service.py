@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import re
+import unicodedata
 from datetime import datetime
 from difflib import SequenceMatcher
 from pathlib import Path
@@ -11,6 +12,8 @@ from rich import print
 from app.agents.document_processing.agent_document_extractor import AgentDocumentExtractor
 from app.agents.processes.judicial_contestation_analysis_agent import JudicialContestationAnalysisAgent
 from app.agents.processes.judicial_document_summary_agent import JudicialDocumentSummaryAgent
+from sqlalchemy import and_
+
 from app.models import (
     Client,
     JudicialDefendant,
@@ -719,6 +722,13 @@ class JudicialDocumentService:
             benefit_number = str(item.get('benefit_number', '') or '').strip()
             request_type = str(item.get('request_type', '') or '').strip()
             source_section = str(item.get('source_section', '') or '').strip()
+            raw_legal_thesis_id = item.get('legal_thesis_id')
+            legal_thesis_id: int | None = None
+            try:
+                if raw_legal_thesis_id not in (None, ''):
+                    legal_thesis_id = int(raw_legal_thesis_id)
+            except (TypeError, ValueError):
+                legal_thesis_id = None
             if not benefit_number or not request_type:
                 continue
 
@@ -729,15 +739,108 @@ class JudicialDocumentService:
             if benefit:
                 benefit.request_type = request_type
                 if source_section:
-                    db.session.execute(
-                        judicial_process_benefit_legal_theses.update()
-                        .where(judicial_process_benefit_legal_theses.c.benefit_id == benefit.id)
-                        .values(source_section=source_section)
-                    )
+                    target_thesis_id = legal_thesis_id
+                    linked_thesis_ids = {
+                        thesis.id for thesis in (benefit.legal_theses or []) if thesis and thesis.id
+                    }
+
+                    # Se o classificador retornar um ID que não pertence ao benefício,
+                    # ignoramos esse ID e recalculamos pela seção para evitar gravar no vínculo errado.
+                    if (
+                        target_thesis_id is not None
+                        and linked_thesis_ids
+                        and target_thesis_id not in linked_thesis_ids
+                    ):
+                        target_thesis_id = None
+
+                    if target_thesis_id is None:
+                        target_thesis_id = self._resolve_thesis_id_from_source_section(
+                            benefit=benefit,
+                            source_section=source_section,
+                        )
+                    if target_thesis_id is None and len(benefit.legal_theses or []) == 1:
+                        target_thesis_id = benefit.legal_theses[0].id
+
+                    if target_thesis_id is not None:
+                        db.session.execute(
+                            judicial_process_benefit_legal_theses.update()
+                            .where(
+                                and_(
+                                    judicial_process_benefit_legal_theses.c.benefit_id == benefit.id,
+                                    judicial_process_benefit_legal_theses.c.legal_thesis_id == target_thesis_id,
+                                )
+                            )
+                            .values(source_section=source_section)
+                        )
                 benefit.updated_at = datetime.utcnow()
                 updated += 1
 
         return updated
+
+    @staticmethod
+    def _normalize_section_match_text(value: str | None) -> str:
+        text = str(value or '').strip().lower()
+        if not text:
+            return ''
+        text = unicodedata.normalize('NFKD', text)
+        text = ''.join(ch for ch in text if not unicodedata.combining(ch))
+        text = re.sub(r'\s+', ' ', text)
+        return text
+
+    def _resolve_thesis_id_from_source_section(
+        self,
+        benefit: JudicialProcessBenefit,
+        source_section: str,
+    ) -> int | None:
+        """Resolve tese do benefício com base no texto da seção quando o agente não retorna o ID."""
+        theses = list(benefit.legal_theses or [])
+        if not theses:
+            return None
+
+        normalized_section = self._normalize_section_match_text(source_section)
+        if not normalized_section:
+            return None
+
+        # Heurística 1: número de tópico inicial (ex.: "6.") contra a key da tese.
+        section_topic_match = re.match(r'^\s*(\d{1,2})(?:\.\d+)?\b', str(source_section or '').strip())
+        section_topic = section_topic_match.group(1) if section_topic_match else ''
+        if section_topic:
+            for thesis in theses:
+                thesis_key = str(getattr(thesis, 'key', '') or '').strip()
+                if not thesis_key:
+                    continue
+                if thesis_key.startswith(f'{section_topic}.'):
+                    return thesis.id
+
+        # Heurística 2: similaridade textual com nome/descrição da tese.
+        best_id: int | None = None
+        best_score = 0.0
+        for thesis in theses:
+            thesis_text = ' '.join(
+                [
+                    str(getattr(thesis, 'key', '') or ''),
+                    str(getattr(thesis, 'name', '') or ''),
+                    str(getattr(thesis, 'description', '') or ''),
+                ]
+            )
+            normalized_thesis = self._normalize_section_match_text(thesis_text)
+            if not normalized_thesis:
+                continue
+
+            if normalized_section == normalized_thesis:
+                return thesis.id
+
+            score = 0.0
+            if normalized_section in normalized_thesis or normalized_thesis in normalized_section:
+                score = 0.95
+            else:
+                score = SequenceMatcher(None, normalized_section, normalized_thesis).ratio()
+
+            if score > best_score:
+                best_score = score
+                best_id = thesis.id
+
+        return best_id if best_score >= 0.45 else None
 
     def _process_initial_petition_flow(
         self,
