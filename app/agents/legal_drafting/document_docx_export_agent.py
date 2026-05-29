@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Optional
 
 from docx import Document
+from docx.enum.table import WD_TABLE_ALIGNMENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
@@ -198,33 +199,13 @@ class OfficeDocxExportAgent:
         shd.set(qn("w:fill"), fill_hex)
         tc_pr.append(shd)
 
-    @staticmethod
-    def _set_table_borders(table, color_hex: str = "444444", size: int = 8) -> None:
-        tbl_pr = table._tbl.tblPr
-        tbl_borders = tbl_pr.find(qn("w:tblBorders"))
-        if tbl_borders is None:
-            tbl_borders = OxmlElement("w:tblBorders")
-            tbl_pr.append(tbl_borders)
-
-        for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
-            edge_tag = qn(f"w:{edge}")
-            element = tbl_borders.find(edge_tag)
-            if element is None:
-                element = OxmlElement(f"w:{edge}")
-                tbl_borders.append(element)
-            element.set(qn("w:val"), "single")
-            element.set(qn("w:sz"), str(size))
-            element.set(qn("w:space"), "0")
-            element.set(qn("w:color"), color_hex)
-
     def _apply_table_visual_fallback(self, table, total_rows: int) -> None:
-        # Fallback visual para manter o padrão cinza mesmo quando o estilo não é aplicado pelo Word.
-        self._set_table_borders(table, color_hex="5A5A5A", size=8)
+        # Fallback visual baseado no modelo legado modelo_acidente_trajeto.docx.
         if total_rows <= 0:
             return
 
         for col_index in range(len(table.rows[0].cells)):
-            self._set_cell_shading(table.rows[0].cells[col_index], "D9DDE3")
+            self._set_cell_shading(table.rows[0].cells[col_index], "D5DCE4")
 
         for row_index in range(1, total_rows):
             for col_index in range(len(table.rows[row_index].cells)):
@@ -239,15 +220,26 @@ class OfficeDocxExportAgent:
             return
 
         table = doc.add_table(rows=len(table_rows), cols=max_cols)
+        table.alignment = WD_TABLE_ALIGNMENT.CENTER
+
+        section = doc.sections[-1] if doc.sections else None
+        if section:
+            table_width = section.page_width - section.left_margin - section.right_margin
+            col_width = int(table_width / max_cols)
+            table.autofit = False
+            for row in table.rows:
+                for cell in row.cells:
+                    cell.width = col_width
+
         table_style = self._pick_style(
             [style.name for style in doc.styles if style.type == 3],
             [
+                "Table Grid",
                 "Grid Table Light",
                 "Grid Table 1 Light",
                 "Grid Table 1 Light Accent 1",
                 "Grid Table 1 Light Accent 3",
                 "Normal Table",
-                "Table Grid",
             ],
         )
         if table_style:
@@ -259,12 +251,14 @@ class OfficeDocxExportAgent:
                 cell_text = row_values[col_index] if col_index < len(row_values) else ""
                 cell.text = self._normalize_md_emphasis(cell_text)
                 for paragraph in cell.paragraphs:
-                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER if row_index == 0 else WD_ALIGN_PARAGRAPH.LEFT
+                    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
                     for run in paragraph.runs:
-                        run.font.name = "Segoe UI"
-                        run.font.size = Pt(10)
+                        run.font.name = "Avenir Next LT Pro"
+                        run.font.size = Pt(7)
                         if row_index == 0:
                             run.bold = True
+                        else:
+                            run.bold = False
 
         self._apply_table_visual_fallback(table, len(table_rows))
 
