@@ -155,6 +155,13 @@ _IMPUGNACAO_INTERNAL_GUARDRAILS = """
     b) detectar contradições;
     c) melhorar aderência argumentativa;
     d) aumentar materialidade documental.
+
+8) Formato obrigatório de `internal_review_notes` (curto e acionável).
+- Escreva em checklist, com no máximo 8 itens.
+- Cada item deve começar com "- [ ]".
+- Quando mencionar ausência de peça-modelo por tese, indique EXPLICITAMENTE
+    o identificador e/ou nome da tese (ex.: "6.14 - APURAÇÃO DO ÍNDICE DE CUSTO").
+- Evite parágrafos longos e texto corrido.
 """.strip()
 
 
@@ -453,7 +460,115 @@ def _sanitize_generated_impugnacao(
         dedup.append(item.strip())
 
     result.internal_review_notes = "\n".join(dedup)[:4000]
+    result.internal_review_notes = _format_internal_review_notes(
+        result.internal_review_notes,
+        result.benefit_sections,
+    )
     return result
+
+
+def _format_internal_review_notes(
+    notes_text: str,
+    benefit_sections: list[ImpugnacaoBenefitThesisSection],
+) -> str:
+    """Converte notas internas em checklist curto e explicita teses sem peça-modelo."""
+    notes_raw = str(notes_text or "").strip()
+    if not notes_raw:
+        return ""
+
+    normalized = re.sub(r"\s+", " ", notes_raw).strip()
+    split_candidates = re.split(r"(?<=[\.;:])\s+|\n+", normalized)
+    items: list[str] = []
+    seen_items = set()
+
+    for chunk in split_candidates:
+        sentence = str(chunk).strip(" -\t\n\r")
+        if not sentence:
+            continue
+        if len(sentence) < 18:
+            continue
+
+        key = re.sub(r"\s+", " ", sentence).strip().lower()
+        if key in seen_items:
+            continue
+        seen_items.add(key)
+        items.append(sentence)
+
+    # Detecta menções a tese/categoria sem peça-modelo e tenta mapear para nome da tese.
+    thesis_ref_matches = re.findall(
+        r"(?:tese|categoria)\s*(\d+(?:\.\d+)?)",
+        normalized,
+        flags=re.IGNORECASE,
+    )
+    thesis_refs = []
+    seen_refs = set()
+    for ref in thesis_ref_matches:
+        ref_norm = ref.strip()
+        if ref_norm and ref_norm not in seen_refs:
+            seen_refs.add(ref_norm)
+            thesis_refs.append(ref_norm)
+
+    unresolved_models = bool(
+        re.search(r"sem\s+pe[cç]a-?modelo|n[aã]o\s+possui\s+pe[cç]a-?modelo", normalized, flags=re.IGNORECASE)
+    )
+
+    if unresolved_models:
+        thesis_lookup: dict[str, str] = {}
+        for sec in benefit_sections or []:
+            name = str(getattr(sec, "thesis_name", "") or "").strip()
+            if not name:
+                continue
+            for ref in re.findall(r"\b(\d+(?:\.\d+)?)\b", name):
+                thesis_lookup.setdefault(ref, name)
+
+        if thesis_refs:
+            mapped = []
+            for ref in thesis_refs:
+                mapped_name = thesis_lookup.get(ref)
+                if mapped_name:
+                    mapped.append(f"{ref} - {mapped_name}")
+                else:
+                    mapped.append(ref)
+            items.append(
+                "Teses citadas como sem peça-modelo para revisão: " + "; ".join(mapped)
+            )
+        else:
+            section_names = [
+                str(getattr(sec, "thesis_name", "") or "").strip()
+                for sec in (benefit_sections or [])
+                if str(getattr(sec, "thesis_name", "") or "").strip()
+            ]
+            if len(section_names) == 1:
+                items.append(
+                    f"Tese sem peça-modelo não identificada pelo número; provável referência: {section_names[0]}"
+                )
+            else:
+                items.append(
+                    "Tese sem peça-modelo não identificada claramente; confirmar no texto gerado qual rótulo de tese foi citado."
+                )
+
+    # Mantém checklist enxuto para facilitar revisão humana.
+    compact_items = []
+    seen_compact = set()
+    for item in items:
+        clean_item = re.sub(r"\s+", " ", item).strip(" .")
+        if not clean_item:
+            continue
+        if len(clean_item) > 240:
+            clean_item = clean_item[:237].rstrip() + "..."
+        key = clean_item.lower()
+        if key in seen_compact:
+            continue
+        seen_compact.add(key)
+        compact_items.append(clean_item)
+        if len(compact_items) >= 8:
+            break
+
+    if not compact_items:
+        fallback = re.sub(r"\s+", " ", notes_raw)
+        return f"- [ ] {fallback[:220].rstrip()}"
+
+    return "\n".join(f"- [ ] {item}" for item in compact_items)
 
 
 # ── Manifestação ───────────────────────────────────────────────────────────
