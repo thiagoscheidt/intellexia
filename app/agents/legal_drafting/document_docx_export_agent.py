@@ -46,7 +46,8 @@ _SYSTEM_PROMPT = (
     "Preserve conteúdo e sentido jurídico integralmente, sem resumir nem omitir seções. "
     "Apenas padronize quebras de linha, títulos e legibilidade. "
     "Nunca altere pedidos, fundamentos, valores, NBs, NITs, CNPJs ou números processuais. "
-    "Preserve tabelas markdown com pipes exatamente como tabelas estruturadas."
+    "Preserve tabelas markdown com pipes exatamente como tabelas estruturadas. "
+    "Linhas no formato [Anexo: ...] são referências de prova — preserve-as exatamente, em linha própria."
 )
 
 _BOLD_MARKDOWN_RE = re.compile(r"(\*\*([^*]+)\*\*|__([^_]+)__)")
@@ -172,14 +173,62 @@ class OfficeDocxExportAgent:
             return True
         return False
 
+    # Detecta "3.1. HEADING CAPS Body em minúsculas..." e insere \n entre eles.
+    _HEADING_CONCAT_RE = re.compile(
+        r'^(\d+(?:\.\d+)*\.\s+'
+        r'(?:[A-ZÁÉÍÓÚÀÂÊÔÃÕÇ0-9][A-ZÁÉÍÓÚÀÂÊÔÃÕÇ0-9/,.()\- ]*?)'
+        r')(?=\s+[A-ZÁÉÍÓÚÀÂÊÔÃÕÇ][a-záéíóúàâêôãõç])',
+        re.MULTILINE,
+    )
+
+    def _split_concatenated_headings(self, text: str) -> str:
+        """Insert \\n between a numbered all-caps heading and body text on the same line."""
+        def _replace(m: re.Match) -> str:
+            heading = m.group(1).rstrip()
+            rest = text[m.end():m.end()]  # empty — lookahead doesn't consume
+            return heading + "\n"
+
+        result = []
+        for line in text.splitlines(keepends=True):
+            stripped = line.rstrip("\r\n")
+            ending = line[len(stripped):]
+            m = self._HEADING_CONCAT_RE.match(stripped)
+            if m:
+                heading = m.group(1).rstrip()
+                body = stripped[m.end():].strip()
+                if body:
+                    result.append(heading + "\n" + body + ending)
+                    continue
+            result.append(line)
+        return "".join(result)
+
     @staticmethod
     def _is_table_row(line: str) -> bool:
         stripped = str(line or "").strip()
-        return stripped.startswith("|") and stripped.endswith("|") and stripped.count("|") >= 2
+        # Never treat ANEXO placeholders as table rows — they contain pipe chars
+        # (e.g. {{ANEXO|id=X|arquivo=...|titulo=...|url=...}}) that would trigger
+        # the 3-pipe heuristic below, corrupting the table accumulation buffer.
+        if stripped.startswith("{{ANEXO|") and stripped.endswith("}}"):
+            return False
+        # Standard markdown: | cell | cell |
+        if stripped.startswith("|") and stripped.endswith("|") and stripped.count("|") >= 2:
+            return True
+        # Markdown without boundary pipes: cell | cell | cell (3+ pipes, not a sentence)
+        if not stripped.startswith("|") and stripped.count("|") >= 3 and not stripped.endswith((".", "?", "!")):
+            return True
+        # Tab-separated (LLM sometimes generates TSV-style): 2+ tabs
+        if "\t" in stripped and stripped.count("\t") >= 2:
+            return True
+        return False
 
     @staticmethod
     def _parse_table_cells(line: str) -> list[str]:
-        stripped = str(line or "").strip().strip("|")
+        stripped = str(line or "").strip()
+        # Tab-separated
+        if "\t" in stripped and stripped.count("\t") >= 1:
+            return [cell.strip() for cell in stripped.split("\t")]
+        # Pipe-separated
+        stripped = stripped.strip("|")
         return [cell.strip() for cell in stripped.split("|")]
 
     @staticmethod
@@ -557,6 +606,7 @@ class OfficeDocxExportAgent:
             title_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
         text = str(document_text or "")
+        text = self._split_concatenated_headings(text)
         lines = text.splitlines()
         pending_table: list[list[str]] = []
         in_table = False
@@ -646,6 +696,19 @@ class OfficeDocxExportAgent:
                 p.alignment = WD_ALIGN_PARAGRAPH.CENTER
                 continue
 
+            # Linha que é APENAS uma referência de anexo
+            if re.fullmatch(r"\[Anexo:[^\]]+\]", line):
+                p = doc.add_paragraph()
+                run = p.add_run(line)
+                run.font.name = "Segoe UI"
+                run.font.size = Pt(10)
+                run.italic = True
+                p.paragraph_format.left_indent = Inches(0.3)
+                p.paragraph_format.space_before = Pt(4)
+                p.paragraph_format.space_after = Pt(4)
+                p.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
+                continue
+
             if "**" in line or "__" in line:
                 self._append_rich_line(doc, line, body_style)
             else:
@@ -658,6 +721,28 @@ class OfficeDocxExportAgent:
         output.seek(0)
         return output
 
+    _ANEXO_RE = re.compile(r"\{\{ANEXO\|([^}]+)\}\}")
+
+    def _strip_anexo_placeholders(self, text: str) -> str:
+        """Converte {{ANEXO|...}} em referência textual legível para o DOCX."""
+        def _replace(m: re.Match) -> str:
+            params: dict[str, str] = {}
+            for part in m.group(1).split("|"):
+                if "=" in part:
+                    k, v = part.split("=", 1)
+                    params[k.strip()] = v.strip()
+            titulo = params.get("titulo", "")
+            arquivo = params.get("arquivo", "")
+            if titulo and arquivo:
+                return f"[Anexo: {titulo} ({arquivo})]"
+            if titulo:
+                return f"[Anexo: {titulo}]"
+            if arquivo:
+                return f"[Anexo: {arquivo}]"
+            return ""
+
+        return self._ANEXO_RE.sub(_replace, text)
+
     def export_generated_document(
         self,
         *,
@@ -669,6 +754,10 @@ class OfficeDocxExportAgent:
     ) -> BytesIO:
         """Exporta documento gerado para DOCX no padrão do escritório."""
         text = str(document_text or "")
+        # Strip ANEXO placeholders before LLM normalization — the pipe-heavy
+        # {{ANEXO|key=val|...}} syntax confuses the normalizer and corrupts nearby
+        # markdown tables and heading structure.
+        text = self._strip_anexo_placeholders(text)
         if run_ai_normalization:
             text = self._normalize_for_docx(
                 document_title=document_title,

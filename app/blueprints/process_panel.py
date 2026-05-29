@@ -1,4 +1,4 @@
-from flask import Blueprint, render_template, request, session, jsonify, redirect, url_for, flash, send_file
+from flask import Blueprint, render_template, request, session, jsonify, redirect, url_for, flash, send_file, abort
 from meilisearch_python_sdk import Client as MeilisearchClient
 from app.models import (
     db, JudicialProcess,
@@ -1997,6 +1997,35 @@ def download_process_attachment(process_id, attachment_id):
     )
 
 
+@process_panel_bp.route('/<int:process_id>/anexos/<int:attachment_id>/visualizar', methods=['GET'])
+@require_law_firm
+def view_process_attachment(process_id, attachment_id):
+    """Serve o anexo inline para visualização no navegador (imagens e PDFs)."""
+    law_firm_id = get_current_law_firm_id()
+
+    process = JudicialProcess.query.filter_by(
+        id=process_id,
+        law_firm_id=law_firm_id,
+    ).first_or_404()
+
+    attachment = JudicialProcessAttachment.query.filter_by(
+        id=attachment_id,
+        process_id=process.id,
+        law_firm_id=law_firm_id,
+        is_active=True,
+    ).first_or_404()
+
+    file_path = str(attachment.file_path or '').strip()
+    if not file_path or not os.path.exists(file_path):
+        abort(404)
+
+    return send_file(
+        file_path,
+        as_attachment=False,
+        download_name=attachment.original_filename,
+    )
+
+
 @process_panel_bp.route('/<int:process_id>/anexos/<int:attachment_id>/excluir', methods=['POST'])
 @require_law_firm
 def delete_process_attachment(process_id, attachment_id):
@@ -2964,7 +2993,7 @@ def generated_document_create(process_id):
         b.id: b for b in JudicialProcessBenefit.query.filter(
             JudicialProcessBenefit.id.in_(benefit_id_set),
             JudicialProcessBenefit.process_id == process.id,
-        ).all()
+        ).options(selectinload(JudicialProcessBenefit.attachments)).all()
     }
 
     # Load thesis contestations
@@ -3021,11 +3050,27 @@ def generated_document_create(process_id):
         source_section = ''
         if t_id:
             source_section = str(benefit_thesis_source_section_map.get((b_id, t_id), '') or '').strip()
+        benefit_attachments = [
+            {
+                'id': att.id,
+                'arquivo': att.original_filename or '',
+                'titulo': (att.description or att.original_filename or '').strip(),
+                'url': url_for(
+                    'process_panel.download_process_attachment',
+                    process_id=process.id,
+                    attachment_id=att.id,
+                    _external=False,
+                ),
+            }
+            for att in (benefit.attachments or [])
+            if att.is_active and (att.description or '').strip()
+        ]
         agent_selections.append({
             'benefit': benefit,
             'thesis': thesis,
             'contestation': contestation,
             'source_section': source_section,
+            'attachments': benefit_attachments,
         })
 
     title = DOCUMENT_TYPE_LABELS.get(document_type, document_type)
@@ -3233,7 +3278,7 @@ def generated_document_regenerate(process_id, doc_id):
         benefits_by_id = {
             b.id: b for b in JudicialProcessBenefit.query.filter(
                 JudicialProcessBenefit.id.in_(sel_benefit_ids)
-            ).all()
+            ).options(selectinload(JudicialProcessBenefit.attachments)).all()
         }
         contestations_by_key = {}
         if sel_thesis_ids:
@@ -3262,10 +3307,26 @@ def generated_document_regenerate(process_id, doc_id):
                 if contestation and contestation.legal_thesis
                 else theses_by_id.get(sel.legal_thesis_id) if sel.legal_thesis_id else None
             )
+            benefit_attachments = [
+                {
+                    'id': att.id,
+                    'arquivo': att.original_filename or '',
+                    'titulo': (att.description or att.original_filename or '').strip(),
+                    'url': url_for(
+                        'process_panel.download_process_attachment',
+                        process_id=process.id,
+                        attachment_id=att.id,
+                        _external=False,
+                    ),
+                }
+                for att in (benefit.attachments or [])
+                if att.is_active and (att.description or '').strip()
+            ]
             agent_selections.append({
                 'benefit': benefit,
                 'thesis': thesis,
                 'contestation': contestation,
+                'attachments': benefit_attachments,
             })
 
         contestation_file_path = None
@@ -3368,7 +3429,9 @@ def generated_document_download(process_id, doc_id):
         ))
 
     posted_content = request.form.get('content') if request.method == 'POST' else None
-    content_to_export = posted_content if posted_content is not None else version.content
+    # Only use posted content when it's non-empty — an empty POST means the
+    # frontend was not in edit-mode and the server should use the DB version.
+    content_to_export = posted_content if posted_content else version.content
     if not str(content_to_export or '').strip():
         flash('O conteúdo para download está vazio.', 'warning')
         return redirect(url_for(

@@ -134,8 +134,9 @@ _IMPUGNACAO_INTERNAL_GUARDRAILS = """
   procedimento de compensação (art. 89 § 4º Lei 8.212/1991) + atualização pela SELIC.
 
 6) Marcadores internos NÃO podem ir para o texto final.
-- NÃO inserir no corpo da peça: "⚠️", "nota ao revisor", "placeholder", "dados pendentes".
+- NÃO inserir no corpo da peça: "⚠️", "nota ao revisor", "dados pendentes".
 - Qualquer alerta/recomendação interna deve ir em `internal_review_notes`.
+- EXCEÇÃO: placeholders de anexo no formato `{{ANEXO|...}}` são permitidos e esperados no corpo da peça (ver regra 9).
 
 7) Hierarquia de fontes quando houver resumo estruturado + contestação completa.
 - O resumo estruturado da contestação é a representação PRINCIPAL e PRIORITÁRIA da controvérsia.
@@ -162,6 +163,28 @@ _IMPUGNACAO_INTERNAL_GUARDRAILS = """
 - Quando mencionar ausência de peça-modelo por tese, indique EXPLICITAMENTE
     o identificador e/ou nome da tese (ex.: "6.14 - APURAÇÃO DO ÍNDICE DE CUSTO").
 - Evite parágrafos longos e texto corrido.
+
+9) Citação de anexos probatórios disponíveis por benefício.
+- Cada benefício pode ter uma lista de "Anexos disponíveis" no contexto recebido.
+- Quando um argumento for sustentado por documento listado, cite o anexo SEMPRE em linha própria, imediatamente após o parágrafo que ele comprova — nunca no meio de uma frase.
+- Use EXATAMENTE o formato abaixo, em linha isolada (linha em branco antes e depois):
+
+  {{ANEXO|id=X|arquivo=nome_do_arquivo.pdf|titulo=descrição do documento|url=/caminho/download}}
+
+- Exemplo correto:
+  A empresa permanece cadastrada no sistema FAP conforme demonstrado abaixo.
+
+  {{ANEXO|id=5|arquivo=print_fap.png|titulo=Print do sistema FAP web|url=/process-panel/13/anexos/5/download}}
+
+  Diante desse registro inequívoco, a defesa genérica não se sustenta.
+
+- Exemplo ERRADO (nunca faça assim):
+  A empresa permanece cadastrada {{ANEXO|id=5|...}} conforme demonstrado.
+
+- Substitua X, nome_do_arquivo.pdf, descrição e /caminho pelos valores exatos fornecidos no contexto.
+- Cite apenas anexos que constam na lista — nunca invente IDs, nomes ou URLs.
+- Se não houver anexo adequado para um trecho, não insira o placeholder.
+- Um mesmo anexo pode ser citado mais de uma vez se sustenta múltiplos argumentos.
 """.strip()
 
 
@@ -1066,6 +1089,7 @@ class AgentGeneratedDocument:
             grouped.setdefault(section_label, []).append({
                 'benefit': benefit,
                 'contestation': contestation,
+                'attachments': sel.get('attachments') or [],
             })
 
         for section_label, rows in grouped.items():
@@ -1125,6 +1149,16 @@ class AgentGeneratedDocument:
                         lines.append(f"Efeito no FAP: {self._clip_text(efeito)}")
                     if trecho:
                         lines.append(f"Trecho Detectado: {self._clip_text(trecho)}")
+
+                attachments = row.get('attachments') or []
+                if attachments:
+                    lines.append(f"  Anexos disponíveis (NB {benefit.benefit_number or '—'}):")
+                    for att in attachments:
+                        lines.append(
+                            f"    - [ID:{att['id']}] {att['arquivo']} "
+                            f"— \"{att['titulo']}\" "
+                            f"— URL:{att['url']}"
+                        )
 
         return "\n".join(lines)
 

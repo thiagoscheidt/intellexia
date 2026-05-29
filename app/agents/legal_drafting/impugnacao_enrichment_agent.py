@@ -58,6 +58,7 @@ PROIBIDO:
 - Remover ou alterar argumentos existentes
 - Alterar a estrutura ou numeração do documento
 - Resumir ou omitir qualquer seção
+- Modificar tabelas markdown: preserve EXATAMENTE cada linha de tabela com seus pipes (|), separadores (---) e células — nunca reformate, una ou remova colunas de tabela
 """.strip()
 
 
