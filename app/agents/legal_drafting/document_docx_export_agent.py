@@ -19,6 +19,8 @@ from typing import Optional
 
 from docx import Document
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
 from docx.shared import Inches, Pt
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel, Field
@@ -184,6 +186,50 @@ class OfficeDocxExportAgent:
         stripped = str(line or "").strip()
         return bool(re.fullmatch(r"\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?", stripped))
 
+    @staticmethod
+    def _set_cell_shading(cell, fill_hex: str) -> None:
+        tc_pr = cell._tc.get_or_add_tcPr()
+        for child in list(tc_pr):
+            if child.tag == qn("w:shd"):
+                tc_pr.remove(child)
+        shd = OxmlElement("w:shd")
+        shd.set(qn("w:val"), "clear")
+        shd.set(qn("w:color"), "auto")
+        shd.set(qn("w:fill"), fill_hex)
+        tc_pr.append(shd)
+
+    @staticmethod
+    def _set_table_borders(table, color_hex: str = "444444", size: int = 8) -> None:
+        tbl_pr = table._tbl.tblPr
+        tbl_borders = tbl_pr.find(qn("w:tblBorders"))
+        if tbl_borders is None:
+            tbl_borders = OxmlElement("w:tblBorders")
+            tbl_pr.append(tbl_borders)
+
+        for edge in ("top", "left", "bottom", "right", "insideH", "insideV"):
+            edge_tag = qn(f"w:{edge}")
+            element = tbl_borders.find(edge_tag)
+            if element is None:
+                element = OxmlElement(f"w:{edge}")
+                tbl_borders.append(element)
+            element.set(qn("w:val"), "single")
+            element.set(qn("w:sz"), str(size))
+            element.set(qn("w:space"), "0")
+            element.set(qn("w:color"), color_hex)
+
+    def _apply_table_visual_fallback(self, table, total_rows: int) -> None:
+        # Fallback visual para manter o padrão cinza mesmo quando o estilo não é aplicado pelo Word.
+        self._set_table_borders(table, color_hex="5A5A5A", size=8)
+        if total_rows <= 0:
+            return
+
+        for col_index in range(len(table.rows[0].cells)):
+            self._set_cell_shading(table.rows[0].cells[col_index], "D9DDE3")
+
+        for row_index in range(1, total_rows):
+            for col_index in range(len(table.rows[row_index].cells)):
+                self._set_cell_shading(table.rows[row_index].cells[col_index], "FFFFFF")
+
     def _flush_markdown_table(self, doc, table_rows: list[list[str]], body_style: str | None) -> None:
         if not table_rows:
             return
@@ -193,7 +239,19 @@ class OfficeDocxExportAgent:
             return
 
         table = doc.add_table(rows=len(table_rows), cols=max_cols)
-        table.style = "Table Grid" if "Table Grid" in [s.name for s in doc.styles] else table.style
+        table_style = self._pick_style(
+            [style.name for style in doc.styles if style.type == 3],
+            [
+                "Grid Table Light",
+                "Grid Table 1 Light",
+                "Grid Table 1 Light Accent 1",
+                "Grid Table 1 Light Accent 3",
+                "Normal Table",
+                "Table Grid",
+            ],
+        )
+        if table_style:
+            table.style = table_style
 
         for row_index, row_values in enumerate(table_rows):
             for col_index in range(max_cols):
@@ -207,6 +265,8 @@ class OfficeDocxExportAgent:
                         run.font.size = Pt(10)
                         if row_index == 0:
                             run.bold = True
+
+        self._apply_table_visual_fallback(table, len(table_rows))
 
         doc.add_paragraph("")
 
