@@ -80,6 +80,34 @@ class OfficeDocxExportAgent:
         return None
 
     @staticmethod
+    def _normalize_style_name(value: str) -> str:
+        text = str(value or "").strip().lower()
+        text = (
+            text.replace("ç", "c")
+            .replace("ã", "a")
+            .replace("á", "a")
+            .replace("à", "a")
+            .replace("â", "a")
+            .replace("é", "e")
+            .replace("ê", "e")
+            .replace("í", "i")
+            .replace("ó", "o")
+            .replace("ô", "o")
+            .replace("õ", "o")
+            .replace("ú", "u")
+        )
+        return re.sub(r"\s+", " ", text)
+
+    @classmethod
+    def _pick_style_by_aliases(cls, style_names: list[str], aliases: list[str]) -> str | None:
+        normalized_map = {cls._normalize_style_name(name): name for name in style_names}
+        for alias in aliases:
+            candidate = normalized_map.get(cls._normalize_style_name(alias))
+            if candidate:
+                return candidate
+        return None
+
+    @staticmethod
     def _strip_heading_number(text: str) -> str:
         value = str(text or "").strip()
         value = re.sub(r"^\d+(?:\.\d+)*\.?\s+", "", value)
@@ -231,20 +259,27 @@ class OfficeDocxExportAgent:
         # Preserva numeração já existente no heading para evitar "reset" do índice.
         clean_heading = self._normalize_md_emphasis(heading).strip()
 
-        # Evita estilos numerados do template que podem reiniciar a contagem.
-        paragraph = doc.add_paragraph(clean_heading)
-        target_size = 16 if level == 1 else 13
+        paragraph_style = title_style if level == 1 else subtitle_style
+        if paragraph_style:
+            paragraph = doc.add_paragraph(clean_heading, style=paragraph_style)
+            if not paragraph.runs:
+                paragraph.add_run(clean_heading)
+        else:
+            # Evita estilos numerados do template que podem reiniciar a contagem.
+            paragraph = doc.add_paragraph(clean_heading)
+            target_size = 16 if level == 1 else 13
 
-        if not paragraph.runs:
-            paragraph.add_run(clean_heading)
+            if not paragraph.runs:
+                paragraph.add_run(clean_heading)
 
-        for run in paragraph.runs:
-            run.font.name = "Segoe UI"
-            run.font.size = Pt(target_size)
-            run.bold = True
+            for run in paragraph.runs:
+                run.font.name = "Segoe UI"
+                run.font.size = Pt(target_size)
+                run.bold = True
 
-        paragraph.paragraph_format.space_before = Pt(12 if level == 1 else 8)
-        paragraph.paragraph_format.space_after = Pt(6)
+            paragraph.paragraph_format.space_before = Pt(12 if level == 1 else 8)
+            paragraph.paragraph_format.space_after = Pt(6)
+
         paragraph.paragraph_format.alignment = WD_ALIGN_PARAGRAPH.LEFT
         return paragraph
 
@@ -416,6 +451,31 @@ class OfficeDocxExportAgent:
         style_names = [style.name for style in doc.styles if style.type == 1]
         title_style = self._pick_style(style_names, ["Título", "Titulo", "Heading 1", "Título 1"])
         subtitle_style = self._pick_style(style_names, ["Título 2", "Titulo 2", "Heading 2", "Subtítulo"])
+
+        topic_style = self._pick_style_by_aliases(
+            style_names,
+            [
+                "Tópico tese",
+                "Topico tese",
+                "Topico Tese",
+                "Tópico Tese",
+            ],
+        )
+        subtopic_style = self._pick_style_by_aliases(
+            style_names,
+            [
+                "Subtópico tese",
+                "Subtopico tese",
+                "Subtópico Tese",
+                "Subtopico Tese",
+                "Sub tópico tese",
+                "Sub topico tese",
+            ],
+        )
+
+        effective_heading_style = topic_style or title_style
+        # Regra solicitada: usar o mesmo estilo de tópico também nos subtítulos.
+        effective_subheading_style = effective_heading_style
         body_style = self._pick_style(style_names, ["Corpo de Texto", "Corpo de texto", "Normal", "Body Text"])
 
         for _ in range(len(doc.paragraphs)):
@@ -468,8 +528,8 @@ class OfficeDocxExportAgent:
                     doc,
                     bold_heading_candidate,
                     level=heading_level,
-                    title_style=title_style,
-                    subtitle_style=subtitle_style,
+                    title_style=effective_heading_style,
+                    subtitle_style=effective_subheading_style,
                 )
                 continue
 
@@ -489,21 +549,39 @@ class OfficeDocxExportAgent:
                 heading_value = line[2:].strip()
                 if self._should_page_break_before_heading(heading_value) and doc.paragraphs:
                     doc.add_page_break()
-                self._append_heading(doc, heading_value, level=1, title_style=title_style, subtitle_style=subtitle_style)
+                self._append_heading(
+                    doc,
+                    heading_value,
+                    level=1,
+                    title_style=effective_heading_style,
+                    subtitle_style=effective_subheading_style,
+                )
                 continue
 
             if line.startswith("## ") or line.startswith("### "):
                 heading = line[3:].strip() if line.startswith("## ") else line[4:].strip()
                 if self._should_page_break_before_heading(heading) and doc.paragraphs:
                     doc.add_page_break()
-                self._append_heading(doc, heading, level=2, title_style=title_style, subtitle_style=subtitle_style)
+                self._append_heading(
+                    doc,
+                    heading,
+                    level=2,
+                    title_style=effective_heading_style,
+                    subtitle_style=effective_subheading_style,
+                )
                 continue
 
             if self._is_plain_heading(line):
                 heading_level = 1 if line.upper().startswith("RECURSO:") else 2
                 if self._should_page_break_before_heading(line) and doc.paragraphs:
                     doc.add_page_break()
-                self._append_heading(doc, line, level=heading_level, title_style=title_style, subtitle_style=subtitle_style)
+                self._append_heading(
+                    doc,
+                    line,
+                    level=heading_level,
+                    title_style=effective_heading_style,
+                    subtitle_style=effective_subheading_style,
+                )
                 continue
 
             if line.startswith("---"):
