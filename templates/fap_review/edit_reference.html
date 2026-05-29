@@ -4,7 +4,7 @@
 
 {% set page_title = "Visualizar Referência" if is_read_only_reference else "Editar Referência" %}
 
-{% block title %}{{ page_title }} - FAP Review - IntellexIA{% endblock %}
+{% block title %}{{ page_title }} - Revisor de Petições - IntellexIA{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -94,7 +94,7 @@
             <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i>
                     Home</a></li>
             <li class="breadcrumb-item"><a href="{{ url_for('fap_review.index') }}"><i
-                        class="bi bi-file-earmark-check"></i> FAP Review</a></li>
+                        class="bi bi-file-earmark-check"></i> Revisor de Petições</a></li>
             <li class="breadcrumb-item"><a href="{{ url_for('fap_review.settings') }}">Configurações</a></li>
             <li class="breadcrumb-item active">{{ reference.reference_type }}</li>
         </ol>

@@ -4,7 +4,7 @@
 
 {% set page_title = "Log de Auditoria" %}
 
-{% block title %}{{ page_title }} - FAP Review - IntellexIA{% endblock %}
+{% block title %}{{ page_title }} - Revisor de Petições - IntellexIA{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -60,7 +60,7 @@
   <nav aria-label="breadcrumb">
     <ol class="breadcrumb mb-0 bg-transparent small">
       <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
-      <li class="breadcrumb-item"><a href="{{ url_for('fap_review.index') }}"><i class="bi bi-file-earmark-check"></i> FAP Review</a></li>
+      <li class="breadcrumb-item"><a href="{{ url_for('fap_review.index') }}"><i class="bi bi-file-earmark-check"></i> Revisor de Petições</a></li>
       <li class="breadcrumb-item active">{{ page_title }}</li>
     </ol>
   </nav>
@@ -207,7 +207,7 @@
     <div class="alert alert-info d-flex align-items-start gap-2 mt-4 border-0 rounded-3" style="background: var(--bs-info-bg-subtle); color: var(--bs-info-text-emphasis);">
       <i class="bi bi-info-circle-fill flex-shrink-0 mt-1"></i>
       <div class="small">
-        <strong>Nota:</strong> Este log registra todas as ações administrativas do módulo FAP Review,
+        <strong>Nota:</strong> Este log registra todas as ações administrativas do módulo Revisor de Petições,
         incluindo atualizações de configurações, prompts, referências e execuções de análises.
       </div>
     </div>
