@@ -195,26 +195,50 @@
 
   /* Referência de anexo como bloco independente */
   .anexo-figure {
-    margin: .9rem 0;
+    margin: 1rem 0 1.25rem;
+    border: 1px solid rgba(13, 110, 253, .14);
+    border-radius: .9rem;
+    background: linear-gradient(180deg, rgba(13, 110, 253, .04), rgba(13, 110, 253, .02));
+    overflow: hidden;
+  }
+
+  .anexo-figure-preview {
+    display: block;
+    padding: .85rem;
+    background: rgba(15, 23, 42, .03);
+    border-bottom: 1px solid rgba(15, 23, 42, .08);
+  }
+
+  .anexo-figure-preview img {
+    display: block;
+    width: 100%;
+    height: auto;
+    max-height: 460px;
+    object-fit: contain;
+    border-radius: .55rem;
+    background: #fff;
+    box-shadow: 0 8px 22px rgba(15, 23, 42, .08);
+  }
+
+  .anexo-figure-body {
+    padding: .8rem .95rem;
   }
 
   .anexo-figure-link {
     display: inline-flex;
     align-items: center;
     gap: .55rem;
-    padding: .5rem .9rem;
-    background: rgba(13, 110, 253, .06);
-    border: 1px solid rgba(13, 110, 253, .18);
-    border-left: 3px solid #0d6efd;
+    padding: .45rem 0;
+    background: transparent;
+    border: 0;
     border-radius: 6px;
     font-size: .86rem;
     color: #0d6efd;
     text-decoration: none;
-    transition: background .15s;
+    transition: color .15s;
   }
 
   .anexo-figure-link:hover {
-    background: rgba(13, 110, 253, .13);
     color: #0a58ca;
   }
 
@@ -813,6 +837,7 @@ breadcrumbs=[
     function renderAnexoBadges(container) {
       const SOLO_RE = /^\s*\{\{ANEXO\|([^}]+)\}\}\s*$/;
       const INLINE_RE = /\{\{ANEXO\|([^}]+)\}\}/g;
+      const IMAGE_EXT_RE = /\.(png|jpe?g|gif|bmp|webp|svg)$/i;
 
       function parseAnexoParams(raw) {
         var parts = {};
@@ -823,21 +848,43 @@ breadcrumbs=[
         return parts;
       }
 
+      function escapeHtml(value) {
+        return String(value || '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      function getPreviewUrl(url) {
+        if (!url) return '#';
+        return url.replace(/\/download(?:\?.*)?$/, '/visualizar');
+      }
+
       // First pass: replace whole <p> elements that contain only a placeholder.
       container.querySelectorAll('p').forEach(function (p) {
         var m = SOLO_RE.exec(p.innerHTML);
         if (!m) return;
         var parts = parseAnexoParams(m[1]);
         var url = parts.url || '#';
+        var previewUrl = getPreviewUrl(url);
         var titulo = parts.titulo || parts.arquivo || 'Anexo';
         var arquivo = parts.arquivo || '';
+        var isImage = IMAGE_EXT_RE.test(arquivo);
         var div = document.createElement('div');
         div.className = 'anexo-figure';
-        div.innerHTML = '<a href="' + url + '" target="_blank" class="anexo-figure-link">'
+        div.innerHTML = (isImage
+          ? '<a href="' + escapeHtml(previewUrl) + '" target="_blank" class="anexo-figure-preview">'
+          + '<img src="' + escapeHtml(previewUrl) + '" alt="' + escapeHtml(titulo) + '" loading="lazy">'
+          + '</a>'
+          : '')
+          + '<div class="anexo-figure-body">'
+          + '<a href="' + escapeHtml(url) + '" target="_blank" class="anexo-figure-link">'
           + '<i class="bi bi-paperclip"></i>'
-          + '<span class="anexo-figure-titulo">' + titulo + '</span>'
-          + (arquivo ? '<span class="anexo-figure-arquivo"> (' + arquivo + ')</span>' : '')
-          + '</a>';
+          + '<span class="anexo-figure-titulo">' + escapeHtml(titulo) + '</span>'
+          + (arquivo ? '<span class="anexo-figure-arquivo"> (' + escapeHtml(arquivo) + ')</span>' : '')
+          + '</a>'
+          + '</div>';
         p.replaceWith(div);
       });
 
@@ -885,6 +932,7 @@ breadcrumbs=[
       preview.style.display = 'block';
       if (preview && typeof marked !== 'undefined') {
         preview.innerHTML = marked.parse(originalContent || '');
+        renderAnexoBadges(preview);
       }
       if (btnToggle) btnToggle.classList.remove('d-none');
       if (saveForm) saveForm.classList.add('d-none');
