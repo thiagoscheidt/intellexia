@@ -412,12 +412,17 @@ def _sanitize_generated_impugnacao(
     """Remove marcadores internos do texto final e consolida notas para revisão."""
     notes: list[str] = []
 
+    def _normalize_benefit_number_label(text: str) -> str:
+        # Padroniza referências como "NB 6131811117" para "nº 6131811117".
+        return re.sub(r"\bN\s*B\s*[:\-]?\s*(\d{6,})\b", r"nº \1", str(text or ""), flags=re.IGNORECASE)
+
     def _clean(text: str) -> str:
         if not text:
             return ""
 
         cleaned_lines: list[str] = []
-        for raw_line in str(text).splitlines():
+        normalized_text = _normalize_benefit_number_label(text)
+        for raw_line in normalized_text.splitlines():
             line = raw_line.strip()
             if not line:
                 cleaned_lines.append(raw_line)
