@@ -11,6 +11,7 @@ judicial_process_benefit_legal_theses = db.Table(
     db.Column('id', db.Integer, primary_key=True),
     db.Column('benefit_id', db.Integer, db.ForeignKey('judicial_process_benefits.id'), nullable=False, index=True),
     db.Column('legal_thesis_id', db.Integer, db.ForeignKey('judicial_legal_theses.id'), nullable=False, index=True),
+    db.Column('source_section', db.String(255)),
     db.Column('created_at', db.DateTime, default=datetime.now, nullable=False),
     db.UniqueConstraint(
         'benefit_id',

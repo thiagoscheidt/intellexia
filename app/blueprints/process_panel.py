@@ -8,6 +8,7 @@ from app.models import (
     JudicialProcessBenefitThesisContestation, JudicialProcessAttachment,
     JudicialProcessGeneratedDocument, JudicialProcessGeneratedDocumentVersion,
     JudicialProcessGeneratedDocumentSelection,
+    judicial_process_benefit_legal_theses,
 )
 from app.agents.legal_drafting.agent_generated_document import AgentGeneratedDocument, DOCUMENT_TYPE_LABELS
 from app.agents.legal_drafting.document_docx_export_agent import OfficeDocxExportAgent
@@ -1698,6 +1699,7 @@ def detail(process_id):
     ).order_by(JudicialLegalThesis.name.asc()).all()
 
     benefit_thesis_contestation_map = {}
+    benefit_thesis_source_section_map = {}
     if process_benefits:
         benefit_ids = [benefit.id for benefit in process_benefits]
         contestation_rows = JudicialProcessBenefitThesisContestation.query.filter(
@@ -1711,6 +1713,22 @@ def detail(process_id):
                 benefit_thesis_contestation_map[row.process_benefit_id] = {}
             benefit_thesis_contestation_map[row.process_benefit_id][row.legal_thesis_id] = row
 
+        section_rows = db.session.execute(
+            judicial_process_benefit_legal_theses.select().where(
+                and_(
+                    judicial_process_benefit_legal_theses.c.benefit_id.in_(benefit_ids),
+                    judicial_process_benefit_legal_theses.c.source_section.isnot(None),
+                    judicial_process_benefit_legal_theses.c.source_section != '',
+                )
+            )
+        ).fetchall()
+
+        for row in section_rows:
+            section_value = str(getattr(row, 'source_section', '') or '').strip()
+            if not section_value:
+                continue
+            benefit_thesis_source_section_map[(row.benefit_id, row.legal_thesis_id)] = section_value
+
     benefits_grouped_by_thesis = []
     for thesis in legal_theses:
         thesis_benefits = [
@@ -1718,11 +1736,28 @@ def detail(process_id):
             if any(linked_thesis.id == thesis.id for linked_thesis in benefit.legal_theses)
         ]
         if thesis_benefits:
+            thesis_sections: list[str] = []
+            for benefit in thesis_benefits:
+                section_value = str(
+                    benefit_thesis_source_section_map.get((benefit.id, thesis.id), '') or ''
+                ).strip()
+                if not section_value:
+                    continue
+                if section_value.lower() not in {item.lower() for item in thesis_sections}:
+                    thesis_sections.append(section_value)
+
+            source_section_label = ''
+            if thesis_sections:
+                source_section_label = thesis_sections[0]
+                if len(thesis_sections) > 1:
+                    source_section_label = f"{source_section_label} (+{len(thesis_sections) - 1})"
+
             benefits_grouped_by_thesis.append({
                 'id': thesis.id,
                 'name': thesis.name,
                 'benefits': thesis_benefits,
                 'is_unassigned': False,
+                'source_section_label': source_section_label,
             })
 
     unassigned_benefits = [benefit for benefit in process_benefits if not benefit.legal_theses]
@@ -1732,6 +1767,7 @@ def detail(process_id):
             'name': 'Sem tese vinculada',
             'benefits': unassigned_benefits,
             'is_unassigned': True,
+            'source_section_label': '',
         })
     
     # Buscar documentos da knowledge base com o mesmo process_number

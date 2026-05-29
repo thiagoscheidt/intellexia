@@ -69,6 +69,10 @@ class BenefitRequestTypeItem(BaseModel):
         default="",
         description="Tipo de pedido: 'exclusao', 'inclusao' ou 'revisao'",
     )
+    source_section: str = Field(
+        default="",
+        description="Seção principal do documento usada para classificar o pedido deste benefício",
+    )
 
 
 class BenefitRequestTypeClassificationResult(BaseModel):
@@ -1726,6 +1730,7 @@ class AgentDocumentExtractor:
             "INSTRUÇÕES:\n"
             "- Analise o texto da seção de pedidos para identificar o que o autor pede para cada NB.\n"
             "- Considere a seção informada em cada benefício como contexto lateral para desambiguar o cenário jurídico.\n"
+            "- Retorne também source_section com a seção principal usada no raciocínio (preferir a primeira da lista de seções do benefício).\n"
             "- Retorne um item para CADA benefício da lista, mesmo que o tipo seja incerto (use 'revisao' como padrão).\n"
             "- O campo 'benefit_number' deve corresponder exatamente ao NB fornecido.\n\n"
             "BENEFÍCIOS A CLASSIFICAR:\n"
@@ -1768,7 +1773,11 @@ class AgentDocumentExtractor:
             return structured_response.model_dump()
         except Exception:
             fallback = [
-                BenefitRequestTypeItem(benefit_number=str(b.get("benefit_number", "")), request_type="revisao")
+                BenefitRequestTypeItem(
+                    benefit_number=str(b.get("benefit_number", "")),
+                    request_type="revisao",
+                    source_section=str(b.get("source_section", "") or ""),
+                )
                 for b in benefits
             ]
             return BenefitRequestTypeClassificationResult(benefits=fallback).model_dump()

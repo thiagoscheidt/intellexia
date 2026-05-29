@@ -1368,6 +1368,12 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                   else 's' }}
                                 </span>
                                 <span>{{ thesis_group.name }}</span>
+                                {% if thesis_group.source_section_label %}
+                                <span class="badge bg-light text-muted border"
+                                  title="Seção de origem detectada para esta tese">
+                                  <i class="bi bi-bookmark me-1"></i>{{ thesis_group.source_section_label }}
+                                </span>
+                                {% endif %}
                               </span>
                             </button>
                           </h2>

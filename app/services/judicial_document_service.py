@@ -25,6 +25,7 @@ from app.models import (
     JudicialProcessCitedBenefit,
     JudicialSentenceAnalysis,
     db,
+    judicial_process_benefit_legal_theses,
 )
 from app.services.document_processor_service import DocumentProcessorService
 
@@ -717,6 +718,7 @@ class JudicialDocumentService:
 
             benefit_number = str(item.get('benefit_number', '') or '').strip()
             request_type = str(item.get('request_type', '') or '').strip()
+            source_section = str(item.get('source_section', '') or '').strip()
             if not benefit_number or not request_type:
                 continue
 
@@ -726,6 +728,12 @@ class JudicialDocumentService:
             ).first()
             if benefit:
                 benefit.request_type = request_type
+                if source_section:
+                    db.session.execute(
+                        judicial_process_benefit_legal_theses.update()
+                        .where(judicial_process_benefit_legal_theses.c.benefit_id == benefit.id)
+                        .values(source_section=source_section)
+                    )
                 benefit.updated_at = datetime.utcnow()
                 updated += 1
 
