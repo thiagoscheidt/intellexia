@@ -2876,10 +2876,6 @@ def generated_document_create(process_id):
         except (ValueError, IndexError):
             continue
 
-    if not parsed:
-        flash('Selecione ao menos um benefício/tese para gerar o documento.', 'warning')
-        return redirect(url_for('process_panel.generated_document_new', process_id=process_id))
-
     # Load benefits (validate ownership)
     benefit_id_set = {b_id for b_id, _ in parsed}
     benefits_by_id = {
