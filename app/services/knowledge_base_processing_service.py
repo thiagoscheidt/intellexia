@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import uuid
 from difflib import SequenceMatcher
 from datetime import datetime
 from pathlib import Path
@@ -108,6 +109,26 @@ class KnowledgeBaseProcessingService:
                 return candidate
 
         return None
+
+    def _generate_temp_process_number(
+        self,
+        law_firm_id: int,
+        excluded_process_ids: set[int] | None = None,
+    ) -> str:
+        excluded_ids = {pid for pid in (excluded_process_ids or set()) if pid}
+
+        for _ in range(30):
+            candidate = f"TEMP-{uuid.uuid4().hex[:8].upper()}"
+            query = JudicialProcess.query.filter(
+                JudicialProcess.law_firm_id == law_firm_id,
+                JudicialProcess.process_number == candidate,
+            )
+            if excluded_ids:
+                query = query.filter(~JudicialProcess.id.in_(excluded_ids))
+            if not query.first():
+                return candidate
+
+        return f"TEMP-{uuid.uuid4().hex[:8].upper()}"
 
     def _propagate_process_number_update(
         self,
@@ -791,9 +812,43 @@ class KnowledgeBaseProcessingService:
                                             ingestion_agent=ingestion_agent,
                                         )
                                     else:
+                                        old_temp_number = str(linked_process.process_number or "").strip()
+                                        duplicate_old_number = str(duplicate.process_number or "").strip()
+                                        duplicate_new_temp = self._generate_temp_process_number(
+                                            law_firm_id=linked_process.law_firm_id,
+                                            excluded_process_ids={linked_process.id, duplicate.id},
+                                        )
+
                                         print(
-                                            f"Número {real_number} já pertence a outro processo (ID {duplicate.id}). "
-                                            "Número temporário mantido."
+                                            f"Número {real_number} já pertence ao processo ID {duplicate.id}. "
+                                            f"Realocando processo antigo para {duplicate_new_temp} e "
+                                            f"atribuindo {real_number} ao processo ID {linked_process.id}."
+                                        )
+
+                                        duplicate.process_number = duplicate_new_temp
+                                        duplicate.updated_at = datetime.utcnow()
+                                        self._propagate_process_number_update(
+                                            law_firm_id=linked_process.law_firm_id,
+                                            process_id=duplicate.id,
+                                            old_number=duplicate_old_number,
+                                            new_number=duplicate_new_temp,
+                                            ingestion_agent=ingestion_agent,
+                                        )
+
+                                        linked_process.process_number = real_number
+                                        linked_process.updated_at = datetime.utcnow()
+                                        item.lawsuit_number = real_number
+                                        self._propagate_process_number_update(
+                                            law_firm_id=linked_process.law_firm_id,
+                                            process_id=linked_process.id,
+                                            old_number=old_temp_number,
+                                            new_number=real_number,
+                                            ingestion_agent=ingestion_agent,
+                                        )
+
+                                        print(
+                                            f"Swap de número concluído: processo atual={real_number}; "
+                                            f"processo ID {duplicate.id}={duplicate_new_temp}."
                                         )
 
                     if not is_fap_report and self._is_initial_petition_document(extraction_payload):
