@@ -2987,6 +2987,25 @@ def generated_document_create(process_id):
             ).all()
         }
 
+    benefit_thesis_source_section_map: dict[tuple[int, int], str] = {}
+    if parsed:
+        section_rows = db.session.execute(
+            judicial_process_benefit_legal_theses.select().where(
+                and_(
+                    judicial_process_benefit_legal_theses.c.benefit_id.in_(benefit_id_set),
+                    judicial_process_benefit_legal_theses.c.legal_thesis_id.in_(thesis_id_set) if thesis_id_set else False,
+                    judicial_process_benefit_legal_theses.c.source_section.isnot(None),
+                    judicial_process_benefit_legal_theses.c.source_section != '',
+                )
+            )
+        ).fetchall() if thesis_id_set else []
+
+        for row in section_rows:
+            section_value = str(getattr(row, 'source_section', '') or '').strip()
+            if not section_value:
+                continue
+            benefit_thesis_source_section_map[(row.benefit_id, row.legal_thesis_id)] = section_value
+
     # Build agent input: list of dicts with benefit + contestation data
     agent_selections = []
     for b_id, t_id in parsed:
@@ -2999,10 +3018,14 @@ def generated_document_create(process_id):
             if contestation and contestation.legal_thesis
             else theses_by_id.get(t_id) if t_id else None
         )
+        source_section = ''
+        if t_id:
+            source_section = str(benefit_thesis_source_section_map.get((b_id, t_id), '') or '').strip()
         agent_selections.append({
             'benefit': benefit,
             'thesis': thesis,
             'contestation': contestation,
+            'source_section': source_section,
         })
 
     title = DOCUMENT_TYPE_LABELS.get(document_type, document_type)

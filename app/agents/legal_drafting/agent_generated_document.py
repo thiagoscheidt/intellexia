@@ -1030,7 +1030,7 @@ class AgentGeneratedDocument:
         return "\n".join(lines)
 
     def _build_selections_context(self, selections: list[dict], include_contestation: bool = False) -> str:
-        """Constrói contexto textual agrupado por tese (múltiplos benefícios por tese)."""
+        """Constrói contexto textual agrupado por seção/tese (múltiplos benefícios por grupo)."""
         if not selections:
             return ""
 
@@ -1038,7 +1038,7 @@ class AgentGeneratedDocument:
         if original_count > 40:
             selections = selections[:40]
 
-        lines = ["=== BENEFÍCIOS E TESES SELECIONADOS (AGRUPADO POR TESE) ==="]
+        lines = ["=== BENEFÍCIOS E SEÇÕES SELECIONADOS (AGRUPADO POR SEÇÃO) ==="]
         if original_count > len(selections):
             lines.append(
                 f"Observação: contexto resumido para {len(selections)} de {original_count} seleções "
@@ -1050,19 +1050,23 @@ class AgentGeneratedDocument:
             benefit = sel.get('benefit')
             thesis = sel.get('thesis')
             contestation = sel.get('contestation')
+            source_section = str(sel.get('source_section', '') or '').strip()
             if not benefit:
                 continue
 
-            thesis_label = (thesis.name if thesis else "Sem tese específica").strip()
-            grouped.setdefault(thesis_label, []).append({
+            section_label = self._normalize_section_label_for_prompt(source_section)
+            if not section_label:
+                section_label = (thesis.name if thesis else "Sem tese específica").strip()
+
+            grouped.setdefault(section_label, []).append({
                 'benefit': benefit,
                 'contestation': contestation,
             })
 
-        for thesis_label, rows in grouped.items():
+        for section_label, rows in grouped.items():
             count = len(rows)
             lines.append(f"\n{count} {'benefício' if count == 1 else 'benefícios'}")
-            lines.append(thesis_label.upper())
+            lines.append(section_label.upper())
             lines.append(
                 "NB\tNIT\tSegurado\tTipo\tVigência FAP\tTipo de Pedido\t"
                 "Decisão da União\tDecisões Judiciais"
@@ -1118,6 +1122,17 @@ class AgentGeneratedDocument:
                         lines.append(f"Trecho Detectado: {self._clip_text(trecho)}")
 
         return "\n".join(lines)
+
+    @staticmethod
+    def _normalize_section_label_for_prompt(section_text: str) -> str:
+        """Remove numeração inicial do tópico para usar apenas o nome da seção no prompt."""
+        text = str(section_text or '').strip()
+        if not text:
+            return ''
+
+        # Ex.: "5. ACIDENTES..." -> "ACIDENTES..."
+        text = re.sub(r'^\s*\d{1,2}(?:\.\d+)?\s*[\.)-]?\s*', '', text)
+        return text.strip()
 
     def _build_style_references_block(
         self,
