@@ -403,7 +403,15 @@ breadcrumbs=[
                   <div class="d-flex align-items-center gap-2 min-w-0">
                     <i
                       class="bi {% if group.thesis_id is not none %}bi-balance-scale text-primary{% else %}bi-dash-circle text-secondary{% endif %} flex-shrink-0"></i>
-                    <span class="fw-semibold small text-truncate" title="{{ group.label }}">{{ group.label }}</span>
+                    <div class="d-flex flex-column min-w-0">
+                      <span class="fw-semibold small text-truncate" title="{{ group.label }}">{{ group.label }}</span>
+                      {% if group.source_section_label %}
+                      <span class="text-muted" style="font-size:.72rem; line-height:1.2;"
+                        title="{{ group.source_section_label }}">
+                        <i class="bi bi-bookmark me-1"></i>{{ group.source_section_label }}
+                      </span>
+                      {% endif %}
+                    </div>
                     <span class="badge bg-secondary-subtle text-secondary-emphasis ms-1 flex-shrink-0"
                       style="font-size:.7rem">{{ group.entries|length }} benef.</span>
                   </div>

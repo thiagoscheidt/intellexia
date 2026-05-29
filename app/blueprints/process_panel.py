@@ -2836,12 +2836,30 @@ def generated_document_new(process_id):
     # Build map: benefit_id → { thesis_id → JudicialProcessBenefitThesisContestation }
     benefit_ids = [b.id for b in benefits]
     thesis_contestation_map = {}
+    benefit_thesis_source_section_map: dict[tuple[int, int], str] = {}
     if benefit_ids:
         rows = JudicialProcessBenefitThesisContestation.query.filter(
             JudicialProcessBenefitThesisContestation.process_benefit_id.in_(benefit_ids)
         ).all()
         for row in rows:
             thesis_contestation_map.setdefault(row.process_benefit_id, {})[row.legal_thesis_id] = row
+
+        section_rows = db.session.execute(
+            judicial_process_benefit_legal_theses.select().where(
+                and_(
+                    judicial_process_benefit_legal_theses.c.benefit_id.in_(benefit_ids),
+                    judicial_process_benefit_legal_theses.c.legal_thesis_id.isnot(None),
+                    judicial_process_benefit_legal_theses.c.source_section.isnot(None),
+                    judicial_process_benefit_legal_theses.c.source_section != '',
+                )
+            )
+        ).fetchall()
+
+        for row in section_rows:
+            section_value = str(getattr(row, 'source_section', '') or '').strip()
+            if not section_value:
+                continue
+            benefit_thesis_source_section_map[(row.benefit_id, row.legal_thesis_id)] = section_value
 
     # Agrupa por tese usando benefit.legal_theses como fonte de verdade.
     # Contestation data enriquece onde existir, mas não é obrigatória.
@@ -2855,20 +2873,48 @@ def generated_document_new(process_id):
                 # Apenas contestação específica da tese; fallback para campos diretos do benefit no template
                 cont = b_conts.get(thesis.id)
                 if thesis.id not in thesis_groups_map:
-                    thesis_groups_map[thesis.id] = {'label': thesis.name, 'entries': []}
+                    thesis_groups_map[thesis.id] = {
+                        'label': thesis.name,
+                        'entries': [],
+                        'source_sections': [],
+                    }
+
+                source_section_value = str(
+                    benefit_thesis_source_section_map.get((b.id, thesis.id), '') or ''
+                ).strip()
+                if source_section_value:
+                    known_sections = {
+                        item.lower() for item in thesis_groups_map[thesis.id]['source_sections']
+                    }
+                    if source_section_value.lower() not in known_sections:
+                        thesis_groups_map[thesis.id]['source_sections'].append(source_section_value)
+
                 thesis_groups_map[thesis.id]['entries'].append({'benefit': b, 'cont': cont})
         else:
             no_thesis_entries.append({'benefit': b, 'cont': None})
 
-    thesis_groups = [
-        {'thesis_id': tid, 'label': data['label'], 'entries': data['entries']}
-        for tid, data in thesis_groups_map.items()
-    ]
+    thesis_groups = []
+    for tid, data in thesis_groups_map.items():
+        sections = list(data.get('source_sections', []))
+        source_section_label = ''
+        if sections:
+            source_section_label = sections[0]
+            if len(sections) > 1:
+                source_section_label = f"{source_section_label} (+{len(sections) - 1})"
+
+        thesis_groups.append({
+            'thesis_id': tid,
+            'label': data['label'],
+            'entries': data['entries'],
+            'source_section_label': source_section_label,
+        })
+
     if no_thesis_entries:
         thesis_groups.append({
             'thesis_id': None,
             'label': 'Sem tese vinculada',
             'entries': no_thesis_entries,
+            'source_section_label': '',
         })
 
     return render_template(
