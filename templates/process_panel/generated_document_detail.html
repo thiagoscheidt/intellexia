@@ -86,19 +86,31 @@
   }
 
   /* Editor mode */
-  #docEditor {
+  #docEditorWrap {
     display: none;
-    width: 100%;
+    padding: 1rem 1.25rem 1.25rem;
     min-height: 65vh;
-    padding: 2rem 2.5rem;
-    border: none;
-    outline: none;
-    resize: vertical;
-    font-family: 'Courier New', monospace;
-    font-size: .88rem;
-    line-height: 1.7;
     background: var(--bs-body-bg);
-    color: var(--bs-body-color);
+  }
+
+  #docEditorQuill {
+    background: var(--bs-body-bg);
+  }
+
+  #docEditorWrap .ql-toolbar {
+    border-radius: .5rem .5rem 0 0;
+  }
+
+  #docEditorWrap .ql-container {
+    min-height: 55vh;
+    border-radius: 0 0 .5rem .5rem;
+    font-family: var(--bs-font-monospace);
+    font-size: .9rem;
+    line-height: 1.7;
+  }
+
+  #docEditorWrap .ql-editor {
+    white-space: pre-wrap;
   }
 
   /* Failed / pending states */
@@ -140,6 +152,17 @@
   .version-source-manual {
     background: rgba(25, 135, 84, .12);
     color: #198754;
+  }
+
+  .regenerate-editor .ql-toolbar {
+    border-radius: .5rem .5rem 0 0;
+  }
+
+  .regenerate-editor .ql-container {
+    min-height: 150px;
+    border-radius: 0 0 .5rem .5rem;
+    font-family: var(--bs-font-monospace);
+    font-size: .88rem;
   }
 </style>
 {% endblock %}
@@ -250,8 +273,11 @@ breadcrumbs=[
         {% else %}
         <!-- Preview rendered -->
         <div id="docPreview"></div>
-        <!-- Editor textarea -->
-        <textarea id="docEditor">{{ cv.content or '' }}</textarea>
+        <!-- Editor padrão (Quill) -->
+        <div id="docEditorWrap">
+          <div id="docEditorQuill"></div>
+        </div>
+        <textarea id="docEditor" class="d-none">{{ cv.content or '' }}</textarea>
         {% endif %}
 
       </div><!-- /.doc-main-card -->
@@ -376,7 +402,7 @@ breadcrumbs=[
 
 <!-- ── Regenerate Modal ────────────────────────────────────────────────── -->
 <div class="modal fade" id="regenerateModal" tabindex="-1" aria-labelledby="regenerateModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
     <div class="modal-content">
       <form method="POST"
         action="{{ url_for('process_panel.generated_document_regenerate', process_id=process.id, doc_id=generated_doc.id) }}">
@@ -393,8 +419,12 @@ breadcrumbs=[
           <label class="form-label fw-semibold small">
             Instruções adicionais <span class="text-muted fw-normal">(opcional)</span>
           </label>
-          <textarea name="instructions" class="form-control form-control-sm" rows="3"
-            placeholder="Ex: Reforçar o argumento sobre o período de carência, incluir menção ao acórdão X…"></textarea>
+          <div class="regenerate-editor">
+            <div id="regenerateInstructionsEditor"></div>
+          </div>
+          <textarea name="instructions" id="regenerateInstructions" class="d-none"></textarea>
+          <div class="form-text mt-2">Ex: Reforçar o argumento sobre o período de carência, incluir menção ao acórdão X…
+          </div>
         </div>
         <div class="modal-footer border-0 pt-0">
           <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
@@ -413,17 +443,162 @@ breadcrumbs=[
 <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
 <script>
   (function () {
-    const rawContent = document.getElementById('docEditor')
-      ? document.getElementById('docEditor').value
-      : '';
+    const editorInput = document.getElementById('docEditor');
+    const rawContent = editorInput ? editorInput.value : '';
     const preview = document.getElementById('docPreview');
-    const editor = document.getElementById('docEditor');
+    const editorWrap = document.getElementById('docEditorWrap');
+    const quillElement = document.getElementById('docEditorQuill');
     const btnToggle = document.getElementById('btnToggleEdit');
     const btnCancelEdit = document.getElementById('btnCancelEdit');
     const saveForm = document.getElementById('saveForm');
     const saveContent = document.getElementById('saveContent');
+    const regenerateModalEl = document.getElementById('regenerateModal');
+    const regenerateEditorEl = document.getElementById('regenerateInstructionsEditor');
+    const regenerateHiddenInput = document.getElementById('regenerateInstructions');
+    const regenerateForm = regenerateModalEl ? regenerateModalEl.querySelector('form') : null;
     let editMode = false;
     let originalContent = rawContent;
+    let quill = null;
+    let regenerateQuill = null;
+
+    function inlineHtmlToMarkdown(node) {
+      if (!node) {
+        return '';
+      }
+      if (node.nodeType === Node.TEXT_NODE) {
+        return node.textContent || '';
+      }
+      if (node.nodeType !== Node.ELEMENT_NODE) {
+        return '';
+      }
+
+      const tag = node.tagName.toLowerCase();
+      const content = Array.from(node.childNodes).map(inlineHtmlToMarkdown).join('');
+
+      if (tag === 'strong' || tag === 'b') {
+        return `**${content}**`;
+      }
+      if (tag === 'em' || tag === 'i') {
+        return `*${content}*`;
+      }
+      if (tag === 'code') {
+        return `\`${content}\``;
+      }
+      if (tag === 'a') {
+        const href = node.getAttribute('href') || '';
+        return href ? `[${content}](${href})` : content;
+      }
+      if (tag === 'br') {
+        return '\n';
+      }
+
+      return content;
+    }
+
+    function blockNodeToMarkdown(node) {
+      if (!node || node.nodeType !== Node.ELEMENT_NODE) {
+        return '';
+      }
+
+      const tag = node.tagName.toLowerCase();
+      if (tag === 'h1' || tag === 'h2' || tag === 'h3') {
+        const level = tag === 'h1' ? '#' : (tag === 'h2' ? '##' : '###');
+        const text = inlineHtmlToMarkdown(node).trim();
+        return text ? `${level} ${text}` : '';
+      }
+      if (tag === 'p') {
+        return inlineHtmlToMarkdown(node).replace(/\n+/g, ' ').trim();
+      }
+      if (tag === 'blockquote') {
+        const text = inlineHtmlToMarkdown(node).trim();
+        return text ? text.split('\n').map(line => `> ${line}`).join('\n') : '';
+      }
+      if (tag === 'pre') {
+        const text = (node.textContent || '').replace(/\n$/, '');
+        return `\`\`\`\n${text}\n\`\`\``;
+      }
+      if (tag === 'ul') {
+        const items = Array.from(node.querySelectorAll(':scope > li'));
+        return items.map(li => `- ${inlineHtmlToMarkdown(li).trim()}`).join('\n');
+      }
+      if (tag === 'ol') {
+        const items = Array.from(node.querySelectorAll(':scope > li'));
+        return items.map((li, idx) => `${idx + 1}. ${inlineHtmlToMarkdown(li).trim()}`).join('\n');
+      }
+      if (node.classList && node.classList.contains('ql-code-block-container')) {
+        const codeLines = Array.from(node.querySelectorAll('.ql-code-block')).map(el => el.textContent || '');
+        return `\`\`\`\n${codeLines.join('\n')}\n\`\`\``;
+      }
+      return inlineHtmlToMarkdown(node).trim();
+    }
+
+    function quillToMarkdown(quillInstance) {
+      const blocks = [];
+      for (const child of Array.from(quillInstance.root.children)) {
+        const markdownBlock = blockNodeToMarkdown(child);
+        if (markdownBlock) {
+          blocks.push(markdownBlock);
+        }
+      }
+      return blocks.join('\n\n').replace(/\n{3,}/g, '\n\n').trim();
+    }
+
+    function getCurrentContent() {
+      if (quill) {
+        return quillToMarkdown(quill);
+      }
+      return editorInput ? editorInput.value : rawContent;
+    }
+
+    if (quillElement && typeof Quill !== 'undefined') {
+      const toolbarOptions = [
+        [{ header: [1, 2, 3, false] }],
+        ['bold', 'italic', 'underline'],
+        ['blockquote', 'code-block'],
+        [{ list: 'ordered' }, { list: 'bullet' }],
+        ['link'],
+        ['clean']
+      ];
+      quill = new Quill('#docEditorQuill', {
+        theme: 'snow',
+        modules: { toolbar: toolbarOptions },
+        placeholder: 'Edite o conteúdo do documento...'
+      });
+
+      if (rawContent && typeof marked !== 'undefined') {
+        quill.clipboard.dangerouslyPasteHTML(marked.parse(rawContent));
+      }
+    }
+
+    if (regenerateEditorEl && regenerateHiddenInput && typeof Quill !== 'undefined') {
+      const regenerateToolbarOptions = [
+        ['bold', 'italic', 'underline'],
+        [{ list: 'ordered' }, { list: 'bullet' }],
+        ['clean']
+      ];
+
+      regenerateQuill = new Quill('#regenerateInstructionsEditor', {
+        theme: 'snow',
+        modules: { toolbar: regenerateToolbarOptions },
+        placeholder: 'Escreva instruções para a nova geração...'
+      });
+
+      if (regenerateHiddenInput.value && typeof marked !== 'undefined') {
+        regenerateQuill.clipboard.dangerouslyPasteHTML(marked.parse(regenerateHiddenInput.value));
+      }
+
+      if (regenerateModalEl) {
+        regenerateModalEl.addEventListener('shown.bs.modal', function () {
+          regenerateQuill.focus();
+        });
+      }
+
+      if (regenerateForm) {
+        regenerateForm.addEventListener('submit', function () {
+          regenerateHiddenInput.value = quillToMarkdown(regenerateQuill);
+        });
+      }
+    }
 
     // Render markdown on load
     if (preview && rawContent) {
@@ -433,8 +608,8 @@ breadcrumbs=[
     window.toggleEditMode = function () {
       editMode = true;
       preview.style.display = 'none';
-      editor.style.display = 'block';
-      editor.focus();
+      if (editorWrap) editorWrap.style.display = 'block';
+      if (quill) quill.focus();
 
       if (btnToggle) btnToggle.classList.add('d-none');
       if (saveForm) saveForm.classList.remove('d-none');
@@ -446,9 +621,18 @@ breadcrumbs=[
 
     window.cancelEdit = function () {
       editMode = false;
-      editor.value = originalContent;
-      editor.style.display = 'none';
+      if (editorInput) editorInput.value = originalContent;
+      if (quill && typeof marked !== 'undefined') {
+        quill.setContents([]);
+        if (originalContent) {
+          quill.clipboard.dangerouslyPasteHTML(marked.parse(originalContent));
+        }
+      }
+      if (editorWrap) editorWrap.style.display = 'none';
       preview.style.display = 'block';
+      if (preview && typeof marked !== 'undefined') {
+        preview.innerHTML = marked.parse(originalContent || '');
+      }
       if (btnToggle) btnToggle.classList.remove('d-none');
       if (saveForm) saveForm.classList.add('d-none');
       if (btnCancelEdit) btnCancelEdit.classList.add('d-none');
@@ -457,7 +641,9 @@ breadcrumbs=[
     // Before save, copy editor content into hidden input
     if (saveForm) {
       saveForm.addEventListener('submit', function () {
-        saveContent.value = editor.value;
+        const currentContent = getCurrentContent();
+        saveContent.value = currentContent;
+        if (editorInput) editorInput.value = currentContent;
       });
     }
 
@@ -485,7 +671,9 @@ breadcrumbs=[
         }
 
         loading = true;
-        downloadContent.value = editor ? editor.value : rawContent;
+        const currentContent = getCurrentContent();
+        downloadContent.value = currentContent;
+        if (editorInput) editorInput.value = currentContent;
 
         btnDownloadDocx.dataset.originalHtml = btnDownloadDocx.innerHTML;
         btnDownloadDocx.classList.add('disabled');
