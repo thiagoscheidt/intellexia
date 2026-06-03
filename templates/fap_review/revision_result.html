@@ -301,11 +301,25 @@
         line-height: 1.4;
     }
 
-    .debug-json-viewer .json-key { color: #9cdcfe; }
-    .debug-json-viewer .json-string { color: #ce9178; }
-    .debug-json-viewer .json-number { color: #b5cea8; }
-    .debug-json-viewer .json-boolean { color: #569cd6; }
-    .debug-json-viewer .json-null { color: #569cd6; }
+    .debug-json-viewer .json-key {
+        color: #9cdcfe;
+    }
+
+    .debug-json-viewer .json-string {
+        color: #ce9178;
+    }
+
+    .debug-json-viewer .json-number {
+        color: #b5cea8;
+    }
+
+    .debug-json-viewer .json-boolean {
+        color: #569cd6;
+    }
+
+    .debug-json-viewer .json-null {
+        color: #569cd6;
+    }
 
     /* ── Check button ────────────────────────────────────────────── */
     .finding-check-btn {
@@ -599,7 +613,8 @@
                             <i class="bi bi-clipboard-check text-primary"></i>
                             Pontos de Atenção Identificados
                         </div>
-                        <span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3">
+                        <span
+                            class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3">
                             {{ result_data.findings|length }} pontos
                         </span>
                     </div>
@@ -607,7 +622,8 @@
 
                         <!-- Contadores por severidade -->
                         <div class="findings-toolbar mb-3">
-                            <span class="toolbar-pill" style="background: rgba(108,117,125,.09); border-color: #6c757d;">
+                            <span class="toolbar-pill"
+                                style="background: rgba(108,117,125,.09); border-color: #6c757d;">
                                 <strong style="color: #6c757d;"><i class="bi bi-collection me-1"></i>Total:</strong>
                                 {{ result_data.findings|length }}
                             </span>
@@ -615,24 +631,28 @@
                                 <strong style="color: #dc3545;">
                                     <i class="bi bi-exclamation-triangle-fill me-1"></i>Críticos:
                                 </strong>
-                                {{ result_data.executive_summary.critical_findings if result_data.executive_summary else 0 }}
+                                {{ result_data.executive_summary.critical_findings if result_data.executive_summary else
+                                0 }}
                             </span>
                             <span class="toolbar-pill" style="border-color: #ffc107; background: rgba(255,193,7,.08);">
                                 <strong style="color: #9a6700;">
                                     <i class="bi bi-exclamation-circle-fill me-1"></i>Moderados:
                                 </strong>
-                                {{ result_data.executive_summary.moderate_findings if result_data.executive_summary else 0 }}
+                                {{ result_data.executive_summary.moderate_findings if result_data.executive_summary else
+                                0 }}
                             </span>
                             <span class="toolbar-pill" style="border-color: #0dcaf0; background: rgba(13,202,240,.07);">
                                 <strong style="color: #0c7a94;">
                                     <i class="bi bi-info-circle-fill me-1"></i>Formais:
                                 </strong>
-                                {{ result_data.executive_summary.formal_findings if result_data.executive_summary else 0 }}
+                                {{ result_data.executive_summary.formal_findings if result_data.executive_summary else 0
+                                }}
                             </span>
                         </div>
 
                         <!-- Navegação Rápida com círculos numerados por cor -->
-                        <div class="mb-3 p-3 rounded" style="background: var(--bs-secondary-bg); border: 1px solid rgba(15,23,42,.07);">
+                        <div class="mb-3 p-3 rounded"
+                            style="background: var(--bs-secondary-bg); border: 1px solid rgba(15,23,42,.07);">
                             <div class="small fw-semibold text-muted mb-2">
                                 <i class="bi bi-list-ol me-1"></i> Navegação Rápida
                             </div>
@@ -649,7 +669,8 @@
                         </div>
 
                         <!-- Barra de Progresso de Revisão -->
-                        <div class="mb-4 p-3 rounded" style="background: var(--bs-secondary-bg); border: 1px solid rgba(15,23,42,.07);">
+                        <div class="mb-4 p-3 rounded"
+                            style="background: var(--bs-secondary-bg); border: 1px solid rgba(15,23,42,.07);">
                             <div class="d-flex justify-content-between align-items-center mb-2">
                                 <span class="small fw-semibold text-muted">
                                     <i class="bi bi-check2-square me-1"></i> Progresso de revisão
@@ -666,12 +687,13 @@
                         <!-- Listagem redesenhada dos Pontos -->
                         {% for finding in result_data.findings %}
                         {% set normalized_category = (finding.category or '')|upper %}
-                        {% set show_category = normalized_category and normalized_category not in ['CRITICAL', 'MODERATE', 'FORMAL', 'CRÍTICO', 'MODERADO'] %}
-                        {% set sev_class = 'sev-critical' if finding.severity == 'CRÍTICO' else ('sev-moderate' if finding.severity == 'MODERADO' else 'sev-formal') %}
+                        {% set show_category = normalized_category and normalized_category not in ['CRITICAL',
+                        'MODERATE', 'FORMAL', 'CRÍTICO', 'MODERADO'] %}
+                        {% set sev_class = 'sev-critical' if finding.severity == 'CRÍTICO' else ('sev-moderate' if
+                        finding.severity == 'MODERADO' else 'sev-formal') %}
 
                         <div id="ponto-{{ loop.index }}" class="finding-card {{ sev_class }}"
-                             data-finding-index="{{ loop.index }}"
-                             style="scroll-margin-top: 80px;">
+                            data-finding-index="{{ loop.index }}" style="scroll-margin-top: 80px;">
 
                             <!-- Cabeçalho colorido por severidade -->
                             <div class="finding-card-header {{ sev_class }}">
@@ -693,10 +715,12 @@
                                         </span>
                                         {% endif %}
                                         {% if show_category %}
-                                        <span class="badge rounded-pill bg-light text-dark border">{{ finding.category }}</span>
+                                        <span class="badge rounded-pill bg-light text-dark border">{{ finding.category
+                                            }}</span>
                                         {% endif %}
                                         {% if finding.is_new_pattern %}
-                                        <span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle">
+                                        <span
+                                            class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle">
                                             <i class="bi bi-stars me-1"></i>Padrão Novo
                                         </span>
                                         {% endif %}
@@ -704,18 +728,14 @@
                                 </div>
                                 <div class="d-flex align-items-center gap-2 flex-shrink-0">
                                     {% if finding.location %}
-                                    <button type="button"
-                                        class="btn btn-sm btn-outline-primary view-finding-page-btn"
+                                    <button type="button" class="btn btn-sm btn-outline-primary view-finding-page-btn"
                                         data-bs-toggle="modal" data-bs-target="#findingPageModal"
-                                        data-finding-number="{{ loop.index }}"
-                                        data-location="{{ finding.location }}"
+                                        data-finding-number="{{ loop.index }}" data-location="{{ finding.location }}"
                                         title="Visualizar no documento">
                                         <i class="bi bi-eye me-1"></i> Ver Página
                                     </button>
                                     {% endif %}
-                                    <button type="button"
-                                        class="finding-check-btn"
-                                        title="Marcar como revisado">
+                                    <button type="button" class="finding-check-btn" title="Marcar como revisado">
                                         <i class="bi bi-check"></i>
                                     </button>
                                 </div>
@@ -760,13 +780,16 @@
 
                         <!-- CTA final -->
                         <div class="p-3 rounded mt-3 d-flex align-items-start gap-3"
-                             style="background: var(--bs-secondary-bg); border: 1px solid rgba(15,23,42,.07);">
-                            <i class="bi bi-lightbulb text-warning" style="font-size: 1.2rem; flex-shrink:0; margin-top:.1rem;"></i>
+                            style="background: var(--bs-secondary-bg); border: 1px solid rgba(15,23,42,.07);">
+                            <i class="bi bi-lightbulb text-warning"
+                                style="font-size: 1.2rem; flex-shrink:0; margin-top:.1rem;"></i>
                             <div class="small">
-                                <strong>Próximas etapas:</strong> Priorize os pontos <span class="text-danger fw-semibold">Críticos</span> e
+                                <strong>Próximas etapas:</strong> Priorize os pontos <span
+                                    class="text-danger fw-semibold">Críticos</span> e
                                 <span style="color:#9a6700;" class="fw-semibold">Moderados</span>.
                                 Incorpore as correções sugeridas e utilize a referência do manual para embasamento.
-                                Os pontos <span style="color:#0c7a94;" class="fw-semibold">Formais</span> melhoram a conformidade, mas não bloqueiam o andamento.
+                                Os pontos <span style="color:#0c7a94;" class="fw-semibold">Formais</span> melhoram a
+                                conformidade, mas não bloqueiam o andamento.
                             </div>
                         </div>
                     </div>
@@ -801,38 +824,6 @@
                                     {% endfor %}
                                 </tbody>
                             </table>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            {% endif %}
-
-            {% if result_data.new_patterns %}
-            <div class="col-12">
-                <div class="card info-card">
-                    <div class="card-header d-flex align-items-center gap-2">
-                        <i class="bi bi-stars text-warning"></i>
-                        Padrões Novos Identificados
-                    </div>
-                    <div class="card-body">
-                        {% for pattern in result_data.new_patterns %}
-                        <div class="p-3 rounded border mb-3" style="background: var(--bs-secondary-bg);">
-                            <div class="fw-semibold mb-2">{{ pattern.pattern_description }}</div>
-                            <div class="small mb-1"><strong>Comportamento Recorrente:</strong> {{ pattern.recurrence }}
-                            </div>
-                            <div class="small mb-1"><strong>Proposta de Atualização:</strong> {{
-                                pattern.suggested_update }}</div>
-                            {% if pattern.section %}
-                            <div class="small"><strong>Seção do Manual:</strong> {{ pattern.section }}</div>
-                            {% endif %}
-                        </div>
-                        {% endfor %}
-
-                        <div class="alert alert-info border-0 mb-0"
-                            style="background: var(--bs-info-bg-subtle); color: var(--bs-info-text-emphasis);">
-                            <i class="bi bi-info-circle-fill me-1"></i>
-                            Estes padrões foram encaminhados ao Agente de Treinamento para possível atualização do
-                            manual.
                         </div>
                     </div>
                 </div>

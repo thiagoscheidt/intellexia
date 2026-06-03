@@ -9,7 +9,7 @@ Este agente NÃO atualiza diretamente:
 - casos de referência
 - base oficial de conhecimento
 
-Ele apenas identifica padrões e encaminha achados ao Agente de Treinamento.
+O aprendizado e a evolução de conhecimento pertencem exclusivamente ao módulo de treinamento.
 """
 
 import json
@@ -362,7 +362,7 @@ INSTRUÇÕES DO PROJETO:
                 findings=self._parse_findings(result_dict.get('findings', [])),
                 missing_documents=self._parse_missing_documents(result_dict.get('missing_documents', [])),
                 executive_summary=self._parse_executive_summary(result_dict.get('executive_summary', {})),
-                new_patterns=self._parse_new_patterns(result_dict.get('new_patterns', [])),
+                new_patterns=[],
             )
             
             return result
@@ -523,7 +523,7 @@ INSTRUÇÕES DO PROJETO:
                 cost_usd=float(total_cost) if total_cost else None,
                 comparative_changes=self._parse_comparative_changes(result_dict.get('comparative_changes', [])),
                 findings=self._parse_findings(result_dict.get('findings', [])),
-                new_patterns=self._parse_new_patterns(result_dict.get('new_patterns', [])),
+                new_patterns=[],
                 executive_summary=self._parse_executive_summary(result_dict.get('executive_summary', {})),
             )
             
@@ -823,15 +823,13 @@ Se a razão social estiver consistente em todo o documento, não gere finding ne
 2. Todas as demais inconsistências com o manual
 3. Erros críticos, moderados e formais
 4. Documentos obrigatórios em falta
-5. Padrões novos não cobertos pelo manual
-6. Riscos jurídicos
+5. Riscos jurídicos
 
 Estruture a resposta em JSON válido com a seguinte estrutura:
 - theses (array de teses identificadas)
 - findings (array de achados)
 - missing_documents (array de documentos em falta)
-- executive_summary (resumo executivo)
-- new_patterns (padrões novos)"""
+- executive_summary (resumo executivo)"""
 
     def _build_comparative_user_message(
         self,
@@ -871,12 +869,10 @@ Para cada alteração identificada:
 1. Transcreva trecho original e corrigido
 2. Explique motivo da correção
 3. Indique se padrão já existe no manual
-4. Indique se é padrão novo
 
 Estruture em JSON com:
 - comparative_changes (array de alterações)
 - findings (achados gerais)
-- new_patterns (padrões novos)
 - executive_summary (resumo)"""
 
     def _build_file_part_for_message(self, file_path: str) -> dict[str, Any]:
@@ -943,7 +939,7 @@ Estruture em JSON com:
             "theses": self._merge_unique_dict_items(all_dicts, "theses"),
             "findings": merged_findings,
             "missing_documents": self._merge_unique_dict_items(all_dicts, "missing_documents"),
-            "new_patterns": self._merge_unique_dict_items(all_dicts, "new_patterns"),
+            "new_patterns": [],
             "comparative_changes": self._merge_unique_dict_items(all_dicts, "comparative_changes"),
         }
 
