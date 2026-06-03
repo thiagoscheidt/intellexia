@@ -88,6 +88,7 @@ class PetitionReviewResult(BaseModel):
     """Resultado completo da revisão de petição"""
     execution_id: Optional[int] = None
     analysis_type: str = Field(..., description="'single_version' ou 'comparative'")
+    focused_review: bool = Field(False, description="Indica se a revisão usou histórico do mesmo identificador")
     tokens_used: Optional[int] = Field(None, description="Total de tokens utilizados na execução")
     cost_usd: Optional[float] = Field(None, description="Custo estimado da execução em USD")
     
@@ -179,6 +180,7 @@ class FapPetitionReviewerAgent:
         reviewer_identity: str = "",
         reviewer_rules: str = "",
         reviewer_output_format: str = "",
+        focused_review: bool = False,
     ) -> str:
         """
         Constrói o prompt do sistema carregando dinamicamente da configuração
@@ -206,6 +208,7 @@ INSTRUÇÕES OPERACIONAIS:
 Ao revisar a petição, valide estritamente com base no MANUAL DE REFERÊNCIA.
 Em caso de divergência entre qualquer instrução e o manual, o manual prevalece.
 Não invente critérios fora do manual.
+{('\n\nMODO DE REVISÃO FOCADA:\nHá pontos de atenção de revisão anterior fornecidos pelo usuário. Nesta execução, não faça uma varredura integral do manual. Use o manual apenas para validar esses pontos já identificados e a checagem obrigatória de consistência do nome da empresa. Não abra novos achados fora desse escopo, salvo divergência atual de razão social.') if focused_review else ''}
 
 VERIFICAÇÃO OBRIGATÓRIA — CONSISTÊNCIA DO NOME DA EMPRESA (prioridade máxima):
 Em TODA revisão, independentemente de outras regras e antes de qualquer outra análise, você DEVE:
@@ -231,6 +234,7 @@ INSTRUÇÕES DO PROJETO:
     async def review_petition_single_version(self,
                                             petition_file_path: str,
                                             petition_text: str | None = None,
+                                            prior_attention_points: str | None = None,
                                             auxiliary_documents: list[dict] = None,
                                             reviewer_identity: str = "",
                                             reviewer_rules: str = "",
@@ -255,12 +259,14 @@ INSTRUÇÕES DO PROJETO:
             reviewer_identity,
             reviewer_rules,
             reviewer_output_format,
+            focused_review=bool(prior_attention_points),
         )
         
         try:
             user_message = self._build_single_user_message(
                 auxiliary_documents=auxiliary_documents,
                 petition_text=petition_text,
+                prior_attention_points=prior_attention_points,
             )
 
             if petition_text:
@@ -308,6 +314,7 @@ INSTRUÇÕES DO PROJETO:
                     "petition_file_path": petition_file_path,
                     "petition_file_name": self._extract_file_name(petition_file_path),
                     "auxiliary_documents_count": len(auxiliary_documents or []),
+                    "focused_review": bool(prior_attention_points),
                     "mode": analysis_mode,
                     "llm_input": {
                         "system_prompt": self._truncate_for_log(system_prompt),
@@ -339,6 +346,7 @@ INSTRUÇÕES DO PROJETO:
                 result_data={
                     "execution_id": execution_id,
                     "analysis_type": "single_version",
+                    "focused_review": bool(prior_attention_points),
                     "mode": analysis_mode,
                     "petition_file_name": self._extract_file_name(petition_file_path),
                 },
@@ -356,6 +364,7 @@ INSTRUÇÕES DO PROJETO:
             # Criar resultado com dados salvaguardados
             result = PetitionReviewResult(
                 analysis_type="single_version",
+                focused_review=bool(prior_attention_points),
                 tokens_used=total_tokens or None,
                 cost_usd=float(total_cost) if total_cost else None,
                 theses=self._parse_theses(result_dict.get('theses', [])),
@@ -371,6 +380,7 @@ INSTRUÇÕES DO PROJETO:
             # Fallback em caso de erro
             return PetitionReviewResult(
                 analysis_type="single_version",
+                focused_review=bool(prior_attention_points),
                 executive_summary=ExecutiveSummary(
                     total_findings=0,
                     critical_findings=0,
@@ -385,6 +395,7 @@ INSTRUÇÕES DO PROJETO:
                                          revised_petition_file_path: str,
                                          original_petition_text: str | None = None,
                                          revised_petition_text: str | None = None,
+                                         prior_attention_points: str | None = None,
                                          auxiliary_documents: list[dict] = None,
                                          reviewer_identity: str = "",
                                          reviewer_rules: str = "",
@@ -410,6 +421,7 @@ INSTRUÇÕES DO PROJETO:
             reviewer_identity,
             reviewer_rules,
             reviewer_output_format,
+            focused_review=bool(prior_attention_points),
         )
         
         try:
@@ -417,6 +429,7 @@ INSTRUÇÕES DO PROJETO:
                 auxiliary_documents=auxiliary_documents,
                 original_petition_text=original_petition_text,
                 revised_petition_text=revised_petition_text,
+                prior_attention_points=prior_attention_points,
                 original_file_name=self._extract_file_name(original_petition_file_path),
                 revised_file_name=self._extract_file_name(revised_petition_file_path),
             )
@@ -471,6 +484,7 @@ INSTRUÇÕES DO PROJETO:
                     "original_file_name": self._extract_file_name(original_petition_file_path),
                     "revised_file_name": self._extract_file_name(revised_petition_file_path),
                     "auxiliary_documents_count": len(auxiliary_documents or []),
+                    "focused_review": bool(prior_attention_points),
                     "mode": analysis_mode,
                     "llm_input": {
                         "system_prompt": self._truncate_for_log(system_prompt),
@@ -502,6 +516,7 @@ INSTRUÇÕES DO PROJETO:
                 result_data={
                     "execution_id": execution_id,
                     "analysis_type": "comparative",
+                    "focused_review": bool(prior_attention_points),
                     "mode": analysis_mode,
                     "original_file_name": self._extract_file_name(original_petition_file_path),
                     "revised_file_name": self._extract_file_name(revised_petition_file_path),
@@ -519,6 +534,7 @@ INSTRUÇÕES DO PROJETO:
             
             result = PetitionReviewResult(
                 analysis_type="comparative",
+                focused_review=bool(prior_attention_points),
                 tokens_used=total_tokens or None,
                 cost_usd=float(total_cost) if total_cost else None,
                 comparative_changes=self._parse_comparative_changes(result_dict.get('comparative_changes', [])),
@@ -532,6 +548,7 @@ INSTRUÇÕES DO PROJETO:
         except Exception as e:
             return PetitionReviewResult(
                 analysis_type="comparative",
+                focused_review=bool(prior_attention_points),
                 executive_summary=ExecutiveSummary(
                     total_findings=0,
                     critical_findings=0,
@@ -800,6 +817,7 @@ INSTRUÇÕES DO PROJETO:
         *,
         auxiliary_documents: list[dict] | None,
         petition_text: str | None = None,
+        prior_attention_points: str | None = None,
     ) -> str:
         aux_text = self._format_auxiliary_documents(auxiliary_documents)
         petition_source = (
@@ -808,6 +826,32 @@ INSTRUÇÕES DO PROJETO:
             "O documento foi enviado como anexo de arquivo nesta mensagem."
         )
         petition_body = f"\n\nTEXTO DA PETIÇÃO:\n{petition_text}" if petition_text else ""
+        if prior_attention_points:
+            return f"""Revise esta nova versão de uma petição inicial de FAP já analisada anteriormente.
+
+PETIÇÃO A REVISAR:
+{petition_source}
+
+{petition_body}
+
+{aux_text}
+
+PONTOS DE ATENÇÃO IDENTIFICADOS NA REVISÃO ANTERIOR:
+{prior_attention_points}
+
+OBJETIVO DESTA REVISÃO FOCADA:
+1. Verifique se cada ponto de atenção acima foi corrigido na versão atual.
+2. Se um ponto permanecer pendente, reporte-o em findings com localização atual e correção esperada.
+3. Se um ponto tiver sido resolvido, não o reporte novamente.
+4. Não faça nova varredura geral do manual nem gere novos achados fora dessa lista.
+5. Exceção obrigatória: continue validando a consistência do nome da empresa em todo o documento e reporte divergências atuais como CRÍTICO.
+
+Estruture a resposta em JSON válido com a seguinte estrutura:
+- theses (array de teses identificadas)
+- findings (array de achados ainda pendentes na nova versão)
+- missing_documents (array de documentos ainda em falta)
+- executive_summary (resumo executivo)"""
+
         return f"""Revise esta petição inicial de FAP contra o manual.
 
 PETIÇÃO A REVISAR:
@@ -837,6 +881,7 @@ Estruture a resposta em JSON válido com a seguinte estrutura:
         auxiliary_documents: list[dict] | None,
         original_petition_text: str | None = None,
         revised_petition_text: str | None = None,
+        prior_attention_points: str | None = None,
         original_file_name: str = "",
         revised_file_name: str = "",
     ) -> str:
@@ -853,6 +898,31 @@ Estruture a resposta em JSON válido com a seguinte estrutura:
         )
         original_body = f"\n\nTEXTO DA VERSÃO ORIGINAL:\n{original_petition_text}" if original_petition_text else ""
         revised_body = f"\n\nTEXTO DA VERSÃO REVISADA:\n{revised_petition_text}" if revised_petition_text else ""
+        if prior_attention_points:
+            return f"""Revise comparativamente estas duas versões de petição de FAP.
+
+    {original_source}
+    {revised_source}
+
+    {original_body}
+    {revised_body}
+
+    {aux_text}
+
+    PONTOS DE ATENÇÃO IDENTIFICADOS NA REVISÃO ANTERIOR:
+    {prior_attention_points}
+
+    OBJETIVO DESTA REVISÃO FOCADA:
+    1. Use a versão revisada como referência principal para verificar se os pontos de atenção anteriores foram corrigidos.
+    2. Quando útil, compare com a versão original para demonstrar a correção ou a persistência do problema.
+    3. Não faça nova varredura geral do manual nem gere novos achados fora dessa lista.
+    4. Exceção obrigatória: continue validando a consistência do nome da empresa nas duas versões e reporte divergências atuais como CRÍTICO.
+
+    Estruture em JSON com:
+    - comparative_changes (array de alterações relevantes aos pontos anteriores)
+    - findings (achados ainda pendentes)
+    - executive_summary (resumo)"""
+
         return f"""Revise comparativamente estas duas versões de petição de FAP.
 
 {original_source}

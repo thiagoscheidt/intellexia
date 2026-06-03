@@ -227,6 +227,82 @@ def _extract_text_from_document(filepath: str) -> str:
         raise
 
 
+def _build_prior_attention_points(
+    law_firm_id: int,
+    law_firm_document_identifier: str,
+    current_execution_id: int,
+) -> str | None:
+    """Resume os pontos de atenção da última revisão concluída do mesmo documento."""
+    if not law_firm_document_identifier:
+        return None
+
+    previous_execution = (
+        FapReviewExecution.query.filter(
+            FapReviewExecution.law_firm_id == law_firm_id,
+            FapReviewExecution.execution_type == 'revision',
+            FapReviewExecution.status == 'completed',
+            FapReviewExecution.law_firm_document_identifier == law_firm_document_identifier,
+            FapReviewExecution.id != current_execution_id,
+            FapReviewExecution.result_json.isnot(None),
+        )
+        .order_by(FapReviewExecution.completed_at.desc(), FapReviewExecution.id.desc())
+        .first()
+    )
+
+    if not previous_execution or not previous_execution.result_json:
+        return None
+
+    try:
+        result_payload = json.loads(previous_execution.result_json)
+    except (TypeError, json.JSONDecodeError):
+        current_app.logger.warning(
+            'Falha ao interpretar o histórico da execução %s para o identificador %s',
+            previous_execution.id,
+            law_firm_document_identifier,
+        )
+        return None
+
+    lines: list[str] = []
+
+    for finding in result_payload.get('findings') or []:
+        description = str(finding.get('description') or '').strip()
+        if not description:
+            continue
+
+        severity = str(finding.get('severity') or 'ATENÇÃO').strip().upper()
+        location = str(finding.get('location') or '').strip()
+        correction = str(finding.get('correction') or '').strip()
+        manual_reference = str(finding.get('manual_reference') or '').strip()
+
+        parts = [f'- [{severity}] {description}']
+        if location:
+            parts.append(f'Local: {location}')
+        if correction:
+            parts.append(f'Correção esperada: {correction}')
+        if manual_reference:
+            parts.append(f'Referência manual: {manual_reference}')
+        lines.append(' | '.join(parts))
+
+    for missing_document in result_payload.get('missing_documents') or []:
+        document_type = str(missing_document.get('document_type') or '').strip()
+        if not document_type:
+            continue
+
+        thesis = str(missing_document.get('thesis') or '').strip()
+        manual_reference = str(missing_document.get('manual_reference') or '').strip()
+        parts = [f'- [DOCUMENTO] {document_type}']
+        if thesis:
+            parts.append(f'Tese relacionada: {thesis}')
+        if manual_reference:
+            parts.append(f'Referência manual: {manual_reference}')
+        lines.append(' | '.join(parts))
+
+    if not lines:
+        return None
+
+    return '\n'.join(lines)
+
+
 def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_file_path: str,
                            compared_file_path: str = None) -> dict:
     """Executa o agente revisor e armazena resultado"""
@@ -300,6 +376,11 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_file_p
         try:
             petition_extension = Path(petition_file_path).suffix.lower()
             petition_text = _extract_text_from_document(petition_file_path) if petition_extension in {'.docx', '.txt'} else None
+            prior_attention_points = _build_prior_attention_points(
+                law_firm_id=law_firm_id,
+                law_firm_document_identifier=execution.law_firm_document_identifier or '',
+                current_execution_id=execution.id,
+            )
 
             compared_text = None
             if compared_file_path:
@@ -314,6 +395,7 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_file_p
                         revised_petition_file_path=compared_file_path,
                         original_petition_text=petition_text,
                         revised_petition_text=compared_text,
+                        prior_attention_points=prior_attention_points,
                         reviewer_identity=reviewer_identity_prompt.content if reviewer_identity_prompt else "",
                         reviewer_rules=reviewer_rules_prompt.content if reviewer_rules_prompt else "",
                         reviewer_output_format=reviewer_output_format_prompt.content if reviewer_output_format_prompt else "",
@@ -328,6 +410,7 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_file_p
                     agent.review_petition_single_version(
                         petition_file_path=petition_file_path,
                         petition_text=petition_text,
+                        prior_attention_points=prior_attention_points,
                         reviewer_identity=reviewer_identity_prompt.content if reviewer_identity_prompt else "",
                         reviewer_rules=reviewer_rules_prompt.content if reviewer_rules_prompt else "",
                         reviewer_output_format=reviewer_output_format_prompt.content if reviewer_output_format_prompt else "",
