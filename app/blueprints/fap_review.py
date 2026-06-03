@@ -771,12 +771,17 @@ def revision_result(execution_id: int):
             FapReviewExecution.law_firm_document_identifier == execution.law_firm_document_identifier,
             FapReviewExecution.id != execution.id,
         ).count()
+
+    manual_reference = _get_active_reference(law_firm_id, 'manual_fap')
+    manual_content = (manual_reference.content if manual_reference else '').strip()
     
     return render_template('fap_review/revision_result.html',
                           execution=execution,
                           result_data=result_data,
                           prior_revision_count=prior_revision_count,
-                          ignored_finding_indices=ignored_finding_indices)
+                          ignored_finding_indices=ignored_finding_indices,
+                          manual_content=manual_content,
+                          manual_reference=manual_reference)
 
 
 @fap_review_bp.route('/revision/<int:execution_id>/findings/<int:finding_index>/dismiss-feedback', methods=['POST'])
