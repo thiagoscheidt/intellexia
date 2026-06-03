@@ -834,7 +834,8 @@
                                         <i class="bi bi-eye me-1"></i> Ver Página
                                     </button>
                                     {% endif %}
-                                    <button type="button" class="finding-dismiss-btn" title="Não pertinente">
+                                    <button type="button" class="finding-dismiss-btn" title="Não pertinente"
+                                        data-dismiss-feedback-url="{{ url_for('fap_review.revision_finding_feedback', execution_id=execution.id, finding_index=loop.index) }}">
                                         <i class="bi bi-x"></i>
                                     </button>
                                     <button type="button" class="finding-check-btn" title="Marcar como revisado">
@@ -1260,15 +1261,26 @@
     // ── Check / progresso de revisão ─────────────────────────────
     (function () {
         const STORAGE_KEY = 'fap_checked_{{ execution.id }}';
+        const persistedDismissed = new Set('{{ ignored_finding_indices|default([], true)|join(",") }}'.split(',').filter(Boolean));
         const TOTAL = document.querySelectorAll('.finding-card').length;
 
         function load() {
-            try { return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}'); }
-            catch { return {}; }
+            try {
+                return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+            }
+            catch {
+                return {};
+            }
         }
 
         function save(state) {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+            const normalizedState = {};
+            Object.keys(state || {}).forEach(function (key) {
+                if (state[key] === 'checked') {
+                    normalizedState[key] = 'checked';
+                }
+            });
+            localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedState));
         }
 
         function updateProgress(state) {
@@ -1286,7 +1298,7 @@
                 const checkBtn = card.querySelector('.finding-check-btn');
                 const dismissBtn = card.querySelector('.finding-dismiss-btn');
                 const navPill = document.getElementById('nav-pill-' + idx);
-                const val = state[idx];
+                const val = persistedDismissed.has(String(idx)) ? 'dismissed' : state[idx];
 
                 // Reset
                 card.classList.remove('is-checked', 'is-dismissed');
@@ -1323,21 +1335,62 @@
                 btn.addEventListener('click', function () {
                     var card = this.closest('.finding-card');
                     var idx = card.dataset.findingIndex;
+                    if (persistedDismissed.has(String(idx))) {
+                        return;
+                    }
                     var state = load();
-                    state[idx] = state[idx] === 'checked' ? null : 'checked';
+                    if (state[idx] === 'checked') {
+                        delete state[idx];
+                    } else {
+                        state[idx] = 'checked';
+                    }
                     save(state);
                     applyState(state);
                 });
             });
 
             document.querySelectorAll('.finding-dismiss-btn').forEach(function (btn) {
-                btn.addEventListener('click', function () {
+                btn.addEventListener('click', async function () {
                     var card = this.closest('.finding-card');
                     var idx = card.dataset.findingIndex;
                     var state = load();
-                    state[idx] = state[idx] === 'dismissed' ? null : 'dismissed';
-                    save(state);
-                    applyState(state);
+                    var shouldDismiss = !persistedDismissed.has(String(idx));
+
+                    this.disabled = true;
+                    try {
+                        var response = await fetch(this.dataset.dismissFeedbackUrl, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest'
+                            },
+                            body: JSON.stringify({ dismissed: shouldDismiss })
+                        });
+                        var payload = {};
+                        try {
+                            payload = await response.json();
+                        } catch {
+                            payload = {};
+                        }
+
+                        if (!response.ok) {
+                            throw new Error(payload.error || 'Não foi possível salvar o feedback do ponto de atenção.');
+                        }
+
+                        delete state[idx];
+                        save(state);
+
+                        if (shouldDismiss) {
+                            persistedDismissed.add(String(idx));
+                        } else {
+                            persistedDismissed.delete(String(idx));
+                        }
+                        applyState(state);
+                    } catch (error) {
+                        alert(error.message || 'Não foi possível salvar o feedback do ponto de atenção.');
+                    } finally {
+                        this.disabled = false;
+                    }
                 });
             });
         });

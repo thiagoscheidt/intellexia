@@ -11,6 +11,7 @@ Rotas principais:
 import os
 import json
 import asyncio
+import hashlib
 from datetime import datetime
 from io import BytesIO
 from decimal import Decimal
@@ -23,7 +24,7 @@ from sqlalchemy import and_, func
 from app.models import (
     db, User, LawFirm,
     FapReviewPromptVersion, FapReviewReferenceVersion, FapReviewSetting,
-    FapReviewExecution, FapReviewAuditLog
+    FapReviewExecution, FapReviewIgnoredFinding, FapReviewAuditLog
 )
 from app.agents.fap_review import (
     FapPetitionReviewerAgent,
@@ -227,6 +228,40 @@ def _extract_text_from_document(filepath: str) -> str:
         raise
 
 
+def _normalize_finding_field(value: object) -> str:
+    """Normaliza campo textual de achado para fingerprint estável."""
+    return ' '.join(str(value or '').strip().split()).lower()
+
+
+def _build_finding_fingerprint(finding: dict | None) -> str:
+    """Gera fingerprint estável de um achado para persistir feedback do usuário."""
+    if not isinstance(finding, dict):
+        return ''
+
+    payload = {
+        'category': _normalize_finding_field(finding.get('category')),
+        'severity': _normalize_finding_field(finding.get('severity')),
+        'description': _normalize_finding_field(finding.get('description')),
+        'location': _normalize_finding_field(finding.get('location')),
+        'correction': _normalize_finding_field(finding.get('correction')),
+        'manual_reference': _normalize_finding_field(finding.get('manual_reference')),
+    }
+    serialized = json.dumps(payload, sort_keys=True, ensure_ascii=False)
+    return hashlib.sha256(serialized.encode('utf-8')).hexdigest()
+
+
+def _get_ignored_finding_fingerprints(law_firm_id: int, law_firm_document_identifier: str) -> set[str]:
+    """Retorna fingerprints de achados marcados como não úteis para o documento."""
+    if not law_firm_document_identifier:
+        return set()
+
+    rows = FapReviewIgnoredFinding.query.filter_by(
+        law_firm_id=law_firm_id,
+        law_firm_document_identifier=law_firm_document_identifier,
+    ).with_entities(FapReviewIgnoredFinding.finding_fingerprint).all()
+    return {str(row[0]) for row in rows if row and row[0]}
+
+
 def _build_prior_attention_points(
     law_firm_id: int,
     law_firm_document_identifier: str,
@@ -262,9 +297,17 @@ def _build_prior_attention_points(
         )
         return None
 
+    ignored_fingerprints = _get_ignored_finding_fingerprints(
+        law_firm_id=law_firm_id,
+        law_firm_document_identifier=law_firm_document_identifier,
+    )
     lines: list[str] = []
 
     for finding in result_payload.get('findings') or []:
+        finding_fingerprint = _build_finding_fingerprint(finding)
+        if finding_fingerprint and finding_fingerprint in ignored_fingerprints:
+            continue
+
         description = str(finding.get('description') or '').strip()
         if not description:
             continue
@@ -298,7 +341,11 @@ def _build_prior_attention_points(
         lines.append(' | '.join(parts))
 
     if not lines:
-        return None
+        return (
+            '__NO_ACTIVE_PRIOR_ATTENTION_POINTS__\n'
+            'Os pontos de atenção anteriores deste identificador foram marcados como não úteis '
+            'e não devem ser cobrados novamente nesta revisão.'
+        )
 
     return '\n'.join(lines)
 
@@ -704,6 +751,18 @@ def revision_result(execution_id: int):
         except json.JSONDecodeError:
             result_data = {}
 
+    ignored_finding_indices: list[int] = []
+    if execution.law_firm_document_identifier and result_data.get('findings'):
+        ignored_fingerprints = _get_ignored_finding_fingerprints(
+            law_firm_id=law_firm_id,
+            law_firm_document_identifier=execution.law_firm_document_identifier,
+        )
+        ignored_finding_indices = [
+            index
+            for index, finding in enumerate(result_data.get('findings') or [], start=1)
+            if _build_finding_fingerprint(finding) in ignored_fingerprints
+        ]
+
     prior_revision_count = 0
     if execution.law_firm_document_identifier:
         prior_revision_count = FapReviewExecution.query.filter(
@@ -716,7 +775,89 @@ def revision_result(execution_id: int):
     return render_template('fap_review/revision_result.html',
                           execution=execution,
                           result_data=result_data,
-                          prior_revision_count=prior_revision_count)
+                          prior_revision_count=prior_revision_count,
+                          ignored_finding_indices=ignored_finding_indices)
+
+
+@fap_review_bp.route('/revision/<int:execution_id>/findings/<int:finding_index>/dismiss-feedback', methods=['POST'])
+@require_law_firm
+def revision_finding_feedback(execution_id: int, finding_index: int):
+    """Persiste feedback de ponto marcado como não útil para futuras revisões do mesmo documento."""
+    law_firm_id = get_current_law_firm_id()
+    user_id = session.get('user_id')
+
+    execution = FapReviewExecution.query.filter_by(
+        id=execution_id,
+        law_firm_id=law_firm_id,
+    ).first_or_404()
+
+    if not execution.law_firm_document_identifier:
+        return jsonify({'error': 'Esta revisão não possui identificador de documento para persistir feedback.'}), 400
+
+    try:
+        payload = json.loads(execution.result_json or '{}')
+    except json.JSONDecodeError:
+        return jsonify({'error': 'Resultado da revisão inválido para registrar feedback.'}), 400
+
+    findings = payload.get('findings') or []
+    if finding_index < 1 or finding_index > len(findings):
+        return jsonify({'error': 'Ponto de atenção não encontrado nesta revisão.'}), 404
+
+    finding = findings[finding_index - 1]
+    finding_fingerprint = _build_finding_fingerprint(finding)
+    if not finding_fingerprint:
+        return jsonify({'error': 'Não foi possível identificar o ponto de atenção selecionado.'}), 400
+
+    request_payload = request.get_json(silent=True) or {}
+    dismissed = bool(request_payload.get('dismissed'))
+
+    existing_feedback = FapReviewIgnoredFinding.query.filter_by(
+        law_firm_id=law_firm_id,
+        law_firm_document_identifier=execution.law_firm_document_identifier,
+        finding_fingerprint=finding_fingerprint,
+    ).first()
+
+    description = str(finding.get('description') or '').strip()
+    audit_action = None
+    audit_description = None
+
+    try:
+        if dismissed:
+            if not existing_feedback:
+                db.session.add(FapReviewIgnoredFinding(
+                    law_firm_id=law_firm_id,
+                    law_firm_document_identifier=execution.law_firm_document_identifier,
+                    source_execution_id=execution.id,
+                    created_by_id=user_id,
+                    finding_fingerprint=finding_fingerprint,
+                    finding_description=description,
+                ))
+            audit_action = 'revision_finding_dismissed'
+            audit_description = f'Ponto marcado como não útil: {description[:200]}'
+        elif existing_feedback:
+            db.session.delete(existing_feedback)
+            audit_action = 'revision_finding_dismiss_undone'
+            audit_description = f'Ponto voltou a ser considerado no histórico: {description[:200]}'
+
+        db.session.commit()
+    except Exception as error:
+        db.session.rollback()
+        current_app.logger.error(f'Erro ao persistir feedback do ponto de atenção: {error}')
+        return jsonify({'error': 'Não foi possível salvar o feedback do ponto de atenção.'}), 500
+
+    if audit_action and audit_description:
+        try:
+            _log_audit(
+                law_firm_id,
+                audit_action,
+                'execution',
+                execution.id,
+                audit_description,
+            )
+        except Exception as audit_error:
+            current_app.logger.warning(f'Feedback salvo, mas falha ao registrar auditoria: {audit_error}')
+
+    return jsonify({'success': True, 'dismissed': dismissed})
 
 
 @fap_review_bp.route('/revision/<int:execution_id>/document/main', methods=['GET'])

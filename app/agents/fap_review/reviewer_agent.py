@@ -127,6 +127,7 @@ class FapPetitionReviewerAgent:
     _REVIEW_CHUNK_OVERLAP_CHARS = int(os.environ.get('FAP_REVIEW_CHUNK_OVERLAP_CHARS', '1200'))
     _AUX_PREVIEW_LIMIT = int(os.environ.get('FAP_REVIEW_AUX_PREVIEW_LIMIT', '5'))
     _SECTION_TITLE_MAX_CHARS = int(os.environ.get('FAP_REVIEW_SECTION_TITLE_MAX_CHARS', '160'))
+    _NO_ACTIVE_PRIOR_ATTENTION_MARKER = '__NO_ACTIVE_PRIOR_ATTENTION_POINTS__'
 
     def __init__(self, 
                  openai_api_key: Optional[str] = None,
@@ -826,6 +827,30 @@ INSTRUÇÕES DO PROJETO:
             "O documento foi enviado como anexo de arquivo nesta mensagem."
         )
         petition_body = f"\n\nTEXTO DA PETIÇÃO:\n{petition_text}" if petition_text else ""
+        if prior_attention_points and prior_attention_points.startswith(self._NO_ACTIVE_PRIOR_ATTENTION_MARKER):
+            return f"""Revise esta nova versão de uma petição inicial de FAP já analisada anteriormente.
+
+PETIÇÃO A REVISAR:
+{petition_source}
+
+{petition_body}
+
+{aux_text}
+
+CONTEXTO DO HISTÓRICO:
+Os pontos de atenção anteriores deste identificador foram marcados pelo usuário como não úteis e não devem ser cobrados novamente.
+
+OBJETIVO DESTA REVISÃO FOCADA:
+1. Não reabra pontos de atenção antigos marcados como não úteis.
+2. Não faça nova varredura geral do manual nem gere novos achados fora desse escopo.
+3. Exceção obrigatória: continue validando a consistência do nome da empresa em todo o documento e reporte divergências atuais como CRÍTICO.
+
+Estruture a resposta em JSON válido com a seguinte estrutura:
+- theses (array de teses identificadas)
+- findings (array de achados; deixe vazio se não houver divergência atual de razão social)
+- missing_documents (array de documentos em falta; deixe vazio)
+- executive_summary (resumo executivo)"""
+
         if prior_attention_points:
             return f"""Revise esta nova versão de uma petição inicial de FAP já analisada anteriormente.
 
@@ -898,30 +923,54 @@ Estruture a resposta em JSON válido com a seguinte estrutura:
         )
         original_body = f"\n\nTEXTO DA VERSÃO ORIGINAL:\n{original_petition_text}" if original_petition_text else ""
         revised_body = f"\n\nTEXTO DA VERSÃO REVISADA:\n{revised_petition_text}" if revised_petition_text else ""
+        if prior_attention_points and prior_attention_points.startswith(self._NO_ACTIVE_PRIOR_ATTENTION_MARKER):
+            return f"""Revise comparativamente estas duas versões de petição de FAP.
+
+{original_source}
+{revised_source}
+
+{original_body}
+{revised_body}
+
+{aux_text}
+
+CONTEXTO DO HISTÓRICO:
+Os pontos de atenção anteriores deste identificador foram marcados pelo usuário como não úteis e não devem ser cobrados novamente.
+
+OBJETIVO DESTA REVISÃO FOCADA:
+1. Não reabra pontos de atenção antigos marcados como não úteis.
+2. Não faça nova varredura geral do manual nem gere novos achados fora desse escopo.
+3. Exceção obrigatória: continue validando a consistência do nome da empresa nas duas versões e reporte divergências atuais como CRÍTICO.
+
+Estruture em JSON com:
+- comparative_changes (array de alterações; deixe vazio se não houver divergência atual relevante)
+- findings (achados; deixe vazio se não houver divergência atual de razão social)
+- executive_summary (resumo)"""
+
         if prior_attention_points:
             return f"""Revise comparativamente estas duas versões de petição de FAP.
 
-    {original_source}
-    {revised_source}
+{original_source}
+{revised_source}
 
-    {original_body}
-    {revised_body}
+{original_body}
+{revised_body}
 
-    {aux_text}
+{aux_text}
 
-    PONTOS DE ATENÇÃO IDENTIFICADOS NA REVISÃO ANTERIOR:
-    {prior_attention_points}
+PONTOS DE ATENÇÃO IDENTIFICADOS NA REVISÃO ANTERIOR:
+{prior_attention_points}
 
-    OBJETIVO DESTA REVISÃO FOCADA:
-    1. Use a versão revisada como referência principal para verificar se os pontos de atenção anteriores foram corrigidos.
-    2. Quando útil, compare com a versão original para demonstrar a correção ou a persistência do problema.
-    3. Não faça nova varredura geral do manual nem gere novos achados fora dessa lista.
-    4. Exceção obrigatória: continue validando a consistência do nome da empresa nas duas versões e reporte divergências atuais como CRÍTICO.
+OBJETIVO DESTA REVISÃO FOCADA:
+1. Use a versão revisada como referência principal para verificar se os pontos de atenção anteriores foram corrigidos.
+2. Quando útil, compare com a versão original para demonstrar a correção ou a persistência do problema.
+3. Não faça nova varredura geral do manual nem gere novos achados fora dessa lista.
+4. Exceção obrigatória: continue validando a consistência do nome da empresa nas duas versões e reporte divergências atuais como CRÍTICO.
 
-    Estruture em JSON com:
-    - comparative_changes (array de alterações relevantes aos pontos anteriores)
-    - findings (achados ainda pendentes)
-    - executive_summary (resumo)"""
+Estruture em JSON com:
+- comparative_changes (array de alterações relevantes aos pontos anteriores)
+- findings (achados ainda pendentes)
+- executive_summary (resumo)"""
 
         return f"""Revise comparativamente estas duas versões de petição de FAP.
 

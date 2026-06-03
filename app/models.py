@@ -2704,6 +2704,40 @@ class FapReviewExecution(db.Model):
         return f'<FapReviewExecution type={self.execution_type} status={self.status}>'
 
 
+class FapReviewIgnoredFinding(db.Model):
+    """Achados marcados como não úteis para não reaproveitar no histórico do documento."""
+    __tablename__ = 'fap_review_ignored_findings'
+    __table_args__ = (
+        db.Index('ix_fap_review_ignored_findings_execution_id', 'source_execution_id'),
+        db.Index('ix_fap_review_ignored_findings_created_by_id', 'created_by_id'),
+        db.UniqueConstraint(
+            'law_firm_id',
+            'law_firm_document_identifier',
+            'finding_fingerprint',
+            name='uq_fap_review_ignored_findings_scope',
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    law_firm_document_identifier = db.Column(db.String(96), nullable=False, index=True)
+    source_execution_id = db.Column(db.Integer, db.ForeignKey('fap_review_executions.id'), nullable=False)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+
+    finding_fingerprint = db.Column(db.String(64), nullable=False)
+    finding_description = db.Column(db.Text)
+
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    law_firm = db.relationship('LawFirm')
+    source_execution = db.relationship('FapReviewExecution')
+    created_by = db.relationship('User')
+
+    def __repr__(self):
+        return f'<FapReviewIgnoredFinding law_firm_id={self.law_firm_id} execution_id={self.source_execution_id}>'
+
+
 class FapReviewAuditLog(db.Model):
     """Tabela fap_review_audit_logs - Log de auditoria de todas as alterações do módulo"""
     __tablename__ = 'fap_review_audit_logs'
