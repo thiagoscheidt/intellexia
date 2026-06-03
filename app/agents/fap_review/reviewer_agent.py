@@ -207,6 +207,16 @@ Ao revisar a petição, valide estritamente com base no MANUAL DE REFERÊNCIA.
 Em caso de divergência entre qualquer instrução e o manual, o manual prevalece.
 Não invente critérios fora do manual.
 
+VERIFICAÇÃO OBRIGATÓRIA — CONSISTÊNCIA DO NOME DA EMPRESA (prioridade máxima):
+Em TODA revisão, independentemente de outras regras e antes de qualquer outra análise, você DEVE:
+1. Identificar a razão social exata da empresa autora conforme consta na qualificação inicial (cabeçalho da petição).
+2. Varrer TODO o documento — qualificação, síntese fática, pedidos, tabelas, notas de rodapé, trechos de contestação e exemplos — e verificar se o nome da empresa aparece grafado de forma IDÊNTICA em todas as ocorrências.
+3. Qualquer divergência de grafia (letras trocadas, suprimidas, acrescidas ou trocadas de ordem) deve ser reportada como achado de gravidade CRÍTICO, indicando a grafia correta, a grafia incorreta encontrada e a localização exata (seção e parágrafo) de cada ocorrência divergente.
+4. O mesmo critério se aplica à abreviatura societária (ex.: "S.A." vs "S/A" vs "SA") — deve ser uniforme em todo o documento.
+5. Se NÃO houver divergência, NÃO crie achado sobre razão social. A consistência do nome deve permanecer silenciosa e não pode aparecer em findings, resumo executivo ou alertas.
+Exemplos de erros típicos: "WHIRLPOOL" grafado como "WHIRPOOL"; "AMBEV S.A." como "AMBEV SA"; nome com letra acentuada vs. sem acento.
+Esta verificação NÃO PODE ser omitida em nenhuma hipótese.
+
 MANUAL DE REFERÊNCIA:
 {self.manual_content if self.manual_content else 'Manual não carregado'}
 
@@ -220,6 +230,7 @@ INSTRUÇÕES DO PROJETO:
 
     async def review_petition_single_version(self,
                                             petition_file_path: str,
+                                            petition_text: str | None = None,
                                             auxiliary_documents: list[dict] = None,
                                             reviewer_identity: str = "",
                                             reviewer_rules: str = "",
@@ -247,22 +258,30 @@ INSTRUÇÕES DO PROJETO:
         )
         
         try:
-            petition_file_part = self._build_file_part_for_message(petition_file_path)
-
             user_message = self._build_single_user_message(
                 auxiliary_documents=auxiliary_documents,
+                petition_text=petition_text,
             )
 
-            messages = [
-                SystemMessage(content=system_prompt),
-                HumanMessage(content=[
-                    {
-                        "type": "text",
-                        "text": user_message,
-                    },
-                    petition_file_part,
-                ])
-            ]
+            if petition_text:
+                messages = [
+                    SystemMessage(content=system_prompt),
+                    HumanMessage(content=user_message),
+                ]
+                analysis_mode = "extracted_text"
+            else:
+                petition_file_part = self._build_file_part_for_message(petition_file_path)
+                messages = [
+                    SystemMessage(content=system_prompt),
+                    HumanMessage(content=[
+                        {
+                            "type": "text",
+                            "text": user_message,
+                        },
+                        petition_file_part,
+                    ])
+                ]
+                analysis_mode = "file_attachment"
 
             start_time = time.time()
             response = self.llm.invoke(messages)
@@ -289,7 +308,7 @@ INSTRUÇÕES DO PROJETO:
                     "petition_file_path": petition_file_path,
                     "petition_file_name": self._extract_file_name(petition_file_path),
                     "auxiliary_documents_count": len(auxiliary_documents or []),
-                    "mode": "file_attachment",
+                    "mode": analysis_mode,
                     "llm_input": {
                         "system_prompt": self._truncate_for_log(system_prompt),
                         "user_prompt": self._truncate_for_log(user_message),
@@ -320,7 +339,7 @@ INSTRUÇÕES DO PROJETO:
                 result_data={
                     "execution_id": execution_id,
                     "analysis_type": "single_version",
-                    "mode": "file_attachment",
+                    "mode": analysis_mode,
                     "petition_file_name": self._extract_file_name(petition_file_path),
                 },
                 model_name=self.model_name,
@@ -364,6 +383,8 @@ INSTRUÇÕES DO PROJETO:
     async def review_petition_comparative(self,
                                          original_petition_file_path: str,
                                          revised_petition_file_path: str,
+                                         original_petition_text: str | None = None,
+                                         revised_petition_text: str | None = None,
                                          auxiliary_documents: list[dict] = None,
                                          reviewer_identity: str = "",
                                          reviewer_rules: str = "",
@@ -392,23 +413,35 @@ INSTRUÇÕES DO PROJETO:
         )
         
         try:
-            original_file_part = self._build_file_part_for_message(original_petition_file_path)
-            revised_file_part = self._build_file_part_for_message(revised_petition_file_path)
-
             user_message = self._build_comparative_user_message(
                 auxiliary_documents=auxiliary_documents,
+                original_petition_text=original_petition_text,
+                revised_petition_text=revised_petition_text,
+                original_file_name=self._extract_file_name(original_petition_file_path),
+                revised_file_name=self._extract_file_name(revised_petition_file_path),
             )
+
+            human_content: list[Any] = [
+                {
+                    "type": "text",
+                    "text": user_message,
+                }
+            ]
+            analysis_mode = "file_attachment"
+
+            if not original_petition_text:
+                human_content.append(self._build_file_part_for_message(original_petition_file_path))
+            else:
+                analysis_mode = "hybrid_text"
+
+            if not revised_petition_text:
+                human_content.append(self._build_file_part_for_message(revised_petition_file_path))
+            else:
+                analysis_mode = "hybrid_text"
 
             messages = [
                 SystemMessage(content=system_prompt),
-                HumanMessage(content=[
-                    {
-                        "type": "text",
-                        "text": user_message,
-                    },
-                    original_file_part,
-                    revised_file_part,
-                ])
+                HumanMessage(content=human_content if len(human_content) > 1 else user_message),
             ]
 
             start_time = time.time()
@@ -438,7 +471,7 @@ INSTRUÇÕES DO PROJETO:
                     "original_file_name": self._extract_file_name(original_petition_file_path),
                     "revised_file_name": self._extract_file_name(revised_petition_file_path),
                     "auxiliary_documents_count": len(auxiliary_documents or []),
-                    "mode": "file_attachment",
+                    "mode": analysis_mode,
                     "llm_input": {
                         "system_prompt": self._truncate_for_log(system_prompt),
                         "user_prompt": self._truncate_for_log(user_message),
@@ -469,7 +502,7 @@ INSTRUÇÕES DO PROJETO:
                 result_data={
                     "execution_id": execution_id,
                     "analysis_type": "comparative",
-                    "mode": "file_attachment",
+                    "mode": analysis_mode,
                     "original_file_name": self._extract_file_name(original_petition_file_path),
                     "revised_file_name": self._extract_file_name(revised_petition_file_path),
                 },
@@ -527,10 +560,64 @@ INSTRUÇÕES DO PROJETO:
         try:
             for item in data:
                 if isinstance(item, dict):
+                    if self._should_ignore_finding(item):
+                        continue
                     result.append(FindingItem(**item))
         except Exception:
             pass
         return result
+
+    def _normalize_review_text(self, value: Any) -> str:
+        """Normaliza texto para heurísticas simples de saneamento do output do modelo."""
+        text = str(value or "").strip().lower()
+        return " ".join(text.split())
+
+    def _should_ignore_finding(self, item: dict[str, Any]) -> bool:
+        """Descarta falsos positivos em que o modelo marcou como achado algo explicitamente sem problema."""
+        haystack = " ".join(
+            self._normalize_review_text(item.get(field))
+            for field in ("category", "description", "location", "correction", "manual_reference")
+        )
+
+        if not haystack:
+            return False
+
+        mentions_company_name = any(
+            token in haystack
+            for token in (
+                "razao social",
+                "razão social",
+                "nome da empresa",
+                "nome da autora",
+                "empresa autora",
+            )
+        )
+        if not mentions_company_name:
+            return False
+
+        indicates_no_issue = any(
+            token in haystack
+            for token in (
+                "sem divergencia",
+                "sem divergências",
+                "sem divergencia detectada",
+                "sem divergências detectadas",
+                "nao ha divergencia",
+                "não há divergência",
+                "nenhuma divergencia",
+                "nenhuma divergência",
+                "grafada de forma consistente",
+                "grafado de forma consistente",
+                "consistente em todo o documento",
+                "sem problema",
+                "sem inconsistencias",
+                "sem inconsistências",
+            )
+        )
+        if not indicates_no_issue:
+            return False
+
+        return True
 
     def _parse_missing_documents(self, data: list) -> list[MissingDocument]:
         """Parse lista de documentos em falta"""
@@ -712,21 +799,32 @@ INSTRUÇÕES DO PROJETO:
         self,
         *,
         auxiliary_documents: list[dict] | None,
+        petition_text: str | None = None,
     ) -> str:
         aux_text = self._format_auxiliary_documents(auxiliary_documents)
+        petition_source = (
+            "O conteúdo textual extraído da petição segue abaixo nesta mensagem."
+            if petition_text else
+            "O documento foi enviado como anexo de arquivo nesta mensagem."
+        )
+        petition_body = f"\n\nTEXTO DA PETIÇÃO:\n{petition_text}" if petition_text else ""
         return f"""Revise esta petição inicial de FAP contra o manual.
 
 PETIÇÃO A REVISAR:
-O documento foi enviado como anexo de arquivo nesta mensagem.
+{petition_source}
+
+{petition_body}
 
 {aux_text}
 
 Identifique:
-1. Todas as inconsistências com o manual
-2. Erros críticos, moderados e formais
-3. Documentos obrigatórios em falta
-4. Padrões novos não cobertos pelo manual
-5. Riscos jurídicos
+1. CONSISTÊNCIA DO NOME DA EMPRESA — verifique se a razão social da empresa autora está grafada de forma IDÊNTICA em TODAS as ocorrências do documento (qualificação, corpo, tabelas, notas, pedidos). Reporte qualquer divergência como CRÍTICO com a localização exata.
+Se a razão social estiver consistente em todo o documento, não gere finding nem alerta sobre esse ponto.
+2. Todas as demais inconsistências com o manual
+3. Erros críticos, moderados e formais
+4. Documentos obrigatórios em falta
+5. Padrões novos não cobertos pelo manual
+6. Riscos jurídicos
 
 Estruture a resposta em JSON válido com a seguinte estrutura:
 - theses (array de teses identificadas)
@@ -739,13 +837,35 @@ Estruture a resposta em JSON válido com a seguinte estrutura:
         self,
         *,
         auxiliary_documents: list[dict] | None,
+        original_petition_text: str | None = None,
+        revised_petition_text: str | None = None,
+        original_file_name: str = "",
+        revised_file_name: str = "",
     ) -> str:
         aux_text = self._format_auxiliary_documents(auxiliary_documents)
+        original_source = (
+            f"VERSÃO ORIGINAL ({original_file_name or 'documento original'}) enviada como texto extraído abaixo."
+            if original_petition_text else
+            f"VERSÃO ORIGINAL ({original_file_name or 'documento original'}) enviada como anexo de arquivo nesta mensagem."
+        )
+        revised_source = (
+            f"VERSÃO REVISADA ({revised_file_name or 'documento revisado'}) enviada como texto extraído abaixo."
+            if revised_petition_text else
+            f"VERSÃO REVISADA ({revised_file_name or 'documento revisado'}) enviada como anexo de arquivo nesta mensagem."
+        )
+        original_body = f"\n\nTEXTO DA VERSÃO ORIGINAL:\n{original_petition_text}" if original_petition_text else ""
+        revised_body = f"\n\nTEXTO DA VERSÃO REVISADA:\n{revised_petition_text}" if revised_petition_text else ""
         return f"""Revise comparativamente estas duas versões de petição de FAP.
 
-As duas versões (original e revisada) foram enviadas como anexos de arquivo nesta mensagem.
+{original_source}
+{revised_source}
+
+{original_body}
+{revised_body}
 
 {aux_text}
+
+VERIFICAÇÃO PRÉVIA OBRIGATÓRIA: antes de analisar as diferenças entre as versões, verifique em AMBOS os documentos se a razão social da empresa autora está grafada de forma idêntica em todas as ocorrências. Reporte eventuais inconsistências como achado CRÍTICO.
 
 Para cada alteração identificada:
 1. Transcreva trecho original e corrigido
@@ -815,9 +935,13 @@ Estruture em JSON com:
 
     def _merge_result_dicts(self, all_dicts: list[dict]) -> dict:
         """Consolida resultados de múltiplos chunks em um único dicionário."""
+        merged_findings = [
+            item for item in self._merge_unique_dict_items(all_dicts, "findings")
+            if not self._should_ignore_finding(item)
+        ]
         merged: dict[str, Any] = {
             "theses": self._merge_unique_dict_items(all_dicts, "theses"),
-            "findings": self._merge_unique_dict_items(all_dicts, "findings"),
+            "findings": merged_findings,
             "missing_documents": self._merge_unique_dict_items(all_dicts, "missing_documents"),
             "new_patterns": self._merge_unique_dict_items(all_dicts, "new_patterns"),
             "comparative_changes": self._merge_unique_dict_items(all_dicts, "comparative_changes"),

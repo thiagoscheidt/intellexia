@@ -62,6 +62,13 @@ READ_ONLY_PROMPT_TYPES = {'revisor_output_format'}
 READ_ONLY_REFERENCE_TYPES = {'project_instructions'}
 
 
+def _get_file_extension(filename: str) -> str:
+    """Obtém extensão normalizada do arquivo."""
+    if not filename or '.' not in filename:
+        return ''
+    return f".{filename.rsplit('.', 1)[1].lower()}"
+
+
 def allowed_file(filename: str, allowed_extensions: set) -> bool:
     """Verifica se arquivo tem extensão permitida"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_extensions
@@ -156,7 +163,7 @@ def _create_upload_directory(law_firm_id: int, subdir: str = "") -> Path:
 
 
 def _extract_text_from_document(filepath: str) -> str:
-    """Extrai texto de um documento (PDF, DOCX ou TXT)"""
+    """Extrai texto de um documento (PDF, DOCX ou TXT)."""
     filepath = Path(filepath)
     extension = filepath.suffix.lower()
     text = ""
@@ -185,7 +192,7 @@ def _extract_text_from_document(filepath: str) -> str:
             else:
                 raise ImportError("PyPDF2 não está instalado")
         
-        elif extension in ['.docx', '.doc']:
+        elif extension == '.docx':
             if DocxDocument:
                 try:
                     doc = DocxDocument(filepath)
@@ -200,6 +207,9 @@ def _extract_text_from_document(filepath: str) -> str:
                     raise ValueError(f"Erro ao ler DOCX: {e}")
             else:
                 raise ImportError("python-docx não está instalado")
+
+        elif extension == '.doc':
+            raise ValueError("Arquivos .doc não são suportados no FAP Review. Envie em PDF ou DOCX.")
         
         elif extension == '.txt':
             with open(filepath, 'r', encoding='utf-8') as f:
@@ -289,12 +299,22 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_file_p
         asyncio.set_event_loop(loop)
         
         try:
+            petition_extension = Path(petition_file_path).suffix.lower()
+            petition_text = _extract_text_from_document(petition_file_path) if petition_extension in {'.docx', '.txt'} else None
+
+            compared_text = None
+            if compared_file_path:
+                compared_extension = Path(compared_file_path).suffix.lower()
+                compared_text = _extract_text_from_document(compared_file_path) if compared_extension in {'.docx', '.txt'} else None
+
             if compared_file_path and execution.comparative_analysis:
                 # Análise comparativa
                 result = loop.run_until_complete(
                     agent.review_petition_comparative(
                         original_petition_file_path=petition_file_path,
                         revised_petition_file_path=compared_file_path,
+                        original_petition_text=petition_text,
+                        revised_petition_text=compared_text,
                         reviewer_identity=reviewer_identity_prompt.content if reviewer_identity_prompt else "",
                         reviewer_rules=reviewer_rules_prompt.content if reviewer_rules_prompt else "",
                         reviewer_output_format=reviewer_output_format_prompt.content if reviewer_output_format_prompt else "",
@@ -308,6 +328,7 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_file_p
                 result = loop.run_until_complete(
                     agent.review_petition_single_version(
                         petition_file_path=petition_file_path,
+                        petition_text=petition_text,
                         reviewer_identity=reviewer_identity_prompt.content if reviewer_identity_prompt else "",
                         reviewer_rules=reviewer_rules_prompt.content if reviewer_rules_prompt else "",
                         reviewer_output_format=reviewer_output_format_prompt.content if reviewer_output_format_prompt else "",
@@ -456,6 +477,10 @@ def revision():
             main_file = request.files['main_document']
             if main_file.filename == '':
                 return jsonify({'error': 'Arquivo vazio'}), 400
+
+            main_extension = _get_file_extension(main_file.filename)
+            if main_extension == '.doc':
+                return jsonify({'error': 'Arquivos .doc não são suportados no FAP Review. Envie em PDF ou DOCX.'}), 400
             
             if not allowed_file(main_file.filename, ALLOWED_DOCUMENT_EXTENSIONS):
                 return jsonify({'error': 'Tipo de arquivo não permitido'}), 400
@@ -490,6 +515,11 @@ def revision():
             comparative_analysis = False
             if 'compared_document' in request.files:
                 compared_file = request.files['compared_document']
+                if compared_file and compared_file.filename:
+                    compared_extension = _get_file_extension(compared_file.filename)
+                    if compared_extension == '.doc':
+                        return jsonify({'error': 'Arquivos .doc não são suportados no FAP Review. Envie em PDF ou DOCX.'}), 400
+
                 if compared_file and compared_file.filename and allowed_file(compared_file.filename, ALLOWED_DOCUMENT_EXTENSIONS):
                     compared_filename = secure_filename(compared_file.filename)
                     compared_filename = timestamp + 'compared_' + compared_filename
@@ -644,6 +674,10 @@ def training():
 
                 if not original_file.filename or not revised_file.filename:
                     flash('Selecione ambos os arquivos (original e revisado).', 'warning')
+                    return redirect(url_for('fap_review.training'))
+
+                if _get_file_extension(original_file.filename) == '.doc' or _get_file_extension(revised_file.filename) == '.doc':
+                    flash('Arquivos .doc não são suportados no FAP Review. Envie em PDF ou DOCX.', 'error')
                     return redirect(url_for('fap_review.training'))
 
                 if not allowed_file(original_file.filename, ALLOWED_DOCUMENT_EXTENSIONS):
