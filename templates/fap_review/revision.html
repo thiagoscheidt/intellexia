@@ -187,6 +187,27 @@
 
                             <div class="mb-4">
                                 <label class="form-label small fw-semibold mb-2">
+                                    <i class="bi bi-file-earmark-spreadsheet text-success me-1"></i>
+                                    Planilha de Benefícios <span class="text-muted fw-normal">(Opcional)</span>
+                                </label>
+                                <div class="dropzone-custom" id="benefitsSpreadsheetDropzone">
+                                    <i class="bi bi-file-earmark-spreadsheet dropzone-icon"
+                                        style="color: var(--bs-success-text-emphasis);"></i>
+                                    <p class="mb-1 mt-2 fw-semibold small">Arraste a planilha aqui ou clique para
+                                        selecionar</p>
+                                    <small class="text-muted">Arquivo Excel .xlsx com os benefícios e teses</small>
+                                    <input type="file" class="d-none" id="benefitsSpreadsheet"
+                                        name="benefits_spreadsheet" accept=".xlsx">
+                                </div>
+                                <div id="benefitsSpreadsheetList"></div>
+                                <div class="form-text">
+                                    Se enviada, o sistema confere depois da revisão se os números de benefício com tese
+                                    preenchida foram citados no documento analisado.
+                                </div>
+                            </div>
+
+                            <div class="mb-4">
+                                <label class="form-label small fw-semibold mb-2">
                                     <i class="bi bi-paperclip text-info me-1"></i>
                                     Documentos Auxiliares <span class="text-muted fw-normal">(Opcional)</span>
                                 </label>
@@ -369,12 +390,14 @@
 
         setupDropzone('mainDocumentDropzone', 'mainDocument', 'mainDocumentList', false);
         setupDropzone('auxiliaryDocumentsDropzone', 'auxiliaryDocuments', 'auxiliaryDocumentsList', true);
+        setupDropzone('benefitsSpreadsheetDropzone', 'benefitsSpreadsheet', 'benefitsSpreadsheetList', false);
 
         document.getElementById('petitionForm').addEventListener('submit', async function (e) {
             e.preventDefault();
 
             const mainFiles = document.getElementById('mainDocument').files;
             const auxiliaryFiles = document.getElementById('auxiliaryDocuments').files;
+            const benefitsSpreadsheetFiles = document.getElementById('benefitsSpreadsheet').files;
             const documentIdentifier = document.getElementById('lawFirmDocumentIdentifier').value.trim();
 
             if (!mainFiles.length) {
@@ -387,7 +410,7 @@
                 return;
             }
 
-            if (hasOversizedFiles(mainFiles) || hasOversizedFiles(auxiliaryFiles)) {
+            if (hasOversizedFiles(mainFiles) || hasOversizedFiles(auxiliaryFiles) || hasOversizedFiles(benefitsSpreadsheetFiles)) {
                 alert('Um ou mais arquivos excedem o limite de 50MB por documento.');
                 return;
             }

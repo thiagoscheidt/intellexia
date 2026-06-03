@@ -12,6 +12,8 @@ import os
 import json
 import asyncio
 import hashlib
+import re
+import unicodedata
 from datetime import datetime
 from io import BytesIO
 from decimal import Decimal
@@ -51,12 +53,18 @@ try:
 except ImportError:
     DocxDocument = None
 
+try:
+    from openpyxl import load_workbook
+except ImportError:
+    load_workbook = None
+
 
 fap_review_bp = Blueprint('fap_review', __name__, url_prefix='/fap-review')
 
 # Configurações
 ALLOWED_DOCUMENT_EXTENSIONS = {'pdf', 'doc', 'docx', 'txt'}
 ALLOWED_AUXILIARY_EXTENSIONS = {'pdf', 'doc', 'docx', 'xls', 'xlsx', 'txt', 'png', 'jpg', 'jpeg'}
+ALLOWED_BENEFITS_SPREADSHEET_EXTENSIONS = {'xlsx'}
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB
 READ_ONLY_PROMPT_TYPES = {'revisor_output_format'}
 READ_ONLY_REFERENCE_TYPES = {'project_instructions'}
@@ -228,6 +236,130 @@ def _extract_text_from_document(filepath: str) -> str:
         raise
 
 
+def _normalize_spreadsheet_header(value: object) -> str:
+    """Normaliza cabeçalhos de planilha para busca resiliente."""
+    normalized = unicodedata.normalize('NFKD', str(value or ''))
+    ascii_text = normalized.encode('ascii', 'ignore').decode('ascii')
+    return ' '.join(ascii_text.strip().lower().split())
+
+
+def _format_benefit_number(value: object) -> str:
+    """Formata número de benefício preservando apenas o valor legível."""
+    if value is None:
+        return ''
+
+    if isinstance(value, bool):
+        return ''
+
+    if isinstance(value, int):
+        return str(value)
+
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+
+    return str(value).strip()
+
+
+def _normalize_benefit_number(value: object) -> str:
+    """Normaliza número de benefício para comparação textual."""
+    return re.sub(r'\D+', '', _format_benefit_number(value))
+
+
+def _document_mentions_benefit_number(document_text: str, normalized_benefit_number: str) -> bool:
+    """Verifica se o documento menciona o benefício com tolerância a pontuação e separadores."""
+    if not document_text or not normalized_benefit_number:
+        return False
+
+    # Aceita formatos como 1234567890, 123.456.789-0, 123 456 789 0 ou variações com separadores.
+    separator_pattern = r'[\s\.\-\/_;,:\(\)\[\]]*'
+    digit_pattern = separator_pattern.join(re.escape(digit) for digit in normalized_benefit_number)
+    pattern = rf'(?<!\d){digit_pattern}(?!\d)'
+    return re.search(pattern, document_text) is not None
+
+
+def _parse_benefits_spreadsheet(filepath: str) -> list[dict[str, str]]:
+    """Lê a planilha de benefícios e retorna apenas linhas com tese preenchida."""
+    if not load_workbook:
+        raise ImportError('openpyxl não está instalado')
+
+    workbook = load_workbook(filename=filepath, read_only=True, data_only=True)
+    worksheet = workbook.active
+
+    try:
+        header_row = next(worksheet.iter_rows(min_row=1, max_row=1, values_only=True), None)
+        if not header_row:
+            raise ValueError('A planilha de benefícios está vazia.')
+
+        header_map = {
+            _normalize_spreadsheet_header(value): index
+            for index, value in enumerate(header_row)
+        }
+        benefit_idx = header_map.get('numero do beneficio')
+        thesis_idx = header_map.get('teses')
+
+        if benefit_idx is None or thesis_idx is None:
+            raise ValueError(
+                'A planilha deve conter as colunas "Número do Benefício" e "TESES".'
+            )
+
+        rows: list[dict[str, str]] = []
+        for row in worksheet.iter_rows(min_row=2, values_only=True):
+            thesis = ' '.join(str(row[thesis_idx] or '').strip().split()) if thesis_idx < len(row) else ''
+            if not thesis:
+                continue
+
+            benefit_number = _format_benefit_number(row[benefit_idx] if benefit_idx < len(row) else '')
+            normalized_benefit_number = _normalize_benefit_number(benefit_number)
+            if not normalized_benefit_number:
+                continue
+
+            rows.append({
+                'benefit_number': benefit_number,
+                'benefit_number_normalized': normalized_benefit_number,
+                'thesis': thesis,
+            })
+
+        return rows
+    finally:
+        workbook.close()
+
+
+def _build_benefits_spreadsheet_review(
+    spreadsheet_path: str,
+    spreadsheet_filename: str,
+    document_text: str,
+    checked_document_label: str,
+) -> dict:
+    """Gera checagem determinística dos benefícios da planilha contra o documento."""
+    rows = _parse_benefits_spreadsheet(spreadsheet_path)
+
+    items: list[dict[str, object]] = []
+    found_count = 0
+
+    for row in rows:
+        found_in_document = _document_mentions_benefit_number(
+            document_text=document_text,
+            normalized_benefit_number=row['benefit_number_normalized'],
+        )
+        if found_in_document:
+            found_count += 1
+
+        items.append({
+            'benefit_number': row['benefit_number'],
+            'thesis': row['thesis'],
+            'found_in_document': found_in_document,
+        })
+
+    return {
+        'source_filename': spreadsheet_filename,
+        'checked_document_label': checked_document_label,
+        'total_rows_with_theses': len(items),
+        'found_count': found_count,
+        'missing_count': max(len(items) - found_count, 0),
+        'items': items,
+    }
+
+
 def _normalize_finding_field(value: object) -> str:
     """Normaliza campo textual de achado para fingerprint estável."""
     return ' '.join(str(value or '').strip().split()).lower()
@@ -351,7 +483,8 @@ def _build_prior_attention_points(
 
 
 def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_file_path: str,
-                           compared_file_path: str = None) -> dict:
+                           compared_file_path: str = None,
+                           benefits_spreadsheet: dict | None = None) -> dict:
     """Executa o agente revisor e armazena resultado"""
     try:
         execution = FapReviewExecution.query.get(execution_id)
@@ -466,9 +599,46 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_file_p
                         law_firm_id=law_firm_id,
                     )
                 )
+
+            result_payload = result.model_dump(mode='json')
+
+            if benefits_spreadsheet and benefits_spreadsheet.get('path'):
+                target_document_path = compared_file_path if compared_file_path and execution.comparative_analysis else petition_file_path
+                target_document_text = compared_text if compared_file_path and execution.comparative_analysis else petition_text
+                if not target_document_text:
+                    target_document_text = _extract_text_from_document(target_document_path)
+
+                checked_document_label = (
+                    'Documento revisado'
+                    if compared_file_path and execution.comparative_analysis
+                    else (execution.main_document_filename or 'Documento principal')
+                )
+
+                try:
+                    result_payload['benefits_spreadsheet_review'] = _build_benefits_spreadsheet_review(
+                        spreadsheet_path=str(benefits_spreadsheet['path']),
+                        spreadsheet_filename=str(benefits_spreadsheet.get('name') or Path(benefits_spreadsheet['path']).name),
+                        document_text=target_document_text,
+                        checked_document_label=checked_document_label,
+                    )
+                except Exception as spreadsheet_error:
+                    current_app.logger.warning(
+                        'Falha ao processar planilha de beneficios da execucao %s: %s',
+                        execution_id,
+                        spreadsheet_error,
+                    )
+                    result_payload['benefits_spreadsheet_review'] = {
+                        'source_filename': str(benefits_spreadsheet.get('name') or Path(benefits_spreadsheet['path']).name),
+                        'checked_document_label': checked_document_label,
+                        'error': str(spreadsheet_error),
+                        'items': [],
+                        'total_rows_with_theses': 0,
+                        'found_count': 0,
+                        'missing_count': 0,
+                    }
             
             # Armazenar resultado
-            execution.result_json = result.model_dump_json(indent=2)
+            execution.result_json = json.dumps(result_payload, ensure_ascii=False, indent=2)
             execution.status = 'completed'
             execution.completed_at = datetime.utcnow()
             
@@ -646,6 +816,22 @@ def revision():
                             'path': str(aux_filepath)
                         })
                         auxiliary_count += 1
+
+            benefits_spreadsheet = None
+            if 'benefits_spreadsheet' in request.files:
+                spreadsheet_file = request.files['benefits_spreadsheet']
+                if spreadsheet_file and spreadsheet_file.filename:
+                    if not allowed_file(spreadsheet_file.filename, ALLOWED_BENEFITS_SPREADSHEET_EXTENSIONS):
+                        return jsonify({'error': 'A planilha de benefícios deve estar em formato .xlsx.'}), 400
+
+                    spreadsheet_filename = secure_filename(spreadsheet_file.filename)
+                    spreadsheet_filename = timestamp + 'benefits_' + spreadsheet_filename
+                    spreadsheet_filepath = upload_dir / spreadsheet_filename
+                    spreadsheet_file.save(str(spreadsheet_filepath))
+                    benefits_spreadsheet = {
+                        'name': spreadsheet_file.filename,
+                        'path': str(spreadsheet_filepath),
+                    }
             
             # Verificar se há análise comparativa
             compared_document = None
@@ -704,7 +890,8 @@ def revision():
                     execution.id,
                     law_firm_id,
                     petition_file_path,
-                    compared_file_path
+                    compared_file_path,
+                    benefits_spreadsheet=benefits_spreadsheet,
                 )
             
             except Exception as agent_error:
