@@ -10,7 +10,6 @@ Rotas principais:
 
 import os
 import json
-import hashlib
 import asyncio
 from datetime import datetime
 from io import BytesIO
@@ -484,6 +483,14 @@ def revision():
             
             if not allowed_file(main_file.filename, ALLOWED_DOCUMENT_EXTENSIONS):
                 return jsonify({'error': 'Tipo de arquivo não permitido'}), 400
+
+            law_firm_document_identifier = str(
+                request.form.get('law_firm_document_identifier', '')
+            ).strip()
+            if not law_firm_document_identifier:
+                return jsonify({'error': 'Informe o identificador do documento para o escritório.'}), 400
+            if len(law_firm_document_identifier) > 96:
+                return jsonify({'error': 'O identificador do documento deve ter no máximo 96 caracteres.'}), 400
             
             # Salvar arquivo principal
             upload_dir = _create_upload_directory(law_firm_id, 'revisions')
@@ -536,6 +543,7 @@ def revision():
                 status='processing',
                 main_document_path=str(filepath),
                 main_document_filename=main_file.filename,
+                law_firm_document_identifier=law_firm_document_identifier,
                 auxiliary_documents_count=auxiliary_count,
                 auxiliary_documents_json=json.dumps(auxiliary_files),
                 comparative_analysis=comparative_analysis,
@@ -612,10 +620,20 @@ def revision_result(execution_id: int):
             result_data = json.loads(execution.result_json)
         except json.JSONDecodeError:
             result_data = {}
+
+    prior_revision_count = 0
+    if execution.law_firm_document_identifier:
+        prior_revision_count = FapReviewExecution.query.filter(
+            FapReviewExecution.law_firm_id == law_firm_id,
+            FapReviewExecution.execution_type == 'revision',
+            FapReviewExecution.law_firm_document_identifier == execution.law_firm_document_identifier,
+            FapReviewExecution.id != execution.id,
+        ).count()
     
     return render_template('fap_review/revision_result.html',
                           execution=execution,
-                          result_data=result_data)
+                          result_data=result_data,
+                          prior_revision_count=prior_revision_count)
 
 
 @fap_review_bp.route('/revision/<int:execution_id>/document/main', methods=['GET'])

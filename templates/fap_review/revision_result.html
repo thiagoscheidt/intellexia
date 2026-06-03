@@ -556,6 +556,11 @@
                                     {% endif %}
                                 </div>
                             </div>
+                            <div class="col-md-6">
+                                <div class="text-muted small">Identificador do Documento</div>
+                                <div class="fw-semibold" style="word-break: break-all;">{{
+                                    execution.law_firm_document_identifier or '-' }}</div>
+                            </div>
                             <div class="col-md-2">
                                 <div class="text-muted small">Auxiliares</div>
                                 <div class="fw-semibold">{{ execution.auxiliary_documents_count }}</div>
@@ -567,6 +572,10 @@
                             <div class="col-md-2">
                                 <div class="text-muted small">Custo (USD)</div>
                                 <div class="fw-semibold">{{ execution.cost_usd or '-' }}</div>
+                            </div>
+                            <div class="col-md-2">
+                                <div class="text-muted small">Revisões Anteriores</div>
+                                <div class="fw-semibold">{{ prior_revision_count or 0 }}</div>
                             </div>
                         </div>
                     </div>
@@ -1249,7 +1258,7 @@
         }
 
         function updateProgress(state) {
-            const done = Object.values(state).filter(function(v) { return v === 'checked'; }).length;
+            const done = Object.values(state).filter(function (v) { return v === 'checked'; }).length;
             const pct = TOTAL ? Math.round(done / TOTAL * 100) : 0;
             const bar = document.getElementById('findingsProgressBar');
             const txt = document.getElementById('findingsProgressText');

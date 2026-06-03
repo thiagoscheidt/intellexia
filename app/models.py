@@ -2653,6 +2653,7 @@ class FapReviewExecution(db.Model):
     __tablename__ = 'fap_review_executions'
     __table_args__ = (
         db.Index('ix_fap_review_executions_law_firm_status', 'law_firm_id', 'status'),
+        db.Index('ix_fap_review_executions_law_firm_document_identifier', 'law_firm_id', 'law_firm_document_identifier'),
         db.Index('ix_fap_review_executions_user_id', 'user_id'),
         db.Index('ix_fap_review_executions_execution_type', 'execution_type'),
     )
@@ -2667,6 +2668,10 @@ class FapReviewExecution(db.Model):
     # Documentos
     main_document_path = db.Column(db.String(500))
     main_document_filename = db.Column(db.String(255))
+    law_firm_document_identifier = db.Column(
+        db.String(96),
+        comment='Identificador determinístico do documento, escopado por escritório',
+    )
     auxiliary_documents_count = db.Column(db.Integer, default=0)
     auxiliary_documents_json = db.Column(db.Text, comment='JSON array com informações dos documentos auxiliares')
 

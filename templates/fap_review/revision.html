@@ -156,6 +156,20 @@
                             </div>
 
                             <div class="mb-4">
+                                <label for="lawFirmDocumentIdentifier" class="form-label small fw-semibold mb-2">
+                                    <i class="bi bi-hash text-primary me-1"></i>
+                                    Identificador do Documento no Escritório <span class="text-danger">*</span>
+                                </label>
+                                <input type="text" class="form-control" id="lawFirmDocumentIdentifier"
+                                    name="law_firm_document_identifier" maxlength="96" required
+                                    placeholder="Ex.: PET-FAP-CLIENTE-X-2026-001">
+                                <div class="form-text">
+                                    Preencha o identificador usado internamente pelo escritório para reconhecer revisões
+                                    anteriores deste documento.
+                                </div>
+                            </div>
+
+                            <div class="mb-4">
                                 <label class="form-label small fw-semibold mb-2">
                                     <i class="bi bi-file-earmark-pdf text-danger me-1"></i>
                                     Documento Principal <span class="text-danger">*</span>
@@ -361,9 +375,15 @@
 
             const mainFiles = document.getElementById('mainDocument').files;
             const auxiliaryFiles = document.getElementById('auxiliaryDocuments').files;
+            const documentIdentifier = document.getElementById('lawFirmDocumentIdentifier').value.trim();
 
             if (!mainFiles.length) {
                 alert('Por favor, selecione um documento principal');
+                return;
+            }
+
+            if (!documentIdentifier) {
+                alert('Por favor, informe o identificador do documento no escritório');
                 return;
             }
 
