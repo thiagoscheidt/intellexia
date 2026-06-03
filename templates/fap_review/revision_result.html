@@ -374,6 +374,59 @@
         color: var(--bs-secondary-color);
     }
 
+    /* Dismissed card visual state */
+    .finding-card.is-dismissed {
+        opacity: .45;
+        transition: opacity 0.2s ease;
+    }
+
+    .finding-card.is-dismissed .finding-card-header {
+        background: rgba(108, 117, 125, .06) !important;
+        border-bottom-color: rgba(108, 117, 125, .14) !important;
+    }
+
+    .finding-card.is-dismissed .finding-num-badge {
+        background: rgba(108, 117, 125, .14) !important;
+        color: #6c757d !important;
+        border-color: rgba(108, 117, 125, .25) !important;
+    }
+
+    .finding-card.is-dismissed .finding-header-title {
+        text-decoration: line-through;
+        color: var(--bs-secondary-color);
+    }
+
+    /* Dismiss button */
+    .finding-dismiss-btn {
+        background: none;
+        border: 1.5px solid rgba(15, 23, 42, .18);
+        border-radius: 50%;
+        width: 2rem;
+        height: 2rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        color: #adb5bd;
+        font-size: .9rem;
+        transition: all 0.18s ease;
+        flex-shrink: 0;
+        align-self: center;
+        padding: 0;
+    }
+
+    .finding-dismiss-btn:hover {
+        border-color: #dc3545;
+        color: #dc3545;
+        background: rgba(220, 53, 69, .08);
+    }
+
+    .finding-dismiss-btn.is-dismissed {
+        background: rgba(220, 53, 69, .15);
+        border-color: #dc3545;
+        color: #dc3545;
+    }
+
     /* Progress bar container */
     .findings-progress-bar {
         height: 6px;
@@ -758,6 +811,9 @@
                                         <i class="bi bi-eye me-1"></i> Ver Página
                                     </button>
                                     {% endif %}
+                                    <button type="button" class="finding-dismiss-btn" title="Não pertinente">
+                                        <i class="bi bi-x"></i>
+                                    </button>
                                     <button type="button" class="finding-check-btn" title="Marcar como revisado">
                                         <i class="bi bi-check"></i>
                                     </button>
@@ -1193,7 +1249,7 @@
         }
 
         function updateProgress(state) {
-            const done = Object.values(state).filter(Boolean).length;
+            const done = Object.values(state).filter(function(v) { return v === 'checked'; }).length;
             const pct = TOTAL ? Math.round(done / TOTAL * 100) : 0;
             const bar = document.getElementById('findingsProgressBar');
             const txt = document.getElementById('findingsProgressText');
@@ -1204,28 +1260,33 @@
         function applyState(state) {
             document.querySelectorAll('.finding-card').forEach(function (card) {
                 const idx = card.dataset.findingIndex;
-                const btn = card.querySelector('.finding-check-btn');
-                const numBadge = card.querySelector('.finding-num-badge');
+                const checkBtn = card.querySelector('.finding-check-btn');
+                const dismissBtn = card.querySelector('.finding-dismiss-btn');
                 const navPill = document.getElementById('nav-pill-' + idx);
+                const val = state[idx];
 
-                if (state[idx]) {
+                // Reset
+                card.classList.remove('is-checked', 'is-dismissed');
+                checkBtn.classList.remove('is-checked');
+                checkBtn.title = 'Marcar como revisado';
+                checkBtn.innerHTML = '<i class="bi bi-check"></i>';
+                dismissBtn.classList.remove('is-dismissed');
+                dismissBtn.title = 'Não pertinente';
+                dismissBtn.innerHTML = '<i class="bi bi-x"></i>';
+                if (navPill) { navPill.style.opacity = ''; navPill.textContent = idx; }
+
+                if (val === 'checked') {
                     card.classList.add('is-checked');
-                    btn.classList.add('is-checked');
-                    btn.title = 'Desmarcar';
-                    btn.innerHTML = '<i class="bi bi-check-lg"></i>';
-                    if (navPill) {
-                        navPill.style.opacity = '.4';
-                        navPill.innerHTML = '✓';
-                    }
-                } else {
-                    card.classList.remove('is-checked');
-                    btn.classList.remove('is-checked');
-                    btn.title = 'Marcar como revisado';
-                    btn.innerHTML = '<i class="bi bi-check"></i>';
-                    if (navPill) {
-                        navPill.style.opacity = '';
-                        navPill.textContent = idx;
-                    }
+                    checkBtn.classList.add('is-checked');
+                    checkBtn.title = 'Desmarcar';
+                    checkBtn.innerHTML = '<i class="bi bi-check-lg"></i>';
+                    if (navPill) { navPill.style.opacity = '.4'; navPill.innerHTML = '✓'; }
+                } else if (val === 'dismissed') {
+                    card.classList.add('is-dismissed');
+                    dismissBtn.classList.add('is-dismissed');
+                    dismissBtn.title = 'Desfazer';
+                    dismissBtn.innerHTML = '<i class="bi bi-x-lg"></i>';
+                    if (navPill) { navPill.style.opacity = '.3'; navPill.innerHTML = '–'; }
                 }
             });
             updateProgress(state);
@@ -1240,7 +1301,18 @@
                     var card = this.closest('.finding-card');
                     var idx = card.dataset.findingIndex;
                     var state = load();
-                    state[idx] = !state[idx];
+                    state[idx] = state[idx] === 'checked' ? null : 'checked';
+                    save(state);
+                    applyState(state);
+                });
+            });
+
+            document.querySelectorAll('.finding-dismiss-btn').forEach(function (btn) {
+                btn.addEventListener('click', function () {
+                    var card = this.closest('.finding-card');
+                    var idx = card.dataset.findingIndex;
+                    var state = load();
+                    state[idx] = state[idx] === 'dismissed' ? null : 'dismissed';
                     save(state);
                     applyState(state);
                 });
