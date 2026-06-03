@@ -388,10 +388,33 @@
         background: #198754;
         transition: width 0.3s ease;
     }
+
+    /* ── Sticky Quick Nav ──────────────────────────────────────────── */
+    #stickyQuickNav {
+        position: fixed;
+        right: 0;
+        z-index: 1025;
+        padding: 0;
+        box-shadow: 0 2px 12px rgba(15, 23, 42, .10);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity .2s ease;
+    }
+
+    #stickyQuickNav.visible {
+        opacity: 1;
+        pointer-events: auto;
+    }
+
+    #stickyQuickNav .mb-3 {
+        margin-bottom: 0 !important;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
+<div id="stickyQuickNav"></div>
+
 <div class="fap-revision-result-page" data-execution-id="{{ execution.id }}">
     {% call page_hero(title=page_title, subtitle='Visualize os achados e o diagnóstico gerado pelo agente revisor',
     icon='bi bi-file-earmark-check') %}
@@ -651,7 +674,7 @@
                         </div>
 
                         <!-- Navegação Rápida com círculos numerados por cor -->
-                        <div class="mb-3 p-3 rounded"
+                        <div id="quickNavBlock" class="mb-3 p-3 rounded"
                             style="background: var(--bs-secondary-bg); border: 1px solid rgba(15,23,42,.07);">
                             <div class="small fw-semibold text-muted mb-2">
                                 <i class="bi bi-list-ol me-1"></i> Navegação Rápida
@@ -1279,4 +1302,33 @@
     }, 3000);
 </script>
 {% endif %}
+
+<script>
+    (function () {
+        const block = document.getElementById('quickNavBlock');
+        const sticky = document.getElementById('stickyQuickNav');
+        if (!block || !sticky) return;
+
+        // Clone the original block so sticky looks identical
+        const clone = block.cloneNode(true);
+        clone.removeAttribute('id');
+        sticky.appendChild(clone);
+
+        sticky.style.top = '0px';
+        sticky.style.left = '69px';
+        sticky.style.right = '0px';
+
+        const observer = new IntersectionObserver(function (entries) {
+            const entry = entries[0];
+            // Only show sticky when the block has been scrolled ABOVE the viewport (top < 0)
+            if (!entry.isIntersecting) {
+                sticky.classList.toggle('visible', entry.boundingClientRect.top < 0);
+            } else {
+                sticky.classList.remove('visible');
+            }
+        }, { threshold: 0 });
+
+        observer.observe(block);
+    })();
+</script>
 {% endblock %}
