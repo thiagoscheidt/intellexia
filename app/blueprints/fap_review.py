@@ -862,17 +862,13 @@ def index():
         for petition in petitions
     ]
 
-    setting = _get_fap_setting(law_firm_id)
-
     return render_template('fap_review/index.html',
                           total_petitions=total_petitions,
                           ready_petitions=ready_petitions,
                           in_review_petitions=in_review_petitions,
                           awaiting_adjustments_petitions=awaiting_adjustments_petitions,
                           total_revisions=total_revisions,
-                          petition_rows=petition_rows,
-                          petition_status_labels=PETITION_WORKFLOW_STATUSES,
-                          setting=setting)
+                          petition_rows=petition_rows)
 
 
 @fap_review_bp.route('/revision', methods=['GET', 'POST'])

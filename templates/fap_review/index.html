@@ -53,7 +53,7 @@
         letter-spacing: .04em; color: #6c7a8d; margin-bottom: .1rem;
     }
     .stat-card .sc-label-urgent { color: #dc3545; }
-    .stat-card .sc-value { font-size: 1.55rem; font-weight: 800; line-height: 1; color: var(--bs-emphasis-color); }
+    .stat-card .sc-value { font-size: 1.8rem; font-weight: 800; line-height: 1; color: var(--bs-emphasis-color); }
     .stat-card .sc-sub-text { font-size: .72rem; color: #9aa5b4; margin-top: .2rem; }
 
     /* ── Petition list ───────────────────────────────────── */
@@ -135,7 +135,7 @@
     }
     .office-identifier-chip span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .office-identifier-chip .wrike-inline-mark { width: 1.2rem; height: auto; flex-shrink: 0; }
-    .office-identifier-chip.is-empty { background: rgba(108,117,125,.10); border-color: rgba(108,117,125,.18); color: #6c7d75; }
+    .office-identifier-chip.is-empty { background: rgba(108,117,125,.10); border-color: rgba(108,117,125,.18); color: #6c757d; }
 </style>
 {% endblock %}
 
@@ -215,7 +215,10 @@
                     <i class="bi bi-check-circle"></i> Prontas ({{ ready_petitions }})
                 </button>
                 {% endif %}
-                <button class="filter-pill" data-filter="others">Outras</button>
+                {% set others_count = (petition_rows|length) - awaiting_adjustments_petitions - in_review_petitions - ready_petitions %}
+                {% if others_count > 0 %}
+                <button class="filter-pill" data-filter="others">Outras ({{ others_count }})</button>
+                {% endif %}
             </div>
 
             <!-- Lista de petições -->
@@ -244,7 +247,7 @@
                     {% set row_border_width = '4px' %}
                 {% else %}
                     {% set row_bg = 'rgba(108,117,125,.02)' %}
-                    {% set row_border_color = '#dee2e6' %}
+                    {% set row_border_color = '#6c757d' %}
                     {% set row_border_width = '2px' %}
                 {% endif %}
 
