@@ -124,18 +124,25 @@
     .filter-pill.pill-success { border-color: #198754; color: #198754; }
     .filter-pill.pill-success.active { background: #198754; border-color: #198754; color: #fff; }
 
-    /* ── Wrike chip ──────────────────────────────────────── */
-    .office-identifier-chip {
-        display: inline-flex; align-items: center; gap: .35rem;
-        max-width: 190px; padding: .28rem .48rem; border-radius: .55rem;
-        background: var(--identifier-chip-bg, rgba(13,110,253,.10));
-        border: 1px solid var(--identifier-chip-border, rgba(13,110,253,.18));
-        color: var(--identifier-chip-text, #0a58ca);
-        font-size: .74rem; font-weight: 700; line-height: 1.25;
+    /* ── Wrike ID chip ───────────────────────────────────── */
+    .wrike-id-chip {
+        display: inline-flex; align-items: center; gap: .5rem;
+        padding: .38rem .6rem; border-radius: .65rem;
+        background: #1e2d40; max-width: 185px;
     }
-    .office-identifier-chip span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    .office-identifier-chip .wrike-inline-mark { width: 1.2rem; height: auto; flex-shrink: 0; }
-    .office-identifier-chip.is-empty { background: rgba(108,117,125,.10); border-color: rgba(108,117,125,.18); color: #6c757d; }
+    .wrike-id-chip .wrike-logo-img { width: 1.4rem; height: auto; flex-shrink: 0; }
+    .wrike-id-body { display: flex; flex-direction: column; min-width: 0; }
+    .wrike-id-label {
+        font-size: .57rem; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .07em; color: rgba(255,255,255,.5); line-height: 1;
+    }
+    .wrike-id-value {
+        font-size: .83rem; font-weight: 700; color: #fff;
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.3;
+    }
+    .wrike-id-chip.is-empty { background: rgba(108,117,125,.12); }
+    .wrike-id-chip.is-empty .wrike-id-label { color: #9aa5b4; }
+    .wrike-id-chip.is-empty .wrike-id-value { color: #6c757d; }
 </style>
 {% endblock %}
 
@@ -258,11 +265,13 @@
 
                     <!-- Wrike ID -->
                     <div class="pr-wrike">
-                        <div class="office-identifier-chip{% if not petition.office_document_identifier %} is-empty{% endif %}"
-                             {% if petition.office_document_identifier %}data-identifier="{{ petition.office_document_identifier }}"{% endif %}
-                             title="{{ petition.office_document_identifier or '-' }}">
-                            <img src="{{ url_for('static', filename='assets/wrike-logo-light.svg') }}" alt="Wrike" class="wrike-inline-mark">
-                            <span>{{ petition.office_document_identifier or '-' }}</span>
+                        <div class="wrike-id-chip{% if not petition.office_document_identifier %} is-empty{% endif %}"
+                             title="{{ petition.office_document_identifier or 'Sem Id Wrike' }}">
+                            <img src="{{ url_for('static', filename='assets/wrike-logo-light.svg') }}" alt="Wrike" class="wrike-logo-img">
+                            <div class="wrike-id-body">
+                                <span class="wrike-id-label">Wrike ID</span>
+                                <span class="wrike-id-value">{{ petition.office_document_identifier or '—' }}</span>
+                            </div>
                         </div>
                     </div>
 
@@ -319,37 +328,6 @@
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function () {
-
-        // ── Chip de Wrike: paleta de cores por hash ──────────────
-        const chips = document.querySelectorAll('.office-identifier-chip[data-identifier]');
-        const chipPalette = [
-            { bg: '#dbeafe', border: '#93c5fd', text: '#1d4ed8' },
-            { bg: '#dcfce7', border: '#86efac', text: '#15803d' },
-            { bg: '#fef3c7', border: '#fcd34d', text: '#b45309' },
-            { bg: '#fee2e2', border: '#fca5a5', text: '#b91c1c' },
-            { bg: '#ede9fe', border: '#c4b5fd', text: '#6d28d9' },
-            { bg: '#cffafe', border: '#67e8f9', text: '#0f766e' },
-            { bg: '#fce7f3', border: '#f9a8d4', text: '#be185d' },
-            { bg: '#ffedd5', border: '#fdba74', text: '#c2410c' },
-            { bg: '#e0f2fe', border: '#7dd3fc', text: '#0369a1' },
-            { bg: '#ecfccb', border: '#bef264', text: '#4d7c0f' }
-        ];
-        function hashIdentifier(value) {
-            let hash = 0;
-            for (let i = 0; i < value.length; i++) {
-                hash = ((hash << 5) - hash) + value.charCodeAt(i);
-                hash |= 0;
-            }
-            return Math.abs(hash);
-        }
-        chips.forEach(function (chip) {
-            const id = chip.dataset.identifier || '';
-            if (!id) return;
-            const entry = chipPalette[hashIdentifier(id) % chipPalette.length];
-            chip.style.setProperty('--identifier-chip-bg', entry.bg);
-            chip.style.setProperty('--identifier-chip-border', entry.border);
-            chip.style.setProperty('--identifier-chip-text', entry.text);
-        });
 
         // ── Busca + filtro por status ─────────────────────────────
         const searchInput = document.getElementById('petitionSearch');
