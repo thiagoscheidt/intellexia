@@ -8,55 +8,30 @@
 
 {% block extra_css %}
 <style>
-    .fap-review-page {
-        animation: fadeIn 0.3s ease-in;
-    }
+    .fap-review-page { animation: fadeIn .3s ease-in; }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-    @keyframes fadeIn {
-        from {
-            opacity: 0;
-        }
-
-        to {
-            opacity: 1;
-        }
-    }
-
+    /* ── Stat cards ─────────────────────────────────────── */
     .stat-cards {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
         gap: .75rem;
         margin-bottom: 1.5rem;
     }
-
-    @media (max-width: 1200px) {
-        .stat-cards {
-            grid-template-columns: repeat(2, 1fr);
-        }
-    }
-
-    @media (max-width: 600px) {
-        .stat-cards {
-            grid-template-columns: 1fr;
-        }
-    }
+    @media (max-width: 1200px) { .stat-cards { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 600px)  { .stat-cards { grid-template-columns: 1fr; } }
 
     .stat-card {
         position: relative;
         overflow: hidden;
         background: var(--bs-body-bg);
-        border: 1px solid rgba(15, 23, 42, .07);
+        border: 1px solid rgba(15,23,42,.07);
         border-radius: .85rem;
-        box-shadow: 0 4px 16px rgba(15, 23, 42, .06);
+        box-shadow: 0 4px 16px rgba(15,23,42,.06);
         padding: .85rem 1rem .85rem 1.2rem;
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        transition: transform .2s ease, box-shadow .2s ease;
     }
-
-    .stat-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 6px 20px rgba(15, 23, 42, .10);
-    }
-
+    .stat-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(15,23,42,.10); }
     .stat-card::before {
         content: "";
         position: absolute;
@@ -65,107 +40,102 @@
         background: var(--sc-color, #0d6efd);
         border-radius: 4px 0 0 4px;
     }
-
     .stat-card .sc-icon {
-        width: 2.1rem;
-        height: 2.1rem;
-        background: var(--sc-soft, rgba(13, 110, 253, .10));
+        width: 2.1rem; height: 2.1rem;
+        background: var(--sc-soft, rgba(13,110,253,.10));
         color: var(--sc-color, #0d6efd);
         border-radius: .55rem;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: .9rem;
-        flex-shrink: 0;
+        display: inline-flex; align-items: center; justify-content: center;
+        font-size: .9rem; flex-shrink: 0;
     }
-
     .stat-card .sc-label {
-        font-size: .68rem;
-        font-weight: 700;
-        text-transform: uppercase;
-        letter-spacing: .04em;
-        color: #6c7a8d;
+        font-size: .68rem; font-weight: 700; text-transform: uppercase;
+        letter-spacing: .04em; color: #6c7a8d; margin-bottom: .1rem;
+    }
+    .stat-card .sc-label-urgent { color: #dc3545; }
+    .stat-card .sc-value { font-size: 1.55rem; font-weight: 800; line-height: 1; color: var(--bs-emphasis-color); }
+    .stat-card .sc-sub-text { font-size: .72rem; color: #9aa5b4; margin-top: .2rem; }
+
+    /* ── Petition list ───────────────────────────────────── */
+    .petition-list { display: flex; flex-direction: column; }
+
+    .petition-row {
+        display: grid;
+        grid-template-columns: 200px 1fr 160px auto;
+        align-items: center;
+        padding: .75rem 1rem;
+        border-bottom: 1px solid rgba(15,23,42,.06);
+        transition: filter .15s ease;
+    }
+    .petition-row:hover { filter: brightness(.97); }
+    .petition-row:last-child { border-bottom: none; }
+
+    .pr-wrike { padding-right: .75rem; }
+
+    .pr-title { padding: 0 .75rem; min-width: 0; }
+    .pr-title-text {
+        font-size: .9rem; font-weight: 600;
+        color: var(--bs-emphasis-color);
+        white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
         margin-bottom: .1rem;
     }
+    .pr-title-meta { font-size: .76rem; color: #9aa5b4; }
 
-    .stat-card .sc-value {
-        font-size: 1.55rem;
-        font-weight: 800;
-        line-height: 1;
-        color: var(--bs-emphasis-color);
+    .pr-status { padding: 0 .75rem; }
+
+    .pr-actions { display: flex; gap: .4rem; justify-content: flex-end; white-space: nowrap; }
+
+    @media (max-width: 900px) {
+        .petition-row { grid-template-columns: 1fr auto; row-gap: .25rem; }
+        .pr-wrike { grid-column: 1; }
+        .pr-title { grid-column: 1; padding-left: 0; }
+        .pr-status { display: none; }
+        .pr-actions { grid-row: 1 / 3; grid-column: 2; flex-direction: column; }
     }
 
-    .sc-sub {
-        display: flex;
-        gap: .6rem;
-        margin-top: .3rem;
-        flex-wrap: wrap;
+    /* ── Search & filter ─────────────────────────────────── */
+    .petition-search-bar {
+        display: flex; align-items: center; gap: .4rem;
+        background: var(--bs-secondary-bg);
+        border: 1px solid var(--bs-border-color);
+        border-radius: .6rem; padding: .35rem .7rem;
+        min-width: 240px; flex: 1; max-width: 340px;
     }
-
-    .sc-sub-item {
-        display: inline-flex;
-        flex-direction: column;
+    .petition-search-bar input {
+        border: none; background: transparent; font-size: .85rem;
+        width: 100%; color: var(--bs-body-color);
     }
+    .petition-search-bar input:focus { outline: none; }
+    .petition-search-bar input::placeholder { color: #9aa5b4; }
 
-    .sc-sub-label {
-        font-size: .6rem;
-        color: #9aa5b4;
-        text-transform: uppercase;
-        letter-spacing: .03em;
+    .filter-pill {
+        display: inline-flex; align-items: center; gap: .3rem;
+        padding: .3rem .85rem; border-radius: 999px; font-size: .78rem; font-weight: 600;
+        cursor: pointer; border: 1px solid var(--bs-border-color);
+        background: var(--bs-body-bg); color: var(--bs-secondary-color);
+        transition: all .15s ease; user-select: none;
     }
+    .filter-pill:hover { border-color: var(--bs-primary); color: var(--bs-primary); }
+    .filter-pill.active { background: var(--bs-primary); border-color: var(--bs-primary); color: #fff; }
+    .filter-pill.pill-danger  { border-color: #dc3545; color: #dc3545; }
+    .filter-pill.pill-danger.active  { background: #dc3545; border-color: #dc3545; color: #fff; }
+    .filter-pill.pill-warning { border-color: #9a6700; color: #9a6700; }
+    .filter-pill.pill-warning.active { background: #ffc107; border-color: #ffc107; color: #000; }
+    .filter-pill.pill-success { border-color: #198754; color: #198754; }
+    .filter-pill.pill-success.active { background: #198754; border-color: #198754; color: #fff; }
 
-    .sc-sub-value {
-        font-size: .8rem;
-        font-weight: 700;
-        color: var(--sc-color, #0d6efd);
-    }
-
-    .agent-config-row {
-        transition: background-color 0.2s ease;
-    }
-
-    .agent-config-row:hover {
-        background-color: var(--bs-secondary-bg);
-    }
-
+    /* ── Wrike chip ──────────────────────────────────────── */
     .office-identifier-chip {
-        display: inline-flex;
-        align-items: center;
-        gap: .35rem;
-        max-width: 180px;
-        padding: .28rem .48rem;
-        border-radius: .55rem;
-        background: var(--identifier-chip-bg, rgba(13, 110, 253, .10));
-        border: 1px solid var(--identifier-chip-border, rgba(13, 110, 253, .18));
+        display: inline-flex; align-items: center; gap: .35rem;
+        max-width: 190px; padding: .28rem .48rem; border-radius: .55rem;
+        background: var(--identifier-chip-bg, rgba(13,110,253,.10));
+        border: 1px solid var(--identifier-chip-border, rgba(13,110,253,.18));
         color: var(--identifier-chip-text, #0a58ca);
-        font-size: .74rem;
-        font-weight: 700;
-        line-height: 1.25;
+        font-size: .74rem; font-weight: 700; line-height: 1.25;
     }
-
-    .office-identifier-chip i {
-        flex-shrink: 0;
-        font-size: .7rem;
-    }
-
-    .office-identifier-chip .wrike-inline-mark {
-        width: 1.2rem;
-        height: auto;
-        flex-shrink: 0;
-    }
-
-    .office-identifier-chip span {
-        display: block;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-    }
-
-    .office-identifier-chip.is-empty {
-        background: rgba(108, 117, 125, .10);
-        border-color: rgba(108, 117, 125, .18);
-        color: #6c757d;
-    }
+    .office-identifier-chip span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .office-identifier-chip .wrike-inline-mark { width: 1.2rem; height: auto; flex-shrink: 0; }
+    .office-identifier-chip.is-empty { background: rgba(108,117,125,.10); border-color: rgba(108,117,125,.18); color: #6c7d75; }
 </style>
 {% endblock %}
 
@@ -173,307 +143,171 @@
 <div class="fap-review-page">
     {% call page_hero(title=page_title, subtitle='Revisão e análise de petições iniciais FAP com agentes de IA',
     icon='bi bi-file-earmark-check') %}
-    <nav aria-label="breadcrumb">
-        <ol class="breadcrumb mb-0 bg-transparent small">
-            <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i>
-                    Home</a></li>
-            <li class="breadcrumb-item active"><i class="bi bi-file-earmark-check"></i> Revisor de Petições</li>
-        </ol>
-    </nav>
+    <div class="d-flex align-items-center gap-3 flex-wrap">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb mb-0 bg-transparent small">
+                <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li>
+                <li class="breadcrumb-item active"><i class="bi bi-file-earmark-check"></i> Revisor de Petições</li>
+            </ol>
+        </nav>
+        <a href="{{ url_for('fap_review.revision') }}" class="btn btn-primary btn-sm">
+            <i class="bi bi-folder-plus me-1"></i> Nova Petição / Revisão
+        </a>
+    </div>
     {% endcall %}
 
     <div class="page-content">
-        <!-- Estatísticas em Grid -->
+        <!-- Estatísticas -->
         <div class="stat-cards">
-            <!-- Total de Petições -->
-            <div class="stat-card" style="--sc-color: #0d6efd; --sc-soft: rgba(13, 110, 253, .10);">
+            <div class="stat-card" style="--sc-color: #0d6efd; --sc-soft: rgba(13,110,253,.10);">
                 <div class="sc-icon"><i class="bi bi-bar-chart"></i></div>
-                <div class="sc-label">Total</div>
+                <div class="sc-label">Total de petições</div>
                 <div class="sc-value">{{ total_petitions }}</div>
-                <div class="sc-sub">
-                    <div class="sc-sub-item">
-                        <span class="sc-sub-label">Petições</span>
-                    </div>
-                    <div class="sc-sub-item">
-                        <span class="sc-sub-label">Revisões</span>
-                        <span class="sc-sub-value">{{ total_revisions }}</span>
-                    </div>
-                </div>
+                <div class="sc-sub-text">{{ total_revisions }} revisões realizadas</div>
             </div>
-
-            <!-- Prontas -->
-            <div class="stat-card" style="--sc-color: #198754; --sc-soft: rgba(25, 135, 84, .10);">
-                <div class="sc-icon"><i class="bi bi-check-circle"></i></div>
-                <div class="sc-label">Prontas</div>
-                <div class="sc-value">{{ ready_petitions }}</div>
-                <div class="sc-sub">
-                    <div class="sc-sub-item">
-                        <span class="sc-sub-label">Para seguir</span>
-                        <span class="sc-sub-value" style="--sc-color: #198754;">{{ (ready_petitions /
-                            total_petitions * 100)|round if total_petitions else 0 }}%</span>
-                    </div>
-                </div>
+            <div class="stat-card" style="--sc-color: #dc3545; --sc-soft: rgba(220,53,69,.10);">
+                <div class="sc-icon"><i class="bi bi-exclamation-circle"></i></div>
+                <div class="sc-label sc-label-urgent">⚠ Aguardando ajustes</div>
+                <div class="sc-value" style="color: #dc3545;">{{ awaiting_adjustments_petitions }}</div>
+                <div class="sc-sub-text" style="color: rgba(220,53,69,.7);">Requerem atenção agora</div>
             </div>
-
-            <!-- Em Revisão -->
-            <div class="stat-card" style="--sc-color: #ffc107; --sc-soft: rgba(255, 193, 7, .10);">
+            <div class="stat-card" style="--sc-color: #ffc107; --sc-soft: rgba(255,193,7,.10);">
                 <div class="sc-icon"><i class="bi bi-hourglass-split"></i></div>
                 <div class="sc-label">Em revisão</div>
                 <div class="sc-value">{{ in_review_petitions }}</div>
-                <div class="sc-sub">
-                    <div class="sc-sub-item">
-                        <span class="sc-sub-label">Ativas</span>
-                    </div>
-                </div>
+                <div class="sc-sub-text">Processando</div>
             </div>
-
-            <!-- Ajustes -->
-            <div class="stat-card" style="--sc-color: #dc3545; --sc-soft: rgba(220, 53, 69, .10);">
-                <div class="sc-icon"><i class="bi bi-exclamation-circle"></i></div>
-                <div class="sc-label">Ajustes</div>
-                <div class="sc-value">{{ awaiting_adjustments_petitions }}</div>
-                <div class="sc-sub">
-                    <div class="sc-sub-item">
-                        <span class="sc-sub-label">Revisar</span>
-                    </div>
-                </div>
+            <div class="stat-card" style="--sc-color: #198754; --sc-soft: rgba(25,135,84,.10);">
+                <div class="sc-icon"><i class="bi bi-check-circle"></i></div>
+                <div class="sc-label">Prontas para seguir</div>
+                <div class="sc-value" style="color: #198754;">{{ ready_petitions }}</div>
+                <div class="sc-sub-text">{{ (ready_petitions / total_petitions * 100)|round if total_petitions else 0 }}% do total</div>
             </div>
-        </div>
-
-        <!-- Botões de Ação -->
-        <div class="d-flex flex-wrap gap-2 mb-4">
-            <a href="{{ url_for('fap_review.revision') }}" class="btn btn-primary">
-                <i class="bi bi-folder-plus me-1"></i> Nova Petição / Revisão
-            </a>
-            <a href="{{ url_for('fap_review.settings') }}" class="btn btn-outline-secondary">
-                <i class="bi bi-sliders me-1"></i> Configurações
-            </a>
         </div>
 
         <!-- Petições -->
         <div class="card mb-4">
-            <div class="card-header border-0 d-flex align-items-center justify-content-between">
+            <div class="card-header border-0 d-flex align-items-center justify-content-between gap-3 flex-wrap">
                 <h5 class="card-title mb-0"><i class="bi bi-collection me-2"></i> Petições em Acompanhamento</h5>
+                <div class="petition-search-bar">
+                    <i class="bi bi-search text-muted" style="font-size: .85rem; flex-shrink:0;"></i>
+                    <input type="text" id="petitionSearch" placeholder="Buscar petição ou Id Wrike..." autocomplete="off">
+                </div>
             </div>
-            <div class="card-body p-0">
-                {% if petition_rows %}
-                <div class="table-responsive">
-                    <table class="table table-hover mb-0">
-                        <thead class="table-light">
-                            <tr>
-                                <th class="ps-3" style="width: 60px;">ID</th>
-                                <th style="width: 190px; min-width: 190px;">Id Wrike</th>
-                                <th>Petição</th>
-                                <th style="width: 90px;">Revisões</th>
-                                <th>Status da Petição</th>
-                                <th>Última Revisão</th>
-                                <th style="width: 140px;">Atualizado</th>
-                                <th class="pe-3" style="width: 110px;"></th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {% for row in petition_rows %}
-                            {% set petition = row.petition %}
-                            {% set latest_revision = row.latest_revision %}
-                            {% set status_badge = row.status_badge %}
-                            <tr class="agent-config-row">
-                                <td class="ps-3"><code>#{{ petition.id }}</code></td>
-                                <td>
-                                    <div class="office-identifier-chip{% if not petition.office_document_identifier %} is-empty{% endif %}"
-                                        {% if petition.office_document_identifier
-                                        %}data-identifier="{{ petition.office_document_identifier }}" {% endif %}
-                                        title="{{ petition.office_document_identifier or '-' }}">
-                                        <img src="{{ url_for('static', filename='assets/wrike-logo-light.svg') }}"
-                                            alt="Wrike" class="wrike-inline-mark">
-                                        <span>{{ petition.office_document_identifier or '-' }}</span>
-                                    </div>
-                                </td>
-                                <td>
-                                    <div class="fw-semibold">{{ petition.title }}</div>
-                                </td>
-                                <td>
-                                    <span
-                                        class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">
-                                        {{ petition.revision_count or 0 }}
-                                    </span>
-                                </td>
-                                <td>
-                                    <span
-                                        class="badge rounded-pill bg-{{ status_badge.class }}-subtle text-{{ status_badge.class }}-emphasis border border-{{ status_badge.class }}-subtle">
-                                        <i class="{{ status_badge.icon }} me-1"></i> {{ status_badge.label }}
-                                    </span>
-                                </td>
-                                <td>
-                                    {% if latest_revision %}
-                                    {% if latest_revision.status == 'completed' %}
-                                    <span
-                                        class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle">
-                                        <i class="bi bi-check-circle me-1"></i> Concluída
-                                    </span>
-                                    {% elif latest_revision.status == 'processing' %}
-                                    <span
-                                        class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle">
-                                        <i class="bi bi-hourglass-split me-1"></i> Processando
-                                    </span>
-                                    {% elif latest_revision.status == 'failed' %}
-                                    <span
-                                        class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle">
-                                        <i class="bi bi-exclamation-circle me-1"></i> Erro
-                                    </span>
-                                    {% else %}
-                                    <span
-                                        class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">
-                                        {{ latest_revision.status|capitalize }}
-                                    </span>
-                                    {% endif %}
-                                    <div class="small text-muted mt-1">R{{ latest_revision.revision_number or '?' }}
-                                    </div>
-                                    {% else %}
-                                    <span class="text-muted small">Sem revisão</span>
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <small>{{ (petition.last_reviewed_at or petition.updated_at or
-                                        petition.created_at).strftime('%d/%m/%Y %H:%M') }}</small>
-                                </td>
-                                <td class="pe-3">
-                                    <a href="{{ url_for('fap_review.petition_detail', petition_id=petition.id) }}"
-                                        class="btn btn-sm btn-outline-primary" title="Visualizar resultado">
-                                        <i class="bi bi-eye"></i>
-                                    </a>
-                                    <a href="{{ url_for('fap_review.revision', petition_id=petition.id) }}"
-                                        class="btn btn-sm btn-outline-secondary" title="Nova revisão">
-                                        <i class="bi bi-plus-lg"></i>
-                                    </a>
-                                </td>
-                            </tr>
-                            {% endfor %}
-                        </tbody>
-                    </table>
-                </div>
-                {% else %}
-                <div class="text-center py-5">
-                    <i class="bi bi-inbox text-muted" style="font-size: 2rem;"></i>
-                    <p class="text-muted mt-2 mb-0">Nenhuma petição registrada ainda</p>
-                </div>
+
+            <!-- Filtros por status -->
+            <div class="px-3 py-2 d-flex flex-wrap gap-2 align-items-center" style="background: var(--bs-secondary-bg); border-top: 1px solid rgba(15,23,42,.06); border-bottom: 1px solid rgba(15,23,42,.06);">
+                <button class="filter-pill active" data-filter="all">
+                    Todos ({{ total_petitions }})
+                </button>
+                {% if awaiting_adjustments_petitions %}
+                <button class="filter-pill pill-danger" data-filter="awaiting_adjustments">
+                    <i class="bi bi-exclamation-circle"></i> Ajustes ({{ awaiting_adjustments_petitions }})
+                </button>
                 {% endif %}
+                {% if in_review_petitions %}
+                <button class="filter-pill pill-warning" data-filter="in_review">
+                    <i class="bi bi-hourglass-split"></i> Em revisão ({{ in_review_petitions }})
+                </button>
+                {% endif %}
+                {% if ready_petitions %}
+                <button class="filter-pill pill-success" data-filter="ready_for_filing">
+                    <i class="bi bi-check-circle"></i> Prontas ({{ ready_petitions }})
+                </button>
+                {% endif %}
+                <button class="filter-pill" data-filter="others">Outras</button>
             </div>
-        </div>
 
-        <!-- Configuração dos Agentes -->
-        <div class="row g-3 mb-4">
-            <div class="col-lg-6">
-                <div class="card h-100">
-                    <div class="card-header border-0">
-                        <h5 class="card-title mb-0"><i class="bi bi-gear-wide-connected me-2"></i> Agente Revisor</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="agent-config-row p-2 rounded">
-                            <dl class="row mb-0">
-                                <dt class="col-6"><small class="text-muted">Status</small></dt>
-                                <dd class="col-6 text-end">
-                                    {% if setting.reviewer_enabled %}
-                                    <span
-                                        class="badge bg-success-subtle text-success-emphasis border border-success-subtle rounded-pill">
-                                        <i class="bi bi-check-circle me-1"></i> Ativo
-                                    </span>
-                                    {% else %}
-                                    <span
-                                        class="badge bg-danger-subtle text-danger-emphasis border border-danger-subtle rounded-pill">
-                                        <i class="bi bi-x-circle me-1"></i> Inativo
-                                    </span>
-                                    {% endif %}
-                                </dd>
-                                <dt class="col-6"><small class="text-muted">Modelo</small></dt>
-                                <dd class="col-6 text-end"><code>{{ setting.reviewer_model }}</code></dd>
-                                <dt class="col-6"><small class="text-muted">Temperatura</small></dt>
-                                <dd class="col-6 text-end">
-                                    <span
-                                        class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">
-                                        {{ setting.reviewer_temperature }}
-                                    </span>
-                                </dd>
-                            </dl>
+            <!-- Lista de petições -->
+            {% if petition_rows %}
+            <div class="petition-list" id="petitionList">
+                {% for row in petition_rows %}
+                {% set petition = row.petition %}
+                {% set latest_revision = row.latest_revision %}
+                {% set status_badge = row.status_badge %}
+
+                {% if petition.workflow_status == 'awaiting_adjustments' %}
+                    {% set row_bg = 'rgba(220,53,69,.04)' %}
+                    {% set row_border_color = '#dc3545' %}
+                    {% set row_border_width = '4px' %}
+                {% elif petition.workflow_status in ['in_review', 'new'] %}
+                    {% set row_bg = 'rgba(255,193,7,.04)' %}
+                    {% set row_border_color = '#ffc107' %}
+                    {% set row_border_width = '4px' %}
+                {% elif petition.workflow_status == 'ready_for_filing' %}
+                    {% set row_bg = 'transparent' %}
+                    {% set row_border_color = '#198754' %}
+                    {% set row_border_width = '4px' %}
+                {% elif petition.workflow_status == 'filed' %}
+                    {% set row_bg = 'transparent' %}
+                    {% set row_border_color = '#0d6efd' %}
+                    {% set row_border_width = '4px' %}
+                {% else %}
+                    {% set row_bg = 'rgba(108,117,125,.02)' %}
+                    {% set row_border_color = '#dee2e6' %}
+                    {% set row_border_width = '2px' %}
+                {% endif %}
+
+                <div class="petition-row"
+                     style="background: {{ row_bg }}; border-left: {{ row_border_width }} solid {{ row_border_color }};"
+                     data-status="{{ petition.workflow_status }}"
+                     data-search="{{ (petition.title ~ ' ' ~ (petition.office_document_identifier or ''))|lower }}">
+
+                    <!-- Wrike ID -->
+                    <div class="pr-wrike">
+                        <div class="office-identifier-chip{% if not petition.office_document_identifier %} is-empty{% endif %}"
+                             {% if petition.office_document_identifier %}data-identifier="{{ petition.office_document_identifier }}"{% endif %}
+                             title="{{ petition.office_document_identifier or '-' }}">
+                            <img src="{{ url_for('static', filename='assets/wrike-logo-light.svg') }}" alt="Wrike" class="wrike-inline-mark">
+                            <span>{{ petition.office_document_identifier or '-' }}</span>
                         </div>
-                        <hr>
-                        <small class="text-muted">
-                            <i class="bi bi-info-circle me-1"></i>
-                            Revisa petições iniciais e identifica inconsistências, erros de formatação e ausência de
-                            documentação.
-                        </small>
                     </div>
-                </div>
-            </div>
 
-            <div class="col-lg-6">
-                <div class="card h-100">
-                    <div class="card-header border-0">
-                        <h5 class="card-title mb-0"><i class="bi bi-graduation-cap me-2"></i> Agente de Treinamento</h5>
-                    </div>
-                    <div class="card-body">
-                        <div class="agent-config-row p-2 rounded">
-                            <dl class="row mb-0">
-                                <dt class="col-6"><small class="text-muted">Status</small></dt>
-                                <dd class="col-6 text-end">
-                                    {% if setting.training_enabled %}
-                                    <span
-                                        class="badge bg-success-subtle text-success-emphasis border border-success-subtle rounded-pill">
-                                        <i class="bi bi-check-circle me-1"></i> Ativo
-                                    </span>
-                                    {% else %}
-                                    <span
-                                        class="badge bg-danger-subtle text-danger-emphasis border border-danger-subtle rounded-pill">
-                                        <i class="bi bi-x-circle me-1"></i> Inativo
-                                    </span>
-                                    {% endif %}
-                                </dd>
-                                <dt class="col-6"><small class="text-muted">Modelo</small></dt>
-                                <dd class="col-6 text-end"><code>{{ setting.training_model }}</code></dd>
-                                <dt class="col-6"><small class="text-muted">Temperatura</small></dt>
-                                <dd class="col-6 text-end">
-                                    <span
-                                        class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">
-                                        {{ setting.training_temperature }}
-                                    </span>
-                                </dd>
-                            </dl>
+                    <!-- Título + meta -->
+                    <div class="pr-title">
+                        <div class="pr-title-text">{{ petition.title }}</div>
+                        <div class="pr-title-meta">
+                            {% if latest_revision %}R{{ latest_revision.revision_number or '?' }} · {% endif %}
+                            {{ (petition.last_reviewed_at or petition.updated_at or petition.created_at).strftime('%d/%m/%Y') }}
                         </div>
-                        <hr>
-                        <small class="text-muted">
-                            <i class="bi bi-info-circle me-1"></i>
-                            Consolida padrões de erros recorrentes e evolui a base de conhecimento do revisor.
-                        </small>
                     </div>
-                </div>
-            </div>
-        </div>
 
-        <!-- Navegação Rápida -->
-        <div class="card">
-            <div class="card-body">
-                <div class="row g-2">
-                    <div class="col-md-3 col-sm-6">
-                        <a href="{{ url_for('fap_review.revision') }}" class="btn btn-outline-primary w-100">
-                            <i class="bi bi-file-earmark-arrow-up me-2"></i> Revisar Petição
-                        </a>
+                    <!-- Status -->
+                    <div class="pr-status">
+                        <span class="badge rounded-pill bg-{{ status_badge.class }}-subtle text-{{ status_badge.class }}-emphasis border border-{{ status_badge.class }}-subtle">
+                            <i class="{{ status_badge.icon }} me-1"></i> {{ status_badge.label }}
+                        </span>
                     </div>
-                    <div class="col-md-3 col-sm-6">
-                        <a href="{{ url_for('fap_review.training') }}" class="btn btn-outline-info w-100">
-                            <i class="bi bi-book me-2"></i> Treinamento
-                        </a>
-                    </div>
-                    <div class="col-md-3 col-sm-6">
-                        <a href="{{ url_for('fap_review.settings') }}" class="btn btn-outline-secondary w-100">
-                            <i class="bi bi-sliders me-2"></i> Configurações
-                        </a>
-                    </div>
-                    <div class="col-md-3 col-sm-6">
-                        <a href="{{ url_for('fap_review.audit_logs') }}" class="btn btn-outline-dark w-100">
-                            <i class="bi bi-clipboard-check me-2"></i> Auditoria
-                        </a>
+
+                    <!-- Ações -->
+                    <div class="pr-actions">
+                        <a href="{{ url_for('fap_review.petition_detail', petition_id=petition.id) }}"
+                           class="btn btn-sm btn-outline-secondary">Histórico</a>
+                        <a href="{{ url_for('fap_review.revision', petition_id=petition.id) }}"
+                           class="btn btn-sm btn-primary">Revisar</a>
                     </div>
                 </div>
+                {% endfor %}
             </div>
+
+            <!-- Empty state para filtro sem resultado -->
+            <div id="petitionEmptyState" class="text-center py-5" style="display:none;">
+                <i class="bi bi-search text-muted" style="font-size: 2rem;"></i>
+                <p class="text-muted mt-2 mb-0">Nenhuma petição encontrada para este filtro</p>
+            </div>
+
+            <!-- Rodapé -->
+            <div class="px-3 py-2 d-flex justify-content-between align-items-center" style="border-top: 1px solid rgba(15,23,42,.06); background: var(--bs-secondary-bg);">
+                <small class="text-muted" id="petitionCount">Exibindo {{ petition_rows|length }} petições</small>
+                <a href="{{ url_for('fap_review.index') }}" class="small text-primary fw-semibold" style="text-decoration: none;">Ver todas →</a>
+            </div>
+
+            {% else %}
+            <div class="text-center py-5">
+                <i class="bi bi-inbox text-muted" style="font-size: 2rem;"></i>
+                <p class="text-muted mt-2 mb-0">Nenhuma petição registrada ainda</p>
+            </div>
+            {% endif %}
         </div>
 
     </div>
@@ -483,6 +317,8 @@
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', function () {
+
+        // ── Chip de Wrike: paleta de cores por hash ──────────────
         const chips = document.querySelectorAll('.office-identifier-chip[data-identifier]');
         const chipPalette = [
             { bg: '#dbeafe', border: '#93c5fd', text: '#1d4ed8' },
@@ -496,27 +332,80 @@
             { bg: '#e0f2fe', border: '#7dd3fc', text: '#0369a1' },
             { bg: '#ecfccb', border: '#bef264', text: '#4d7c0f' }
         ];
-
         function hashIdentifier(value) {
             let hash = 0;
-            for (let index = 0; index < value.length; index += 1) {
-                hash = ((hash << 5) - hash) + value.charCodeAt(index);
+            for (let i = 0; i < value.length; i++) {
+                hash = ((hash << 5) - hash) + value.charCodeAt(i);
                 hash |= 0;
             }
             return Math.abs(hash);
         }
-
-        chips.forEach((chip) => {
-            const identifier = chip.dataset.identifier || '';
-            if (!identifier) {
-                return;
-            }
-
-            const paletteEntry = chipPalette[hashIdentifier(identifier) % chipPalette.length];
-            chip.style.setProperty('--identifier-chip-bg', paletteEntry.bg);
-            chip.style.setProperty('--identifier-chip-border', paletteEntry.border);
-            chip.style.setProperty('--identifier-chip-text', paletteEntry.text);
+        chips.forEach(function (chip) {
+            const id = chip.dataset.identifier || '';
+            if (!id) return;
+            const entry = chipPalette[hashIdentifier(id) % chipPalette.length];
+            chip.style.setProperty('--identifier-chip-bg', entry.bg);
+            chip.style.setProperty('--identifier-chip-border', entry.border);
+            chip.style.setProperty('--identifier-chip-text', entry.text);
         });
+
+        // ── Busca + filtro por status ─────────────────────────────
+        const searchInput = document.getElementById('petitionSearch');
+        const filterPills = document.querySelectorAll('.filter-pill');
+        const rows = document.querySelectorAll('.petition-row');
+        const countDisplay = document.getElementById('petitionCount');
+        const emptyState = document.getElementById('petitionEmptyState');
+        const totalCount = rows.length;
+        let activeFilter = 'all';
+
+        function applyFilters() {
+            const term = (searchInput ? searchInput.value : '').toLowerCase().trim();
+            let visible = 0;
+
+            rows.forEach(function (row) {
+                const matchesSearch = !term || (row.dataset.search || '').includes(term);
+                const status = row.dataset.status || '';
+                let matchesFilter = true;
+
+                if (activeFilter === 'awaiting_adjustments') {
+                    matchesFilter = status === 'awaiting_adjustments';
+                } else if (activeFilter === 'in_review') {
+                    matchesFilter = status === 'in_review' || status === 'new';
+                } else if (activeFilter === 'ready_for_filing') {
+                    matchesFilter = status === 'ready_for_filing';
+                } else if (activeFilter === 'others') {
+                    matchesFilter = status === 'filed' || status === 'archived';
+                }
+
+                const show = matchesSearch && matchesFilter;
+                row.style.display = show ? '' : 'none';
+                if (show) visible++;
+            });
+
+            if (countDisplay) {
+                if (activeFilter !== 'all' || term) {
+                    countDisplay.textContent = 'Exibindo ' + visible + ' de ' + totalCount + ' petições';
+                } else {
+                    countDisplay.textContent = 'Exibindo ' + totalCount + ' petições';
+                }
+            }
+            if (emptyState) {
+                emptyState.style.display = visible === 0 ? '' : 'none';
+            }
+        }
+
+        filterPills.forEach(function (pill) {
+            pill.addEventListener('click', function () {
+                filterPills.forEach(function (p) { p.classList.remove('active'); });
+                this.classList.add('active');
+                activeFilter = this.dataset.filter || 'all';
+                applyFilters();
+            });
+        });
+
+        if (searchInput) {
+            searchInput.addEventListener('input', applyFilters);
+        }
     });
 </script>
 {% endblock %}
