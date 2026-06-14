@@ -14,6 +14,7 @@ import asyncio
 import hashlib
 import re
 import unicodedata
+from collections import Counter, defaultdict
 from datetime import datetime
 from io import BytesIO
 from decimal import Decimal
@@ -809,6 +810,281 @@ def _build_petition_status_badge(workflow_status: str) -> dict[str, str]:
     }
 
 
+def _load_execution_result_payload(execution: FapReviewExecution) -> dict:
+    """Lê o payload JSON da revisão com fallback seguro."""
+    if not execution.result_json:
+        return {}
+
+    try:
+        payload = json.loads(execution.result_json)
+    except (TypeError, json.JSONDecodeError):
+        current_app.logger.warning('Falha ao interpretar result_json da execução %s', execution.id)
+        return {}
+
+    return payload if isinstance(payload, dict) else {}
+
+
+def _calculate_lawyer_score(total_findings: int, completed_revisions: int, rework_ratio: float, recurrence_rate: float) -> int:
+    """Gera score heurístico simples para incentivar redução de retrabalho e reincidência."""
+    if completed_revisions <= 0:
+        return 100
+
+    avg_findings = total_findings / completed_revisions
+    finding_penalty = min(45.0, avg_findings * 6.0)
+    rework_penalty = min(30.0, rework_ratio * 30.0)
+    recurrence_penalty = min(25.0, recurrence_rate * 25.0)
+
+    score = 100.0 - finding_penalty - rework_penalty - recurrence_penalty
+    return max(0, min(100, int(round(score))))
+
+
+def _translate_user_role(role: str | None) -> str:
+    """Traduz o papel do usuário para exibição em português."""
+    role_map = {
+        'admin': 'administrador',
+        'lawyer': 'advogado',
+        'assistant': 'assistente',
+        'user': 'usuário',
+    }
+    normalized_role = str(role or '').strip().lower()
+    return role_map.get(normalized_role, normalized_role or 'usuário')
+
+
+def _normalize_finding_severity(severity: str | None) -> str:
+    """Normaliza a severidade do achado para um conjunto conhecido em português."""
+    normalized_severity = str(severity or '').strip().upper()
+    severity_map = {
+        'CRITICAL': 'CRÍTICO',
+        'CRITICO': 'CRÍTICO',
+        'CRÍTICO': 'CRÍTICO',
+        'MODERATE': 'MODERADO',
+        'MODERADO': 'MODERADO',
+        'FORMAL': 'FORMAL',
+    }
+    return severity_map.get(normalized_severity, normalized_severity or 'FORMAL')
+
+
+def _translate_finding_category(category: str | None) -> str:
+    """Traduz categorias de achados para exibição em português."""
+    normalized_category = str(category or '').strip().upper()
+    category_map = {
+        'CRITICAL': 'Crítico',
+        'CRITICO': 'Crítico',
+        'CRÍTICO': 'Crítico',
+        'MODERATE': 'Moderado',
+        'MODERADO': 'Moderado',
+        'FORMAL': 'Formal',
+        'SEM_CATEGORIA': 'Sem categoria',
+    }
+    if normalized_category in category_map:
+        return category_map[normalized_category]
+
+    cat_match = re.fullmatch(r'CAT[-_\s]?(\d+)', normalized_category)
+    if cat_match:
+        return f"Categoria {cat_match.group(1)}"
+
+    return str(category or 'Sem categoria').strip() or 'Sem categoria'
+
+
+def _build_lawyer_statistics(law_firm_id: int) -> dict:
+    """Consolida score e métricas dos advogados a partir do histórico de revisões."""
+    revisions = FapReviewExecution.query.filter_by(
+        law_firm_id=law_firm_id,
+        execution_type='revision',
+    ).order_by(
+        FapReviewExecution.created_at.asc(),
+        FapReviewExecution.id.asc(),
+    ).all()
+
+    lawyer_stats: dict[int, dict] = {}
+    petition_user_groups: dict[tuple[int, int], list[FapReviewExecution]] = defaultdict(list)
+
+    for execution in revisions:
+        if not execution.user_id or not execution.user:
+            continue
+
+        stats = lawyer_stats.setdefault(execution.user_id, {
+            'user': execution.user,
+            'total_revisions': 0,
+            'completed_revisions': 0,
+            'petitions': set(),
+            'petition_history': {},
+            'total_findings': 0,
+            'critical_findings': 0,
+            'moderate_findings': 0,
+            'formal_findings': 0,
+            'repeated_findings': 0,
+            'categories': Counter(),
+            'monthly': defaultdict(lambda: {'revisions': 0, 'findings': 0, 'repeated_findings': 0}),
+        })
+
+        stats['total_revisions'] += 1
+        if execution.petition_id:
+            stats['petitions'].add(execution.petition_id)
+            petition_user_groups[(execution.user_id, execution.petition_id)].append(execution)
+
+        month_key = (execution.created_at or execution.updated_at or datetime.utcnow()).strftime('%Y-%m')
+        stats['monthly'][month_key]['revisions'] += 1
+
+        payload = _load_execution_result_payload(execution)
+        findings = payload.get('findings') or []
+        if execution.status == 'completed':
+            stats['completed_revisions'] += 1
+
+        petition_key = execution.petition_id or execution.id
+        petition_title = execution.petition.title if execution.petition else (execution.main_document_filename or 'Petição')
+        petition_identifier = (
+            execution.petition.office_document_identifier
+            if execution.petition and execution.petition.office_document_identifier
+            else (execution.law_firm_document_identifier or '-')
+        )
+        petition_history = stats['petition_history'].setdefault(petition_key, {
+            'petition_id': execution.petition_id,
+            'title': petition_title,
+            'identifier': petition_identifier,
+            'revision_count': 0,
+            'latest_revision_number': 0,
+            'latest_status': execution.status,
+            'latest_at': execution.created_at or execution.updated_at,
+            'total_findings': 0,
+            'repeated_findings': 0,
+            'categories': Counter(),
+        })
+        petition_history['revision_count'] += 1
+        petition_history['latest_revision_number'] = max(
+            petition_history['latest_revision_number'],
+            execution.revision_number or petition_history['revision_count'],
+        )
+        petition_history['latest_status'] = execution.status
+        petition_history['latest_at'] = execution.created_at or execution.updated_at
+
+        for finding in findings:
+            severity = _normalize_finding_severity(finding.get('severity'))
+            category = _translate_finding_category(finding.get('category') or 'SEM_CATEGORIA')
+
+            stats['total_findings'] += 1
+            petition_history['total_findings'] += 1
+            stats['categories'][category] += 1
+            petition_history['categories'][category] += 1
+            stats['monthly'][month_key]['findings'] += 1
+
+            if severity == 'CRÍTICO':
+                stats['critical_findings'] += 1
+            elif severity == 'MODERADO':
+                stats['moderate_findings'] += 1
+            else:
+                stats['formal_findings'] += 1
+
+    for (user_id, petition_id), grouped_revisions in petition_user_groups.items():
+        if petition_id is None:
+            continue
+
+        seen_fingerprints: set[str] = set()
+        for execution in sorted(grouped_revisions, key=lambda item: ((item.revision_number or 0), item.created_at or datetime.utcnow(), item.id)):
+            payload = _load_execution_result_payload(execution)
+            findings = payload.get('findings') or []
+            month_key = (execution.created_at or execution.updated_at or datetime.utcnow()).strftime('%Y-%m')
+            petition_key = execution.petition_id or execution.id
+            petition_history = lawyer_stats[user_id]['petition_history'].get(petition_key)
+
+            for finding in findings:
+                fingerprint = _build_finding_fingerprint(finding)
+                if not fingerprint:
+                    continue
+                if fingerprint in seen_fingerprints:
+                    lawyer_stats[user_id]['repeated_findings'] += 1
+                    lawyer_stats[user_id]['monthly'][month_key]['repeated_findings'] += 1
+                    if petition_history:
+                        petition_history['repeated_findings'] += 1
+                seen_fingerprints.add(fingerprint)
+
+    lawyers: list[dict] = []
+    total_findings_overall = 0
+    total_repeated_overall = 0
+
+    for stats in lawyer_stats.values():
+        petitions_count = len(stats['petitions'])
+        rework_petitions = sum(
+            1 for petition_data in stats['petition_history'].values()
+            if petition_data['revision_count'] > 1
+        )
+        completed_revisions = stats['completed_revisions'] or 0
+        total_findings = stats['total_findings'] or 0
+        repeated_findings = stats['repeated_findings'] or 0
+        recurrence_rate = (repeated_findings / total_findings) if total_findings else 0.0
+        rework_ratio = (rework_petitions / petitions_count) if petitions_count else 0.0
+        avg_findings_per_revision = (total_findings / completed_revisions) if completed_revisions else 0.0
+
+        monthly_trend = []
+        for month_key in sorted(stats['monthly'].keys())[-6:]:
+            month_metrics = stats['monthly'][month_key]
+            monthly_trend.append({
+                'month_key': month_key,
+                'label': f"{month_key[5:7]}/{month_key[0:4]}",
+                'revisions': month_metrics['revisions'],
+                'findings': month_metrics['findings'],
+                'repeated_findings': month_metrics['repeated_findings'],
+            })
+
+        petition_history_rows = []
+        for petition_data in stats['petition_history'].values():
+            top_category = petition_data['categories'].most_common(1)
+            petition_history_rows.append({
+                **petition_data,
+                'top_category': top_category[0][0] if top_category else '-',
+            })
+
+        petition_history_rows.sort(
+            key=lambda item: (item['revision_count'], item['latest_at'] or datetime.utcnow()),
+            reverse=True,
+        )
+
+        total_findings_overall += total_findings
+        total_repeated_overall += repeated_findings
+
+        lawyers.append({
+            'user_id': stats['user'].id,
+            'name': stats['user'].name,
+            'role': _translate_user_role(stats['user'].role),
+            'score': _calculate_lawyer_score(total_findings, completed_revisions, rework_ratio, recurrence_rate),
+            'total_revisions': stats['total_revisions'],
+            'completed_revisions': completed_revisions,
+            'petitions_count': petitions_count,
+            'rework_petitions': rework_petitions,
+            'rework_ratio': rework_ratio,
+            'total_findings': total_findings,
+            'critical_findings': stats['critical_findings'],
+            'moderate_findings': stats['moderate_findings'],
+            'formal_findings': stats['formal_findings'],
+            'repeated_findings': repeated_findings,
+            'recurrence_rate': recurrence_rate,
+            'avg_findings_per_revision': avg_findings_per_revision,
+            'top_categories': stats['categories'].most_common(5),
+            'petition_history': petition_history_rows,
+            'monthly_trend': monthly_trend,
+        })
+
+    lawyers.sort(
+        key=lambda item: (-item['score'], item['recurrence_rate'], item['avg_findings_per_revision'], item['name'].lower()),
+    )
+
+    for index, lawyer in enumerate(lawyers, start=1):
+        lawyer['rank'] = index
+
+    overview = {
+        'total_lawyers': len(lawyers),
+        'total_revisions': len(revisions),
+        'total_findings': total_findings_overall,
+        'repeated_findings': total_repeated_overall,
+        'recurrence_rate': (total_repeated_overall / total_findings_overall) if total_findings_overall else 0.0,
+    }
+
+    return {
+        'overview': overview,
+        'lawyers': lawyers,
+    }
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # ROTAS PRINCIPAIS
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1246,6 +1522,21 @@ def petition_update_status(petition_id: int):
     )
 
     return jsonify({'success': True, 'workflow_status': new_status})
+
+
+@fap_review_bp.route('/lawyer-stats', methods=['GET'])
+@require_law_firm
+@require_admin_user
+def lawyer_stats():
+    """Exibe score e histórico de qualidade das revisões por advogado."""
+    law_firm_id = get_current_law_firm_id()
+    score_data = _build_lawyer_statistics(law_firm_id)
+
+    return render_template(
+        'fap_review/lawyer_stats.html',
+        overview=score_data['overview'],
+        lawyers=score_data['lawyers'],
+    )
 
 
 @fap_review_bp.route('/revision/<int:execution_id>/findings/<int:finding_index>/dismiss-feedback', methods=['POST'])

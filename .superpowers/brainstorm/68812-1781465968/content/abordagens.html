@@ -1,0 +1,175 @@
+<h2>3 abordagens para redesenhar o dashboard</h2>
+<p class="subtitle">Cada uma resolve os problemas de forma diferente. Qual direção faz mais sentido?</p>
+
+<div class="options" style="flex-direction: column; gap: 16px;">
+
+  <!-- Abordagem 1 -->
+  <div class="option" data-choice="incremental" onclick="toggleSelect(this)">
+    <div class="letter">A</div>
+    <div class="content">
+      <h3>Correção cirúrgica <span style="font-size: 12px; color: #198754; font-weight: 600; background: #d1fae5; border-radius: 4px; padding: 2px 8px; margin-left: 6px;">Recomendada</span></h3>
+      <p>Mantém a estrutura atual. Corrige os 3 problemas dentro do que já existe.</p>
+      <div style="margin: 10px 0; background: #f8f9fa; border-radius: 8px; padding: 12px; font-size: 12px;">
+        <div style="font-weight: 700; margin-bottom: 8px; color: #374151;">Como fica:</div>
+        <!-- Stat cards melhorados -->
+        <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-bottom: 10px;">
+          <div style="background: white; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px; border-left: 4px solid #0d6efd; display: flex; align-items: center; justify-content: space-between;">
+            <div><div style="font-size: 9px; color: #6c7a8d; font-weight: 700; text-transform: uppercase;">Total</div><div style="font-size: 1.3rem; font-weight: 800;">12</div></div>
+            <div style="background: rgba(13,110,253,.1); border-radius: 6px; padding: 5px 8px; font-size: 11px; color: #0d6efd; font-weight: 600;">+ Revisar</div>
+          </div>
+          <div style="background: white; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px; border-left: 4px solid #198754;"><div style="font-size: 9px; color: #6c7a8d; font-weight: 700; text-transform: uppercase;">Prontas</div><div style="font-size: 1.3rem; font-weight: 800; color: #198754;">4</div></div>
+          <div style="background: white; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px; border-left: 4px solid #ffc107;"><div style="font-size: 9px; color: #6c7a8d; font-weight: 700; text-transform: uppercase;">Em revisão</div><div style="font-size: 1.3rem; font-weight: 800; color: #9a6700;">5</div></div>
+          <div style="background: white; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px; border-left: 4px solid #dc3545;"><div style="font-size: 9px; color: #6c7a8d; font-weight: 700; text-transform: uppercase;">Ajustes</div><div style="font-size: 1.3rem; font-weight: 800; color: #dc3545;">3</div></div>
+        </div>
+        <!-- Barra de busca + filtros -->
+        <div style="display: flex; gap: 6px; align-items: center; margin-bottom: 8px;">
+          <div style="flex: 1; background: white; border: 1px solid #e2e8f0; border-radius: 6px; padding: 5px 10px; font-size: 12px; color: #9aa5b4;">🔍 Buscar petição ou Id Wrike...</div>
+          <div style="display: flex; gap: 4px; flex-wrap: wrap;">
+            <span style="background: white; border: 1px solid #e2e8f0; border-radius: 20px; padding: 3px 10px; font-size: 11px; cursor: pointer;">Todos</span>
+            <span style="background: #fee2e2; border: 1px solid #fca5a5; color: #b91c1c; border-radius: 20px; padding: 3px 10px; font-size: 11px; font-weight: 600;">⚠ Ajustes (3)</span>
+            <span style="background: #fef3c7; border: 1px solid #fcd34d; color: #92400e; border-radius: 20px; padding: 3px 10px; font-size: 11px;">⧗ Em revisão (5)</span>
+            <span style="background: #d1fae5; border: 1px solid #6ee7b7; color: #065f46; border-radius: 20px; padding: 3px 10px; font-size: 11px;">✓ Prontas (4)</span>
+          </div>
+        </div>
+        <!-- Tabela com linhas coloridas -->
+        <div style="background: white; border: 1px solid #e2e8f0; border-radius: 6px; overflow: hidden;">
+          <div style="display: grid; grid-template-columns: 1fr auto auto; padding: 6px 12px; background: #fee2e2; border-bottom: 1px solid #fca5a5; align-items: center;">
+            <div>
+              <span style="font-size: 11px; font-weight: 700; color: #b91c1c;">⚠ Revisão FAP Beta S.A.</span>
+              <span style="font-size: 10px; color: #dc3545; margin-left: 6px; background: rgba(220,53,69,.1); border-radius: 4px; padding: 1px 6px;">Aguardando ajustes</span>
+            </div>
+            <div style="font-size: 10px; color: #9aa5b4; margin-right: 8px;">PET-FAP-002 · R1</div>
+            <div style="display: flex; gap: 4px;">
+              <button style="border: 1px solid #0d6efd; color: #0d6efd; background: white; border-radius: 5px; padding: 3px 8px; font-size: 11px;">Histórico</button>
+              <button style="border: 1px solid #198754; color: #198754; background: white; border-radius: 5px; padding: 3px 8px; font-size: 11px;">Revisar</button>
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr auto auto; padding: 6px 12px; border-bottom: 1px solid #f0f0f0; align-items: center;">
+            <div>
+              <span style="font-size: 11px; font-weight: 600; color: #374151;">Inicial FAP Empresa XPTO 2026</span>
+              <span style="font-size: 10px; color: #198754; margin-left: 6px; background: #d1fae5; border-radius: 4px; padding: 1px 6px;">Pronta</span>
+            </div>
+            <div style="font-size: 10px; color: #9aa5b4; margin-right: 8px;">PET-FAP-001 · R3</div>
+            <div style="display: flex; gap: 4px;">
+              <button style="border: 1px solid #0d6efd; color: #0d6efd; background: white; border-radius: 5px; padding: 3px 8px; font-size: 11px;">Histórico</button>
+              <button style="border: 1px solid #198754; color: #198754; background: white; border-radius: 5px; padding: 3px 8px; font-size: 11px;">Revisar</button>
+            </div>
+          </div>
+          <div style="display: grid; grid-template-columns: 1fr auto auto; padding: 6px 12px; background: #fffbeb; align-items: center;">
+            <div>
+              <span style="font-size: 11px; font-weight: 600; color: #374151;">Contestação FAP Gama Ltda</span>
+              <span style="font-size: 10px; color: #92400e; margin-left: 6px; background: #fef3c7; border-radius: 4px; padding: 1px 6px;">Em revisão</span>
+            </div>
+            <div style="font-size: 10px; color: #9aa5b4; margin-right: 8px;">PET-FAP-003 · R2</div>
+            <div style="display: flex; gap: 4px;">
+              <button style="border: 1px solid #0d6efd; color: #0d6efd; background: white; border-radius: 5px; padding: 3px 8px; font-size: 11px;">Histórico</button>
+              <button style="border: 1px solid #198754; color: #198754; background: white; border-radius: 5px; padding: 3px 8px; font-size: 11px;">Revisar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="pros-cons" style="margin-top: 10px;">
+        <div class="pros"><h4>Vantagens</h4><ul><li>Mínima mudança de código</li><li>Resolve todos os 3 problemas</li><li>Mantém a tabela familiar</li></ul></div>
+        <div class="cons"><h4>Desvantagens</h4><ul><li>Ainda exige scroll para ver tudo</li><li>Cards de agente permanecem no final</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Abordagem 2 -->
+  <div class="option" data-choice="priority-grouped" onclick="toggleSelect(this)">
+    <div class="letter">B</div>
+    <div class="content">
+      <h3>Agrupado por prioridade</h3>
+      <p>A tabela desaparece. As petições são agrupadas em seções por status, com a mais urgente no topo.</p>
+      <div style="margin: 10px 0; background: #f8f9fa; border-radius: 8px; padding: 12px; font-size: 12px;">
+        <!-- Grupo urgente -->
+        <div style="background: #fee2e2; border: 1px solid #fca5a5; border-radius: 8px; padding: 8px 12px; margin-bottom: 8px;">
+          <div style="font-size: 11px; font-weight: 800; color: #b91c1c; margin-bottom: 6px;">⚠ AGUARDANDO AJUSTES — 3 petições</div>
+          <div style="background: white; border-radius: 5px; padding: 5px 10px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+            <span style="font-size: 11px; font-weight: 600;">Revisão FAP Beta S.A.</span>
+            <div style="display: flex; gap: 4px;"><button style="border: 1px solid #0d6efd; color: #0d6efd; background: white; border-radius: 4px; padding: 2px 7px; font-size: 10px;">Histórico</button><button style="border: 1px solid #198754; color: #198754; background: white; border-radius: 4px; padding: 2px 7px; font-size: 10px;">Revisar</button></div>
+          </div>
+          <div style="background: white; border-radius: 5px; padding: 5px 10px; display: flex; justify-content: space-between; align-items: center;">
+            <span style="font-size: 11px;">+ 2 mais...</span>
+          </div>
+        </div>
+        <!-- Grupo em revisão -->
+        <div style="background: #fffbeb; border: 1px solid #fcd34d; border-radius: 8px; padding: 8px 12px; margin-bottom: 8px;">
+          <div style="font-size: 11px; font-weight: 800; color: #92400e; margin-bottom: 6px;">⧗ EM REVISÃO — 5 petições</div>
+          <div style="background: white; border-radius: 5px; padding: 5px 10px; font-size: 11px; text-align: center; color: #9aa5b4;">5 petições em processo...</div>
+        </div>
+        <!-- Grupo pronto -->
+        <div style="background: #f0fdf4; border: 1px solid #86efac; border-radius: 8px; padding: 8px 12px;">
+          <div style="font-size: 11px; font-weight: 800; color: #15803d; margin-bottom: 6px;">✓ PRONTAS — 4 petições</div>
+          <div style="background: white; border-radius: 5px; padding: 5px 10px; font-size: 11px; text-align: center; color: #9aa5b4;">4 petições prontas...</div>
+        </div>
+      </div>
+      <div class="pros-cons" style="margin-top: 10px;">
+        <div class="pros"><h4>Vantagens</h4><ul><li>Prioridades óbvias à primeira vista</li><li>Urgências ficam no topo em vermelho</li></ul></div>
+        <div class="cons"><h4>Desvantagens</h4><ul><li>Muda bastante o layout atual</li><li>Mais difícil de achar uma petição específica sem busca</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Abordagem 3 -->
+  <div class="option" data-choice="compact-sidebar" onclick="toggleSelect(this)">
+    <div class="letter">C</div>
+    <div class="content">
+      <h3>Layout compacto de 2 colunas</h3>
+      <p>Coluna esquerda: stats + ações rápidas. Coluna direita: tabela compacta com busca. Tudo visível sem scroll.</p>
+      <div style="margin: 10px 0; background: #f8f9fa; border-radius: 8px; padding: 12px;">
+        <div style="display: grid; grid-template-columns: 220px 1fr; gap: 12px; font-size: 11px;">
+          <!-- Coluna esquerda -->
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px;">
+              <div style="font-size: 9px; color: #6c7a8d; font-weight: 700; text-transform: uppercase; margin-bottom: 6px;">Resumo</div>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px;">
+                <div style="background: #f8f9fa; border-radius: 5px; padding: 5px; text-align: center;"><div style="font-size: 1.1rem; font-weight: 800;">12</div><div style="font-size: 9px; color: #6c7a8d;">Total</div></div>
+                <div style="background: #fee2e2; border-radius: 5px; padding: 5px; text-align: center;"><div style="font-size: 1.1rem; font-weight: 800; color: #dc3545;">3</div><div style="font-size: 9px; color: #dc3545;">Ajustes</div></div>
+                <div style="background: #fffbeb; border-radius: 5px; padding: 5px; text-align: center;"><div style="font-size: 1.1rem; font-weight: 800; color: #92400e;">5</div><div style="font-size: 9px; color: #92400e;">Em revisão</div></div>
+                <div style="background: #f0fdf4; border-radius: 5px; padding: 5px; text-align: center;"><div style="font-size: 1.1rem; font-weight: 800; color: #15803d;">4</div><div style="font-size: 9px; color: #15803d;">Prontas</div></div>
+              </div>
+            </div>
+            <button style="background: #0d6efd; color: white; border: none; border-radius: 8px; padding: 10px; font-size: 12px; font-weight: 700; width: 100%;">+ Nova Revisão</button>
+            <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px;">
+              <div style="font-size: 9px; color: #6c7a8d; font-weight: 700; text-transform: uppercase; margin-bottom: 6px;">Agentes</div>
+              <div style="display: flex; justify-content: space-between; margin-bottom: 4px;"><span>Revisor</span><span style="background: #d1fae5; color: #065f46; border-radius: 20px; padding: 1px 7px; font-size: 10px;">Ativo</span></div>
+              <div style="display: flex; justify-content: space-between;"><span>Treinamento</span><span style="background: #d1fae5; color: #065f46; border-radius: 20px; padding: 1px 7px; font-size: 10px;">Ativo</span></div>
+            </div>
+          </div>
+          <!-- Coluna direita: tabela -->
+          <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden; display: flex; flex-direction: column;">
+            <div style="padding: 8px 10px; border-bottom: 1px solid #f0f0f0;">
+              <div style="background: #f8f9fa; border: 1px solid #e2e8f0; border-radius: 5px; padding: 4px 8px; color: #9aa5b4; font-size: 11px;">🔍 Buscar...</div>
+            </div>
+            <div style="padding: 5px 10px 0; display: flex; gap: 4px; border-bottom: 1px solid #f0f0f0; flex-wrap: wrap;">
+              <span style="border-bottom: 2px solid #0d6efd; padding: 4px 4px; font-size: 10px; font-weight: 700; color: #0d6efd;">Todos</span>
+              <span style="padding: 4px 4px; font-size: 10px; color: #dc3545;">Ajustes</span>
+              <span style="padding: 4px 4px; font-size: 10px; color: #9aa5b4;">Em revisão</span>
+              <span style="padding: 4px 4px; font-size: 10px; color: #9aa5b4;">Prontas</span>
+            </div>
+            <div style="flex: 1; overflow: auto;">
+              <div style="background: #fee2e2; padding: 6px 10px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f0f0f0;">
+                <div><div style="font-size: 11px; font-weight: 700; color: #b91c1c;">Revisão FAP Beta S.A.</div><div style="font-size: 9px; color: #dc3545;">PET-FAP-002</div></div>
+                <div style="display: flex; gap: 3px;"><button style="border: 1px solid #0d6efd; color: #0d6efd; background: white; border-radius: 4px; padding: 2px 6px; font-size: 10px;">Histórico</button><button style="border: 1px solid #198754; color: #198754; background: white; border-radius: 4px; padding: 2px 6px; font-size: 10px;">Revisar</button></div>
+              </div>
+              <div style="padding: 6px 10px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #f0f0f0;">
+                <div><div style="font-size: 11px; font-weight: 600;">Inicial FAP Empresa XPTO</div><div style="font-size: 9px; color: #9aa5b4;">PET-FAP-001</div></div>
+                <div style="display: flex; gap: 3px;"><button style="border: 1px solid #0d6efd; color: #0d6efd; background: white; border-radius: 4px; padding: 2px 6px; font-size: 10px;">Histórico</button><button style="border: 1px solid #198754; color: #198754; background: white; border-radius: 4px; padding: 2px 6px; font-size: 10px;">Revisar</button></div>
+              </div>
+              <div style="background: #fffbeb; padding: 6px 10px; display: flex; justify-content: space-between; align-items: center;">
+                <div><div style="font-size: 11px; font-weight: 600;">Contestação FAP Gama Ltda</div><div style="font-size: 9px; color: #9aa5b4;">PET-FAP-003</div></div>
+                <div style="display: flex; gap: 3px;"><button style="border: 1px solid #0d6efd; color: #0d6efd; background: white; border-radius: 4px; padding: 2px 6px; font-size: 10px;">Histórico</button><button style="border: 1px solid #198754; color: #198754; background: white; border-radius: 4px; padding: 2px 6px; font-size: 10px;">Revisar</button></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="pros-cons" style="margin-top: 10px;">
+        <div class="pros"><h4>Vantagens</h4><ul><li>Tudo visível sem scroll</li><li>Stats + ação + tabela num só lugar</li></ul></div>
+        <div class="cons"><h4>Desvantagens</h4><ul><li>Muda bastante a estrutura</li><li>Tabela fica menor em telas menores</li></ul></div>
+      </div>
+    </div>
+  </div>
+
+</div>

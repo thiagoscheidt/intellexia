@@ -1,0 +1,1106 @@
+{% extends "layout/base.html" %}
+
+{% from "partials/page_hero.html" import page_hero %}
+
+{% set page_title = "Estatísticas dos Advogados" %}
+
+{% block title %}{{ page_title }} - IntellexIA{% endblock %}
+
+{% block extra_css %}
+<style>
+    :root {
+        --ls-navy: #133b5c;
+        --ls-sky: #4fa3d1;
+        --ls-mint: #9ad1c6;
+        --ls-sand: #f6f1e9;
+        --ls-ink: #243447;
+        --ls-muted: #6c7a8d;
+        --ls-border: rgba(19, 59, 92, .08);
+        --ls-shadow: 0 20px 45px rgba(19, 59, 92, .10);
+        --ls-soft-shadow: 0 8px 24px rgba(19, 59, 92, .08);
+    }
+
+    .lawyer-stats-page {
+        position: relative;
+        animation: fadeIn .3s ease-in;
+    }
+
+    .lawyer-stats-page::before,
+    .lawyer-stats-page::after {
+        content: "";
+        position: absolute;
+        pointer-events: none;
+        z-index: 0;
+        filter: blur(14px);
+        opacity: .55;
+    }
+
+    .lawyer-stats-page::before {
+        top: 2rem;
+        right: 2rem;
+        width: 15rem;
+        height: 15rem;
+        background: radial-gradient(circle, rgba(79, 163, 209, .18) 0%, rgba(79, 163, 209, 0) 70%);
+    }
+
+    .lawyer-stats-page::after {
+        top: 16rem;
+        left: -1rem;
+        width: 12rem;
+        height: 12rem;
+        background: radial-gradient(circle, rgba(154, 209, 198, .18) 0%, rgba(154, 209, 198, 0) 70%);
+    }
+
+    .lawyer-stats-page>* {
+        position: relative;
+        z-index: 1;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+        }
+
+        to {
+            opacity: 1;
+        }
+    }
+
+    .hero-summary {
+        display: grid;
+        grid-template-columns: minmax(0, 1.45fr) minmax(19rem, .95fr);
+        gap: 1rem;
+        margin-bottom: 1.5rem;
+    }
+
+    @media (max-width: 1080px) {
+        .hero-summary {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .hero-spotlight,
+    .hero-aside {
+        border-radius: 1.2rem;
+        overflow: hidden;
+        border: 1px solid var(--ls-border);
+        box-shadow: var(--ls-shadow);
+    }
+
+    .hero-spotlight {
+        background:
+            linear-gradient(135deg, rgba(19, 59, 92, .96) 0%, rgba(36, 86, 123, .96) 56%, rgba(79, 163, 209, .93) 100%);
+        color: #fff;
+        padding: 1.35rem 1.35rem 1.2rem;
+    }
+
+    .hero-kicker {
+        display: inline-flex;
+        align-items: center;
+        gap: .45rem;
+        border-radius: 999px;
+        padding: .38rem .7rem;
+        background: rgba(255, 255, 255, .12);
+        border: 1px solid rgba(255, 255, 255, .16);
+        font-size: .74rem;
+        font-weight: 700;
+        letter-spacing: .04em;
+        text-transform: uppercase;
+    }
+
+    .hero-title {
+        font-size: clamp(1.35rem, 2vw, 2rem);
+        line-height: 1.15;
+        font-weight: 800;
+        max-width: 38rem;
+        margin: .95rem 0 .55rem;
+    }
+
+    .hero-description {
+        max-width: 42rem;
+        color: rgba(255, 255, 255, .82);
+        margin-bottom: 1rem;
+        font-size: .94rem;
+    }
+
+    .hero-highlights {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: .8rem;
+    }
+
+    @media (max-width: 760px) {
+        .hero-highlights {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .hero-highlight {
+        border-radius: 1rem;
+        padding: .9rem 1rem;
+        background: rgba(255, 255, 255, .10);
+        border: 1px solid rgba(255, 255, 255, .14);
+        backdrop-filter: blur(8px);
+    }
+
+    .hero-highlight-label {
+        font-size: .72rem;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        color: rgba(255, 255, 255, .74);
+        margin-bottom: .2rem;
+        font-weight: 700;
+    }
+
+    .hero-highlight-value {
+        font-size: 1.45rem;
+        font-weight: 800;
+        line-height: 1;
+    }
+
+    .hero-highlight-sub {
+        font-size: .78rem;
+        color: rgba(255, 255, 255, .76);
+        margin-top: .3rem;
+    }
+
+    .hero-aside {
+        background: linear-gradient(180deg, rgba(255, 255, 255, .96) 0%, rgba(246, 241, 233, .95) 100%);
+        padding: 1.2rem;
+    }
+
+    .hero-aside-title {
+        display: flex;
+        align-items: center;
+        gap: .6rem;
+        color: var(--ls-navy);
+        font-weight: 800;
+        margin-bottom: .7rem;
+    }
+
+    .hero-aside-title i {
+        width: 2rem;
+        height: 2rem;
+        border-radius: .7rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: rgba(79, 163, 209, .14);
+        color: var(--ls-sky);
+    }
+
+    .heuristic-note {
+        border: 1px solid rgba(79, 163, 209, .16);
+        background: rgba(79, 163, 209, .07);
+        color: var(--ls-ink);
+        border-radius: 1rem;
+        padding: .95rem 1rem;
+        font-size: .84rem;
+        margin-bottom: 1rem;
+    }
+
+    .score-legend {
+        display: grid;
+        gap: .65rem;
+    }
+
+    .score-legend-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .8rem;
+        border-radius: .85rem;
+        padding: .7rem .8rem;
+        background: rgba(255, 255, 255, .74);
+        border: 1px solid rgba(19, 59, 92, .07);
+    }
+
+    .score-legend-band {
+        display: inline-flex;
+        align-items: center;
+        gap: .45rem;
+        font-weight: 700;
+        color: var(--ls-ink);
+    }
+
+    .score-legend-dot {
+        width: .7rem;
+        height: .7rem;
+        border-radius: 999px;
+    }
+
+    .score-legend-dot.high {
+        background: #198754;
+    }
+
+    .score-legend-dot.medium {
+        background: #ffc107;
+    }
+
+    .score-legend-dot.low {
+        background: #dc3545;
+    }
+
+    .score-legend-text {
+        font-size: .78rem;
+        color: var(--ls-muted);
+        text-align: right;
+    }
+
+    .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: .75rem;
+        margin-bottom: 1.5rem;
+    }
+
+    @media (max-width: 1200px) {
+        .stats-grid {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    @media (max-width: 640px) {
+        .stats-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .stats-card,
+    .lawyer-card,
+    .history-card {
+        border: 1px solid var(--ls-border);
+        border-radius: 1rem;
+        box-shadow: var(--ls-soft-shadow);
+        background: var(--bs-body-bg);
+    }
+
+    .stats-card {
+        position: relative;
+        overflow: hidden;
+        padding: 1rem 1rem 1rem 1.1rem;
+        transition: transform .18s ease, box-shadow .18s ease;
+    }
+
+    .stats-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 14px 28px rgba(19, 59, 92, .11);
+    }
+
+    .stats-card::before {
+        content: "";
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 4px;
+        border-radius: 0 999px 999px 0;
+        background: var(--stats-accent, var(--ls-sky));
+    }
+
+    .stats-card-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .75rem;
+        margin-bottom: .75rem;
+    }
+
+    .stats-card-icon {
+        width: 2.35rem;
+        height: 2.35rem;
+        border-radius: .8rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: var(--stats-soft, rgba(79, 163, 209, .12));
+        color: var(--stats-accent, var(--ls-sky));
+        font-size: 1rem;
+    }
+
+    .stats-card-tag {
+        border-radius: 999px;
+        padding: .28rem .55rem;
+        font-size: .72rem;
+        font-weight: 700;
+        color: var(--stats-accent, var(--ls-sky));
+        background: var(--stats-soft, rgba(79, 163, 209, .10));
+    }
+
+    .stats-card-label {
+        font-size: .72rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        color: var(--ls-muted);
+    }
+
+    .stats-card-value {
+        font-size: 1.8rem;
+        font-weight: 800;
+        color: var(--ls-navy);
+        line-height: 1;
+        margin-top: .2rem;
+    }
+
+    .stats-card-sub {
+        margin-top: .25rem;
+        color: #8795a7;
+        font-size: .78rem;
+    }
+
+    .stats-card.stats-card-neutral {
+        --stats-accent: #133b5c;
+        --stats-soft: rgba(19, 59, 92, .10);
+    }
+
+    .stats-card.stats-card-info {
+        --stats-accent: #4fa3d1;
+        --stats-soft: rgba(79, 163, 209, .12);
+    }
+
+    .stats-card.stats-card-risk {
+        --stats-accent: #b42318;
+        --stats-soft: rgba(180, 35, 24, .10);
+    }
+
+    .stats-card.stats-card-critical {
+        --stats-accent: #dc3545;
+        --stats-soft: rgba(220, 53, 69, .10);
+    }
+
+    .stats-card.stats-card-moderate {
+        --stats-accent: #9a6700;
+        --stats-soft: rgba(255, 193, 7, .14);
+    }
+
+    .stats-card.stats-card-formal {
+        --stats-accent: #0c7a94;
+        --stats-soft: rgba(13, 202, 240, .10);
+    }
+
+    .section-heading {
+        display: flex;
+        align-items: end;
+        justify-content: space-between;
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .section-heading-title {
+        font-size: 1.1rem;
+        font-weight: 800;
+        color: var(--ls-navy);
+        margin-bottom: .15rem;
+    }
+
+    .section-heading-subtitle {
+        color: var(--ls-muted);
+        font-size: .84rem;
+    }
+
+    .section-heading-badge {
+        border-radius: 999px;
+        background: rgba(79, 163, 209, .10);
+        color: var(--ls-sky);
+        padding: .45rem .75rem;
+        font-size: .75rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+
+    .lawyer-rank-badge {
+        width: 2.5rem;
+        height: 2.5rem;
+        border-radius: 999px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, rgba(19, 59, 92, .12) 0%, rgba(79, 163, 209, .16) 100%);
+        color: var(--ls-navy);
+        font-weight: 800;
+        flex-shrink: 0;
+    }
+
+    .lawyer-avatar {
+        width: 2.75rem;
+        height: 2.75rem;
+        border-radius: .95rem;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        background: linear-gradient(135deg, rgba(19, 59, 92, .12) 0%, rgba(79, 163, 209, .20) 100%);
+        color: var(--ls-navy);
+        font-weight: 800;
+        font-size: 1rem;
+        flex-shrink: 0;
+    }
+
+    .score-pill {
+        min-width: 5rem;
+        border-radius: 999px;
+        padding: .52rem .92rem;
+        text-align: center;
+        font-weight: 800;
+        font-size: .9rem;
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, .28);
+    }
+
+    .score-pill.score-high {
+        background: rgba(25, 135, 84, .12);
+        color: #198754;
+        border: 1px solid rgba(25, 135, 84, .18);
+    }
+
+    .score-pill.score-medium {
+        background: rgba(255, 193, 7, .14);
+        color: #9a6700;
+        border: 1px solid rgba(255, 193, 7, .22);
+    }
+
+    .score-pill.score-low {
+        background: rgba(220, 53, 69, .12);
+        color: #dc3545;
+        border: 1px solid rgba(220, 53, 69, .18);
+    }
+
+    .metric-chip {
+        border-radius: 999px;
+        padding: .4rem .75rem;
+        background: rgba(19, 59, 92, .05);
+        font-size: .78rem;
+        color: var(--ls-muted);
+        border: 1px solid rgba(19, 59, 92, .06);
+    }
+
+    .category-badge {
+        border-radius: 999px;
+        padding: .38rem .7rem;
+        background: rgba(79, 163, 209, .10);
+        color: var(--ls-navy);
+        font-size: .75rem;
+        font-weight: 700;
+        border: 1px solid rgba(79, 163, 209, .14);
+    }
+
+    .category-badge-critical {
+        background: rgba(220, 53, 69, .10);
+        color: #dc3545;
+        border-color: rgba(220, 53, 69, .25);
+    }
+
+    .category-badge-moderate {
+        background: rgba(255, 193, 7, .12);
+        color: #9a6700;
+        border-color: rgba(255, 193, 7, .32);
+    }
+
+    .category-badge-formal {
+        background: rgba(13, 202, 240, .10);
+        color: #0c7a94;
+        border-color: rgba(13, 202, 240, .25);
+    }
+
+    .category-badge-generic {
+        background: rgba(108, 117, 125, .10);
+        color: #5c636a;
+        border-color: rgba(108, 117, 125, .22);
+    }
+
+    .top-category-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
+        max-width: 100%;
+    }
+
+    .monthly-summary-list {
+        display: grid;
+        gap: .75rem;
+    }
+
+    .monthly-summary-card {
+        border: 1px solid rgba(19, 59, 92, .08);
+        border-radius: .95rem;
+        background: linear-gradient(180deg, rgba(255, 255, 255, .98) 0%, rgba(247, 249, 251, .96) 100%);
+        padding: .85rem .9rem;
+    }
+
+    .monthly-summary-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .75rem;
+        margin-bottom: .7rem;
+    }
+
+    .monthly-summary-label {
+        font-size: .9rem;
+        font-weight: 800;
+        color: var(--ls-navy);
+    }
+
+    .monthly-summary-chip {
+        border-radius: 999px;
+        padding: .28rem .6rem;
+        font-size: .72rem;
+        font-weight: 700;
+        background: rgba(79, 163, 209, .10);
+        color: var(--ls-sky);
+        border: 1px solid rgba(79, 163, 209, .14);
+    }
+
+    .monthly-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .6rem;
+    }
+
+    .monthly-summary-metric {
+        border-radius: .8rem;
+        padding: .65rem .75rem;
+        background: rgba(19, 59, 92, .04);
+        border: 1px solid rgba(19, 59, 92, .05);
+    }
+
+    .monthly-summary-metric.alert {
+        background: rgba(220, 53, 69, .06);
+        border-color: rgba(220, 53, 69, .10);
+    }
+
+    .monthly-summary-metric.warning {
+        background: rgba(255, 193, 7, .10);
+        border-color: rgba(255, 193, 7, .16);
+    }
+
+    .monthly-summary-metric.info {
+        background: rgba(13, 202, 240, .08);
+        border-color: rgba(13, 202, 240, .14);
+    }
+
+    .monthly-summary-caption {
+        font-size: .7rem;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        color: var(--ls-muted);
+        font-weight: 700;
+        margin-bottom: .2rem;
+    }
+
+    .monthly-summary-value {
+        font-size: 1.02rem;
+        font-weight: 800;
+        color: var(--ls-navy);
+        line-height: 1.1;
+    }
+
+    .monthly-summary-sub {
+        margin-top: .25rem;
+        font-size: .74rem;
+        color: #8290a2;
+    }
+
+    .lawyer-card {
+        overflow: hidden;
+    }
+
+    .lawyer-card::before {
+        content: "";
+        display: block;
+        height: 4px;
+        background: linear-gradient(90deg, var(--ls-navy) 0%, var(--ls-sky) 55%, var(--ls-mint) 100%);
+    }
+
+    .lawyer-card .card-header,
+    .history-card .card-header {
+        background: transparent;
+        border-bottom: 1px solid var(--ls-border);
+        font-weight: 700;
+        font-size: .85rem;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: var(--ls-muted);
+    }
+
+    .lawyer-toggle {
+        transition: background-color .18s ease;
+    }
+
+    .lawyer-toggle:hover {
+        background: linear-gradient(180deg, rgba(79, 163, 209, .04) 0%, rgba(79, 163, 209, 0) 100%) !important;
+    }
+
+    .lawyer-header-main {
+        min-width: 0;
+    }
+
+    .lawyer-name {
+        font-size: 1rem;
+        font-weight: 800;
+        color: var(--ls-navy);
+        margin-bottom: .15rem;
+    }
+
+    .lawyer-meta {
+        font-size: .8rem;
+        color: var(--ls-muted);
+    }
+
+    .lawyer-header-metrics {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: .55rem;
+    }
+
+    .insight-card {
+        height: 100%;
+        border-radius: 1rem;
+        background: linear-gradient(180deg, rgba(255, 255, 255, .98) 0%, rgba(247, 249, 251, .98) 100%);
+    }
+
+    .insight-card .card-body {
+        padding: 1rem;
+    }
+
+    .insight-title {
+        display: flex;
+        align-items: center;
+        gap: .55rem;
+        font-size: .84rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: var(--ls-muted);
+        margin-bottom: .95rem;
+    }
+
+    .insight-title i {
+        color: var(--ls-sky);
+    }
+
+    .table-responsive {
+        border-radius: 0 0 1rem 1rem;
+    }
+
+    .history-table td,
+    .history-table th {
+        vertical-align: middle;
+        font-size: .84rem;
+    }
+
+    .history-table thead th {
+        font-size: .76rem;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+        color: var(--ls-muted);
+        border-bottom-width: 1px;
+    }
+
+    .history-table tbody tr:hover {
+        background: rgba(79, 163, 209, .04);
+    }
+
+    .petition-link {
+        color: var(--ls-navy);
+    }
+
+    .petition-link:hover {
+        color: var(--ls-sky);
+    }
+
+    .empty-state-card {
+        border-radius: 1.2rem;
+        border: 1px dashed rgba(19, 59, 92, .16);
+        box-shadow: none;
+        background: linear-gradient(180deg, rgba(255, 255, 255, .95) 0%, rgba(246, 241, 233, .75) 100%);
+    }
+
+    @media (max-width: 767px) {
+        .section-heading {
+            align-items: start;
+            flex-direction: column;
+        }
+
+        .lawyer-header-metrics {
+            justify-content: start;
+        }
+
+        .monthly-summary-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="lawyer-stats-page container-fluid py-3">
+    {% call page_hero(title=page_title, subtitle='Pontuação heurística e histórico de qualidade das revisões submetidas
+    pela equipe', icon='bi bi-graph-up-arrow') %}
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb mb-0 bg-transparent small">
+            <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i>
+                    Início</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('fap_review.index') }}"><i
+                        class="bi bi-file-earmark-check"></i> Revisor de Petições</a></li>
+            <li class="breadcrumb-item active">{{ page_title }}</li>
+        </ol>
+    </nav>
+    {% endcall %}
+
+    <div class="d-flex flex-wrap gap-2 mb-4">
+        <a href="{{ url_for('fap_review.index') }}" class="btn btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i> Voltar ao Painel
+        </a>
+        <a href="{{ url_for('fap_review.revision') }}" class="btn btn-primary">
+            <i class="bi bi-folder-plus me-1"></i> Nova Revisão
+        </a>
+    </div>
+
+    <div class="hero-summary">
+        <section class="hero-spotlight">
+            <div class="hero-kicker">
+                <i class="bi bi-activity"></i>
+                Painel de Aprendizado da Equipe
+            </div>
+            <div class="hero-title">Uma leitura rápida de qualidade, retrabalho e reincidência nas revisões do time.
+            </div>
+            <div class="hero-description">
+                A pontuação ajuda a identificar padrões recorrentes, priorizar orientação e acompanhar a maturidade das
+                petições submetidas ao revisor automático.
+            </div>
+
+            <div class="hero-highlights">
+                <div class="hero-highlight">
+                    <div class="hero-highlight-label">Base monitorada</div>
+                    <div class="hero-highlight-value">{{ overview.total_revisions }}</div>
+                    <div class="hero-highlight-sub">revisões em {{ overview.total_lawyers }} advogados</div>
+                </div>
+                <div class="hero-highlight">
+                    <div class="hero-highlight-label">Pressão de correção</div>
+                    <div class="hero-highlight-value">{{ overview.total_findings }}</div>
+                    <div class="hero-highlight-sub">achados consolidados no histórico</div>
+                </div>
+                <div class="hero-highlight">
+                    <div class="hero-highlight-label">Reincidência global</div>
+                    <div class="hero-highlight-value">{{ (overview.recurrence_rate * 100)|round(1) }}%</div>
+                    <div class="hero-highlight-sub">{{ overview.repeated_findings }} pontos voltaram a aparecer</div>
+                </div>
+            </div>
+        </section>
+
+        <aside class="hero-aside">
+            <div class="hero-aside-title">
+                <i class="bi bi-stars"></i>
+                Como ler a pontuação
+            </div>
+            <div class="heuristic-note">
+                A pontuação varia de 0 a 100 e combina três sinais: média de achados por revisão concluída, retrabalho
+                na mesma petição e reincidência de achados já apontados anteriormente.
+            </div>
+            <div class="score-legend">
+                <div class="score-legend-item">
+                    <div class="score-legend-band"><span class="score-legend-dot high"></span> 80 a 100</div>
+                    <div class="score-legend-text">Consistência alta e baixa recorrência de erros.</div>
+                </div>
+                <div class="score-legend-item">
+                    <div class="score-legend-band"><span class="score-legend-dot medium"></span> 60 a 79</div>
+                    <div class="score-legend-text">Boa base, mas com pontos de correção recorrentes.</div>
+                </div>
+                <div class="score-legend-item">
+                    <div class="score-legend-band"><span class="score-legend-dot low"></span> 0 a 59</div>
+                    <div class="score-legend-text">Demanda atenção, revisão de padrões e orientação.</div>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <div class="stats-grid">
+        <div class="stats-card" style="--stats-accent:#133b5c; --stats-soft:rgba(19, 59, 92, .10);">
+            <div class="stats-card-top">
+                <span class="stats-card-icon"><i class="bi bi-people"></i></span>
+                <span class="stats-card-tag">Equipe</span>
+            </div>
+            <div class="stats-card-label">Advogados monitorados</div>
+            <div class="stats-card-value">{{ overview.total_lawyers }}</div>
+            <div class="stats-card-sub">Com ao menos uma revisão submetida</div>
+        </div>
+        <div class="stats-card" style="--stats-accent:#4fa3d1; --stats-soft:rgba(79, 163, 209, .12);">
+            <div class="stats-card-top">
+                <span class="stats-card-icon"><i class="bi bi-journal-check"></i></span>
+                <span class="stats-card-tag">Volume</span>
+            </div>
+            <div class="stats-card-label">Revisões analisadas</div>
+            <div class="stats-card-value">{{ overview.total_revisions }}</div>
+            <div class="stats-card-sub">Base de cálculo do painel</div>
+        </div>
+        <div class="stats-card" style="--stats-accent:#d97706; --stats-soft:rgba(217, 119, 6, .11);">
+            <div class="stats-card-top">
+                <span class="stats-card-icon"><i class="bi bi-exclamation-triangle"></i></span>
+                <span class="stats-card-tag">Qualidade</span>
+            </div>
+            <div class="stats-card-label">Achados registrados</div>
+            <div class="stats-card-value">{{ overview.total_findings }}</div>
+            <div class="stats-card-sub">Somando todas as revisões concluídas</div>
+        </div>
+        <div class="stats-card" style="--stats-accent:#b42318; --stats-soft:rgba(180, 35, 24, .10);">
+            <div class="stats-card-top">
+                <span class="stats-card-icon"><i class="bi bi-arrow-repeat"></i></span>
+                <span class="stats-card-tag">Risco</span>
+            </div>
+            <div class="stats-card-label">Reincidência geral</div>
+            <div class="stats-card-value">{{ (overview.recurrence_rate * 100)|round(1) }}%</div>
+            <div class="stats-card-sub">{{ overview.repeated_findings }} achados repetidos no histórico</div>
+        </div>
+    </div>
+
+    {% if lawyers %}
+    <div class="section-heading">
+        <div>
+            <div class="section-heading-title">Classificação e diagnóstico individual</div>
+            <div class="section-heading-subtitle">Abra cada advogado para ver histórico por petição, distribuição de
+                erros e evolução mensal.</div>
+        </div>
+        <div class="section-heading-badge">{{ lawyers|length }} perfis ranqueados</div>
+    </div>
+
+    <div class="accordion" id="lawyerStatsAccordion">
+        {% for lawyer in lawyers %}
+        {% set score_class = 'score-high' if lawyer.score >= 80 else ('score-medium' if lawyer.score >= 60 else
+        'score-low') %}
+        <div class="card lawyer-card mb-4">
+            <div class="card-header p-0">
+                <button class="btn w-100 text-start p-3 border-0 bg-transparent lawyer-toggle" type="button"
+                    data-bs-toggle="collapse" data-bs-target="#lawyerCollapse{{ lawyer.user_id }}"
+                    aria-expanded="{{ 'true' if loop.first else 'false' }}">
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                        <div class="d-flex align-items-center gap-3 min-w-0 lawyer-header-main">
+                            <span class="lawyer-rank-badge">#{{ lawyer.rank }}</span>
+                            <span class="lawyer-avatar">{{ lawyer.name[:1]|upper }}</span>
+                            <div class="min-w-0">
+                                <div class="lawyer-name text-truncate">{{ lawyer.name }}</div>
+                                <div class="lawyer-meta text-truncate">{{ lawyer.role|capitalize }} • {{
+                                    lawyer.petitions_count }} petições • {{ lawyer.total_revisions }} revisões</div>
+                            </div>
+                        </div>
+                        <div class="lawyer-header-metrics">
+                            <span class="metric-chip">{{ lawyer.total_findings }} achados</span>
+                            <span class="metric-chip">{{ lawyer.rework_petitions }} petições com retrabalho</span>
+                            <span class="score-pill {{ score_class }}">Pontuação {{ lawyer.score }}</span>
+                        </div>
+                    </div>
+                </button>
+            </div>
+            <div id="lawyerCollapse{{ lawyer.user_id }}" class="collapse {% if loop.first %}show{% endif %}"
+                data-bs-parent="#lawyerStatsAccordion">
+                <div class="card-body p-3 p-lg-4">
+                    <div class="row g-4 mb-4">
+                        <div class="col-xl-7">
+                            <div class="row g-3">
+                                <div class="col-sm-6 col-lg-4">
+                                    <div class="stats-card stats-card-neutral h-100">
+                                        <div class="stats-card-label">Revisões concluídas</div>
+                                        <div class="stats-card-value">{{ lawyer.completed_revisions }}</div>
+                                        <div class="stats-card-sub">De {{ lawyer.total_revisions }} submetidas</div>
+                                    </div>
+                                </div>
+                                <div class="col-sm-6 col-lg-4">
+                                    <div class="stats-card stats-card-info h-100">
+                                        <div class="stats-card-label">Média de achados</div>
+                                        <div class="stats-card-value">{{ lawyer.avg_findings_per_revision|round(1) }}
+                                        </div>
+                                        <div class="stats-card-sub">Por revisão concluída</div>
+                                    </div>
+                                </div>
+                                <div class="col-sm-6 col-lg-4">
+                                    <div class="stats-card stats-card-risk h-100">
+                                        <div class="stats-card-label">Reincidência</div>
+                                        <div class="stats-card-value">{{ (lawyer.recurrence_rate * 100)|round(1) }}%
+                                        </div>
+                                        <div class="stats-card-sub">{{ lawyer.repeated_findings }} achados repetidos
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="col-sm-6 col-lg-4">
+                                    <div class="stats-card stats-card-critical h-100">
+                                        <div class="stats-card-label">Críticos</div>
+                                        <div class="stats-card-value">{{ lawyer.critical_findings }}</div>
+                                        <div class="stats-card-sub">Achados de maior gravidade</div>
+                                    </div>
+                                </div>
+                                <div class="col-sm-6 col-lg-4">
+                                    <div class="stats-card stats-card-moderate h-100">
+                                        <div class="stats-card-label">Moderados</div>
+                                        <div class="stats-card-value">{{ lawyer.moderate_findings }}</div>
+                                        <div class="stats-card-sub">Achados intermediários</div>
+                                    </div>
+                                </div>
+                                <div class="col-sm-6 col-lg-4">
+                                    <div class="stats-card stats-card-formal h-100">
+                                        <div class="stats-card-label">Formais</div>
+                                        <div class="stats-card-value">{{ lawyer.formal_findings }}</div>
+                                        <div class="stats-card-sub">Ajustes de forma</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-xl-5">
+                            <div class="history-card insight-card h-100">
+                                <div class="card-body">
+                                    <div class="insight-title">
+                                        <i class="bi bi-tags"></i>
+                                        Tipos de erro mais frequentes
+                                    </div>
+                                    {% if lawyer.top_categories %}
+                                    <div class="d-flex flex-wrap gap-2 mb-3">
+                                        {% for category, count in lawyer.top_categories %}
+                                        {% set category_badge_class = 'category-badge-critical' if category == 'Crítico'
+                                        else ('category-badge-moderate' if category == 'Moderado' else
+                                        ('category-badge-formal' if category == 'Formal' else 'category-badge-generic'))
+                                        %}
+                                        <span class="category-badge {{ category_badge_class }}">{{ category }} • {{
+                                            count }}</span>
+                                        {% endfor %}
+                                    </div>
+                                    {% else %}
+                                    <div class="text-muted small">Sem categorias registradas nas revisões concluídas.
+                                    </div>
+                                    {% endif %}
+                                    <div class="small text-muted">
+                                        Retrabalho em {{ (lawyer.rework_ratio * 100)|round(1) }}% das petições
+                                        acompanhadas por este advogado.
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-4">
+                        <div class="col-lg-5">
+                            <div class="history-card insight-card h-100">
+                                <div class="card-body">
+                                    <div class="insight-title">
+                                        <i class="bi bi-bar-chart-line"></i>
+                                        Resumo mensal recente
+                                    </div>
+                                    {% if lawyer.monthly_trend %}
+                                    <div class="monthly-summary-list">
+                                        {% for month in lawyer.monthly_trend|reverse %}
+                                        {% set avg_findings_month = (month.findings / month.revisions) if
+                                        month.revisions else 0 %}
+                                        {% set repeated_rate = (month.repeated_findings / month.findings * 100) if
+                                        month.findings else 0 %}
+                                        <div class="monthly-summary-card">
+                                            <div class="monthly-summary-head">
+                                                <div class="monthly-summary-label">{{ month.label }}</div>
+                                                <div class="monthly-summary-chip">{{ month.revisions }} revisões</div>
+                                            </div>
+                                            <div class="monthly-summary-grid">
+                                                <div class="monthly-summary-metric">
+                                                    <div class="monthly-summary-caption">Achados</div>
+                                                    <div class="monthly-summary-value">{{ month.findings }}</div>
+                                                    <div class="monthly-summary-sub">Total apontado no mês</div>
+                                                </div>
+                                                <div class="monthly-summary-metric info">
+                                                    <div class="monthly-summary-caption">Média por revisão</div>
+                                                    <div class="monthly-summary-value">{{ avg_findings_month|round(1) }}
+                                                    </div>
+                                                    <div class="monthly-summary-sub">Quanto cada revisão concentrou
+                                                    </div>
+                                                </div>
+                                                <div class="monthly-summary-metric warning">
+                                                    <div class="monthly-summary-caption">Achados repetidos</div>
+                                                    <div class="monthly-summary-value">{{ month.repeated_findings }}
+                                                    </div>
+                                                    <div class="monthly-summary-sub">Pontos que voltaram a aparecer
+                                                    </div>
+                                                </div>
+                                                <div class="monthly-summary-metric alert">
+                                                    <div class="monthly-summary-caption">Taxa de reincidência</div>
+                                                    <div class="monthly-summary-value">{{ repeated_rate|round(1) }}%
+                                                    </div>
+                                                    <div class="monthly-summary-sub">Sobre o total de achados do mês
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    {% else %}
+                                    <div class="text-muted small">Ainda não há histórico mensal suficiente.</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-7">
+                            <div class="history-card h-100">
+                                <div class="card-header">Histórico individual por petição</div>
+                                <div class="card-body p-0">
+                                    {% if lawyer.petition_history %}
+                                    <div class="table-responsive">
+                                        <table class="table table-hover history-table mb-0">
+                                            <thead class="table-light">
+                                                <tr>
+                                                    <th class="ps-3">Petição</th>
+                                                    <th>Id Wrike</th>
+                                                    <th>Revisões</th>
+                                                    <th>Achados</th>
+                                                    <th>Reincidência</th>
+                                                    <th>Categoria dominante</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {% for petition in lawyer.petition_history %}
+                                                <tr>
+                                                    <td class="ps-3">
+                                                        {% if petition.petition_id %}
+                                                        <a href="{{ url_for('fap_review.petition_detail', petition_id=petition.petition_id) }}"
+                                                            class="text-decoration-none fw-semibold petition-link">
+                                                            {{ petition.title }}
+                                                        </a>
+                                                        {% else %}
+                                                        <span class="fw-semibold">{{ petition.title }}</span>
+                                                        {% endif %}
+                                                    </td>
+                                                    <td>{{ petition.identifier }}</td>
+                                                    <td>R{{ petition.latest_revision_number }} • {{
+                                                        petition.revision_count }} total</td>
+                                                    <td>{{ petition.total_findings }}</td>
+                                                    <td>{{ petition.repeated_findings }}</td>
+                                                    <td>
+                                                        {% set top_category_badge_class = 'category-badge-critical' if
+                                                        petition.top_category == 'Crítico' else
+                                                        ('category-badge-moderate' if petition.top_category ==
+                                                        'Moderado' else ('category-badge-formal' if
+                                                        petition.top_category == 'Formal' else
+                                                        'category-badge-generic')) %}
+                                                        <span
+                                                            class="category-badge top-category-pill {{ top_category_badge_class }}">{{
+                                                            petition.top_category }}</span>
+                                                    </td>
+                                                </tr>
+                                                {% endfor %}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    {% else %}
+                                    <div class="p-3 text-muted small">Sem histórico individual por petição.</div>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="card history-card empty-state-card">
+        <div class="card-body text-center py-5">
+            <i class="bi bi-bar-chart text-muted" style="font-size: 2rem;"></i>
+            <p class="text-muted mt-2 mb-0">Nenhuma revisão submetida ainda para calcular estatísticas.</p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endblock %}

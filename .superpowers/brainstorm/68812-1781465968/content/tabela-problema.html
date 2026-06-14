@@ -1,0 +1,66 @@
+<h2>Tabela de petições — qual é o problema principal?</h2>
+<p class="subtitle">Clique no que mais incomoda. Pode selecionar vários.</p>
+
+<div style="max-width: 800px; margin: 0 auto;">
+
+  <div class="options" data-multiselect style="flex-direction: column; gap: 10px;">
+
+    <div class="option" data-choice="too-many-columns" onclick="toggleSelect(this)">
+      <div class="letter">A</div>
+      <div class="content">
+        <h3>Colunas demais</h3>
+        <p>A tabela tem 8 colunas (ID, Wrike, Petição, Revisões, Status, Última Revisão, Atualizado, Ações). Difícil de ler, especialmente em telas menores. Algumas colunas parecem redundantes.</p>
+        <div style="margin-top: 8px; display: flex; gap: 4px; flex-wrap: wrap;">
+          <span style="background: #fef3c7; border: 1px solid #fcd34d; color: #92400e; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 600;">#ID</span>
+          <span style="background: #e0f2fe; border: 1px solid #7dd3fc; color: #0369a1; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 600;">Wrike</span>
+          <span style="background: white; border: 1px solid #e2e8f0; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 600;">Petição</span>
+          <span style="background: #fef3c7; border: 1px solid #fcd34d; color: #92400e; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 600;">Revisões</span>
+          <span style="background: white; border: 1px solid #e2e8f0; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 600;">Status</span>
+          <span style="background: #fef3c7; border: 1px solid #fcd34d; color: #92400e; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 600;">Última Revisão</span>
+          <span style="background: #fef3c7; border: 1px solid #fcd34d; color: #92400e; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 600;">Atualizado</span>
+          <span style="background: white; border: 1px solid #e2e8f0; border-radius: 4px; padding: 2px 8px; font-size: 11px; font-weight: 600;">Ações</span>
+        </div>
+        <p style="margin-top: 6px; font-size: 12px; color: #9a6700;">Em amarelo: candidatas a remover ou fundir</p>
+      </div>
+    </div>
+
+    <div class="option" data-choice="no-filters" onclick="toggleSelect(this)">
+      <div class="letter">B</div>
+      <div class="content">
+        <h3>Não tem filtro / busca</h3>
+        <p>Com muitas petições, não dá para filtrar por status, buscar por nome ou pelo Id Wrike. Tem que rolar a página inteira para achar o que precisa.</p>
+      </div>
+    </div>
+
+    <div class="option" data-choice="rows-look-same" onclick="toggleSelect(this)">
+      <div class="letter">C</div>
+      <div class="content">
+        <h3>Todas as linhas parecem iguais</h3>
+        <p>Petições com problemas (aguardando ajustes, com erro) não se destacam visualmente das que estão prontas. Difícil priorizar o que precisa de atenção.</p>
+        <div style="margin-top: 8px; display: flex; flex-direction: column; gap: 4px;">
+          <div style="background: white; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 12px; font-size: 12px;">Inicial FAP Empresa XPTO — <span style="color: #198754; font-weight: 600;">✓ Pronta</span></div>
+          <div style="background: white; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 12px; font-size: 12px;">Revisão FAP Beta S.A. — <span style="color: #dc3545; font-weight: 600;">⚠ Aguardando ajustes</span></div>
+          <div style="background: white; border: 1px solid #e2e8f0; border-radius: 6px; padding: 6px 12px; font-size: 12px;">Contestação FAP Gama Ltda — <span style="color: #9a6700; font-weight: 600;">⧗ Em revisão</span></div>
+        </div>
+        <p style="margin-top: 6px; font-size: 12px; color: #6c7a8d;">↑ Os três parecem iguais visualmente mesmo com status diferentes</p>
+      </div>
+    </div>
+
+    <div class="option" data-choice="action-unclear" onclick="toggleSelect(this)">
+      <div class="letter">D</div>
+      <div class="content">
+        <h3>Ações pouco claras na linha</h3>
+        <p>Os botões 👁 e + no final de cada linha são pequenos e sem texto. Não está claro que 👁 abre o histórico da petição e + inicia uma nova revisão daquela petição.</p>
+      </div>
+    </div>
+
+    <div class="option" data-choice="too-much-scroll" onclick="toggleSelect(this)">
+      <div class="letter">E</div>
+      <div class="content">
+        <h3>Muito scroll / dados demais na tela</h3>
+        <p>A página mostra 20 petições sem paginação, mais os cards de agentes e navegação rápida embaixo. A página fica muito longa.</p>
+      </div>
+    </div>
+
+  </div>
+</div>

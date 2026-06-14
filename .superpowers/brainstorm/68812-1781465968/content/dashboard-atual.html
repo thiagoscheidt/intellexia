@@ -1,0 +1,149 @@
+<h2>Dashboard atual — onde está o problema?</h2>
+<p class="subtitle">Clique nas seções que incomodam mais. Pode selecionar várias.</p>
+
+<div style="max-width: 900px; margin: 0 auto; font-family: system-ui, sans-serif;">
+
+  <div class="options" data-multiselect style="display: flex; flex-direction: column; gap: 12px;">
+
+    <!-- Seção 1: Stat cards -->
+    <div class="option" data-choice="stat-cards" onclick="toggleSelect(this)" style="padding: 0; border-radius: 10px; overflow: hidden;">
+      <div style="display: flex; align-items: stretch; width: 100%;">
+        <div class="letter" style="min-width: 40px; display: flex; align-items: center; justify-content: center; font-size: 13px;">A</div>
+        <div style="flex: 1; padding: 12px 16px; background: #f8f9fa; border-left: 1px solid #e9ecef;">
+          <div style="font-size: 11px; text-transform: uppercase; color: #6c7a8d; font-weight: 700; letter-spacing: .04em; margin-bottom: 8px;">SEÇÃO A — Cards de estatísticas (4 cards no topo)</div>
+          <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;">
+            <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; border-left: 4px solid #0d6efd;">
+              <div style="font-size: 10px; color: #6c7a8d; font-weight: 700; text-transform: uppercase;">Total</div>
+              <div style="font-size: 1.4rem; font-weight: 800;">12</div>
+              <div style="font-size: 10px; color: #9aa5b4;">Petições · Revisões 38</div>
+            </div>
+            <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; border-left: 4px solid #198754;">
+              <div style="font-size: 10px; color: #6c7a8d; font-weight: 700; text-transform: uppercase;">Prontas</div>
+              <div style="font-size: 1.4rem; font-weight: 800; color: #198754;">4</div>
+              <div style="font-size: 10px; color: #9aa5b4;">Para seguir · 33%</div>
+            </div>
+            <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; border-left: 4px solid #ffc107;">
+              <div style="font-size: 10px; color: #6c7a8d; font-weight: 700; text-transform: uppercase;">Em revisão</div>
+              <div style="font-size: 1.4rem; font-weight: 800; color: #9a6700;">5</div>
+            </div>
+            <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; border-left: 4px solid #dc3545;">
+              <div style="font-size: 10px; color: #6c7a8d; font-weight: 700; text-transform: uppercase;">Ajustes</div>
+              <div style="font-size: 1.4rem; font-weight: 800; color: #dc3545;">3</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Seção 2: Botões de ação -->
+    <div class="option" data-choice="action-buttons" onclick="toggleSelect(this)" style="padding: 0; border-radius: 10px; overflow: hidden;">
+      <div style="display: flex; align-items: stretch; width: 100%;">
+        <div class="letter" style="min-width: 40px; display: flex; align-items: center; justify-content: center; font-size: 13px;">B</div>
+        <div style="flex: 1; padding: 12px 16px; background: #f8f9fa; border-left: 1px solid #e9ecef;">
+          <div style="font-size: 11px; text-transform: uppercase; color: #6c7a8d; font-weight: 700; letter-spacing: .04em; margin-bottom: 8px;">SEÇÃO B — Botões de ação flutuantes</div>
+          <div style="display: flex; gap: 8px;">
+            <div style="background: #0d6efd; color: white; border-radius: 6px; padding: 6px 14px; font-size: 13px; font-weight: 600;">+ Nova Petição / Revisão</div>
+            <div style="background: white; border: 1px solid #dee2e6; border-radius: 6px; padding: 6px 14px; font-size: 13px; color: #495057;">⚙ Configurações</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Seção 3: Tabela de petições -->
+    <div class="option" data-choice="petition-table" onclick="toggleSelect(this)" style="padding: 0; border-radius: 10px; overflow: hidden;">
+      <div style="display: flex; align-items: stretch; width: 100%;">
+        <div class="letter" style="min-width: 40px; display: flex; align-items: center; justify-content: center; font-size: 13px;">C</div>
+        <div style="flex: 1; padding: 12px 16px; background: #f8f9fa; border-left: 1px solid #e9ecef;">
+          <div style="font-size: 11px; text-transform: uppercase; color: #6c7a8d; font-weight: 700; letter-spacing: .04em; margin-bottom: 8px;">SEÇÃO C — Tabela "Petições em Acompanhamento" (20 linhas)</div>
+          <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; overflow: hidden;">
+            <div style="background: #f8f9fa; padding: 8px 12px; border-bottom: 1px solid #e2e8f0;">
+              <strong style="font-size: 13px;">Petições em Acompanhamento</strong>
+            </div>
+            <table style="width: 100%; border-collapse: collapse; font-size: 12px;">
+              <thead>
+                <tr style="background: #f8f9fa;">
+                  <th style="padding: 6px 10px; text-align: left; color: #6c7a8d; font-size: 11px; font-weight: 700;">ID</th>
+                  <th style="padding: 6px 10px; text-align: left; color: #6c7a8d; font-size: 11px; font-weight: 700;">Id Wrike</th>
+                  <th style="padding: 6px 10px; text-align: left; color: #6c7a8d; font-size: 11px; font-weight: 700;">Petição</th>
+                  <th style="padding: 6px 10px; text-align: left; color: #6c7a8d; font-size: 11px; font-weight: 700;">Revisões</th>
+                  <th style="padding: 6px 10px; text-align: left; color: #6c7a8d; font-size: 11px; font-weight: 700;">Status</th>
+                  <th style="padding: 6px 10px; text-align: left; color: #6c7a8d; font-size: 11px; font-weight: 700;">Última Revisão</th>
+                  <th style="padding: 6px 10px; text-align: left; color: #6c7a8d; font-size: 11px; font-weight: 700;">Atualizado</th>
+                  <th style="padding: 6px 10px; text-align: left; color: #6c7a8d; font-size: 11px; font-weight: 700;"></th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style="border-top: 1px solid #f0f0f0;">
+                  <td style="padding: 6px 10px;"><code style="font-size: 11px;">#5</code></td>
+                  <td style="padding: 6px 10px;"><span style="background: #dbeafe; border: 1px solid #93c5fd; color: #1d4ed8; border-radius: 6px; padding: 2px 7px; font-size: 11px; font-weight: 700;">PET-FAP-001</span></td>
+                  <td style="padding: 6px 10px; font-weight: 600; font-size: 12px;">Inicial FAP Empresa XPTO 2026</td>
+                  <td style="padding: 6px 10px; text-align: center;"><span style="background: #e9ecef; border-radius: 20px; padding: 2px 8px; font-size: 11px;">3</span></td>
+                  <td style="padding: 6px 10px;"><span style="background: #d1fae5; border: 1px solid #6ee7b7; color: #065f46; border-radius: 20px; padding: 2px 8px; font-size: 11px;">✓ Pronta</span></td>
+                  <td style="padding: 6px 10px;"><span style="background: #d1fae5; border: 1px solid #6ee7b7; color: #065f46; border-radius: 20px; padding: 2px 8px; font-size: 11px;">✓ Concluída</span><div style="font-size: 10px; color: #9aa5b4; margin-top: 2px;">R3</div></td>
+                  <td style="padding: 6px 10px; font-size: 11px; color: #6c757d;">12/06/2026 14:23</td>
+                  <td style="padding: 6px 10px;"><div style="display: flex; gap: 4px;"><button style="border: 1px solid #0d6efd; color: #0d6efd; background: white; border-radius: 4px; padding: 3px 8px; font-size: 11px;">👁</button><button style="border: 1px solid #6c757d; color: #6c757d; background: white; border-radius: 4px; padding: 3px 8px; font-size: 11px;">+</button></div></td>
+                </tr>
+                <tr style="border-top: 1px solid #f0f0f0; background: #fafafa;">
+                  <td style="padding: 6px 10px;"><code style="font-size: 11px;">#4</code></td>
+                  <td style="padding: 6px 10px;"><span style="background: #dcfce7; border: 1px solid #86efac; color: #15803d; border-radius: 6px; padding: 2px 7px; font-size: 11px; font-weight: 700;">PET-FAP-002</span></td>
+                  <td style="padding: 6px 10px; font-weight: 600; font-size: 12px;">Revisão FAP Beta S.A.</td>
+                  <td style="padding: 6px 10px; text-align: center;"><span style="background: #e9ecef; border-radius: 20px; padding: 2px 8px; font-size: 11px;">1</span></td>
+                  <td style="padding: 6px 10px;"><span style="background: #fef3c7; border: 1px solid #fcd34d; color: #92400e; border-radius: 20px; padding: 2px 8px; font-size: 11px;">⧗ Em revisão</span></td>
+                  <td style="padding: 6px 10px;"><span style="background: #fef3c7; border: 1px solid #fcd34d; color: #92400e; border-radius: 20px; padding: 2px 8px; font-size: 11px;">⧗ Processando</span></td>
+                  <td style="padding: 6px 10px; font-size: 11px; color: #6c757d;">12/06/2026 09:11</td>
+                  <td style="padding: 6px 10px;"><div style="display: flex; gap: 4px;"><button style="border: 1px solid #0d6efd; color: #0d6efd; background: white; border-radius: 4px; padding: 3px 8px; font-size: 11px;">👁</button><button style="border: 1px solid #6c757d; color: #6c757d; background: white; border-radius: 4px; padding: 3px 8px; font-size: 11px;">+</button></div></td>
+                </tr>
+                <tr style="border-top: 1px solid #f0f0f0;">
+                  <td colspan="8" style="padding: 6px 10px; text-align: center; color: #9aa5b4; font-size: 11px;">... mais 18 linhas</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Seção 4: Cards de agentes -->
+    <div class="option" data-choice="agent-cards" onclick="toggleSelect(this)" style="padding: 0; border-radius: 10px; overflow: hidden;">
+      <div style="display: flex; align-items: stretch; width: 100%;">
+        <div class="letter" style="min-width: 40px; display: flex; align-items: center; justify-content: center; font-size: 13px;">D</div>
+        <div style="flex: 1; padding: 12px 16px; background: #f8f9fa; border-left: 1px solid #e9ecef;">
+          <div style="font-size: 11px; text-transform: uppercase; color: #6c7a8d; font-weight: 700; letter-spacing: .04em; margin-bottom: 8px;">SEÇÃO D — Cards "Agente Revisor" e "Agente de Treinamento" (2 cards lado a lado)</div>
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+            <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
+              <div style="font-size: 12px; font-weight: 700; margin-bottom: 8px;">⚙ Agente Revisor</div>
+              <div style="font-size: 11px; color: #6c7a8d; margin-bottom: 4px;">Status: <span style="background: #d1fae5; color: #065f46; border-radius: 20px; padding: 1px 8px; font-size: 10px;">✓ Ativo</span></div>
+              <div style="font-size: 11px; color: #6c7a8d;">Modelo: <code style="font-size: 10px;">gpt-4o-mini</code></div>
+              <div style="font-size: 11px; color: #6c7a8d;">Temperatura: <span style="background: #e9ecef; border-radius: 20px; padding: 1px 6px; font-size: 10px;">0.0</span></div>
+            </div>
+            <div style="background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px;">
+              <div style="font-size: 12px; font-weight: 700; margin-bottom: 8px;">🎓 Agente de Treinamento</div>
+              <div style="font-size: 11px; color: #6c7a8d; margin-bottom: 4px;">Status: <span style="background: #d1fae5; color: #065f46; border-radius: 20px; padding: 1px 8px; font-size: 10px;">✓ Ativo</span></div>
+              <div style="font-size: 11px; color: #6c7a8d;">Modelo: <code style="font-size: 10px;">gpt-4o-mini</code></div>
+              <div style="font-size: 11px; color: #6c7a8d;">Temperatura: <span style="background: #e9ecef; border-radius: 20px; padding: 1px 6px; font-size: 10px;">0.7</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Seção 5: Navegação rápida -->
+    <div class="option" data-choice="quick-nav" onclick="toggleSelect(this)" style="padding: 0; border-radius: 10px; overflow: hidden;">
+      <div style="display: flex; align-items: stretch; width: 100%;">
+        <div class="letter" style="min-width: 40px; display: flex; align-items: center; justify-content: center; font-size: 13px;">E</div>
+        <div style="flex: 1; padding: 12px 16px; background: #f8f9fa; border-left: 1px solid #e9ecef;">
+          <div style="font-size: 11px; text-transform: uppercase; color: #6c7a8d; font-weight: 700; letter-spacing: .04em; margin-bottom: 8px;">SEÇÃO E — Botões de navegação rápida no rodapé (Revisar · Treinamento · Configurações · Auditoria)</div>
+          <div style="display: grid; grid-template-columns: repeat(4,1fr); gap: 8px;">
+            <div style="border: 1px solid #0d6efd; color: #0d6efd; border-radius: 6px; padding: 7px; text-align: center; font-size: 12px;">Revisar Petição</div>
+            <div style="border: 1px solid #0dcaf0; color: #0c7a94; border-radius: 6px; padding: 7px; text-align: center; font-size: 12px;">Treinamento</div>
+            <div style="border: 1px solid #6c757d; color: #6c757d; border-radius: 6px; padding: 7px; text-align: center; font-size: 12px;">Configurações</div>
+            <div style="border: 1px solid #343a40; color: #343a40; border-radius: 6px; padding: 7px; text-align: center; font-size: 12px;">Auditoria</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top: 20px; text-align: center;">Selecione as seções que mais incomodam. Pode selecionar várias.</p>

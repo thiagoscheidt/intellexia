@@ -1,0 +1,197 @@
+<h2>Design detalhado — Dashboard FAP Review</h2>
+<p class="subtitle">Mockup completo da abordagem A. Confira cada seção e me diz se está bom.</p>
+
+<div style="max-width: 1000px; margin: 0 auto; font-family: system-ui, sans-serif;">
+
+  <!-- ── PAGE HERO (sem mudança) ───────────────────────────────── -->
+  <div style="background: #f8f9fa; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 18px; margin-bottom: 14px; display: flex; justify-content: space-between; align-items: center;">
+    <div>
+      <div style="font-size: 18px; font-weight: 800; margin-bottom: 2px;">Revisor de Petições</div>
+      <div style="font-size: 12px; color: #6c7a8d;">Revisão e análise de petições iniciais FAP com agentes de IA</div>
+    </div>
+    <!-- Botão principal movido para cá -->
+    <a href="#" style="background: #0d6efd; color: white; border: none; border-radius: 8px; padding: 9px 18px; font-size: 13px; font-weight: 700; text-decoration: none; display: flex; align-items: center; gap: 6px; white-space: nowrap;">
+      + Nova Revisão
+    </a>
+  </div>
+
+  <!-- ── STAT CARDS — agora com subtítulo descritivo ───────────── -->
+  <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 14px;">
+    <div style="background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; border-left: 5px solid #0d6efd; box-shadow: 0 2px 8px rgba(15,23,42,.05);">
+      <div style="font-size: 10px; color: #6c7a8d; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;">Total de petições</div>
+      <div style="font-size: 1.8rem; font-weight: 900; line-height: 1.1; margin: 4px 0;">12</div>
+      <div style="font-size: 11px; color: #9aa5b4;">38 revisões realizadas</div>
+    </div>
+    <div style="background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; border-left: 5px solid #dc3545; box-shadow: 0 2px 8px rgba(15,23,42,.05);">
+      <div style="font-size: 10px; color: #dc3545; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;">⚠ Aguardando ajustes</div>
+      <div style="font-size: 1.8rem; font-weight: 900; line-height: 1.1; margin: 4px 0; color: #dc3545;">3</div>
+      <div style="font-size: 11px; color: #dc3545; opacity: .7;">Requerem atenção agora</div>
+    </div>
+    <div style="background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; border-left: 5px solid #ffc107; box-shadow: 0 2px 8px rgba(15,23,42,.05);">
+      <div style="font-size: 10px; color: #9a6700; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;">Em revisão</div>
+      <div style="font-size: 1.8rem; font-weight: 900; line-height: 1.1; margin: 4px 0; color: #9a6700;">5</div>
+      <div style="font-size: 11px; color: #9aa5b4;">Processando</div>
+    </div>
+    <div style="background: white; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; border-left: 5px solid #198754; box-shadow: 0 2px 8px rgba(15,23,42,.05);">
+      <div style="font-size: 10px; color: #198754; font-weight: 700; text-transform: uppercase; letter-spacing: .05em;">Prontas para seguir</div>
+      <div style="font-size: 1.8rem; font-weight: 900; line-height: 1.1; margin: 4px 0; color: #198754;">4</div>
+      <div style="font-size: 11px; color: #9aa5b4;">33% do total</div>
+    </div>
+  </div>
+
+  <!-- ── TABELA COM BUSCA + FILTROS ───────────────────────────── -->
+  <div style="background: white; border: 1px solid #e2e8f0; border-radius: 10px; overflow: hidden; box-shadow: 0 2px 8px rgba(15,23,42,.05); margin-bottom: 14px;">
+
+    <!-- Header da tabela -->
+    <div style="padding: 14px 16px; border-bottom: 1px solid #f0f0f0; display: flex; align-items: center; justify-content: space-between; gap: 12px;">
+      <div style="font-size: 14px; font-weight: 700;">Petições em Acompanhamento</div>
+      <div style="display: flex; gap: 8px; align-items: center; flex: 1; justify-content: flex-end;">
+        <!-- Busca -->
+        <div style="display: flex; align-items: center; gap: 6px; background: #f8f9fa; border: 1px solid #e2e8f0; border-radius: 7px; padding: 6px 10px; min-width: 200px;">
+          <span style="color: #9aa5b4; font-size: 13px;">🔍</span>
+          <span style="font-size: 12px; color: #9aa5b4;">Buscar petição ou Id Wrike...</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Filtros por status -->
+    <div style="padding: 8px 16px; border-bottom: 1px solid #f0f0f0; display: flex; gap: 6px; flex-wrap: wrap; align-items: center; background: #fafafa;">
+      <span style="font-size: 11px; color: #9aa5b4; font-weight: 600; margin-right: 4px;">Filtrar:</span>
+      <span style="background: #0d6efd; color: white; border-radius: 20px; padding: 3px 12px; font-size: 11px; font-weight: 700; cursor: pointer;">Todos (12)</span>
+      <span style="background: white; border: 1px solid #fca5a5; color: #dc3545; border-radius: 20px; padding: 3px 12px; font-size: 11px; font-weight: 600; cursor: pointer;">⚠ Ajustes (3)</span>
+      <span style="background: white; border: 1px solid #fcd34d; color: #9a6700; border-radius: 20px; padding: 3px 12px; font-size: 11px; cursor: pointer;">⧗ Em revisão (5)</span>
+      <span style="background: white; border: 1px solid #86efac; color: #15803d; border-radius: 20px; padding: 3px 12px; font-size: 11px; cursor: pointer;">✓ Prontas (4)</span>
+      <span style="background: white; border: 1px solid #e2e8f0; color: #6c7a8d; border-radius: 20px; padding: 3px 12px; font-size: 11px; cursor: pointer;">Novas / Arquivadas</span>
+    </div>
+
+    <!-- Linhas da tabela -->
+    <!-- URGENTE: Aguardando ajustes → fundo levemente vermelho -->
+    <div style="background: rgba(220,53,69,.04); border-left: 4px solid #dc3545; display: grid; grid-template-columns: 200px 1fr 140px auto; gap: 0; align-items: center; padding: 10px 16px; border-bottom: 1px solid rgba(220,53,69,.12);">
+      <div>
+        <div style="display: inline-flex; align-items: center; gap: 5px; background: #fee2e2; border: 1px solid #fca5a5; border-radius: 6px; padding: 3px 8px; font-size: 11px; font-weight: 700; color: #b91c1c; max-width: 190px;">
+          <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='15' fill='%23b91c1c'/%3E%3Ctext y='.9em' font-size='80' fill='white'%3EW%3C/text%3E%3C/svg%3E" style="width:14px; height:14px; border-radius:3px;" alt="W">
+          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">PET-FAP-002</span>
+        </div>
+      </div>
+      <div style="padding: 0 12px;">
+        <div style="font-size: 13px; font-weight: 700; color: #1e293b;">Revisão FAP Beta S.A.</div>
+        <div style="font-size: 11px; color: #dc3545; margin-top: 2px; font-weight: 600;">⚠ Aguardando ajustes · R1 · 11/06/2026</div>
+      </div>
+      <div>
+        <span style="background: #fee2e2; border: 1px solid #fca5a5; color: #b91c1c; border-radius: 20px; padding: 3px 10px; font-size: 11px; font-weight: 700;">⚠ Ajustes</span>
+      </div>
+      <div style="display: flex; gap: 6px; justify-content: flex-end;">
+        <button style="border: 1px solid #6c757d; color: #495057; background: white; border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer;">Histórico</button>
+        <button style="border: 1px solid #0d6efd; color: white; background: #0d6efd; border-radius: 6px; padding: 5px 10px; font-size: 12px; font-weight: 600; cursor: pointer;">Revisar</button>
+      </div>
+    </div>
+
+    <!-- URGENTE 2 -->
+    <div style="background: rgba(220,53,69,.04); border-left: 4px solid #dc3545; display: grid; grid-template-columns: 200px 1fr 140px auto; gap: 0; align-items: center; padding: 10px 16px; border-bottom: 1px solid rgba(220,53,69,.12);">
+      <div>
+        <div style="display: inline-flex; align-items: center; gap: 5px; background: #fee2e2; border: 1px solid #fca5a5; border-radius: 6px; padding: 3px 8px; font-size: 11px; font-weight: 700; color: #b91c1c; max-width: 190px;">
+          <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='15' fill='%23b91c1c'/%3E%3Ctext y='.9em' font-size='80' fill='white'%3EW%3C/text%3E%3C/svg%3E" style="width:14px; height:14px; border-radius:3px;" alt="W">
+          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">PET-FAP-007</span>
+        </div>
+      </div>
+      <div style="padding: 0 12px;">
+        <div style="font-size: 13px; font-weight: 700; color: #1e293b;">Contestação FAP Delta Ind.</div>
+        <div style="font-size: 11px; color: #dc3545; margin-top: 2px; font-weight: 600;">⚠ Aguardando ajustes · R2 · 10/06/2026</div>
+      </div>
+      <div>
+        <span style="background: #fee2e2; border: 1px solid #fca5a5; color: #b91c1c; border-radius: 20px; padding: 3px 10px; font-size: 11px; font-weight: 700;">⚠ Ajustes</span>
+      </div>
+      <div style="display: flex; gap: 6px; justify-content: flex-end;">
+        <button style="border: 1px solid #6c757d; color: #495057; background: white; border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer;">Histórico</button>
+        <button style="border: 1px solid #0d6efd; color: white; background: #0d6efd; border-radius: 6px; padding: 5px 10px; font-size: 12px; font-weight: 600; cursor: pointer;">Revisar</button>
+      </div>
+    </div>
+
+    <!-- EM REVISÃO: fundo amarelo leve -->
+    <div style="background: rgba(255,193,7,.04); border-left: 4px solid #ffc107; display: grid; grid-template-columns: 200px 1fr 140px auto; gap: 0; align-items: center; padding: 10px 16px; border-bottom: 1px solid #f5f5f5;">
+      <div>
+        <div style="display: inline-flex; align-items: center; gap: 5px; background: #fef9c3; border: 1px solid #fcd34d; border-radius: 6px; padding: 3px 8px; font-size: 11px; font-weight: 700; color: #854d0e; max-width: 190px;">
+          <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='15' fill='%23854d0e'/%3E%3Ctext y='.9em' font-size='80' fill='white'%3EW%3C/text%3E%3C/svg%3E" style="width:14px; height:14px; border-radius:3px;" alt="W">
+          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">PET-FAP-003</span>
+        </div>
+      </div>
+      <div style="padding: 0 12px;">
+        <div style="font-size: 13px; font-weight: 600; color: #1e293b;">Contestação FAP Gama Ltda</div>
+        <div style="font-size: 11px; color: #9aa5b4; margin-top: 2px;">R2 · 12/06/2026</div>
+      </div>
+      <div>
+        <span style="background: #fef9c3; border: 1px solid #fcd34d; color: #854d0e; border-radius: 20px; padding: 3px 10px; font-size: 11px;">⧗ Em revisão</span>
+      </div>
+      <div style="display: flex; gap: 6px; justify-content: flex-end;">
+        <button style="border: 1px solid #6c757d; color: #495057; background: white; border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer;">Histórico</button>
+        <button style="border: 1px solid #0d6efd; color: white; background: #0d6efd; border-radius: 6px; padding: 5px 10px; font-size: 12px; font-weight: 600; cursor: pointer;">Revisar</button>
+      </div>
+    </div>
+
+    <!-- PRONTA: normal, borda verde -->
+    <div style="border-left: 4px solid #198754; display: grid; grid-template-columns: 200px 1fr 140px auto; gap: 0; align-items: center; padding: 10px 16px; border-bottom: 1px solid #f5f5f5;">
+      <div>
+        <div style="display: inline-flex; align-items: center; gap: 5px; background: #dbeafe; border: 1px solid #93c5fd; border-radius: 6px; padding: 3px 8px; font-size: 11px; font-weight: 700; color: #1d4ed8; max-width: 190px;">
+          <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='15' fill='%231d4ed8'/%3E%3Ctext y='.9em' font-size='80' fill='white'%3EW%3C/text%3E%3C/svg%3E" style="width:14px; height:14px; border-radius:3px;" alt="W">
+          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">PET-FAP-001</span>
+        </div>
+      </div>
+      <div style="padding: 0 12px;">
+        <div style="font-size: 13px; font-weight: 600; color: #1e293b;">Inicial FAP Empresa XPTO 2026</div>
+        <div style="font-size: 11px; color: #9aa5b4; margin-top: 2px;">R3 · 12/06/2026</div>
+      </div>
+      <div>
+        <span style="background: #d1fae5; border: 1px solid #6ee7b7; color: #065f46; border-radius: 20px; padding: 3px 10px; font-size: 11px;">✓ Pronta</span>
+      </div>
+      <div style="display: flex; gap: 6px; justify-content: flex-end;">
+        <button style="border: 1px solid #6c757d; color: #495057; background: white; border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer;">Histórico</button>
+        <button style="border: 1px solid #0d6efd; color: white; background: #0d6efd; border-radius: 6px; padding: 5px 10px; font-size: 12px; font-weight: 600; cursor: pointer;">Revisar</button>
+      </div>
+    </div>
+
+    <!-- PRONTA 2 -->
+    <div style="border-left: 4px solid #198754; display: grid; grid-template-columns: 200px 1fr 140px auto; gap: 0; align-items: center; padding: 10px 16px; border-bottom: 1px solid #f5f5f5;">
+      <div>
+        <div style="display: inline-flex; align-items: center; gap: 5px; background: #ecfccb; border: 1px solid #bef264; border-radius: 6px; padding: 3px 8px; font-size: 11px; font-weight: 700; color: #4d7c0f; max-width: 190px;">
+          <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='15' fill='%234d7c0f'/%3E%3Ctext y='.9em' font-size='80' fill='white'%3EW%3C/text%3E%3C/svg%3E" style="width:14px; height:14px; border-radius:3px;" alt="W">
+          <span style="overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">PET-FAP-005</span>
+        </div>
+      </div>
+      <div style="padding: 0 12px;">
+        <div style="font-size: 13px; font-weight: 600; color: #1e293b;">FAP Epsilon Comércio Ltda</div>
+        <div style="font-size: 11px; color: #9aa5b4; margin-top: 2px;">R1 · 09/06/2026</div>
+      </div>
+      <div>
+        <span style="background: #d1fae5; border: 1px solid #6ee7b7; color: #065f46; border-radius: 20px; padding: 3px 10px; font-size: 11px;">✓ Pronta</span>
+      </div>
+      <div style="display: flex; gap: 6px; justify-content: flex-end;">
+        <button style="border: 1px solid #6c757d; color: #495057; background: white; border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer;">Histórico</button>
+        <button style="border: 1px solid #0d6efd; color: white; background: #0d6efd; border-radius: 6px; padding: 5px 10px; font-size: 12px; font-weight: 600; cursor: pointer;">Revisar</button>
+      </div>
+    </div>
+
+    <!-- Rodapé da tabela -->
+    <div style="padding: 10px 16px; background: #fafafa; border-top: 1px solid #f0f0f0; display: flex; justify-content: space-between; align-items: center;">
+      <span style="font-size: 12px; color: #9aa5b4;">Exibindo 5 de 12 petições</span>
+      <span style="font-size: 12px; color: #0d6efd; cursor: pointer; font-weight: 600;">Ver todas →</span>
+    </div>
+  </div>
+
+  <!-- ── LEGENDA das mudanças ──────────────────────────────────── -->
+  <div style="background: #f0f9ff; border: 1px solid #bae6fd; border-radius: 10px; padding: 14px 16px; font-size: 12px; color: #0369a1;">
+    <div style="font-weight: 700; margin-bottom: 8px;">📋 O que mudou em relação ao atual:</div>
+    <ul style="margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px;">
+      <li><strong>Botão "Nova Revisão"</strong> movido para o cabeçalho da página (sempre visível)</li>
+      <li><strong>Stat card "Ajustes"</strong> ficou vermelho com texto "Requerem atenção agora" — urgência clara</li>
+      <li><strong>Barra de busca + filtros por status</strong> acima da tabela</li>
+      <li><strong>Linhas coloridas</strong> com borda esquerda por status (vermelho = ajustes, amarelo = em revisão, verde = pronta)</li>
+      <li><strong>Id Wrike sempre visível</strong> na primeira coluna com chip colorido (mantém cores variadas por hash)</li>
+      <li><strong>Título + revisão + data</strong> na mesma célula (sem coluna "Atualizado" separada)</li>
+      <li><strong>Botões "Histórico" e "Revisar"</strong> com texto, sem ícones soltos</li>
+      <li><strong>Coluna "ID" (#5, #4)</strong> removida — o Wrike ID substitui como identificador</li>
+      <li><strong>Coluna "Revisões"</strong> (contagem) removida — info agora inline no subtítulo da linha</li>
+      <li><strong>Cards de agentes + navegação rápida</strong> removidos do dashboard — vivem na tela de Configurações</li>
+    </ul>
+  </div>
+
+</div>
