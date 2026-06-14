@@ -21,7 +21,7 @@ from pathlib import Path
 
 from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session, url_for, send_file
 from werkzeug.utils import secure_filename
-from sqlalchemy import and_, func
+from sqlalchemy import and_, func, case
 
 from app.models import (
     db, User, LawFirm,
@@ -838,9 +838,17 @@ def index():
         execution_type='revision',
     ).count()
 
+    _priority_order = case(
+        (FapReviewPetition.workflow_status == 'awaiting_adjustments', 0),
+        (FapReviewPetition.workflow_status.in_(['new', 'in_review']), 1),
+        (FapReviewPetition.workflow_status == 'ready_for_filing', 2),
+        else_=3
+    )
+
     petitions = FapReviewPetition.query.filter_by(
         law_firm_id=law_firm_id,
     ).order_by(
+        _priority_order,
         FapReviewPetition.updated_at.desc(),
         FapReviewPetition.id.desc(),
     ).limit(20).all()
