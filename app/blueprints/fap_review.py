@@ -25,6 +25,7 @@ from sqlalchemy import and_, func
 
 from app.models import (
     db, User, LawFirm,
+    FapReviewPetition,
     FapReviewPromptVersion, FapReviewReferenceVersion, FapReviewSetting,
     FapReviewExecution, FapReviewIgnoredFinding, FapReviewAuditLog
 )
@@ -68,6 +69,14 @@ ALLOWED_BENEFITS_SPREADSHEET_EXTENSIONS = {'xlsx'}
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB
 READ_ONLY_PROMPT_TYPES = {'revisor_output_format'}
 READ_ONLY_REFERENCE_TYPES = {'project_instructions'}
+PETITION_WORKFLOW_STATUSES = {
+    'new': 'Nova',
+    'in_review': 'Em revisão',
+    'awaiting_adjustments': 'Aguardando ajustes',
+    'ready_for_filing': 'Pronta para seguir',
+    'filed': 'Processo iniciado',
+    'archived': 'Arquivada',
+}
 
 
 def _get_file_extension(filename: str) -> str:
@@ -396,25 +405,35 @@ def _get_ignored_finding_fingerprints(law_firm_id: int, law_firm_document_identi
 
 def _build_prior_attention_points(
     law_firm_id: int,
+    petition_id: int | None,
     law_firm_document_identifier: str,
     current_execution_id: int,
 ) -> str | None:
     """Resume os pontos de atenção da última revisão concluída do mesmo documento."""
-    if not law_firm_document_identifier:
+    if not petition_id and not law_firm_document_identifier:
         return None
 
-    previous_execution = (
-        FapReviewExecution.query.filter(
-            FapReviewExecution.law_firm_id == law_firm_id,
-            FapReviewExecution.execution_type == 'revision',
-            FapReviewExecution.status == 'completed',
-            FapReviewExecution.law_firm_document_identifier == law_firm_document_identifier,
-            FapReviewExecution.id != current_execution_id,
-            FapReviewExecution.result_json.isnot(None),
-        )
-        .order_by(FapReviewExecution.completed_at.desc(), FapReviewExecution.id.desc())
-        .first()
+    previous_execution_query = FapReviewExecution.query.filter(
+        FapReviewExecution.law_firm_id == law_firm_id,
+        FapReviewExecution.execution_type == 'revision',
+        FapReviewExecution.status == 'completed',
+        FapReviewExecution.id != current_execution_id,
+        FapReviewExecution.result_json.isnot(None),
     )
+
+    if petition_id:
+        previous_execution_query = previous_execution_query.filter(
+            FapReviewExecution.petition_id == petition_id,
+        )
+    else:
+        previous_execution_query = previous_execution_query.filter(
+            FapReviewExecution.law_firm_document_identifier == law_firm_document_identifier,
+        )
+
+    previous_execution = previous_execution_query.order_by(
+        FapReviewExecution.completed_at.desc(),
+        FapReviewExecution.id.desc(),
+    ).first()
 
     if not previous_execution or not previous_execution.result_json:
         return None
@@ -558,6 +577,7 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_file_p
             petition_text = _extract_text_from_document(petition_file_path) if petition_extension in {'.docx', '.txt'} else None
             prior_attention_points = _build_prior_attention_points(
                 law_firm_id=law_firm_id,
+                petition_id=execution.petition_id,
                 law_firm_document_identifier=execution.law_firm_document_identifier or '',
                 current_execution_id=execution.id,
             )
@@ -647,6 +667,8 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_file_p
                 execution.tokens_used = result.tokens_used
             if hasattr(result, 'cost_usd'):
                 execution.cost_usd = Decimal(str(result.cost_usd))
+
+            _sync_petition_after_revision(execution)
             
             db.session.commit()
             
@@ -669,6 +691,7 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_file_p
                 execution.status = 'failed'
                 execution.error_message = str(e)
                 execution.completed_at = datetime.utcnow()
+                _sync_petition_after_revision(execution)
                 db.session.commit()
                 
                 _log_audit(law_firm_id, 'revision_failed', 'execution', execution_id,
@@ -722,6 +745,70 @@ def _append_reference_version(
     return version
 
 
+def _build_petition_title(raw_title: str, fallback_filename: str = '', fallback_identifier: str = '') -> str:
+    """Monta um título amigável para a petição."""
+    title = ' '.join(str(raw_title or '').strip().split())
+    if title:
+        return title
+
+    filename = Path(str(fallback_filename or '')).stem.strip()
+    if filename:
+        return filename
+
+    identifier = str(fallback_identifier or '').strip()
+    return identifier or 'Petição sem título'
+
+
+def _derive_petition_workflow_status(execution_status: str) -> str:
+    """Traduz o status da revisão para o status agregado da petição."""
+    if execution_status in {'pending', 'processing'}:
+        return 'in_review'
+    if execution_status == 'completed':
+        return 'ready_for_filing'
+    if execution_status == 'failed':
+        return 'awaiting_adjustments'
+    return 'new'
+
+
+def _sync_petition_after_revision(execution: FapReviewExecution) -> None:
+    """Atualiza a visão agregada da petição depois de uma revisão."""
+    petition = execution.petition
+    if not petition or execution.execution_type != 'revision':
+        return
+
+    if execution.revision_number is None:
+        execution.revision_number = FapReviewExecution.query.filter_by(
+            petition_id=petition.id,
+            execution_type='revision',
+        ).count()
+
+    petition.latest_revision_id = execution.id
+    petition.revision_count = max(petition.revision_count or 0, execution.revision_number or 0)
+    petition.last_reviewed_at = execution.completed_at or execution.updated_at or execution.created_at
+
+    if petition.workflow_status not in {'filed', 'archived'}:
+        petition.workflow_status = _derive_petition_workflow_status(execution.status)
+
+    petition.updated_at = datetime.utcnow()
+
+
+def _build_petition_status_badge(workflow_status: str) -> dict[str, str]:
+    """Retorna classes e label para o status da petição na UI."""
+    mapping = {
+        'new': {'class': 'secondary', 'icon': 'bi bi-plus-circle'},
+        'in_review': {'class': 'warning', 'icon': 'bi bi-hourglass-split'},
+        'awaiting_adjustments': {'class': 'danger', 'icon': 'bi bi-pencil-square'},
+        'ready_for_filing': {'class': 'success', 'icon': 'bi bi-check-circle'},
+        'filed': {'class': 'primary', 'icon': 'bi bi-send-check'},
+        'archived': {'class': 'dark', 'icon': 'bi bi-archive'},
+    }
+    status_key = workflow_status if workflow_status in mapping else 'new'
+    return {
+        'label': PETITION_WORKFLOW_STATUSES.get(status_key, 'Nova'),
+        **mapping[status_key],
+    }
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # ROTAS PRINCIPAIS
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -732,31 +819,51 @@ def _append_reference_version(
 def index():
     """Dashboard principal do módulo"""
     law_firm_id = get_current_law_firm_id()
-    
-    # Estatísticas
-    total_executions = FapReviewExecution.query.filter_by(law_firm_id=law_firm_id).count()
-    completed_executions = FapReviewExecution.query.filter_by(
+
+    total_petitions = FapReviewPetition.query.filter_by(law_firm_id=law_firm_id).count()
+    ready_petitions = FapReviewPetition.query.filter_by(
         law_firm_id=law_firm_id,
-        status='completed'
+        workflow_status='ready_for_filing',
     ).count()
-    failed_executions = FapReviewExecution.query.filter_by(
+    in_review_petitions = FapReviewPetition.query.filter(
+        FapReviewPetition.law_firm_id == law_firm_id,
+        FapReviewPetition.workflow_status.in_(['new', 'in_review']),
+    ).count()
+    awaiting_adjustments_petitions = FapReviewPetition.query.filter_by(
         law_firm_id=law_firm_id,
-        status='failed'
+        workflow_status='awaiting_adjustments',
     ).count()
-    
-    # Últimas execuções
-    recent_executions = FapReviewExecution.query.filter_by(
-        law_firm_id=law_firm_id
-    ).order_by(FapReviewExecution.created_at.desc()).limit(5).all()
-    
-    # Configurações
+    total_revisions = FapReviewExecution.query.filter_by(
+        law_firm_id=law_firm_id,
+        execution_type='revision',
+    ).count()
+
+    petitions = FapReviewPetition.query.filter_by(
+        law_firm_id=law_firm_id,
+    ).order_by(
+        FapReviewPetition.updated_at.desc(),
+        FapReviewPetition.id.desc(),
+    ).limit(20).all()
+
+    petition_rows = [
+        {
+            'petition': petition,
+            'latest_revision': petition.latest_revision,
+            'status_badge': _build_petition_status_badge(petition.workflow_status),
+        }
+        for petition in petitions
+    ]
+
     setting = _get_fap_setting(law_firm_id)
-    
+
     return render_template('fap_review/index.html',
-                          total_executions=total_executions,
-                          completed_executions=completed_executions,
-                          failed_executions=failed_executions,
-                          recent_executions=recent_executions,
+                          total_petitions=total_petitions,
+                          ready_petitions=ready_petitions,
+                          in_review_petitions=in_review_petitions,
+                          awaiting_adjustments_petitions=awaiting_adjustments_petitions,
+                          total_revisions=total_revisions,
+                          petition_rows=petition_rows,
+                          petition_status_labels=PETITION_WORKFLOW_STATUSES,
                           setting=setting)
 
 
@@ -784,13 +891,26 @@ def revision():
             if not allowed_file(main_file.filename, ALLOWED_DOCUMENT_EXTENSIONS):
                 return jsonify({'error': 'Tipo de arquivo não permitido'}), 400
 
+            petition_id = request.form.get('petition_id', type=int)
+            petition_title = str(request.form.get('petition_title', '')).strip()
+            petition = None
             law_firm_document_identifier = str(
                 request.form.get('law_firm_document_identifier', '')
             ).strip()
-            if not law_firm_document_identifier:
-                return jsonify({'error': 'Informe o identificador do documento para o escritório.'}), 400
-            if len(law_firm_document_identifier) > 96:
-                return jsonify({'error': 'O identificador do documento deve ter no máximo 96 caracteres.'}), 400
+
+            if petition_id:
+                petition = FapReviewPetition.query.filter_by(
+                    id=petition_id,
+                    law_firm_id=law_firm_id,
+                ).first()
+                if not petition:
+                    return jsonify({'error': 'Petição selecionada não encontrada.'}), 404
+                law_firm_document_identifier = petition.office_document_identifier
+            else:
+                if not law_firm_document_identifier:
+                    return jsonify({'error': 'Informe o identificador do documento para o escritório.'}), 400
+                if len(law_firm_document_identifier) > 96:
+                    return jsonify({'error': 'O identificador do documento deve ter no máximo 96 caracteres.'}), 400
             
             # Salvar arquivo principal
             upload_dir = _create_upload_directory(law_firm_id, 'revisions')
@@ -850,13 +970,45 @@ def revision():
                     compared_file.save(str(compared_filepath))
                     compared_document = str(compared_filepath)
                     comparative_analysis = True
+
+            if not petition:
+                petition = FapReviewPetition.query.filter_by(
+                    law_firm_id=law_firm_id,
+                    office_document_identifier=law_firm_document_identifier,
+                ).first()
+
+            petition_created = False
+            petition_created_title = ''
+            if not petition:
+                petition = FapReviewPetition(
+                    law_firm_id=law_firm_id,
+                    created_by_id=user_id,
+                    office_document_identifier=law_firm_document_identifier,
+                    title=_build_petition_title(
+                        petition_title,
+                        fallback_filename=main_file.filename,
+                        fallback_identifier=law_firm_document_identifier,
+                    ),
+                    workflow_status='in_review',
+                )
+                db.session.add(petition)
+                db.session.flush()
+                petition_created = True
+                petition_created_title = petition.title
+
+            next_revision_number = FapReviewExecution.query.filter_by(
+                petition_id=petition.id,
+                execution_type='revision',
+            ).count() + 1
             
             # Criar registro de execução
             execution = FapReviewExecution(
                 law_firm_id=law_firm_id,
                 user_id=user_id,
+                petition_id=petition.id,
                 execution_type='revision',
                 status='processing',
+                revision_number=next_revision_number,
                 main_document_path=str(filepath),
                 main_document_filename=main_file.filename,
                 law_firm_document_identifier=law_firm_document_identifier,
@@ -866,7 +1018,21 @@ def revision():
                 compared_document_path=compared_document
             )
             db.session.add(execution)
+            db.session.flush()
+            petition.latest_revision_id = execution.id
+            petition.revision_count = max(petition.revision_count or 0, next_revision_number)
+            petition.workflow_status = 'in_review'
+            petition.updated_at = datetime.utcnow()
             db.session.commit()
+
+            if petition_created:
+                _log_audit(
+                    law_firm_id,
+                    'petition_created',
+                    'petition',
+                    petition.id,
+                    f'Petição criada: {petition_created_title}',
+                )
             
             # Log de auditoria
             _log_audit(law_firm_id, 'revision_started', 'execution', execution.id,
@@ -906,6 +1072,7 @@ def revision():
             
             return jsonify({
                 'success': True,
+                'petition_id': petition.id,
                 'execution_id': execution.id,
                 'message': 'Revisão iniciada com sucesso'
             })
@@ -917,7 +1084,27 @@ def revision():
     
     # GET - Exibir página
     setting = _get_fap_setting(law_firm_id)
-    return render_template('fap_review/revision.html', setting=setting)
+    petitions = FapReviewPetition.query.filter_by(
+        law_firm_id=law_firm_id,
+    ).order_by(
+        FapReviewPetition.updated_at.desc(),
+        FapReviewPetition.id.desc(),
+    ).all()
+    selected_petition_id = request.args.get('petition_id', type=int)
+    selected_petition = None
+    if selected_petition_id:
+        selected_petition = FapReviewPetition.query.filter_by(
+            id=selected_petition_id,
+            law_firm_id=law_firm_id,
+        ).first()
+
+    return render_template(
+        'fap_review/revision.html',
+        setting=setting,
+        petitions=petitions,
+        selected_petition=selected_petition,
+        petition_status_labels=PETITION_WORKFLOW_STATUSES,
+    )
 
 
 @fap_review_bp.route('/revision/<int:execution_id>', methods=['GET'])
@@ -930,6 +1117,12 @@ def revision_result(execution_id: int):
         id=execution_id,
         law_firm_id=law_firm_id
     ).first_or_404()
+    petition = execution.petition
+    document_identifier = (
+        petition.office_document_identifier
+        if petition and petition.office_document_identifier
+        else execution.law_firm_document_identifier
+    )
     
     result_data = {}
     if execution.result_json:
@@ -939,10 +1132,10 @@ def revision_result(execution_id: int):
             result_data = {}
 
     ignored_finding_indices: list[int] = []
-    if execution.law_firm_document_identifier and result_data.get('findings'):
+    if document_identifier and result_data.get('findings'):
         ignored_fingerprints = _get_ignored_finding_fingerprints(
             law_firm_id=law_firm_id,
-            law_firm_document_identifier=execution.law_firm_document_identifier,
+            law_firm_document_identifier=document_identifier,
         )
         ignored_finding_indices = [
             index
@@ -951,7 +1144,14 @@ def revision_result(execution_id: int):
         ]
 
     prior_revision_count = 0
-    if execution.law_firm_document_identifier:
+    if execution.petition_id:
+        prior_revision_count = FapReviewExecution.query.filter(
+            FapReviewExecution.law_firm_id == law_firm_id,
+            FapReviewExecution.execution_type == 'revision',
+            FapReviewExecution.petition_id == execution.petition_id,
+            FapReviewExecution.id != execution.id,
+        ).count()
+    elif execution.law_firm_document_identifier:
         prior_revision_count = FapReviewExecution.query.filter(
             FapReviewExecution.law_firm_id == law_firm_id,
             FapReviewExecution.execution_type == 'revision',
@@ -964,11 +1164,84 @@ def revision_result(execution_id: int):
     
     return render_template('fap_review/revision_result.html',
                           execution=execution,
+                          petition=petition,
+                          petition_status_badge=_build_petition_status_badge(petition.workflow_status) if petition else None,
                           result_data=result_data,
                           prior_revision_count=prior_revision_count,
                           ignored_finding_indices=ignored_finding_indices,
                           manual_content=manual_content,
                           manual_reference=manual_reference)
+
+
+@fap_review_bp.route('/petitions/<int:petition_id>', methods=['GET'])
+@require_law_firm
+def petition_detail(petition_id: int):
+    """Exibe o histórico agregado de revisões de uma petição."""
+    law_firm_id = get_current_law_firm_id()
+
+    petition = FapReviewPetition.query.filter_by(
+        id=petition_id,
+        law_firm_id=law_firm_id,
+    ).first_or_404()
+
+    revisions = FapReviewExecution.query.filter_by(
+        law_firm_id=law_firm_id,
+        petition_id=petition.id,
+        execution_type='revision',
+    ).order_by(
+        FapReviewExecution.created_at.desc(),
+        FapReviewExecution.id.desc(),
+    ).all()
+
+    return render_template(
+        'fap_review/petition_detail.html',
+        petition=petition,
+        revisions=revisions,
+        status_badge=_build_petition_status_badge(petition.workflow_status),
+        petition_status_labels=PETITION_WORKFLOW_STATUSES,
+    )
+
+
+@fap_review_bp.route('/petitions/<int:petition_id>/status', methods=['POST'])
+@require_law_firm
+def petition_update_status(petition_id: int):
+    """Permite controle manual do status agregado da petição."""
+    law_firm_id = get_current_law_firm_id()
+
+    petition = FapReviewPetition.query.filter_by(
+        id=petition_id,
+        law_firm_id=law_firm_id,
+    ).first_or_404()
+
+    payload = request.get_json(silent=True) or {}
+    new_status = str(payload.get('workflow_status') or '').strip()
+    if new_status not in PETITION_WORKFLOW_STATUSES:
+        return jsonify({'error': 'Status da petição inválido.'}), 400
+
+    old_status = petition.workflow_status
+    if new_status == old_status:
+        return jsonify({'success': True, 'workflow_status': new_status})
+
+    try:
+        petition.workflow_status = new_status
+        petition.updated_at = datetime.utcnow()
+        db.session.commit()
+    except Exception as error:
+        db.session.rollback()
+        current_app.logger.error(f'Erro ao atualizar status da petição: {error}')
+        return jsonify({'error': 'Não foi possível atualizar o status da petição.'}), 500
+
+    _log_audit(
+        law_firm_id,
+        'petition_status_updated',
+        'petition',
+        petition.id,
+        f'Status alterado de {PETITION_WORKFLOW_STATUSES.get(old_status, old_status)} para {PETITION_WORKFLOW_STATUSES.get(new_status, new_status)}',
+        old_value=old_status,
+        new_value=new_status,
+    )
+
+    return jsonify({'success': True, 'workflow_status': new_status})
 
 
 @fap_review_bp.route('/revision/<int:execution_id>/findings/<int:finding_index>/dismiss-feedback', methods=['POST'])

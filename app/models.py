@@ -2648,12 +2648,62 @@ class FapReviewSetting(db.Model):
         return f'<FapReviewSetting law_firm_id={self.law_firm_id}>'
 
 
+class FapReviewPetition(db.Model):
+    """Tabela fap_review_petitions - Agrupa revisões de uma mesma petição do escritório."""
+    __tablename__ = 'fap_review_petitions'
+    __table_args__ = (
+        db.Index('ix_fap_review_petitions_law_firm_status', 'law_firm_id', 'workflow_status'),
+        db.UniqueConstraint(
+            'law_firm_id',
+            'office_document_identifier',
+            name='uq_fap_review_petitions_office_identifier',
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+
+    office_document_identifier = db.Column(db.String(96), nullable=False)
+    title = db.Column(db.String(255), nullable=False)
+    workflow_status = db.Column(
+        db.String(30),
+        default='new',
+        nullable=False,
+        comment='new, in_review, awaiting_adjustments, ready_for_filing, filed, archived',
+    )
+    latest_revision_id = db.Column(db.Integer, db.ForeignKey('fap_review_executions.id'))
+    revision_count = db.Column(db.Integer, default=0, nullable=False)
+    last_reviewed_at = db.Column(db.DateTime)
+
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    law_firm = db.relationship('LawFirm')
+    created_by = db.relationship('User', foreign_keys=[created_by_id])
+    latest_revision = db.relationship(
+        'FapReviewExecution',
+        foreign_keys=[latest_revision_id],
+        post_update=True,
+    )
+    revisions = db.relationship(
+        'FapReviewExecution',
+        foreign_keys='FapReviewExecution.petition_id',
+        back_populates='petition',
+        lazy='dynamic',
+    )
+
+    def __repr__(self):
+        return f'<FapReviewPetition id={self.id} status={self.workflow_status}>'
+
+
 class FapReviewExecution(db.Model):
     """Tabela fap_review_executions - Registro de execuções do Agente Revisor e Agente de Treinamento"""
     __tablename__ = 'fap_review_executions'
     __table_args__ = (
         db.Index('ix_fap_review_executions_law_firm_status', 'law_firm_id', 'status'),
         db.Index('ix_fap_review_executions_law_firm_document_identifier', 'law_firm_id', 'law_firm_document_identifier'),
+        db.Index('ix_fap_review_executions_petition_id', 'petition_id'),
         db.Index('ix_fap_review_executions_user_id', 'user_id'),
         db.Index('ix_fap_review_executions_execution_type', 'execution_type'),
     )
@@ -2661,9 +2711,11 @@ class FapReviewExecution(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
     user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+    petition_id = db.Column(db.Integer, db.ForeignKey('fap_review_petitions.id'), index=True)
 
     execution_type = db.Column(db.String(50), nullable=False, comment='revision, training')
     status = db.Column(db.String(20), default='pending', nullable=False, comment='pending, processing, completed, failed')
+    revision_number = db.Column(db.Integer, comment='Número sequencial da revisão dentro da petição')
 
     # Documentos
     main_document_path = db.Column(db.String(500))
@@ -2697,6 +2749,7 @@ class FapReviewExecution(db.Model):
 
     law_firm = db.relationship('LawFirm')
     user = db.relationship('User')
+    petition = db.relationship('FapReviewPetition', foreign_keys=[petition_id], back_populates='revisions')
     prompt_version = db.relationship('FapReviewPromptVersion')
     reference_version = db.relationship('FapReviewReferenceVersion')
 

@@ -106,12 +106,139 @@
         margin-bottom: .45rem;
         color: var(--bs-secondary-color);
     }
+
+    .wizard-card {
+        border: 1px solid rgba(15, 23, 42, .07);
+        border-radius: .95rem;
+        box-shadow: 0 6px 22px rgba(15, 23, 42, .06);
+    }
+
+    .wizard-steps {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 2rem;
+        position: relative;
+    }
+
+    .wizard-steps::before {
+        content: '';
+        position: absolute;
+        top: 20px;
+        left: 0;
+        right: 0;
+        height: 2px;
+        background: #e9ecef;
+        z-index: 0;
+    }
+
+    .wizard-step {
+        flex: 1;
+        text-align: center;
+        position: relative;
+        z-index: 1;
+    }
+
+    .wizard-step-circle {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: #e9ecef;
+        color: #6c757d;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0 auto .5rem;
+        font-weight: bold;
+        transition: all .3s;
+    }
+
+    .wizard-step-label {
+        font-size: .875rem;
+        color: #6c757d;
+    }
+
+    .wizard-step.active .wizard-step-circle {
+        background: #0d6efd;
+        color: #fff;
+    }
+
+    .wizard-step.completed .wizard-step-circle {
+        background: #198754;
+        color: #fff;
+    }
+
+    .wizard-step.active .wizard-step-label {
+        color: #0d6efd;
+        font-weight: 600;
+    }
+
+    .wizard-step.completed .wizard-step-label {
+        color: #198754;
+    }
+
+    .wizard-panel {
+        display: none;
+    }
+
+    .wizard-panel.active {
+        display: block;
+    }
+
+    .wizard-panel h6 {
+        font-size: 1rem;
+    }
+
+    .step-actions {
+        border-top: 1px solid rgba(15, 23, 42, .08);
+        padding-top: 1.25rem;
+        margin-top: 1.5rem;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: .75rem;
+    }
+
+    .summary-box {
+        border: 1px solid rgba(15, 23, 42, .08);
+        border-radius: .8rem;
+        background: var(--bs-secondary-bg);
+        padding: .85rem;
+    }
+
+    .summary-line {
+        display: flex;
+        justify-content: space-between;
+        gap: .75rem;
+        padding: .35rem 0;
+        border-bottom: 1px solid rgba(15, 23, 42, .08);
+        font-size: .83rem;
+    }
+
+    .summary-line:last-child {
+        border-bottom: none;
+        padding-bottom: 0;
+    }
+
+    .wrike-inline-mark {
+        height: 14px;
+        width: auto;
+        display: inline-block;
+        vertical-align: middle;
+        flex-shrink: 0;
+    }
+
+    .wrike-label-inline {
+        display: inline-flex;
+        align-items: center;
+        gap: .4rem;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="fap-revision-page">
-    {% call page_hero(title=page_title, subtitle='Envie a petição para análise automática pelo agente revisor', icon='bi
+    {% call page_hero(title=page_title, subtitle='Siga as etapas para selecionar a petição e enviar os arquivos para
+    revisão automática', icon='bi
     bi-file-earmark-arrow-up') %}
     <nav aria-label="breadcrumb">
         <ol class="breadcrumb mb-0 bg-transparent small">
@@ -141,12 +268,23 @@
         <div class="row g-4">
 
             <div class="col-lg-8">
-                <div class="card info-card h-100">
-                    <div class="card-header d-flex align-items-center gap-2">
-                        <i class="bi bi-cloud-upload text-primary"></i>
-                        Enviar Documentos
-                    </div>
-                    <div class="card-body">
+                <div class="card wizard-card h-100">
+                    <div class="card-body p-4">
+                        <div class="wizard-steps" id="wizardSteps">
+                            <div class="wizard-step active" id="step-ind-1">
+                                <div class="wizard-step-circle">1</div>
+                                <div class="wizard-step-label">Petição</div>
+                            </div>
+                            <div class="wizard-step" id="step-ind-2">
+                                <div class="wizard-step-circle">2</div>
+                                <div class="wizard-step-label">Documento</div>
+                            </div>
+                            <div class="wizard-step" id="step-ind-3">
+                                <div class="wizard-step-circle">3</div>
+                                <div class="wizard-step-label">Complementos</div>
+                            </div>
+                        </div>
+
                         <form id="petitionForm" enctype="multipart/form-data">
                             <div class="upload-guideline d-flex align-items-start gap-2 mb-4 small">
                                 <i class="bi bi-shield-check mt-1"></i>
@@ -155,83 +293,181 @@
                                 </div>
                             </div>
 
-                            <div class="mb-4">
-                                <label for="lawFirmDocumentIdentifier" class="form-label small fw-semibold mb-2">
-                                    <i class="bi bi-hash text-primary me-1"></i>
-                                    Identificador do Documento no Escritório <span class="text-danger">*</span>
-                                </label>
-                                <input type="text" class="form-control" id="lawFirmDocumentIdentifier"
-                                    name="law_firm_document_identifier" maxlength="96" required
-                                    placeholder="Ex.: PET-FAP-CLIENTE-X-2026-001">
-                                <div class="form-text">
-                                    Preencha o identificador usado internamente pelo escritório para reconhecer revisões
-                                    anteriores deste documento.
+                            <div class="wizard-panel active" id="panel-1">
+                                <h6 class="fw-semibold mb-1">Selecionar ou criar petição</h6>
+                                <p class="text-muted small mb-3">Escolha uma petição existente ou cadastre uma nova
+                                    antes de iniciar a revisão.</p>
+                                <div class="mb-4">
+                                    <label for="petitionId" class="form-label small fw-semibold mb-2">
+                                        <i class="bi bi-folder2-open text-primary me-1"></i>
+                                        Petição
+                                    </label>
+                                    <select class="form-select" id="petitionId" name="petition_id">
+                                        <option value="">Criar nova petição</option>
+                                        {% for petition in petitions %}
+                                        <option value="{{ petition.id }}" data-title="{{ petition.title }}"
+                                            data-identifier="{{ petition.office_document_identifier }}" {% if
+                                            selected_petition and selected_petition.id==petition.id %}selected{% endif
+                                            %}>
+                                            {{ petition.title }} • {{ petition.office_document_identifier }}
+                                        </option>
+                                        {% endfor %}
+                                    </select>
+                                    <div class="form-text">
+                                        Selecione uma petição existente para adicionar uma nova revisão ou deixe em
+                                        branco
+                                        para criar uma nova.
+                                    </div>
+                                </div>
+
+                                <div class="mb-4">
+                                    <label for="petitionTitle" class="form-label small fw-semibold mb-2">
+                                        <i class="bi bi-card-text text-primary me-1"></i>
+                                        Título da Petição
+                                    </label>
+                                    <input type="text" class="form-control" id="petitionTitle" name="petition_title"
+                                        maxlength="255"
+                                        value="{{ selected_petition.title if selected_petition else '' }}"
+                                        placeholder="Ex.: Inicial FAP Empresa XPTO 2026">
+                                    <div class="form-text">
+                                        Use um nome amigável para localizar a petição no dashboard.
+                                    </div>
+                                </div>
+
+                                <div class="mb-4">
+                                    <label for="lawFirmDocumentIdentifier" class="form-label small fw-semibold mb-2">
+                                        <span class="wrike-label-inline">
+                                            <img src="{{ url_for('static', filename='assets/wrike-logo-light.svg') }}"
+                                                alt="Wrike" class="wrike-inline-mark">
+                                            <span>Id Wrike da Petição <span class="text-danger">*</span></span>
+                                        </span>
+                                    </label>
+                                    <input type="text" class="form-control" id="lawFirmDocumentIdentifier"
+                                        name="law_firm_document_identifier" maxlength="96" required
+                                        value="{{ selected_petition.office_document_identifier if selected_petition else '' }}"
+                                        placeholder="Ex.: PET-FAP-CLIENTE-X-2026-001">
+                                    <div class="form-text">
+                                        Esse Id Wrike passa a representar a petição inteira e agrupa todas as suas
+                                        revisões.
+                                    </div>
+                                </div>
+
+                                <div class="step-actions">
+                                    <a href="{{ url_for('fap_review.index') }}"
+                                        class="btn btn-outline-secondary btn-sm">
+                                        <i class="bi bi-arrow-left me-1"></i> Voltar
+                                    </a>
+                                    <button type="button" class="btn btn-primary btn-sm" id="btnStep1Next">
+                                        Próximo <i class="bi bi-arrow-right ms-1"></i>
+                                    </button>
                                 </div>
                             </div>
 
-                            <div class="mb-4">
-                                <label class="form-label small fw-semibold mb-2">
-                                    <i class="bi bi-file-earmark-pdf text-danger me-1"></i>
-                                    Documento Principal <span class="text-danger">*</span>
-                                </label>
-                                <div class="dropzone-custom" id="mainDocumentDropzone">
-                                    <i class="bi bi-file-earmark-arrow-up dropzone-icon"></i>
-                                    <p class="mb-1 mt-2 fw-semibold small">Arraste o arquivo aqui ou clique para
-                                        selecionar</p>
-                                    <small class="text-muted">PDF, Word (.doc/.docx) - Máximo 50MB</small>
-                                    <input type="file" class="d-none" id="mainDocument" name="main_document"
-                                        accept=".pdf,.doc,.docx" required>
+                            <div class="wizard-panel" id="panel-2">
+                                <h6 class="fw-semibold mb-1">Enviar documento principal</h6>
+                                <p class="text-muted small mb-3">Anexe a versão da petição que será analisada pelo
+                                    agente revisor.</p>
+                                <div class="mb-4">
+                                    <label class="form-label small fw-semibold mb-2">
+                                        <i class="bi bi-file-earmark-pdf text-danger me-1"></i>
+                                        Documento Principal <span class="text-danger">*</span>
+                                    </label>
+                                    <div class="dropzone-custom" id="mainDocumentDropzone">
+                                        <i class="bi bi-file-earmark-arrow-up dropzone-icon"></i>
+                                        <p class="mb-1 mt-2 fw-semibold small">Arraste o arquivo aqui ou clique para
+                                            selecionar</p>
+                                        <small class="text-muted">PDF, Word (.doc/.docx) - Máximo 50MB</small>
+                                        <input type="file" class="d-none" id="mainDocument" name="main_document"
+                                            accept=".pdf,.doc,.docx" required>
+                                    </div>
+                                    <div id="mainDocumentList"></div>
                                 </div>
-                                <div id="mainDocumentList"></div>
-                            </div>
 
-                            <div class="mb-4">
-                                <label class="form-label small fw-semibold mb-2">
-                                    <i class="bi bi-file-earmark-spreadsheet text-success me-1"></i>
-                                    Planilha de Benefícios <span class="text-muted fw-normal">(Opcional)</span>
-                                </label>
-                                <div class="dropzone-custom" id="benefitsSpreadsheetDropzone">
-                                    <i class="bi bi-file-earmark-spreadsheet dropzone-icon"
-                                        style="color: var(--bs-success-text-emphasis);"></i>
-                                    <p class="mb-1 mt-2 fw-semibold small">Arraste a planilha aqui ou clique para
-                                        selecionar</p>
-                                    <small class="text-muted">Arquivo Excel .xlsx com os benefícios e teses</small>
-                                    <input type="file" class="d-none" id="benefitsSpreadsheet"
-                                        name="benefits_spreadsheet" accept=".xlsx">
-                                </div>
-                                <div id="benefitsSpreadsheetList"></div>
-                                <div class="form-text">
-                                    Se enviada, o sistema confere depois da revisão se os números de benefício com tese
-                                    preenchida foram citados no documento analisado.
+                                <div class="step-actions">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnStep2Back">
+                                        <i class="bi bi-arrow-left me-1"></i> Voltar
+                                    </button>
+                                    <button type="button" class="btn btn-primary btn-sm" id="btnStep2Next">
+                                        Próximo <i class="bi bi-arrow-right ms-1"></i>
+                                    </button>
                                 </div>
                             </div>
 
-                            <div class="mb-4">
-                                <label class="form-label small fw-semibold mb-2">
-                                    <i class="bi bi-paperclip text-info me-1"></i>
-                                    Documentos Auxiliares <span class="text-muted fw-normal">(Opcional)</span>
-                                </label>
-                                <div class="dropzone-custom" id="auxiliaryDocumentsDropzone">
-                                    <i class="bi bi-paperclip dropzone-icon"
-                                        style="color: var(--bs-secondary-color);"></i>
-                                    <p class="mb-1 mt-2 fw-semibold small">Arraste os arquivos aqui ou clique para
-                                        selecionar</p>
-                                    <small class="text-muted">PDF, Word, Excel, imagens - Máximo 50MB cada</small>
-                                    <input type="file" class="d-none" id="auxiliaryDocuments" name="auxiliary_documents"
-                                        multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg">
+                            <div class="wizard-panel" id="panel-3">
+                                <h6 class="fw-semibold mb-1">Adicionar complementos e revisar envio</h6>
+                                <p class="text-muted small mb-3">Inclua materiais opcionais e confirme os dados antes de
+                                    iniciar a revisão.</p>
+                                <div class="mb-4">
+                                    <label class="form-label small fw-semibold mb-2">
+                                        <i class="bi bi-file-earmark-spreadsheet text-success me-1"></i>
+                                        Planilha de Benefícios <span class="text-muted fw-normal">(Opcional)</span>
+                                    </label>
+                                    <div class="dropzone-custom" id="benefitsSpreadsheetDropzone">
+                                        <i class="bi bi-file-earmark-spreadsheet dropzone-icon"
+                                            style="color: var(--bs-success-text-emphasis);"></i>
+                                        <p class="mb-1 mt-2 fw-semibold small">Arraste a planilha aqui ou clique para
+                                            selecionar</p>
+                                        <small class="text-muted">Arquivo Excel .xlsx com os benefícios e teses</small>
+                                        <input type="file" class="d-none" id="benefitsSpreadsheet"
+                                            name="benefits_spreadsheet" accept=".xlsx">
+                                    </div>
+                                    <div id="benefitsSpreadsheetList"></div>
+                                    <div class="form-text">
+                                        Se enviada, o sistema confere depois da revisão se os números de benefício com
+                                        tese
+                                        preenchida foram citados no documento analisado.
+                                    </div>
                                 </div>
-                                <div id="auxiliaryDocumentsList"></div>
-                            </div>
 
-                            <hr class="my-4">
+                                <div class="mb-4">
+                                    <label class="form-label small fw-semibold mb-2">
+                                        <i class="bi bi-paperclip text-info me-1"></i>
+                                        Documentos Auxiliares <span class="text-muted fw-normal">(Opcional)</span>
+                                    </label>
+                                    <div class="dropzone-custom" id="auxiliaryDocumentsDropzone">
+                                        <i class="bi bi-paperclip dropzone-icon"
+                                            style="color: var(--bs-secondary-color);"></i>
+                                        <p class="mb-1 mt-2 fw-semibold small">Arraste os arquivos aqui ou clique para
+                                            selecionar</p>
+                                        <small class="text-muted">PDF, Word, Excel, imagens - Máximo 50MB cada</small>
+                                        <input type="file" class="d-none" id="auxiliaryDocuments"
+                                            name="auxiliary_documents" multiple
+                                            accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg">
+                                    </div>
+                                    <div id="auxiliaryDocumentsList"></div>
+                                </div>
 
-                            <div class="d-flex gap-2">
-                                <button type="submit" class="btn btn-primary flex-grow-1" id="submitBtn">
-                                    <i class="bi bi-play-circle me-2"></i> Iniciar Revisão
-                                </button>
-                                <a href="{{ url_for('fap_review.index') }}" class="btn btn-outline-secondary">
-                                    <i class="bi bi-arrow-left me-1"></i> Voltar
-                                </a>
+                                <div class="summary-box mb-3" id="reviewSummaryBox">
+                                    <div class="summary-line">
+                                        <span class="text-muted">Petição</span>
+                                        <strong id="summaryPetition">-</strong>
+                                    </div>
+                                    <div class="summary-line">
+                                        <span class="text-muted wrike-label-inline">
+                                            <img src="{{ url_for('static', filename='assets/wrike-logo-light.svg') }}"
+                                                alt="Wrike" class="wrike-inline-mark">
+                                            <span>Id Wrike</span>
+                                        </span>
+                                        <strong id="summaryIdentifier">-</strong>
+                                    </div>
+                                    <div class="summary-line">
+                                        <span class="text-muted">Documento principal</span>
+                                        <strong id="summaryMainDocument">-</strong>
+                                    </div>
+                                    <div class="summary-line">
+                                        <span class="text-muted">Complementos</span>
+                                        <strong id="summaryAttachments">0 arquivo(s)</strong>
+                                    </div>
+                                </div>
+
+                                <div class="step-actions">
+                                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnStep3Back">
+                                        <i class="bi bi-arrow-left me-1"></i> Voltar
+                                    </button>
+                                    <button type="submit" class="btn btn-primary btn-sm" id="submitBtn">
+                                        <i class="bi bi-play-circle me-2"></i> Iniciar Revisão
+                                    </button>
+                                </div>
                             </div>
 
                         </form>
@@ -304,14 +540,14 @@
                 <div class="card info-card how-it-works-card">
                     <div class="card-header d-flex align-items-center gap-2">
                         <i class="bi bi-lightbulb text-warning"></i>
-                        Como Funciona
+                        Fluxo da Revisão
                     </div>
                     <div class="card-body">
                         <ol class="how-it-works-list ps-3 mb-0">
-                            <li>Faça upload da petição inicial (PDF ou Word)</li>
-                            <li>O agente revisor analisa o conteúdo com as regras ativas</li>
-                            <li>Inconsistências e oportunidades de melhoria são detectadas</li>
-                            <li>O sistema gera um relatório final para revisão jurídica</li>
+                            <li>Selecione uma petição existente ou crie uma nova com o Id Wrike.</li>
+                            <li>Envie o documento principal que será revisado.</li>
+                            <li>Adicione planilha de benefícios e documentos auxiliares, se houver.</li>
+                            <li>Inicie a revisão e acompanhe o relatório gerado pelo agente.</li>
                         </ol>
                         <div class="mt-3 pt-1 d-flex align-items-center gap-2 text-muted small">
                             <i class="bi bi-clock"></i>
@@ -335,6 +571,11 @@
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const MAX_FILE_SIZE = 50 * 1024 * 1024;
+        const petitionSelect = document.getElementById('petitionId');
+        const petitionTitleInput = document.getElementById('petitionTitle');
+        const documentIdentifierInput = document.getElementById('lawFirmDocumentIdentifier');
+        const wizardSteps = [1, 2, 3];
+        let currentStep = 1;
 
         function hasOversizedFiles(fileList) {
             return Array.from(fileList).some(file => file.size > MAX_FILE_SIZE);
@@ -388,9 +629,96 @@
             input.addEventListener('change', () => renderList(input.files, list, zone));
         }
 
+        function setStep(stepNumber) {
+            currentStep = stepNumber;
+
+            wizardSteps.forEach((step) => {
+                const indicator = document.getElementById(`step-ind-${step}`);
+                const panel = document.getElementById(`panel-${step}`);
+                const isActive = step === stepNumber;
+                const isCompleted = step < stepNumber;
+
+                indicator?.classList.toggle('active', isActive);
+                indicator?.classList.toggle('completed', isCompleted);
+                panel?.classList.toggle('active', isActive);
+            });
+        }
+
+        function updateReviewSummary() {
+            const selectedOption = petitionSelect.options[petitionSelect.selectedIndex];
+            const petitionLabel = petitionSelect.value && selectedOption
+                ? (selectedOption.dataset.title || selectedOption.textContent.trim())
+                : (petitionTitleInput.value.trim() || 'Nova petição');
+            const identifier = documentIdentifierInput.value.trim() || '-';
+            const mainDocumentName = document.getElementById('mainDocument').files[0]?.name || '-';
+            const totalAttachments = document.getElementById('auxiliaryDocuments').files.length + document.getElementById('benefitsSpreadsheet').files.length;
+
+            document.getElementById('summaryPetition').textContent = petitionLabel;
+            document.getElementById('summaryIdentifier').textContent = identifier;
+            document.getElementById('summaryMainDocument').textContent = mainDocumentName;
+            document.getElementById('summaryAttachments').textContent = `${totalAttachments} arquivo(s)`;
+        }
+
+        function validateStep1() {
+            const documentIdentifier = documentIdentifierInput.value.trim();
+            if (!documentIdentifier) {
+                alert('Por favor, informe o Id Wrike da petição');
+                return false;
+            }
+            return true;
+        }
+
+        function validateStep2() {
+            const mainFiles = document.getElementById('mainDocument').files;
+            if (!mainFiles.length) {
+                alert('Por favor, selecione um documento principal');
+                return false;
+            }
+            return true;
+        }
+
         setupDropzone('mainDocumentDropzone', 'mainDocument', 'mainDocumentList', false);
         setupDropzone('auxiliaryDocumentsDropzone', 'auxiliaryDocuments', 'auxiliaryDocumentsList', true);
         setupDropzone('benefitsSpreadsheetDropzone', 'benefitsSpreadsheet', 'benefitsSpreadsheetList', false);
+
+        function syncPetitionFields() {
+            const selectedOption = petitionSelect.options[petitionSelect.selectedIndex];
+            const petitionId = petitionSelect.value;
+
+            if (petitionId && selectedOption) {
+                petitionTitleInput.value = selectedOption.dataset.title || '';
+                documentIdentifierInput.value = selectedOption.dataset.identifier || '';
+                petitionTitleInput.readOnly = true;
+                documentIdentifierInput.readOnly = true;
+            } else {
+                petitionTitleInput.readOnly = false;
+                documentIdentifierInput.readOnly = false;
+            }
+        }
+
+        petitionSelect.addEventListener('change', syncPetitionFields);
+        syncPetitionFields();
+
+        document.getElementById('btnStep1Next').addEventListener('click', function () {
+            if (!validateStep1()) return;
+            setStep(2);
+        });
+
+        document.getElementById('btnStep2Back').addEventListener('click', function () {
+            setStep(1);
+        });
+
+        document.getElementById('btnStep2Next').addEventListener('click', function () {
+            if (!validateStep2()) return;
+            updateReviewSummary();
+            setStep(3);
+        });
+
+        document.getElementById('btnStep3Back').addEventListener('click', function () {
+            setStep(2);
+        });
+
+        setStep(1);
 
         document.getElementById('petitionForm').addEventListener('submit', async function (e) {
             e.preventDefault();
@@ -398,7 +726,7 @@
             const mainFiles = document.getElementById('mainDocument').files;
             const auxiliaryFiles = document.getElementById('auxiliaryDocuments').files;
             const benefitsSpreadsheetFiles = document.getElementById('benefitsSpreadsheet').files;
-            const documentIdentifier = document.getElementById('lawFirmDocumentIdentifier').value.trim();
+            const documentIdentifier = documentIdentifierInput.value.trim();
 
             if (!mainFiles.length) {
                 alert('Por favor, selecione um documento principal');
@@ -406,7 +734,7 @@
             }
 
             if (!documentIdentifier) {
-                alert('Por favor, informe o identificador do documento no escritório');
+                alert('Por favor, informe o Id Wrike da petição');
                 return;
             }
 

@@ -148,6 +148,12 @@
         font-size: .7rem;
     }
 
+    .office-identifier-chip .wrike-inline-mark {
+        width: 1.2rem;
+        height: auto;
+        flex-shrink: 0;
+    }
+
     .office-identifier-chip span {
         display: block;
         overflow: hidden;
@@ -179,52 +185,56 @@
     <div class="page-content">
         <!-- Estatísticas em Grid -->
         <div class="stat-cards">
-            <!-- Total de Execuções -->
+            <!-- Total de Petições -->
             <div class="stat-card" style="--sc-color: #0d6efd; --sc-soft: rgba(13, 110, 253, .10);">
                 <div class="sc-icon"><i class="bi bi-bar-chart"></i></div>
                 <div class="sc-label">Total</div>
-                <div class="sc-value">{{ total_executions }}</div>
+                <div class="sc-value">{{ total_petitions }}</div>
                 <div class="sc-sub">
                     <div class="sc-sub-item">
-                        <span class="sc-sub-label">Execuções</span>
+                        <span class="sc-sub-label">Petições</span>
+                    </div>
+                    <div class="sc-sub-item">
+                        <span class="sc-sub-label">Revisões</span>
+                        <span class="sc-sub-value">{{ total_revisions }}</span>
                     </div>
                 </div>
             </div>
 
-            <!-- Concluídas -->
+            <!-- Prontas -->
             <div class="stat-card" style="--sc-color: #198754; --sc-soft: rgba(25, 135, 84, .10);">
                 <div class="sc-icon"><i class="bi bi-check-circle"></i></div>
-                <div class="sc-label">Concluídas</div>
-                <div class="sc-value">{{ completed_executions }}</div>
+                <div class="sc-label">Prontas</div>
+                <div class="sc-value">{{ ready_petitions }}</div>
                 <div class="sc-sub">
                     <div class="sc-sub-item">
-                        <span class="sc-sub-label">Sucesso</span>
-                        <span class="sc-sub-value" style="--sc-color: #198754;">{{ (completed_executions /
-                            total_executions * 100)|round if total_executions else 0 }}%</span>
+                        <span class="sc-sub-label">Para seguir</span>
+                        <span class="sc-sub-value" style="--sc-color: #198754;">{{ (ready_petitions /
+                            total_petitions * 100)|round if total_petitions else 0 }}%</span>
                     </div>
                 </div>
             </div>
 
-            <!-- Em Processamento -->
+            <!-- Em Revisão -->
             <div class="stat-card" style="--sc-color: #ffc107; --sc-soft: rgba(255, 193, 7, .10);">
                 <div class="sc-icon"><i class="bi bi-hourglass-split"></i></div>
-                <div class="sc-label">Processando</div>
-                <div class="sc-value">{{ total_executions - completed_executions - failed_executions }}</div>
+                <div class="sc-label">Em revisão</div>
+                <div class="sc-value">{{ in_review_petitions }}</div>
                 <div class="sc-sub">
                     <div class="sc-sub-item">
-                        <span class="sc-sub-label">Pendentes</span>
+                        <span class="sc-sub-label">Ativas</span>
                     </div>
                 </div>
             </div>
 
-            <!-- Erros -->
+            <!-- Ajustes -->
             <div class="stat-card" style="--sc-color: #dc3545; --sc-soft: rgba(220, 53, 69, .10);">
                 <div class="sc-icon"><i class="bi bi-exclamation-circle"></i></div>
-                <div class="sc-label">Erros</div>
-                <div class="sc-value">{{ failed_executions }}</div>
+                <div class="sc-label">Ajustes</div>
+                <div class="sc-value">{{ awaiting_adjustments_petitions }}</div>
                 <div class="sc-sub">
                     <div class="sc-sub-item">
-                        <span class="sc-sub-label">Falhas</span>
+                        <span class="sc-sub-label">Revisar</span>
                     </div>
                 </div>
             </div>
@@ -233,71 +243,79 @@
         <!-- Botões de Ação -->
         <div class="d-flex flex-wrap gap-2 mb-4">
             <a href="{{ url_for('fap_review.revision') }}" class="btn btn-primary">
-                <i class="bi bi-upload me-1"></i> Nova Revisão
+                <i class="bi bi-folder-plus me-1"></i> Nova Petição / Revisão
             </a>
             <a href="{{ url_for('fap_review.settings') }}" class="btn btn-outline-secondary">
                 <i class="bi bi-sliders me-1"></i> Configurações
             </a>
         </div>
 
-        <!-- Últimas Execuções -->
+        <!-- Petições -->
         <div class="card mb-4">
             <div class="card-header border-0 d-flex align-items-center justify-content-between">
-                <h5 class="card-title mb-0"><i class="bi bi-clock-history me-2"></i> Últimas Execuções</h5>
+                <h5 class="card-title mb-0"><i class="bi bi-collection me-2"></i> Petições em Acompanhamento</h5>
             </div>
             <div class="card-body p-0">
-                {% if recent_executions %}
+                {% if petition_rows %}
                 <div class="table-responsive">
                     <table class="table table-hover mb-0">
                         <thead class="table-light">
                             <tr>
                                 <th class="ps-3" style="width: 60px;">ID</th>
-                                <th style="width: 190px; min-width: 190px;">Identificador do Escritório</th>
-                                <th>Tipo</th>
-                                <th>Status</th>
-                                <th>Documento</th>
-                                <th style="width: 130px;">Data</th>
-                                <th class="pe-3" style="width: 70px;"></th>
+                                <th style="width: 190px; min-width: 190px;">Id Wrike</th>
+                                <th>Petição</th>
+                                <th style="width: 90px;">Revisões</th>
+                                <th>Status da Petição</th>
+                                <th>Última Revisão</th>
+                                <th style="width: 140px;">Atualizado</th>
+                                <th class="pe-3" style="width: 110px;"></th>
                             </tr>
                         </thead>
                         <tbody>
-                            {% for execution in recent_executions %}
+                            {% for row in petition_rows %}
+                            {% set petition = row.petition %}
+                            {% set latest_revision = row.latest_revision %}
+                            {% set status_badge = row.status_badge %}
                             <tr class="agent-config-row">
-                                <td class="ps-3"><code>#{{ execution.id }}</code></td>
+                                <td class="ps-3"><code>#{{ petition.id }}</code></td>
                                 <td>
-                                    <div class="office-identifier-chip{% if not execution.law_firm_document_identifier %} is-empty{% endif %}"
-                                        {% if execution.law_firm_document_identifier
-                                        %}data-identifier="{{ execution.law_firm_document_identifier }}" {% endif %}
-                                        title="{{ execution.law_firm_document_identifier or '-' }}">
-                                        <i class="bi bi-hash"></i>
-                                        <span>{{ execution.law_firm_document_identifier or '-' }}</span>
+                                    <div class="office-identifier-chip{% if not petition.office_document_identifier %} is-empty{% endif %}"
+                                        {% if petition.office_document_identifier
+                                        %}data-identifier="{{ petition.office_document_identifier }}" {% endif %}
+                                        title="{{ petition.office_document_identifier or '-' }}">
+                                        <img src="{{ url_for('static', filename='assets/wrike-logo-light.svg') }}"
+                                            alt="Wrike" class="wrike-inline-mark">
+                                        <span>{{ petition.office_document_identifier or '-' }}</span>
                                     </div>
                                 </td>
                                 <td>
-                                    {% if execution.execution_type == 'revision' %}
-                                    <span
-                                        class="badge rounded-pill bg-info-subtle text-info-emphasis border border-info-subtle">
-                                        <i class="bi bi-file-earmark-check me-1"></i> Revisão
-                                    </span>
-                                    {% else %}
-                                    <span
-                                        class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle">
-                                        <i class="bi bi-graduation-cap me-1"></i> Treinamento
-                                    </span>
-                                    {% endif %}
+                                    <div class="fw-semibold">{{ petition.title }}</div>
                                 </td>
                                 <td>
-                                    {% if execution.status == 'completed' %}
+                                    <span
+                                        class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">
+                                        {{ petition.revision_count or 0 }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span
+                                        class="badge rounded-pill bg-{{ status_badge.class }}-subtle text-{{ status_badge.class }}-emphasis border border-{{ status_badge.class }}-subtle">
+                                        <i class="{{ status_badge.icon }} me-1"></i> {{ status_badge.label }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {% if latest_revision %}
+                                    {% if latest_revision.status == 'completed' %}
                                     <span
                                         class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle">
                                         <i class="bi bi-check-circle me-1"></i> Concluída
                                     </span>
-                                    {% elif execution.status == 'processing' %}
+                                    {% elif latest_revision.status == 'processing' %}
                                     <span
                                         class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle">
                                         <i class="bi bi-hourglass-split me-1"></i> Processando
                                     </span>
-                                    {% elif execution.status == 'failed' %}
+                                    {% elif latest_revision.status == 'failed' %}
                                     <span
                                         class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle">
                                         <i class="bi bi-exclamation-circle me-1"></i> Erro
@@ -305,21 +323,27 @@
                                     {% else %}
                                     <span
                                         class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">
-                                        {{ execution.status|capitalize }}
+                                        {{ latest_revision.status|capitalize }}
                                     </span>
+                                    {% endif %}
+                                    <div class="small text-muted mt-1">R{{ latest_revision.revision_number or '?' }}
+                                    </div>
+                                    {% else %}
+                                    <span class="text-muted small">Sem revisão</span>
                                     {% endif %}
                                 </td>
                                 <td>
-                                    <small class="text-muted">{{ execution.main_document_path|basename if
-                                        execution.main_document_path else 'N/A' }}</small>
-                                </td>
-                                <td>
-                                    <small>{{ execution.created_at.strftime('%d/%m/%Y %H:%M') }}</small>
+                                    <small>{{ (petition.last_reviewed_at or petition.updated_at or
+                                        petition.created_at).strftime('%d/%m/%Y %H:%M') }}</small>
                                 </td>
                                 <td class="pe-3">
-                                    <a href="{{ url_for('fap_review.revision_result', execution_id=execution.id) }}"
+                                    <a href="{{ url_for('fap_review.petition_detail', petition_id=petition.id) }}"
                                         class="btn btn-sm btn-outline-primary" title="Visualizar resultado">
                                         <i class="bi bi-eye"></i>
+                                    </a>
+                                    <a href="{{ url_for('fap_review.revision', petition_id=petition.id) }}"
+                                        class="btn btn-sm btn-outline-secondary" title="Nova revisão">
+                                        <i class="bi bi-plus-lg"></i>
                                     </a>
                                 </td>
                             </tr>
@@ -330,7 +354,7 @@
                 {% else %}
                 <div class="text-center py-5">
                     <i class="bi bi-inbox text-muted" style="font-size: 2rem;"></i>
-                    <p class="text-muted mt-2 mb-0">Nenhuma execução registrada ainda</p>
+                    <p class="text-muted mt-2 mb-0">Nenhuma petição registrada ainda</p>
                 </div>
                 {% endif %}
             </div>

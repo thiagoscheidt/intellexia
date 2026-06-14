@@ -118,6 +118,20 @@
         text-decoration: none;
     }
 
+    .wrike-inline-mark {
+        height: 14px;
+        width: auto;
+        display: inline-block;
+        vertical-align: middle;
+        flex-shrink: 0;
+    }
+
+    .wrike-label-inline {
+        display: inline-flex;
+        align-items: center;
+        gap: .4rem;
+    }
+
     .fnp-critical {
         background: rgba(220, 53, 69, .12);
         color: #dc3545;
@@ -598,11 +612,38 @@
                                 </div>
                             </div>
                             <div class="col-md-6">
-                                <div class="text-muted small">Identificador do Documento</div>
+                                <div class="text-muted small">Petição</div>
+                                {% if petition %}
+                                <div class="d-flex flex-wrap align-items-center gap-2">
+                                    <a href="{{ url_for('fap_review.petition_detail', petition_id=petition.id) }}"
+                                        class="fw-semibold text-decoration-none">{{ petition.title }}</a>
+                                    {% if petition_status_badge %}
+                                    <span
+                                        class="badge rounded-pill bg-{{ petition_status_badge.class }}-subtle text-{{ petition_status_badge.class }}-emphasis border border-{{ petition_status_badge.class }}-subtle px-3 py-2">
+                                        <i class="{{ petition_status_badge.icon }} me-1"></i> {{
+                                        petition_status_badge.label }}
+                                    </span>
+                                    {% endif %}
+                                </div>
+                                {% else %}
+                                <div class="fw-semibold">-</div>
+                                {% endif %}
+                            </div>
+                            <div class="col-md-3 col-lg-2">
+                                <div class="text-muted small">Revisão</div>
+                                <div class="fw-semibold">R{{ execution.revision_number or 1 }}</div>
+                            </div>
+                            <div class="col-md-3 col-lg-2">
+                                <div class="text-muted small wrike-label-inline">
+                                    <img src="{{ url_for('static', filename='assets/wrike-logo-light.svg') }}"
+                                        alt="Wrike" class="wrike-inline-mark">
+                                    <span>Id Wrike</span>
+                                </div>
                                 <div class="fw-semibold" style="word-break: break-all;">{{
+                                    petition.office_document_identifier if petition else
                                     execution.law_firm_document_identifier or '-' }}</div>
                             </div>
-                            <div class="col-md-2">
+                            <div class="col-md-2 col-lg-1">
                                 <div class="text-muted small">Auxiliares</div>
                                 <div class="fw-semibold">{{ execution.auxiliary_documents_count }}</div>
                             </div>
