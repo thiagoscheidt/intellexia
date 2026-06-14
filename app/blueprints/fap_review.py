@@ -886,6 +886,41 @@ def _translate_finding_category(category: str | None) -> str:
     return str(category or 'Sem categoria').strip() or 'Sem categoria'
 
 
+def _propagate_petition_identifier_change(
+    law_firm_id: int,
+    petition: FapReviewPetition,
+    old_identifier: str,
+    new_identifier: str,
+) -> None:
+    """Propaga a troca do Id Wrike para execuções e feedbacks associados à petição."""
+    if not old_identifier or old_identifier == new_identifier:
+        return
+
+    FapReviewExecution.query.filter_by(
+        law_firm_id=law_firm_id,
+        petition_id=petition.id,
+    ).update({'law_firm_document_identifier': new_identifier}, synchronize_session=False)
+
+    ignored_findings = FapReviewIgnoredFinding.query.filter_by(
+        law_firm_id=law_firm_id,
+        law_firm_document_identifier=old_identifier,
+    ).all()
+
+    for ignored_finding in ignored_findings:
+        duplicated_row = FapReviewIgnoredFinding.query.filter_by(
+            law_firm_id=law_firm_id,
+            law_firm_document_identifier=new_identifier,
+            finding_fingerprint=ignored_finding.finding_fingerprint,
+        ).first()
+
+        if duplicated_row:
+            db.session.delete(ignored_finding)
+            continue
+
+        ignored_finding.law_firm_document_identifier = new_identifier
+        ignored_finding.updated_at = datetime.utcnow()
+
+
 def _build_lawyer_statistics(law_firm_id: int) -> dict:
     """Consolida score e métricas dos advogados a partir do histórico de revisões."""
     revisions = FapReviewExecution.query.filter_by(
@@ -1133,6 +1168,7 @@ def index():
         {
             'petition': petition,
             'latest_revision': petition.latest_revision,
+            'latest_reviewer_name': petition.latest_revision.user.name if petition.latest_revision and petition.latest_revision.user else None,
             'status_badge': _build_petition_status_badge(petition.workflow_status),
         }
         for petition in petitions
@@ -1473,13 +1509,112 @@ def petition_detail(petition_id: int):
         FapReviewExecution.id.desc(),
     ).all()
 
+    revision_summary = {
+        'completed': sum(1 for revision in revisions if revision.status == 'completed'),
+        'processing': sum(1 for revision in revisions if revision.status == 'processing'),
+        'failed': sum(1 for revision in revisions if revision.status == 'failed'),
+        'comparative': sum(1 for revision in revisions if revision.comparative_analysis),
+        'latest_completed_at': next(
+            (
+                revision.completed_at or revision.updated_at or revision.created_at
+                for revision in revisions
+                if revision.status == 'completed'
+            ),
+            None,
+        ),
+    }
+
     return render_template(
         'fap_review/petition_detail.html',
         petition=petition,
         revisions=revisions,
+        revision_summary=revision_summary,
         status_badge=_build_petition_status_badge(petition.workflow_status),
         petition_status_labels=PETITION_WORKFLOW_STATUSES,
     )
+
+
+@fap_review_bp.route('/petitions/<int:petition_id>/update', methods=['POST'])
+@require_law_firm
+def petition_update_details(petition_id: int):
+    """Permite editar os principais campos cadastrais da petição."""
+    law_firm_id = get_current_law_firm_id()
+
+    petition = FapReviewPetition.query.filter_by(
+        id=petition_id,
+        law_firm_id=law_firm_id,
+    ).first_or_404()
+
+    payload = request.get_json(silent=True) or {}
+    new_title = ' '.join(str(payload.get('title') or '').split())
+    new_identifier = ' '.join(str(payload.get('office_document_identifier') or '').split())
+
+    if not new_title:
+        return jsonify({'error': 'Informe o título da petição.'}), 400
+    if len(new_title) > 255:
+        return jsonify({'error': 'O título da petição pode ter no máximo 255 caracteres.'}), 400
+
+    if not new_identifier:
+        return jsonify({'error': 'Informe o Id Wrike da petição.'}), 400
+    if len(new_identifier) > 96:
+        return jsonify({'error': 'O Id Wrike pode ter no máximo 96 caracteres.'}), 400
+
+    duplicated_petition = FapReviewPetition.query.filter(
+        FapReviewPetition.law_firm_id == law_firm_id,
+        FapReviewPetition.office_document_identifier == new_identifier,
+        FapReviewPetition.id != petition.id,
+    ).first()
+    if duplicated_petition:
+        return jsonify({'error': 'Já existe outra petição com este Id Wrike.'}), 400
+
+    old_title = petition.title
+    old_identifier = petition.office_document_identifier
+
+    if new_title == old_title and new_identifier == old_identifier:
+        return jsonify({
+            'success': True,
+            'petition': {
+                'title': petition.title,
+                'office_document_identifier': petition.office_document_identifier,
+            },
+        })
+
+    try:
+        petition.title = new_title
+        petition.office_document_identifier = new_identifier
+        petition.updated_at = datetime.utcnow()
+
+        if new_identifier != old_identifier:
+            _propagate_petition_identifier_change(
+                law_firm_id=law_firm_id,
+                petition=petition,
+                old_identifier=old_identifier,
+                new_identifier=new_identifier,
+            )
+
+        db.session.commit()
+    except Exception as error:
+        db.session.rollback()
+        current_app.logger.error(f'Erro ao atualizar dados da petição: {error}')
+        return jsonify({'error': 'Não foi possível atualizar os dados da petição.'}), 500
+
+    _log_audit(
+        law_firm_id,
+        'petition_updated',
+        'petition',
+        petition.id,
+        'Campos principais da petição atualizados.',
+        old_value=json.dumps({'title': old_title, 'office_document_identifier': old_identifier}, ensure_ascii=False),
+        new_value=json.dumps({'title': petition.title, 'office_document_identifier': petition.office_document_identifier}, ensure_ascii=False),
+    )
+
+    return jsonify({
+        'success': True,
+        'petition': {
+            'title': petition.title,
+            'office_document_identifier': petition.office_document_identifier,
+        },
+    })
 
 
 @fap_review_bp.route('/petitions/<int:petition_id>/status', methods=['POST'])

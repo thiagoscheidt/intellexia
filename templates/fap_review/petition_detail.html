@@ -8,32 +8,337 @@
 
 {% block extra_css %}
 <style>
+    :root {
+        --pd-navy: #133b5c;
+        --pd-sky: #4fa3d1;
+        --pd-sand: #f6f1e9;
+        --pd-border: rgba(19, 59, 92, .08);
+        --pd-shadow: 0 12px 28px rgba(19, 59, 92, .08);
+    }
+
+    .petition-detail-page {
+        position: relative;
+        animation: fadeIn .25s ease-in;
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+        }
+
+        to {
+            opacity: 1;
+        }
+    }
+
+    .petition-detail-page>* {
+        position: relative;
+        z-index: 1;
+    }
+
     .petition-summary-card,
-    .petition-history-card {
-        border: 1px solid rgba(15, 23, 42, .07);
-        border-radius: .85rem;
-        box-shadow: 0 4px 16px rgba(15, 23, 42, .06);
+    .petition-history-card,
+    .petition-edit-card,
+    .petition-latest-card {
+        border: 1px solid var(--pd-border);
+        border-radius: 1rem;
+        box-shadow: var(--pd-shadow);
+        overflow: hidden;
+    }
+
+    .petition-summary-card {
+        background: #fff;
+        color: var(--bs-emphasis-color);
+        position: relative;
+    }
+
+    .petition-summary-card::before {
+        content: "";
+        position: absolute;
+        inset: 0 0 auto 0;
+        height: 4px;
+        background: linear-gradient(90deg, var(--pd-navy) 0%, var(--pd-sky) 100%);
+    }
+
+    .petition-summary-card .card-body {
+        padding: 1.2rem;
+    }
+
+    .petition-summary-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 1rem;
+        margin-bottom: 1.1rem;
+    }
+
+    @media (max-width: 991px) {
+        .petition-summary-top {
+            flex-direction: column;
+        }
+    }
+
+    .petition-summary-eyebrow {
+        font-size: .73rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .06em;
+        color: #6c7a8d;
+        margin-bottom: .45rem;
+    }
+
+    .petition-main-title {
+        font-size: clamp(1.35rem, 2vw, 2rem);
+        line-height: 1.15;
+        font-weight: 800;
+        margin: 0 0 .5rem;
+        color: var(--pd-navy);
+    }
+
+    .petition-meta-line {
+        color: #6b7785;
+        font-size: .9rem;
+        margin-bottom: .85rem;
+    }
+
+    .petition-id-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: .55rem;
+        border-radius: 999px;
+        padding: .5rem .8rem;
+        background: rgba(19, 59, 92, .05);
+        border: 1px solid rgba(19, 59, 92, .08);
+        font-size: .83rem;
+        color: var(--pd-navy);
+        font-weight: 700;
+        max-width: 100%;
+    }
+
+    .petition-id-pill strong {
+        word-break: break-all;
+        font-weight: 800;
+    }
+
+    .petition-status-controls {
+        min-width: min(100%, 320px);
+    }
+
+    .petition-highlight-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: .75rem;
+    }
+
+    @media (max-width: 1100px) {
+        .petition-highlight-grid {
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+    }
+
+    @media (max-width: 640px) {
+        .petition-highlight-grid {
+            grid-template-columns: 1fr;
+        }
     }
 
     .petition-kpi {
-        border: 1px solid rgba(15, 23, 42, .07);
-        border-radius: .8rem;
-        padding: .85rem .95rem;
-        background: var(--bs-body-bg);
+        border: 1px solid rgba(19, 59, 92, .08);
+        border-radius: 1rem;
+        padding: .9rem 1rem;
+        background: #f8fafc;
         height: 100%;
     }
 
     .petition-kpi-label {
+        font-size: .72rem;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        color: #728093;
+        font-weight: 700;
+    }
+
+    .petition-kpi-value {
+        font-size: 1.35rem;
+        font-weight: 800;
+        color: var(--pd-navy);
+        line-height: 1.1;
+        margin-top: .2rem;
+    }
+
+    .petition-kpi-sub {
+        font-size: .76rem;
+        color: #728093;
+        margin-top: .25rem;
+    }
+
+    .petition-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.1fr) minmax(320px, .9fr);
+        gap: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    @media (max-width: 1100px) {
+        .petition-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .petition-edit-card .card-header,
+    .petition-latest-card .card-header,
+    .petition-history-card .card-header {
+        background: transparent;
+        border-bottom: 1px solid var(--pd-border);
+        font-size: .84rem;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        font-weight: 800;
+        color: #6c7a8d;
+    }
+
+    .petition-panel-title {
+        font-size: 1rem;
+        font-weight: 800;
+        color: var(--pd-navy);
+        margin-bottom: .2rem;
+    }
+
+    .petition-panel-subtitle {
+        color: #748294;
+        font-size: .84rem;
+    }
+
+    .petition-edit-card .card-body,
+    .petition-latest-card .card-body {
+        padding: 1rem 1.05rem;
+    }
+
+    .petition-form-help {
+        font-size: .76rem;
+        color: #7c8a9b;
+    }
+
+    .petition-save-feedback {
+        display: none;
+        border-radius: .8rem;
+        padding: .75rem .85rem;
+        font-size: .84rem;
+        margin-bottom: .9rem;
+    }
+
+    .petition-save-feedback.is-visible {
+        display: block;
+    }
+
+    .petition-save-feedback.is-success {
+        background: rgba(25, 135, 84, .08);
+        color: #198754;
+        border: 1px solid rgba(25, 135, 84, .16);
+    }
+
+    .petition-save-feedback.is-error {
+        background: rgba(220, 53, 69, .08);
+        color: #dc3545;
+        border: 1px solid rgba(220, 53, 69, .16);
+    }
+
+    .petition-status-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .75rem;
+        align-items: center;
+    }
+
+    .petition-latest-card {
+        background: linear-gradient(180deg, rgba(255, 255, 255, .98) 0%, rgba(246, 241, 233, .55) 100%);
+    }
+
+    .petition-latest-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .75rem;
+        margin-bottom: 1rem;
+    }
+
+    .petition-latest-revision {
+        font-size: 1.35rem;
+        font-weight: 800;
+        color: var(--pd-navy);
+    }
+
+    .petition-latest-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .75rem;
+    }
+
+    @media (max-width: 640px) {
+        .petition-latest-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .petition-mini-metric {
+        border-radius: .9rem;
+        background: rgba(19, 59, 92, .04);
+        border: 1px solid rgba(19, 59, 92, .05);
+        padding: .8rem .85rem;
+    }
+
+    .petition-mini-metric-label {
         font-size: .7rem;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        color: #6c7a8d;
+        font-weight: 700;
+        margin-bottom: .2rem;
+    }
+
+    .petition-mini-metric-value {
+        font-size: 1rem;
+        font-weight: 800;
+        color: var(--pd-navy);
+    }
+
+    .petition-history-card .table th,
+    .petition-history-card .table td {
+        vertical-align: middle;
+        font-size: .86rem;
+    }
+
+    .petition-history-card .table thead th {
+        font-size: .76rem;
         text-transform: uppercase;
         letter-spacing: .04em;
         color: #6c7a8d;
     }
 
-    .petition-kpi-value {
-        font-size: 1.3rem;
-        font-weight: 800;
+    .petition-history-card .table tbody tr:hover {
+        background: rgba(79, 163, 209, .04);
+    }
+
+    .revision-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
+        border-radius: 999px;
+        padding: .32rem .65rem;
+        background: rgba(19, 59, 92, .06);
+        color: var(--pd-navy);
+        font-weight: 700;
+        font-size: .78rem;
+    }
+
+    .revision-doc-name {
+        font-weight: 600;
         color: var(--bs-emphasis-color);
+    }
+
+    .revision-doc-meta {
+        font-size: .77rem;
+        color: #7a8797;
     }
 
     .wrike-inline-mark {
@@ -43,23 +348,17 @@
         vertical-align: middle;
         flex-shrink: 0;
     }
-
-    .wrike-label-inline {
-        display: inline-flex;
-        align-items: center;
-        gap: .4rem;
-    }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid py-3">
-    {% call page_hero(title=petition.title, subtitle='Acompanhamento consolidado das revisões da petição', icon='bi
-    bi-folder2-open') %}
+<div class="petition-detail-page container-fluid py-3">
+    {% call page_hero(title=petition.title, subtitle='Acompanhamento consolidado, edição rápida e histórico completo da
+    petição', icon='bi bi-folder2-open') %}
     <nav aria-label="breadcrumb">
         <ol class="breadcrumb mb-0 bg-transparent small">
             <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i>
-                    Home</a></li>
+                    Início</a></li>
             <li class="breadcrumb-item"><a href="{{ url_for('fap_review.index') }}"><i
                         class="bi bi-file-earmark-check"></i> Revisor de Petições</a></li>
             <li class="breadcrumb-item active">{{ petition.title }}</li>
@@ -72,24 +371,33 @@
             <i class="bi bi-plus-circle me-1"></i> Nova Revisão
         </a>
         <a href="{{ url_for('fap_review.index') }}" class="btn btn-outline-secondary">
-            <i class="bi bi-arrow-left me-1"></i> Voltar ao Dashboard
+            <i class="bi bi-arrow-left me-1"></i> Voltar ao Painel
         </a>
     </div>
 
     <div class="card petition-summary-card mb-4">
         <div class="card-body">
-            <div class="row g-3 align-items-end">
-                <div class="col-lg-7">
-                    <div class="text-muted small wrike-label-inline">
+            <div class="petition-summary-top">
+                <div>
+                    <div class="petition-summary-eyebrow">Resumo da petição</div>
+                    <div class="petition-main-title" id="petitionTitleHeading">{{ petition.title }}</div>
+                    <div class="petition-meta-line">
+                        Petição criada em {{ petition.created_at.strftime('%d/%m/%Y') }}{% if petition.created_by and
+                        petition.created_by.name %} por {{ petition.created_by.name }}{% endif %}
+                    </div>
+
+                    <div class="petition-id-pill">
                         <img src="{{ url_for('static', filename='assets/wrike-logo-light.svg') }}" alt="Wrike"
                             class="wrike-inline-mark">
                         <span>Id Wrike</span>
+                        <strong id="petitionIdentifierHeading">{{ petition.office_document_identifier }}</strong>
                     </div>
-                    <div class="fw-semibold mb-3" style="word-break: break-all;">{{ petition.office_document_identifier
-                        }}</div>
-                    <label for="petitionWorkflowStatus" class="form-label small fw-semibold mb-2">Status da
-                        Petição</label>
-                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                </div>
+
+                <div class="petition-status-controls">
+                    <label for="petitionWorkflowStatus" class="form-label small fw-semibold text-muted mb-2">Status da
+                        petição</label>
+                    <div class="petition-status-row justify-content-lg-end">
                         <select id="petitionWorkflowStatus" class="form-select" style="max-width: 280px;">
                             {% for status_key, status_label in petition_status_labels.items() %}
                             <option value="{{ status_key }}" {% if petition.workflow_status==status_key %}selected{%
@@ -102,37 +410,154 @@
                         </span>
                     </div>
                 </div>
-                <div class="col-lg-5">
-                    <div class="row g-3">
-                        <div class="col-sm-4">
-                            <div class="petition-kpi">
-                                <div class="petition-kpi-label">Revisões</div>
-                                <div class="petition-kpi-value">{{ petition.revision_count or 0 }}</div>
-                            </div>
-                        </div>
-                        <div class="col-sm-4">
-                            <div class="petition-kpi">
-                                <div class="petition-kpi-label">Última revisão</div>
-                                <div class="petition-kpi-value">{% if petition.latest_revision %}R{{
-                                    petition.latest_revision.revision_number or '?' }}{% else %}-{% endif %}</div>
-                            </div>
-                        </div>
-                        <div class="col-sm-4">
-                            <div class="petition-kpi">
-                                <div class="petition-kpi-label">Atualizado</div>
-                                <div class="petition-kpi-value" style="font-size: 1rem;">{{ (petition.last_reviewed_at
-                                    or petition.updated_at or petition.created_at).strftime('%d/%m/%Y') }}</div>
-                            </div>
-                        </div>
-                    </div>
+            </div>
+
+            <div class="petition-highlight-grid mt-4">
+                <div class="petition-kpi">
+                    <div class="petition-kpi-label">Revisões</div>
+                    <div class="petition-kpi-value">{{ petition.revision_count or 0 }}</div>
+                    <div class="petition-kpi-sub">Histórico consolidado da petição</div>
+                </div>
+                <div class="petition-kpi">
+                    <div class="petition-kpi-label">Concluídas</div>
+                    <div class="petition-kpi-value">{{ revision_summary.completed }}</div>
+                    <div class="petition-kpi-sub">{{ revision_summary.processing }} em processamento{% if
+                        revision_summary.failed %} • {{ revision_summary.failed }} com falha{% endif %}</div>
+                </div>
+                <div class="petition-kpi">
+                    <div class="petition-kpi-label">Comparativas</div>
+                    <div class="petition-kpi-value">{{ revision_summary.comparative }}</div>
+                    <div class="petition-kpi-sub">Revisões com duas versões comparadas</div>
+                </div>
+                <div class="petition-kpi">
+                    <div class="petition-kpi-label">Última movimentação</div>
+                    <div class="petition-kpi-value" style="font-size: 1rem;">{{ (petition.last_reviewed_at or
+                        petition.updated_at or petition.created_at).strftime('%d/%m/%Y') }}</div>
+                    <div class="petition-kpi-sub">Atualizado em {{ (petition.last_reviewed_at or petition.updated_at or
+                        petition.created_at).strftime('%H:%M') }}</div>
                 </div>
             </div>
         </div>
     </div>
 
+    <div class="petition-grid">
+        <div class="card petition-edit-card">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <span><i class="bi bi-pencil-square me-2"></i> Dados da Petição</span>
+                <span
+                    class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">Edição
+                    rápida</span>
+            </div>
+            <div class="card-body">
+                <div class="petition-panel-title">Edite os campos principais sem sair desta tela</div>
+                <div class="petition-panel-subtitle mb-3">O título melhora a organização interna e o Id Wrike mantém o
+                    vínculo operacional com o fluxo do escritório.</div>
+
+                <div id="petitionSaveFeedback" class="petition-save-feedback"></div>
+
+                <form id="petitionDetailsForm" class="row g-3">
+                    <div class="col-12">
+                        <label for="petitionTitleInput" class="form-label fw-semibold">Título da petição</label>
+                        <input type="text" id="petitionTitleInput" class="form-control" maxlength="255"
+                            value="{{ petition.title }}">
+                        <div class="petition-form-help mt-1">Use um título curto e claro para identificar a peça no
+                            histórico.</div>
+                    </div>
+                    <div class="col-12">
+                        <label for="petitionIdentifierInput" class="form-label fw-semibold">Id Wrike</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-body-tertiary">
+                                <img src="{{ url_for('static', filename='assets/wrike-logo-light.svg') }}" alt="Wrike"
+                                    class="wrike-inline-mark">
+                            </span>
+                            <input type="text" id="petitionIdentifierInput" class="form-control" maxlength="96"
+                                value="{{ petition.office_document_identifier }}">
+                        </div>
+                        <div class="petition-form-help mt-1">Ao alterar esse campo, o histórico relacionado da petição
+                            acompanha o novo identificador.</div>
+                    </div>
+                    <div class="col-12 d-flex flex-wrap gap-2 justify-content-end">
+                        <button type="button" id="petitionResetButton" class="btn btn-outline-secondary">
+                            <i class="bi bi-arrow-counterclockwise me-1"></i> Desfazer
+                        </button>
+                        <button type="submit" id="petitionSaveButton" class="btn btn-primary">
+                            <i class="bi bi-save me-1"></i> Salvar Alterações
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="card petition-latest-card">
+            <div class="card-header d-flex align-items-center justify-content-between">
+                <span><i class="bi bi-lightning-charge me-2"></i> Última Revisão</span>
+                {% if petition.latest_revision %}
+                <a href="{{ url_for('fap_review.revision_result', execution_id=petition.latest_revision.id) }}"
+                    class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-box-arrow-up-right me-1"></i> Abrir Resultado
+                </a>
+                {% endif %}
+            </div>
+            <div class="card-body">
+                {% if petition.latest_revision %}
+                <div class="petition-latest-top">
+                    <div>
+                        <div class="petition-panel-subtitle">Revisão mais recente registrada nesta petição</div>
+                        <div class="petition-latest-revision">R{{ petition.latest_revision.revision_number or '?' }}
+                        </div>
+                    </div>
+                    <span
+                        class="badge rounded-pill bg-{{ status_badge.class }}-subtle text-{{ status_badge.class }}-emphasis border border-{{ status_badge.class }}-subtle px-3 py-2">
+                        <i class="{{ status_badge.icon }} me-1"></i> {{ status_badge.label }}
+                    </span>
+                </div>
+
+                <div class="petition-latest-grid">
+                    <div class="petition-mini-metric">
+                        <div class="petition-mini-metric-label">Documento principal</div>
+                        <div class="petition-mini-metric-value">{{ petition.latest_revision.main_document_filename or
+                            '-' }}</div>
+                    </div>
+                    <div class="petition-mini-metric">
+                        <div class="petition-mini-metric-label">Modo de análise</div>
+                        <div class="petition-mini-metric-value">{{ 'Comparativa' if
+                            petition.latest_revision.comparative_analysis else 'Versão única' }}</div>
+                    </div>
+                    <div class="petition-mini-metric">
+                        <div class="petition-mini-metric-label">Responsável</div>
+                        <div class="petition-mini-metric-value">{{ petition.latest_revision.user.name if
+                            petition.latest_revision.user else '-' }}</div>
+                    </div>
+                    <div class="petition-mini-metric">
+                        <div class="petition-mini-metric-label">Concluída em</div>
+                        <div class="petition-mini-metric-value">{{ (petition.latest_revision.completed_at or
+                            petition.latest_revision.updated_at or
+                            petition.latest_revision.created_at).strftime('%d/%m/%Y %H:%M') }}</div>
+                    </div>
+                </div>
+                {% else %}
+                <div class="text-center text-muted py-4">
+                    <i class="bi bi-hourglass-split" style="font-size: 2rem;"></i>
+                    <p class="mt-2 mb-0">Essa petição ainda não possui revisão concluída para destacar.</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+
     <div class="card petition-history-card">
-        <div class="card-header border-0 d-flex align-items-center justify-content-between">
+        <div class="card-header border-0 d-flex flex-wrap align-items-center justify-content-between gap-2">
             <h5 class="card-title mb-0"><i class="bi bi-clock-history me-2"></i> Histórico de Revisões</h5>
+            <div class="d-flex flex-wrap gap-2">
+                <span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle">{{
+                    revision_summary.completed }} concluídas</span>
+                <span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle">{{
+                    revision_summary.processing }} em andamento</span>
+                {% if revision_summary.failed %}
+                <span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle">{{
+                    revision_summary.failed }} com falha</span>
+                {% endif %}
+            </div>
         </div>
         <div class="card-body p-0">
             {% if revisions %}
@@ -143,7 +568,7 @@
                             <th class="ps-3">Revisão</th>
                             <th>Status</th>
                             <th>Documento</th>
-                            <th>Comparativa</th>
+                            <th>Responsável</th>
                             <th>Data</th>
                             <th class="pe-3"></th>
                         </tr>
@@ -151,7 +576,10 @@
                     <tbody>
                         {% for execution in revisions %}
                         <tr>
-                            <td class="ps-3"><strong>R{{ execution.revision_number or loop.revindex }}</strong></td>
+                            <td class="ps-3">
+                                <span class="revision-chip"><i class="bi bi-layers me-1"></i> R{{
+                                    execution.revision_number or loop.revindex }}</span>
+                            </td>
                             <td>
                                 {% if execution.status == 'completed' %}
                                 <span
@@ -170,13 +598,16 @@
                                 </span>
                                 {% else %}
                                 <span
-                                    class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">
-                                    {{ execution.status|capitalize }}
-                                </span>
+                                    class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">{{
+                                    execution.status|capitalize }}</span>
                                 {% endif %}
                             </td>
-                            <td>{{ execution.main_document_filename or '-' }}</td>
-                            <td>{{ 'Sim' if execution.comparative_analysis else 'Não' }}</td>
+                            <td>
+                                <div class="revision-doc-name">{{ execution.main_document_filename or '-' }}</div>
+                                <div class="revision-doc-meta">{{ 'Comparativa' if execution.comparative_analysis else
+                                    'Versão única' }}</div>
+                            </td>
+                            <td>{{ execution.user.name if execution.user else '-' }}</td>
                             <td>{{ execution.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
                             <td class="pe-3 text-end">
                                 <a href="{{ url_for('fap_review.revision_result', execution_id=execution.id) }}"
@@ -204,6 +635,37 @@
 <script>
     document.addEventListener('DOMContentLoaded', function () {
         const statusSelect = document.getElementById('petitionWorkflowStatus');
+        const petitionForm = document.getElementById('petitionDetailsForm');
+        const petitionTitleInput = document.getElementById('petitionTitleInput');
+        const petitionIdentifierInput = document.getElementById('petitionIdentifierInput');
+        const petitionSaveButton = document.getElementById('petitionSaveButton');
+        const petitionResetButton = document.getElementById('petitionResetButton');
+        const petitionSaveFeedback = document.getElementById('petitionSaveFeedback');
+        const petitionTitleHeading = document.getElementById('petitionTitleHeading');
+        const petitionIdentifierHeading = document.getElementById('petitionIdentifierHeading');
+
+        const initialValues = {
+            title: petitionTitleInput?.value || '',
+            officeDocumentIdentifier: petitionIdentifierInput?.value || '',
+        };
+
+        function showFeedback(message, kind) {
+            if (!petitionSaveFeedback) {
+                return;
+            }
+
+            petitionSaveFeedback.textContent = message;
+            petitionSaveFeedback.className = `petition-save-feedback is-visible ${kind === 'success' ? 'is-success' : 'is-error'}`;
+        }
+
+        function clearFeedback() {
+            if (!petitionSaveFeedback) {
+                return;
+            }
+
+            petitionSaveFeedback.textContent = '';
+            petitionSaveFeedback.className = 'petition-save-feedback';
+        }
 
         statusSelect?.addEventListener('change', async function () {
             const response = await fetch('{{ url_for("fap_review.petition_update_status", petition_id=petition.id) }}', {
@@ -218,9 +680,64 @@
                 const payload = await response.json().catch(() => ({}));
                 alert(payload.error || 'Não foi possível atualizar o status da petição.');
                 window.location.reload();
+                return;
             }
 
             window.location.reload();
+        });
+
+        petitionResetButton?.addEventListener('click', function () {
+            if (petitionTitleInput) {
+                petitionTitleInput.value = initialValues.title;
+            }
+            if (petitionIdentifierInput) {
+                petitionIdentifierInput.value = initialValues.officeDocumentIdentifier;
+            }
+            clearFeedback();
+        });
+
+        petitionForm?.addEventListener('submit', async function (event) {
+            event.preventDefault();
+            clearFeedback();
+
+            const payload = {
+                title: petitionTitleInput?.value || '',
+                office_document_identifier: petitionIdentifierInput?.value || '',
+            };
+
+            petitionSaveButton?.setAttribute('disabled', 'disabled');
+            petitionResetButton?.setAttribute('disabled', 'disabled');
+
+            try {
+                const response = await fetch('{{ url_for("fap_review.petition_update_details", petition_id=petition.id) }}', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const responsePayload = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    showFeedback(responsePayload.error || 'Não foi possível salvar as alterações da petição.', 'error');
+                    return;
+                }
+
+                if (petitionTitleHeading) {
+                    petitionTitleHeading.textContent = responsePayload.petition?.title || payload.title;
+                }
+                if (petitionIdentifierHeading) {
+                    petitionIdentifierHeading.textContent = responsePayload.petition?.office_document_identifier || payload.office_document_identifier;
+                }
+
+                showFeedback('Dados da petição atualizados com sucesso.', 'success');
+                window.setTimeout(() => window.location.reload(), 700);
+            } catch (error) {
+                showFeedback('Não foi possível salvar as alterações da petição.', 'error');
+            } finally {
+                petitionSaveButton?.removeAttribute('disabled');
+                petitionResetButton?.removeAttribute('disabled');
+            }
         });
     });
 </script>

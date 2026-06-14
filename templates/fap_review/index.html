@@ -8,8 +8,23 @@
 
 {% block extra_css %}
 <style>
+    :root {
+        --fr-slate-900: #152535;
+        --fr-slate-700: #415466;
+        --fr-slate-500: #7b8a98;
+        --fr-slate-100: #eef3f7;
+        --fr-border: rgba(21, 37, 53, .08);
+        --fr-shadow: 0 18px 42px rgba(21, 37, 53, .07);
+    }
+
     .fap-review-page {
         animation: fadeIn .3s ease-in;
+    }
+
+    .page-content {
+        display: flex;
+        flex-direction: column;
+        gap: 1.25rem;
     }
 
     @keyframes fadeIn {
@@ -26,8 +41,7 @@
     .stat-cards {
         display: grid;
         grid-template-columns: repeat(4, 1fr);
-        gap: .75rem;
-        margin-bottom: 1.5rem;
+        gap: 1rem;
     }
 
     @media (max-width: 1200px) {
@@ -45,11 +59,11 @@
     .stat-card {
         position: relative;
         overflow: hidden;
-        background: var(--bs-body-bg);
-        border: 1px solid rgba(15, 23, 42, .07);
-        border-radius: .85rem;
-        box-shadow: 0 4px 16px rgba(15, 23, 42, .06);
-        padding: .85rem 1rem .85rem 1.2rem;
+        background: linear-gradient(180deg, rgba(255, 255, 255, .98) 0%, rgba(248, 250, 252, .98) 100%);
+        border: 1px solid var(--fr-border);
+        border-radius: 1rem;
+        box-shadow: var(--fr-shadow);
+        padding: 1rem 1.05rem 1rem 1.2rem;
         transition: transform .2s ease, box-shadow .2s ease;
     }
 
@@ -61,32 +75,43 @@
     .stat-card::before {
         content: "";
         position: absolute;
-        inset: 0 auto 0 0;
-        width: 5px;
+        inset: 0 0 auto 0;
+        height: 4px;
         background: var(--sc-color, #0d6efd);
-        border-radius: 4px 0 0 4px;
+    }
+
+    .stat-card::after {
+        content: "";
+        position: absolute;
+        top: -2rem;
+        right: -2rem;
+        width: 6rem;
+        height: 6rem;
+        border-radius: 999px;
+        background: var(--sc-soft, rgba(13, 110, 253, .08));
     }
 
     .stat-card .sc-icon {
-        width: 2.1rem;
-        height: 2.1rem;
+        width: 2.4rem;
+        height: 2.4rem;
         background: var(--sc-soft, rgba(13, 110, 253, .10));
         color: var(--sc-color, #0d6efd);
-        border-radius: .55rem;
+        border-radius: .8rem;
         display: inline-flex;
         align-items: center;
         justify-content: center;
-        font-size: .9rem;
+        font-size: 1rem;
         flex-shrink: 0;
+        margin-bottom: .7rem;
     }
 
     .stat-card .sc-label {
         font-size: .68rem;
         font-weight: 700;
         text-transform: uppercase;
-        letter-spacing: .04em;
-        color: #6c7a8d;
-        margin-bottom: .1rem;
+        letter-spacing: .06em;
+        color: var(--fr-slate-500);
+        margin-bottom: .2rem;
     }
 
     .stat-card .sc-label-urgent {
@@ -94,39 +119,85 @@
     }
 
     .stat-card .sc-value {
-        font-size: 1.8rem;
+        font-size: 2rem;
         font-weight: 800;
         line-height: 1;
-        color: var(--bs-emphasis-color);
+        color: var(--fr-slate-900);
     }
 
     .stat-card .sc-sub-text {
-        font-size: .72rem;
-        color: #9aa5b4;
-        margin-top: .2rem;
+        font-size: .76rem;
+        color: var(--fr-slate-500);
+        margin-top: .32rem;
+    }
+
+    .petition-board-card {
+        border: 1px solid var(--fr-border);
+        border-radius: 1.15rem;
+        box-shadow: var(--fr-shadow);
+        overflow: hidden;
+        background: #fff;
+    }
+
+    .petition-board-header {
+        background: linear-gradient(180deg, rgba(250, 252, 253, .95) 0%, rgba(255, 255, 255, 1) 100%);
+        padding: 1.15rem 1.2rem;
+        position: relative;
+    }
+
+    .petition-board-header::after {
+        content: "";
+        position: absolute;
+        inset: auto 0 0 0;
+        height: 1px;
+        background: linear-gradient(90deg, rgba(21, 37, 53, .08) 0%, rgba(21, 37, 53, .02) 100%);
+    }
+
+    .petition-board-summary {
+        display: flex;
+        align-items: center;
+        gap: .5rem;
+        flex-wrap: wrap;
+        margin-top: .55rem;
+    }
+
+    .petition-board-summary-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: .35rem;
+        border-radius: 999px;
+        padding: .36rem .72rem;
+        font-size: .75rem;
+        font-weight: 700;
+        border: 1px solid rgba(21, 37, 53, .08);
+        background: #fff;
+        color: #5f6b7a;
     }
 
     /* ── Petition list ───────────────────────────────────── */
     .petition-list {
         display: flex;
         flex-direction: column;
+        padding: .85rem;
+        gap: .75rem;
+        background: linear-gradient(180deg, rgba(248, 250, 252, .55) 0%, rgba(255, 255, 255, 0) 100%);
     }
 
     .petition-row {
         display: grid;
-        grid-template-columns: 200px 1fr 160px auto;
+        grid-template-columns: 190px minmax(0, 1fr) 170px 170px auto;
         align-items: center;
-        padding: .75rem 1rem;
-        border-bottom: 1px solid rgba(15, 23, 42, .06);
-        transition: filter .15s ease;
+        padding: 1rem 1rem;
+        border: 1px solid rgba(21, 37, 53, .07);
+        border-radius: 1rem;
+        box-shadow: 0 10px 24px rgba(21, 37, 53, .05);
+        transition: transform .15s ease, box-shadow .15s ease, filter .15s ease;
     }
 
     .petition-row:hover {
-        filter: brightness(.97);
-    }
-
-    .petition-row:last-child {
-        border-bottom: none;
+        filter: brightness(.99);
+        transform: translateY(-2px);
+        box-shadow: 0 14px 28px rgba(21, 37, 53, .08);
     }
 
     .pr-wrike {
@@ -139,22 +210,65 @@
     }
 
     .pr-title-text {
-        font-size: .9rem;
-        font-weight: 600;
-        color: var(--bs-emphasis-color);
+        font-size: .98rem;
+        font-weight: 700;
+        color: var(--fr-slate-900);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
-        margin-bottom: .1rem;
+        margin-bottom: .18rem;
     }
 
     .pr-title-meta {
-        font-size: .76rem;
-        color: #9aa5b4;
+        font-size: .78rem;
+        color: var(--fr-slate-500);
     }
 
     .pr-status {
         padding: 0 .75rem;
+    }
+
+    .pr-reviewer {
+        padding: 0 .75rem;
+    }
+
+    .pr-column-label {
+        font-size: .64rem;
+        font-weight: 800;
+        letter-spacing: .05em;
+        text-transform: uppercase;
+        color: #8a96a3;
+        margin-bottom: .2rem;
+    }
+
+    .pr-reviewer-name {
+        display: inline-flex;
+        align-items: center;
+        gap: .45rem;
+        min-width: 0;
+        font-size: .84rem;
+        font-weight: 700;
+        color: #233245;
+    }
+
+    .pr-reviewer-avatar {
+        width: 1.9rem;
+        height: 1.9rem;
+        border-radius: 999px;
+        background: linear-gradient(135deg, rgba(13, 110, 253, .16) 0%, rgba(111, 66, 193, .12) 100%);
+        color: #0d6efd;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: .76rem;
+        font-weight: 800;
+        flex-shrink: 0;
+    }
+
+    .pr-reviewer-empty {
+        color: #9aa5b4;
+        font-size: .82rem;
+        font-weight: 600;
     }
 
     .pr-actions {
@@ -167,7 +281,7 @@
     @media (max-width: 900px) {
         .petition-row {
             grid-template-columns: 1fr auto;
-            row-gap: .25rem;
+            row-gap: .55rem;
         }
 
         .pr-wrike {
@@ -182,11 +296,19 @@
         }
 
         .pr-status {
-            display: none;
+            grid-column: 1;
+            grid-row: 3;
+            padding-left: 0;
+        }
+
+        .pr-reviewer {
+            grid-column: 1;
+            grid-row: 4;
+            padding-left: 0;
         }
 
         .pr-actions {
-            grid-row: 1 / 3;
+            grid-row: 1 / 5;
             grid-column: 2;
             flex-direction: column;
         }
@@ -197,13 +319,14 @@
         display: flex;
         align-items: center;
         gap: .4rem;
-        background: var(--bs-secondary-bg);
-        border: 1px solid var(--bs-border-color);
-        border-radius: .6rem;
-        padding: .35rem .7rem;
+        background: #fff;
+        border: 1px solid rgba(21, 37, 53, .10);
+        border-radius: .8rem;
+        padding: .5rem .8rem;
         min-width: 240px;
         flex: 1;
-        max-width: 340px;
+        max-width: 380px;
+        box-shadow: inset 0 1px 1px rgba(21, 37, 53, .02);
     }
 
     .petition-search-bar input {
@@ -231,8 +354,8 @@
         font-size: .78rem;
         font-weight: 600;
         cursor: pointer;
-        border: 1px solid var(--bs-border-color);
-        background: var(--bs-body-bg);
+        border: 1px solid rgba(21, 37, 53, .10);
+        background: #fff;
         color: var(--bs-secondary-color);
         transition: all .15s ease;
         user-select: none;
@@ -287,12 +410,11 @@
         display: inline-flex;
         align-items: center;
         gap: .55rem;
-        padding: .4rem .65rem .4rem .55rem;
-        border-radius: .6rem;
-        background: var(--bs-body-bg);
-        border: 1px solid #e2e8f0;
-        border-left: 3px solid #00e05c;
-        box-shadow: 0 1px 4px rgba(15, 23, 42, .07);
+        padding: .5rem .72rem .5rem .62rem;
+        border-radius: .85rem;
+        background: linear-gradient(180deg, rgba(255, 255, 255, .98) 0%, rgba(248, 250, 252, .98) 100%);
+        border: 1px solid rgba(21, 37, 53, .08);
+        box-shadow: 0 6px 14px rgba(15, 23, 42, .05);
         max-width: 190px;
     }
 
@@ -336,6 +458,49 @@
     .wrike-id-chip.is-empty .wrike-id-value {
         color: #adb5bd;
     }
+
+    .petition-toolbar {
+        background: linear-gradient(180deg, rgba(248, 250, 252, .95) 0%, rgba(255, 255, 255, .98) 100%);
+        border-top: 1px solid rgba(15, 23, 42, .06);
+        border-bottom: 1px solid rgba(15, 23, 42, .06);
+    }
+
+    .petition-list-header {
+        display: grid;
+        grid-template-columns: 190px minmax(0, 1fr) 170px 170px auto;
+        gap: 0;
+        padding: .4rem 1.85rem .1rem;
+        background: transparent;
+        border-bottom: none;
+    }
+
+    .petition-list-header span {
+        font-size: .67rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        color: #7b8794;
+        padding: 0 .75rem;
+    }
+
+    .petition-list-header span:first-child {
+        padding-left: 0;
+    }
+
+    .petition-list-header span:last-child {
+        text-align: right;
+        padding-right: 0;
+    }
+
+    @media (max-width: 900px) {
+        .petition-list-header {
+            display: none;
+        }
+
+        .petition-list {
+            padding: .75rem;
+        }
+    }
 </style>
 {% endblock %}
 
@@ -347,7 +512,7 @@
         <nav aria-label="breadcrumb">
             <ol class="breadcrumb mb-0 bg-transparent small">
                 <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i>
-                        Home</a></li>
+                        Início</a></li>
                 <li class="breadcrumb-item active"><i class="bi bi-file-earmark-check"></i> Revisor de Petições</li>
             </ol>
         </nav>
@@ -393,9 +558,20 @@
         </div>
 
         <!-- Petições -->
-        <div class="card mb-4">
-            <div class="card-header border-0 d-flex align-items-center justify-content-between gap-3 flex-wrap">
-                <h5 class="card-title mb-0"><i class="bi bi-collection me-2"></i> Petições em Acompanhamento</h5>
+        <div class="card petition-board-card mb-4">
+            <div
+                class="card-header petition-board-header border-0 d-flex align-items-center justify-content-between gap-3 flex-wrap">
+                <div>
+                    <h5 class="card-title mb-0"><i class="bi bi-collection me-2"></i> Petições em Acompanhamento</h5>
+                    <div class="petition-board-summary">
+                        <span class="petition-board-summary-chip"><i class="bi bi-clock-history"></i> Últimas 20
+                            petições atualizadas</span>
+                        <span class="petition-board-summary-chip"><i class="bi bi-person-check"></i> Com histórico da
+                            última revisão</span>
+                        <span class="petition-board-summary-chip"><i class="bi bi-funnel"></i> Filtro e busca em tempo
+                            real</span>
+                    </div>
+                </div>
                 <div class="petition-search-bar">
                     <i class="bi bi-search text-muted" style="font-size: .85rem; flex-shrink:0;"></i>
                     <input type="text" id="petitionSearch" placeholder="Buscar petição ou Id Wrike..."
@@ -404,8 +580,7 @@
             </div>
 
             <!-- Filtros por status -->
-            <div class="px-3 py-2 d-flex flex-wrap gap-2 align-items-center"
-                style="background: var(--bs-secondary-bg); border-top: 1px solid rgba(15,23,42,.06); border-bottom: 1px solid rgba(15,23,42,.06);">
+            <div class="petition-toolbar px-3 py-2 d-flex flex-wrap gap-2 align-items-center">
                 <button class="filter-pill active" data-filter="all">
                     Todos ({{ petition_rows|length }})
                 </button>
@@ -433,10 +608,18 @@
 
             <!-- Lista de petições -->
             {% if petition_rows %}
+            <div class="petition-list-header">
+                <span>Id Wrike</span>
+                <span>Petição</span>
+                <span>Status</span>
+                <span>Último usuário</span>
+                <span>Ações</span>
+            </div>
             <div class="petition-list" id="petitionList">
                 {% for row in petition_rows %}
                 {% set petition = row.petition %}
                 {% set latest_revision = row.latest_revision %}
+                {% set latest_reviewer_name = row.latest_reviewer_name %}
                 {% set status_badge = row.status_badge %}
 
                 {% if petition.workflow_status == 'awaiting_adjustments' %}
@@ -464,7 +647,7 @@
                 <div class="petition-row"
                     style="background: {{ row_bg }}; border-left: {{ row_border_width }} solid {{ row_border_color }};"
                     data-status="{{ petition.workflow_status }}"
-                    data-search="{{ (petition.title ~ ' ' ~ (petition.office_document_identifier or ''))|lower }}">
+                    data-search="{{ (petition.title ~ ' ' ~ (petition.office_document_identifier or '') ~ ' ' ~ (latest_reviewer_name or ''))|lower }}">
 
                     <!-- Wrike ID -->
                     <div class="pr-wrike">
@@ -484,25 +667,48 @@
                         <div class="pr-title-text">{{ petition.title }}</div>
                         <div class="pr-title-meta">
                             {% if latest_revision %}R{{ latest_revision.revision_number or '?' }} · {% endif %}
-                            {{ (petition.last_reviewed_at or petition.updated_at or
+                            Atualizada em {{ (petition.last_reviewed_at or petition.updated_at or
                             petition.created_at).strftime('%d/%m/%Y') }}
                         </div>
                     </div>
 
                     <!-- Status -->
                     <div class="pr-status">
+                        <div class="pr-column-label d-md-none">Status</div>
                         <span
                             class="badge rounded-pill bg-{{ status_badge.class }}-subtle text-{{ status_badge.class }}-emphasis border border-{{ status_badge.class }}-subtle">
                             <i class="{{ status_badge.icon }} me-1"></i> {{ status_badge.label }}
                         </span>
                     </div>
 
+                    <div class="pr-reviewer">
+                        <div class="pr-column-label d-md-none">Último usuário</div>
+                        {% if latest_reviewer_name %}
+                        <div class="pr-reviewer-name" title="{{ latest_reviewer_name }}">
+                            <span class="pr-reviewer-avatar">{{ latest_reviewer_name[:1]|upper }}</span>
+                            <span class="text-truncate">{{ latest_reviewer_name }}</span>
+                        </div>
+                        {% else %}
+                        <div class="pr-reviewer-empty">Sem revisão registrada</div>
+                        {% endif %}
+                    </div>
+
                     <!-- Ações -->
                     <div class="pr-actions">
+                        {% if latest_revision %}
+                        <a href="{{ url_for('fap_review.revision_result', execution_id=latest_revision.id) }}"
+                            class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener noreferrer">
+                            <i class="bi bi-box-arrow-up-right me-1"></i> Última Revisão
+                        </a>
+                        {% endif %}
                         <a href="{{ url_for('fap_review.petition_detail', petition_id=petition.id) }}"
-                            class="btn btn-sm btn-outline-secondary">Histórico</a>
+                            class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-folder2-open me-1"></i> Abrir Petição
+                        </a>
                         <a href="{{ url_for('fap_review.revision', petition_id=petition.id) }}"
-                            class="btn btn-sm btn-primary">Revisar</a>
+                            class="btn btn-sm btn-primary">
+                            <i class="bi bi-search-heart me-1"></i> Revisar
+                        </a>
                     </div>
                 </div>
                 {% endfor %}

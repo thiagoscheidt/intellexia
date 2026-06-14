@@ -509,6 +509,165 @@
     #stickyQuickNav .mb-3 {
         margin-bottom: 0 !important;
     }
+
+    .petition-ready-action {
+        margin-top: .75rem;
+    }
+
+    .petition-ready-feedback {
+        display: none;
+        margin-top: .6rem;
+        padding: .65rem .8rem;
+        border-radius: .7rem;
+        font-size: .82rem;
+        border: 1px solid transparent;
+    }
+
+    .petition-ready-feedback.is-visible {
+        display: block;
+    }
+
+    .petition-ready-feedback.is-success {
+        background: rgba(25, 135, 84, .08);
+        border-color: rgba(25, 135, 84, .18);
+        color: #198754;
+    }
+
+    .petition-ready-feedback.is-error {
+        background: rgba(220, 53, 69, .08);
+        border-color: rgba(220, 53, 69, .18);
+        color: #dc3545;
+    }
+
+    .execution-overview-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1.3fr) minmax(280px, .9fr);
+        gap: 1rem;
+    }
+
+    @media (max-width: 991px) {
+        .execution-overview-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .execution-main-panel,
+    .execution-side-panel,
+    .execution-meta-card {
+        border: 1px solid rgba(15, 23, 42, .07);
+        border-radius: .9rem;
+        background: var(--bs-body-bg);
+    }
+
+    .execution-main-panel {
+        padding: 1rem 1rem 1.05rem;
+    }
+
+    .execution-side-panel {
+        padding: 1rem;
+        background: linear-gradient(180deg, rgba(248, 250, 252, .95) 0%, rgba(255, 255, 255, .98) 100%);
+    }
+
+    .execution-eyebrow {
+        font-size: .7rem;
+        font-weight: 800;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        color: #7b8794;
+        margin-bottom: .45rem;
+    }
+
+    .execution-doc-title {
+        font-size: 1.08rem;
+        font-weight: 800;
+        color: var(--bs-emphasis-color);
+        line-height: 1.35;
+        margin-bottom: .35rem;
+        word-break: break-word;
+    }
+
+    .execution-helper-text {
+        font-size: .84rem;
+        color: #6c7a8d;
+        margin-bottom: 1rem;
+    }
+
+    .execution-badge-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .55rem;
+        margin-bottom: 1rem;
+    }
+
+    .execution-meta-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: .7rem;
+    }
+
+    @media (max-width: 767px) {
+        .execution-meta-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .execution-meta-card {
+        padding: .8rem .85rem;
+    }
+
+    .execution-meta-label {
+        font-size: .68rem;
+        text-transform: uppercase;
+        letter-spacing: .05em;
+        color: #7b8794;
+        margin-bottom: .3rem;
+        font-weight: 700;
+    }
+
+    .execution-meta-value {
+        font-size: .94rem;
+        color: var(--bs-emphasis-color);
+        font-weight: 700;
+        line-height: 1.45;
+        word-break: break-word;
+    }
+
+    .execution-side-stack {
+        display: grid;
+        gap: .75rem;
+    }
+
+    .execution-side-item {
+        border-radius: .8rem;
+        padding: .8rem .85rem;
+        background: rgba(255, 255, 255, .82);
+        border: 1px solid rgba(15, 23, 42, .06);
+    }
+
+    .execution-side-item .execution-meta-label {
+        margin-bottom: .35rem;
+    }
+
+    .petition-link-block {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: .55rem;
+        margin-bottom: .55rem;
+    }
+
+    .petition-link-block a {
+        font-size: .98rem;
+        font-weight: 800;
+        text-decoration: none;
+    }
+
+    .execution-actions-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .55rem;
+        margin-top: .8rem;
+    }
 </style>
 {% endblock %}
 
@@ -551,56 +710,77 @@
                         </div>
                     </div>
                     <div class="card-body">
-                        <div class="row g-3">
-                            <div class="col-sm-6 col-lg-3">
-                                <div class="text-muted small">ID da Execução</div>
-                                <div class="fw-semibold">#{{ execution.id }}</div>
-                            </div>
-                            <div class="col-sm-6 col-lg-3">
-                                <div class="text-muted small">Tipo</div>
-                                {% if execution.execution_type == 'revision' %}
-                                <span
-                                    class="badge rounded-pill bg-info-subtle text-info-emphasis border border-info-subtle px-3 py-2">
-                                    <i class="bi bi-file-earmark-check me-1"></i> Revisão
-                                </span>
-                                {% else %}
-                                <span
-                                    class="badge rounded-pill bg-primary-subtle text-primary-emphasis border border-primary-subtle px-3 py-2">
-                                    <i class="bi bi-mortarboard me-1"></i> Treinamento
-                                </span>
-                                {% endif %}
-                            </div>
-                            <div class="col-sm-6 col-lg-3">
-                                <div class="text-muted small">Status</div>
-                                {% if execution.status == 'completed' %}
-                                <span
-                                    class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2">
-                                    <i class="bi bi-check-circle me-1"></i> Concluída
-                                </span>
-                                {% elif execution.status == 'processing' %}
-                                <span
-                                    class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2">
-                                    <i class="bi bi-hourglass-split me-1"></i> Processando
-                                </span>
-                                {% elif execution.status == 'failed' %}
-                                <span
-                                    class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2">
-                                    <i class="bi bi-x-circle me-1"></i> Erro
-                                </span>
-                                {% else %}
-                                <span
-                                    class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3 py-2">{{
-                                    execution.status }}</span>
-                                {% endif %}
-                            </div>
-                            <div class="col-sm-6 col-lg-3">
-                                <div class="text-muted small">Data</div>
-                                <div class="fw-semibold">{{ execution.created_at.strftime('%d/%m/%Y %H:%M:%S') }}</div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="text-muted small">Documento Principal</div>
-                                <div class="d-flex flex-wrap align-items-center gap-2">
-                                    <div class="fw-semibold">{{ execution.main_document_filename }}</div>
+                        <div class="execution-overview-grid">
+                            <div class="execution-main-panel">
+                                <div class="execution-eyebrow">Documento analisado</div>
+                                <div class="execution-doc-title">{{ execution.main_document_filename }}</div>
+                                <div class="execution-helper-text">Confira o vínculo com a petição, o estágio atual e os
+                                    principais dados operacionais desta revisão.</div>
+
+                                <div class="execution-badge-row">
+                                    {% if execution.execution_type == 'revision' %}
+                                    <span
+                                        class="badge rounded-pill bg-info-subtle text-info-emphasis border border-info-subtle px-3 py-2">
+                                        <i class="bi bi-file-earmark-check me-1"></i> Revisão
+                                    </span>
+                                    {% else %}
+                                    <span
+                                        class="badge rounded-pill bg-primary-subtle text-primary-emphasis border border-primary-subtle px-3 py-2">
+                                        <i class="bi bi-mortarboard me-1"></i> Treinamento
+                                    </span>
+                                    {% endif %}
+
+                                    {% if execution.status == 'completed' %}
+                                    <span
+                                        class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle px-3 py-2">
+                                        <i class="bi bi-check-circle me-1"></i> Concluída
+                                    </span>
+                                    {% elif execution.status == 'processing' %}
+                                    <span
+                                        class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2">
+                                        <i class="bi bi-hourglass-split me-1"></i> Processando
+                                    </span>
+                                    {% elif execution.status == 'failed' %}
+                                    <span
+                                        class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle px-3 py-2">
+                                        <i class="bi bi-x-circle me-1"></i> Erro
+                                    </span>
+                                    {% else %}
+                                    <span
+                                        class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle px-3 py-2">{{
+                                        execution.status }}</span>
+                                    {% endif %}
+
+                                    {% if result_data.focused_review %}
+                                    <span
+                                        class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2">
+                                        <i class="bi bi-bullseye me-1"></i> Revisão Focada por Histórico
+                                    </span>
+                                    {% else %}
+                                    <span
+                                        class="badge rounded-pill bg-primary-subtle text-primary-emphasis border border-primary-subtle px-3 py-2">
+                                        <i class="bi bi-journal-text me-1"></i> Revisão Geral
+                                    </span>
+                                    {% endif %}
+                                </div>
+
+                                <div class="execution-meta-grid">
+                                    <div class="execution-meta-card">
+                                        <div class="execution-meta-label">ID da execução</div>
+                                        <div class="execution-meta-value">#{{ execution.id }}</div>
+                                    </div>
+                                    <div class="execution-meta-card">
+                                        <div class="execution-meta-label">Data da revisão</div>
+                                        <div class="execution-meta-value">{{ execution.created_at.strftime('%d/%m/%Y
+                                            %H:%M') }}</div>
+                                    </div>
+                                    <div class="execution-meta-card">
+                                        <div class="execution-meta-label">Revisão</div>
+                                        <div class="execution-meta-value">R{{ execution.revision_number or 1 }}</div>
+                                    </div>
+                                </div>
+
+                                <div class="execution-actions-row">
                                     {% if execution.main_document_path and execution.main_document_filename and
                                     execution.main_document_filename.lower().endswith('.pdf') %}
                                     <a href="{{ url_for('fap_review.revision_main_document', execution_id=execution.id) }}"
@@ -611,67 +791,67 @@
                                     {% endif %}
                                 </div>
                             </div>
-                            <div class="col-md-6">
-                                <div class="text-muted small">Petição</div>
-                                {% if petition %}
-                                <div class="d-flex flex-wrap align-items-center gap-2">
-                                    <a href="{{ url_for('fap_review.petition_detail', petition_id=petition.id) }}"
-                                        class="fw-semibold text-decoration-none">{{ petition.title }}</a>
-                                    {% if petition_status_badge %}
-                                    <span
-                                        class="badge rounded-pill bg-{{ petition_status_badge.class }}-subtle text-{{ petition_status_badge.class }}-emphasis border border-{{ petition_status_badge.class }}-subtle px-3 py-2">
-                                        <i class="{{ petition_status_badge.icon }} me-1"></i> {{
-                                        petition_status_badge.label }}
-                                    </span>
-                                    {% endif %}
+
+                            <div class="execution-side-panel">
+                                <div class="execution-eyebrow">Vínculo da petição</div>
+
+                                <div class="execution-side-stack">
+                                    <div class="execution-side-item">
+                                        <div class="execution-meta-label">Petição</div>
+                                        {% if petition %}
+                                        <div class="petition-link-block">
+                                            <a
+                                                href="{{ url_for('fap_review.petition_detail', petition_id=petition.id) }}">{{
+                                                petition.title }}</a>
+                                            {% if petition_status_badge %}
+                                            <span
+                                                class="badge rounded-pill bg-{{ petition_status_badge.class }}-subtle text-{{ petition_status_badge.class }}-emphasis border border-{{ petition_status_badge.class }}-subtle px-3 py-2">
+                                                <i class="{{ petition_status_badge.icon }} me-1"></i> {{
+                                                petition_status_badge.label }}
+                                            </span>
+                                            {% endif %}
+                                        </div>
+
+                                        {% if execution.status == 'completed' %}
+                                        <div class="petition-ready-action">
+                                            {% if petition.workflow_status not in ['ready_for_filing', 'filed',
+                                            'archived'] %}
+                                            <button type="button" class="btn btn-sm btn-success"
+                                                id="markPetitionReadyButton"
+                                                data-update-url="{{ url_for('fap_review.petition_update_status', petition_id=petition.id) }}">
+                                                <i class="bi bi-check2-circle me-1"></i> Marcar petição como pronta
+                                            </button>
+                                            <div id="petitionReadyFeedback" class="petition-ready-feedback"></div>
+                                            {% elif petition.workflow_status == 'ready_for_filing' %}
+                                            <div class="small text-success mt-2">
+                                                <i class="bi bi-check2-circle me-1"></i> Esta petição já está marcada
+                                                como pronta para seguir.
+                                            </div>
+                                            {% endif %}
+                                        </div>
+                                        {% endif %}
+                                        {% else %}
+                                        <div class="execution-meta-value">-</div>
+                                        {% endif %}
+                                    </div>
+
+                                    <div class="execution-side-item">
+                                        <div class="execution-meta-label wrike-label-inline">
+                                            <img src="{{ url_for('static', filename='assets/wrike-logo-light.svg') }}"
+                                                alt="Wrike" class="wrike-inline-mark">
+                                            <span>Id Wrike</span>
+                                        </div>
+                                        <div class="execution-meta-value">{{ petition.office_document_identifier if
+                                            petition else execution.law_firm_document_identifier or '-' }}</div>
+                                    </div>
+
+                                    <div class="execution-side-item">
+                                        <div class="execution-meta-label">Contexto da revisão</div>
+                                        <div class="execution-meta-value">{{ execution.auxiliary_documents_count }}
+                                            documento(s) auxiliar(es) · {{ prior_revision_count or 0 }} revisão(ões)
+                                            anterior(es)</div>
+                                    </div>
                                 </div>
-                                {% else %}
-                                <div class="fw-semibold">-</div>
-                                {% endif %}
-                            </div>
-                            <div class="col-md-3 col-lg-2">
-                                <div class="text-muted small">Revisão</div>
-                                <div class="fw-semibold">R{{ execution.revision_number or 1 }}</div>
-                            </div>
-                            <div class="col-md-3 col-lg-2">
-                                <div class="text-muted small wrike-label-inline">
-                                    <img src="{{ url_for('static', filename='assets/wrike-logo-light.svg') }}"
-                                        alt="Wrike" class="wrike-inline-mark">
-                                    <span>Id Wrike</span>
-                                </div>
-                                <div class="fw-semibold" style="word-break: break-all;">{{
-                                    petition.office_document_identifier if petition else
-                                    execution.law_firm_document_identifier or '-' }}</div>
-                            </div>
-                            <div class="col-md-2 col-lg-1">
-                                <div class="text-muted small">Auxiliares</div>
-                                <div class="fw-semibold">{{ execution.auxiliary_documents_count }}</div>
-                            </div>
-                            <div class="col-md-2">
-                                <div class="text-muted small">Tokens</div>
-                                <div class="fw-semibold">{{ execution.tokens_used or '-' }}</div>
-                            </div>
-                            <div class="col-md-2">
-                                <div class="text-muted small">Custo (USD)</div>
-                                <div class="fw-semibold">{{ execution.cost_usd or '-' }}</div>
-                            </div>
-                            <div class="col-md-2">
-                                <div class="text-muted small">Revisões Anteriores</div>
-                                <div class="fw-semibold">{{ prior_revision_count or 0 }}</div>
-                            </div>
-                            <div class="col-md-4 col-lg-3">
-                                <div class="text-muted small">Modo da Revisão</div>
-                                {% if result_data.focused_review %}
-                                <span
-                                    class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle px-3 py-2">
-                                    <i class="bi bi-bullseye me-1"></i> Revisão Focada por Histórico
-                                </span>
-                                {% else %}
-                                <span
-                                    class="badge rounded-pill bg-primary-subtle text-primary-emphasis border border-primary-subtle px-3 py-2">
-                                    <i class="bi bi-journal-text me-1"></i> Revisão Geral
-                                </span>
-                                {% endif %}
                             </div>
                         </div>
                     </div>
@@ -1444,6 +1624,45 @@
     // Modal para Visualizar Página do Ponto de Atenção
     document.addEventListener('DOMContentLoaded', function () {
         const findingPageModal = document.getElementById('findingPageModal');
+        const markPetitionReadyButton = document.getElementById('markPetitionReadyButton');
+        const petitionReadyFeedback = document.getElementById('petitionReadyFeedback');
+
+        function showPetitionReadyFeedback(message, kind) {
+            if (!petitionReadyFeedback) {
+                return;
+            }
+
+            petitionReadyFeedback.textContent = message;
+            petitionReadyFeedback.className = `petition-ready-feedback is-visible ${kind === 'success' ? 'is-success' : 'is-error'}`;
+        }
+
+        if (markPetitionReadyButton) {
+            markPetitionReadyButton.addEventListener('click', async function () {
+                const updateUrl = this.dataset.updateUrl;
+                this.disabled = true;
+
+                try {
+                    const response = await fetch(updateUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ workflow_status: 'ready_for_filing' })
+                    });
+
+                    const payload = await response.json().catch(() => ({}));
+                    if (!response.ok) {
+                        throw new Error(payload.error || 'Não foi possível marcar a petição como pronta.');
+                    }
+
+                    showPetitionReadyFeedback('Petição marcada como pronta com sucesso.', 'success');
+                    window.setTimeout(() => window.location.reload(), 900);
+                } catch (error) {
+                    showPetitionReadyFeedback(error.message || 'Não foi possível marcar a petição como pronta.', 'error');
+                    this.disabled = false;
+                }
+            });
+        }
 
         if (findingPageModal) {
             findingPageModal.addEventListener('show.bs.modal', function (e) {
