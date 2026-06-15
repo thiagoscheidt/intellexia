@@ -232,6 +232,215 @@
         align-items: center;
         gap: .4rem;
     }
+
+    .petition-mode-switch {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .65rem;
+        margin-bottom: 1rem;
+    }
+
+    .petition-mode-btn {
+        border: 1px solid rgba(15, 23, 42, .10);
+        background: #fff;
+        border-radius: .8rem;
+        padding: .8rem .95rem;
+        min-width: 220px;
+        text-align: left;
+        transition: all .18s ease;
+    }
+
+    .petition-mode-btn.active {
+        border-color: var(--bs-primary);
+        background: var(--bs-primary-bg-subtle);
+        box-shadow: 0 8px 18px rgba(13, 110, 253, .10);
+    }
+
+    .petition-mode-title {
+        font-size: .88rem;
+        font-weight: 700;
+        color: var(--bs-emphasis-color);
+        margin-bottom: .15rem;
+    }
+
+    .petition-mode-subtitle {
+        font-size: .77rem;
+        color: var(--bs-secondary-color);
+        line-height: 1.45;
+    }
+
+    .petition-choice-panel {
+        border: 1px solid rgba(15, 23, 42, .08);
+        border-radius: .95rem;
+        background: linear-gradient(180deg, rgba(248, 250, 252, .92) 0%, rgba(255, 255, 255, .98) 100%);
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .petition-choice-panel[hidden] {
+        display: none !important;
+    }
+
+    .petition-search-shell {
+        display: flex;
+        align-items: center;
+        gap: .55rem;
+        background: #fff;
+        border: 1px solid rgba(15, 23, 42, .10);
+        border-radius: .8rem;
+        padding: .6rem .8rem;
+        margin-bottom: .9rem;
+    }
+
+    .petition-search-shell input {
+        border: none;
+        background: transparent;
+        width: 100%;
+        font-size: .88rem;
+    }
+
+    .petition-search-shell input:focus {
+        outline: none;
+    }
+
+    .petition-cards-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: .75rem;
+        max-height: 340px;
+        overflow: auto;
+        padding-right: .15rem;
+    }
+
+    @media (max-width: 767px) {
+        .petition-cards-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+
+    .petition-choice-card {
+        border: 1px solid rgba(15, 23, 42, .09);
+        background: #fff;
+        border-radius: .95rem;
+        padding: .9rem .95rem;
+        text-align: left;
+        transition: all .18s ease;
+        box-shadow: 0 4px 14px rgba(15, 23, 42, .04);
+    }
+
+    .petition-choice-card:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 10px 22px rgba(15, 23, 42, .08);
+        border-color: rgba(13, 110, 253, .22);
+    }
+
+    .petition-choice-card.active {
+        border-color: var(--bs-primary);
+        background: rgba(13, 110, 253, .05);
+        box-shadow: 0 12px 24px rgba(13, 110, 253, .12);
+    }
+
+    .petition-choice-card-title {
+        font-size: .9rem;
+        font-weight: 700;
+        color: var(--bs-emphasis-color);
+        margin-bottom: .35rem;
+    }
+
+    .petition-choice-card-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .45rem;
+        margin-bottom: .35rem;
+    }
+
+    .petition-choice-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: .3rem;
+        padding: .28rem .55rem;
+        border-radius: 999px;
+        font-size: .72rem;
+        font-weight: 700;
+        background: rgba(15, 23, 42, .05);
+        color: #617182;
+        border: 1px solid rgba(15, 23, 42, .07);
+    }
+
+    .petition-choice-card-subtext {
+        font-size: .77rem;
+        color: #7b8794;
+    }
+
+    .petition-empty-search {
+        border: 1px dashed rgba(15, 23, 42, .14);
+        border-radius: .85rem;
+        padding: 1rem;
+        text-align: center;
+        font-size: .84rem;
+        color: #7b8794;
+        background: rgba(255, 255, 255, .7);
+    }
+
+    .petition-mode-hint {
+        font-size: .79rem;
+        color: #7b8794;
+        margin-top: .35rem;
+    }
+
+    .petition-selected-card {
+        border: 1px solid rgba(15, 23, 42, .08);
+        border-radius: .95rem;
+        background: linear-gradient(180deg, rgba(248, 250, 252, .92) 0%, rgba(255, 255, 255, .98) 100%);
+        padding: 1rem;
+        margin-bottom: 1rem;
+    }
+
+    .petition-selected-card[hidden] {
+        display: none !important;
+    }
+
+    .petition-selected-title {
+        font-size: .95rem;
+        font-weight: 700;
+        color: var(--bs-emphasis-color);
+        margin-bottom: .35rem;
+    }
+
+    .petition-selected-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .45rem;
+        margin-bottom: .75rem;
+    }
+
+    .petition-selection-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .55rem;
+        align-items: center;
+    }
+
+    .petition-modal .modal-content {
+        border: 1px solid rgba(15, 23, 42, .08);
+        border-radius: 1rem;
+        box-shadow: 0 16px 40px rgba(15, 23, 42, .12);
+    }
+
+    .petition-modal .modal-header {
+        border-bottom: 1px solid rgba(15, 23, 42, .08);
+        padding: 1rem 1rem .9rem;
+    }
+
+    .petition-modal .modal-body {
+        padding: 1rem;
+    }
+
+    .petition-modal-title {
+        font-size: 1rem;
+        font-weight: 700;
+        color: var(--bs-emphasis-color);
+    }
 </style>
 {% endblock %}
 
@@ -298,26 +507,83 @@
                                 <p class="text-muted small mb-3">Escolha uma petição existente ou cadastre uma nova
                                     antes de iniciar a revisão.</p>
                                 <div class="mb-4">
-                                    <label for="petitionId" class="form-label small fw-semibold mb-2">
+                                    <label class="form-label small fw-semibold mb-2">
                                         <i class="bi bi-folder2-open text-primary me-1"></i>
-                                        Petição
+                                        Como deseja começar?
                                     </label>
-                                    <select class="form-select" id="petitionId" name="petition_id">
+
+                                    <div class="petition-mode-switch" id="petitionModeSwitch">
+                                        <button type="button"
+                                            class="petition-mode-btn{% if selected_petition %} active{% endif %}"
+                                            data-mode="existing" id="existingPetitionModeBtn">
+                                            <div class="petition-mode-title">Usar petição existente</div>
+                                            <div class="petition-mode-subtitle">Selecione uma petição já cadastrada para
+                                                criar mais uma revisão no mesmo histórico.</div>
+                                        </button>
+                                        <button type="button"
+                                            class="petition-mode-btn{% if not selected_petition %} active{% endif %}"
+                                            data-mode="new" id="newPetitionModeBtn">
+                                            <div class="petition-mode-title">Criar nova petição</div>
+                                            <div class="petition-mode-subtitle">Cadastre uma nova petição com título e
+                                                Id Wrike antes de enviar o documento.</div>
+                                        </button>
+                                    </div>
+
+                                    <select class="form-select d-none" id="petitionId" name="petition_id">
                                         <option value="">Criar nova petição</option>
                                         {% for petition in petitions %}
                                         <option value="{{ petition.id }}" data-title="{{ petition.title }}"
-                                            data-identifier="{{ petition.office_document_identifier }}" {% if
-                                            selected_petition and selected_petition.id==petition.id %}selected{% endif
-                                            %}>
+                                            data-identifier="{{ petition.office_document_identifier }}"
+                                            data-status="{{ petition_status_labels.get(petition.workflow_status, petition.workflow_status) }}"
+                                            {% if selected_petition and selected_petition.id==petition.id %}selected{%
+                                            endif %}>
                                             {{ petition.title }} • {{ petition.office_document_identifier }}
                                         </option>
                                         {% endfor %}
                                     </select>
-                                    <div class="form-text">
-                                        Selecione uma petição existente para adicionar uma nova revisão ou deixe em
-                                        branco
-                                        para criar uma nova.
+
+                                    <div class="petition-selected-card" id="existingPetitionPanel" {% if not petitions
+                                        %} hidden{% endif %}{% if not selected_petition %} hidden{% endif %}>
+                                        <div class="petition-selected-title" id="selectedPetitionTitle">{{
+                                            selected_petition.title if selected_petition else 'Nenhuma petição
+                                            selecionada' }}</div>
+                                        <div class="petition-selected-meta">
+                                            <span class="petition-choice-chip" id="selectedPetitionIdentifierChip">
+                                                <img src="{{ url_for('static', filename='assets/wrike-logo-light.svg') }}"
+                                                    alt="Wrike" class="wrike-inline-mark">
+                                                <span id="selectedPetitionIdentifier">{{
+                                                    selected_petition.office_document_identifier if selected_petition
+                                                    else 'Sem Id Wrike' }}</span>
+                                            </span>
+                                            <span class="petition-choice-chip" id="selectedPetitionStatus">{{
+                                                petition_status_labels.get(selected_petition.workflow_status,
+                                                selected_petition.workflow_status) if selected_petition else 'Sem
+                                                status' }}</span>
+                                        </div>
+                                        <div class="petition-selection-actions">
+                                            <button type="button" class="btn btn-sm btn-outline-primary"
+                                                id="openPetitionPickerButton" data-bs-toggle="modal"
+                                                data-bs-target="#petitionPickerModal">
+                                                <i class="bi bi-search me-1"></i> Escolher petição
+                                            </button>
+                                            <span class="petition-mode-hint mb-0">A petição escolhida preenche os campos
+                                                abaixo automaticamente e mantém o vínculo do histórico.</span>
+                                        </div>
                                     </div>
+
+                                    <div class="petition-choice-panel" id="newPetitionPanel" {% if selected_petition %}
+                                        hidden{% endif %}>
+                                        <div class="petition-empty-search mb-0 text-start">
+                                            <i class="bi bi-plus-circle me-1 text-primary"></i>
+                                            Você está criando uma nova petição. Informe abaixo o título e o Id Wrike que
+                                            vão agrupar as próximas revisões.
+                                        </div>
+                                    </div>
+
+                                    {% if not petitions %}
+                                    <div class="petition-mode-hint">Ainda não há petições cadastradas, então a revisão
+                                        começará com uma nova petição.</div>
+                                    {% endif %}
                                 </div>
 
                                 <div class="mb-4">
@@ -565,6 +831,57 @@
         </div>
     </div>
 </div>
+
+<div class="modal fade petition-modal" id="petitionPickerModal" tabindex="-1" aria-labelledby="petitionPickerModalLabel"
+    aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <div>
+                    <div class="petition-modal-title" id="petitionPickerModalLabel">Selecionar petição existente</div>
+                    <div class="small text-muted">Busque por título, Id Wrike ou status e clique na petição desejada.
+                    </div>
+                </div>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="petition-search-shell">
+                    <i class="bi bi-search text-muted"></i>
+                    <input type="text" id="petitionSearchInput" placeholder="Buscar por título, Id Wrike ou status..."
+                        autocomplete="off">
+                </div>
+
+                <div class="petition-cards-grid" id="petitionCardsGrid">
+                    {% for petition in petitions %}
+                    <button type="button"
+                        class="petition-choice-card{% if selected_petition and selected_petition.id == petition.id %} active{% endif %}"
+                        data-petition-id="{{ petition.id }}" data-title="{{ petition.title }}"
+                        data-identifier="{{ petition.office_document_identifier }}"
+                        data-status-label="{{ petition_status_labels.get(petition.workflow_status, petition.workflow_status) }}"
+                        data-search="{{ (petition.title ~ ' ' ~ petition.office_document_identifier ~ ' ' ~ petition_status_labels.get(petition.workflow_status, petition.workflow_status))|lower }}">
+                        <div class="petition-choice-card-title">{{ petition.title }}</div>
+                        <div class="petition-choice-card-meta">
+                            <span class="petition-choice-chip">
+                                <img src="{{ url_for('static', filename='assets/wrike-logo-light.svg') }}" alt="Wrike"
+                                    class="wrike-inline-mark">
+                                {{ petition.office_document_identifier }}
+                            </span>
+                            <span class="petition-choice-chip">{{ petition_status_labels.get(petition.workflow_status,
+                                petition.workflow_status) }}</span>
+                        </div>
+                        <div class="petition-choice-card-subtext">Clique para reaproveitar o cadastro e seguir com uma
+                            nova revisão.</div>
+                    </button>
+                    {% endfor %}
+                </div>
+
+                <div class="petition-empty-search mt-3" id="petitionEmptySearch" hidden>
+                    Nenhuma petição encontrada com esse filtro.
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -574,8 +891,21 @@
         const petitionSelect = document.getElementById('petitionId');
         const petitionTitleInput = document.getElementById('petitionTitle');
         const documentIdentifierInput = document.getElementById('lawFirmDocumentIdentifier');
+        const existingPetitionModeBtn = document.getElementById('existingPetitionModeBtn');
+        const newPetitionModeBtn = document.getElementById('newPetitionModeBtn');
+        const existingPetitionPanel = document.getElementById('existingPetitionPanel');
+        const newPetitionPanel = document.getElementById('newPetitionPanel');
+        const petitionPickerModalElement = document.getElementById('petitionPickerModal');
+        const petitionPickerModal = petitionPickerModalElement && window.bootstrap ? new window.bootstrap.Modal(petitionPickerModalElement) : null;
+        const selectedPetitionTitle = document.getElementById('selectedPetitionTitle');
+        const selectedPetitionIdentifier = document.getElementById('selectedPetitionIdentifier');
+        const selectedPetitionStatus = document.getElementById('selectedPetitionStatus');
+        const petitionSearchInput = document.getElementById('petitionSearchInput');
+        const petitionCards = Array.from(document.querySelectorAll('.petition-choice-card'));
+        const petitionEmptySearch = document.getElementById('petitionEmptySearch');
         const wizardSteps = [1, 2, 3];
         let currentStep = 1;
+        let petitionMode = petitionSelect.value ? 'existing' : 'new';
 
         function hasOversizedFiles(fileList) {
             return Array.from(fileList).some(file => file.size > MAX_FILE_SIZE);
@@ -677,6 +1007,56 @@
             return true;
         }
 
+        function setPetitionMode(mode, options = {}) {
+            petitionMode = mode;
+            const clearFields = options.clearFields === true;
+
+            existingPetitionModeBtn?.classList.toggle('active', mode === 'existing');
+            newPetitionModeBtn?.classList.toggle('active', mode === 'new');
+
+            if (existingPetitionPanel) {
+                existingPetitionPanel.hidden = mode !== 'existing' || petitionCards.length === 0;
+            }
+            if (newPetitionPanel) {
+                newPetitionPanel.hidden = mode !== 'new';
+            }
+
+            if (mode === 'new') {
+                petitionSelect.value = '';
+                petitionTitleInput.readOnly = false;
+                documentIdentifierInput.readOnly = false;
+
+                if (clearFields) {
+                    petitionTitleInput.value = '';
+                    documentIdentifierInput.value = '';
+                }
+            } else if (!petitionSelect.value && petitionCards.length > 0) {
+                const firstVisibleCard = petitionCards.find((card) => !card.hidden) || petitionCards[0];
+                if (firstVisibleCard) {
+                    petitionSelect.value = firstVisibleCard.dataset.petitionId;
+                }
+            }
+
+            syncPetitionFields();
+        }
+
+        function filterPetitionCards() {
+            const term = (petitionSearchInput?.value || '').trim().toLowerCase();
+            let visibleCount = 0;
+
+            petitionCards.forEach(function (card) {
+                const match = !term || (card.dataset.search || '').includes(term);
+                card.hidden = !match;
+                if (match) {
+                    visibleCount += 1;
+                }
+            });
+
+            if (petitionEmptySearch) {
+                petitionEmptySearch.hidden = visibleCount !== 0;
+            }
+        }
+
         setupDropzone('mainDocumentDropzone', 'mainDocument', 'mainDocumentList', false);
         setupDropzone('auxiliaryDocumentsDropzone', 'auxiliaryDocuments', 'auxiliaryDocumentsList', true);
         setupDropzone('benefitsSpreadsheetDropzone', 'benefitsSpreadsheet', 'benefitsSpreadsheetList', false);
@@ -685,18 +1065,50 @@
             const selectedOption = petitionSelect.options[petitionSelect.selectedIndex];
             const petitionId = petitionSelect.value;
 
+            petitionCards.forEach(function (card) {
+                card.classList.toggle('active', card.dataset.petitionId === petitionId);
+            });
+
             if (petitionId && selectedOption) {
                 petitionTitleInput.value = selectedOption.dataset.title || '';
                 documentIdentifierInput.value = selectedOption.dataset.identifier || '';
                 petitionTitleInput.readOnly = true;
                 documentIdentifierInput.readOnly = true;
+                if (selectedPetitionTitle) {
+                    selectedPetitionTitle.textContent = selectedOption.dataset.title || '';
+                }
+                if (selectedPetitionIdentifier) {
+                    selectedPetitionIdentifier.textContent = selectedOption.dataset.identifier || '';
+                }
+                if (selectedPetitionStatus) {
+                    selectedPetitionStatus.textContent = selectedOption.dataset.status || 'Sem status';
+                }
             } else {
                 petitionTitleInput.readOnly = false;
                 documentIdentifierInput.readOnly = false;
             }
         }
 
+        petitionCards.forEach(function (card) {
+            card.addEventListener('click', function () {
+                petitionSelect.value = this.dataset.petitionId || '';
+                setPetitionMode('existing');
+                petitionPickerModal?.hide();
+            });
+        });
+
+        existingPetitionModeBtn?.addEventListener('click', function () {
+            setPetitionMode('existing');
+        });
+
+        newPetitionModeBtn?.addEventListener('click', function () {
+            setPetitionMode('new', { clearFields: true });
+        });
+
+        petitionSearchInput?.addEventListener('input', filterPetitionCards);
         petitionSelect.addEventListener('change', syncPetitionFields);
+        filterPetitionCards();
+        setPetitionMode(petitionMode);
         syncPetitionFields();
 
         document.getElementById('btnStep1Next').addEventListener('click', function () {
