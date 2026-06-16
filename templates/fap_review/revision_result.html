@@ -819,13 +819,13 @@
                                             <button type="button" class="btn btn-sm btn-success"
                                                 id="markPetitionReadyButton"
                                                 data-update-url="{{ url_for('fap_review.petition_update_status', petition_id=petition.id) }}">
-                                                <i class="bi bi-check2-circle me-1"></i> Marcar petição como pronta
+                                                <i class="bi bi-check2-circle me-1"></i> Aprovar petição
                                             </button>
                                             <div id="petitionReadyFeedback" class="petition-ready-feedback"></div>
                                             {% elif petition.workflow_status == 'ready_for_filing' %}
                                             <div class="small text-success mt-2">
                                                 <i class="bi bi-check2-circle me-1"></i> Esta petição já está marcada
-                                                como pronta para seguir.
+                                                como aprovada pelo revisor.
                                             </div>
                                             {% endif %}
                                         </div>
@@ -1652,13 +1652,13 @@
 
                     const payload = await response.json().catch(() => ({}));
                     if (!response.ok) {
-                        throw new Error(payload.error || 'Não foi possível marcar a petição como pronta.');
+                        throw new Error(payload.error || 'Não foi possível aprovar a petição.');
                     }
 
-                    showPetitionReadyFeedback('Petição marcada como pronta com sucesso.', 'success');
+                    showPetitionReadyFeedback('Petição aprovada com sucesso.', 'success');
                     window.setTimeout(() => window.location.reload(), 900);
                 } catch (error) {
-                    showPetitionReadyFeedback(error.message || 'Não foi possível marcar a petição como pronta.', 'error');
+                    showPetitionReadyFeedback(error.message || 'Não foi possível aprovar a petição.', 'error');
                     this.disabled = false;
                 }
             });

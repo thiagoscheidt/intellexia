@@ -74,7 +74,7 @@ PETITION_WORKFLOW_STATUSES = {
     'new': 'Nova',
     'in_review': 'Em revisão',
     'awaiting_adjustments': 'Aguardando ajustes',
-    'ready_for_filing': 'Pronta para seguir',
+    'ready_for_filing': 'Aprovada pelo revisor',
     'filed': 'Processo iniciado',
     'archived': 'Arquivada',
 }
@@ -765,7 +765,7 @@ def _derive_petition_workflow_status(execution_status: str) -> str:
     if execution_status in {'pending', 'processing'}:
         return 'in_review'
     if execution_status == 'completed':
-        return 'ready_for_filing'
+        return 'awaiting_adjustments'
     if execution_status == 'failed':
         return 'awaiting_adjustments'
     return 'new'
