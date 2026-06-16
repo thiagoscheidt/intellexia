@@ -57,6 +57,13 @@ uv run python scripts/tests/test_document_extractor.py --knowledge-id 123
 
 **Não há Alembic.** Cada migração é um script Python isolado em `database/` (ex.: `add_fap_reason_column.py`, `add_benefits_table.py`). Rode manualmente com `uv run python database/<script>.py`. Para recriar do zero: `uv run python database/recreate_database.py` (APAGA TUDO). Novas migrations seguem este padrão de script standalone.
 
+**Checklist mínimo para todo script de migration:**
+
+1. Nome descritivo em `database/` — prefixo `add_*`, `alter_*` ou `remove_*`.
+2. Executar dentro de `with app.app_context():`.
+3. Verificar existência prévia (coluna/tabela/índice) para garantir idempotência.
+4. Emitir mensagens claras de sucesso e erro.
+
 ---
 
 ## Estrutura de Diretórios
@@ -202,6 +209,8 @@ Pergunta do usuário
 - **`FapContestationJudgmentMetadataAgent`**: Extrai metadados de julgamentos de contestação FAP.
 - **`FapSectionGeneratorAgent`**: Gera seções específicas de peças FAP.
 
+> **FAP Review**: o agente revisor deve usar perfil determinístico — temperatura baixa (geralmente `0.0`).
+
 ---
 
 ## Camada de Serviços
@@ -283,9 +292,32 @@ SUMMARY_MAX_CHARS=50000
   - Não copiar HTML/JS/CSS do modal para templates de feature; evoluções devem ocorrer no componente compartilhado.
 - **Tabelas PDF**: lógica de carry-over para células vazias (CNPJ/NIT que se repetem em linhas).
 - **Dual vector store**: Qdrant para busca conceitual, Meilisearch para busca por termos exatos (CPF, CNPJ, número de processo).
-- **Filtro de tenant obrigatório**: toda query de listagem filtra por `law_firm_id`.
+- **Filtro de tenant obrigatório**: toda query de listagem filtra por `law_firm_id`. Nunca expor dados de outro escritório.
 - **Datetimes em UTC no banco**; exibição em SP via filtros Jinja.
 - **Poppler** é dependência externa para converter PDF → imagem em petições (`pdf2image`). Instale via chocolatey/scoop/apt/brew.
+
+---
+
+## Convenções Frontend
+
+- **Base de layout**: `templates/layout/base.html`. Todos os templates herdam dele.
+- **Componentes compartilhados**: reutilizar o que existe em `templates/partials/` antes de criar novo.
+- **`page_hero`**: se a tela já usa esse padrão, mantê-lo. Preservar breadcrumbs, mensagens flash e estados de carregamento/erro.
+- **Responsividade**: garantir funcionamento em desktop e mobile sem quebrar o layout existente.
+- **JavaScript**: evitar frameworks novos; priorizar JS nativo no padrão atual do projeto. Reutilizar helpers existentes antes de criar utilitários paralelos. Tratar estados vazios e falhas de API com mensagens claras ao usuário.
+- **CSS**: preferir estilos locais da página apenas quando necessário. Evitar colisão com estilos globais e manter nomenclatura clara. Preservar consistência visual entre módulos (cards, badges, formulários, tabelas).
+
+---
+
+## Boas Práticas de Alteração
+
+- Fazer mudanças pequenas, focadas e consistentes com o estilo local do arquivo.
+- Evitar refatoração ampla sem necessidade funcional clara.
+- Preservar compatibilidade com o fluxo atual baseado em blueprints.
+- Reutilizar serviços e helpers existentes antes de criar lógica paralela.
+- Evitar novas dependências sem necessidade clara.
+- Priorizar funções pequenas e reutilizáveis em vez de duplicação.
+- Em caso de conflito entre documentação e código atual, o código prevalece.
 
 ---
 
