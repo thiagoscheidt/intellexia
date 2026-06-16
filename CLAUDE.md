@@ -95,7 +95,17 @@ intellexia/
 
 **Código legado (evitar modificar; consulte antes de reutilizar):**
 - `app/routes.py` — antiga, substituída por blueprints. Mantém apenas `/api/health` e rota de teste.
-- `app/routes_backup.py`, `old/`, `agent_document_generator.py` na raiz — arquivos históricos.
+- `app/routes_backup.py`, `old/` — arquivos históricos sem uso ativo.
+- `agent_document_generator.py` (raiz) — agente FAP legado, ainda importado por `petitions.py` para geração de petições FAP via python-docx. Funcional mas não evoluir.
+
+**Estado dos módulos:**
+
+| Módulo | Estado | Observação |
+|---|---|---|
+| cases, knowledge_base, fap_panel, fap_reasons | **Estável** | Código limpo, sem TODOs |
+| documents, petitions, clients, lawyers, courts, benefits | **Estável** | CRUD simples, funcional |
+| process_panel, disputes_center, fap_review | **Em desenvolvimento ativo** | Lógica complexa, bem estruturada |
+| assistant | **Limitado** | Pattern-matching apenas — não usa agentes de IA |
 
 ---
 
@@ -107,7 +117,31 @@ intellexia/
 
 ### Blueprints Registrados
 
-`auth`, `dashboard`, `cases`, `clients`, `lawyers`, `courts`, `benefits`, `documents`, `petitions`, `assistant`, `tools`, `settings`, `knowledge_base`, `admin_users`, `process_panel`, `disputes_center`, `case_comments`, `fap_reasons`. Cada um em `app/blueprints/<nome>.py`, expondo `<nome>_bp`.
+`auth`, `dashboard`, `cases`, `clients`, `lawyers`, `courts`, `benefits`, `documents`, `petitions`, `assistant`, `tools`, `settings`, `knowledge_base`, `admin_users`, `process_panel`, `disputes_center`, `case_comments`, `fap_reasons`, `fap_panel`, `fap_review`. Cada um em `app/blueprints/<nome>.py`, expondo `<nome>_bp`.
+
+**Função de cada blueprint:**
+
+| Blueprint | Prefixo de rota | Função |
+|---|---|---|
+| `auth` | `/` | Login, logout, registro |
+| `dashboard` | `/` | Dashboard com estatísticas gerais |
+| `cases` | `/cases` | Gestão de casos, templates, KB por caso |
+| `clients` | `/clients` | CRUD de clientes (CNPJ, contatos) |
+| `lawyers` | `/lawyers` | CRUD de advogados |
+| `courts` | `/courts` | CRUD de varas/tribunais |
+| `benefits` | `/cases/<id>/benefits` | Benefícios associados a casos |
+| `documents` | `/cases/<id>/documents` | Documentos de casos com análise IA |
+| `petitions` | `/cases/<id>/petitions` | Geração e versionamento de petições |
+| `assistant` | `/assistente-juridico` | Chat com pattern-matching básico (sem IA avançada) |
+| `knowledge_base` | `/knowledge-base` | KB global com busca vetorial, chat, categorias, tags |
+| `process_panel` | `/process-panel` | Painel de processos judiciais com fases, teses, impugnação |
+| `disputes_center` | `/disputes-center` | Gestão de contestações FAP (benefícios, CATs, folha, vínculos) |
+| `fap_panel` | `/fap-panel` | Sincronização com FAP Web, download de PDFs em lote |
+| `fap_review` | `/fap-review` | Revisão de petições FAP com IA, score de qualidade por advogado |
+| `fap_reasons` | `/cases/fap-reasons` | Catálogo de motivos FAP configurável |
+| `case_comments` | — | Threads de comentários em casos |
+| `settings` | — | Preferências e integrações por usuário |
+| `admin_users` | — | Gerenciamento de usuários (admin-only) |
 
 ### Multi-Tenancy (CRÍTICO)
 
@@ -205,11 +239,48 @@ Pergunta do usuário
 
 #### FAP (`app/agents/fap/`)
 
-- **`FapCaseClassifierAgent`**: Classifica razões de contestação de FAP com score de confiança.
-- **`FapContestationJudgmentMetadataAgent`**: Extrai metadados de julgamentos de contestação FAP.
-- **`FapSectionGeneratorAgent`**: Gera seções específicas de peças FAP.
+- **`FapCaseClassifierAgent`**: Classifica um benefício em motivo FAP. Detecta "null tokens" (`"nada consta"`, `"NL"`, `"sem observação"`) e retorna `unable_to_classify=True` nesses casos.
+- **`FAPContestationClassifierAgent`**: Classifica justificativas de contestação em tópicos jurídicos. Usa `temperature=0.0`. Limiar mínimo `MIN_CONFIDENCE = 0.80`. Retorna array de tópicos — um benefício pode ter múltiplos tópicos simultâneos. Os tópicos são whitelist configurável (ex: `"ACIDENTE DE TRAJETO"`, `"NEXO TÉCNICO PREVIDENCIÁRIO PENDENTE DE JULGAMENTO"`, `"ERRO DE ESTABELECIMENTO"`, `"PRÉ-FAP"`, ~20 ao total). Prompt e reference são **versionados por law_firm** (tabelas `FapContestationClassifierPromptVersion` e `FapContestationClassifierReferenceVersion`).
+- **`FapContestationJudgmentMetadataAgent`**: Extrai metadados estruturados de decisões judiciais FAP (número processo, data, órgão, decisão, fundamentação).
+- **`FapSectionGeneratorAgent`**: Popula template DOCX com dados reais. Coleta todos os textos com índices, envia em uma única requisição IA, aplica substituições preservando 100% da formatação. Placeholders não resolvidos são mantidos.
+- **`FapPetitionReviewerAgent`** (`app/agents/fap/`): Revisa petições FAP. Suporta análise simples (documento único) e análise comparativa (original vs revisado). Retorna `findings[]`, `missing_documents[]` e `benefits_check{}`. Achados descartados pelo usuário são ignorados por fingerprint em revisões futuras.
 
-> **FAP Review**: o agente revisor deve usar perfil determinístico — temperatura baixa (geralmente `0.0`).
+> **FAP Review**: agente revisor usa `temperature=0.0` (determinístico).
+
+**Regras de negócio FAP embutidas no código:**
+- Status bruto do FAP Web é normalizado: `"em andamento"`, `"EM ANÁLISE"` → `"analyzing"`.
+- Tópicos FAP de um benefício ficam em `Benefit.fap_contestation_topics_json` (array JSON). Campo legado `fap_contestation_topic` (string única) ainda existe.
+- `FapWebContestacao` com mesmo `(contestacao_id, cnpj_raiz)` → UPDATE, não INSERT (deduplicação).
+- Marcar primeira instância como deferida pode ser feito em lote para todos os benefícios de uma vigência.
+- Prompt do classificador é customizável por escritório sem alterar código.
+
+**Workflows FAP:**
+
+```
+# Sincronização + Classificação
+FapPanel → FapWebService.fetch_contestacoes(cnpj, year)
+  → cria/atualiza FapWebContestacao + ChangeHistory
+  → FAPContestationClassifierAgent.classify(benefit_description)
+     → carrega prompt + reference ativos (por law_firm)
+     → OpenAI temperature=0.0
+     → retorna selected_topics (confidence >= 0.80)
+  → salva em Benefit.fap_contestation_topics_json
+
+# Geração de Petição
+Petitions.generate → AgentDocumentGenerator (raiz legado)
+  → carrega template DOCX
+  → FapSectionGeneratorAgent.populate_template(case_data)
+     → textos + dados → OpenAI → mapeamento → aplica
+  → salva Petition (DOCX)
+
+# Revisão de Petição
+FapReview.revision [POST]
+  → upload DOCX (+ opcional: comparativo + planilha XLSX)
+  → cria FapReviewExecution (status=processing)
+  → FapPetitionReviewerAgent.review()
+     → findings, missing_documents, benefits_check
+  → persiste result_json; workflow_status evolui até "ready_for_filing"
+```
 
 ---
 
