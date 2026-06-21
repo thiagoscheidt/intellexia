@@ -713,8 +713,15 @@ def main():
 
     try:
         with app.app_context():
-            db.create_all()
-            print("[OK] Tabelas verificadas")
+            try:
+                db.create_all()
+                print("[OK] Tabelas verificadas")
+            except Exception as e:
+                if "Duplicate key name" in str(e) or "already exists" in str(e).lower():
+                    print(f"→ Schema já existe (índices duplicados ignorados)")
+                    db.session.rollback()
+                else:
+                    raise
 
             print("\n[ESCRITORIO] Criando escritorio...")
             law_firm = create_law_firm(db, LawFirm)
