@@ -2611,7 +2611,7 @@ class FapReviewReferenceVersion(db.Model):
         nullable=False,
         comment='manual_fap, casos_referencia, project_instructions'
     )
-    content = db.Column(db.Text, nullable=False)
+    content = db.Column(db.Text(16777215), nullable=False)  # MEDIUMTEXT — suporta até ~16MB
     is_active = db.Column(db.Boolean, default=False, nullable=False)
     created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
