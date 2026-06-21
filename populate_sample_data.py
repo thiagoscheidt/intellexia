@@ -242,6 +242,23 @@ def create_law_firm(db, LawFirm):
 
 def create_users(db, User, law_firm):
     users_data = [
+        # Criadores do sistema
+        {
+            'law_firm_id': law_firm.id,
+            'name': 'Thiago Scheidt',
+            'email': 'thiago@intellexia.com.br',
+            'role': 'admin',
+            'is_active': True,
+            'is_verified': True,
+        },
+        {
+            'law_firm_id': law_firm.id,
+            'name': 'Antonio',
+            'email': 'antonio@intellexia.com.br',
+            'role': 'admin',
+            'is_active': True,
+            'is_verified': True,
+        },
         # Admins
         {
             'law_firm_id': law_firm.id,
