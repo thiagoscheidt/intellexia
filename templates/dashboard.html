@@ -48,9 +48,10 @@
     box-shadow: 0 6px 14px rgba(0, 0, 0, .04);
   }
 
-  .dash-table thead th {
-    font-size: 0.78rem;
-    letter-spacing: .03em;
+  .dash-section-label {
+    font-size: .72rem;
+    font-weight: 700;
+    letter-spacing: .07em;
     text-transform: uppercase;
     color: var(--bs-secondary-color);
   }
@@ -134,35 +135,34 @@
     box-shadow: 0 10px 20px rgba(0, 0, 0, .3);
   }
 
-  /* Ações Rápidas - Hover Effects */
   .row .card.border-primary:hover,
   .row .card.border-success:hover,
   .row .card.border-info:hover,
-  .row .card.border-warning:hover {
+  .row .card.border-warning:hover,
+  .row .card.border-danger:hover {
     transform: translateY(-4px);
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    transition: all 0.3s ease;
   }
 
   [data-bs-theme="dark"] .row .card.border-primary:hover,
   [data-bs-theme="dark"] .row .card.border-success:hover,
   [data-bs-theme="dark"] .row .card.border-info:hover,
-  [data-bs-theme="dark"] .row .card.border-warning:hover {
+  [data-bs-theme="dark"] .row .card.border-warning:hover,
+  [data-bs-theme="dark"] .row .card.border-danger:hover {
     box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
   }
 </style>
 {% endblock %}
 
 {% block content %}
-{% set total_cases_safe = total_cases or 0 %}
-{% set active_pct = total_cases_safe and ((active_cases or 0) * 100 / total_cases_safe) or 0 %}
-{% set filed_pct = total_cases_safe and ((filed_cases or 0) * 100 / total_cases_safe) or 0 %}
 
+<!-- HERO -->
 <div class="row g-3 mb-4">
   <div class="col-12">
     <div class="card dash-hero shadow-sm">
       <div class="card-body p-4">
-        <div
-          class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-3">
+        <div class="d-flex flex-column flex-lg-row align-items-start align-items-lg-center justify-content-between gap-3">
           <div class="d-flex align-items-start gap-3">
             <div class="rounded-circle d-flex align-items-center justify-content-center page-hero-icon">
               <i class="bi bi-speedometer2 page-hero-icon__glyph"></i>
@@ -171,7 +171,7 @@
               <h1 class="h3 mb-2 fw-bold">Dashboard do Sistema</h1>
               <div class="d-flex align-items-center flex-wrap gap-2 mb-2">
                 <span class="dash-hero__chip">Visão geral operacional</span>
-                <small class="text-body-secondary">Acompanhe métricas, produtividade e próximos passos</small>
+                <small class="text-body-secondary">Acompanhe contestações FAP, processos e base de conhecimento</small>
               </div>
               <div style="min-height: 28px;">
                 <span id="welcomeTyped" class="text-primary fw-semibold" style="font-size: .96rem;"></span>
@@ -179,11 +179,11 @@
             </div>
           </div>
           <div class="d-flex flex-wrap gap-2">
-            <a href="{{ url_for('cases.case_new') }}" class="btn btn-primary dash-link-btn">
-              <i class="bi bi-plus-circle me-2"></i>Novo Caso
+            <a href="{{ url_for('fap_panel.index') }}" class="btn btn-primary dash-link-btn">
+              <i class="bi bi-shield-check me-2"></i>Painel FAP
             </a>
-            <a href="{{ url_for('knowledge_base.search_chat') }}" class="btn btn-outline-primary dash-link-btn">
-              <i class="bi bi-search me-2"></i>Assistente Jurídico
+            <a href="{{ url_for('disputes_center.list_disputes_center') }}" class="btn btn-outline-primary dash-link-btn">
+              <i class="bi bi-diagram-2 me-2"></i>Contestações
             </a>
           </div>
         </div>
@@ -192,7 +192,7 @@
   </div>
 </div>
 
-<!-- AÇÕES RÁPIDAS - MELHORADO -->
+<!-- AÇÕES RÁPIDAS -->
 <div class="row g-3 mb-4">
   <div class="col-lg-8">
     <div class="card dash-card h-100">
@@ -204,32 +204,42 @@
       </div>
       <div class="card-body">
         <div class="row g-3">
-          <!-- Novo Caso -->
           <div class="col-md-6">
-            <a href="{{ url_for('cases.case_new') }}" class="text-decoration-none">
-              <div class="card border-primary h-100" style="transition: all 0.3s ease; cursor: pointer;">
+            <a href="{{ url_for('fap_panel.index') }}" class="text-decoration-none">
+              <div class="card border-primary h-100" style="cursor: pointer;">
                 <div class="card-body d-flex align-items-center gap-3 py-3">
-                  <div class="rounded-circle bg-primary-subtle d-flex align-items-center justify-content-center"
-                    style="width: 50px; height: 50px; min-width: 50px;">
-                    <i class="bi bi-plus-circle-fill text-primary" style="font-size: 1.5rem;"></i>
+                  <div class="rounded-circle bg-primary-subtle d-flex align-items-center justify-content-center" style="width:50px;height:50px;min-width:50px;">
+                    <i class="bi bi-shield-fill-check text-primary" style="font-size:1.5rem;"></i>
                   </div>
                   <div>
-                    <h6 class="mb-0 fw-semibold text-dark">Novo Caso</h6>
-                    <small class="text-muted">Cadastrar novo processo</small>
+                    <h6 class="mb-0 fw-semibold text-dark">Painel FAP</h6>
+                    <small class="text-muted">Contestações e sincronização FAP</small>
                   </div>
                 </div>
               </div>
             </a>
           </div>
-
-          <!-- Assistente Jurídico -->
+          <div class="col-md-6">
+            <a href="{{ url_for('disputes_center.list_disputes_center') }}" class="text-decoration-none">
+              <div class="card border-danger h-100" style="cursor: pointer;">
+                <div class="card-body d-flex align-items-center gap-3 py-3">
+                  <div class="rounded-circle bg-danger-subtle d-flex align-items-center justify-content-center" style="width:50px;height:50px;min-width:50px;">
+                    <i class="bi bi-diagram-2-fill text-danger" style="font-size:1.5rem;"></i>
+                  </div>
+                  <div>
+                    <h6 class="mb-0 fw-semibold text-dark">Centro de Contestações</h6>
+                    <small class="text-muted">Benefícios e tópicos contestados</small>
+                  </div>
+                </div>
+              </div>
+            </a>
+          </div>
           <div class="col-md-6">
             <a href="{{ url_for('knowledge_base.search_chat') }}" class="text-decoration-none">
-              <div class="card border-success h-100" style="transition: all 0.3s ease; cursor: pointer;">
+              <div class="card border-success h-100" style="cursor: pointer;">
                 <div class="card-body d-flex align-items-center gap-3 py-3">
-                  <div class="rounded-circle bg-success-subtle d-flex align-items-center justify-content-center"
-                    style="width: 50px; height: 50px; min-width: 50px;">
-                    <i class="bi bi-robot text-success" style="font-size: 1.5rem;"></i>
+                  <div class="rounded-circle bg-success-subtle d-flex align-items-center justify-content-center" style="width:50px;height:50px;min-width:50px;">
+                    <i class="bi bi-robot text-success" style="font-size:1.5rem;"></i>
                   </div>
                   <div>
                     <h6 class="mb-0 fw-semibold text-dark">Assistente Jurídico</h6>
@@ -239,37 +249,16 @@
               </div>
             </a>
           </div>
-
-          <!-- Pesquisa Inteligente -->
-          <div class="col-md-6">
-            <a href="{{ url_for('knowledge_base.intelligent_search') }}" class="text-decoration-none">
-              <div class="card border-info h-100" style="transition: all 0.3s ease; cursor: pointer;">
-                <div class="card-body d-flex align-items-center gap-3 py-3">
-                  <div class="rounded-circle bg-info-subtle d-flex align-items-center justify-content-center"
-                    style="width: 50px; height: 50px; min-width: 50px;">
-                    <i class="bi bi-lightbulb-fill text-info" style="font-size: 1.5rem;"></i>
-                  </div>
-                  <div>
-                    <h6 class="mb-0 fw-semibold text-dark">Pesquisa Inteligente</h6>
-                    <small class="text-muted">Buscar na base com IA</small>
-                  </div>
-                </div>
-              </div>
-            </a>
-          </div>
-
-          <!-- Painel de Processos -->
           <div class="col-md-6">
             <a href="{{ url_for('process_panel.list_processes') }}" class="text-decoration-none">
-              <div class="card border-warning h-100" style="transition: all 0.3s ease; cursor: pointer;">
+              <div class="card border-warning h-100" style="cursor: pointer;">
                 <div class="card-body d-flex align-items-center gap-3 py-3">
-                  <div class="rounded-circle bg-warning-subtle d-flex align-items-center justify-content-center"
-                    style="width: 50px; height: 50px; min-width: 50px;">
-                    <i class="bi bi-diagram-3-fill text-warning" style="font-size: 1.5rem;"></i>
+                  <div class="rounded-circle bg-warning-subtle d-flex align-items-center justify-content-center" style="width:50px;height:50px;min-width:50px;">
+                    <i class="bi bi-diagram-3-fill text-warning" style="font-size:1.5rem;"></i>
                   </div>
                   <div>
                     <h6 class="mb-0 fw-semibold text-dark">Painel de Processos</h6>
-                    <small class="text-muted">Gerenciar todos os processos</small>
+                    <small class="text-muted">Gerenciar processos judiciais</small>
                   </div>
                 </div>
               </div>
@@ -290,112 +279,285 @@
       </div>
       <div class="card-body">
         <div class="d-grid gap-2">
-          <a href="{{ url_for('cases.cases_list') }}"
-            class="btn btn-outline-secondary btn-sm text-start d-flex align-items-center">
-            <i class="bi bi-list-ul me-2"></i>Todos os Casos
+          <a href="{{ url_for('fap_panel.contestacoes') }}" class="btn btn-outline-secondary btn-sm text-start d-flex align-items-center">
+            <i class="bi bi-file-earmark-text me-2"></i>Contestações FAP
           </a>
-          <a href="{{ url_for('clients.clients_list') }}"
-            class="btn btn-outline-secondary btn-sm text-start d-flex align-items-center">
-            <i class="bi bi-people me-2"></i>Todos os Clientes
+          <a href="{{ url_for('disputes_center.list_fap_vigencias') }}" class="btn btn-outline-secondary btn-sm text-start d-flex align-items-center">
+            <i class="bi bi-calendar3 me-2"></i>Vigências FAP
           </a>
-          <a href="{{ url_for('benefits.benefits_list') }}"
-            class="btn btn-outline-secondary btn-sm text-start d-flex align-items-center">
-            <i class="bi bi-shield-check me-2"></i>Todos os Benefícios
+          <a href="{{ url_for('fap_review.index') }}" class="btn btn-outline-secondary btn-sm text-start d-flex align-items-center">
+            <i class="bi bi-file-earmark-check me-2"></i>Revisão de Petições FAP
           </a>
-          <a href="{{ url_for('clients.client_new') }}"
-            class="btn btn-outline-secondary btn-sm text-start d-flex align-items-center">
-            <i class="bi bi-person-plus-fill me-2"></i>Novo Cliente
+          <a href="{{ url_for('process_panel.list_processes') }}" class="btn btn-outline-secondary btn-sm text-start d-flex align-items-center">
+            <i class="bi bi-diagram-3 me-2"></i>Painel de Processos
           </a>
-          <a href="{{ url_for('lawyers.lawyer_new') }}"
-            class="btn btn-outline-secondary btn-sm text-start d-flex align-items-center">
-            <i class="bi bi-person-badge me-2"></i>Novo Advogado
-          </a>
-          <a href="{{ url_for('knowledge_base.list') }}"
-            class="btn btn-outline-secondary btn-sm text-start d-flex align-items-center">
+          <a href="{{ url_for('knowledge_base.list') }}" class="btn btn-outline-secondary btn-sm text-start d-flex align-items-center">
             <i class="bi bi-book me-2"></i>Base de Conhecimento
           </a>
+          <a href="{{ url_for('knowledge_base.intelligent_search') }}" class="btn btn-outline-secondary btn-sm text-start d-flex align-items-center">
+            <i class="bi bi-lightbulb me-2"></i>Pesquisa Inteligente
+          </a>
         </div>
       </div>
     </div>
   </div>
 </div>
 
-<!-- CARDS RESUMO GERAL -->
-<div class="row g-3 mb-4">
-  <div class="col-lg-3 col-sm-6">
-    <div class="card dash-stat h-100">
-      <div class="card-body d-flex justify-content-between align-items-start">
-        <div>
-          <div class="text-body-secondary small">Total de Casos</div>
-          <div class="display-6 fw-semibold lh-1 mt-1">{{ total_cases or 0 }}</div>
-        </div>
-        <span class="dash-stat__icon text-bg-primary-subtle text-primary-emphasis"><i
-            class="bi bi-briefcase-fill"></i></span>
-      </div>
-      <div class="card-footer bg-transparent border-0 pt-0 pb-3 px-3">
-        <a href="{{ url_for('cases.cases_list') }}" class="btn btn-sm btn-outline-primary dash-link-btn">Ver casos</a>
-      </div>
-    </div>
-  </div>
-  <div class="col-lg-3 col-sm-6">
-    <div class="card dash-stat h-100">
-      <div class="card-body d-flex justify-content-between align-items-start">
-        <div>
-          <div class="text-body-secondary small">Casos Ativos</div>
-          <div class="display-6 fw-semibold lh-1 mt-1">{{ active_cases or 0 }}</div>
-        </div>
-        <span class="dash-stat__icon text-bg-success-subtle text-success-emphasis"><i
-            class="bi bi-check-circle-fill"></i></span>
-      </div>
-      <div class="card-footer bg-transparent border-0 pt-0 pb-3 px-3">
-        <a href="{{ url_for('cases.cases_list') }}" class="btn btn-sm btn-outline-success dash-link-btn">Ver ativos</a>
-      </div>
-    </div>
-  </div>
-  <div class="col-lg-3 col-sm-6">
-    <div class="card dash-stat h-100">
-      <div class="card-body d-flex justify-content-between align-items-start">
-        <div>
-          <div class="text-body-secondary small">Clientes</div>
-          <div class="display-6 fw-semibold lh-1 mt-1">{{ total_clients or 0 }}</div>
-        </div>
-        <span class="dash-stat__icon text-bg-warning-subtle text-warning-emphasis"><i
-            class="bi bi-people-fill"></i></span>
-      </div>
-      <div class="card-footer bg-transparent border-0 pt-0 pb-3 px-3">
-        <a href="{{ url_for('clients.clients_list') }}" class="btn btn-sm btn-outline-warning dash-link-btn">Ver
-          clientes</a>
-      </div>
-    </div>
-  </div>
-  <div class="col-lg-3 col-sm-6">
-    <div class="card dash-stat h-100">
-      <div class="card-body d-flex justify-content-between align-items-start">
-        <div>
-          <div class="text-body-secondary small">Benefícios</div>
-          <div class="display-6 fw-semibold lh-1 mt-1">{{ total_benefits or 0 }}</div>
-        </div>
-        <span class="dash-stat__icon text-bg-info-subtle text-info-emphasis"><i
-            class="bi bi-shield-check-fill"></i></span>
-      </div>
-      <div class="card-footer bg-transparent border-0 pt-0 pb-3 px-3">
-        <a href="{{ url_for('benefits.benefits_list') }}" class="btn btn-sm btn-outline-info dash-link-btn">Ver
-          benefícios</a>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- PAINEL DE PROCESSOS EM PRIMEIRO LUGAR -->
-<div class="row g-3 mb-4">
+<!-- PAINEL FAP -->
+<div class="row g-3 mb-2">
   <div class="col-12">
     <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
-      <h2 class="h5 mb-0 fw-semibold"><i class="bi bi-diagram-3 me-2 text-primary"></i>Painel de Processos</h2>
-      <a href="{{ url_for('process_panel.list_processes') }}" class="btn btn-sm btn-outline-primary dash-link-btn">
+      <div>
+        <span class="dash-section-label">Painel FAP</span>
+        <h2 class="h5 mb-0 fw-semibold mt-1"><i class="bi bi-shield-check me-2 text-primary"></i>Contestações FAP Web</h2>
+      </div>
+      <a href="{{ url_for('fap_panel.contestacoes') }}" class="btn btn-sm btn-outline-primary dash-link-btn">
+        Ver todas as contestações
+      </a>
+    </div>
+  </div>
+</div>
+<div class="row g-3 mb-4">
+  <div class="col-lg-3 col-sm-6">
+    <div class="card dash-stat h-100">
+      <div class="card-body d-flex justify-content-between align-items-start">
+        <div>
+          <div class="text-body-secondary small">Total de Contestações</div>
+          <div class="display-6 fw-semibold lh-1 mt-1">{{ total_contestacoes or 0 }}</div>
+        </div>
+        <span class="dash-stat__icon text-bg-primary-subtle text-primary-emphasis"><i class="bi bi-shield-fill-check"></i></span>
+      </div>
+      <div class="card-footer bg-transparent border-0 pt-0 pb-3 px-3">
+        <a href="{{ url_for('fap_panel.contestacoes') }}" class="btn btn-sm btn-outline-primary dash-link-btn">Ver todas</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-3 col-sm-6">
+    <div class="card dash-stat h-100">
+      <div class="card-body d-flex justify-content-between align-items-start">
+        <div>
+          <div class="text-body-secondary small">Com PDF Baixado</div>
+          <div class="display-6 fw-semibold lh-1 mt-1">{{ contestacoes_com_pdf or 0 }}</div>
+        </div>
+        <span class="dash-stat__icon text-bg-success-subtle text-success-emphasis"><i class="bi bi-file-earmark-pdf-fill"></i></span>
+      </div>
+      <div class="card-footer bg-transparent border-0 pt-0 pb-3 px-3">
+        {% if total_contestacoes %}
+        <small class="text-muted">{{ ((contestacoes_com_pdf or 0) * 100 // total_contestacoes) }}% do total</small>
+        {% else %}
+        <small class="text-muted">—</small>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-3 col-sm-6">
+    <div class="card dash-stat h-100">
+      <div class="card-body d-flex justify-content-between align-items-start">
+        <div>
+          <div class="text-body-secondary small">Sem PDF</div>
+          <div class="display-6 fw-semibold lh-1 mt-1">{{ (total_contestacoes or 0) - (contestacoes_com_pdf or 0) }}</div>
+        </div>
+        <span class="dash-stat__icon text-bg-warning-subtle text-warning-emphasis"><i class="bi bi-file-earmark-x-fill"></i></span>
+      </div>
+      <div class="card-footer bg-transparent border-0 pt-0 pb-3 px-3">
+        <a href="{{ url_for('fap_panel.contestacoes') }}" class="btn btn-sm btn-outline-warning dash-link-btn">Verificar</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-3 col-sm-6">
+    <div class="card dash-stat h-100">
+      <div class="card-body d-flex justify-content-between align-items-start">
+        <div>
+          <div class="text-body-secondary small">Vigências Cadastradas</div>
+          <div class="display-6 fw-semibold lh-1 mt-1">{{ contestacoes_por_ano | length }}</div>
+        </div>
+        <span class="dash-stat__icon text-bg-info-subtle text-info-emphasis"><i class="bi bi-calendar3"></i></span>
+      </div>
+      <div class="card-footer bg-transparent border-0 pt-0 pb-3 px-3">
+        {% if contestacoes_por_ano %}
+        <small class="text-muted">Mais recente: {{ contestacoes_por_ano.keys() | first }}</small>
+        {% else %}
+        <small class="text-muted">—</small>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- GRÁFICOS FAP -->
+<div class="row g-3 mb-4">
+  <div class="col-lg-6">
+    <div class="card dash-card h-100">
+      <div class="card-header bg-transparent border-0 pb-0">
+        <h3 class="card-title fw-semibold mb-0"><i class="bi bi-pie-chart me-2 text-primary"></i>Contestações por Situação</h3>
+      </div>
+      <div class="card-body">
+        {% if contestacoes_por_situacao %}
+        <canvas id="chartContestacoesSituacao" height="220"></canvas>
+        {% else %}
+        <div class="alert alert-light mb-0">Nenhuma contestação sincronizada ainda.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-6">
+    <div class="card dash-card h-100">
+      <div class="card-header bg-transparent border-0 pb-0">
+        <h3 class="card-title fw-semibold mb-0"><i class="bi bi-bar-chart me-2 text-success"></i>Contestações por Ano de Vigência</h3>
+      </div>
+      <div class="card-body">
+        {% if contestacoes_por_ano %}
+        <canvas id="chartContestacoesPorAno" height="220"></canvas>
+        {% else %}
+        <div class="alert alert-light mb-0">Nenhuma contestação sincronizada ainda.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CENTRO DE CONTESTAÇÕES -->
+<div class="row g-3 mb-2">
+  <div class="col-12">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <div>
+        <span class="dash-section-label">Centro de Contestações</span>
+        <h2 class="h5 mb-0 fw-semibold mt-1"><i class="bi bi-diagram-2 me-2 text-danger"></i>Benefícios Contestados</h2>
+      </div>
+      <a href="{{ url_for('disputes_center.list_disputes_center') }}" class="btn btn-sm btn-outline-danger dash-link-btn">
+        Ver centro de contestações
+      </a>
+    </div>
+  </div>
+</div>
+<div class="row g-3 mb-4">
+  <div class="col-lg-3 col-sm-6">
+    <div class="card dash-stat h-100">
+      <div class="card-body d-flex justify-content-between align-items-start">
+        <div>
+          <div class="text-body-secondary small">Total de Benefícios</div>
+          <div class="display-6 fw-semibold lh-1 mt-1">{{ total_benefits_dc or 0 }}</div>
+        </div>
+        <span class="dash-stat__icon text-bg-danger-subtle text-danger-emphasis"><i class="bi bi-people-fill"></i></span>
+      </div>
+      <div class="card-footer bg-transparent border-0 pt-0 pb-3 px-3">
+        <a href="{{ url_for('disputes_center.list_disputes_center') }}" class="btn btn-sm btn-outline-danger dash-link-btn">Ver todos</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-3 col-sm-6">
+    <div class="card dash-stat h-100">
+      <div class="card-body d-flex justify-content-between align-items-start">
+        <div>
+          <div class="text-body-secondary small">Classificados por IA</div>
+          <div class="display-6 fw-semibold lh-1 mt-1">{{ benefits_classified or 0 }}</div>
+        </div>
+        <span class="dash-stat__icon text-bg-success-subtle text-success-emphasis"><i class="bi bi-robot"></i></span>
+      </div>
+      <div class="card-footer bg-transparent border-0 pt-0 pb-3 px-3">
+        {% if total_benefits_dc %}
+        <small class="text-muted">{{ ((benefits_classified or 0) * 100 // total_benefits_dc) }}% classificados</small>
+        {% else %}
+        <small class="text-muted">—</small>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-3 col-sm-6">
+    <div class="card dash-stat h-100">
+      <div class="card-body d-flex justify-content-between align-items-start">
+        <div>
+          <div class="text-body-secondary small">1ª Instância — Deferidos</div>
+          <div class="display-6 fw-semibold lh-1 mt-1">{{ benefits_deferidos or 0 }}</div>
+        </div>
+        <span class="dash-stat__icon text-bg-success-subtle text-success-emphasis"><i class="bi bi-check-circle-fill"></i></span>
+      </div>
+      <div class="card-footer bg-transparent border-0 pt-0 pb-3 px-3">
+        <a href="{{ url_for('disputes_center.list_disputes_center') }}" class="btn btn-sm btn-outline-success dash-link-btn">Filtrar</a>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-3 col-sm-6">
+    <div class="card dash-stat h-100">
+      <div class="card-body d-flex justify-content-between align-items-start">
+        <div>
+          <div class="text-body-secondary small">1ª Instância — Indeferidos</div>
+          <div class="display-6 fw-semibold lh-1 mt-1">{{ benefits_indeferidos or 0 }}</div>
+        </div>
+        <span class="dash-stat__icon text-bg-warning-subtle text-warning-emphasis"><i class="bi bi-x-circle-fill"></i></span>
+      </div>
+      <div class="card-footer bg-transparent border-0 pt-0 pb-3 px-3">
+        <a href="{{ url_for('disputes_center.list_disputes_center') }}" class="btn btn-sm btn-outline-warning dash-link-btn">Filtrar</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- GRÁFICO BENEFÍCIOS POR TIPO -->
+<div class="row g-3 mb-4">
+  <div class="col-lg-5">
+    <div class="card dash-card h-100">
+      <div class="card-header bg-transparent border-0 pb-0">
+        <h3 class="card-title fw-semibold mb-0"><i class="bi bi-pie-chart me-2 text-danger"></i>Benefícios por Tipo de Pedido</h3>
+      </div>
+      <div class="card-body">
+        {% if total_benefits_dc %}
+        <canvas id="chartBenefitsTipo" height="220"></canvas>
+        {% else %}
+        <div class="alert alert-light mb-0">Nenhum benefício cadastrado ainda.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-7">
+    <div class="card dash-card h-100">
+      <div class="card-header bg-transparent border-0 pb-0">
+        <h3 class="card-title fw-semibold mb-0"><i class="bi bi-bar-chart me-2 text-primary"></i>Resumo por Tipo de Pedido</h3>
+      </div>
+      <div class="card-body">
+        <div class="row g-3">
+          <div class="col-sm-4">
+            <div class="kb-metric text-center">
+              <span class="kb-metric__icon text-bg-danger-subtle text-danger-emphasis mb-2 mx-auto d-flex"><i class="bi bi-dash-circle-fill"></i></span>
+              <div class="kb-metric__label">Exclusão</div>
+              <div class="kb-metric__value">{{ benefits_exclusao or 0 }}</div>
+            </div>
+          </div>
+          <div class="col-sm-4">
+            <div class="kb-metric text-center">
+              <span class="kb-metric__icon text-bg-success-subtle text-success-emphasis mb-2 mx-auto d-flex"><i class="bi bi-plus-circle-fill"></i></span>
+              <div class="kb-metric__label">Inclusão</div>
+              <div class="kb-metric__value">{{ benefits_inclusao or 0 }}</div>
+            </div>
+          </div>
+          <div class="col-sm-4">
+            <div class="kb-metric text-center">
+              <span class="kb-metric__icon text-bg-warning-subtle text-warning-emphasis mb-2 mx-auto d-flex"><i class="bi bi-arrow-clockwise"></i></span>
+              <div class="kb-metric__label">Revisão</div>
+              <div class="kb-metric__value">{{ benefits_revisao or 0 }}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PAINEL DE PROCESSOS -->
+<div class="row g-3 mb-2">
+  <div class="col-12">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+      <div>
+        <span class="dash-section-label">Painel Judicial</span>
+        <h2 class="h5 mb-0 fw-semibold mt-1"><i class="bi bi-diagram-3 me-2 text-warning"></i>Processos Judiciais</h2>
+      </div>
+      <a href="{{ url_for('process_panel.list_processes') }}" class="btn btn-sm btn-outline-warning dash-link-btn">
         Ver painel completo
       </a>
     </div>
   </div>
+</div>
+<div class="row g-3 mb-4">
   <div class="col-lg-3 col-sm-6">
     <div class="card dash-stat h-100">
       <div class="card-body d-flex justify-content-between align-items-start">
@@ -403,12 +565,10 @@
           <div class="text-body-secondary small">Total de Processos</div>
           <div class="display-6 fw-semibold lh-1 mt-1">{{ total_processes or 0 }}</div>
         </div>
-        <span class="dash-stat__icon text-bg-primary-subtle text-primary-emphasis"><i
-            class="bi bi-diagram-3-fill"></i></span>
+        <span class="dash-stat__icon text-bg-primary-subtle text-primary-emphasis"><i class="bi bi-diagram-3-fill"></i></span>
       </div>
       <div class="card-footer bg-transparent border-0 pt-0 pb-3 px-3">
-        <a href="{{ url_for('process_panel.list_processes') }}" class="btn btn-sm btn-outline-primary dash-link-btn">Ver
-          processos</a>
+        <a href="{{ url_for('process_panel.list_processes') }}" class="btn btn-sm btn-outline-primary dash-link-btn">Ver processos</a>
       </div>
     </div>
   </div>
@@ -419,12 +579,10 @@
           <div class="text-body-secondary small">Ativos</div>
           <div class="display-6 fw-semibold lh-1 mt-1">{{ active_processes or 0 }}</div>
         </div>
-        <span class="dash-stat__icon text-bg-success-subtle text-success-emphasis"><i
-            class="bi bi-check2-square"></i></span>
+        <span class="dash-stat__icon text-bg-success-subtle text-success-emphasis"><i class="bi bi-check2-square"></i></span>
       </div>
       <div class="card-footer bg-transparent border-0 pt-0 pb-3 px-3">
-        <a href="{{ url_for('process_panel.list_processes', status='ativo') }}"
-          class="btn btn-sm btn-outline-success dash-link-btn">Filtrar ativos</a>
+        <a href="{{ url_for('process_panel.list_processes', status='ativo') }}" class="btn btn-sm btn-outline-success dash-link-btn">Filtrar ativos</a>
       </div>
     </div>
   </div>
@@ -435,12 +593,10 @@
           <div class="text-body-secondary small">Suspensos</div>
           <div class="display-6 fw-semibold lh-1 mt-1">{{ suspended_processes or 0 }}</div>
         </div>
-        <span class="dash-stat__icon text-bg-warning-subtle text-warning-emphasis"><i
-            class="bi bi-pause-circle"></i></span>
+        <span class="dash-stat__icon text-bg-warning-subtle text-warning-emphasis"><i class="bi bi-pause-circle"></i></span>
       </div>
       <div class="card-footer bg-transparent border-0 pt-0 pb-3 px-3">
-        <a href="{{ url_for('process_panel.list_processes', status='suspenso') }}"
-          class="btn btn-sm btn-outline-warning dash-link-btn">Filtrar suspensos</a>
+        <a href="{{ url_for('process_panel.list_processes', status='suspenso') }}" class="btn btn-sm btn-outline-warning dash-link-btn">Filtrar suspensos</a>
       </div>
     </div>
   </div>
@@ -451,60 +607,30 @@
           <div class="text-body-secondary small">Encerrados</div>
           <div class="display-6 fw-semibold lh-1 mt-1">{{ closed_processes or 0 }}</div>
         </div>
-        <span class="dash-stat__icon text-bg-secondary-subtle text-secondary-emphasis"><i
-            class="bi bi-archive"></i></span>
+        <span class="dash-stat__icon text-bg-secondary-subtle text-secondary-emphasis"><i class="bi bi-archive"></i></span>
       </div>
       <div class="card-footer bg-transparent border-0 pt-0 pb-3 px-3">
-        <a href="{{ url_for('process_panel.list_processes', status='encerrado') }}"
-          class="btn btn-sm btn-outline-secondary dash-link-btn">Filtrar encerrados</a>
+        <a href="{{ url_for('process_panel.list_processes', status='encerrado') }}" class="btn btn-sm btn-outline-secondary dash-link-btn">Filtrar encerrados</a>
       </div>
     </div>
   </div>
 </div>
 
-<!-- GRÁFICOS DE PROCESSOS -->
-<div class="row g-3 mb-4">
-  <div class="col-lg-6">
-    <div class="card dash-card h-100">
-      <div class="card-header bg-transparent border-0 pb-0">
-        <h3 class="card-title fw-semibold mb-0"><i class="bi bi-graph-up-arrow me-2 text-primary"></i>Processos por
-          Status</h3>
-      </div>
-      <div class="card-body">
-        <canvas id="chartProcessStatus" height="200"></canvas>
-      </div>
-    </div>
-  </div>
-  <div class="col-lg-6">
-    <div class="card dash-card h-100">
-      <div class="card-header bg-transparent border-0 pb-0">
-        <h3 class="card-title fw-semibold mb-0"><i class="bi bi-pie-chart me-2 text-success"></i>Distribuição de
-          Processos</h3>
-      </div>
-      <div class="card-body">
-        <canvas id="chartProcessDistribution" height="200"></canvas>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- RESUMO DE CASOS E OUTROS -->
+<!-- BASE DE CONHECIMENTO -->
 <div class="row g-3 mb-4">
   <div class="col-12">
     <div class="card dash-card kb-shell overflow-hidden">
       <div class="card-header kb-header text-white px-4 py-3">
-        <div
-          class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-2">
+        <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-2">
           <div class="d-flex align-items-center">
             <div class="me-3">
-              <div class="rounded-circle bg-white d-flex align-items-center justify-content-center"
-                style="width: 42px; height: 42px; box-shadow: 0 4px 10px rgba(0,0,0,0.12);">
-                <i class="bi bi-book-fill" style="font-size: 1.2rem; color: #667eea;"></i>
+              <div class="rounded-circle bg-white d-flex align-items-center justify-content-center" style="width:42px;height:42px;box-shadow:0 4px 10px rgba(0,0,0,0.12);">
+                <i class="bi bi-book-fill" style="font-size:1.2rem;color:#667eea;"></i>
               </div>
             </div>
             <div>
               <h3 class="card-title mb-1 fw-semibold">Base de Conhecimento do Escritório</h3>
-              <small class="opacity-75">Resumo dos documentos, categorias e tags cadastrados</small>
+              <small class="opacity-75">Documentos, categorias e tags cadastrados</small>
             </div>
           </div>
           <div>
@@ -522,8 +648,7 @@
                 <div class="kb-metric__label">Documentos</div>
                 <div class="kb-metric__value">{{ knowledge_count or 0 }}</div>
               </div>
-              <span class="kb-metric__icon text-bg-primary-subtle text-primary-emphasis"><i
-                  class="bi bi-collection-fill"></i></span>
+              <span class="kb-metric__icon text-bg-primary-subtle text-primary-emphasis"><i class="bi bi-collection-fill"></i></span>
             </div>
           </div>
           <div class="col-md-4">
@@ -532,8 +657,7 @@
                 <div class="kb-metric__label">Categorias</div>
                 <div class="kb-metric__value">{{ knowledge_categories_count or 0 }}</div>
               </div>
-              <span class="kb-metric__icon text-bg-warning-subtle text-warning-emphasis"><i
-                  class="bi bi-folder-fill"></i></span>
+              <span class="kb-metric__icon text-bg-warning-subtle text-warning-emphasis"><i class="bi bi-folder-fill"></i></span>
             </div>
           </div>
           <div class="col-md-4">
@@ -542,8 +666,7 @@
                 <div class="kb-metric__label">Tags únicas</div>
                 <div class="kb-metric__value">{{ knowledge_tags_count or 0 }}</div>
               </div>
-              <span class="kb-metric__icon text-bg-success-subtle text-success-emphasis"><i
-                  class="bi bi-tags-fill"></i></span>
+              <span class="kb-metric__icon text-bg-success-subtle text-success-emphasis"><i class="bi bi-tags-fill"></i></span>
             </div>
           </div>
         </div>
@@ -552,157 +675,34 @@
   </div>
 </div>
 
-<!-- Valor Total das Causas -->
-{% if total_cause_value and total_cause_value > 0 %}
-<div class="row g-3 mb-4">
-  <div class="col-12">
-    <div class="card dash-card border-success">
-      <div class="card-body text-center py-4">
-        <div class="d-flex align-items-center justify-content-center gap-3 flex-wrap">
-          <div class="rounded-circle bg-success-subtle d-flex align-items-center justify-content-center"
-            style="width: 60px; height: 60px;">
-            <i class="bi bi-currency-dollar text-success" style="font-size: 2rem;"></i>
-          </div>
-          <div>
-            <h6 class="text-muted mb-1">Valor Total das Causas</h6>
-            <h3 class="text-success fw-bold mb-0">
-              R$ {{ "{:,.2f}".format(total_cause_value).replace(",", "X").replace(".", ",").replace("X", ".") }}
-            </h3>
-            <small class="text-muted">Soma de todos os valores de causa cadastrados</small>
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-{% endif %}
-
-<div class="row g-3 mb-4">
-  <div class="col-lg-6">
-    <div class="card dash-card h-100">
-      <div class="card-header bg-transparent border-0 pb-0 d-flex justify-content-between align-items-center">
-        <h3 class="card-title mb-0"><i class="bi bi-graph-up-arrow me-1"></i> Processos por Status</h3>
-      </div>
-      <div class="card-body">
-        <canvas id="chartProcessStatus" height="180"></canvas>
-      </div>
-    </div>
-  </div>
-  <div class="col-lg-6">
-    <div class="card dash-card h-100">
-      <div class="card-header bg-transparent border-0 pb-0 d-flex justify-content-between align-items-center">
-        <h3 class="card-title mb-0"><i class="bi bi-pie-chart me-1"></i> Taxa de Distribuição de Processos</h3>
-      </div>
-      <div class="card-body">
-        <canvas id="chartProcessDistribution" height="180"></canvas>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="row g-3 mb-4">
-  <div class="col-12">
-    <div class="card dash-card h-100">
-      <div class="card-header bg-transparent border-0 pb-0 d-flex justify-content-between align-items-center">
-        <h3 class="card-title mb-0"><i class="bi bi-calendar3 me-1"></i> Processos Abertos por Mês (Tendência)</h3>
-      </div>
-      <div class="card-body">
-        <canvas id="chartProcessMonthly" height="220"></canvas>
-      </div>
-    </div>
-  </div>
-</div>
-
-<div class="row g-3 mb-4">
-  <div class="col-12">
-    <div class="card dash-card">
-      <div
-        class="card-header bg-transparent border-0 pb-0 d-flex flex-column flex-lg-row justify-content-between align-items-start align-items-lg-center gap-2">
-        <h3 class="card-title fw-semibold mb-0"><i class="bi bi-bar-chart me-2 text-info"></i>Motivos FAP (Benefícios)
-        </h3>
-        <div class="d-flex align-items-center flex-wrap gap-3">
-          <div class="d-flex align-items-center">
-            <span class="badge bg-secondary me-2">{{ total_benefits or 0 }}</span>
-            <span class="text-body-secondary">Benefícios no total</span>
-          </div>
-          <div class="d-flex align-items-center">
-            <span class="badge bg-warning text-dark me-2">{{ fap_reason_unclassified or 0 }}</span>
-            <span class="text-body-secondary">Sem motivo definido</span>
-          </div>
-        </div>
-      </div>
-      <div class="card-body">
-        <div class="row g-4">
-          <div class="col-lg-5">
-            {% if fap_reason_stats %}
-            <h6>Por Motivo FAP:</h6>
-            <ul class="list-unstyled mb-0">
-              {% for item in fap_reason_stats %}
-              <li class="mb-1">
-                <span class="badge bg-primary me-2">{{ item.count }}</span>
-                {{ item.name }}
-              </li>
-              {% endfor %}
-            </ul>
-            {% else %}
-            <div class="alert alert-light mb-0">Sem motivos FAP cadastrados.</div>
-            {% endif %}
-          </div>
-          <div class="col-lg-7">
-            {% if fap_reason_stats %}
-            <canvas id="chartFapReasons" height="220"></canvas>
-            {% else %}
-            <div class="alert alert-light mb-0">Sem dados para exibir gráfico.</div>
-            {% endif %}
-          </div>
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
-<div class="row g-3 mb-2">
-  <div class="col-12">
-    <div class="card dash-card h-100">
-      <div class="card-header bg-transparent border-0 pb-0 d-flex justify-content-between align-items-center">
-        <h3 class="card-title mb-0"><i class="bi bi-calendar3 me-1"></i> Casos Abertos por Mês</h3>
-      </div>
-      <div class="card-body">
-        {% if cases_by_month %}
-        <canvas id="chartMonthly" height="180"></canvas>
-        {% else %}
-        <div class="alert alert-light mb-0">Sem dados mensais para exibir.</div>
-        {% endif %}
-      </div>
-    </div>
-  </div>
-</div>
 {% endblock %}
+
 {% block extra_js %}
-<!-- Chart.js sem SRI para evitar bloqueio por hash incorreto -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js" crossorigin="anonymous"></script>
 <script src="https://cdn.jsdelivr.net/npm/typed.js@2.0.12"></script>
 <script id="dashboard-data" type="application/json">{{ {
-  'casesByStatus': cases_by_status or {},
-  'casesByType': cases_by_type or {},
-  'casesByMonth': cases_by_month or {},
-  'fapReasonStats': fap_reason_stats or [],
+  'contestacoesPorSituacao': contestacoes_por_situacao or {},
+  'contestacoesPorAno': contestacoes_por_ano or {},
+  'benefitsExclusao': benefits_exclusao or 0,
+  'benefitsInclusao': benefits_inclusao or 0,
+  'benefitsRevisao': benefits_revisao or 0,
   'activeProcesses': active_processes or 0,
   'suspendedProcesses': suspended_processes or 0,
   'closedProcesses': closed_processes or 0
 } | tojson }}</script>
 <script>
   document.addEventListener('DOMContentLoaded', function () {
-    const dashboardDataEl = document.getElementById('dashboard-data');
-    const dashboardData = dashboardDataEl ? JSON.parse(dashboardDataEl.textContent || '{}') : {};
+    const data = JSON.parse(document.getElementById('dashboard-data').textContent || '{}');
 
+    // Typed.js
     const welcomeEl = document.getElementById('welcomeTyped');
     if (welcomeEl) {
       new Typed('#welcomeTyped', {
         strings: [
-          'Bem-vindo(a)! Aqui você acompanha o que importa no seu escritório.',
-          'Dica rápida: mantenha os templates atualizados para agilizar petições.',
-          'Insights inteligentes: revise benefícios ativos e motivos FAP com frequência.',
-          'Seu painel está pronto — comece pelos casos recentes.'
+          'Bem-vindo(a)! Acompanhe as contestações FAP e processos do escritório.',
+          'Dica: mantenha as contestações sincronizadas para ter dados atualizados.',
+          'Classifique os benefícios com IA para agilizar a geração de petições.',
+          'Seu painel está pronto — comece pelas contestações mais recentes.'
         ],
         typeSpeed: 35,
         backSpeed: 18,
@@ -713,186 +713,62 @@
         cursorChar: '|'
       });
     }
-    const casesByStatus = dashboardData.casesByStatus || {};
-    const casesByType = dashboardData.casesByType || {};
-    const casesByMonth = dashboardData.casesByMonth || {};
-    const fapReasonStats = dashboardData.fapReasonStats || [];
 
-    const activeProcesses = Number(dashboardData.activeProcesses || 0);
-    const suspendedProcesses = Number(dashboardData.suspendedProcesses || 0);
-    const closedProcesses = Number(dashboardData.closedProcesses || 0);
+    const palette = ['#0d6efd', '#198754', '#ffc107', '#0dcaf0', '#6610f2', '#fd7e14', '#dc3545', '#6c757d'];
 
-    const toSeries = (obj, labelMap) => {
-      const labels = [];
-      const data = [];
-      Object.entries(obj || {}).forEach(([key, value]) => {
-        labels.push(labelMap?.[key] || key);
-        data.push(value);
-      });
-      return { labels, data };
-    };
-
-    const statusMap = {
-      active: 'Ativos',
-      draft: 'Rascunhos',
-      filed: 'Protocolados',
-    };
-
-    const typeMap = {
-      fap: 'FAP',
-      previdenciario: 'Previdenciário',
-      trabalhista: 'Trabalhista',
-      outros: 'Outros',
-    };
-
-    const palette = ['#0d6efd', '#198754', '#ffc107', '#0dcaf0', '#6610f2', '#fd7e14', '#6c757d'];
-
-    const processStatuses = {
-      ativo: activeProcesses,
-      suspenso: suspendedProcesses,
-      encerrado: closedProcesses,
-    };
-
-    const processStatusMap = {
-      ativo: 'Ativos',
-      suspenso: 'Suspensos',
-      encerrado: 'Encerrados',
-    };
-
-    if (Object.keys(processStatuses).length) {
-      const { labels, data } = toSeries(processStatuses, processStatusMap);
-      const processStatusCtx = document.getElementById('chartProcessStatus');
-      if (processStatusCtx) {
-        new Chart(processStatusCtx, {
-          type: 'bar',
-          data: {
-            labels,
-            datasets: [{
-              label: 'Processos',
-              data,
-              backgroundColor: ['#198754', '#ffc107', '#6c757d'],
-              borderRadius: 6,
-            }],
-          },
-          options: {
-            plugins: { legend: { display: false } },
-            scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
-          },
-        });
-      }
-
-      const processDistributionCtx = document.getElementById('chartProcessDistribution');
-      if (processDistributionCtx) {
-        new Chart(processDistributionCtx, {
+    // Contestações por Situação (doughnut)
+    const situacao = data.contestacoesPorSituacao || {};
+    if (Object.keys(situacao).length) {
+      const ctx = document.getElementById('chartContestacoesSituacao');
+      if (ctx) {
+        new Chart(ctx, {
           type: 'doughnut',
           data: {
-            labels,
-            datasets: [{
-              data,
-              backgroundColor: ['#198754', '#ffc107', '#6c757d'],
-            }],
+            labels: Object.keys(situacao),
+            datasets: [{ data: Object.values(situacao), backgroundColor: palette }]
           },
-          options: {
-            plugins: { legend: { position: 'bottom' } },
-          },
+          options: { plugins: { legend: { position: 'bottom' } } }
         });
       }
     }
 
-    if (Object.keys(casesByMonth).length) {
-      const { labels, data } = toSeries(casesByMonth);
-      const monthlyCtx = document.getElementById('chartMonthly');
-      if (monthlyCtx) {
-        new Chart(monthlyCtx, {
-          type: 'line',
-          data: {
-            labels,
-            datasets: [{
-              label: 'Casos abertos',
-              data,
-              borderColor: palette[0],
-              backgroundColor: palette[0] + '33',
-              tension: 0.25,
-              fill: true,
-              pointRadius: 4,
-              pointHoverRadius: 6,
-            }],
-          },
-          options: {
-            plugins: { legend: { display: false } },
-            scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
-          },
-        });
-      }
-    }
-
-    if (Object.keys(casesByStatus).length) {
-      const { labels, data } = toSeries(casesByStatus, statusMap);
-      const statusCtx = document.getElementById('chartStatus');
-      if (statusCtx) {
-        new Chart(statusCtx, {
+    // Contestações por Ano (bar)
+    const porAno = data.contestacoesPorAno || {};
+    if (Object.keys(porAno).length) {
+      const ctx = document.getElementById('chartContestacoesPorAno');
+      if (ctx) {
+        new Chart(ctx, {
           type: 'bar',
           data: {
-            labels,
+            labels: Object.keys(porAno),
             datasets: [{
-              label: 'Casos',
-              data,
-              backgroundColor: labels.map((_, i) => palette[i % palette.length]),
+              label: 'Contestações',
+              data: Object.values(porAno),
+              backgroundColor: '#0d6efd',
               borderRadius: 6,
-            }],
+            }]
           },
           options: {
             plugins: { legend: { display: false } },
-            scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
-          },
+            scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+          }
         });
       }
     }
 
-    if (Object.keys(casesByType).length) {
-      const { labels, data } = toSeries(casesByType, typeMap);
-      const typeCtx = document.getElementById('chartType');
-      if (typeCtx) {
-        new Chart(typeCtx, {
+    // Benefícios por tipo (doughnut)
+    const tipoLabels = ['Exclusão', 'Inclusão', 'Revisão'];
+    const tipoData = [data.benefitsExclusao, data.benefitsInclusao, data.benefitsRevisao];
+    if (tipoData.some(v => v > 0)) {
+      const ctx = document.getElementById('chartBenefitsTipo');
+      if (ctx) {
+        new Chart(ctx, {
           type: 'doughnut',
           data: {
-            labels,
-            datasets: [{
-              data,
-              backgroundColor: labels.map((_, i) => palette[i % palette.length]),
-            }],
+            labels: tipoLabels,
+            datasets: [{ data: tipoData, backgroundColor: ['#dc3545', '#198754', '#ffc107'] }]
           },
-          options: {
-            plugins: { legend: { position: 'bottom' } },
-          },
-        });
-      }
-    }
-
-    if (Array.isArray(fapReasonStats) && fapReasonStats.length) {
-      const labels = fapReasonStats.map(item => item.name);
-      const data = fapReasonStats.map(item => item.count);
-      const fapCtx = document.getElementById('chartFapReasons');
-      if (fapCtx) {
-        new Chart(fapCtx, {
-          type: 'bar',
-          data: {
-            labels,
-            datasets: [{
-              label: 'Benefícios',
-              data,
-              backgroundColor: labels.map((_, i) => palette[i % palette.length]),
-              borderRadius: 6,
-            }],
-          },
-          options: {
-            indexAxis: 'y',
-            plugins: { legend: { display: false } },
-            scales: {
-              x: { beginAtZero: true, ticks: { precision: 0 } },
-              y: { ticks: { autoSkip: false } },
-            },
-          },
+          options: { plugins: { legend: { position: 'bottom' } } }
         });
       }
     }
