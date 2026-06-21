@@ -1,9 +1,16 @@
 """
 Middlewares e contexto da aplicação
 """
-from flask import session, request, redirect, url_for, jsonify
+from flask import session, request, redirect, url_for, jsonify, flash
 from sqlalchemy.orm import joinedload
 from app.models import db, User, Case, CaseComment
+from app.utils.permissions import (
+    MODULE_PERMISSIONS,
+    can_access_endpoint,
+    get_landing_endpoint,
+    has_module_permission,
+    parse_module_permissions,
+)
 from datetime import datetime
 from functools import wraps
 
@@ -25,9 +32,24 @@ def init_app_middlewares(app):
         # Se está autenticado, atualizar última atividade
         if 'user_id' in session and request.endpoint not in public_endpoints:
             user = User.query.get(session['user_id'])
-            if user:
-                user.last_activity = datetime.utcnow()
-                db.session.commit()
+            if not user:
+                session.clear()
+                if request.is_json:
+                    return jsonify({"error": "Unauthorized"}), 401
+                return redirect(url_for('auth.login'))
+
+            user.last_activity = datetime.utcnow()
+            db.session.commit()
+
+            session['user_role'] = user.role
+            session['user_module_permissions'] = user.get_module_permissions()
+
+            if not can_access_endpoint(request.endpoint, user.role, user.module_permissions):
+                if request.is_json:
+                    return jsonify({"error": "Acesso negado"}), 403
+                flash('Acesso negado para este modulo.', 'danger')
+                landing_endpoint = get_landing_endpoint(user.role, user.module_permissions)
+                return redirect(url_for(landing_endpoint))
 
     @app.context_processor
     def inject_recent_case_comments():
@@ -63,6 +85,22 @@ def init_app_middlewares(app):
         return {
             'recent_case_comments': recent_items,
             'recent_case_comments_count': len(recent_items)
+        }
+
+    @app.context_processor
+    def inject_module_permissions():
+        role = session.get('user_role')
+        permissions = parse_module_permissions(session.get('user_module_permissions'), role)
+        permissions_set = set(permissions)
+
+        def can_view_module(module_key):
+            return module_key in permissions_set
+
+        return {
+            'module_permissions_catalog': MODULE_PERMISSIONS,
+            'current_module_permissions': permissions,
+            'can_view_module': can_view_module,
+            'has_module_permission': lambda module_key: has_module_permission(module_key, role, permissions),
         }
 
 def get_current_law_firm_id():

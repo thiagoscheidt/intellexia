@@ -31,6 +31,7 @@
                                 <th>Nome</th>
                                 <th>Email</th>
                                 <th>Papel</th>
+                                <th>Permissões de Módulo</th>
                                 <th>Status</th>
                                 <th class="text-end">Ações</th>
                             </tr>
@@ -41,6 +42,19 @@
                                 <td>{{ user.name }}</td>
                                 <td>{{ user.email }}</td>
                                 <td><span class="badge bg-secondary text-uppercase">{{ user.role }}</span></td>
+                                <td>
+                                    {% set user_modules = user.get_module_permissions() %}
+                                    {% if user_modules %}
+                                    <div class="d-flex flex-wrap gap-1">
+                                        {% for module_key in user_modules %}
+                                        <span class="badge text-bg-light border">{{
+                                            module_permissions_catalog.get(module_key, module_key) }}</span>
+                                        {% endfor %}
+                                    </div>
+                                    {% else %}
+                                    <span class="text-muted small">Sem acesso a módulos</span>
+                                    {% endif %}
+                                </td>
                                 <td>
                                     {% if user.is_active %}
                                     <span class="badge bg-success">Ativo</span>
@@ -53,7 +67,8 @@
                                     <div class="btn-group" role="group">
                                         <button class="btn btn-sm btn-outline-primary btn-edit" data-id="{{ user.id }}"
                                             data-name="{{ user.name }}" data-email="{{ user.email }}"
-                                            data-role="{{ user.role }}">
+                                            data-role="{{ user.role }}"
+                                            data-permissions='{{ user.get_module_permissions()|tojson|safe }}'>
                                             <i class="bi bi-pencil-square"></i>
                                         </button>
                                         <button class="btn btn-sm btn-outline-secondary"
@@ -83,7 +98,7 @@
 
 <!-- Modal add user -->
 <div class="modal fade" id="modalAddUser" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Novo Usuário</h5>
@@ -105,12 +120,42 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Papel</label>
-                        <select class="form-select" name="role">
+                        <select class="form-select" name="role" id="add_role">
                             <option value="user">Usuário</option>
                             <option value="assistant">Assistente</option>
                             <option value="lawyer">Advogado</option>
                             <option value="admin">Administrador</option>
                         </select>
+                    </div>
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-start gap-2 mb-2 flex-wrap">
+                            <div>
+                                <label class="form-label d-block mb-1">Permissões por módulo</label>
+                                <small class="text-muted d-block">Usuários administradores recebem acesso total
+                                    automaticamente.</small>
+                            </div>
+                            <div class="btn-group btn-group-sm" role="group"
+                                aria-label="Ações de permissão (novo usuário)">
+                                <button type="button" class="btn btn-outline-secondary" data-perm-action="all"
+                                    data-target-form="formAddUser">Selecionar todos</button>
+                                <button type="button" class="btn btn-outline-secondary" data-perm-action="none"
+                                    data-target-form="formAddUser">Limpar</button>
+                            </div>
+                        </div>
+                        <div class="permission-grid">
+                            <div class="row g-2 mx-0" id="add_permissions_group">
+                                {% for module_key, module_label in module_permissions_catalog.items() %}
+                                <div class="col-md-6">
+                                    <div class="form-check border rounded p-2 h-100">
+                                        <input class="form-check-input" type="checkbox" name="module_permissions"
+                                            value="{{ module_key }}" id="add_perm_{{ module_key }}" checked>
+                                        <label class="form-check-label" for="add_perm_{{ module_key }}">{{ module_label
+                                            }}</label>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
                     </div>
                 </form>
             </div>
@@ -124,7 +169,7 @@
 
 <!-- Modal edit user -->
 <div class="modal fade" id="modalEditUser" tabindex="-1" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable modal-lg">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title">Editar Usuário</h5>
@@ -155,6 +200,37 @@
                             <option value="admin">Administrador</option>
                         </select>
                     </div>
+                    <div class="mb-3">
+                        <div class="d-flex justify-content-between align-items-start gap-2 mb-2 flex-wrap">
+                            <div>
+                                <label class="form-label d-block mb-1">Permissões por módulo</label>
+                                <small class="text-muted d-block">Para admins, os checkboxes ficam bloqueados com acesso
+                                    total.</small>
+                            </div>
+                            <div class="btn-group btn-group-sm" role="group"
+                                aria-label="Ações de permissão (editar usuário)">
+                                <button type="button" class="btn btn-outline-secondary" data-perm-action="all"
+                                    data-target-form="formEditUser">Selecionar todos</button>
+                                <button type="button" class="btn btn-outline-secondary" data-perm-action="none"
+                                    data-target-form="formEditUser">Limpar</button>
+                            </div>
+                        </div>
+                        <div class="permission-grid">
+                            <div class="row g-2 mx-0" id="edit_permissions_group">
+                                {% for module_key, module_label in module_permissions_catalog.items() %}
+                                <div class="col-md-6">
+                                    <div class="form-check border rounded p-2 h-100">
+                                        <input class="form-check-input edit-module-permission" type="checkbox"
+                                            name="module_permissions" value="{{ module_key }}"
+                                            id="edit_perm_{{ module_key }}">
+                                        <label class="form-check-label" for="edit_perm_{{ module_key }}">{{ module_label
+                                            }}</label>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
                 </form>
             </div>
             <div class="modal-footer">
@@ -166,15 +242,152 @@
 </div>
 {% endblock %}
 
+{% block extra_css %}
+<style>
+    .permission-grid {
+        max-height: 260px;
+        overflow-y: auto;
+        border: 1px solid var(--bs-border-color);
+        border-radius: 0.5rem;
+        padding: 0.75rem;
+        background: var(--bs-body-bg);
+    }
+
+    .permission-grid .row {
+        margin-left: 0;
+        margin-right: 0;
+    }
+
+    .permission-grid .row>[class*="col-"] {
+        padding-left: 0.35rem;
+        padding-right: 0.35rem;
+    }
+
+    .permission-grid .form-check {
+        transition: border-color 0.2s ease, box-shadow 0.2s ease;
+    }
+
+    .permission-grid .form-check:has(.form-check-input:checked) {
+        border-color: var(--bs-primary) !important;
+        box-shadow: 0 0 0 1px rgba(var(--bs-primary-rgb), 0.2);
+    }
+</style>
+{% endblock %}
+
 {% block extra_js %}
 <script>
     document.addEventListener('DOMContentLoaded', () => {
         const form = document.getElementById('formAddUser');
+        const addModalEl = document.getElementById('modalAddUser');
+        const addModal = new bootstrap.Modal(addModalEl);
         const btnSave = document.getElementById('btnSaveUser');
         const editModalEl = document.getElementById('modalEditUser');
         const editModal = new bootstrap.Modal(editModalEl);
         const editForm = document.getElementById('formEditUser');
         const btnUpdate = document.getElementById('btnUpdateUser');
+        const addRole = document.getElementById('add_role');
+        const editRole = document.getElementById('edit_role');
+        let addLastCustomSelection = [];
+        let editLastCustomSelection = [];
+
+        function getCheckedPermissions(targetForm) {
+            return Array.from(targetForm.querySelectorAll('input[name="module_permissions"]:checked'))
+                .map((checkbox) => checkbox.value);
+        }
+
+        function setCheckedPermissions(targetForm, permissions) {
+            const selected = new Set(Array.isArray(permissions) ? permissions : []);
+            targetForm.querySelectorAll('input[name="module_permissions"]').forEach((checkbox) => {
+                checkbox.checked = selected.has(checkbox.value);
+            });
+        }
+
+        function selectAllPermissions(targetForm, selected) {
+            targetForm.querySelectorAll('input[name="module_permissions"]').forEach((checkbox) => {
+                if (!checkbox.disabled) {
+                    checkbox.checked = selected;
+                }
+            });
+        }
+
+        function syncPermissionCheckboxes(form, roleValue) {
+            const checkboxes = form.querySelectorAll('input[name="module_permissions"]');
+            const isAdmin = (roleValue || '').toLowerCase() === 'admin';
+
+            if (isAdmin) {
+                if (form === editForm) {
+                    editLastCustomSelection = getCheckedPermissions(form);
+                } else {
+                    addLastCustomSelection = getCheckedPermissions(form);
+                }
+            }
+
+            checkboxes.forEach(checkbox => {
+                checkbox.disabled = isAdmin;
+                if (isAdmin) {
+                    checkbox.checked = true;
+                }
+            });
+
+            if (!isAdmin) {
+                const restoreList = form === editForm ? editLastCustomSelection : addLastCustomSelection;
+                if (restoreList.length) {
+                    setCheckedPermissions(form, restoreList);
+                }
+            }
+        }
+
+        function setEditPermissions(permissions) {
+            const list = Array.isArray(permissions) ? permissions : [];
+            const checkboxes = editForm.querySelectorAll('input[name="module_permissions"]');
+            checkboxes.forEach(checkbox => {
+                checkbox.checked = list.includes(checkbox.value);
+            });
+        }
+
+        syncPermissionCheckboxes(form, addRole.value);
+        syncPermissionCheckboxes(editForm, editRole.value);
+
+        addModalEl.addEventListener('hidden.bs.modal', () => {
+            form.reset();
+            addRole.value = 'user';
+            selectAllPermissions(form, true);
+            addLastCustomSelection = getCheckedPermissions(form);
+            syncPermissionCheckboxes(form, addRole.value);
+        });
+
+        editModalEl.addEventListener('hidden.bs.modal', () => {
+            editForm.reset();
+            editRole.value = 'user';
+            editLastCustomSelection = [];
+            syncPermissionCheckboxes(editForm, editRole.value);
+        });
+
+        addRole.addEventListener('change', () => syncPermissionCheckboxes(form, addRole.value));
+        editRole.addEventListener('change', () => syncPermissionCheckboxes(editForm, editRole.value));
+
+        document.querySelectorAll('[data-perm-action]').forEach((button) => {
+            button.addEventListener('click', () => {
+                const formId = button.dataset.targetForm;
+                const action = button.dataset.permAction;
+                const targetForm = document.getElementById(formId);
+                if (!targetForm) {
+                    return;
+                }
+
+                const targetRole = targetForm.querySelector('select[name="role"]');
+                if (targetRole && targetRole.value.toLowerCase() === 'admin') {
+                    return;
+                }
+
+                selectAllPermissions(targetForm, action === 'all');
+                if (targetForm === editForm) {
+                    editLastCustomSelection = getCheckedPermissions(targetForm);
+                } else {
+                    addLastCustomSelection = getCheckedPermissions(targetForm);
+                }
+            });
+        });
 
         btnSave.addEventListener('click', () => {
             const formData = new FormData(form);
@@ -184,6 +397,7 @@
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }
             }).then(r => r.json()).then(data => {
                 if (data.success) {
+                    addModal.hide();
                     location.reload();
                 } else {
                     alert(data.message || 'Erro ao salvar.');
@@ -198,6 +412,15 @@
                 document.getElementById('edit_name').value = btn.dataset.name || '';
                 document.getElementById('edit_email').value = btn.dataset.email || '';
                 document.getElementById('edit_role').value = btn.dataset.role || 'user';
+                let permissions = [];
+                try {
+                    permissions = JSON.parse(btn.dataset.permissions || '[]');
+                } catch (error) {
+                    permissions = [];
+                }
+                setEditPermissions(permissions);
+                editLastCustomSelection = getCheckedPermissions(editForm);
+                syncPermissionCheckboxes(editForm, document.getElementById('edit_role').value);
                 document.getElementById('edit_password').value = '';
                 editModal.show();
             });
@@ -212,6 +435,7 @@
                 headers: { 'X-Requested-With': 'XMLHttpRequest' }
             }).then(r => r.json()).then(data => {
                 if (data.success) {
+                    editModal.hide();
                     location.reload();
                 } else {
                     alert(data.message || 'Erro ao atualizar.');

@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, session, redirect, url_for, jsonify, flash
 from functools import wraps
 from app.models import db, User
+from app.utils.permissions import MODULE_PERMISSIONS, normalize_module_permissions
 
 admin_users_bp = Blueprint('admin_users', __name__, url_prefix='/admin/users')
 
@@ -36,7 +37,11 @@ def require_admin(f):
 def list_users():
     law_firm_id = session.get('law_firm_id')
     users = User.query.filter_by(law_firm_id=law_firm_id).order_by(User.created_at.desc()).all()
-    return render_template('admin/users.html', users=users)
+    return render_template(
+        'admin/users.html',
+        users=users,
+        module_permissions_catalog=MODULE_PERMISSIONS,
+    )
 
 
 @admin_users_bp.route('/', methods=['POST'])
@@ -48,6 +53,7 @@ def create_user():
     email = request.form.get('email', '').strip().lower()
     password = request.form.get('password', '').strip()
     role = request.form.get('role', 'user').strip() or 'user'
+    module_permissions = request.form.getlist('module_permissions')
 
     if not name or not email or not password:
         return jsonify({"success": False, "message": "Nome, email e senha são obrigatórios."}), 400
@@ -65,6 +71,7 @@ def create_user():
             is_active=True,
         )
         user.set_password(password)
+        user.set_module_permissions(normalize_module_permissions(module_permissions, role))
         db.session.add(user)
         db.session.commit()
         return jsonify({"success": True, "message": "Usuário criado com sucesso."})
@@ -104,6 +111,7 @@ def update_user(user_id):
     email = request.form.get('email', '').strip().lower()
     role = request.form.get('role', '').strip() or user.role
     password = request.form.get('password', '').strip()
+    module_permissions = request.form.getlist('module_permissions')
 
     if not name or not email:
         return jsonify({"success": False, "message": "Nome e email são obrigatórios."}), 400
@@ -116,6 +124,7 @@ def update_user(user_id):
         user.name = name
         user.email = email
         user.role = role
+        user.set_module_permissions(normalize_module_permissions(module_permissions, role))
         if password:
             user.set_password(password)
         db.session.commit()

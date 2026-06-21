@@ -1,5 +1,6 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify, flash
 from app.models import db, User, LawFirm
+from app.utils.permissions import get_landing_endpoint
 from datetime import datetime
 import re
 
@@ -42,15 +43,18 @@ def login_post():
     session['user_email'] = user.email
     session['user_name'] = user.name
     session['user_role'] = user.role
+    session['user_module_permissions'] = user.get_module_permissions()
     session['law_firm_id'] = user.law_firm_id
     session['law_firm_name'] = user.law_firm.name
+
+    landing_endpoint = get_landing_endpoint(user.role, user.module_permissions)
     
     if remember:
         session.permanent = True
     
     return jsonify({
         "success": True, 
-        "redirect": url_for('dashboard.dashboard'),
+        "redirect": url_for(landing_endpoint),
         "user": user.to_dict()
     })
 
@@ -113,6 +117,7 @@ def register_post():
             is_verified=False
         )
         user.set_password(password)
+        user.set_module_permissions(None)
         db.session.add(user)
         db.session.commit()
         

@@ -3,6 +3,8 @@ from datetime import datetime
 from decimal import Decimal
 from werkzeug.security import generate_password_hash, check_password_hash
 
+from app.utils.permissions import dump_module_permissions, parse_module_permissions
+
 db = SQLAlchemy()
 
 
@@ -94,6 +96,7 @@ class User(db.Model):
     
     # Permissões e status
     role = db.Column(db.String(30), nullable=False, default='user')  # admin, lawyer, assistant, user
+    module_permissions = db.Column(db.Text, nullable=True)
     is_active = db.Column(db.Boolean, default=True)
     is_verified = db.Column(db.Boolean, default=False)
     
@@ -115,6 +118,14 @@ class User(db.Model):
     def check_password(self, password):
         """Verifica se a senha está correta"""
         return check_password_hash(self.password_hash, password)
+
+    def get_module_permissions(self):
+        """Retorna a lista de permissoes de modulo normalizadas."""
+        return parse_module_permissions(self.module_permissions, self.role)
+
+    def set_module_permissions(self, permissions):
+        """Salva a lista de permissoes de modulo como JSON."""
+        self.module_permissions = dump_module_permissions(permissions, self.role)
     
     def to_dict(self):
         """Retorna um dicionário com os dados do usuário"""
@@ -123,6 +134,7 @@ class User(db.Model):
             'name': self.name,
             'email': self.email,
             'role': self.role,
+            'module_permissions': self.get_module_permissions(),
             'oab_number': self.oab_number,
             'phone': self.phone,
             'is_active': self.is_active,

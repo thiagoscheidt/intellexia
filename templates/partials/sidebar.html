@@ -21,6 +21,7 @@
       <!--begin::Sidebar Menu-->
       <ul class="nav sidebar-menu flex-column" data-lte-toggle="treeview" role="navigation" aria-label="Main navigation"
         data-accordion="false" id="navigation">
+        {% if can_view_module('dashboard') %}
         <li
           class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('dashboard.') else '' }}">
           <a href="#"
@@ -50,8 +51,10 @@
             </li>
           </ul>
         </li>
+        {% endif %}
 
         {# ── Painel FAP ────────────────────────────────────────────────── #}
+        {% if can_view_module('fap_panel') %}
         <li
           class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('fap_panel.') else '' }}">
           <a href="#"
@@ -97,7 +100,9 @@
             </li>
           </ul>
         </li>
+        {% endif %}
 
+        {% if can_view_module('disputes_center') %}
         <li
           class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('disputes_center.') else '' }}">
           <a href="#"
@@ -177,8 +182,10 @@
             {% endif %}
           </ul>
         </li>
+        {% endif %}
 
         {# ── Revisor de Petições ────────────────────────────────────────── #}
+        {% if can_view_module('fap_review') %}
         <li
           class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('fap_review.') else '' }}">
           <a href="#"
@@ -232,7 +239,9 @@
             </li>
           </ul>
         </li>
+        {% endif %}
 
+        {% if can_view_module('process_panel') %}
         <li
           class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint.startswith('process_panel.') or request.endpoint.startswith('impugnacao_references.')) else '' }}">
           <a href="#"
@@ -278,7 +287,9 @@
             </li>
           </ul>
         </li>
+        {% endif %}
 
+        {% if can_view_module('cases') %}
         <li
           class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint.startswith('cases.') or request.endpoint.startswith('benefits.') or request.endpoint.startswith('documents.') or request.endpoint.startswith('petitions.') or request.endpoint.startswith('fap_reasons.')) else '' }}">
           <a href="#"
@@ -332,7 +343,9 @@
             </li>
           </ul>
         </li>
+        {% endif %}
 
+        {% if can_view_module('knowledge_base') %}
         <li
           class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('knowledge_base.') else '' }}">
           <a href="#"
@@ -394,7 +407,9 @@
             </li>
           </ul>
         </li>
+        {% endif %}
 
+        {% if can_view_module('tools') %}
         <li
           class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint.startswith('tools.') or request.endpoint == 'assistant.legal_assistant') else '' }}">
           <a href="#"
@@ -439,7 +454,9 @@
             </li>
           </ul>
         </li>
+        {% endif %}
 
+        {% if can_view_module('clients') %}
         <li class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('clients.') else '' }}">
           <a href="#"
             class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('clients.') else '' }}">
@@ -468,7 +485,9 @@
             </li>
           </ul>
         </li>
+        {% endif %}
 
+        {% if can_view_module('lawyers') %}
         <li class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('lawyers.') else '' }}">
           <a href="#"
             class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('lawyers.') else '' }}">
@@ -497,7 +516,9 @@
             </li>
           </ul>
         </li>
+        {% endif %}
 
+        {% if can_view_module('courts') %}
         <li class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('courts.') else '' }}">
           <a href="#"
             class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('courts.') else '' }}">
@@ -526,8 +547,10 @@
             </li>
           </ul>
         </li>
+        {% endif %}
 
 
+        {% if can_view_module('settings') %}
         <li
           class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint == 'process_panel.manage_judicial_phases' or request.endpoint == 'process_panel.manage_document_types' or request.endpoint == 'process_panel.manage_defendants' or request.endpoint == 'process_panel.manage_legal_theses' or request.endpoint.startswith('knowledge_base.categories') or request.endpoint.startswith('knowledge_base.tags') or request.endpoint == 'settings.law_firm_settings') else '' }}">
           <a href="#"
@@ -599,8 +622,9 @@
             {% endif %}
           </ul>
         </li>
+        {% endif %}
 
-        {% if session.get('user_role') == 'admin' %}
+        {% if can_view_module('admin_users') and session.get('user_role') == 'admin' %}
         <li class="nav-header">ADMINISTRAÇÃO</li>
 
         <li class="nav-item">
