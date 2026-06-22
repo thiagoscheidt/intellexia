@@ -35,8 +35,8 @@ def login_post():
     if not user.check_password(password):
         return jsonify({"success": False, "message": "Email ou senha incorretos"})
     
-    user.last_login = datetime.utcnow()
-    user.last_activity = datetime.utcnow()
+    user.last_login = datetime.now()
+    user.last_activity = datetime.now()
     db.session.commit()
     
     session['user_id'] = user.id

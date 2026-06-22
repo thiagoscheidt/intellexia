@@ -149,7 +149,7 @@ def process_pending_appeals(batch_size: int = 10) -> int:
                 appeal.generated_file_path = docx_path
             
             # Atualizar status
-            appeal.processed_at = datetime.utcnow()
+            appeal.processed_at = datetime.now()
             appeal.status = 'completed'
             db.session.commit()
             

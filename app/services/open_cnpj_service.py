@@ -148,7 +148,7 @@ class OpenCNPJService:
         client.city = data.get("municipio") or client.city
         client.state = data.get("uf") or client.state
         client.zip_code = data.get("cep") or client.zip_code
-        client.updated_at = datetime.utcnow()
+        client.updated_at = datetime.now()
 
     def _serialize_company(self, company: Any) -> Dict[str, Any]:
         """Exporta somente dados necessários para rota e UI."""

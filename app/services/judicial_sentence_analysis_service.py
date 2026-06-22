@@ -300,7 +300,7 @@ class JudicialSentenceAnalysisService:
             decision = self._normalize_benefit_decision(benefit_item.get('result', ''))
             if target.first_instance_decision != decision:
                 target.first_instance_decision = decision
-                target.updated_at = datetime.utcnow()
+                target.updated_at = datetime.now()
                 updated += 1
 
         # Fallback: sentença decide por grupo (tipo/tese), não por NB individual
@@ -331,7 +331,7 @@ class JudicialSentenceAnalysisService:
 
             if inferred and benefit.first_instance_decision != inferred:
                 benefit.first_instance_decision = inferred
-                benefit.updated_at = datetime.utcnow()
+                benefit.updated_at = datetime.now()
                 updated += 1
 
         return updated
@@ -459,7 +459,7 @@ class JudicialSentenceAnalysisService:
                     if updated_benefits > 0:
                         print(f"Benefícios atualizados (1ª instância): {updated_benefits}")
 
-                    item.processed_at = datetime.utcnow()
+                    item.processed_at = datetime.now()
                     item.status = 'completed'
                     db.session.commit()
                     processed += 1

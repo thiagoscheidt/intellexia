@@ -274,7 +274,7 @@ def _register_phase_history(
             process_id=process.id,
             phase_id=phase.id,
             occurred_at=occurred_at,
-            recorded_at=datetime.utcnow(),
+            recorded_at=datetime.now(),
             source_event_id=source_event_id,
             judge_name_snapshot=process.judge_name,
             tribunal_snapshot=process.tribunal_name,
@@ -505,7 +505,7 @@ def update_judicial_phase(phase_id):
     try:
         phase.name = name
         phase.key = key
-        phase.updated_at = datetime.utcnow()
+        phase.updated_at = datetime.now()
         db.session.commit()
         flash('Fase judicial atualizada com sucesso.', 'success')
     except Exception as e:
@@ -524,7 +524,7 @@ def toggle_judicial_phase_status(phase_id):
 
     try:
         phase.is_active = not phase.is_active
-        phase.updated_at = datetime.utcnow()
+        phase.updated_at = datetime.now()
         db.session.commit()
         flash('Status da fase atualizado.', 'success')
     except Exception as e:
@@ -568,7 +568,7 @@ def reorder_judicial_phases():
         for order, phase_id in enumerate(unique_ids, start=1):
             phase = phases_by_id[phase_id]
             phase.display_order = order
-            phase.updated_at = datetime.utcnow()
+            phase.updated_at = datetime.now()
 
         db.session.commit()
         return jsonify({'success': True, 'message': 'Ordem atualizada com sucesso'})
@@ -595,7 +595,7 @@ def restore_judicial_phases_default_order():
                 continue
 
             phase.display_order = phase_order
-            phase.updated_at = datetime.utcnow()
+            phase.updated_at = datetime.now()
             assigned_order = max(assigned_order, phase_order)
 
         remaining_phases = [
@@ -606,7 +606,7 @@ def restore_judicial_phases_default_order():
 
         for index, phase in enumerate(remaining_phases, start=assigned_order + 1):
             phase.display_order = index
-            phase.updated_at = datetime.utcnow()
+            phase.updated_at = datetime.now()
 
         db.session.commit()
         flash('Ordem padrão das fases restaurada com sucesso.', 'success')
@@ -702,7 +702,7 @@ def update_document_type(doc_type_id):
         doc_type.name = name
         doc_type.key = key
         doc_type.phase_id = phase_id
-        doc_type.updated_at = datetime.utcnow()
+        doc_type.updated_at = datetime.now()
         db.session.commit()
         flash('Tipo de documento atualizado com sucesso.', 'success')
     except Exception as e:
@@ -724,7 +724,7 @@ def toggle_document_type_status(doc_type_id):
 
     try:
         doc_type.is_active = not doc_type.is_active
-        doc_type.updated_at = datetime.utcnow()
+        doc_type.updated_at = datetime.now()
         db.session.commit()
         flash('Status do tipo de documento atualizado.', 'success')
     except Exception as e:
@@ -813,7 +813,7 @@ def update_defendant(defendant_id):
 
     try:
         defendant.name = name
-        defendant.updated_at = datetime.utcnow()
+        defendant.updated_at = datetime.now()
         db.session.commit()
         flash('Polo passivo atualizado com sucesso.', 'success')
     except Exception as e:
@@ -836,7 +836,7 @@ def toggle_defendant_status(defendant_id):
 
     try:
         defendant.is_active = not defendant.is_active
-        defendant.updated_at = datetime.utcnow()
+        defendant.updated_at = datetime.now()
         db.session.commit()
         flash('Status do polo passivo atualizado.', 'success')
     except Exception as e:
@@ -940,7 +940,7 @@ def update_legal_thesis(thesis_id):
         thesis.name = name
         thesis.key = key
         thesis.description = description or None
-        thesis.updated_at = datetime.utcnow()
+        thesis.updated_at = datetime.now()
         db.session.commit()
         flash('Tese jurídica atualizada com sucesso.', 'success')
     except Exception as e:
@@ -962,7 +962,7 @@ def toggle_legal_thesis_status(thesis_id):
 
     try:
         thesis.is_active = not thesis.is_active
-        thesis.updated_at = datetime.utcnow()
+        thesis.updated_at = datetime.now()
         db.session.commit()
         flash('Status da tese jurídica atualizado.', 'success')
     except Exception as e:
@@ -1471,7 +1471,7 @@ def new_process():
                 ).first()
 
                 if duplicate:
-                    event_date = datetime.utcnow()
+                    event_date = datetime.now()
                     event = JudicialEvent(
                         process_id=new_proc.id,
                         type=document_type.key,
@@ -1547,7 +1547,7 @@ def new_process():
                 db.session.add(kb_entry)
                 db.session.flush()
 
-                event_date = datetime.utcnow()
+                event_date = datetime.now()
                 event = JudicialEvent(
                     process_id=new_proc.id,
                     type=document_type.key,
@@ -1596,7 +1596,7 @@ def new_process():
                 flash('Nenhum arquivo novo foi enviado (todos os arquivos já existem na base).', 'warning')
                 return redirect(url_for('process_panel.new_process'))
 
-            new_proc.updated_at = datetime.utcnow()
+            new_proc.updated_at = datetime.now()
             db.session.commit()
 
             if duplicates_count > 0 or reused_count > 0:
@@ -1954,7 +1954,7 @@ def create_process_attachment(process_id):
         attachment.benefits = selected_benefits
 
         db.session.add(attachment)
-        process.updated_at = datetime.utcnow()
+        process.updated_at = datetime.now()
         db.session.commit()
 
         flash('Anexo adicionado ao processo com sucesso.', 'success')
@@ -2161,7 +2161,7 @@ def new_process_document(process_id):
                     f'Documento {document_type.name} adicionado ao processo.'
                     if not description else description
                 ),
-                event_date=datetime.utcnow(),
+                event_date=datetime.now(),
             )
             db.session.add(event)
             db.session.flush()
@@ -2193,7 +2193,7 @@ def new_process_document(process_id):
                 )
             )
 
-            process.updated_at = datetime.utcnow()
+            process.updated_at = datetime.now()
             db.session.commit()
 
             flash('Documento adicionado ao processo com sucesso.', 'success')
@@ -2250,8 +2250,8 @@ def update_process_benefit_legal_thesis(process_id, benefit_id):
     benefit.legal_thesis_id = theses[0].id if theses else None
 
     try:
-        benefit.updated_at = datetime.utcnow()
-        process.updated_at = datetime.utcnow()
+        benefit.updated_at = datetime.now()
+        process.updated_at = datetime.now()
         db.session.commit()
         flash('Teses jurídicas do benefício atualizadas com sucesso.', 'success')
     except Exception as e:
@@ -2287,7 +2287,7 @@ def create_process_note(process_id):
                 content=content,
             )
         )
-        process.updated_at = datetime.utcnow()
+        process.updated_at = datetime.now()
         db.session.commit()
         flash('Anotação adicionada com sucesso.', 'success')
     except Exception as e:
@@ -2338,7 +2338,7 @@ def update_process_phase_kanban(process_id):
             type='atualizacao_fase_kanban',
             phase=new_phase_key,
             description='Fase atualizada por arrastar e soltar no Kanban.',
-            event_date=datetime.utcnow(),
+            event_date=datetime.now(),
         )
         db.session.add(event)
         db.session.flush()
@@ -2358,7 +2358,7 @@ def update_process_phase_kanban(process_id):
             },
         )
 
-        process.updated_at = datetime.utcnow()
+        process.updated_at = datetime.now()
         db.session.commit()
 
         return jsonify({
@@ -2488,7 +2488,7 @@ def edit(process_id):
                     type='atualizacao_fase_manual',
                     phase=selected_phase_key,
                     description='Fase atualizada manualmente na edição do processo.',
-                    event_date=datetime.utcnow(),
+                    event_date=datetime.now(),
                 )
                 db.session.add(event)
                 db.session.flush()
@@ -2504,7 +2504,7 @@ def edit(process_id):
                         metadata_payload={'origin': 'edit_form'},
                     )
 
-            process.updated_at = datetime.utcnow()
+            process.updated_at = datetime.now()
             db.session.commit()
             flash('Processo atualizado com sucesso!', 'success')
             return redirect(url_for('process_panel.detail', process_id=process.id))
@@ -2585,7 +2585,7 @@ def create_process_phase_history(process_id):
             metadata_payload={'origin': 'manual_form'},
         )
 
-        process.updated_at = datetime.utcnow()
+        process.updated_at = datetime.now()
         db.session.commit()
         flash('Histórico de fase registrado com sucesso.', 'success')
     except Exception as e:
@@ -2658,7 +2658,7 @@ def reprocess_process_document(process_id, doc_id):
         judicial_doc.status = 'pending'
         judicial_doc.error_message = None
         judicial_doc.processed_at = None
-        judicial_doc.updated_at = datetime.utcnow()
+        judicial_doc.updated_at = datetime.now()
         db.session.commit()
         flash('Documento enviado para reprocessamento com sucesso.', 'success')
     except Exception as e:
@@ -3538,7 +3538,7 @@ def update_status(process_id):
     
     try:
         process.status = new_status
-        process.updated_at = datetime.utcnow()
+        process.updated_at = datetime.now()
         db.session.commit()
         return jsonify({'success': True, 'status': new_status})
     except Exception as e:

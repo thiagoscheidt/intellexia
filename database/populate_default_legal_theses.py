@@ -299,7 +299,7 @@ def populate_default_legal_theses():
                         existing.name = item["name"]
                         existing.description = item["description"]
                         existing.is_active = True
-                        existing.updated_at = datetime.utcnow()
+                        existing.updated_at = datetime.now()
                         updated_count += 1
                     else:
                         db.session.add(

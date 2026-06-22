@@ -515,7 +515,7 @@ def _ensure_fap_report_in_knowledge_base(law_firm_id, user_id, filename, file_pa
             duplicate.file_path = file_path
             duplicate.file_size = file_size
             duplicate.file_type = file_type
-            duplicate.updated_at = datetime.utcnow()
+            duplicate.updated_at = datetime.now()
         return duplicate
 
     knowledge_file = KnowledgeBase(
@@ -649,7 +649,7 @@ def _mark_first_instance_deferred_for_vigencia(law_firm_id, user_id, vigencia, n
             'updated_count': 0,
         }
 
-    now = datetime.utcnow()
+    now = datetime.now()
     history_rows = []
     for benefit in eligible_benefits:
         old_status = benefit.first_instance_status
@@ -3544,7 +3544,7 @@ def fap_auto_import_import_contestacao():
             imported.report_id = report.id
             imported.year = int(year)
             imported.original_filename = filename
-            imported.imported_at = datetime.utcnow()
+            imported.imported_at = datetime.now()
         else:
             imported = FapAutoImportedContestacao(
                 law_firm_id=law_firm_id,
@@ -3828,7 +3828,7 @@ def edit_dispute(benefit_id):
         benefit.justification = form.justification.data
         benefit.opinion = form.opinion.data
         benefit.notes = form.notes.data
-        benefit.updated_at = datetime.utcnow()
+        benefit.updated_at = datetime.now()
 
         if old_first_instance_status != new_first_instance_status:
             db.session.add(
@@ -4244,7 +4244,7 @@ def edit_cat(cat_id):
             or None
         )
         cat.notes = request.form.get('notes') or None
-        cat.updated_at = datetime.utcnow()
+        cat.updated_at = datetime.now()
 
         new_first_instance_status = cat.first_instance_status or ''
         if new_first_instance_status != old_first_instance_status:
@@ -4717,7 +4717,7 @@ def edit_payroll_mass(payroll_mass_id):
             or None
         )
         pm.notes = request.form.get('notes') or None
-        pm.updated_at = datetime.utcnow()
+        pm.updated_at = datetime.now()
 
         new_first_instance_status = pm.first_instance_status or ''
         if new_first_instance_status != old_first_instance_status:
@@ -5176,7 +5176,7 @@ def edit_employment_link(employment_link_id):
             or None
         )
         el.notes = request.form.get('notes') or None
-        el.updated_at = datetime.utcnow()
+        el.updated_at = datetime.now()
 
         new_first_instance_status = el.first_instance_status or ''
         if new_first_instance_status != old_first_instance_status:
@@ -5662,7 +5662,7 @@ def edit_turnover_rate(turnover_rate_id):
             or None
         )
         tr.notes = request.form.get('notes') or None
-        tr.updated_at = datetime.utcnow()
+        tr.updated_at = datetime.now()
 
         new_first_instance_status = tr.first_instance_status or ''
         if new_first_instance_status != old_first_instance_status:

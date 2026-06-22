@@ -120,7 +120,7 @@ def client_edit(client_id):
         client.zip_code = form.zip_code.data
         client.has_branches = form.has_branches.data
         client.branches_description = form.branches_description.data
-        client.updated_at = datetime.utcnow()
+        client.updated_at = datetime.now()
         
         try:
             db.session.commit()

@@ -528,7 +528,7 @@ class KnowledgeQueryAgent:
                         is_active=True,
                     ).first()
                     if chat_session:
-                        chat_session.updated_at = datetime.utcnow()
+                        chat_session.updated_at = datetime.now()
 
                 db.session.commit()
 

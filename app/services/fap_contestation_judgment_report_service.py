@@ -273,7 +273,7 @@ class FapContestationJudgmentReportService:
             changed = True
 
         if changed:
-            benefit.updated_at = datetime.utcnow()
+            benefit.updated_at = datetime.now()
 
         return changed
 
@@ -525,7 +525,7 @@ class FapContestationJudgmentReportService:
         client.zip_code = company_data.get('cep') or client.zip_code
         if is_matriz:
             client.has_branches = True
-        client.updated_at = datetime.utcnow()
+        client.updated_at = datetime.now()
 
         return client, company_data, cnpj_formatado
 
@@ -543,7 +543,7 @@ class FapContestationJudgmentReportService:
         if not vigencia_year:
             return None
 
-        vigencia_now = datetime.utcnow()
+        vigencia_now = datetime.now()
         vigencia_insert_stmt = mysql_insert(FapVigenciaCnpj.__table__).values(
             law_firm_id=law_firm_id,
             employer_cnpj=employer_cnpj_digits,
@@ -1368,7 +1368,7 @@ class FapContestationJudgmentReportService:
         )
         if mapped_value:
             mapped_date = self._parse_br_date(mapped_value)
-            current_year = datetime.utcnow().year
+            current_year = datetime.now().year
             # Garante plausibilidade mínima para data de nascimento e evita
             # capturar datas operacionais (ex.: DIB/acidente) em layouts deslocados.
             if mapped_date and mapped_date.year <= current_year - 14:
@@ -1387,7 +1387,7 @@ class FapContestationJudgmentReportService:
         if not dates:
             return None
 
-        current_year = datetime.utcnow().year
+        current_year = datetime.now().year
         plausible_birth_dates = [d for d in dates if d.year <= current_year - 14]
         if plausible_birth_dates:
             return min(plausible_birth_dates)
@@ -2374,9 +2374,9 @@ class FapContestationJudgmentReportService:
                     if decisions_summary:
                         benefit.notes = f'{benefit.notes}\n{decisions_summary}'
 
-                benefit.updated_at = datetime.utcnow()
+                benefit.updated_at = datetime.now()
 
-            history_now = datetime.utcnow()
+            history_now = datetime.now()
             history_insert_stmt = mysql_insert(BenefitFapSourceHistory.__table__).values(
                 law_firm_id=report.law_firm_id,
                 benefit_id=benefit.id,
@@ -2517,11 +2517,11 @@ class FapContestationJudgmentReportService:
                     notes_parts.append(decisions_summary)
                 cat.notes = '\n'.join(notes_parts)
 
-                cat.updated_at = datetime.utcnow()
+                cat.updated_at = datetime.now()
                 imported_count += 1
 
             # Registra histórico de arquivo para rastreabilidade (idempotente em concorrência)
-            cat_history_now = datetime.utcnow()
+            cat_history_now = datetime.now()
             cat_history_insert_stmt = mysql_insert(FapContestationCatSourceHistory.__table__).values(
                 law_firm_id=report.law_firm_id,
                 cat_id=cat.id,
@@ -2696,10 +2696,10 @@ class FapContestationJudgmentReportService:
                     notes_parts.append(decisions_summary)
                 payroll_mass.notes = '\n'.join(notes_parts)
 
-                payroll_mass.updated_at = datetime.utcnow()
+                payroll_mass.updated_at = datetime.now()
                 imported_count += 1
 
-            payroll_history_now = datetime.utcnow()
+            payroll_history_now = datetime.now()
             payroll_history_insert_stmt = mysql_insert(FapContestationPayrollMassSourceHistory.__table__).values(
                 law_firm_id=report.law_firm_id,
                 payroll_mass_id=payroll_mass.id,
@@ -2913,10 +2913,10 @@ class FapContestationJudgmentReportService:
                     notes_parts.append(decisions_summary)
                 employment_link.notes = '\n'.join(notes_parts)
 
-                employment_link.updated_at = datetime.utcnow()
+                employment_link.updated_at = datetime.now()
                 imported_count += 1
 
-            employment_history_now = datetime.utcnow()
+            employment_history_now = datetime.now()
             employment_history_insert_stmt = mysql_insert(FapContestationEmploymentLinkSourceHistory.__table__).values(
                 law_firm_id=report.law_firm_id,
                 employment_link_id=employment_link.id,
@@ -3081,10 +3081,10 @@ class FapContestationJudgmentReportService:
                     notes_parts.append(decisions_summary)
                 turnover_rate.notes = '\n'.join(notes_parts)
 
-                turnover_rate.updated_at = datetime.utcnow()
+                turnover_rate.updated_at = datetime.now()
                 imported_count += 1
 
-            turnover_history_now = datetime.utcnow()
+            turnover_history_now = datetime.now()
             turnover_history_insert_stmt = mysql_insert(FapContestationTurnoverRateSourceHistory.__table__).values(
                 law_firm_id=report.law_firm_id,
                 turnover_rate_id=turnover_rate.id,
@@ -3118,7 +3118,7 @@ class FapContestationJudgmentReportService:
 
         report.status = 'processing'
         report.error_message = None
-        report.updated_at = datetime.utcnow()
+        report.updated_at = datetime.now()
         db.session.commit()
 
         try:
@@ -3160,8 +3160,8 @@ class FapContestationJudgmentReportService:
 
             report.imported_benefits_count = imported_count
             report.status = 'completed'
-            report.processed_at = datetime.utcnow()
-            report.updated_at = datetime.utcnow()
+            report.processed_at = datetime.now()
+            report.updated_at = datetime.now()
             db.session.commit()
 
             print(
@@ -3180,7 +3180,7 @@ class FapContestationJudgmentReportService:
 
             report.error_message = str(exc)
             report.status = 'error'
-            report.updated_at = datetime.utcnow()
+            report.updated_at = datetime.now()
 
             db.session.commit()
             print(f'Erro ao processar relatório #{report_id}: {exc}')

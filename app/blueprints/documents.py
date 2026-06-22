@@ -71,7 +71,7 @@ def case_document_new(case_id):
                             ai_summary = doc_reader.analyze_document(file_id=file_id)
                         
                         document.ai_summary = ai_summary
-                        document.ai_processed_at = datetime.utcnow()
+                        document.ai_processed_at = datetime.now()
                         document.ai_status = 'completed'
                         db.session.commit()
                         
@@ -167,7 +167,7 @@ def case_document_reprocess(case_id, document_id):
         
         # Atualizar documento
         document.ai_summary = ai_summary
-        document.ai_processed_at = datetime.utcnow()
+        document.ai_processed_at = datetime.now()
         document.ai_status = 'completed'
         db.session.commit()
         

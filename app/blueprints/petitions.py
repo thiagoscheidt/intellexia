@@ -173,7 +173,7 @@ def case_petition_generate(case_id):
                 
                 petition.content = petition_content
                 petition.status = 'completed'
-                petition.generated_at = datetime.utcnow()
+                petition.generated_at = datetime.now()
                 
                 if is_fap_case:
                     petition.file_path = output_path

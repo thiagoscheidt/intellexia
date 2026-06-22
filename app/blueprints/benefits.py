@@ -405,7 +405,7 @@ def case_benefit_edit(case_id, benefit_id):
         benefit.fap_reason_id = int(form.fap_reason_id.data) if form.fap_reason_id.data else None
         benefit.fap_vigencia_years = ','.join(form.fap_vigencia_years.data) if form.fap_vigencia_years.data else None
         benefit.notes = form.notes.data
-        benefit.updated_at = datetime.utcnow()
+        benefit.updated_at = datetime.now()
         
         try:
             db.session.commit()

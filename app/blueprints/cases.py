@@ -545,7 +545,7 @@ def case_edit(case_id):
         case.value_cause = form.value_cause.data
         case.status = form.status.data
         case.filing_date = form.filing_date.data
-        case.updated_at = datetime.utcnow()
+        case.updated_at = datetime.now()
         
         try:
             db.session.commit()

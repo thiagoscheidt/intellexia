@@ -661,7 +661,7 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_file_p
             # Armazenar resultado
             execution.result_json = json.dumps(result_payload, ensure_ascii=False, indent=2)
             execution.status = 'completed'
-            execution.completed_at = datetime.utcnow()
+            execution.completed_at = datetime.now()
             
             # Se o resultado tem tokens, armazenar
             if hasattr(result, 'tokens_used'):
@@ -691,7 +691,7 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_file_p
             if execution:
                 execution.status = 'failed'
                 execution.error_message = str(e)
-                execution.completed_at = datetime.utcnow()
+                execution.completed_at = datetime.now()
                 _sync_petition_after_revision(execution)
                 db.session.commit()
                 
@@ -790,7 +790,7 @@ def _sync_petition_after_revision(execution: FapReviewExecution) -> None:
     if petition.workflow_status not in {'filed', 'archived'}:
         petition.workflow_status = _derive_petition_workflow_status(execution.status)
 
-    petition.updated_at = datetime.utcnow()
+    petition.updated_at = datetime.now()
 
 
 def _build_petition_status_badge(workflow_status: str) -> dict[str, str]:
@@ -918,7 +918,7 @@ def _propagate_petition_identifier_change(
             continue
 
         ignored_finding.law_firm_document_identifier = new_identifier
-        ignored_finding.updated_at = datetime.utcnow()
+        ignored_finding.updated_at = datetime.now()
 
 
 def _build_lawyer_statistics(law_firm_id: int) -> dict:
@@ -958,7 +958,7 @@ def _build_lawyer_statistics(law_firm_id: int) -> dict:
             stats['petitions'].add(execution.petition_id)
             petition_user_groups[(execution.user_id, execution.petition_id)].append(execution)
 
-        month_key = (execution.created_at or execution.updated_at or datetime.utcnow()).strftime('%Y-%m')
+        month_key = (execution.created_at or execution.updated_at or datetime.now()).strftime('%Y-%m')
         stats['monthly'][month_key]['revisions'] += 1
 
         payload = _load_execution_result_payload(execution)
@@ -1015,10 +1015,10 @@ def _build_lawyer_statistics(law_firm_id: int) -> dict:
             continue
 
         seen_fingerprints: set[str] = set()
-        for execution in sorted(grouped_revisions, key=lambda item: ((item.revision_number or 0), item.created_at or datetime.utcnow(), item.id)):
+        for execution in sorted(grouped_revisions, key=lambda item: ((item.revision_number or 0), item.created_at or datetime.now(), item.id)):
             payload = _load_execution_result_payload(execution)
             findings = payload.get('findings') or []
-            month_key = (execution.created_at or execution.updated_at or datetime.utcnow()).strftime('%Y-%m')
+            month_key = (execution.created_at or execution.updated_at or datetime.now()).strftime('%Y-%m')
             petition_key = execution.petition_id or execution.id
             petition_history = lawyer_stats[user_id]['petition_history'].get(petition_key)
 
@@ -1070,7 +1070,7 @@ def _build_lawyer_statistics(law_firm_id: int) -> dict:
             })
 
         petition_history_rows.sort(
-            key=lambda item: (item['revision_count'], item['latest_at'] or datetime.utcnow()),
+            key=lambda item: (item['revision_count'], item['latest_at'] or datetime.now()),
             reverse=True,
         )
 
@@ -1338,7 +1338,7 @@ def revision():
             petition.latest_revision_id = execution.id
             petition.revision_count = max(petition.revision_count or 0, next_revision_number)
             petition.workflow_status = 'in_review'
-            petition.updated_at = datetime.utcnow()
+            petition.updated_at = datetime.now()
             db.session.commit()
 
             if petition_created:
@@ -1582,7 +1582,7 @@ def petition_update_details(petition_id: int):
     try:
         petition.title = new_title
         petition.office_document_identifier = new_identifier
-        petition.updated_at = datetime.utcnow()
+        petition.updated_at = datetime.now()
 
         if new_identifier != old_identifier:
             _propagate_petition_identifier_change(
@@ -1639,7 +1639,7 @@ def petition_update_status(petition_id: int):
 
     try:
         petition.workflow_status = new_status
-        petition.updated_at = datetime.utcnow()
+        petition.updated_at = datetime.now()
         db.session.commit()
     except Exception as error:
         db.session.rollback()
@@ -2043,8 +2043,8 @@ def training():
                 )
 
                 execution.status = 'completed'
-                execution.completed_at = datetime.utcnow()
-                execution.updated_at = datetime.utcnow()
+                execution.completed_at = datetime.now()
+                execution.updated_at = datetime.now()
                 execution.result_json = json.dumps(
                     {
                         'stage': 'applied',
@@ -2090,7 +2090,7 @@ def training():
 
                 execution.status = 'failed'
                 execution.error_message = str(e)
-                execution.completed_at = datetime.utcnow()
+                execution.completed_at = datetime.now()
                 db.session.commit()
 
                 flash(f'Erro ao aplicar treinamento: {str(e)}', 'error')

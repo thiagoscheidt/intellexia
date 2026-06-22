@@ -105,7 +105,7 @@ def tools_document_summary_upload():
                     
                     # Salvar resultado
                     document.summary_text = ai_summary
-                    document.processed_at = datetime.utcnow()
+                    document.processed_at = datetime.now()
                     document.status = 'completed'
                     db.session.commit()
                     
@@ -192,7 +192,7 @@ def tools_document_summary_reprocess(document_id):
         
         # Atualizar documento
         document.summary_text = ai_summary
-        document.processed_at = datetime.utcnow()
+        document.processed_at = datetime.now()
         document.status = 'completed'
         db.session.commit()
         

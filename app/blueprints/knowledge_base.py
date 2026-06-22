@@ -197,7 +197,7 @@ def link_to_process(file_id):
 
     try:
         file.lawsuit_number = str(process.process_number).strip()
-        file.updated_at = datetime.utcnow()
+        file.updated_at = datetime.now()
 
         event = JudicialEvent(
             process_id=process.id,
@@ -207,7 +207,7 @@ def link_to_process(file_id):
                 f'Arquivo da KnowledgeBase vinculado manualmente '
                 f'({file.original_filename} - {document_type.name}).'
             ),
-            event_date=datetime.utcnow(),
+            event_date=datetime.now(),
         )
         db.session.add(event)
         db.session.flush()
@@ -225,7 +225,7 @@ def link_to_process(file_id):
             )
         )
 
-        process.updated_at = datetime.utcnow()
+        process.updated_at = datetime.now()
         db.session.commit()
         return jsonify({'success': True, 'message': 'Arquivo vinculado ao processo com sucesso.'})
     except Exception as e:
@@ -872,7 +872,7 @@ def delete(file_id):
         ).delete_document_by_file_id(file.id)
 
         file.is_active = False
-        file.updated_at = datetime.utcnow()
+        file.updated_at = datetime.now()
         db.session.commit()
         flash('Arquivo removido da base de conhecimento.', 'success')
         return jsonify({'success': True})
@@ -952,7 +952,7 @@ def generate_summary(file_id):
     print(f"Resumo gerado para o arquivo ID {file_id}: {summary_payload}")
     if existing_summary:
         existing_summary.payload = summary_payload
-        existing_summary.updated_at = datetime.utcnow()
+        existing_summary.updated_at = datetime.now()
     else:
         summary = KnowledgeSummary(
             knowledge_base_id=file_id,

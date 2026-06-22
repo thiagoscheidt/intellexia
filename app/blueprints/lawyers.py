@@ -67,7 +67,7 @@ def lawyer_edit(lawyer_id):
         lawyer.email = form.email.data
         lawyer.phone = form.phone.data
         lawyer.is_default_for_publications = form.is_default_for_publications.data
-        lawyer.updated_at = datetime.utcnow()
+        lawyer.updated_at = datetime.now()
         
         try:
             db.session.commit()

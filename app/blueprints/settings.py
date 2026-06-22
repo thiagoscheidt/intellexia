@@ -68,7 +68,7 @@ def law_firm_settings_post():
         law_firm.email = request.form.get('email', law_firm.email)
         law_firm.website = request.form.get('website', law_firm.website)
         
-        law_firm.updated_at = datetime.utcnow()
+        law_firm.updated_at = datetime.now()
         
         db.session.commit()
         

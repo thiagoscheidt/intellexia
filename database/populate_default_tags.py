@@ -68,8 +68,8 @@ def populate_default_tags():
                         color=tag_data["color"],
                         display_order=tag_data["order"],
                         is_active=True,
-                        created_at=datetime.utcnow(),
-                        updated_at=datetime.utcnow()
+                        created_at=datetime.now(),
+                        updated_at=datetime.now()
                     )
                     db.session.add(tag)
                     tags_created += 1

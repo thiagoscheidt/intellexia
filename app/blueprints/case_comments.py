@@ -187,7 +187,7 @@ def update_comment(case_id, comment_id):
     if 'mentions' in data:
         comment.mentions = data.get('mentions', [])
     
-    comment.updated_at = datetime.utcnow()
+    comment.updated_at = datetime.now()
     db.session.commit()
     
     return jsonify({'updated': True})
@@ -250,7 +250,7 @@ def resolve_comment(case_id, comment_id):
     else:
         comment.is_resolved = True
         comment.resolved_by_id = session.get('user_id')
-        comment.resolved_at = datetime.utcnow()
+        comment.resolved_at = datetime.now()
     
     db.session.commit()
     

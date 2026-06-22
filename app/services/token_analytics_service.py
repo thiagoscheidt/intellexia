@@ -30,7 +30,7 @@ class TokenAnalyticsService:
         action_name: str | None = None,
         model_name: str | None = None,
     ) -> dict:
-        end_at = datetime.utcnow()
+        end_at = datetime.now()
         start_at = end_at - timedelta(days=days)
 
         query = AgentTokenUsage.query.filter(

@@ -130,7 +130,7 @@ def edit(reason_id):
         fap_reason.display_name = display_name
         fap_reason.description = description
         fap_reason.template_id = template_id
-        fap_reason.updated_at = datetime.utcnow()
+        fap_reason.updated_at = datetime.now()
         
         try:
             db.session.commit()
@@ -166,7 +166,7 @@ def toggle(reason_id):
     ).first_or_404()
     
     fap_reason.is_active = not fap_reason.is_active
-    fap_reason.updated_at = datetime.utcnow()
+    fap_reason.updated_at = datetime.now()
     
     try:
         db.session.commit()

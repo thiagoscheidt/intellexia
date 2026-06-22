@@ -144,7 +144,7 @@ class KnowledgeBaseProcessingService:
         if not old_number or not new_number or old_number == new_number:
             return
 
-        now = datetime.utcnow()
+        now = datetime.now()
         updated_kb_ids: set[int] = set()
 
         kb_updated = 0
@@ -395,7 +395,7 @@ class KnowledgeBaseProcessingService:
                     extraction_payload=extraction_payload,
                     force_update=False,
                 )
-                process.updated_at = datetime.utcnow()
+                process.updated_at = datetime.now()
             return
 
         user_provided_number = str(item.lawsuit_number or "").strip()
@@ -488,10 +488,10 @@ class KnowledgeBaseProcessingService:
             extraction_payload=extraction_payload,
         )
         if not linked:
-            process.updated_at = datetime.utcnow()
+            process.updated_at = datetime.now()
             return
 
-        process.updated_at = datetime.utcnow()
+        process.updated_at = datetime.now()
 
     def _resolve_target_process(self, item: KnowledgeBase, extraction_payload: dict) -> JudicialProcess | None:
         existing_link = self.judicial_document_service.get_link_by_knowledge_base_id(item.id)
@@ -582,7 +582,7 @@ class KnowledgeBaseProcessingService:
                     existing_benefit.legal_thesis_id = resolved_legal_thesis_id
                 elif resolved_legal_thesis_id is None and not existing_benefit.legal_theses:
                     existing_benefit.legal_thesis_id = None
-                existing_benefit.updated_at = datetime.utcnow()
+                existing_benefit.updated_at = datetime.now()
                 upserted += 1
                 continue
 
@@ -673,7 +673,7 @@ class KnowledgeBaseProcessingService:
             ).first()
             if benefit:
                 benefit.request_type = request_type
-                benefit.updated_at = datetime.utcnow()
+                benefit.updated_at = datetime.now()
                 updated += 1
 
         return updated
@@ -697,7 +697,7 @@ class KnowledgeBaseProcessingService:
                         f"ID {linked_judicial_document.id}. Processamento mantido apenas no fluxo judicial."
                     )
                     item.processing_status = "completed"
-                    item.processed_at = datetime.utcnow()
+                    item.processed_at = datetime.now()
                     item.processing_error_message = None
                     db.session.commit()
                     return True
@@ -802,7 +802,7 @@ class KnowledgeBaseProcessingService:
                                             f"Atualizando número temporário {linked_process.process_number} -> {real_number}"
                                         )
                                         linked_process.process_number = real_number
-                                        linked_process.updated_at = datetime.utcnow()
+                                        linked_process.updated_at = datetime.now()
                                         item.lawsuit_number = real_number
                                         self._propagate_process_number_update(
                                             law_firm_id=linked_process.law_firm_id,
@@ -826,7 +826,7 @@ class KnowledgeBaseProcessingService:
                                         )
 
                                         duplicate.process_number = duplicate_new_temp
-                                        duplicate.updated_at = datetime.utcnow()
+                                        duplicate.updated_at = datetime.now()
                                         self._propagate_process_number_update(
                                             law_firm_id=linked_process.law_firm_id,
                                             process_id=duplicate.id,
@@ -836,7 +836,7 @@ class KnowledgeBaseProcessingService:
                                         )
 
                                         linked_process.process_number = real_number
-                                        linked_process.updated_at = datetime.utcnow()
+                                        linked_process.updated_at = datetime.now()
                                         item.lawsuit_number = real_number
                                         self._propagate_process_number_update(
                                             law_firm_id=linked_process.law_firm_id,
@@ -922,7 +922,7 @@ class KnowledgeBaseProcessingService:
                         merged_payload["pedidos_excerpt"] = pedidos_excerpt
 
                     existing_summary.payload = merged_payload
-                    existing_summary.updated_at = datetime.utcnow()
+                    existing_summary.updated_at = datetime.now()
                 else:
                     db.session.add(
                         KnowledgeSummary(
@@ -932,16 +932,16 @@ class KnowledgeBaseProcessingService:
                     )
 
                 item.processing_status = "completed"
-                item.processed_at = datetime.utcnow()
+                item.processed_at = datetime.now()
                 item.processing_error_message = None
                 db.session.commit()
 
                 linked_document = self.judicial_document_service.get_link_by_knowledge_base_id(item.id)
                 if linked_document:
                     linked_document.status = "completed"
-                    linked_document.processed_at = datetime.utcnow()
+                    linked_document.processed_at = datetime.now()
                     linked_document.error_message = None
-                    linked_document.updated_at = datetime.utcnow()
+                    linked_document.updated_at = datetime.now()
                     db.session.commit()
 
                 print(f"Processado com sucesso: {item.id} - {item.original_filename}")
@@ -960,7 +960,7 @@ class KnowledgeBaseProcessingService:
                         if linked_document:
                             linked_document.status = "error"
                             linked_document.error_message = str(error)
-                            linked_document.updated_at = datetime.utcnow()
+                            linked_document.updated_at = datetime.now()
                             db.session.commit()
                     except Exception:
                         db.session.rollback()

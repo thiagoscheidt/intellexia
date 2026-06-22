@@ -70,7 +70,7 @@ def court_edit(court_id):
         court.vara_name = form.vara_name.data
         court.city = form.city.data
         court.state = form.state.data
-        court.updated_at = datetime.utcnow()
+        court.updated_at = datetime.now()
         
         try:
             db.session.commit()

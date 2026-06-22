@@ -91,8 +91,8 @@ class JudicialDocumentService:
         document.status = status
         document.error_message = error_message
         if status == 'completed':
-            document.processed_at = datetime.utcnow()
-        document.updated_at = datetime.utcnow()
+            document.processed_at = datetime.now()
+        document.updated_at = datetime.now()
 
     @staticmethod
     def _normalize_process_number(value: str | None) -> str:
@@ -308,7 +308,7 @@ class JudicialDocumentService:
             return
 
         client.cnpj = normalized_cnpj
-        client.updated_at = datetime.utcnow()
+        client.updated_at = datetime.now()
 
     def _extract_primary_process_number(self, value: str | None) -> str:
         if not value:
@@ -357,7 +357,7 @@ class JudicialDocumentService:
         if not old_number or not new_number or old_number == new_number:
             return
 
-        now = datetime.utcnow()
+        now = datetime.now()
         sentence_updated = 0
         sentence_items = JudicialSentenceAnalysis.query.filter_by(
             law_firm_id=law_firm_id,
@@ -484,7 +484,7 @@ class JudicialDocumentService:
                 current_cnpj = self._normalize_cnpj(client.cnpj)
                 if (not current_cnpj or self._is_placeholder_cnpj(current_cnpj)) and current_cnpj != normalized_cnpj:
                     client.cnpj = normalized_cnpj
-                    client.updated_at = datetime.utcnow()
+                    client.updated_at = datetime.now()
             return client
 
         client = Client(
@@ -664,7 +664,7 @@ class JudicialDocumentService:
                     existing_benefit.legal_thesis_id = merged_theses[0].id if merged_theses else resolved_legal_thesis_id
                 elif resolved_legal_thesis_id is None and not existing_benefit.legal_theses:
                     existing_benefit.legal_thesis_id = None
-                existing_benefit.updated_at = datetime.utcnow()
+                existing_benefit.updated_at = datetime.now()
                 upserted += 1
                 continue
 
@@ -714,7 +714,7 @@ class JudicialDocumentService:
                 existing.fap_vigencia_year = (
                     str(item.get('fap_vigencia_year', '') or '').strip() or existing.fap_vigencia_year
                 )
-                existing.updated_at = datetime.utcnow()
+                existing.updated_at = datetime.now()
             else:
                 db.session.add(
                     JudicialProcessCitedBenefit(
@@ -793,7 +793,7 @@ class JudicialDocumentService:
                             )
                             .values(source_section=source_section)
                         )
-                benefit.updated_at = datetime.utcnow()
+                benefit.updated_at = datetime.now()
                 updated += 1
 
         return updated
@@ -1053,7 +1053,7 @@ class JudicialDocumentService:
                 },
                 ensure_ascii=False,
             )
-            thesis_row.updated_at = datetime.utcnow()
+            thesis_row.updated_at = datetime.now()
             thesis_rows_updated += 1
 
         updated = 0
@@ -1128,7 +1128,7 @@ class JudicialDocumentService:
                 },
                 ensure_ascii=False,
             )
-            benefit.updated_at = datetime.utcnow()
+            benefit.updated_at = datetime.now()
             updated += 1
 
         print(
@@ -1195,7 +1195,7 @@ class JudicialDocumentService:
                     old_temp_number = str(process.process_number or '').strip()
                     print(f'Atualizando número temporário {process.process_number} -> {real_number}')
                     process.process_number = real_number
-                    process.updated_at = datetime.utcnow()
+                    process.updated_at = datetime.now()
                     self._propagate_process_number_update(
                         law_firm_id=process.law_firm_id,
                         old_number=old_temp_number,
@@ -1216,7 +1216,7 @@ class JudicialDocumentService:
                     )
 
                     duplicate.process_number = duplicate_new_temp
-                    duplicate.updated_at = datetime.utcnow()
+                    duplicate.updated_at = datetime.now()
                     self._propagate_process_number_update(
                         law_firm_id=process.law_firm_id,
                         old_number=duplicate_old_number,
@@ -1224,7 +1224,7 @@ class JudicialDocumentService:
                     )
 
                     process.process_number = real_number
-                    process.updated_at = datetime.utcnow()
+                    process.updated_at = datetime.now()
                     self._propagate_process_number_update(
                         law_firm_id=process.law_firm_id,
                         old_number=old_temp_number,
@@ -1272,7 +1272,7 @@ class JudicialDocumentService:
                 file_path=file_path,
             )
 
-        process.updated_at = datetime.utcnow()
+        process.updated_at = datetime.now()
 
         return {
             'sections_overview': sections_overview if isinstance(sections_overview, list) else [],
@@ -1346,8 +1346,8 @@ class JudicialDocumentService:
                 existing.summary_payload = summary_result
                 existing.status = 'completed'
                 existing.error_message = None
-                existing.processed_at = datetime.utcnow()
-                existing.updated_at = datetime.utcnow()
+                existing.processed_at = datetime.now()
+                existing.updated_at = datetime.now()
             else:
                 db.session.add(
                     JudicialDocumentSummary(
@@ -1356,7 +1356,7 @@ class JudicialDocumentService:
                         summary_text=summary_text,
                         summary_payload=summary_result,
                         status='completed',
-                        processed_at=datetime.utcnow(),
+                        processed_at=datetime.now(),
                     )
                 )
             db.session.commit()
@@ -1370,7 +1370,7 @@ class JudicialDocumentService:
                 if existing:
                     existing.status = 'error'
                     existing.error_message = str(error)
-                    existing.updated_at = datetime.utcnow()
+                    existing.updated_at = datetime.now()
                     db.session.commit()
             except Exception:
                 db.session.rollback()

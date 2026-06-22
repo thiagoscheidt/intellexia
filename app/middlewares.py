@@ -38,7 +38,7 @@ def init_app_middlewares(app):
                     return jsonify({"error": "Unauthorized"}), 401
                 return redirect(url_for('auth.login'))
 
-            user.last_activity = datetime.utcnow()
+            user.last_activity = datetime.now()
             db.session.commit()
 
             session['user_role'] = user.role
