@@ -409,8 +409,7 @@ def persist_contestacoes_for_company(
                 created += 1
 
         db.session.commit()
-        if created or updated:
-            _log(f"      {company.cnpj} — ano {year_int}: {created} criada(s), {updated} atualizada(s)")
+        _log(f"    Ano {year_int}: {len(items)} contestação(ões) — {created} criada(s), {updated} atualizada(s)")
         total_created += created
         total_updated += updated
 
@@ -671,9 +670,8 @@ def main() -> None:
                     fetched_by_company[cid] = res
                     if res['expired']:
                         expired_count += 1
-                    qtd = sum(len(v) for v in res['years'].values())
-                    if done % 25 == 0 or qtd:
-                        _log(f"  [{done}/{total}] buscadas — última: {qtd} contestação(ões)")
+                    if done % 25 == 0 or done == total:
+                        _log(f"  ... {done}/{total} empresas buscadas")
 
             _log(f"  ✓ Busca concluída ({len(fetched_by_company)}/{total} empresas)")
 
@@ -693,9 +691,19 @@ def main() -> None:
             total_updated = 0
             for i, company in enumerate(companies, 1):
                 res = fetched_by_company.get(company.id)
-                if not res or not res['years']:
-                    continue
                 nome = (company.nome or company.cnpj or '').strip()
+                _log(f"\n  [{i}/{total}] {nome} (CNPJ: {company.cnpj})")
+
+                if not res:
+                    _log("      ! não buscada (falha na fase de busca)")
+                    continue
+                for (yr, msg) in res.get('errors', []):
+                    _log(f"      ! ano {yr}: {msg}")
+                if res.get('expired'):
+                    _log(f"      ! acesso negado (sem procuração) nos anos: {res['expired']}")
+                if not res['years']:
+                    continue
+
                 try:
                     stats = persist_contestacoes_for_company(
                         db, FapWebContestacao, FapWebContestacaoChangeHistory,
