@@ -651,6 +651,9 @@ vigência, empresa e instância.', icon='bi bi-table') %}
           <button type="button" id="btnRecentUpdates" class="btn btn-sm btn-outline-primary">
             <i class="bi bi-clock-history me-1"></i> Últimas atualizações
           </button>
+          <button type="button" id="btnLatestDou" class="btn btn-sm btn-outline-primary">
+            <i class="bi bi-newspaper me-1"></i> Últimas publicações D.O.U.
+          </button>
           {% if f_year or f_cnpj_raiz or f_cnpj or f_instancia or f_situacao or f_protocolo or f_prazo2 %}
           <span class="filter-active-badge">
             <i class="bi bi-funnel-fill"></i> Filtros ativos
@@ -1033,6 +1036,31 @@ vigência, empresa e instância.', icon='bi bi-table') %}
     </div>
   </div>
 </div>
+
+<div class="modal fade" id="latestDouModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="latestDouModalTitle">
+          <i class="bi bi-newspaper me-1"></i> Últimas publicações no D.O.U.
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+          <small class="text-muted">Contestações com resultado publicado no Diário Oficial da União, da mais recente para a mais antiga.</small>
+          <button type="button" id="refreshLatestDouBtn" class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-repeat me-1"></i> Atualizar
+          </button>
+        </div>
+        <small class="text-muted d-block mb-2" id="latestDouMeta"></small>
+        <div id="latestDouBody">
+          <div class="text-muted">Carregando...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -1224,9 +1252,12 @@ vigência, empresa e instância.', icon='bi bi-table') %}
     var historyUrlTemplate = '{{ url_for("fap_panel.contestacao_history", rec_id=0) }}';
     var detailsUrlTemplate = '{{ url_for("fap_panel.contestacao_details", rec_id=0) }}';
     var recentUpdatesUrl = '{{ url_for("fap_panel.contestacoes_recent_updates") }}';
+    var latestDouUrl = '{{ url_for("fap_panel.contestacoes_latest_dou") }}';
+    var contestacoesBaseUrl = '{{ url_for("fap_panel.contestacoes_page") }}';
     var btnImportAll = document.getElementById('btnImportAll');
     var btnCancelImport = document.getElementById('btnCancelImport');
     var btnRecentUpdates = document.getElementById('btnRecentUpdates');
+    var btnLatestDou = document.getElementById('btnLatestDou');
     var _importCancelled = false;
 
     function getHistoryUrl(recId) {
@@ -1490,6 +1521,92 @@ vigência, empresa e instância.', icon='bi bi-table') %}
       loadRecentUpdates();
     }
 
+    /* ── Últimas publicações no D.O.U. ─────────────────────────────────── */
+    function renderLatestDou(items) {
+      var body = document.getElementById('latestDouBody');
+      if (!body) return;
+
+      if (!items || items.length === 0) {
+        body.innerHTML = '<div class="text-muted">Nenhuma contestação com publicação no D.O.U. registrada ainda.</div>';
+        return;
+      }
+
+      body.innerHTML = ''
+        + '<div class="table-responsive">'
+        + '<table class="table table-hover table-sm align-middle mb-0">'
+        + '<thead><tr class="text-muted">'
+        + '<th>Publicação D.O.U.</th><th>Empresa / CNPJ</th><th>Protocolo</th>'
+        + '<th>Instância</th><th>Situação</th><th class="text-center">Vigência</th><th class="text-end">Abrir</th>'
+        + '</tr></thead><tbody>'
+        + items.map(function (item) {
+          var openUrl = contestacoesBaseUrl
+            + '?ano_vigencia=' + encodeURIComponent(item.ano_vigencia || '')
+            + '&cnpj_raiz=' + encodeURIComponent(item.cnpj_raiz || '');
+          return ''
+            + '<tr>'
+            + '  <td style="white-space:nowrap;"><span class="badge text-bg-primary">'
+            +      '<i class="bi bi-newspaper me-1"></i>' + escapeHtml(item.data_dou || '') + '</span></td>'
+            + '  <td>'
+            +      (item.company_name ? '<div class="fw-semibold">' + escapeHtml(item.company_name) + '</div>' : '')
+            +      '<small class="text-muted">' + escapeHtml(item.cnpj_formatted || item.cnpj || '') + '</small>'
+            +    '</td>'
+            + '  <td><span class="font-monospace small">' + escapeHtml(item.protocolo || '—') + '</span></td>'
+            + '  <td><small>' + escapeHtml(item.instancia_descricao || '—') + '</small></td>'
+            + '  <td><small>' + escapeHtml(item.situacao_descricao || '—') + '</small></td>'
+            + '  <td class="text-center">' + escapeHtml(item.ano_vigencia || '') + '</td>'
+            + '  <td class="text-end"><a href="' + openUrl + '" class="btn btn-sm btn-outline-secondary" '
+            +      'title="Abrir no painel"><i class="bi bi-box-arrow-up-right"></i></a></td>'
+            + '</tr>';
+        }).join('')
+        + '</tbody></table></div>';
+    }
+
+    async function loadLatestDou() {
+      var body = document.getElementById('latestDouBody');
+      var meta = document.getElementById('latestDouMeta');
+
+      if (body) body.innerHTML = '<div class="text-muted">Carregando...</div>';
+      if (meta) meta.textContent = '';
+
+      try {
+        var response = await fetch(latestDouUrl, {
+          method: 'GET',
+          credentials: 'same-origin',
+          headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        });
+        var payload = null;
+        try { payload = await response.json(); } catch (_) { }
+
+        if (!response.ok || !payload || !payload.ok) {
+          if (body) {
+            body.innerHTML = '<div class="alert alert-danger mb-0">'
+              + escapeHtml((payload && payload.message) || 'Falha ao carregar as publicações no D.O.U.')
+              + '</div>';
+          }
+          return;
+        }
+
+        renderLatestDou(payload.items || []);
+        if (meta) {
+          meta.textContent = (payload.total || 0) + ' publicação(ões) exibida(s)';
+        }
+      } catch (err) {
+        if (body) {
+          body.innerHTML = '<div class="alert alert-danger mb-0">Erro de rede: ' + escapeHtml(err) + '</div>';
+        }
+      }
+    }
+
+    function openLatestDouModal() {
+      var modalEl = document.getElementById('latestDouModal');
+      if (!modalEl) return;
+      var modal = (typeof bootstrap !== 'undefined' && bootstrap.Modal)
+        ? new bootstrap.Modal(modalEl)
+        : null;
+      if (modal) modal.show();
+      loadLatestDou();
+    }
+
     /* ── Importação individual (clique no botão da célula) ─────────────── */
     document.addEventListener('click', async function (e) {
       var recentHistoryBtn = e.target.closest('.recent-open-history-btn');
@@ -1570,6 +1687,19 @@ vigência, empresa e instância.', icon='bi bi-table') %}
     if (refreshRecentUpdatesBtn) {
       refreshRecentUpdatesBtn.addEventListener('click', function () {
         loadRecentUpdates();
+      });
+    }
+
+    if (btnLatestDou) {
+      btnLatestDou.addEventListener('click', function () {
+        openLatestDouModal();
+      });
+    }
+
+    var refreshLatestDouBtn = document.getElementById('refreshLatestDouBtn');
+    if (refreshLatestDouBtn) {
+      refreshLatestDouBtn.addEventListener('click', function () {
+        loadLatestDou();
       });
     }
 

@@ -863,6 +863,7 @@ def contestacoes_recent_updates():
         'situacao_descricao': 'Situação',
         'protocolo': 'Protocolo',
         'data_transmissao': 'Data de transmissão',
+        'data_dou_date': 'Publicação D.O.U.',
     }
 
     def _fmt_cnpj(value):
@@ -951,6 +952,62 @@ def contestacoes_recent_updates():
     return jsonify({
         'ok': True,
         'days': days,
+        'limit': limit,
+        'items': items,
+        'total': len(items),
+    })
+
+
+@fap_panel_bp.route('/contestacoes/latest-dou', methods=['GET'])
+@require_law_firm
+def contestacoes_latest_dou():
+    """AJAX — Últimas contestações publicadas no D.O.U. (ordenadas por dataDOU)."""
+    law_firm_id = get_current_law_firm_id()
+
+    try:
+        limit = int(request.args.get('limit', 20) or 20)
+    except (TypeError, ValueError):
+        limit = 20
+    limit = max(1, min(limit, 100))
+
+    def _fmt_cnpj(value):
+        digits = ''.join(ch for ch in str(value or '') if ch.isdigit())
+        if len(digits) != 14:
+            return value or ''
+        return f'{digits[:2]}.{digits[2:5]}.{digits[5:8]}/{digits[8:12]}-{digits[12:]}'
+
+    rows = (
+        FapWebContestacao.query
+        .filter(
+            FapWebContestacao.law_firm_id == law_firm_id,
+            FapWebContestacao.data_dou_date.isnot(None),
+        )
+        .order_by(
+            FapWebContestacao.data_dou_date.desc(),
+            FapWebContestacao.id.desc(),
+        )
+        .limit(limit)
+        .all()
+    )
+
+    items = []
+    for rec in rows:
+        items.append({
+            'rec_id': rec.id,
+            'contestacao_id': rec.contestacao_id,
+            'cnpj': rec.cnpj or '',
+            'cnpj_formatted': _fmt_cnpj(rec.cnpj),
+            'cnpj_raiz': rec.cnpj_raiz or '',
+            'company_name': ((rec.fap_company.nome if rec.fap_company else '') or '').strip(),
+            'ano_vigencia': rec.ano_vigencia,
+            'protocolo': rec.protocolo or '',
+            'instancia_descricao': rec.instancia_descricao or '',
+            'situacao_descricao': rec.situacao_descricao or '',
+            'data_dou': rec.data_dou_date.strftime('%d/%m/%Y') if rec.data_dou_date else '',
+        })
+
+    return jsonify({
+        'ok': True,
         'limit': limit,
         'items': items,
         'total': len(items),
