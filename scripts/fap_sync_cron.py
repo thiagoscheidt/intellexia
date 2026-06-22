@@ -8,7 +8,8 @@ Sequência de execução:
   3. Sincroniza procurações (upsert FapWebProcuracao)
   4. Contestações — Fase 1: busca em paralelo (várias empresas ao mesmo tempo)
                    Fase 2: grava no banco sequencialmente (upsert FapWebContestacao)
-  5. Para cada empresa: baixa os PDFs das contestações ainda sem arquivo local
+  5. Download — fila única global: baixa em paralelo todos os PDFs sem arquivo local
+                (pula os que já existem em disco)
 
 Variáveis de ambiente (.env):
   FAP_AUTH_JSON        — JSON de autenticação (obrigatório)
@@ -20,7 +21,7 @@ Variáveis de ambiente (.env):
   FAP_SYNC_START_YEAR  — Ano inicial do intervalo padrão (padrão: 2010 → busca de 2010 ao ano atual)
   FAP_SYNC_FETCH_WORKERS    — Nº de buscas de contestações em paralelo (padrão: 8, máx: 20)
   FAP_SYNC_DOWNLOAD    — '1' (padrão) baixa os PDFs após a sincronização; '0' desativa
-  FAP_SYNC_DOWNLOAD_WORKERS — Nº de downloads em paralelo por empresa (padrão: 5, máx: 30)
+  FAP_SYNC_DOWNLOAD_WORKERS — Nº de downloads em paralelo (fila global) (padrão: 8, máx: 30)
 
 Execução manual:
   uv run python scripts/fap_sync_cron.py
@@ -87,8 +88,8 @@ def _download_workers() -> int:
         try:
             return max(1, min(int(raw), 30))
         except ValueError:
-            _log(f"AVISO: FAP_SYNC_DOWNLOAD_WORKERS inválido ('{raw}'). Usando padrão (5).")
-    return 5
+            _log(f"AVISO: FAP_SYNC_DOWNLOAD_WORKERS inválido ('{raw}'). Usando padrão (8).")
+    return 8
 
 
 def _fetch_workers() -> int:
@@ -432,21 +433,21 @@ def persist_contestacoes_for_company(
 
 
 # ---------------------------------------------------------------------------
-# Download dos PDFs das contestações (por empresa)
+# Download dos PDFs das contestações (fila única global)
 # ---------------------------------------------------------------------------
 
-def download_pending_files_for_company(
+def download_pending_files(
     auth, db, FapWebContestacao,
     law_firm_id: int,
-    company: object,
     years: list[int],
     max_workers: int = 5,
 ) -> dict:
-    """Baixa os PDFs das contestações (sem arquivo local) de uma empresa.
+    """Baixa, numa fila única, todos os PDFs sem arquivo local do escritório.
 
-    Reaproveita a mesma lógica da rota de download em lote do painel:
-    para cada contestação com ``file_path`` nulo nos anos sincronizados,
-    chama ``FapWebService.download_contestacao`` e salva em
+    Mais eficiente que baixar empresa-a-empresa: um só pool de workers cobre
+    todas as empresas/anos de uma vez (sem ociosidade quando uma empresa tem
+    poucos arquivos). Antes de ir à rede, resolve em disco os arquivos que já
+    existem (não rebaixa) e salva em
     ``uploads/fap_web_contestacoes/{law_firm_id}/{ano}/{cnpj14}/``.
     """
     import os
@@ -455,15 +456,12 @@ def download_pending_files_for_company(
     from concurrent.futures import ThreadPoolExecutor, as_completed
     from app.services.fap_web_service import FapWebService
 
-    cnpj_digits = ''.join(ch for ch in str(company.cnpj or '') if ch.isdigit())
-    cnpj_raiz = cnpj_digits[:8]
     year_ints = [int(y) for y in years]
 
     pending = (
         FapWebContestacao.query
         .filter(
             FapWebContestacao.law_firm_id == law_firm_id,
-            FapWebContestacao.cnpj_raiz == cnpj_raiz,
             FapWebContestacao.ano_vigencia.in_(year_ints),
             FapWebContestacao.file_path.is_(None),
         )
@@ -507,6 +505,8 @@ def download_pending_files_for_company(
 
     if linked_from_disk:
         db.session.commit()
+
+    _log(f"  {len(pending)} pendente(s): {linked_from_disk} já em disco, {len(to_download)} para baixar")
 
     if not to_download:
         return {'pending': len(pending), 'downloaded': 0, 'failed': 0,
@@ -555,18 +555,23 @@ def download_pending_files_for_company(
     downloaded = 0
     failed = 0
     expired = False
-    workers = max(1, min(max_workers, len(to_download)))
+    done = 0
+    total_dl = len(to_download)
+    workers = max(1, min(max_workers, total_dl))
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures = {pool.submit(_download_one, r): r for r in to_download}
         for fut in as_completed(futures):
             res = fut.result()
+            done += 1
             if res.get('ok'):
                 downloaded += 1
             else:
                 failed += 1
                 if res.get('expired'):
                     expired = True
+            if done % 50 == 0 or done == total_dl:
+                _log(f"  ... download {done}/{total_dl} (ok={downloaded}, falhas={failed})")
 
     return {'pending': len(pending), 'downloaded': downloaded, 'failed': failed,
             'linked': linked_from_disk, 'expired': expired}
@@ -701,7 +706,7 @@ def main() -> None:
                     _log(f"  ! {expired_count} empresa(s) com acesso negado (sem procuração). "
                          "Sessão segue ativa — ignorando essas.")
 
-            # ── Fase 2: GRAVAÇÃO sequencial + download por empresa ─────────
+            # ── Fase 2: GRAVAÇÃO sequencial no banco ──────────────────────
             total_created = 0
             total_updated = 0
             for i, company in enumerate(companies, 1):
@@ -730,32 +735,32 @@ def main() -> None:
                     _log(f"  ✗ Erro ao gravar {nome}: {e}")
                     db.session.rollback()
 
-                # Download dos PDFs das contestações sem arquivo local
-                if download_enabled:
-                    try:
-                        dl = download_pending_files_for_company(
-                            auth, db, FapWebContestacao,
-                            law_firm_id, company, years,
-                            max_workers=download_workers,
-                        )
-                        if dl['pending']:
-                            _log(
-                                f"      {nome}: {dl['downloaded']} baixado(s), "
-                                f"{dl.get('linked', 0)} já em disco, "
-                                f"{dl['failed']} sem PDF/falha (de {dl['pending']} pendente(s))"
-                            )
-                        if dl['expired']:
-                            chk = svc.check_session()
-                            if not chk.ok and getattr(chk, 'expired', False):
-                                _log("  ✗ Sessão FAP expirada durante o download. "
-                                     "Atualize FAP_AUTH_JSON no .env e tente novamente.")
-                                db.session.rollback()
-                                sys.exit(1)
-                    except Exception as e:
-                        _log(f"  ✗ Erro ao baixar arquivos de {nome}: {e}")
-                        db.session.rollback()
-
             _log(f"\n  ✓ Contestações: {total_created} criadas, {total_updated} atualizadas no total")
+
+            # ── Fase 3: DOWNLOAD global dos PDFs (fila única) ─────────────
+            if download_enabled:
+                _log(f"\n[Download] Baixando PDFs em paralelo ({download_workers} workers)...")
+                try:
+                    dl = download_pending_files(
+                        auth, db, FapWebContestacao,
+                        law_firm_id, years, max_workers=download_workers,
+                    )
+                    _log(
+                        f"  ✓ Download: {dl['downloaded']} baixado(s), "
+                        f"{dl['linked']} já em disco, "
+                        f"{dl['failed']} sem PDF/falha (de {dl['pending']} pendente(s))"
+                    )
+                    if dl['expired']:
+                        chk = svc.check_session()
+                        if not chk.ok and getattr(chk, 'expired', False):
+                            _log("  ✗ Sessão FAP expirada durante o download. "
+                                 "Atualize FAP_AUTH_JSON no .env e rode novamente.")
+                        else:
+                            _log("  ! Alguns documentos retornaram acesso negado, "
+                                 "mas a sessão segue ativa.")
+                except Exception as e:
+                    _log(f"  ✗ Erro no download: {e}")
+                    db.session.rollback()
 
     _log("\n" + "=" * 60)
     _log("Sincronização concluída com sucesso")
