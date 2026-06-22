@@ -810,6 +810,8 @@ def contestacao_details(rec_id: int):
             'observacao': raw.get('observacao'),
             'responsavel_nome': (raw.get('responsavel') or {}).get('nome'),
             'email': raw.get('email'),
+            'data_inicio_efeito_suspensivo': _fmt_date(raw.get('dataInicioEfeitoSuspensivo')),
+            'data_fim_efeito_suspensivo': _fmt_date(raw.get('dataFimEfeitoSuspensivo')),
             'revisao_analise': raw.get('revisaoAnalise'),
             'erro_email_publicacao': raw.get('erroEmailPublicacao'),
         },

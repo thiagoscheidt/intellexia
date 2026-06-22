@@ -1254,25 +1254,43 @@ vigência, empresa e instância.', icon='bi bi-table') %}
         }
         var deferHtml = '';
         if (d.deferimento_descricao) {
-          var cls = /^DEFER/i.test(d.deferimento_descricao) ? 'success' : /^INDEFER/i.test(d.deferimento_descricao) ? 'danger' : 'secondary';
+          var deferCod = (d.deferimento_codigo || '').toUpperCase();
+          var cls = deferCod === 'DEFERIMENTO' ? 'success'
+                  : deferCod === 'INDEFERIMENTO' ? 'danger'
+                  : deferCod.includes('PARCIAL') || deferCod.includes('ALTERACAO') ? 'warning'
+                  : 'secondary';
           deferHtml = '<span class="badge bg-' + cls + '">' + escapeHtml(d.deferimento_descricao) + '</span>';
-          if (d.deferimento_codigo) deferHtml += ' <small class="text-muted">(' + escapeHtml(String(d.deferimento_codigo)) + ')</small>';
         }
+        function _date(v) { return v ? escapeHtml(v) : '<span class="text-muted">—</span>'; }
         body.innerHTML = '<table class="table table-sm table-hover mb-0">'
+          + '<tbody>'
+          + '<tr class="table-light"><td colspan="2" class="fw-semibold text-uppercase small py-1 px-2" style="letter-spacing:.05em">Identificação</td></tr>'
+          + row('Protocolo', d.protocolo ? '<code>' + escapeHtml(d.protocolo) + '</code>' : '<span class="text-muted">—</span>')
+          + row('CNPJ', d.cnpj ? '<code>' + escapeHtml(String(d.cnpj)) + '</code>' : '<span class="text-muted">—</span>')
+          + row('Ano Vigência', d.ano_vigencia ? escapeHtml(String(d.ano_vigencia)) : '<span class="text-muted">—</span>')
+          + row('Instância', d.instancia_descricao ? escapeHtml(d.instancia_descricao) : '<span class="text-muted">—</span>')
+          + row('Situação', d.situacao_descricao ? escapeHtml(d.situacao_descricao) : '<span class="text-muted">—</span>')
           + (deferHtml ? row('Deferimento', deferHtml) : '')
-          + row('Data Inicial', escapeHtml(d.data_inicial || ''))
-          + row('Publicação D.O.U.', escapeHtml(d.data_dou || ''))
-          + row('Prazo 1ª Instância', escapeHtml(d.data_fim_prazo_1inst || ''))
-          + row('Prazo 2ª Instância', escapeHtml(d.data_fim_prazo_2inst || ''))
-          + row('Liberação de Análise', escapeHtml(d.data_liberacao_analise || ''))
+          + '<tr class="table-light"><td colspan="2" class="fw-semibold text-uppercase small py-1 px-2" style="letter-spacing:.05em">Datas</td></tr>'
+          + row('Data Inicial', _date(d.data_inicial))
+          + row('Data Transmissão', _date(d.data_transmissao))
+          + row('Publicação D.O.U.', _date(d.data_dou))
+          + row('Liberação de Análise', _date(d.data_liberacao_analise))
+          + row('Fim Prazo 1ª Instância', _date(d.data_fim_prazo_1inst))
+          + row('Fim Prazo 2ª Instância', _date(d.data_fim_prazo_2inst))
+          + (d.data_inicio_efeito_suspensivo ? row('Início Efeito Suspensivo', _date(d.data_inicio_efeito_suspensivo)) : '')
+          + (d.data_fim_efeito_suspensivo ? row('Fim Efeito Suspensivo', _date(d.data_fim_efeito_suspensivo)) : '')
+          + '<tr class="table-light"><td colspan="2" class="fw-semibold text-uppercase small py-1 px-2" style="letter-spacing:.05em">Prazos e Flags</td></tr>'
           + row('Prazo 1ª Inst. Aberto', _yesNo(d.prazo_1inst_aberto))
           + row('Prazo 2ª Inst. Aberto', _yesNo(d.prazo_2inst_aberto))
-          + row('Responsável', escapeHtml(d.responsavel_nome || ''))
-          + row('E-mail', escapeHtml(d.email || ''))
-          + row('Revisão / Análise', escapeHtml(d.revisao_analise || ''))
-          + row('Erro e-mail publicação', escapeHtml(d.erro_email_publicacao || ''))
-          + (d.observacao ? row('Observação', '<span class="text-wrap">' + escapeHtml(d.observacao) + '</span>') : '')
-          + '</table>';
+          + row('Erro e-mail publicação', _yesNo(d.erro_email_publicacao))
+          + row('Revisão / Análise', d.revisao_analise != null ? escapeHtml(String(d.revisao_analise)) : '<span class="text-muted">—</span>')
+          + '<tr class="table-light"><td colspan="2" class="fw-semibold text-uppercase small py-1 px-2" style="letter-spacing:.05em">Responsável</td></tr>'
+          + row('Nome', d.responsavel_nome ? escapeHtml(d.responsavel_nome) : '<span class="text-muted">—</span>')
+          + row('E-mail', d.email ? escapeHtml(d.email) : '<span class="text-muted">—</span>')
+          + (d.observacao ? '<tr class="table-light"><td colspan="2" class="fw-semibold text-uppercase small py-1 px-2" style="letter-spacing:.05em">Observação</td></tr>'
+              + '<tr><td colspan="2" class="text-wrap" style="white-space:pre-wrap">' + escapeHtml(d.observacao) + '</td></tr>' : '')
+          + '</tbody></table>';
       } catch (err) {
         body.innerHTML = '<div class="alert alert-danger">Erro de rede: ' + escapeHtml(String(err)) + '</div>';
       }
