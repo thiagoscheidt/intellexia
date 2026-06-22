@@ -13,6 +13,7 @@ contestacao_id=c.contestacao_id) -%}
   <div class="cell-row">
     <span class="protocolo-code">{{ c.protocolo or '—' }}</span>
     <span class="situacao-text">{{ c.situacao_descricao or '' }}</span>
+    {% if c.data_dou %}<span class="dou-date" title="Publicação D.O.U."><i class="bi bi-newspaper me-1"></i>{{ c.data_dou }}</span>{% endif %}
     {% if c.file_path %}<span class="badge bg-success-subtle text-success ms-1"
       style="font-size:.6rem;vertical-align:middle;" title="Arquivo PDF salvo localmente"><i class="bi bi-hdd-fill"></i>
       Local</span>{% endif %}
@@ -359,6 +360,12 @@ contestacao_id=c.contestacao_id) -%}
     font-size: .68rem;
     color: #6c7a8d;
     line-height: 1.2;
+  }
+
+  .contestacao-cell .dou-date {
+    font-size: .68rem;
+    color: #6b21a8;
+    white-space: nowrap;
   }
 
   .contestacao-cell .cell-actions {

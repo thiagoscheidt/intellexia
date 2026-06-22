@@ -2462,6 +2462,22 @@ class FapWebContestacao(db.Model):
         lazy='dynamic',
     )
 
+    @property
+    def data_dou(self):
+        """Extrai dataDOU do raw_data. Retorna string 'DD/MM/YYYY' ou None."""
+        if not self.raw_data:
+            return None
+        try:
+            import json as _json
+            raw = _json.loads(self.raw_data)
+            s = raw.get('dataDOU')
+            if not s:
+                return None
+            from datetime import datetime as _dt
+            return _dt.fromisoformat(s[:10]).strftime('%d/%m/%Y')
+        except Exception:
+            return None
+
     def __repr__(self):
         return f'<FapWebContestacao id={self.contestacao_id} cnpj={self.cnpj} ano={self.ano_vigencia}>'
 
