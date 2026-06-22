@@ -6,7 +6,8 @@ Sequência de execução:
   1. Verifica sessão FAP (aborta se expirada)
   2. Sincroniza empresas (upsert FapCompany)
   3. Sincroniza procurações (upsert FapWebProcuracao)
-  4. Para cada empresa × ano: sincroniza contestações (upsert FapWebContestacao)
+  4. Contestações — Fase 1: busca em paralelo (várias empresas ao mesmo tempo)
+                   Fase 2: grava no banco sequencialmente (upsert FapWebContestacao)
   5. Para cada empresa: baixa os PDFs das contestações ainda sem arquivo local
 
 Variáveis de ambiente (.env):
@@ -16,6 +17,7 @@ Variáveis de ambiente (.env):
   FAP_SYNC_LAW_FIRM_ID — ID do escritório a sincronizar (padrão: 1)
   FAP_SYNC_YEARS       — Anos separados por vírgula (padrão: ano atual + 2 anteriores)
                          Exemplo: 2026,2025,2024
+  FAP_SYNC_FETCH_WORKERS    — Nº de buscas de contestações em paralelo (padrão: 8, máx: 20)
   FAP_SYNC_DOWNLOAD    — '1' (padrão) baixa os PDFs após a sincronização; '0' desativa
   FAP_SYNC_DOWNLOAD_WORKERS — Nº de downloads em paralelo por empresa (padrão: 5, máx: 30)
 
@@ -72,6 +74,16 @@ def _download_workers() -> int:
         except ValueError:
             _log(f"AVISO: FAP_SYNC_DOWNLOAD_WORKERS inválido ('{raw}'). Usando padrão (5).")
     return 5
+
+
+def _fetch_workers() -> int:
+    raw = os.environ.get('FAP_SYNC_FETCH_WORKERS', '').strip()
+    if raw:
+        try:
+            return max(1, min(int(raw), 20))
+        except ValueError:
+            _log(f"AVISO: FAP_SYNC_FETCH_WORKERS inválido ('{raw}'). Usando padrão (8).")
+    return 8
 
 
 def _get_law_firm_id(db, LawFirm) -> int:
@@ -225,16 +237,46 @@ def sync_procuracoes(svc, db, FapWebProcuracao, law_firm_id: int) -> dict:
 # Sync de contestações (empresa × ano)
 # ---------------------------------------------------------------------------
 
-def sync_contestacoes_for_company(
-    svc, db,
-    FapCompany, FapWebContestacao, FapWebContestacaoChangeHistory, FapAutoImportedContestacao,
+def fetch_contestacoes_for_company(auth, company_id: int, cnpj: str, years: list[int]) -> dict:
+    """Apenas REDE: busca as contestações de uma empresa em todos os anos.
+
+    Thread-safe (cria seu próprio FapWebService). Não toca no banco — devolve
+    os itens crus para serem persistidos depois, no thread principal.
+
+    Retorna {'company_id', 'years': {ano: [itens]}, 'expired': [anos], 'errors': [(ano, msg)]}.
+    """
+    from app.services.fap_web_service import FapWebService
+
+    svc = FapWebService(auth)
+    cnpj_digits = ''.join(ch for ch in str(cnpj or '') if ch.isdigit())
+    cnpj_raiz = cnpj_digits[:8] if len(cnpj_digits) >= 8 else cnpj_digits
+
+    out = {'company_id': company_id, 'years': {}, 'expired': [], 'errors': []}
+    for year in years:
+        result = svc.fetch_contestacoes(cnpj=cnpj_raiz, year=year)
+        if not result.ok:
+            if getattr(result, 'expired', False):
+                out['expired'].append(int(year))
+            else:
+                out['errors'].append((int(year), result.message))
+            continue
+        out['years'][int(year)] = result.data if isinstance(result.data, list) else []
+    return out
+
+
+def persist_contestacoes_for_company(
+    db,
+    FapWebContestacao, FapWebContestacaoChangeHistory, FapAutoImportedContestacao,
     law_firm_id: int,
     company: object,
-    years: list[int],
+    fetched_years: dict,
 ) -> dict:
+    """Persiste no banco (upsert + histórico) as contestações já buscadas.
+
+    Roda no thread principal — escrita sequencial no banco.
+    """
     cnpj_raw = str(company.cnpj or '').strip()
     cnpj_digits = ''.join(ch for ch in cnpj_raw if ch.isdigit())
-    cnpj_raiz = cnpj_digits[:8] if len(cnpj_digits) >= 8 else cnpj_digits
 
     total_created = 0
     total_updated = 0
@@ -246,31 +288,8 @@ def sync_contestacoes_for_company(
         'protocolo', 'data_transmissao', 'data_dou_date',
     )
 
-    for year in years:
-        result = svc.fetch_contestacoes(cnpj=cnpj_raiz, year=year)
-        if not result.ok:
-            if getattr(result, 'expired', False):
-                # 401/403 pode ser sessão global expirada OU acesso negado
-                # apenas para este CNPJ (sem procuração válida). Revalida a
-                # sessão: só aborta tudo se ela estiver realmente expirada.
-                chk = svc.check_session()
-                if not chk.ok and getattr(chk, 'expired', False):
-                    raise RuntimeError(
-                        f"Sessão FAP expirada ao buscar contestações (empresa {cnpj_raiz}, ano {year})."
-                    )
-                _log(
-                    f"    ! Ano {year}: acesso negado para esta empresa "
-                    f"(HTTP {result.status_code}). Sessão segue ativa — pulando empresa/ano."
-                )
-                time.sleep(0.5)
-                continue
-            _log(f"    ! Ano {year}: {result.message}")
-            time.sleep(1)
-            continue
-
-        items = result.data if isinstance(result.data, list) else []
+    for year_int, items in fetched_years.items():
         now = datetime.now()
-        year_int = int(year)
         created = 0
         updated = 0
 
@@ -279,7 +298,7 @@ def sync_contestacoes_for_company(
             if not cid:
                 continue
 
-            cnpj_full = str(item.get('cnpj') or '').strip() or cnpj_raiz
+            cnpj_full = str(item.get('cnpj') or '').strip() or cnpj_digits[:8]
             cnpj_item_digits = ''.join(ch for ch in cnpj_full if ch.isdigit())
             cnpj_full_14 = cnpj_item_digits.zfill(14) if len(cnpj_item_digits) <= 14 else cnpj_item_digits
             cnpj_raiz_item = cnpj_full_14[:8]
@@ -390,12 +409,10 @@ def sync_contestacoes_for_company(
                 created += 1
 
         db.session.commit()
-        _log(f"    Ano {year}: {len(items)} contestações — {created} criadas, {updated} atualizadas")
+        if created or updated:
+            _log(f"      {company.cnpj} — ano {year_int}: {created} criada(s), {updated} atualizada(s)")
         total_created += created
         total_updated += updated
-
-        # Pequena pausa para não sobrecarregar a API
-        time.sleep(0.5)
 
     return {'created': total_created, 'updated': total_updated}
 
@@ -626,28 +643,68 @@ def main() -> None:
         if not companies:
             _log("  ! Nenhuma empresa cadastrada. Execute a sincronização de empresas primeiro.")
         else:
-            _log(f"  {len(companies)} empresa(s) encontrada(s)")
+            from concurrent.futures import ThreadPoolExecutor, as_completed
+
+            total = len(companies)
+            fetch_workers = _fetch_workers()
+            _log(f"  {total} empresa(s) — buscando contestações em paralelo ({fetch_workers} simultâneas)...")
+
+            # ── Fase 1: BUSCA paralela (somente rede, sem tocar no banco) ──
+            # Extrai só os dados necessários para as threads (sem acessar ORM lá).
+            company_meta = [(c.id, c.cnpj) for c in companies]
+            fetched_by_company = {}
+            expired_count = 0
+            done = 0
+            with ThreadPoolExecutor(max_workers=fetch_workers) as pool:
+                futures = {
+                    pool.submit(fetch_contestacoes_for_company, auth, cid, cnpj, years): cid
+                    for (cid, cnpj) in company_meta
+                }
+                for fut in as_completed(futures):
+                    cid = futures[fut]
+                    done += 1
+                    try:
+                        res = fut.result()
+                    except Exception as e:
+                        _log(f"  [{done}/{total}] ✗ Erro ao buscar empresa id={cid}: {e}")
+                        continue
+                    fetched_by_company[cid] = res
+                    if res['expired']:
+                        expired_count += 1
+                    qtd = sum(len(v) for v in res['years'].values())
+                    if done % 25 == 0 or qtd:
+                        _log(f"  [{done}/{total}] buscadas — última: {qtd} contestação(ões)")
+
+            _log(f"  ✓ Busca concluída ({len(fetched_by_company)}/{total} empresas)")
+
+            # Se houve 401/403, confirma se a sessão caiu de fato
+            if expired_count:
+                chk = svc.check_session()
+                if not chk.ok and getattr(chk, 'expired', False):
+                    _log(f"  ✗ Sessão FAP expirou durante a busca — {expired_count} empresa(s) "
+                         "não consultadas. Atualize FAP_AUTH_JSON e rode de novo. "
+                         "Persistindo o que já foi obtido...")
+                else:
+                    _log(f"  ! {expired_count} empresa(s) com acesso negado (sem procuração). "
+                         "Sessão segue ativa — ignorando essas.")
+
+            # ── Fase 2: GRAVAÇÃO sequencial + download por empresa ─────────
             total_created = 0
             total_updated = 0
-
             for i, company in enumerate(companies, 1):
+                res = fetched_by_company.get(company.id)
+                if not res or not res['years']:
+                    continue
                 nome = (company.nome or company.cnpj or '').strip()
-                _log(f"\n  [{i}/{len(companies)}] {nome} (CNPJ: {company.cnpj})")
                 try:
-                    stats = sync_contestacoes_for_company(
-                        svc, db,
-                        FapCompany, FapWebContestacao, FapWebContestacaoChangeHistory,
-                        FapAutoImportedContestacao,
-                        law_firm_id, company, years,
+                    stats = persist_contestacoes_for_company(
+                        db, FapWebContestacao, FapWebContestacaoChangeHistory,
+                        FapAutoImportedContestacao, law_firm_id, company, res['years'],
                     )
                     total_created += stats['created']
                     total_updated += stats['updated']
-                except RuntimeError as e:
-                    _log(f"  ✗ {e}")
-                    db.session.rollback()
-                    sys.exit(1)
                 except Exception as e:
-                    _log(f"  ✗ Erro inesperado para {nome}: {e}")
+                    _log(f"  ✗ Erro ao gravar {nome}: {e}")
                     db.session.rollback()
 
                 # Download dos PDFs das contestações sem arquivo local
@@ -660,28 +717,20 @@ def main() -> None:
                         )
                         if dl['pending']:
                             _log(
-                                f"      Arquivos: {dl['downloaded']} baixado(s), "
+                                f"      {nome}: {dl['downloaded']} baixado(s), "
                                 f"{dl.get('linked', 0)} já em disco, "
                                 f"{dl['failed']} sem PDF/falha (de {dl['pending']} pendente(s))"
                             )
                         if dl['expired']:
-                            # Pode ser 403 só de alguns documentos. Só aborta se a
-                            # sessão estiver realmente expirada.
                             chk = svc.check_session()
                             if not chk.ok and getattr(chk, 'expired', False):
                                 _log("  ✗ Sessão FAP expirada durante o download. "
                                      "Atualize FAP_AUTH_JSON no .env e tente novamente.")
                                 db.session.rollback()
                                 sys.exit(1)
-                            _log("      ! Alguns downloads retornaram acesso negado, "
-                                 "mas a sessão segue ativa — continuando.")
                     except Exception as e:
                         _log(f"  ✗ Erro ao baixar arquivos de {nome}: {e}")
                         db.session.rollback()
-
-                # Pausa entre empresas para não sobrecarregar a API
-                if i < len(companies):
-                    time.sleep(1)
 
             _log(f"\n  ✓ Contestações: {total_created} criadas, {total_updated} atualizadas no total")
 
