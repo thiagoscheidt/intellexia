@@ -14,6 +14,7 @@ contestacao_id=c.contestacao_id) -%}
     <span class="protocolo-code">{{ c.protocolo or '—' }}</span>
     <span class="situacao-text">{{ c.situacao_descricao or '' }}</span>
     {% if c.data_dou %}<span class="dou-date" title="Publicação D.O.U."><i class="bi bi-newspaper me-1"></i>{{ c.data_dou }}</span>{% endif %}
+    {% if c.deferimento_descricao %}<span class="deferimento-badge" title="Deferimento"><i class="bi bi-clipboard-check me-1"></i>{{ c.deferimento_descricao }}</span>{% endif %}
     {% if c.file_path %}<span class="badge bg-success-subtle text-success ms-1"
       style="font-size:.6rem;vertical-align:middle;" title="Arquivo PDF salvo localmente"><i class="bi bi-hdd-fill"></i>
       Local</span>{% endif %}
@@ -365,6 +366,20 @@ contestacao_id=c.contestacao_id) -%}
   .contestacao-cell .dou-date {
     font-size: .68rem;
     color: #6b21a8;
+    white-space: nowrap;
+  }
+
+  .contestacao-cell .deferimento-badge {
+    display: inline-flex;
+    align-items: center;
+    font-size: .62rem;
+    font-weight: 700;
+    line-height: 1;
+    padding: .15rem .4rem;
+    border-radius: 999px;
+    background: rgba(13, 148, 136, .12);
+    color: #0f766e;
+    border: 1px solid rgba(13, 148, 136, .25);
     white-space: nowrap;
   }
 

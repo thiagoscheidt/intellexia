@@ -2489,6 +2489,22 @@ class FapWebContestacao(db.Model):
         except Exception:
             return None
 
+    @property
+    def deferimento_descricao(self):
+        """Descrição do deferimento (ex.: 'Deferimento Parcial') ou None.
+
+        Extraída de raw_data['deferimento']['descricao'].
+        """
+        if not self.raw_data:
+            return None
+        try:
+            import json as _json
+            raw = _json.loads(self.raw_data)
+            deferimento = raw.get('deferimento') or {}
+            return (deferimento.get('descricao') or '').strip() or None
+        except Exception:
+            return None
+
     def __repr__(self):
         return f'<FapWebContestacao id={self.contestacao_id} cnpj={self.cnpj} ano={self.ano_vigencia}>'
 
