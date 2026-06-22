@@ -7,6 +7,7 @@ Sequência de execução:
   2. Sincroniza empresas (upsert FapCompany)
   3. Sincroniza procurações (upsert FapWebProcuracao)
   4. Para cada empresa × ano: sincroniza contestações (upsert FapWebContestacao)
+  5. Para cada empresa: baixa os PDFs das contestações ainda sem arquivo local
 
 Variáveis de ambiente (.env):
   FAP_AUTH_JSON        — JSON de autenticação (obrigatório)
@@ -15,6 +16,8 @@ Variáveis de ambiente (.env):
   FAP_SYNC_LAW_FIRM_ID — ID do escritório a sincronizar (padrão: 1)
   FAP_SYNC_YEARS       — Anos separados por vírgula (padrão: ano atual + 2 anteriores)
                          Exemplo: 2026,2025,2024
+  FAP_SYNC_DOWNLOAD    — '1' (padrão) baixa os PDFs após a sincronização; '0' desativa
+  FAP_SYNC_DOWNLOAD_WORKERS — Nº de downloads em paralelo por empresa (padrão: 5, máx: 30)
 
 Execução manual:
   uv run python scripts/fap_sync_cron.py
@@ -54,6 +57,21 @@ def _get_sync_years() -> list[int]:
             _log(f"AVISO: FAP_SYNC_YEARS inválido ('{raw}'). Usando padrão.")
     current = datetime.now().year
     return [current, current - 1, current - 2]
+
+
+def _download_enabled() -> bool:
+    raw = os.environ.get('FAP_SYNC_DOWNLOAD', '1').strip().lower()
+    return raw not in ('0', 'false', 'no', 'nao', 'off', '')
+
+
+def _download_workers() -> int:
+    raw = os.environ.get('FAP_SYNC_DOWNLOAD_WORKERS', '').strip()
+    if raw:
+        try:
+            return max(1, min(int(raw), 30))
+        except ValueError:
+            _log(f"AVISO: FAP_SYNC_DOWNLOAD_WORKERS inválido ('{raw}'). Usando padrão (5).")
+    return 5
 
 
 def _get_law_firm_id(db, LawFirm) -> int:
@@ -355,6 +373,115 @@ def sync_contestacoes_for_company(
 
 
 # ---------------------------------------------------------------------------
+# Download dos PDFs das contestações (por empresa)
+# ---------------------------------------------------------------------------
+
+def download_pending_files_for_company(
+    auth, db, FapWebContestacao,
+    law_firm_id: int,
+    company: object,
+    years: list[int],
+    max_workers: int = 5,
+) -> dict:
+    """Baixa os PDFs das contestações (sem arquivo local) de uma empresa.
+
+    Reaproveita a mesma lógica da rota de download em lote do painel:
+    para cada contestação com ``file_path`` nulo nos anos sincronizados,
+    chama ``FapWebService.download_contestacao`` e salva em
+    ``uploads/fap_web_contestacoes/{law_firm_id}/{ano}/{cnpj14}/``.
+    """
+    import os
+    from flask import current_app
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from app.services.fap_web_service import FapWebService
+
+    cnpj_digits = ''.join(ch for ch in str(company.cnpj or '') if ch.isdigit())
+    cnpj_raiz = cnpj_digits[:8]
+    year_ints = [int(y) for y in years]
+
+    pending = (
+        FapWebContestacao.query
+        .filter(
+            FapWebContestacao.law_firm_id == law_firm_id,
+            FapWebContestacao.cnpj_raiz == cnpj_raiz,
+            FapWebContestacao.ano_vigencia.in_(year_ints),
+            FapWebContestacao.file_path.is_(None),
+        )
+        .with_entities(
+            FapWebContestacao.id,
+            FapWebContestacao.contestacao_id,
+            FapWebContestacao.cnpj,
+            FapWebContestacao.ano_vigencia,
+        )
+        .all()
+    )
+
+    if not pending:
+        return {'pending': 0, 'downloaded': 0, 'failed': 0, 'expired': False}
+
+    upload_root = os.path.join(current_app.root_path, 'uploads', 'fap_web_contestacoes', str(law_firm_id))
+    flask_app = current_app._get_current_object()
+
+    def _download_one(rec):
+        svc = FapWebService(auth)
+        try:
+            dl = svc.download_contestacao(
+                year=rec.ano_vigencia,
+                cnpj=rec.cnpj,
+                contestacao_id=rec.contestacao_id,
+            )
+            if not dl.ok:
+                return {'rec_id': rec.id, 'ok': False,
+                        'expired': bool(getattr(dl, 'expired', False)), 'error': dl.message}
+
+            pdf_bytes = dl.data['pdf_bytes']
+            filename  = f"{rec.contestacao_id}_{dl.data['filename']}"
+            save_dir  = os.path.join(upload_root, str(rec.ano_vigencia), rec.cnpj)
+            os.makedirs(save_dir, exist_ok=True)
+
+            with open(os.path.join(save_dir, filename), 'wb') as f:
+                f.write(pdf_bytes)
+
+            rel_path = '/'.join([
+                'uploads', 'fap_web_contestacoes',
+                str(law_firm_id), str(rec.ano_vigencia), rec.cnpj, filename,
+            ])
+
+            with flask_app.app_context():
+                db_rec = db.session.get(FapWebContestacao, rec.id)
+                if db_rec:
+                    db_rec.file_path = rel_path
+                    db.session.commit()
+
+            return {'rec_id': rec.id, 'ok': True, 'filename': filename}
+        except Exception as e:
+            try:
+                with flask_app.app_context():
+                    db.session.rollback()
+            except Exception:
+                pass
+            return {'rec_id': rec.id, 'ok': False, 'expired': False, 'error': str(e)}
+
+    downloaded = 0
+    failed = 0
+    expired = False
+    workers = max(1, min(max_workers, len(pending)))
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        futures = {pool.submit(_download_one, r): r for r in pending}
+        for fut in as_completed(futures):
+            res = fut.result()
+            if res.get('ok'):
+                downloaded += 1
+            else:
+                failed += 1
+                if res.get('expired'):
+                    expired = True
+
+    return {'pending': len(pending), 'downloaded': downloaded, 'failed': failed, 'expired': expired}
+
+
+# ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
 
@@ -399,6 +526,13 @@ def main() -> None:
 
     years = _get_sync_years()
     _log(f"Anos a sincronizar: {years}")
+
+    download_enabled = _download_enabled()
+    download_workers = _download_workers()
+    _log(
+        f"Download de PDFs: {'ativado' if download_enabled else 'desativado'}"
+        + (f" ({download_workers} em paralelo)" if download_enabled else '')
+    )
 
     with app.app_context():
         law_firm_id = _get_law_firm_id(db, LawFirm)
@@ -455,6 +589,28 @@ def main() -> None:
                 except Exception as e:
                     _log(f"  ✗ Erro inesperado para {nome}: {e}")
                     db.session.rollback()
+
+                # Download dos PDFs das contestações sem arquivo local
+                if download_enabled:
+                    try:
+                        dl = download_pending_files_for_company(
+                            auth, db, FapWebContestacao,
+                            law_firm_id, company, years,
+                            max_workers=download_workers,
+                        )
+                        if dl['pending']:
+                            _log(
+                                f"      Arquivos: {dl['downloaded']} baixado(s), "
+                                f"{dl['failed']} sem PDF/falha (de {dl['pending']} pendente(s))"
+                            )
+                        if dl['expired']:
+                            _log("  ✗ Sessão FAP expirada durante o download. "
+                                 "Atualize FAP_AUTH_JSON no .env e tente novamente.")
+                            db.session.rollback()
+                            sys.exit(1)
+                    except Exception as e:
+                        _log(f"  ✗ Erro ao baixar arquivos de {nome}: {e}")
+                        db.session.rollback()
 
                 # Pausa entre empresas para não sobrecarregar a API
                 if i < len(companies):
