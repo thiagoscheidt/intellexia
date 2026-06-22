@@ -85,7 +85,11 @@ def _build_deferimento_distribution(law_firm_id):
 
     O deferimento vive em raw_data['deferimento']['descricao'] (não é coluna),
     então parseamos o JSON em Python. Contestações sem deferimento entram na
-    categoria 'Sem julgamento'. Retorna dict {descricao: total}.
+    categoria 'Sem julgamento'.
+
+    Retorna (overall, por_empresa):
+      - overall:     {descricao: total} agregando todas as empresas
+      - por_empresa: {cnpj_raiz: {descricao: total}} para filtro no frontend
     """
     import json as _json
     from app.models import FapWebContestacao
@@ -93,12 +97,13 @@ def _build_deferimento_distribution(law_firm_id):
     rows = (
         FapWebContestacao.query
         .filter_by(law_firm_id=law_firm_id)
-        .with_entities(FapWebContestacao.raw_data)
+        .with_entities(FapWebContestacao.cnpj_raiz, FapWebContestacao.raw_data)
         .all()
     )
 
-    dist = {}
-    for (raw_data,) in rows:
+    overall = {}
+    por_empresa = {}
+    for raiz, raw_data in rows:
         desc = ''
         if raw_data:
             try:
@@ -108,9 +113,11 @@ def _build_deferimento_distribution(law_firm_id):
             except Exception:
                 desc = ''
         key = desc or 'Sem julgamento'
-        dist[key] = dist.get(key, 0) + 1
+        overall[key] = overall.get(key, 0) + 1
+        bucket = por_empresa.setdefault(raiz or '—', {})
+        bucket[key] = bucket.get(key, 0) + 1
 
-    return dist
+    return overall, por_empresa
 
 
 @dashboard_bp.route('/')
@@ -206,7 +213,8 @@ def dashboard():
         contestacoes_empresas.sort(key=lambda e: (e['nome'] or '').lower())
 
         # ── Contestações por status de deferimento ───────────────────
-        contestacoes_por_deferimento = _build_deferimento_distribution(law_firm_id)
+        contestacoes_por_deferimento, contestacoes_deferimento_por_empresa = \
+            _build_deferimento_distribution(law_firm_id)
 
         # ── Últimas contestações publicadas no D.O.U. ────────────────
         latest_dou_contestacoes = _build_latest_dou_contestacoes(law_firm_id)
@@ -250,6 +258,7 @@ def dashboard():
             contestacoes_situacao_por_empresa=contestacoes_situacao_por_empresa,
             contestacoes_empresas=contestacoes_empresas,
             contestacoes_por_deferimento=contestacoes_por_deferimento,
+            contestacoes_deferimento_por_empresa=contestacoes_deferimento_por_empresa,
             latest_dou_contestacoes=latest_dou_contestacoes,
             total_benefits_dc=total_benefits_dc,
             benefits_exclusao=benefits_exclusao,
@@ -282,6 +291,7 @@ def dashboard():
             contestacoes_situacao_por_empresa={},
             contestacoes_empresas=[],
             contestacoes_por_deferimento={},
+            contestacoes_deferimento_por_empresa={},
             latest_dou_contestacoes=[],
             total_benefits_dc=0,
             benefits_exclusao=0,

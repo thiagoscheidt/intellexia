@@ -420,11 +420,24 @@
 <div class="row g-3 mb-4">
   <div class="col-12">
     <div class="card dash-card h-100">
-      <div class="card-header bg-transparent border-0 pb-0">
-        <h3 class="card-title fw-semibold mb-0">
-          <i class="bi bi-clipboard-check me-2 text-success"></i>Contestações por Status de Deferimento
-        </h3>
-        <small class="text-muted">Resultado do julgamento das contestações (deferido, indeferido, parcial e ainda sem julgamento)</small>
+      <div class="card-header bg-transparent border-0 pb-2 d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-2">
+        <div>
+          <h3 class="card-title fw-semibold mb-0">
+            <i class="bi bi-clipboard-check me-2 text-success"></i>Contestações por Status de Deferimento
+          </h3>
+          <small class="text-muted">Resultado do julgamento das contestações (deferido, indeferido, parcial e ainda sem julgamento)</small>
+        </div>
+        {% if contestacoes_empresas %}
+        <div class="d-flex align-items-center gap-2">
+          <label for="empresaDeferimentoSelect" class="small text-muted mb-0 text-nowrap">Empresa</label>
+          <select id="empresaDeferimentoSelect" class="form-select form-select-sm" style="min-width:240px;max-width:380px;">
+            <option value="__all__" selected>Todas as empresas</option>
+            {% for emp in contestacoes_empresas %}
+            <option value="{{ emp.cnpj_raiz }}">{{ emp.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
       </div>
       <div class="card-body">
         {% if contestacoes_por_deferimento %}
@@ -819,6 +832,7 @@
   'contestacoesPorAno': contestacoes_por_ano or {},
   'situacaoPorEmpresa': contestacoes_situacao_por_empresa or {},
   'contestacoesPorDeferimento': contestacoes_por_deferimento or {},
+  'deferimentoPorEmpresa': contestacoes_deferimento_por_empresa or {},
   'benefitsExclusao': benefits_exclusao or 0,
   'benefitsInclusao': benefits_inclusao or 0,
   'benefitsRevisao': benefits_revisao or 0,
@@ -942,10 +956,11 @@
       }
     }
 
-    // Contestações por Status de Deferimento (doughnut)
-    const deferimento = data.contestacoesPorDeferimento || {};
+    // Contestações por Status de Deferimento (doughnut com filtro por empresa)
+    const deferimentoPorEmpresa = data.deferimentoPorEmpresa || {};
+    const deferimentoSelect = document.getElementById('empresaDeferimentoSelect');
     const deferimentoCtx = document.getElementById('chartDeferimento');
-    if (deferimentoCtx && Object.keys(deferimento).length) {
+    if (deferimentoCtx) {
       // Cores semânticas por palavra-chave; fallback na paleta padrão.
       function corDeferimento(label, i) {
         const l = (label || '').toLowerCase();
@@ -956,22 +971,26 @@
         return palette[i % palette.length];
       }
 
-      const labels = Object.keys(deferimento);
-      const values = Object.values(deferimento);
-      const cores = labels.map(corDeferimento);
+      let deferimentoChart = null;
 
-      new Chart(deferimentoCtx, {
-        type: 'doughnut',
-        data: { labels: labels, datasets: [{ data: values, backgroundColor: cores }] },
-        options: { plugins: { legend: { position: 'bottom' } } }
-      });
+      function dadosDeferimento(value) {
+        if (!value || value === '__all__') return data.contestacoesPorDeferimento || {};
+        return deferimentoPorEmpresa[value] || {};
+      }
 
-      const box = document.getElementById('deferimentoResumo');
-      if (box) {
+      function renderResumoDeferimento(dist) {
+        const box = document.getElementById('deferimentoResumo');
+        if (!box) return;
+        const labels = Object.keys(dist);
+        const values = Object.values(dist);
         const total = values.reduce(function (a, b) { return a + (b || 0); }, 0);
+        if (!total) {
+          box.innerHTML = '<div class="text-muted">Sem contestações para esta empresa.</div>';
+          return;
+        }
         box.innerHTML = labels
           .map(function (label, i) {
-            const pct = total ? Math.round((values[i] * 100) / total) : 0;
+            const pct = Math.round((values[i] * 100) / total);
             return ''
               + '<div class="d-flex align-items-center justify-content-between py-1 border-bottom">'
               + '  <span class="d-inline-flex align-items-center gap-2">'
@@ -984,6 +1003,33 @@
           + '<div class="d-flex align-items-center justify-content-between pt-2 fw-semibold">'
           + '  <span>Total</span><span>' + total + '</span>'
           + '</div>';
+      }
+
+      function atualizarDeferimento(value) {
+        const dist = dadosDeferimento(value);
+        const labels = Object.keys(dist);
+        const values = Object.values(dist);
+        const cores = labels.map(corDeferimento);
+        if (deferimentoChart) {
+          deferimentoChart.data.labels = labels;
+          deferimentoChart.data.datasets[0].data = values;
+          deferimentoChart.data.datasets[0].backgroundColor = cores;
+          deferimentoChart.update();
+        } else {
+          deferimentoChart = new Chart(deferimentoCtx, {
+            type: 'doughnut',
+            data: { labels: labels, datasets: [{ data: values, backgroundColor: cores }] },
+            options: { plugins: { legend: { position: 'bottom' } } }
+          });
+        }
+        renderResumoDeferimento(dist);
+      }
+
+      atualizarDeferimento('__all__');
+      if (deferimentoSelect) {
+        deferimentoSelect.addEventListener('change', function () {
+          atualizarDeferimento(this.value);
+        });
       }
     }
 
