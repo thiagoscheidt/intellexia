@@ -416,6 +416,74 @@
   </div>
 </div>
 
+<!-- ÚLTIMAS PUBLICAÇÕES NO D.O.U. -->
+<div class="row g-3 mb-4">
+  <div class="col-12">
+    <div class="card dash-card">
+      <div class="card-header bg-transparent border-0 pb-2 d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div>
+          <h3 class="card-title fw-semibold mb-0">
+            <i class="bi bi-newspaper me-2 text-primary"></i>Últimas Publicações no D.O.U.
+          </h3>
+          <small class="text-muted">Contestações FAP com resultado publicado no Diário Oficial da União — acompanhe o que saiu de novo</small>
+        </div>
+        <a href="{{ url_for('fap_panel.contestacoes_page') }}" class="btn btn-sm btn-outline-primary dash-link-btn">
+          Ver todas as contestações
+        </a>
+      </div>
+      <div class="card-body pt-0">
+        {% if latest_dou_contestacoes %}
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead>
+              <tr class="text-body-secondary">
+                <th scope="col" style="white-space:nowrap;"><i class="bi bi-calendar-event me-1"></i>Publicação D.O.U.</th>
+                <th scope="col">Empresa / CNPJ</th>
+                <th scope="col">Protocolo</th>
+                <th scope="col">Instância</th>
+                <th scope="col">Situação</th>
+                <th scope="col" class="text-center">Vigência</th>
+                <th scope="col" class="text-end">Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for c in latest_dou_contestacoes %}
+              <tr>
+                <td style="white-space:nowrap;">
+                  <span class="badge text-bg-primary-subtle text-primary-emphasis">
+                    <i class="bi bi-newspaper me-1"></i>{{ c.data_dou }}
+                  </span>
+                </td>
+                <td>
+                  {% if c.empresa %}<div class="fw-semibold">{{ c.empresa }}</div>{% endif %}
+                  <small class="text-muted">{{ c.cnpj_fmt }}</small>
+                </td>
+                <td><span class="font-monospace">{{ c.protocolo }}</span></td>
+                <td><small>{{ c.instancia or '—' }}</small></td>
+                <td><small>{{ c.situacao or '—' }}</small></td>
+                <td class="text-center">{{ c.ano_vigencia }}</td>
+                <td class="text-end">
+                  <a href="{{ url_for('fap_panel.contestacoes_page', ano_vigencia=c.ano_vigencia, cnpj_raiz=c.cnpj_raiz) }}"
+                     class="btn btn-sm btn-outline-secondary dash-link-btn" title="Abrir no Painel FAP">
+                    <i class="bi bi-box-arrow-up-right"></i>
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="alert alert-light mb-0">
+          <i class="bi bi-info-circle me-1"></i>Nenhuma contestação com publicação no D.O.U. registrada ainda.
+          Sincronize as contestações no <a href="{{ url_for('fap_panel.index') }}">Painel FAP</a> para acompanhar os resultados.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- CENTRO DE CONTESTAÇÕES -->
 <div class="row g-3 mb-2">
   <div class="col-12">

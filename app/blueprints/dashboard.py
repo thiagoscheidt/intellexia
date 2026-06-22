@@ -24,6 +24,89 @@ def require_law_firm(f):
 def get_current_law_firm_id():
     return session.get('law_firm_id')
 
+
+def _build_latest_dou_contestacoes(law_firm_id, limit=10):
+    """Retorna as contestações mais recentemente publicadas no D.O.U.
+
+    A data de publicação (``dataDOU``) só existe dentro do JSON ``raw_data``,
+    portanto não é possível ordenar via SQL. Carregamos as colunas mínimas +
+    raw_data das contestações do escritório, extraímos a data, ordenamos
+    desc. e devolvemos as ``limit`` mais recentes para o dashboard.
+    """
+    import json as _json
+    from app.models import FapWebContestacao, FapCompany
+
+    rows = (
+        FapWebContestacao.query
+        .filter_by(law_firm_id=law_firm_id)
+        .filter(FapWebContestacao.raw_data.isnot(None))
+        .with_entities(
+            FapWebContestacao.id,
+            FapWebContestacao.contestacao_id,
+            FapWebContestacao.cnpj,
+            FapWebContestacao.cnpj_raiz,
+            FapWebContestacao.ano_vigencia,
+            FapWebContestacao.protocolo,
+            FapWebContestacao.situacao_descricao,
+            FapWebContestacao.instancia_descricao,
+            FapWebContestacao.raw_data,
+        )
+        .all()
+    )
+
+    # Mapa de nome de empresa (chaveado pelo CNPJ cadastrado em FapCompany)
+    company_map = {
+        c.cnpj: c.nome
+        for c in FapCompany.query.filter_by(law_firm_id=law_firm_id)
+        .with_entities(FapCompany.cnpj, FapCompany.nome).all()
+        if c.cnpj
+    }
+
+    def _fmt_cnpj(digits):
+        s = (digits or '').zfill(14)
+        if len(s) == 14:
+            return f'{s[:2]}.{s[2:5]}.{s[5:8]}/{s[8:12]}-{s[12:]}'
+        return digits or ''
+
+    items = []
+    for r in rows:
+        try:
+            raw = _json.loads(r.raw_data)
+        except Exception:
+            continue
+        s = raw.get('dataDOU')
+        if not s:
+            continue
+        try:
+            dt = datetime.fromisoformat(str(s)[:10])
+        except Exception:
+            continue
+        nome = (
+            company_map.get(r.cnpj)
+            or company_map.get(r.cnpj_raiz)
+            or company_map.get((r.cnpj or '')[:8])
+            or ''
+        )
+        items.append({
+            'id': r.id,
+            'contestacao_id': r.contestacao_id,
+            'cnpj_raiz': r.cnpj_raiz,
+            'cnpj_fmt': _fmt_cnpj(r.cnpj),
+            'empresa': nome,
+            'ano_vigencia': r.ano_vigencia,
+            'protocolo': r.protocolo or '—',
+            'situacao': r.situacao_descricao or '',
+            'instancia': r.instancia_descricao or '',
+            'data_dou': dt.strftime('%d/%m/%Y'),
+            '_sort': dt,
+        })
+
+    items.sort(key=lambda x: x['_sort'], reverse=True)
+    top = items[:limit]
+    for it in top:
+        it.pop('_sort', None)
+    return top
+
 @dashboard_bp.route('/')
 def index():
     """Redireciona para o dashboard principal"""
@@ -80,6 +163,11 @@ def dashboard():
         ).group_by(FapWebContestacao.ano_vigencia).order_by(FapWebContestacao.ano_vigencia.desc()).limit(5).all()
         contestacoes_por_ano = {str(a): c for a, c in contestacoes_por_ano_result}
 
+        # ── Últimas contestações publicadas no D.O.U. ────────────────
+        # data_dou não é coluna (vem do JSON raw_data), então parseamos
+        # em Python, ordenamos pela data e pegamos as mais recentes.
+        latest_dou_contestacoes = _build_latest_dou_contestacoes(law_firm_id)
+
         # ── Disputes Center — Benefit ─────────────────────────────────
         total_benefits_dc = Benefit.query.filter_by(law_firm_id=law_firm_id).count()
         benefits_exclusao = Benefit.query.filter_by(law_firm_id=law_firm_id, request_type='exclusao').count()
@@ -116,6 +204,7 @@ def dashboard():
             contestacoes_com_pdf=contestacoes_com_pdf,
             contestacoes_por_situacao=contestacoes_por_situacao,
             contestacoes_por_ano=contestacoes_por_ano,
+            latest_dou_contestacoes=latest_dou_contestacoes,
             total_benefits_dc=total_benefits_dc,
             benefits_exclusao=benefits_exclusao,
             benefits_inclusao=benefits_inclusao,
@@ -144,6 +233,7 @@ def dashboard():
             contestacoes_com_pdf=0,
             contestacoes_por_situacao={},
             contestacoes_por_ano={},
+            latest_dou_contestacoes=[],
             total_benefits_dc=0,
             benefits_exclusao=0,
             benefits_inclusao=0,
