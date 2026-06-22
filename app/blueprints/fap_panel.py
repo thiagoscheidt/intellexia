@@ -752,6 +752,70 @@ def contestacao_history(rec_id):
     })
 
 
+@fap_panel_bp.route('/contestacoes/<int:rec_id>/details', methods=['GET'])
+@require_law_firm
+def contestacao_details(rec_id: int):
+    """AJAX — Retorna os detalhes completos de uma contestação a partir do raw_data."""
+    law_firm_id = get_current_law_firm_id()
+
+    rec = FapWebContestacao.query.filter_by(id=rec_id, law_firm_id=law_firm_id).first()
+    if not rec:
+        return jsonify({'ok': False, 'message': 'Contestação não encontrada.'}), 404
+
+    raw = {}
+    if rec.raw_data:
+        try:
+            raw = json.loads(rec.raw_data)
+        except Exception:
+            pass
+
+    def _fmt_date(s):
+        if not s:
+            return None
+        # ISO date "2026-03-13" ou datetime "2025-11-03T15:58:28"
+        try:
+            return datetime.fromisoformat(s[:10]).strftime('%d/%m/%Y')
+        except Exception:
+            return s
+
+    def _fmt_dt(s):
+        if not s:
+            return None
+        try:
+            return datetime.fromisoformat(s.replace('Z', '').split('+')[0]).strftime('%d/%m/%Y %H:%M')
+        except Exception:
+            return s
+
+    deferimento = raw.get('deferimento') or {}
+
+    return jsonify({
+        'ok': True,
+        'data': {
+            'contestacao_id': rec.contestacao_id,
+            'protocolo': rec.protocolo,
+            'cnpj': rec.cnpj,
+            'ano_vigencia': rec.ano_vigencia,
+            'instancia_descricao': rec.instancia_descricao,
+            'situacao_descricao': rec.situacao_descricao,
+            'deferimento_codigo': deferimento.get('codigo'),
+            'deferimento_descricao': deferimento.get('descricao'),
+            'data_inicial': _fmt_dt(raw.get('dataInicial')),
+            'data_transmissao': _fmt_dt(raw.get('dataTransmissao')),
+            'data_dou': _fmt_date(raw.get('dataDOU')),
+            'data_fim_prazo_1inst': _fmt_date(raw.get('dataFimPrazo1Inst')),
+            'data_fim_prazo_2inst': _fmt_date(raw.get('dataFimPrazo2Inst')),
+            'data_liberacao_analise': _fmt_date(raw.get('dataLiberacaoAnalise')),
+            'prazo_1inst_aberto': raw.get('prazo1InstanciaAberto'),
+            'prazo_2inst_aberto': raw.get('prazo2InstanciaAberto'),
+            'observacao': raw.get('observacao'),
+            'responsavel_nome': (raw.get('responsavel') or {}).get('nome'),
+            'email': raw.get('email'),
+            'revisao_analise': raw.get('revisaoAnalise'),
+            'erro_email_publicacao': raw.get('erroEmailPublicacao'),
+        },
+    })
+
+
 @fap_panel_bp.route('/contestacoes/recent-updates', methods=['GET'])
 @require_law_firm
 def contestacoes_recent_updates():

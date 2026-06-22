@@ -35,6 +35,11 @@ contestacao_id=c.contestacao_id) -%}
         aria-label="Histórico da contestação {{ c.contestacao_id }}">
         <i class="bi bi-clock-history"></i>
       </button>
+      <button type="button" class="btn-cell btn-cell-icon btn-cell-details details-btn" data-rec-id="{{ c.id }}"
+        data-contestacao-id="{{ c.contestacao_id }}" title="Ver detalhes completos"
+        aria-label="Detalhes da contestação {{ c.contestacao_id }}">
+        <i class="bi bi-info-circle"></i>
+      </button>
     </div>
 
     {% if imported_report_id %}
@@ -450,6 +455,17 @@ contestacao_id=c.contestacao_id) -%}
   .btn-cell-history:hover {
     background: #bae6fd;
     color: #0c4a6e;
+  }
+
+  .btn-cell-details {
+    background: #f3e8ff;
+    color: #6b21a8;
+    border-color: #e9d5ff;
+  }
+
+  .btn-cell-details:hover {
+    background: #e9d5ff;
+    color: #581c87;
   }
 
   .contestacao-cell+.contestacao-cell {
@@ -948,6 +964,24 @@ vigência, empresa e instância.', icon='bi bi-table') %}
   </div>
 </div>
 
+<div class="modal fade" id="detailsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="detailsModalTitle">
+          <i class="bi bi-info-circle me-2 text-purple"></i>Detalhes da Contestação
+        </h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body" id="detailsModalBody">
+        <div class="text-muted text-center py-4">
+          <span class="spinner-border spinner-border-sm me-2"></span>Carregando...
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal fade" id="historyModal" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-lg modal-dialog-scrollable">
     <div class="modal-content">
@@ -1181,6 +1215,7 @@ vigência, empresa e instância.', icon='bi bi-table') %}
     var importUrl = '{{ url_for("disputes_center.fap_auto_import_import_contestacao") }}';
     var reportsUrl = '{{ url_for("disputes_center.fap_contestation_reports") }}';
     var historyUrlTemplate = '{{ url_for("fap_panel.contestacao_history", rec_id=0) }}';
+    var detailsUrlTemplate = '{{ url_for("fap_panel.contestacao_details", rec_id=0) }}';
     var recentUpdatesUrl = '{{ url_for("fap_panel.contestacoes_recent_updates") }}';
     var btnImportAll = document.getElementById('btnImportAll');
     var btnCancelImport = document.getElementById('btnCancelImport');
@@ -1189,6 +1224,58 @@ vigência, empresa e instância.', icon='bi bi-table') %}
 
     function getHistoryUrl(recId) {
       return historyUrlTemplate.replace('/0/history', '/' + recId + '/history');
+    }
+
+    function getDetailsUrl(recId) {
+      return detailsUrlTemplate.replace('/0/details', '/' + recId + '/details');
+    }
+
+    function _yesNo(val) {
+      if (val === true || val === 'true' || val === 'S') return '<span class="badge bg-success">Sim</span>';
+      if (val === false || val === 'false' || val === 'N') return '<span class="badge bg-secondary">Não</span>';
+      return val == null ? '<span class="text-muted">—</span>' : escapeHtml(String(val));
+    }
+
+    async function openDetailsModal(recId, contestacaoId) {
+      var body = document.getElementById('detailsModalBody');
+      var title = document.getElementById('detailsModalTitle');
+      body.innerHTML = '<div class="text-muted text-center py-4"><span class="spinner-border spinner-border-sm me-2"></span>Carregando...</div>';
+      if (title) title.innerHTML = '<i class="bi bi-info-circle me-2 text-purple"></i>Contestação ' + escapeHtml(contestacaoId || '#' + recId);
+      var modalEl = document.getElementById('detailsModal');
+      var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+      modal.show();
+      try {
+        var resp = await fetch(getDetailsUrl(recId), { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } });
+        var payload = await resp.json();
+        if (!payload.ok) { body.innerHTML = '<div class="alert alert-danger">' + escapeHtml(payload.message || 'Erro ao carregar detalhes') + '</div>'; return; }
+        var d = payload.data;
+        function row(label, value) {
+          return '<tr><th class="text-nowrap text-muted fw-normal" style="width:40%">' + label + '</th><td>' + (value == null ? '<span class="text-muted">—</span>' : value) + '</td></tr>';
+        }
+        var deferHtml = '';
+        if (d.deferimento_descricao) {
+          var cls = /^DEFER/i.test(d.deferimento_descricao) ? 'success' : /^INDEFER/i.test(d.deferimento_descricao) ? 'danger' : 'secondary';
+          deferHtml = '<span class="badge bg-' + cls + '">' + escapeHtml(d.deferimento_descricao) + '</span>';
+          if (d.deferimento_codigo) deferHtml += ' <small class="text-muted">(' + escapeHtml(String(d.deferimento_codigo)) + ')</small>';
+        }
+        body.innerHTML = '<table class="table table-sm table-hover mb-0">'
+          + (deferHtml ? row('Deferimento', deferHtml) : '')
+          + row('Data Inicial', escapeHtml(d.data_inicial || ''))
+          + row('Publicação D.O.U.', escapeHtml(d.data_dou || ''))
+          + row('Prazo 1ª Instância', escapeHtml(d.data_fim_prazo_1inst || ''))
+          + row('Prazo 2ª Instância', escapeHtml(d.data_fim_prazo_2inst || ''))
+          + row('Liberação de Análise', escapeHtml(d.data_liberacao_analise || ''))
+          + row('Prazo 1ª Inst. Aberto', _yesNo(d.prazo_1inst_aberto))
+          + row('Prazo 2ª Inst. Aberto', _yesNo(d.prazo_2inst_aberto))
+          + row('Responsável', escapeHtml(d.responsavel_nome || ''))
+          + row('E-mail', escapeHtml(d.email || ''))
+          + row('Revisão / Análise', escapeHtml(d.revisao_analise || ''))
+          + row('Erro e-mail publicação', escapeHtml(d.erro_email_publicacao || ''))
+          + (d.observacao ? row('Observação', '<span class="text-wrap">' + escapeHtml(d.observacao) + '</span>') : '')
+          + '</table>';
+      } catch (err) {
+        body.innerHTML = '<div class="alert alert-danger">Erro de rede: ' + escapeHtml(String(err)) + '</div>';
+      }
     }
 
     function getRecentUpdatesRequestUrl(days) {
@@ -1396,6 +1483,16 @@ vigência, empresa e instância.', icon='bi bi-table') %}
         var contestacaoId = historyBtn.dataset.contestacaoId || '';
         if (recId) {
           openHistoryModal(recId, contestacaoId);
+        }
+        return;
+      }
+
+      var detailsBtn = e.target.closest('.details-btn');
+      if (detailsBtn) {
+        var recId = parseInt(detailsBtn.dataset.recId, 10);
+        var contestacaoId = detailsBtn.dataset.contestacaoId || '';
+        if (recId) {
+          openDetailsModal(recId, contestacaoId);
         }
         return;
       }
