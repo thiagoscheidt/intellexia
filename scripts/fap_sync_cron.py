@@ -125,14 +125,29 @@ def sync_companies(svc, db, FapCompany, law_firm_id: int) -> int:
                 synced_at=now,
             ))
 
+    # Poda empresas que não vieram mais na procuração — MAS preserva as que
+    # têm contestações vinculadas (FK em fap_web_contestacoes.fap_company_id),
+    # senão o DELETE falha por constraint e perderíamos histórico.
+    removed = 0
     if seen_cnpjs:
-        FapCompany.query.filter(
+        from app.models import FapWebContestacao
+        stale = FapCompany.query.filter(
             FapCompany.law_firm_id == law_firm_id,
             FapCompany.cnpj.notin_(seen_cnpjs),
-        ).delete(synchronize_session='fetch')
+        ).all()
+        for comp in stale:
+            tem_contestacao = db.session.query(
+                FapWebContestacao.id
+            ).filter_by(
+                law_firm_id=law_firm_id, fap_company_id=comp.id
+            ).first()
+            if tem_contestacao:
+                continue  # mantém: empresa com histórico de contestações
+            db.session.delete(comp)
+            removed += 1
 
     db.session.commit()
-    _log(f"  ✓ Empresas sincronizadas: {len(seen_cnpjs)}")
+    _log(f"  ✓ Empresas sincronizadas: {len(seen_cnpjs)} (removidas {removed} sem contestações)")
     return len(seen_cnpjs)
 
 
@@ -235,7 +250,20 @@ def sync_contestacoes_for_company(
         result = svc.fetch_contestacoes(cnpj=cnpj_raiz, year=year)
         if not result.ok:
             if getattr(result, 'expired', False):
-                raise RuntimeError(f"Sessão FAP expirada ao buscar contestações (empresa {cnpj_raiz}, ano {year}).")
+                # 401/403 pode ser sessão global expirada OU acesso negado
+                # apenas para este CNPJ (sem procuração válida). Revalida a
+                # sessão: só aborta tudo se ela estiver realmente expirada.
+                chk = svc.check_session()
+                if not chk.ok and getattr(chk, 'expired', False):
+                    raise RuntimeError(
+                        f"Sessão FAP expirada ao buscar contestações (empresa {cnpj_raiz}, ano {year})."
+                    )
+                _log(
+                    f"    ! Ano {year}: acesso negado para esta empresa "
+                    f"(HTTP {result.status_code}). Sessão segue ativa — pulando empresa/ano."
+                )
+                time.sleep(0.5)
+                continue
             _log(f"    ! Ano {year}: {result.message}")
             time.sleep(1)
             continue
@@ -391,6 +419,7 @@ def download_pending_files_for_company(
     ``uploads/fap_web_contestacoes/{law_firm_id}/{ano}/{cnpj14}/``.
     """
     import os
+    import glob
     from flask import current_app
     from concurrent.futures import ThreadPoolExecutor, as_completed
     from app.services.fap_web_service import FapWebService
@@ -417,10 +446,40 @@ def download_pending_files_for_company(
     )
 
     if not pending:
-        return {'pending': 0, 'downloaded': 0, 'failed': 0, 'expired': False}
+        return {'pending': 0, 'downloaded': 0, 'failed': 0, 'linked': 0, 'expired': False}
 
     upload_root = os.path.join(current_app.root_path, 'uploads', 'fap_web_contestacoes', str(law_firm_id))
     flask_app = current_app._get_current_object()
+
+    # ── 1) Resolve arquivos que já existem em disco (não baixa de novo) ──
+    # Cobre o caso de o PDF ter sido baixado antes mas o file_path ter ficado
+    # nulo (ex.: run interrompido). Só vincula o caminho — sem ir à rede.
+    to_download = []
+    linked_from_disk = 0
+    for rec in pending:
+        save_dir = os.path.join(upload_root, str(rec.ano_vigencia), rec.cnpj)
+        existing = next(
+            (m for m in glob.glob(os.path.join(save_dir, f'{rec.contestacao_id}_*')) if os.path.isfile(m)),
+            None,
+        )
+        if existing:
+            rel_path = '/'.join([
+                'uploads', 'fap_web_contestacoes',
+                str(law_firm_id), str(rec.ano_vigencia), rec.cnpj, os.path.basename(existing),
+            ])
+            db_rec = db.session.get(FapWebContestacao, rec.id)
+            if db_rec:
+                db_rec.file_path = rel_path
+            linked_from_disk += 1
+        else:
+            to_download.append(rec)
+
+    if linked_from_disk:
+        db.session.commit()
+
+    if not to_download:
+        return {'pending': len(pending), 'downloaded': 0, 'failed': 0,
+                'linked': linked_from_disk, 'expired': False}
 
     def _download_one(rec):
         svc = FapWebService(auth)
@@ -465,10 +524,10 @@ def download_pending_files_for_company(
     downloaded = 0
     failed = 0
     expired = False
-    workers = max(1, min(max_workers, len(pending)))
+    workers = max(1, min(max_workers, len(to_download)))
 
     with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures = {pool.submit(_download_one, r): r for r in pending}
+        futures = {pool.submit(_download_one, r): r for r in to_download}
         for fut in as_completed(futures):
             res = fut.result()
             if res.get('ok'):
@@ -478,7 +537,8 @@ def download_pending_files_for_company(
                 if res.get('expired'):
                     expired = True
 
-    return {'pending': len(pending), 'downloaded': downloaded, 'failed': failed, 'expired': expired}
+    return {'pending': len(pending), 'downloaded': downloaded, 'failed': failed,
+            'linked': linked_from_disk, 'expired': expired}
 
 
 # ---------------------------------------------------------------------------
@@ -601,13 +661,20 @@ def main() -> None:
                         if dl['pending']:
                             _log(
                                 f"      Arquivos: {dl['downloaded']} baixado(s), "
+                                f"{dl.get('linked', 0)} já em disco, "
                                 f"{dl['failed']} sem PDF/falha (de {dl['pending']} pendente(s))"
                             )
                         if dl['expired']:
-                            _log("  ✗ Sessão FAP expirada durante o download. "
-                                 "Atualize FAP_AUTH_JSON no .env e tente novamente.")
-                            db.session.rollback()
-                            sys.exit(1)
+                            # Pode ser 403 só de alguns documentos. Só aborta se a
+                            # sessão estiver realmente expirada.
+                            chk = svc.check_session()
+                            if not chk.ok and getattr(chk, 'expired', False):
+                                _log("  ✗ Sessão FAP expirada durante o download. "
+                                     "Atualize FAP_AUTH_JSON no .env e tente novamente.")
+                                db.session.rollback()
+                                sys.exit(1)
+                            _log("      ! Alguns downloads retornaram acesso negado, "
+                                 "mas a sessão segue ativa — continuando.")
                     except Exception as e:
                         _log(f"  ✗ Erro ao baixar arquivos de {nome}: {e}")
                         db.session.rollback()
