@@ -524,10 +524,8 @@ contestacao_id=c.contestacao_id) -%}
   }
 
   /* ── Loading overlay ───────────────────────────────────────────── */
-  /* Esconde linhas antes do JS rodar: evita flash de tabela enorme */
-  #fapTbody tr {
-    display: none;
-  }
+  /* As linhas já vêm paginadas do servidor (≤ página atual), então
+     não precisam ser escondidas — são exibidas direto. */
 
   #tableLoadingOverlay {
     position: absolute;
