@@ -102,7 +102,7 @@ def dashboard():
 
         from app.models import (
             Lawyer, KnowledgeBase, KnowledgeCategory,
-            JudicialProcess, Benefit, FapWebContestacao,
+            JudicialProcess, Benefit, FapWebContestacao, FapCompany,
         )
 
         # ── Painel de Processos ───────────────────────────────────────
@@ -134,6 +134,42 @@ def dashboard():
             FapWebContestacao.law_firm_id == law_firm_id
         ).group_by(FapWebContestacao.ano_vigencia).order_by(FapWebContestacao.ano_vigencia.desc()).limit(5).all()
         contestacoes_por_ano = {str(a): c for a, c in contestacoes_por_ano_result}
+
+        # ── Contestações por situação, agrupadas por empresa ─────────
+        # Permite no frontend filtrar o gráfico de situação por empresa.
+        situacao_por_empresa_result = db.session.query(
+            FapWebContestacao.cnpj_raiz,
+            FapWebContestacao.situacao_descricao,
+            db.func.count(FapWebContestacao.id).label('count'),
+        ).filter(
+            FapWebContestacao.law_firm_id == law_firm_id
+        ).group_by(
+            FapWebContestacao.cnpj_raiz,
+            FapWebContestacao.situacao_descricao,
+        ).all()
+
+        company_names = {
+            c.cnpj: (c.nome or '')
+            for c in FapCompany.query.filter_by(law_firm_id=law_firm_id)
+            .with_entities(FapCompany.cnpj, FapCompany.nome).all()
+            if c.cnpj
+        }
+
+        contestacoes_situacao_por_empresa = {}
+        for raiz, sit, cnt in situacao_por_empresa_result:
+            key = raiz or '—'
+            bucket = contestacoes_situacao_por_empresa.setdefault(key, {})
+            bucket[(sit or 'Indefinida')] = cnt
+
+        # Lista de empresas (com contestações) para o seletor do gráfico
+        contestacoes_empresas = [
+            {
+                'cnpj_raiz': raiz,
+                'nome': company_names.get(raiz) or company_names.get((raiz or '')[:8]) or raiz,
+            }
+            for raiz in contestacoes_situacao_por_empresa
+        ]
+        contestacoes_empresas.sort(key=lambda e: (e['nome'] or '').lower())
 
         # ── Últimas contestações publicadas no D.O.U. ────────────────
         latest_dou_contestacoes = _build_latest_dou_contestacoes(law_firm_id)
@@ -174,6 +210,8 @@ def dashboard():
             contestacoes_com_pdf=contestacoes_com_pdf,
             contestacoes_por_situacao=contestacoes_por_situacao,
             contestacoes_por_ano=contestacoes_por_ano,
+            contestacoes_situacao_por_empresa=contestacoes_situacao_por_empresa,
+            contestacoes_empresas=contestacoes_empresas,
             latest_dou_contestacoes=latest_dou_contestacoes,
             total_benefits_dc=total_benefits_dc,
             benefits_exclusao=benefits_exclusao,
@@ -203,6 +241,8 @@ def dashboard():
             contestacoes_com_pdf=0,
             contestacoes_por_situacao={},
             contestacoes_por_ano={},
+            contestacoes_situacao_por_empresa={},
+            contestacoes_empresas=[],
             latest_dou_contestacoes=[],
             total_benefits_dc=0,
             benefits_exclusao=0,

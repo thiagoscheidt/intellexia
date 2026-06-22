@@ -416,6 +416,44 @@
   </div>
 </div>
 
+<!-- GRÁFICO POR EMPRESA -->
+<div class="row g-3 mb-4">
+  <div class="col-12">
+    <div class="card dash-card h-100">
+      <div class="card-header bg-transparent border-0 pb-2 d-flex flex-column flex-md-row align-items-start align-items-md-center justify-content-between gap-2">
+        <h3 class="card-title fw-semibold mb-0">
+          <i class="bi bi-building me-2 text-info"></i>Contestações por Situação — por Empresa
+        </h3>
+        {% if contestacoes_empresas %}
+        <div class="d-flex align-items-center gap-2">
+          <label for="empresaSituacaoSelect" class="small text-muted mb-0 text-nowrap">Empresa</label>
+          <select id="empresaSituacaoSelect" class="form-select form-select-sm" style="min-width:240px;max-width:380px;">
+            <option value="__all__" selected>Todas as empresas</option>
+            {% for emp in contestacoes_empresas %}
+            <option value="{{ emp.cnpj_raiz }}">{{ emp.nome }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        {% endif %}
+      </div>
+      <div class="card-body">
+        {% if contestacoes_empresas %}
+        <div class="row g-3 align-items-center">
+          <div class="col-md-7">
+            <canvas id="chartSituacaoPorEmpresa" height="240"></canvas>
+          </div>
+          <div class="col-md-5">
+            <div id="situacaoPorEmpresaResumo" class="small"></div>
+          </div>
+        </div>
+        {% else %}
+        <div class="alert alert-light mb-0">Nenhuma contestação sincronizada ainda.</div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- ÚLTIMAS PUBLICAÇÕES NO D.O.U. -->
 <div class="row g-3 mb-4">
   <div class="col-12">
@@ -751,6 +789,7 @@
 <script id="dashboard-data" type="application/json">{{ {
   'contestacoesPorSituacao': contestacoes_por_situacao or {},
   'contestacoesPorAno': contestacoes_por_ano or {},
+  'situacaoPorEmpresa': contestacoes_situacao_por_empresa or {},
   'benefitsExclusao': benefits_exclusao or 0,
   'benefitsInclusao': benefits_inclusao or 0,
   'benefitsRevisao': benefits_revisao or 0,
@@ -796,6 +835,73 @@
             datasets: [{ data: Object.values(situacao), backgroundColor: palette }]
           },
           options: { plugins: { legend: { position: 'bottom' } } }
+        });
+      }
+    }
+
+    // Contestações por Situação — por Empresa (doughnut com filtro)
+    const situacaoPorEmpresa = data.situacaoPorEmpresa || {};
+    const empresaSelect = document.getElementById('empresaSituacaoSelect');
+    const empresaCtx = document.getElementById('chartSituacaoPorEmpresa');
+    if (empresaCtx) {
+      let empresaChart = null;
+
+      function dadosPorEmpresa(value) {
+        if (!value || value === '__all__') return data.contestacoesPorSituacao || {};
+        return situacaoPorEmpresa[value] || {};
+      }
+
+      function renderResumo(dist) {
+        const box = document.getElementById('situacaoPorEmpresaResumo');
+        if (!box) return;
+        const entries = Object.entries(dist);
+        const total = entries.reduce(function (acc, kv) { return acc + (kv[1] || 0); }, 0);
+        if (!total) {
+          box.innerHTML = '<div class="text-muted">Sem contestações para esta empresa.</div>';
+          return;
+        }
+        const rows = entries
+          .sort(function (a, b) { return b[1] - a[1]; })
+          .map(function (kv, i) {
+            const cor = palette[i % palette.length];
+            const pct = Math.round((kv[1] * 100) / total);
+            return ''
+              + '<div class="d-flex align-items-center justify-content-between py-1 border-bottom">'
+              + '  <span class="d-inline-flex align-items-center gap-2">'
+              + '    <span style="width:10px;height:10px;border-radius:2px;background:' + cor + ';display:inline-block;"></span>'
+              + '    <span>' + kv[0] + '</span>'
+              + '  </span>'
+              + '  <span class="fw-semibold text-nowrap ms-2">' + kv[1] + ' <span class="text-muted">(' + pct + '%)</span></span>'
+              + '</div>';
+          }).join('');
+        box.innerHTML = rows
+          + '<div class="d-flex align-items-center justify-content-between pt-2 fw-semibold">'
+          + '  <span>Total</span><span>' + total + '</span>'
+          + '</div>';
+      }
+
+      function atualizarEmpresa(value) {
+        const dist = dadosPorEmpresa(value);
+        const labels = Object.keys(dist);
+        const values = Object.values(dist);
+        if (empresaChart) {
+          empresaChart.data.labels = labels;
+          empresaChart.data.datasets[0].data = values;
+          empresaChart.update();
+        } else {
+          empresaChart = new Chart(empresaCtx, {
+            type: 'doughnut',
+            data: { labels: labels, datasets: [{ data: values, backgroundColor: palette }] },
+            options: { plugins: { legend: { position: 'bottom' } } }
+          });
+        }
+        renderResumo(dist);
+      }
+
+      atualizarEmpresa('__all__');
+      if (empresaSelect) {
+        empresaSelect.addEventListener('change', function () {
+          atualizarEmpresa(this.value);
         });
       }
     }
