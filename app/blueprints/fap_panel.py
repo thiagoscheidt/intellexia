@@ -1096,7 +1096,10 @@ def contestacoes_page():
     )
 
     # ── Filtros ──────────────────────────────────────────────────────────
-    f_year      = request.args.get('ano_vigencia', '').strip()
+    # Vigência: padrão "Todas" (__all__) na carga inicial (sem parâmetro na URL).
+    # Se o usuário enviar o filtro vazio explicitamente (opção "Selecione"),
+    # respeitamos o vazio.
+    f_year      = request.args.get('ano_vigencia', '__all__').strip()
     f_cnpj_raiz = request.args.get('cnpj_raiz', '').strip()
     f_cnpj      = request.args.get('cnpj', '').strip()          # estabelecimento (14 dígitos)
     f_instancia = request.args.get('instancia', '').strip()
