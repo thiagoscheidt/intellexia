@@ -490,6 +490,7 @@ def _resolve_existing_file_path(file_path: str | None) -> str | None:
 
     candidates = [file_path]
     if not os.path.isabs(file_path):
+        candidates.append(os.path.abspath(os.path.join(current_app.root_path, file_path)))
         candidates.append(os.path.abspath(os.path.join(current_app.root_path, '..', file_path)))
         candidates.append(os.path.abspath(file_path))
 
@@ -3180,7 +3181,7 @@ def fap_contestation_reports():
             success_count = 0
             upload_errors = []
             upload_dir = os.path.abspath(
-                os.path.join(current_app.root_path, '..', 'uploads', 'fap_contestation_reports')
+                os.path.join(current_app.root_path, 'uploads', 'fap_contestation_reports')
             )
             os.makedirs(upload_dir, exist_ok=True)
 
@@ -3493,7 +3494,7 @@ def fap_auto_import_import_contestacao():
         filename = f'FAP_{fap_rec.protocolo}.pdf' if fap_rec.protocolo else f'FAP_{fap_rec.contestacao_id}.pdf'
 
     upload_dir = os.path.abspath(
-        os.path.join(current_app.root_path, '..', 'uploads', 'fap_contestation_reports')
+        os.path.join(current_app.root_path, 'uploads', 'fap_contestation_reports')
     )
     os.makedirs(upload_dir, exist_ok=True)
 
