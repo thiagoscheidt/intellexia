@@ -89,6 +89,26 @@ class FapWebAuthPayload:
             user_agent=(d.get('userAgent') or '').strip(),
         )
 
+    @classmethod
+    def from_env(cls) -> 'FapWebAuthPayload | None':
+        """Carrega a autenticação de fallback a partir de FAP_AUTH_JSON (.env).
+
+        Retorna None se a variável não existir, estiver vazia, for inválida ou
+        não tiver cookies. Remove aspas externas, pois o loader manual de .env
+        da aplicação (main.py) preserva as aspas do valor.
+        """
+        import os
+        raw = (os.environ.get('FAP_AUTH_JSON') or '').strip()
+        if not raw:
+            return None
+        if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in ('"', "'"):
+            raw = raw[1:-1].strip()
+        try:
+            payload = cls.from_json(raw)
+        except Exception:
+            return None
+        return payload if payload.cookies else None
+
 
 # ---------------------------------------------------------------------------
 # Service principal
@@ -97,9 +117,46 @@ class FapWebAuthPayload:
 class FapWebService:
     """Serviço para comunicação com o portal FAP/Dataprev."""
 
-    def __init__(self, auth: FapWebAuthPayload) -> None:
+    def __init__(
+        self,
+        auth: FapWebAuthPayload,
+        fallback_auth: 'FapWebAuthPayload | None' = None,
+        use_env_fallback: bool = True,
+    ) -> None:
         self.auth = auth
+        self._using_fallback = False
+
+        # Fallback automático: se não foi informado, tenta o .env (FAP_AUTH_JSON).
+        if fallback_auth is None and use_env_fallback:
+            try:
+                fallback_auth = FapWebAuthPayload.from_env()
+            except Exception:
+                fallback_auth = None
+
+        # Se o auth primário está vazio/ausente, promove o fallback a primário.
+        if (not self.auth or not getattr(self.auth, 'cookie_string', '')) and fallback_auth:
+            self.auth = fallback_auth
+
+        self._fallback_auth = fallback_auth
         self._ssl_ctx = self._build_ssl_ctx()
+
+    # ── Fallback de autenticação ──────────────────────────────────────────
+
+    def _switch_to_fallback(self) -> bool:
+        """Troca a autenticação atual pela de fallback (.env), se aplicável.
+
+        Retorna True se trocou (vale a pena reenviar a requisição).
+        """
+        fb = self._fallback_auth
+        if not fb or self._using_fallback:
+            return False
+        if not fb.cookie_string:
+            return False
+        if fb.cookie_string == self.auth.cookie_string:
+            return False  # mesmo conjunto de cookies — reenviar não adianta
+        self.auth = fb
+        self._using_fallback = True
+        return True
 
     # ── SSL ──────────────────────────────────────────────────────────────
 
@@ -137,6 +194,16 @@ class FapWebService:
 
     # ── Execução de requisição ────────────────────────────────────────────
 
+    def _raw_get(
+        self,
+        url: str,
+        timeout: int,
+        referer: str,
+    ) -> tuple[bytes, int]:
+        req = urllib.request.Request(url, headers=self._base_headers(referer=referer), method='GET')
+        with urllib.request.urlopen(req, timeout=timeout, context=self._ssl_ctx) as resp:
+            return resp.read(), resp.status
+
     def _get(
         self,
         url: str,
@@ -144,11 +211,17 @@ class FapWebService:
         referer: str = 'https://fap-mps.dataprev.gov.br/contestacoes-eletronicas',
     ) -> tuple[bytes, int]:
         """Faz um GET e retorna (body_bytes, http_status).
+
+        Se a resposta for 401/403 (sessão do usuário vencida/inválida) e houver
+        autenticação de fallback (.env), troca os cookies e reenvia uma vez.
         Lança urllib.error.HTTPError / URLError em caso de falha.
         """
-        req = urllib.request.Request(url, headers=self._base_headers(referer=referer), method='GET')
-        with urllib.request.urlopen(req, timeout=timeout, context=self._ssl_ctx) as resp:
-            return resp.read(), resp.status
+        try:
+            return self._raw_get(url, timeout, referer)
+        except urllib.error.HTTPError as e:
+            if e.code in (401, 403) and self._switch_to_fallback():
+                return self._raw_get(url, timeout, referer)
+            raise
 
     # ── Verificar sessão ─────────────────────────────────────────────────
 
@@ -342,3 +415,56 @@ class FapWebService:
             return FapWebResult(ok=False, message=f'Erro ao processar resposta do servidor: {str(e)}')
 
         return FapWebResult(ok=True, data={'pdf_bytes': pdf_bytes, 'filename': filename})
+
+
+# ---------------------------------------------------------------------------
+# Resolução de autenticação (sessão do usuário → fallback no .env)
+# ---------------------------------------------------------------------------
+
+def resolve_fap_auth(
+    session_auth_json: str | None,
+) -> tuple['FapWebAuthPayload | None', 'FapWebAuthPayload | None']:
+    """Resolve a autenticação FAP a partir dos cookies do usuário e do .env.
+
+    Args:
+        session_auth_json: JSON de autenticação salvo na sessão do usuário
+            (pode ser None/vazio/ inválido).
+
+    Returns:
+        (primary, fallback): ``primary`` é a sessão do usuário quando válida;
+        caso contrário, cai para o ``.env``. ``fallback`` é sempre o ``.env``
+        (ou None se indisponível), usado para reenviar requisições quando os
+        cookies do usuário estiverem vencidos.
+    """
+    try:
+        env_auth = FapWebAuthPayload.from_env()
+    except Exception:
+        env_auth = None
+
+    primary: 'FapWebAuthPayload | None' = None
+    if session_auth_json:
+        try:
+            candidate = FapWebAuthPayload.from_json(session_auth_json)
+            if candidate.cookies:
+                primary = candidate
+        except Exception:
+            primary = None
+
+    if primary is None:
+        primary = env_auth
+
+    return primary, env_auth
+
+
+def build_fap_service(session_auth_json: str | None) -> 'FapWebService | None':
+    """Cria um ``FapWebService`` priorizando os cookies do usuário.
+
+    Se os cookies da sessão estiverem ausentes/ inválidos, usa o ``.env``.
+    O serviço resultante também reenvia automaticamente com o ``.env`` quando
+    a sessão do usuário estiver vencida (401/403). Retorna None somente quando
+    não há nenhuma autenticação disponível (nem sessão, nem ``.env``).
+    """
+    primary, env_auth = resolve_fap_auth(session_auth_json)
+    if primary is None:
+        return None
+    return FapWebService(primary, fallback_auth=env_auth)

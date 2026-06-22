@@ -48,7 +48,9 @@ from app.models import (
     FapWebProcuracao,
     db,
 )
-from app.services.fap_web_service import FapWebAuthPayload, FapWebService
+from app.services.fap_web_service import (
+    FapWebAuthPayload, FapWebService, build_fap_service, resolve_fap_auth,
+)
 
 fap_panel_bp = Blueprint('fap_panel', __name__, url_prefix='/fap-panel')
 
@@ -206,15 +208,11 @@ def sync_save_auth():
 def sync_check_session():
     """AJAX — Verifica se a sessão FAP salva está ativa."""
     saved_auth = session.get('fap_auto_import_auth', '')
-    if not saved_auth:
-        return jsonify({'ok': False, 'message': 'Sem sessão salva.'}), 400
+    service = build_fap_service(saved_auth)
+    if service is None:
+        return jsonify({'ok': False, 'message': 'Sem sessão salva e nenhuma sessão FAP configurada no servidor.'}), 400
 
-    try:
-        auth = FapWebAuthPayload.from_json(saved_auth)
-    except Exception:
-        return jsonify({'ok': False, 'message': 'Dados de autenticação inválidos.'}), 400
-
-    result = FapWebService(auth).check_session()
+    result = service.check_session()
     if result.ok:
         return jsonify({'ok': True, 'status': result.status_code})
     if result.expired:
@@ -322,19 +320,15 @@ def sync_run_year():
         return jsonify({'ok': False, 'message': 'Informe o CNPJ e o ano de vigência.'}), 400
 
     saved_auth = session.get('fap_auto_import_auth', '')
-    if not saved_auth:
+    service = build_fap_service(saved_auth)
+    if service is None:
         return jsonify({
             'ok': False,
-            'message': 'Dados de autenticação não encontrados. Salve a sessão FAP primeiro.',
+            'message': 'Dados de autenticação não encontrados. Salve a sessão FAP ou configure FAP_AUTH_JSON no servidor.',
         }), 400
 
-    try:
-        auth = FapWebAuthPayload.from_json(saved_auth)
-    except Exception:
-        return jsonify({'ok': False, 'message': 'Dados de autenticação inválidos na sessão.'}), 400
-
     # Busca na API FAP
-    result = FapWebService(auth).fetch_contestacoes(cnpj=cnpj_raiz, year=year)
+    result = service.fetch_contestacoes(cnpj=cnpj_raiz, year=year)
     if not result.ok:
         detail = (result.data or {}).get('detail', '') if result.data else ''
         payload = {'ok': False, 'message': result.message}
@@ -563,13 +557,9 @@ def sync_download_batch():
         return jsonify({'ok': False, 'message': 'Informe o CNPJ.'}), 400
 
     saved_auth = session.get('fap_auto_import_auth', '')
-    if not saved_auth:
+    auth, _ = resolve_fap_auth(saved_auth)
+    if auth is None:
         return jsonify({'ok': False, 'message': 'Dados de autenticação não encontrados.'}), 400
-
-    try:
-        auth = FapWebAuthPayload.from_json(saved_auth)
-    except Exception:
-        return jsonify({'ok': False, 'message': 'Dados de autenticação inválidos.'}), 400
 
     pending_q = (
         FapWebContestacao.query
@@ -1811,18 +1801,14 @@ def sync_procuracoes():
     law_firm_id = get_current_law_firm_id()
 
     saved_auth = session.get('fap_auto_import_auth', '')
-    if not saved_auth:
+    service = build_fap_service(saved_auth)
+    if service is None:
         return jsonify({
             'ok': False,
-            'message': 'Dados de autenticação não encontrados. Salve a sessão FAP primeiro.',
+            'message': 'Dados de autenticação não encontrados. Salve a sessão FAP ou configure FAP_AUTH_JSON no servidor.',
         }), 400
 
-    try:
-        auth = FapWebAuthPayload.from_json(saved_auth)
-    except Exception:
-        return jsonify({'ok': False, 'message': 'Dados de autenticação inválidos na sessão.'}), 400
-
-    result = FapWebService(auth).fetch_procuracoes()
+    result = service.fetch_procuracoes()
     if not result.ok:
         expired = getattr(result, 'expired', False)
         payload = {'ok': False, 'message': result.message}
