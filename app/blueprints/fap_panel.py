@@ -364,6 +364,7 @@ def sync_run_year():
         'situacao_descricao',
         'protocolo',
         'data_transmissao',
+        'data_dou_date',
     )
 
     try:
@@ -397,6 +398,15 @@ def sync_run_year():
                 except Exception:
                     pass
 
+            # Normaliza data de publicação no D.O.U. (campo dataDOU → Date)
+            raw_dou = item.get('dataDOU')
+            data_dou_date = None
+            if raw_dou:
+                try:
+                    data_dou_date = datetime.fromisoformat(str(raw_dou)[:10]).date()
+                except Exception:
+                    pass
+
             existing = FapWebContestacao.query.filter_by(
                 law_firm_id=law_firm_id,
                 contestacao_id=int(cid),
@@ -415,6 +425,7 @@ def sync_run_year():
                     'situacao_descricao': situacao.get('descricao'),
                     'protocolo': item.get('protocolo'),
                     'data_transmissao': data_transmissao,
+                    'data_dou_date': data_dou_date,
                 }
 
                 changed_old = {}
@@ -460,6 +471,7 @@ def sync_run_year():
                 existing.situacao_descricao = next_values['situacao_descricao']
                 existing.protocolo = next_values['protocolo']
                 existing.data_transmissao = next_values['data_transmissao']
+                existing.data_dou_date       = next_values['data_dou_date']
                 existing.raw_data            = json.dumps(item, ensure_ascii=False)
                 existing.last_synced_at      = now
                 updated += 1
@@ -477,6 +489,7 @@ def sync_run_year():
                     situacao_descricao  = situacao.get('descricao'),
                     protocolo           = item.get('protocolo'),
                     data_transmissao    = data_transmissao,
+                    data_dou_date       = data_dou_date,
                     raw_data            = json.dumps(item, ensure_ascii=False),
                     last_synced_at      = now,
                 )
@@ -494,6 +507,7 @@ def sync_run_year():
                     'situacao_descricao': situacao.get('descricao'),
                     'protocolo': item.get('protocolo'),
                     'data_transmissao': data_transmissao,
+                    'data_dou_date': data_dou_date,
                 }
 
                 history_row = FapWebContestacaoChangeHistory(

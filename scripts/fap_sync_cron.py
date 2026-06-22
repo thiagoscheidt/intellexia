@@ -210,7 +210,7 @@ def sync_contestacoes_for_company(
         'cnpj', 'cnpj_raiz', 'ano_vigencia', 'fap_company_id',
         'instancia_codigo', 'instancia_descricao',
         'situacao_codigo', 'situacao_descricao',
-        'protocolo', 'data_transmissao',
+        'protocolo', 'data_transmissao', 'data_dou_date',
     )
 
     for year in years:
@@ -251,6 +251,14 @@ def sync_contestacoes_for_company(
                 except Exception:
                     pass
 
+            raw_dou = item.get('dataDOU')
+            data_dou_date = None
+            if raw_dou:
+                try:
+                    data_dou_date = datetime.fromisoformat(str(raw_dou)[:10]).date()
+                except Exception:
+                    pass
+
             existing = FapWebContestacao.query.filter_by(
                 law_firm_id=law_firm_id,
                 contestacao_id=int(cid),
@@ -268,6 +276,7 @@ def sync_contestacoes_for_company(
                 'situacao_descricao': situacao.get('descricao'),
                 'protocolo': item.get('protocolo'),
                 'data_transmissao': data_transmissao,
+                'data_dou_date': data_dou_date,
             }
 
             if existing:

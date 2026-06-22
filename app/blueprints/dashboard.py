@@ -28,29 +28,17 @@ def get_current_law_firm_id():
 def _build_latest_dou_contestacoes(law_firm_id, limit=10):
     """Retorna as contestações mais recentemente publicadas no D.O.U.
 
-    A data de publicação (``dataDOU``) só existe dentro do JSON ``raw_data``,
-    portanto não é possível ordenar via SQL. Carregamos as colunas mínimas +
-    raw_data das contestações do escritório, extraímos a data, ordenamos
-    desc. e devolvemos as ``limit`` mais recentes para o dashboard.
+    Ordena diretamente em SQL pela coluna indexada ``data_dou_date`` (populada
+    na sincronização), trazendo as ``limit`` publicações mais recentes.
     """
-    import json as _json
     from app.models import FapWebContestacao, FapCompany
 
     rows = (
         FapWebContestacao.query
         .filter_by(law_firm_id=law_firm_id)
-        .filter(FapWebContestacao.raw_data.isnot(None))
-        .with_entities(
-            FapWebContestacao.id,
-            FapWebContestacao.contestacao_id,
-            FapWebContestacao.cnpj,
-            FapWebContestacao.cnpj_raiz,
-            FapWebContestacao.ano_vigencia,
-            FapWebContestacao.protocolo,
-            FapWebContestacao.situacao_descricao,
-            FapWebContestacao.instancia_descricao,
-            FapWebContestacao.raw_data,
-        )
+        .filter(FapWebContestacao.data_dou_date.isnot(None))
+        .order_by(FapWebContestacao.data_dou_date.desc())
+        .limit(limit)
         .all()
     )
 
@@ -70,17 +58,6 @@ def _build_latest_dou_contestacoes(law_firm_id, limit=10):
 
     items = []
     for r in rows:
-        try:
-            raw = _json.loads(r.raw_data)
-        except Exception:
-            continue
-        s = raw.get('dataDOU')
-        if not s:
-            continue
-        try:
-            dt = datetime.fromisoformat(str(s)[:10])
-        except Exception:
-            continue
         nome = (
             company_map.get(r.cnpj)
             or company_map.get(r.cnpj_raiz)
@@ -97,15 +74,10 @@ def _build_latest_dou_contestacoes(law_firm_id, limit=10):
             'protocolo': r.protocolo or '—',
             'situacao': r.situacao_descricao or '',
             'instancia': r.instancia_descricao or '',
-            'data_dou': dt.strftime('%d/%m/%Y'),
-            '_sort': dt,
+            'data_dou': r.data_dou_date.strftime('%d/%m/%Y'),
         })
 
-    items.sort(key=lambda x: x['_sort'], reverse=True)
-    top = items[:limit]
-    for it in top:
-        it.pop('_sort', None)
-    return top
+    return items
 
 @dashboard_bp.route('/')
 def index():
@@ -164,8 +136,6 @@ def dashboard():
         contestacoes_por_ano = {str(a): c for a, c in contestacoes_por_ano_result}
 
         # ── Últimas contestações publicadas no D.O.U. ────────────────
-        # data_dou não é coluna (vem do JSON raw_data), então parseamos
-        # em Python, ordenamos pela data e pegamos as mais recentes.
         latest_dou_contestacoes = _build_latest_dou_contestacoes(law_firm_id)
 
         # ── Disputes Center — Benefit ─────────────────────────────────

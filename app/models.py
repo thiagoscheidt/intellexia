@@ -2429,6 +2429,11 @@ class FapWebContestacao(db.Model):
     protocolo       = db.Column(db.String(100), index=True)
     data_transmissao = db.Column(db.DateTime)
 
+    # ── Publicação no D.O.U. ──────────────────────────────────────────
+    # Extraída de raw_data['dataDOU'] durante a sincronização. Coluna
+    # dedicada (indexada) para permitir ordenação/filtro direto em SQL.
+    data_dou_date   = db.Column(db.Date, index=True)
+
     # ── Vínculo com relatório importado (opcional) ────────────────────
     report_id = db.Column(
         db.Integer,
@@ -2464,7 +2469,13 @@ class FapWebContestacao(db.Model):
 
     @property
     def data_dou(self):
-        """Extrai dataDOU do raw_data. Retorna string 'DD/MM/YYYY' ou None."""
+        """Data de publicação no D.O.U. como string 'DD/MM/YYYY' ou None.
+
+        Prefere a coluna ``data_dou_date`` (populada na sincronização). Para
+        registros antigos ainda não migrados, faz fallback no JSON raw_data.
+        """
+        if self.data_dou_date:
+            return self.data_dou_date.strftime('%d/%m/%Y')
         if not self.raw_data:
             return None
         try:
