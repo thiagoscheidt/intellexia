@@ -785,8 +785,6 @@ vigência, empresa e instância.', icon='bi bi-table') %}
           {% endif %}
         </h6>
         <div class="d-flex gap-2 align-items-center">
-          <input type="text" id="localFilter" class="form-control form-control-sm" style="width:175px;"
-            placeholder="Buscar na página…">
           {%- set _qs = {
           'ano_vigencia': f_year or '',
           'cnpj_raiz': f_cnpj_raiz or '',
@@ -852,12 +850,12 @@ vigência, empresa e instância.', icon='bi bi-table') %}
       <div id="importStatsSummary" class="px-3 py-2 border-bottom border-top d-flex flex-wrap gap-3 align-items-center"
         style="font-size:.85rem;background:#f8f9fa;">
         <span><i class="bi bi-check-circle-fill text-success me-1"></i><span id="statsImported"
-            class="fw-semibold">0</span> benefícios processados</span>
+            class="fw-semibold">{{ imported_count }}</span> benefícios processados</span>
         <span class="text-muted">|</span>
-        <span><i class="bi bi-clock-fill text-warning me-1"></i><span id="statsPending" class="fw-semibold">0</span> não
+        <span><i class="bi bi-clock-fill text-warning me-1"></i><span id="statsPending" class="fw-semibold">{{ pending_count }}</span>
           pendentes</span>
         <span class="text-muted">|</span>
-        <span class="text-muted"><span id="statsTotal" class="fw-semibold">0</span> no total</span>
+        <span class="text-muted"><span id="statsTotal" class="fw-semibold">{{ total }}</span> no total (filtro)</span>
       </div>
 
       <div class="table-responsive">
@@ -937,26 +935,47 @@ vigência, empresa e instância.', icon='bi bi-table') %}
         </table>
       </div>
 
+      {%- set _pqb = {
+        'ano_vigencia': f_year or '',
+        'cnpj_raiz': f_cnpj_raiz or '',
+        'cnpj': f_cnpj or '',
+        'instancia': f_instancia or '',
+        'situacao': f_situacao or '',
+        'protocolo': f_protocolo or ''
+      } -%}
       <div class="pagination-shell" id="paginationShell">
         <div class="d-flex align-items-center gap-2">
-          <span class="pg-info" id="pgInfo"></span>
-          <select class="page-size-select" id="pgSize" title="Linhas por página">
-            <option value="10">10 por página</option>
-            <option value="20" selected>20 por página</option>
-            <option value="50">50 por página</option>
-            <option value="100">100 por página</option>
-            <option value="9999">Todas</option>
+          <span class="pg-info">Página {{ page }} de {{ total_pages }} · {{ total_groups }} grupo(s)</span>
+          <select class="page-size-select" title="Grupos por página"
+            onchange="if(this.value)window.location=this.value;">
+            <option value="{{ url_for('fap_panel.contestacoes_page', page=1, page_size=25, **_pqb) }}" {{ 'selected' if page_size==25 }}>25 por página</option>
+            <option value="{{ url_for('fap_panel.contestacoes_page', page=1, page_size=50, **_pqb) }}" {{ 'selected' if page_size==50 }}>50 por página</option>
+            <option value="{{ url_for('fap_panel.contestacoes_page', page=1, page_size=100, **_pqb) }}" {{ 'selected' if page_size==100 }}>100 por página</option>
           </select>
         </div>
         <nav aria-label="Paginação">
-          <ul class="pagination pagination-sm mb-0" id="pgControls"></ul>
+          <ul class="pagination pagination-sm mb-0">
+            <li class="page-item {{ 'disabled' if page <= 1 }}">
+              <a class="page-link" href="{{ url_for('fap_panel.contestacoes_page', page=1, page_size=page_size, **_pqb) }}">&laquo;</a>
+            </li>
+            <li class="page-item {{ 'disabled' if page <= 1 }}">
+              <a class="page-link" href="{{ url_for('fap_panel.contestacoes_page', page=page-1, page_size=page_size, **_pqb) }}">&lsaquo;</a>
+            </li>
+            <li class="page-item disabled"><span class="page-link">{{ page }} / {{ total_pages }}</span></li>
+            <li class="page-item {{ 'disabled' if page >= total_pages }}">
+              <a class="page-link" href="{{ url_for('fap_panel.contestacoes_page', page=page+1, page_size=page_size, **_pqb) }}">&rsaquo;</a>
+            </li>
+            <li class="page-item {{ 'disabled' if page >= total_pages }}">
+              <a class="page-link" href="{{ url_for('fap_panel.contestacoes_page', page=total_pages, page_size=page_size, **_pqb) }}">&raquo;</a>
+            </li>
+          </ul>
         </nav>
       </div>
 
       <div class="table-footer">
         <span>
           <i class="bi bi-table me-1"></i>
-          {{ table_rows|length }} linha(s) · {{ total }} contestação(ões) no total
+          {{ table_rows|length }} grupo(s) nesta página · {{ total }} contestação(ões) no filtro
         </span>
         <span>
           Atualizado via <a href="{{ url_for('fap_panel.sync_page') }}" class="text-decoration-none">Sincronização
@@ -1158,108 +1177,9 @@ vigência, empresa e instância.', icon='bi bi-table') %}
       });
     }
 
-    /* ── Paginação client-side ──────────────────────────────────────────── */
-    var allRows = Array.from(document.querySelectorAll('#fapTbody tr'));
-    var localFilter = document.getElementById('localFilter');
-    var filteredRows = allRows.slice(); // cópia que reflete o filtro local
-    var currentPage = 1;
-    var pageSize = 20;
-
-    var pgInfo = document.getElementById('pgInfo');
-    var pgControls = document.getElementById('pgControls');
-    var pgSize = document.getElementById('pgSize');
-
-    function renderPage() {
-      var total = filteredRows.length;
-      var pages = Math.max(1, Math.ceil(total / pageSize));
-      if (currentPage > pages) currentPage = pages;
-
-      var start = (currentPage - 1) * pageSize;
-      var end = Math.min(start + pageSize, total);
-
-      // Esconde/exibe linhas
-      allRows.forEach(function (r) { r.style.display = 'none'; });
-      filteredRows.forEach(function (r, i) {
-        r.style.display = (i >= start && i < end) ? 'table-row' : 'none';
-      });
-
-      // Info textual
-      pgInfo.textContent = total === 0
-        ? 'Nenhuma linha'
-        : 'Exibindo ' + (start + 1) + '–' + end + ' de ' + total + ' linha(s)';
-
-      // Controles de página
-      pgControls.innerHTML = '';
-
-      function makeBtn(label, page, disabled, active) {
-        var li = document.createElement('li');
-        li.className = 'page-item' + (disabled ? ' disabled' : '') + (active ? ' active' : '');
-        var a = document.createElement('a');
-        a.className = 'page-link';
-        a.href = '#';
-        a.innerHTML = label;
-        a.addEventListener('click', function (e) {
-          e.preventDefault();
-          if (!disabled) { currentPage = page; renderPage(); }
-        });
-        li.appendChild(a);
-        pgControls.appendChild(li);
-      }
-
-      makeBtn('&laquo;', 1, currentPage === 1, false);
-      makeBtn('&lsaquo;', currentPage - 1, currentPage === 1, false);
-
-      // Janela de páginas: máx 7 botões
-      var window_size = 7;
-      var half = Math.floor(window_size / 2);
-      var pStart = Math.max(1, currentPage - half);
-      var pEnd = Math.min(pages, pStart + window_size - 1);
-      if (pEnd - pStart < window_size - 1) pStart = Math.max(1, pEnd - window_size + 1);
-
-      if (pStart > 1) {
-        makeBtn('1', 1, false, false);
-        if (pStart > 2) {
-          var sp = document.createElement('li');
-          sp.className = 'page-item disabled';
-          sp.innerHTML = '<span class="page-link">…</span>';
-          pgControls.appendChild(sp);
-        }
-      }
-      for (var p = pStart; p <= pEnd; p++) {
-        makeBtn(p, p, false, p === currentPage);
-      }
-      if (pEnd < pages) {
-        if (pEnd < pages - 1) {
-          var sp2 = document.createElement('li');
-          sp2.className = 'page-item disabled';
-          sp2.innerHTML = '<span class="page-link">…</span>';
-          pgControls.appendChild(sp2);
-        }
-        makeBtn(pages, pages, false, false);
-      }
-
-      makeBtn('&rsaquo;', currentPage + 1, currentPage === pages, false);
-      makeBtn('&raquo;', pages, currentPage === pages, false);
-    }
-
-    pgSize.addEventListener('change', function () {
-      pageSize = parseInt(this.value, 10);
-      currentPage = 1;
-      renderPage();
-    });
-
-    // Sobrescreve o filtro local para também atualizar filteredRows
-    if (localFilter) {
-      localFilter.addEventListener('input', function () {
-        var term = this.value.toLowerCase().trim();
-        filteredRows = allRows.filter(function (row) {
-          return !term || row.textContent.toLowerCase().includes(term);
-        });
-        currentPage = 1;
-        renderPage();
-        updateImportAllBtnLabel();
-      });
-    }
+    /* ── Paginação: agora é server-side (links com ?page=...) ───────────── */
+    // Contagem de pendentes vem do servidor (todo o conjunto filtrado).
+    var serverPending = {{ pending_count|default(0) }};
 
     /* ── Importação em lote dos filtrados ──────────────────────────────── */
     var importUrl = '{{ url_for("disputes_center.fap_auto_import_import_contestacao") }}';
@@ -1678,8 +1598,7 @@ vigência, empresa e instância.', icon='bi bi-table') %}
         if (p && (p.ok || p.already_imported)) {
           btn.outerHTML = '<a href="' + reportsUrl + '" class="btn-cell btn-cell-imported">'
             + '<i class="bi bi-check-circle-fill"></i> Processado</a>';
-          updateImportStats();
-          updateImportAllBtnLabel();
+          markProcessed(1);
         } else {
           alert('Erro ao importar: ' + ((p && p.message) || 'Falha desconhecida'));
           btn.innerHTML = origHtml;
@@ -1726,65 +1645,81 @@ vigência, empresa e instância.', icon='bi bi-table') %}
       });
     }
 
-    function collectPendingFromFiltered() {
-      var pending = [];
-      filteredRows.forEach(function (row) {
-        row.querySelectorAll('.import-pending-btn').forEach(function (btn) {
-          pending.push({
-            year: btn.dataset.year,
-            cnpj: btn.dataset.cnpj,
-            id: btn.dataset.id,
-            recId: btn.dataset.recId || null,
-            btn: btn,
-          });
-        });
+    var pendingListUrl = '{{ url_for("fap_panel.contestacoes_pending_list") }}';
+
+    // Busca no servidor a lista completa de pendentes do filtro atual
+    // (independe da paginação — pega todas as páginas).
+    async function fetchPendingList() {
+      var url = pendingListUrl + window.location.search;
+      var r = await fetch(url, {
+        credentials: 'same-origin',
+        headers: { 'X-Requested-With': 'XMLHttpRequest' },
       });
-      return pending;
+      var p = await r.json();
+      if (!p || !p.ok) throw new Error((p && p.message) || 'Falha ao obter pendentes');
+      return p.items || [];
     }
 
-    function updateImportStats() {
-      var allCells = document.querySelectorAll('#fapTbody .contestacao-cell');
-      var importedEl = document.getElementById('statsImported');
-      var pendingEl = document.getElementById('statsPending');
-      var totalEl = document.getElementById('statsTotal');
-      var imported = 0, pending = 0;
-      allCells.forEach(function (cell) {
-        if (cell.querySelector('.btn-cell-imported')) imported++;
-        else if (cell.querySelector('.import-pending-btn')) pending++;
-      });
-      if (importedEl) importedEl.textContent = imported;
-      if (pendingEl) pendingEl.textContent = pending;
-      if (totalEl) totalEl.textContent = imported + pending;
+    // Atualiza contadores/botão ao processar N contestações (sem recarregar).
+    function markProcessed(n) {
+      if (!n || n <= 0) return;
+      serverPending = Math.max(0, serverPending - n);
+      var imp = document.getElementById('statsImported');
+      var pend = document.getElementById('statsPending');
+      if (imp) imp.textContent = (parseInt(imp.textContent || '0', 10) + n);
+      if (pend) pend.textContent = serverPending;
+      updateImportAllBtnLabel();
+    }
+
+    // Se o botão da contestação estiver visível na página, marca como processado.
+    function markBtnDone(recId) {
+      if (!recId) return;
+      var btn = document.querySelector('.import-pending-btn[data-rec-id="' + recId + '"]');
+      if (btn) {
+        btn.outerHTML = '<a href="' + reportsUrl + '" class="btn-cell btn-cell-imported">'
+          + '<i class="bi bi-check-circle-fill"></i> Processado</a>';
+      }
     }
 
     function updateImportAllBtnLabel() {
       if (!btnImportAll) return;
-      var count = collectPendingFromFiltered().length;
-      if (count === 0) {
+      if (serverPending <= 0) {
         btnImportAll.disabled = true;
         btnImportAll.innerHTML = '<i class="bi bi-check-all me-1"></i> Todos Processados';
       } else {
         btnImportAll.disabled = false;
         btnImportAll.innerHTML = '<i class="bi bi-cpu me-1"></i> Processar Benefícios'
-          + ' <span class="badge bg-dark ms-1">' + count + '</span>';
+          + ' <span class="badge bg-dark ms-1">' + serverPending + '</span>';
       }
     }
 
     if (btnImportAll) {
       btnImportAll.addEventListener('click', async function () {
-        var pending = collectPendingFromFiltered();
-        if (!pending.length) {
-          alert('Não há contestações pendentes de importação no filtro atual.');
-          return;
-        }
-        var hasLocal = pending.every(function (i) { return !!i.recId; });
-        var note = hasLocal ? '' : '\n\nNota: contestações sem arquivo local exigem sessão FAP ativa.';
-        if (!confirm('Processar benefícios de ' + pending.length + ' contestação(ões)?' + note)) {
+        btnImportAll.disabled = true;
+        btnImportAll.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Carregando lista...';
+
+        var pending;
+        try {
+          pending = await fetchPendingList();
+        } catch (e) {
+          alert('Erro ao obter a lista de pendentes: ' + e);
+          updateImportAllBtnLabel();
           return;
         }
 
-        btnImportAll.disabled = true;
-        btnImportAll.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Processando...';
+        if (!pending.length) {
+          alert('Não há contestações pendentes de processamento no filtro atual.');
+          updateImportAllBtnLabel();
+          return;
+        }
+
+        var hasLocal = pending.every(function (i) { return !!i.has_local; });
+        var note = hasLocal ? '' : '\n\nNota: contestações sem arquivo local exigem sessão FAP ativa.';
+        if (!confirm('Processar benefícios de ' + pending.length + ' contestação(ões) do filtro atual?' + note)) {
+          updateImportAllBtnLabel();
+          return;
+        }
+
         _importCancelled = false;
         if (btnCancelImport) { btnCancelImport.classList.remove('d-none'); btnCancelImport.disabled = false; btnCancelImport.innerHTML = '<i class="bi bi-x-circle"></i>'; }
 
@@ -1799,8 +1734,8 @@ vigência, empresa e instância.', icon='bi bi-table') %}
               body: JSON.stringify({
                 year: item.year,
                 cnpj: item.cnpj,
-                contestacao_id: item.id,
-                rec_id: item.recId ? parseInt(item.recId) : null,
+                contestacao_id: item.contestacao_id,
+                rec_id: item.rec_id || null,
                 force_process: true,
               }),
             });
@@ -1833,20 +1768,18 @@ vigência, empresa e instância.', icon='bi bi-table') %}
             processed++;
             if (r.err) {
               errorCount++;
-              console.error('Erro de rede ao importar #' + r.item.id, r.err);
+              console.error('Erro de rede ao importar #' + r.item.contestacao_id, r.err);
             } else if (r.payload && r.payload.already_imported) {
               skipCount++;
-              r.item.btn.outerHTML =
-                '<a href="' + reportsUrl + '" class="btn-cell btn-cell-imported">'
-                + '<i class="bi bi-check-circle-fill"></i> Processado</a>';
+              markBtnDone(r.item.rec_id);
+              markProcessed(1);
             } else if (!r.resp.ok || !r.payload || !r.payload.ok) {
               errorCount++;
-              console.warn('Falha ao importar #' + r.item.id + ':', r.payload && r.payload.message);
+              console.warn('Falha ao importar #' + r.item.contestacao_id + ':', r.payload && r.payload.message);
             } else {
               successCount++;
-              r.item.btn.outerHTML =
-                '<a href="' + reportsUrl + '" class="btn-cell btn-cell-imported">'
-                + '<i class="bi bi-check-circle-fill"></i> Processado</a>';
+              markBtnDone(r.item.rec_id);
+              markProcessed(1);
             }
           });
         }
@@ -1869,17 +1802,15 @@ vigência, empresa e instância.', icon='bi bi-table') %}
           alert('Processamento concluído: ' + msg + '.');
         }
 
+        if (btnCancelImport) btnCancelImport.classList.add('d-none');
         updateImportAllBtnLabel();
-        updateImportStats();
       });
     }
 
     var loadingOverlay = document.getElementById('tableLoadingOverlay');
 
     requestAnimationFrame(function () {
-      renderPage();
       updateImportAllBtnLabel();
-      updateImportStats();
       if (loadingOverlay) loadingOverlay.style.display = 'none';
     });
   })();

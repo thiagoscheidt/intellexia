@@ -1003,6 +1003,83 @@ def contestacoes_latest_dou():
     })
 
 
+def _build_contestacoes_filters(law_firm_id):
+    """Monta a lista de condições SQLAlchemy a partir dos filtros da query string.
+
+    Compartilhado entre a listagem paginada e a lista de pendentes, garantindo
+    que ambos enxerguem exatamente o mesmo conjunto de contestações.
+    """
+    f_year      = request.args.get('ano_vigencia', '').strip()
+    f_cnpj_raiz = request.args.get('cnpj_raiz', '').strip()
+    f_cnpj      = request.args.get('cnpj', '').strip()
+    f_instancia = request.args.get('instancia', '').strip()
+    f_situacao  = request.args.get('situacao', '').strip()
+    f_protocolo = request.args.get('protocolo', '').strip()
+
+    conds = [FapWebContestacao.law_firm_id == law_firm_id]
+    if f_year and f_year != '__all__':
+        try:
+            conds.append(FapWebContestacao.ano_vigencia == int(f_year))
+        except ValueError:
+            pass
+    if f_cnpj_raiz:
+        conds.append(FapWebContestacao.cnpj_raiz == f_cnpj_raiz)
+    if f_cnpj:
+        conds.append(FapWebContestacao.cnpj == f_cnpj)
+    if f_instancia:
+        conds.append(FapWebContestacao.instancia_codigo == f_instancia)
+    if f_situacao:
+        conds.append(FapWebContestacao.situacao_codigo == f_situacao)
+    if f_protocolo:
+        conds.append(FapWebContestacao.protocolo.ilike(f'%{f_protocolo}%'))
+    return conds
+
+
+@fap_panel_bp.route('/contestacoes/pending-list', methods=['GET'])
+@require_law_firm
+def contestacoes_pending_list():
+    """AJAX — Lista todas as contestações pendentes de processamento que batem
+    com os filtros atuais (independe de paginação). Usada pelo botão
+    'Processar Benefícios (todos)' para processar além da página visível.
+    """
+    from sqlalchemy import and_, exists
+
+    law_firm_id = get_current_law_firm_id()
+    filter_conds = _build_contestacoes_filters(law_firm_id)
+
+    imported_exists = exists().where(and_(
+        FapAutoImportedContestacao.law_firm_id == law_firm_id,
+        FapAutoImportedContestacao.contestacao_id == FapWebContestacao.contestacao_id,
+    ))
+
+    rows = (
+        FapWebContestacao.query
+        .filter(*filter_conds)
+        .filter(~imported_exists)
+        .with_entities(
+            FapWebContestacao.id,
+            FapWebContestacao.contestacao_id,
+            FapWebContestacao.cnpj,
+            FapWebContestacao.ano_vigencia,
+            FapWebContestacao.file_path,
+        )
+        .order_by(FapWebContestacao.ano_vigencia.desc(), FapWebContestacao.cnpj.asc())
+        .all()
+    )
+
+    items = [
+        {
+            'rec_id': r.id,
+            'contestacao_id': r.contestacao_id,
+            'cnpj': (r.cnpj or '').zfill(14),
+            'year': r.ano_vigencia,
+            'has_local': bool(r.file_path),
+        }
+        for r in rows
+    ]
+    return jsonify({'ok': True, 'items': items, 'total': len(items)})
+
+
 @fap_panel_bp.route('/contestacoes')
 @require_law_firm
 def contestacoes_page():
@@ -1038,20 +1115,8 @@ def contestacoes_page():
         f_prazo2,
     ])
 
-    query = FapWebContestacao.query.filter_by(law_firm_id=law_firm_id)
-
-    if f_year and not f_year_all:
-        query = query.filter(FapWebContestacao.ano_vigencia == int(f_year))
-    if f_cnpj_raiz:
-        query = query.filter(FapWebContestacao.cnpj_raiz == f_cnpj_raiz)
-    if f_cnpj:
-        query = query.filter(FapWebContestacao.cnpj == f_cnpj)
-    if f_instancia:
-        query = query.filter(FapWebContestacao.instancia_codigo == f_instancia)
-    if f_situacao:
-        query = query.filter(FapWebContestacao.situacao_codigo == f_situacao)
-    if f_protocolo:
-        query = query.filter(FapWebContestacao.protocolo.ilike(f'%{f_protocolo}%'))
+    filter_conds = _build_contestacoes_filters(law_firm_id)
+    query = FapWebContestacao.query.filter(*filter_conds)
 
     # ── Mapa de CNPJs (14 dígitos) por raiz para o filtro de estabelecimento ──
     cnpj_rows = (
@@ -1070,12 +1135,66 @@ def contestacoes_page():
     for raiz in cnpjs_by_raiz:
         cnpjs_by_raiz[raiz].sort()
 
+    # ── Paginação por grupo (vigência × CNPJ) ────────────────────────────
+    from sqlalchemy import and_, or_, exists
+
+    try:
+        page = max(1, int(request.args.get('page', 1)))
+    except (TypeError, ValueError):
+        page = 1
+    try:
+        page_size = int(request.args.get('page_size', 50))
+    except (TypeError, ValueError):
+        page_size = 50
+    if page_size not in (25, 50, 100):
+        page_size = 50
+
     all_rows = []
+    total_groups = 0
+    total_pages = 1
+    total_contestacoes = 0
+    imported_count = 0
+    pending_count = 0
+
     if has_active_filters:
-        all_rows = query.order_by(
-            FapWebContestacao.ano_vigencia.desc(),
-            FapWebContestacao.cnpj.asc(),
-        ).all()
+        # Estatísticas sobre TODO o conjunto filtrado (não só a página)
+        total_contestacoes = query.count()
+        imported_exists = exists().where(and_(
+            FapAutoImportedContestacao.law_firm_id == law_firm_id,
+            FapAutoImportedContestacao.contestacao_id == FapWebContestacao.contestacao_id,
+        ))
+        imported_count = query.filter(imported_exists).count()
+        pending_count = total_contestacoes - imported_count
+
+        # Grupos (vigência, cnpj) distintos — unidade de paginação
+        groups_q = (
+            db.session.query(FapWebContestacao.ano_vigencia, FapWebContestacao.cnpj)
+            .filter(*filter_conds)
+            .group_by(FapWebContestacao.ano_vigencia, FapWebContestacao.cnpj)
+        )
+        total_groups = groups_q.count()
+        total_pages = max(1, (total_groups + page_size - 1) // page_size)
+        if page > total_pages:
+            page = total_pages
+
+        group_keys = (
+            groups_q
+            .order_by(FapWebContestacao.ano_vigencia.desc(), FapWebContestacao.cnpj.asc())
+            .limit(page_size)
+            .offset((page - 1) * page_size)
+            .all()
+        )
+
+        if group_keys:
+            key_conds = [
+                and_(FapWebContestacao.ano_vigencia == a, FapWebContestacao.cnpj == c)
+                for (a, c) in group_keys
+            ]
+            all_rows = (
+                query.filter(or_(*key_conds))
+                .order_by(FapWebContestacao.ano_vigencia.desc(), FapWebContestacao.cnpj.asc())
+                .all()
+            )
 
     # ── Mapa de contestações já importadas (contestacao_id → report_id) ──
     contestacao_ids = [r.contestacao_id for r in all_rows]
@@ -1152,12 +1271,19 @@ def contestacoes_page():
         companies=companies,
         years=FAP_AVAILABLE_YEARS,
         table_rows=table_rows,
-        total=len(all_rows),
+        total=total_contestacoes,
         instancias=sorted(instancias),
         situacoes=sorted(situacoes),
         imported_map=imported_map,
         cnpjs_by_raiz=cnpjs_by_raiz,
         has_active_filters=has_active_filters,
+        # paginação (por grupo vigência × CNPJ)
+        page=page,
+        page_size=page_size,
+        total_pages=total_pages,
+        total_groups=total_groups,
+        imported_count=imported_count,
+        pending_count=pending_count,
         # filtros ativos (para repreencher o form)
         f_year=f_year,
         f_cnpj_raiz=f_cnpj_raiz,
