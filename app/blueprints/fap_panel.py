@@ -250,8 +250,7 @@ def sync_fetch_companies():
 
     # Upsert companies into DB
     try:
-        from datetime import datetime as _dt
-        now = _dt.utcnow()
+        now = datetime.now()
         seen_cnpjs = set()
         for item in (companies if isinstance(companies, list) else []):
             cnpj = str(item.get('cnpj') or '').strip()
@@ -345,7 +344,7 @@ def sync_run_year():
 
     created = 0
     updated = 0
-    now = datetime.utcnow()
+    now = datetime.now()
 
     tracked_fields = (
         'cnpj',
@@ -840,7 +839,7 @@ def contestacoes_recent_updates():
         days = 7
     days = max(1, min(days, 365))
 
-    since_dt = datetime.utcnow() - timedelta(days=days)
+    since_dt = datetime.now() - timedelta(days=days)
 
     field_labels = {
         'cnpj': 'CNPJ',
@@ -1817,7 +1816,7 @@ def sync_procuracoes():
         return jsonify(payload), 502
 
     items = result.data if isinstance(result.data, list) else []
-    now = datetime.utcnow()
+    now = datetime.now()
     created = 0
     updated = 0
 

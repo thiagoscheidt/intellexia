@@ -99,7 +99,7 @@ def sync_companies(svc, db, FapCompany, law_firm_id: int) -> int:
         return 0
 
     companies = result.data if isinstance(result.data, list) else []
-    now = datetime.utcnow()
+    now = datetime.now()
     seen_cnpjs: set[str] = set()
 
     for item in companies:
@@ -163,7 +163,7 @@ def sync_procuracoes(svc, db, FapWebProcuracao, law_firm_id: int) -> dict:
         return {'created': 0, 'updated': 0}
 
     items = result.data if isinstance(result.data, list) else []
-    now = datetime.utcnow()
+    now = datetime.now()
     created = 0
     updated = 0
 
@@ -269,7 +269,7 @@ def sync_contestacoes_for_company(
             continue
 
         items = result.data if isinstance(result.data, list) else []
-        now = datetime.utcnow()
+        now = datetime.now()
         year_int = int(year)
         created = 0
         updated = 0

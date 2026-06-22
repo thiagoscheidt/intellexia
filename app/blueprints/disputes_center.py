@@ -3661,8 +3661,7 @@ def fap_auto_import_fetch_companies():
 
     # Upsert companies into DB
     try:
-        from datetime import datetime as _dt
-        now = _dt.utcnow()
+        now = datetime.now()  # horário local (synced_at é exibido cru)
         seen_cnpjs = set()
         for item in (companies if isinstance(companies, list) else []):
             cnpj = str(item.get('cnpj') or '').strip()
