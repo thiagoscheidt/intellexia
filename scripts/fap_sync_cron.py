@@ -15,8 +15,9 @@ Variáveis de ambiente (.env):
                          Formato: { "cookies": { "SESSION": "...", "XSRF-TOKEN": "...", "ROUTEID": "..." },
                                     "userAgent": "Mozilla/5.0 ..." }
   FAP_SYNC_LAW_FIRM_ID — ID do escritório a sincronizar (padrão: 1)
-  FAP_SYNC_YEARS       — Anos separados por vírgula (padrão: ano atual + 2 anteriores)
+  FAP_SYNC_YEARS       — Anos específicos separados por vírgula (sobrepõe o intervalo padrão)
                          Exemplo: 2026,2025,2024
+  FAP_SYNC_START_YEAR  — Ano inicial do intervalo padrão (padrão: 2010 → busca de 2010 ao ano atual)
   FAP_SYNC_FETCH_WORKERS    — Nº de buscas de contestações em paralelo (padrão: 8, máx: 20)
   FAP_SYNC_DOWNLOAD    — '1' (padrão) baixa os PDFs após a sincronização; '0' desativa
   FAP_SYNC_DOWNLOAD_WORKERS — Nº de downloads em paralelo por empresa (padrão: 5, máx: 30)
@@ -50,6 +51,10 @@ def _log(msg: str) -> None:
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}", flush=True)
 
 
+# Ano inicial padrão da sincronização (vai deste ano até o ano atual).
+FAP_SYNC_START_YEAR = 2010
+
+
 def _get_sync_years() -> list[int]:
     raw = os.environ.get('FAP_SYNC_YEARS', '').strip()
     if raw:
@@ -57,8 +62,18 @@ def _get_sync_years() -> list[int]:
             return [int(y.strip()) for y in raw.split(',') if y.strip()]
         except ValueError:
             _log(f"AVISO: FAP_SYNC_YEARS inválido ('{raw}'). Usando padrão.")
+
+    start = FAP_SYNC_START_YEAR
+    raw_start = os.environ.get('FAP_SYNC_START_YEAR', '').strip()
+    if raw_start:
+        try:
+            start = int(raw_start)
+        except ValueError:
+            _log(f"AVISO: FAP_SYNC_START_YEAR inválido ('{raw_start}'). Usando {FAP_SYNC_START_YEAR}.")
+
     current = datetime.now().year
-    return [current, current - 1, current - 2]
+    # Do ano atual para trás, até o ano inicial (ex.: 2026, 2025, ..., 2010).
+    return list(range(current, start - 1, -1))
 
 
 def _download_enabled() -> bool:
