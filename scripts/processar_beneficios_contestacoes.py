@@ -5,6 +5,7 @@ equivalente ao botão "Processar Benefícios" da página de contestações.
 
 Uso:
   uv run python scripts/processar_beneficios_contestacoes.py --ano_vigencia 2026
+  uv run python scripts/processar_beneficios_contestacoes.py --ano_vigencia 2026 --workers 4
   uv run python scripts/processar_beneficios_contestacoes.py --ano_vigencia 2026 --law_firm_id 2
   uv run python scripts/processar_beneficios_contestacoes.py --ano_vigencia 2026 --cnpj_raiz 12345678
   uv run python scripts/processar_beneficios_contestacoes.py --ano_vigencia 2026 --dry_run
@@ -24,6 +25,7 @@ import argparse
 import hashlib
 import os
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 
@@ -49,6 +51,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--situacao', default='', help='Filtro por código de situação')
     parser.add_argument('--protocolo', default='', help='Filtro por protocolo (busca parcial)')
     parser.add_argument('--batch_size', type=int, default=0, help='Limite de contestações a processar (0 = sem limite)')
+    parser.add_argument('--workers', type=int, default=1, help='Workers paralelos para processar PDFs (padrão: 1)')
     parser.add_argument('--force_reimport', action='store_true', help='Reimporta mesmo que já exista registro anterior')
     parser.add_argument('--dry_run', action='store_true', help='Apenas lista o que seria processado, sem gravar')
     return parser.parse_args()
@@ -182,12 +185,12 @@ def main() -> None:
                 _log(f'  contestacao_id={c.contestacao_id} cnpj={c.cnpj} protocolo={c.protocolo} file={c.file_path}')
             return
 
-        success_count = 0
-        skip_count = 0
-        error_count = 0
-
         app_root = app.root_path  # = project root (main.py está na raiz)
+        skip_count = 0
+        report_ids: list[int] = []  # IDs registrados aguardando processamento
 
+        # ── Fase 1: Registro (single-thread) ─────────────────────────────
+        _log('Fase 1/2 — Registrando relatórios...')
         for idx, fap_rec in enumerate(contestacoes, start=1):
             if os.path.isabs(fap_rec.file_path):
                 abs_path = fap_rec.file_path
@@ -195,15 +198,13 @@ def main() -> None:
                 abs_path = os.path.abspath(os.path.join(app_root, fap_rec.file_path))
 
             if not os.path.isfile(abs_path):
-                _log(f'[{idx}/{total}] PULADO — arquivo não encontrado: {fap_rec.file_path}')
+                _log(f'  [{idx}/{total}] PULADO — arquivo não encontrado: {fap_rec.file_path}')
                 skip_count += 1
                 continue
 
             cnpj14 = (fap_rec.cnpj or '').zfill(14)
             filename = f'FAP_{fap_rec.protocolo}.pdf' if fap_rec.protocolo else f'FAP_{fap_rec.contestacao_id}.pdf'
             file_size = os.path.getsize(abs_path)
-
-            _log(f'[{idx}/{total}] Processando contestacao_id={fap_rec.contestacao_id} cnpj={cnpj14} protocolo={fap_rec.protocolo}')
 
             try:
                 existing = FapAutoImportedContestacao.query.filter_by(
@@ -257,22 +258,46 @@ def main() -> None:
                 fap_rec.report_id = report.id
 
                 db.session.commit()
-
-                ok, imported_count, err_msg = service.process_single_report(report.id)
-                if ok:
-                    _log(f'  ✓ OK — {imported_count} benefício(s) importado(s) (report_id={report.id})')
-                    success_count += 1
-                else:
-                    _log(f'  ✗ ERRO no processamento: {err_msg} (report_id={report.id})')
-                    error_count += 1
+                report_ids.append(report.id)
+                _log(f'  [{idx}/{total}] Registrado report_id={report.id} | contestacao={fap_rec.contestacao_id} | {cnpj14}')
 
             except Exception as exc:
                 db.session.rollback()
-                _log(f'  ✗ EXCEÇÃO: {exc}')
-                error_count += 1
+                _log(f'  [{idx}/{total}] ERRO no registro (contestacao={fap_rec.contestacao_id}): {exc}')
+                skip_count += 1
+
+        _log(f'Fase 1 concluída: {len(report_ids)} relatório(s) registrado(s), {skip_count} pulado(s).')
+
+        if not report_ids:
+            return
+
+        # ── Fase 2: Processamento (multi-thread) ─────────────────────────
+        workers = max(1, args.workers)
+        _log(f'Fase 2/2 — Processando PDFs com {workers} worker(s)...')
+
+        success_count = 0
+        error_count = 0
+
+        def _process_one(report_id: int) -> tuple[int, bool, int, str | None]:
+            with app.app_context():
+                ok, cnt, err = service.process_single_report(report_id)
+            return report_id, ok, cnt, err
+
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures = {pool.submit(_process_one, rid): rid for rid in report_ids}
+            done = 0
+            for future in as_completed(futures):
+                done += 1
+                report_id, ok, cnt, err = future.result()
+                if ok:
+                    _log(f'  [{done}/{len(report_ids)}] ✓ report_id={report_id} — {cnt} benefício(s)')
+                    success_count += 1
+                else:
+                    _log(f'  [{done}/{len(report_ids)}] ✗ report_id={report_id} — {err}')
+                    error_count += 1
 
         _log('─' * 60)
-        _log(f'Concluído: {success_count} OK | {skip_count} pulados | {error_count} erros')
+        _log(f'Concluído: {success_count} OK | {skip_count} pulados/erros registro | {error_count} erros processamento')
 
 
 if __name__ == '__main__':
