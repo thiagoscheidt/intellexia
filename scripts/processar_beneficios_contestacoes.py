@@ -45,7 +45,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description='Processa benefícios de contestações FAP já sincronizadas'
     )
-    parser.add_argument('--ano_vigencia', type=int, required=True, help='Ano de vigência (ex: 2026)')
+    parser.add_argument('--ano_vigencia', type=int, nargs='+', required=True, help='Ano(s) de vigência (ex: 2026 ou 2022 2023 2024)')
     parser.add_argument('--law_firm_id', type=int, default=1, help='ID do escritório (padrão: 1)')
     parser.add_argument('--cnpj_raiz', default='', help='Filtro por CNPJ raiz (8 dígitos)')
     parser.add_argument('--instancia', default='', help='Filtro por código de instância')
@@ -102,26 +102,15 @@ def _ensure_knowledge_base(db, KnowledgeBase, law_firm_id, user_id, filename, fi
     return knowledge_file
 
 
-def main() -> None:
-    args = parse_args()
-
-    from main import app
-    from app.models import db
-    from app.models import (
-        FapWebContestacao,
-        FapAutoImportedContestacao,
-        FapContestationJudgmentReport,
-        FapVigenciaCnpj,
-        KnowledgeBase,
-        User,
-    )
-    from app.services.fap_contestation_judgment_report_service import FapContestationJudgmentReportService
+def _run_year(args, ano_vigencia: int, app, db, FapWebContestacao, FapAutoImportedContestacao,
+              FapContestationJudgmentReport, FapVigenciaCnpj, KnowledgeBase, User, service) -> None:
     from sqlalchemy import and_, exists
-
-    service = FapContestationJudgmentReportService(flask_app=app)
 
     with app.app_context():
         law_firm_id = args.law_firm_id
+        _log('=' * 60)
+        _log(f'Iniciando vigência {ano_vigencia}')
+        _log('=' * 60)
 
         # Usa o primeiro usuário admin/ativo do escritório para gravar os registros
         admin_user = (
@@ -139,7 +128,7 @@ def main() -> None:
         # Monta filtros
         conds = [
             FapWebContestacao.law_firm_id == law_firm_id,
-            FapWebContestacao.ano_vigencia == args.ano_vigencia,
+            FapWebContestacao.ano_vigencia == ano_vigencia,
         ]
         if args.cnpj_raiz:
             conds.append(FapWebContestacao.cnpj_raiz == args.cnpj_raiz)
@@ -174,7 +163,7 @@ def main() -> None:
         contestacoes = query.all()
         total = len(contestacoes)
 
-        _log(f'Vigência: {args.ano_vigencia} | law_firm_id: {law_firm_id}')
+        _log(f'Vigência: {ano_vigencia} | law_firm_id: {law_firm_id}')
         _log(f'Contestações a processar: {total}')
 
         if total == 0:
@@ -368,6 +357,31 @@ def main() -> None:
 
         _log('─' * 60)
         _log(f'Concluído: {success_count} OK | {skip_count} pulados/erros registro | {error_count} erros processamento')
+
+
+def main() -> None:
+    args = parse_args()
+
+    from main import app
+    from app.models import db
+    from app.models import (
+        FapWebContestacao,
+        FapAutoImportedContestacao,
+        FapContestationJudgmentReport,
+        FapVigenciaCnpj,
+        KnowledgeBase,
+        User,
+    )
+    from app.services.fap_contestation_judgment_report_service import FapContestationJudgmentReportService
+
+    service = FapContestationJudgmentReportService(flask_app=app)
+
+    anos = sorted(args.ano_vigencia)
+    _log(f'Anos a processar: {anos}')
+
+    for ano in anos:
+        _run_year(args, ano, app, db, FapWebContestacao, FapAutoImportedContestacao,
+                  FapContestationJudgmentReport, FapVigenciaCnpj, KnowledgeBase, User, service)
 
 
 if __name__ == '__main__':
