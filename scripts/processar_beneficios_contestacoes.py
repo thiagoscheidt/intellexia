@@ -316,8 +316,9 @@ def main() -> None:
         success_count = 0
         error_count = 0
 
-        _DEADLOCK_CODE = 1213
-        _MAX_RETRIES = 3
+        # 1213 = deadlock, 1205 = lock wait timeout
+        _RETRYABLE_CODES = {1213, 1205}
+        _MAX_RETRIES = 5
 
         def _process_one(report_id: int) -> tuple[int, bool, int, str | None]:
             for attempt in range(1, _MAX_RETRIES + 1):
@@ -326,12 +327,11 @@ def main() -> None:
                         ok, cnt, err = service.process_single_report(report_id)
                     return report_id, ok, cnt, err
                 except Exception as exc:
-                    # Verifica se é deadlock MySQL (1213) para tentar novamente
                     cause = getattr(exc, 'orig', None) or exc
                     code = getattr(cause, 'args', (None,))[0]
-                    if code == _DEADLOCK_CODE and attempt < _MAX_RETRIES:
-                        wait = 0.5 * attempt
-                        _log(f'  [retry {attempt}/{_MAX_RETRIES}] Deadlock em report_id={report_id}, aguardando {wait}s...')
+                    if code in _RETRYABLE_CODES and attempt < _MAX_RETRIES:
+                        wait = attempt * 2.0  # backoff mais longo para lock timeout
+                        _log(f'  [retry {attempt}/{_MAX_RETRIES}] Erro {code} em report_id={report_id}, aguardando {wait:.0f}s...')
                         time.sleep(wait)
                         continue
                     return report_id, False, 0, str(exc)

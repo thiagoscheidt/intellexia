@@ -15,7 +15,7 @@ services:
       MYSQL_INITDB_SKIP_TZINFO: "yes"
     command:
       - --innodb_deadlock_detect=ON
-      - --innodb_lock_wait_timeout=5
+      - --innodb_lock_wait_timeout=30
     volumes:
       - mysql_data:/var/lib/mysql
       - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql
