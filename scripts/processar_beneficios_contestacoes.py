@@ -1,0 +1,279 @@
+#!/usr/bin/env python3
+"""
+Processa os benefícios de contestações FAP já sincronizadas (com arquivo local),
+equivalente ao botão "Processar Benefícios" da página de contestações.
+
+Uso:
+  uv run python scripts/processar_beneficios_contestacoes.py --ano_vigencia 2026
+  uv run python scripts/processar_beneficios_contestacoes.py --ano_vigencia 2026 --law_firm_id 2
+  uv run python scripts/processar_beneficios_contestacoes.py --ano_vigencia 2026 --cnpj_raiz 12345678
+  uv run python scripts/processar_beneficios_contestacoes.py --ano_vigencia 2026 --dry_run
+  uv run python scripts/processar_beneficios_contestacoes.py --ano_vigencia 2026 --force_reimport
+
+Filtros equivalentes à URL:
+  /fap-panel/contestacoes?ano_vigencia=2026&cnpj_raiz=&instancia=&situacao=&protocolo=
+
+Restrições:
+  - Só processa contestações com arquivo PDF já baixado localmente (file_path preenchido).
+  - Contestações sem arquivo local são puladas (exigiriam sessão ativa do portal FAP).
+"""
+
+from __future__ import annotations
+
+import argparse
+import hashlib
+import os
+import sys
+from datetime import datetime
+from pathlib import Path
+
+project_root = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(project_root))
+
+from dotenv import load_dotenv  # type: ignore[import]
+load_dotenv(project_root / '.env')
+
+
+def _log(msg: str) -> None:
+    print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}", flush=True)
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description='Processa benefícios de contestações FAP já sincronizadas'
+    )
+    parser.add_argument('--ano_vigencia', type=int, required=True, help='Ano de vigência (ex: 2026)')
+    parser.add_argument('--law_firm_id', type=int, default=1, help='ID do escritório (padrão: 1)')
+    parser.add_argument('--cnpj_raiz', default='', help='Filtro por CNPJ raiz (8 dígitos)')
+    parser.add_argument('--instancia', default='', help='Filtro por código de instância')
+    parser.add_argument('--situacao', default='', help='Filtro por código de situação')
+    parser.add_argument('--protocolo', default='', help='Filtro por protocolo (busca parcial)')
+    parser.add_argument('--batch_size', type=int, default=0, help='Limite de contestações a processar (0 = sem limite)')
+    parser.add_argument('--force_reimport', action='store_true', help='Reimporta mesmo que já exista registro anterior')
+    parser.add_argument('--dry_run', action='store_true', help='Apenas lista o que seria processado, sem gravar')
+    return parser.parse_args()
+
+
+def _compute_file_hash(file_path: str) -> str:
+    h = hashlib.sha256()
+    with open(file_path, 'rb') as f:
+        for chunk in iter(lambda: f.read(65536), b''):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _ensure_knowledge_base(db, KnowledgeBase, law_firm_id, user_id, filename, file_path, file_size, file_type):
+    file_hash = _compute_file_hash(file_path)
+
+    duplicate = KnowledgeBase.query.filter_by(
+        law_firm_id=law_firm_id,
+        file_hash=file_hash,
+        is_active=True,
+    ).first()
+
+    if duplicate:
+        if (not duplicate.file_path or not os.path.exists(duplicate.file_path)) and os.path.exists(file_path):
+            duplicate.file_path = file_path
+            duplicate.file_size = file_size
+            duplicate.updated_at = datetime.now()
+        return duplicate
+
+    knowledge_file = KnowledgeBase(
+        user_id=user_id,
+        law_firm_id=law_firm_id,
+        original_filename=filename,
+        file_path=file_path,
+        file_size=file_size,
+        file_type=file_type,
+        file_hash=file_hash,
+        description='Relatório de julgamento de contestação do FAP importado pelo painel de benefícios.',
+        category='Relatórios FAP',
+        tags='fap,contestacao,julgamento',
+        lawsuit_number=None,
+        processing_status='pending',
+        is_active=True,
+    )
+    db.session.add(knowledge_file)
+    db.session.flush()
+    return knowledge_file
+
+
+def main() -> None:
+    args = parse_args()
+
+    from main import app
+    from app.models import db
+    from app.models import (
+        FapWebContestacao,
+        FapAutoImportedContestacao,
+        FapContestationJudgmentReport,
+        KnowledgeBase,
+        User,
+    )
+    from app.services.fap_contestation_judgment_report_service import FapContestationJudgmentReportService
+    from sqlalchemy import and_, exists
+
+    service = FapContestationJudgmentReportService(flask_app=app)
+
+    with app.app_context():
+        law_firm_id = args.law_firm_id
+
+        # Usa o primeiro usuário admin/ativo do escritório para gravar os registros
+        admin_user = (
+            User.query
+            .filter_by(law_firm_id=law_firm_id, is_active=True)
+            .order_by(User.id.asc())
+            .first()
+        )
+        if not admin_user:
+            _log(f'ERRO: Nenhum usuário ativo encontrado para law_firm_id={law_firm_id}.')
+            sys.exit(1)
+        user_id = admin_user.id
+        _log(f'Usuário de referência: {admin_user.email} (id={user_id})')
+
+        # Monta filtros
+        conds = [
+            FapWebContestacao.law_firm_id == law_firm_id,
+            FapWebContestacao.ano_vigencia == args.ano_vigencia,
+        ]
+        if args.cnpj_raiz:
+            conds.append(FapWebContestacao.cnpj_raiz == args.cnpj_raiz)
+        if args.instancia:
+            conds.append(FapWebContestacao.instancia_codigo == args.instancia)
+        if args.situacao:
+            conds.append(FapWebContestacao.situacao_codigo == args.situacao)
+        if args.protocolo:
+            conds.append(FapWebContestacao.protocolo.ilike(f'%{args.protocolo}%'))
+
+        # Apenas registros com arquivo local
+        conds.append(FapWebContestacao.file_path.isnot(None))
+        conds.append(FapWebContestacao.file_path != '')
+
+        # Exclui já importadas (a menos que force_reimport)
+        if not args.force_reimport:
+            already_imported = exists().where(and_(
+                FapAutoImportedContestacao.law_firm_id == law_firm_id,
+                FapAutoImportedContestacao.contestacao_id == FapWebContestacao.contestacao_id,
+            ))
+            conds.append(~already_imported)
+
+        query = (
+            FapWebContestacao.query
+            .filter(*conds)
+            .order_by(FapWebContestacao.cnpj.asc(), FapWebContestacao.contestacao_id.asc())
+        )
+
+        if args.batch_size > 0:
+            query = query.limit(args.batch_size)
+
+        contestacoes = query.all()
+        total = len(contestacoes)
+
+        _log(f'Vigência: {args.ano_vigencia} | law_firm_id: {law_firm_id}')
+        _log(f'Contestações a processar: {total}')
+
+        if total == 0:
+            _log('Nada a processar. Verifique os filtros ou se os PDFs foram baixados.')
+            return
+
+        if args.dry_run:
+            _log('[DRY RUN] Listagem sem gravação:')
+            for c in contestacoes:
+                _log(f'  contestacao_id={c.contestacao_id} cnpj={c.cnpj} protocolo={c.protocolo} file={c.file_path}')
+            return
+
+        success_count = 0
+        skip_count = 0
+        error_count = 0
+
+        app_root = app.root_path  # = project root (main.py está na raiz)
+
+        for idx, fap_rec in enumerate(contestacoes, start=1):
+            if os.path.isabs(fap_rec.file_path):
+                abs_path = fap_rec.file_path
+            else:
+                abs_path = os.path.abspath(os.path.join(app_root, fap_rec.file_path))
+
+            if not os.path.isfile(abs_path):
+                _log(f'[{idx}/{total}] PULADO — arquivo não encontrado: {fap_rec.file_path}')
+                skip_count += 1
+                continue
+
+            cnpj14 = (fap_rec.cnpj or '').zfill(14)
+            filename = f'FAP_{fap_rec.protocolo}.pdf' if fap_rec.protocolo else f'FAP_{fap_rec.contestacao_id}.pdf'
+            file_size = os.path.getsize(abs_path)
+
+            _log(f'[{idx}/{total}] Processando contestacao_id={fap_rec.contestacao_id} cnpj={cnpj14} protocolo={fap_rec.protocolo}')
+
+            try:
+                existing = FapAutoImportedContestacao.query.filter_by(
+                    law_firm_id=law_firm_id,
+                    contestacao_id=fap_rec.contestacao_id,
+                    cnpj=cnpj14,
+                ).first()
+
+                report = FapContestationJudgmentReport(
+                    user_id=user_id,
+                    law_firm_id=law_firm_id,
+                    original_filename=filename,
+                    file_path=abs_path,
+                    file_size=file_size,
+                    file_type='PDF',
+                    status='pending',
+                )
+                db.session.add(report)
+                db.session.flush()
+
+                knowledge_file = _ensure_knowledge_base(
+                    db=db,
+                    KnowledgeBase=KnowledgeBase,
+                    law_firm_id=law_firm_id,
+                    user_id=user_id,
+                    filename=filename,
+                    file_path=abs_path,
+                    file_size=file_size,
+                    file_type='PDF',
+                )
+                report.knowledge_base_id = knowledge_file.id
+                db.session.flush()
+
+                if existing and args.force_reimport:
+                    existing.report_id = report.id
+                    existing.year = fap_rec.ano_vigencia
+                    existing.original_filename = filename
+                    existing.imported_at = datetime.now()
+                else:
+                    imported = FapAutoImportedContestacao(
+                        law_firm_id=law_firm_id,
+                        report_id=report.id,
+                        contestacao_id=fap_rec.contestacao_id,
+                        cnpj=cnpj14,
+                        year=fap_rec.ano_vigencia,
+                        original_filename=filename,
+                    )
+                    db.session.add(imported)
+
+                fap_rec.needs_reprocess = False
+                fap_rec.report_id = report.id
+
+                db.session.commit()
+
+                ok, imported_count, err_msg = service.process_single_report(report.id)
+                if ok:
+                    _log(f'  ✓ OK — {imported_count} benefício(s) importado(s) (report_id={report.id})')
+                    success_count += 1
+                else:
+                    _log(f'  ✗ ERRO no processamento: {err_msg} (report_id={report.id})')
+                    error_count += 1
+
+            except Exception as exc:
+                db.session.rollback()
+                _log(f'  ✗ EXCEÇÃO: {exc}')
+                error_count += 1
+
+        _log('─' * 60)
+        _log(f'Concluído: {success_count} OK | {skip_count} pulados | {error_count} erros')
+
+
+if __name__ == '__main__':
+    main()
