@@ -543,6 +543,19 @@ class FapContestationJudgmentReportService:
         if not vigencia_year:
             return None
 
+        # SELECT first (consistent read, sem locks) — evita gap locks do INSERT
+        # que causam deadlocks quando múltiplos threads processam em paralelo.
+        with db.session.no_autoflush:
+            record = FapVigenciaCnpj.query.filter_by(
+                law_firm_id=law_firm_id,
+                employer_cnpj=employer_cnpj_digits,
+                vigencia_year=vigencia_year,
+            ).first()
+
+        if record is not None:
+            return record
+
+        # Linha não existe: INSERT com ON DUPLICATE KEY como proteção de race
         vigencia_now = datetime.now()
         vigencia_insert_stmt = mysql_insert(FapVigenciaCnpj.__table__).values(
             law_firm_id=law_firm_id,

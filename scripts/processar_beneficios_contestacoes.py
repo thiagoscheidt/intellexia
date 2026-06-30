@@ -190,6 +190,8 @@ def main() -> None:
         app_root = app.root_path  # = project root (main.py está na raiz)
         skip_count = 0
         report_ids: list[int] = []  # IDs registrados aguardando processamento
+        # Mapa report_id → fap_web_contestacao.id para reset em caso de erro
+        report_to_fap_rec: dict[int, int] = {}
 
         # ── Fase 1: Registro (single-thread) ─────────────────────────────
         _log('Fase 1/2 — Registrando relatórios...')
@@ -261,6 +263,7 @@ def main() -> None:
 
                 db.session.commit()
                 report_ids.append(report.id)
+                report_to_fap_rec[report.id] = fap_rec.id
                 _log(f'  [{idx}/{total}] Registrado report_id={report.id} | contestacao={fap_rec.contestacao_id} | {cnpj14}')
 
             except Exception as exc:
@@ -333,6 +336,22 @@ def main() -> None:
                         continue
                     return report_id, False, 0, str(exc)
 
+        def _reset_failed(report_id: int) -> None:
+            """Remove o registro de importação e reseta o FapWebContestacao para pendente."""
+            try:
+                with app.app_context():
+                    FapAutoImportedContestacao.query.filter_by(report_id=report_id).delete()
+                    fap_rec_id = report_to_fap_rec.get(report_id)
+                    if fap_rec_id:
+                        fap_rec = FapWebContestacao.query.get(fap_rec_id)
+                        if fap_rec:
+                            fap_rec.needs_reprocess = True
+                            fap_rec.report_id = None
+                    db.session.commit()
+            except Exception as exc:
+                db.session.rollback()
+                _log(f'  AVISO: não foi possível resetar report_id={report_id}: {exc}')
+
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {pool.submit(_process_one, rid): rid for rid in report_ids}
             done = 0
@@ -344,6 +363,7 @@ def main() -> None:
                     success_count += 1
                 else:
                     _log(f'  [{done}/{len(report_ids)}] ✗ report_id={report_id} — {err}')
+                    _reset_failed(report_id)
                     error_count += 1
 
         _log('─' * 60)
