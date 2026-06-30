@@ -13,6 +13,9 @@ services:
       MYSQL_USER: intellexia
       MYSQL_PASSWORD: intellexia_password_123
       MYSQL_INITDB_SKIP_TZINFO: "yes"
+    command:
+      - --innodb_deadlock_detect=ON
+      - --innodb_lock_wait_timeout=5
     volumes:
       - mysql_data:/var/lib/mysql
       - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql

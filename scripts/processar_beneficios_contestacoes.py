@@ -25,6 +25,7 @@ import argparse
 import hashlib
 import os
 import sys
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
@@ -110,6 +111,7 @@ def main() -> None:
         FapWebContestacao,
         FapAutoImportedContestacao,
         FapContestationJudgmentReport,
+        FapVigenciaCnpj,
         KnowledgeBase,
         User,
     )
@@ -271,6 +273,39 @@ def main() -> None:
         if not report_ids:
             return
 
+        # ── Fase 1b: Pre-seed fap_vigencia_cnpjs (single-thread) ────────
+        # Garante que as linhas já existam antes das threads paralelas.
+        # Sem isso, múltiplas threads tentam INSERT na mesma chave e
+        # causam deadlock de índice no MySQL.
+        _log('Fase 1b — Pre-seed fap_vigencia_cnpjs...')
+        try:
+            from sqlalchemy.dialects.mysql import insert as mysql_insert
+            unique_vigencias = {
+                (str(c.cnpj or '').zfill(14).replace('.', '').replace('/', '').replace('-', ''),
+                 str(c.ano_vigencia))
+                for c in contestacoes
+                if c.cnpj and c.ano_vigencia
+            }
+            seeded = 0
+            for cnpj_digits, vigencia_year in sorted(unique_vigencias):
+                if len(cnpj_digits) != 14:
+                    continue
+                now_dt = datetime.now()
+                stmt = mysql_insert(FapVigenciaCnpj.__table__).values(
+                    law_firm_id=law_firm_id,
+                    employer_cnpj=cnpj_digits,
+                    vigencia_year=vigencia_year,
+                    created_at=now_dt,
+                    updated_at=now_dt,
+                ).on_duplicate_key_update(updated_at=now_dt)
+                db.session.execute(stmt)
+                seeded += 1
+            db.session.commit()
+            _log(f'  {seeded} combinação(ões) CNPJ/vigência garantidas.')
+        except Exception as exc:
+            db.session.rollback()
+            _log(f'  AVISO: pre-seed falhou ({exc}) — prosseguindo sem garantia.')
+
         # ── Fase 2: Processamento (multi-thread) ─────────────────────────
         workers = max(1, args.workers)
         _log(f'Fase 2/2 — Processando PDFs com {workers} worker(s)...')
@@ -278,10 +313,25 @@ def main() -> None:
         success_count = 0
         error_count = 0
 
+        _DEADLOCK_CODE = 1213
+        _MAX_RETRIES = 3
+
         def _process_one(report_id: int) -> tuple[int, bool, int, str | None]:
-            with app.app_context():
-                ok, cnt, err = service.process_single_report(report_id)
-            return report_id, ok, cnt, err
+            for attempt in range(1, _MAX_RETRIES + 1):
+                try:
+                    with app.app_context():
+                        ok, cnt, err = service.process_single_report(report_id)
+                    return report_id, ok, cnt, err
+                except Exception as exc:
+                    # Verifica se é deadlock MySQL (1213) para tentar novamente
+                    cause = getattr(exc, 'orig', None) or exc
+                    code = getattr(cause, 'args', (None,))[0]
+                    if code == _DEADLOCK_CODE and attempt < _MAX_RETRIES:
+                        wait = 0.5 * attempt
+                        _log(f'  [retry {attempt}/{_MAX_RETRIES}] Deadlock em report_id={report_id}, aguardando {wait}s...')
+                        time.sleep(wait)
+                        continue
+                    return report_id, False, 0, str(exc)
 
         with ThreadPoolExecutor(max_workers=workers) as pool:
             futures = {pool.submit(_process_one, rid): rid for rid in report_ids}
