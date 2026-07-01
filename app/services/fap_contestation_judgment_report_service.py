@@ -617,6 +617,15 @@ class FapContestationJudgmentReportService:
         return None
 
     @staticmethod
+    def _rss_mb() -> float:
+        """Uso de memória residente (RSS) do processo em MB, para diagnóstico."""
+        try:
+            import psutil
+            return psutil.Process().memory_info().rss / (1024 * 1024)
+        except Exception:
+            return 0.0
+
+    @staticmethod
     def _normalize_pdf_page_text(page_text: str) -> str:
         """Normaliza o texto de uma página do PDF (quebras de linha e espaços)."""
         text = page_text.replace('\r\n', '\n').replace('\r', '\n')
@@ -656,7 +665,7 @@ class FapContestationJudgmentReportService:
 
         page_texts: list[str] = []
         with pdfplumber.open(str(path)) as pdf:
-            for page in pdf.pages:
+            for page_index, page in enumerate(pdf.pages, start=1):
                 page_text = page.extract_text(
                     x_tolerance=2,
                     y_tolerance=3,
@@ -665,8 +674,14 @@ class FapContestationJudgmentReportService:
                 )
                 if page_text:
                     page_texts.append(self._normalize_pdf_page_text(page_text))
-                # Descarta os objetos pesados desta página; o texto já foi copiado acima.
-                page.flush_cache()
+                # page.close() libera as cached_properties (_layout/_objects) E o
+                # lru_cache interno de get_textmap (o TextMap desta página). Usar só
+                # flush_cache() deixava o TextMap retido por página — vazamento que
+                # crescia linearmente com o número de páginas do PDF.
+                page.close()
+
+                if page_index % 500 == 0:
+                    print(f'[RSS] leitura PDF: {page_index} página(s) | {self._rss_mb():.0f} MB')
 
         if not page_texts:
             return ''
@@ -870,8 +885,8 @@ class FapContestationJudgmentReportService:
                 layout=False,
                 use_text_flow=True,
             )
-            # Libera os objetos da página assim que o texto é copiado.
-            first_page.flush_cache()
+            # close() libera cached_properties E o lru_cache de get_textmap.
+            first_page.close()
 
         if not first_page_text or not first_page_text.strip():
             raise ValueError('pdfplumber não retornou texto da primeira página.')
@@ -3029,6 +3044,7 @@ class FapContestationJudgmentReportService:
             print(f'Relatório #{report.id} | etapa employment_links (parse) levou {parse_timings["employment_links"]:.2f}s')
             print(f'Relatório #{report.id} | etapa turnover_rates (parse) levou {parse_timings["turnover_rates"]:.2f}s')
             print(f'Relatório #{report.id} | extração completa levou {perf_counter() - extraction_started_at:.2f}s')
+            print(f'Relatório #{report.id} | RSS após extração: {self._rss_mb():.0f} MB')
 
             print(
                 f'Relatório #{report.id}: {len(extracted_benefits)} benefício(s), '
@@ -3043,6 +3059,8 @@ class FapContestationJudgmentReportService:
             imported_payroll_masses = self._upsert_payroll_masses_from_report(report, extracted_payroll_masses, metadata)
             imported_employment_links = self._upsert_employment_links_from_report(report, extracted_employment_links, metadata)
             imported_turnover_rates = self._upsert_turnover_rates_from_report(report, extracted_turnover_rates, metadata)
+
+            print(f'Relatório #{report.id} | RSS após importação: {self._rss_mb():.0f} MB')
 
             report.imported_benefits_count = imported_count
             report.status = 'completed'
