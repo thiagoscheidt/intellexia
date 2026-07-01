@@ -764,6 +764,7 @@
                   <i class="bi bi-1-circle me-1 text-primary"></i>1ª Instância
                 </div>
                 <div class="card-body">
+                  <ul class="nav nav-tabs nav-tabs-sm mb-2 d-none" id="decisionFirstTabs" role="tablist"></ul>
                   <div class="mb-2">
                     <span class="text-muted small d-block mb-1">Status</span>
                     <span id="decisionFirstStatus" class="badge fs-6"></span>
@@ -802,6 +803,7 @@
                   <i class="bi bi-2-circle me-1 text-primary"></i>2ª Instância
                 </div>
                 <div class="card-body">
+                  <ul class="nav nav-tabs nav-tabs-sm mb-2 d-none" id="decisionSecondTabs" role="tablist"></ul>
                   <div class="mb-2">
                     <span class="text-muted small d-block mb-1">Status</span>
                     <span id="decisionSecondStatus" class="badge fs-6"></span>
@@ -1176,24 +1178,13 @@
         data: null,
         className: 'text-center',
         render: function (_, __, row) {
-          const firstJustification = encodeMultilineAttr(row.first_instance_justification || '');
-          const firstOpinion = encodeMultilineAttr(row.first_instance_opinion || '');
-          const secondJustification = encodeMultilineAttr(row.second_instance_justification || '');
-          const secondOpinion = encodeMultilineAttr(row.second_instance_opinion || '');
-
           return `
               <div class="d-flex flex-wrap justify-content-center gap-2">
                 <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal"
-                  data-bs-target="#benefitDecisionModal" data-benefit-number="${escapeAttr(row.benefit_number || '')}"
+                  data-bs-target="#benefitDecisionModal"
+                  data-benefit-id="${escapeAttr(row.id || '')}"
+                  data-benefit-number="${escapeAttr(row.benefit_number || '')}"
                   data-benefit-insured="${escapeAttr(row.insured_name || '')}"
-                  data-first-status="${escapeAttr(row.first_instance_status || '')}"
-                  data-first-status-raw="${escapeAttr(row.first_instance_status_raw || '')}"
-                  data-first-justification="${firstJustification}"
-                  data-first-opinion="${firstOpinion}"
-                  data-second-status="${escapeAttr(row.second_instance_status || '')}"
-                  data-second-status-raw="${escapeAttr(row.second_instance_status_raw || '')}"
-                  data-second-justification="${secondJustification}"
-                  data-second-opinion="${secondOpinion}"
                   title="Ver decisões" aria-label="Ver decisões">
                   <i class="bi bi-card-list"></i>
                 </button>
@@ -2134,68 +2125,92 @@
       }, 1400);
     }
 
+    function applyStatus(statusEl, rawEl, rawWrapper, statusValue, rawValue) {
+      const val = statusValue || '-';
+      statusEl.className = 'badge ' + statusClass(val);
+      statusEl.textContent = statusLabel(val);
+      const tip = statusTooltip(val);
+      statusEl.setAttribute('title', tip);
+      const existing = bootstrap.Tooltip.getInstance(statusEl);
+      if (tip) {
+        statusEl.setAttribute('data-bs-toggle', 'tooltip');
+        bootstrap.Tooltip.getOrCreateInstance(statusEl);
+      } else {
+        if (existing) existing.dispose();
+        statusEl.removeAttribute('data-bs-toggle');
+      }
+      const raw = (rawValue || '').trim();
+      if (raw) {
+        rawEl.textContent = raw;
+        rawWrapper.classList.remove('d-none');
+      } else {
+        rawEl.textContent = '';
+        rawWrapper.classList.add('d-none');
+      }
+    }
+
+    function renderInstance(prefix, decisions) {
+      const tabs = document.getElementById(prefix + 'Tabs');
+      const statusEl = document.getElementById(prefix + 'Status');
+      const rawEl = document.getElementById(prefix + 'StatusRaw');
+      const rawWrapper = document.getElementById(prefix + 'StatusRawWrapper');
+      const justEl = document.getElementById(prefix + 'Justification');
+      const opinionEl = document.getElementById(prefix + 'Opinion');
+
+      function show(dec) {
+        applyStatus(statusEl, rawEl, rawWrapper, dec ? dec.status : '', dec ? dec.status_raw : '');
+        justEl.innerHTML = formatLongText(dec ? dec.justification : '');
+        opinionEl.innerHTML = formatLongText(dec ? dec.opinion : '');
+      }
+
+      if (tabs) { tabs.classList.add('d-none'); tabs.innerHTML = ''; }
+
+      if (!decisions.length) { show(null); return; }
+      if (decisions.length === 1) { show(decisions[0]); return; }
+
+      tabs.classList.remove('d-none');
+      decisions.forEach(function (dec, i) {
+        const li = document.createElement('li');
+        li.className = 'nav-item';
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'nav-link' + (i === 0 ? ' active' : '');
+        b.textContent = 'Análise ' + (i + 1) + (dec.source_page ? ' (p.' + dec.source_page + ')' : '');
+        b.addEventListener('click', function () {
+          tabs.querySelectorAll('.nav-link').forEach(function (n) { n.classList.remove('active'); });
+          b.classList.add('active');
+          show(dec);
+        });
+        li.appendChild(b);
+        tabs.appendChild(li);
+      });
+      show(decisions[0]);
+    }
+
     modal.addEventListener('show.bs.modal', function (event) {
       const btn = event.relatedTarget;
       if (!btn) return;
 
+      const benefitId = btn.getAttribute('data-benefit-id');
       const number = btn.getAttribute('data-benefit-number') || '';
       const insured = btn.getAttribute('data-benefit-insured') || '';
       if (benefitDecisionNumber) benefitDecisionNumber.textContent = number;
-      subtitle.textContent = insured || ('NB ' + number);
+      subtitle.textContent = insured ? ('NB ' + number + ' — ' + insured) : ('NB ' + number);
 
-      const firstStatusValue = btn.getAttribute('data-first-status') || '-';
-      const secondStatusValue = btn.getAttribute('data-second-status') || '-';
+      renderInstance('decisionFirst', []);
+      renderInstance('decisionSecond', []);
+      if (!benefitId) return;
 
-      firstStatus.className = 'badge ' + statusClass(firstStatusValue);
-      secondStatus.className = 'badge ' + statusClass(secondStatusValue);
-      firstStatus.textContent = statusLabel(firstStatusValue);
-      secondStatus.textContent = statusLabel(secondStatusValue);
-
-      const firstTooltip = statusTooltip(firstStatusValue);
-      const secondTooltip = statusTooltip(secondStatusValue);
-      firstStatus.setAttribute('title', firstTooltip);
-      secondStatus.setAttribute('title', secondTooltip);
-
-      if (firstTooltip) {
-        firstStatus.setAttribute('data-bs-toggle', 'tooltip');
-        bootstrap.Tooltip.getOrCreateInstance(firstStatus);
-      } else {
-        const firstTooltipInstance = bootstrap.Tooltip.getInstance(firstStatus);
-        if (firstTooltipInstance) firstTooltipInstance.dispose();
-        firstStatus.removeAttribute('data-bs-toggle');
-      }
-
-      if (secondTooltip) {
-        secondStatus.setAttribute('data-bs-toggle', 'tooltip');
-        bootstrap.Tooltip.getOrCreateInstance(secondStatus);
-      } else {
-        const secondTooltipInstance = bootstrap.Tooltip.getInstance(secondStatus);
-        if (secondTooltipInstance) secondTooltipInstance.dispose();
-        secondStatus.removeAttribute('data-bs-toggle');
-      }
-
-      const firstRaw = (btn.getAttribute('data-first-status-raw') || '').trim();
-      if (firstRaw) {
-        firstStatusRaw.textContent = firstRaw;
-        firstStatusRawWrapper.classList.remove('d-none');
-      } else {
-        firstStatusRaw.textContent = '';
-        firstStatusRawWrapper.classList.add('d-none');
-      }
-
-      const secondRaw = (btn.getAttribute('data-second-status-raw') || '').trim();
-      if (secondRaw) {
-        secondStatusRaw.textContent = secondRaw;
-        secondStatusRawWrapper.classList.remove('d-none');
-      } else {
-        secondStatusRaw.textContent = '';
-        secondStatusRawWrapper.classList.add('d-none');
-      }
-
-      firstJustification.innerHTML = formatLongText(btn.getAttribute('data-first-justification'));
-      firstOpinion.innerHTML = formatLongText(btn.getAttribute('data-first-opinion'));
-      secondJustification.innerHTML = formatLongText(btn.getAttribute('data-second-justification'));
-      secondOpinion.innerHTML = formatLongText(btn.getAttribute('data-second-opinion'));
+      fetch('/disputes-center/benefits/' + benefitId + '/decisions', { headers: { 'Accept': 'application/json' } })
+        .then(function (r) { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); })
+        .then(function (data) {
+          const list = data.decisions || [];
+          renderInstance('decisionFirst', list.filter(function (d) { return d.instancia === 1; }));
+          renderInstance('decisionSecond', list.filter(function (d) { return d.instancia === 2; }));
+        })
+        .catch(function () {
+          subtitle.textContent = 'Não foi possível carregar as decisões.';
+        });
     });
 
     modal.addEventListener('click', function (event) {
