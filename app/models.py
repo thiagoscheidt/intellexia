@@ -1668,22 +1668,22 @@ class Benefit(db.Model):
     request_type = db.Column(db.String(20), index=True)  # exclusao, inclusao, revisao
 
     # General notes
-    notes = db.Column(db.Text)
+    notes = db.Column(db.Text(16777215))  # MEDIUMTEXT — acumula histórico de múltiplas instâncias
     first_instance_status = db.Column(db.String(30), index=True)
     first_instance_status_raw = db.Column(db.String(255))
-    first_instance_justification = db.Column(db.Text)
-    first_instance_opinion = db.Column(db.Text)
+    first_instance_justification = db.Column(db.Text(16777215))
+    first_instance_opinion = db.Column(db.Text(16777215))
     second_instance_status = db.Column(db.String(30), index=True)
     second_instance_status_raw = db.Column(db.String(255))
-    second_instance_justification = db.Column(db.Text)
-    second_instance_opinion = db.Column(db.Text)
+    second_instance_justification = db.Column(db.Text(16777215))
+    second_instance_opinion = db.Column(db.Text(16777215))
     # Mantém compatibilidade com o campo legado (primeira categoria).
     fap_contestation_topic = db.Column(db.String(120), index=True)
     # Armazena todas as categorias do benefício em JSON (lista de strings).
     fap_contestation_topics_json = db.Column(db.Text)
-    justification = db.Column(db.Text)
+    justification = db.Column(db.Text(16777215))
     status = db.Column(db.String(30), default='pending', index=True)
-    opinion = db.Column(db.Text)
+    opinion = db.Column(db.Text(16777215))
 
     # Audit
     created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
