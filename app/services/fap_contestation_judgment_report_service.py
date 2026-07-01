@@ -2192,10 +2192,16 @@ class FapContestationJudgmentReportService:
                 vigencia_year_raw=validity_year,
             )
 
+        # Diagnóstico: quantos blocos, quantos NBs distintos e quantas repetições.
+        empty_number_count = 0
+        number_counts: dict[str, int] = {}
+
         for item in extracted_benefits:
             benefit_number = str(item.get('benefit_number') or '').strip()
             if not benefit_number:
+                empty_number_count += 1
                 continue
+            number_counts[benefit_number] = number_counts.get(benefit_number, 0) + 1
 
             is_new_benefit = False
             benefit = self._find_existing_benefit_for_report(
@@ -2300,6 +2306,28 @@ class FapContestationJudgmentReportService:
 
             if should_apply_update:
                 imported_count += 1
+
+        # ── Detalhamento (diagnóstico de duplicatas) ────────────────────
+        total_blocks = len(extracted_benefits)
+        distinct_numbers = len(number_counts)
+        repeated = {num: cnt for num, cnt in number_counts.items() if cnt > 1}
+        duplicate_occurrences = sum(cnt - 1 for cnt in repeated.values())
+
+        print(
+            f'Relatório #{report.id} | detalhamento benefícios: '
+            f'blocos={total_blocks} | distintos={distinct_numbers} | '
+            f'duplicados={duplicate_occurrences} | sem_número={empty_number_count} | '
+            f'aplicados={imported_count}'
+        )
+
+        if repeated:
+            repeated_sorted = sorted(repeated.items(), key=lambda kv: (-kv[1], kv[0]))
+            print(
+                f'Relatório #{report.id} | {len(repeated)} NB(s) repetido(s) no PDF '
+                f'(aparições no relatório):'
+            )
+            for num, cnt in repeated_sorted:
+                print(f'    NB {num}: {cnt}x')
 
         return imported_count
 
