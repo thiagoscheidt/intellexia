@@ -3,6 +3,7 @@ from __future__ import annotations
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
+import gc
 import json
 import re
 from time import perf_counter
@@ -615,8 +616,32 @@ class FapContestationJudgmentReportService:
 
         return None
 
-    def _extract_typed_blocks_with_pdfplumber(self, file_path: str | Path) -> list[tuple[str, str]]:
-        """Extrai texto do PDF uma única vez e retorna blocos tipados."""
+    @staticmethod
+    def _normalize_pdf_page_text(page_text: str) -> str:
+        """Normaliza o texto de uma página do PDF (quebras de linha e espaços)."""
+        text = page_text.replace('\r\n', '\n').replace('\r', '\n')
+        text = re.sub(r'[ \t]+', ' ', text)
+        text = re.sub(r'\n{3,}', '\n\n', text)
+        return text.strip()
+
+    def _read_pdf_as_markdown(self, file_path: str | Path) -> str:
+        """Lê o PDF inteiro via pdfplumber e retorna o markdown normalizado.
+
+        Libera o cache de cada página logo após extrair o texto (``page.flush_cache()``).
+        Sem isso, o pdfplumber mantém os objetos char-a-char de TODAS as páginas
+        residentes ao mesmo tempo — o que estoura a memória em PDFs com milhares de
+        páginas (ex.: um relatório de 3247 páginas chegava a consumir dezenas de GB).
+        Como o texto de cada página já foi copiado para ``page_texts``, os objetos
+        internos da página não têm mais utilidade e podem ser descartados na hora.
+
+        O texto final é montado exatamente como antes (concatenação de todas as
+        páginas + ``normalize_markdown``), então o parsing por blocos — que precisa
+        do documento inteiro para não cortar benefícios divididos entre páginas —
+        permanece idêntico.
+
+        Retorna string vazia quando o PDF não produz texto; cabe a cada chamador
+        decidir se isso é erro ou apenas ausência da seção.
+        """
         path = Path(file_path)
         if not path.exists():
             raise FileNotFoundError(f'Arquivo não encontrado: {path}')
@@ -629,12 +654,6 @@ class FapContestationJudgmentReportService:
         except ImportError as exc:
             raise ImportError('pdfplumber não está instalado no ambiente atual.') from exc
 
-        def normalize_page_text(page_text: str) -> str:
-            text = page_text.replace('\r\n', '\n').replace('\r', '\n')
-            text = re.sub(r'[ \t]+', ' ', text)
-            text = re.sub(r'\n{3,}', '\n\n', text)
-            return text.strip()
-
         page_texts: list[str] = []
         with pdfplumber.open(str(path)) as pdf:
             for page in pdf.pages:
@@ -645,12 +664,20 @@ class FapContestationJudgmentReportService:
                     use_text_flow=True,
                 )
                 if page_text:
-                    page_texts.append(normalize_page_text(page_text))
+                    page_texts.append(self._normalize_pdf_page_text(page_text))
+                # Descarta os objetos pesados desta página; o texto já foi copiado acima.
+                page.flush_cache()
 
         if not page_texts:
-            raise ValueError('pdfplumber não retornou texto para o arquivo informado.')
+            return ''
 
-        text = self.normalize_markdown('\n\n'.join(page_texts))
+        return self.normalize_markdown('\n\n'.join(page_texts))
+
+    def _extract_typed_blocks_with_pdfplumber(self, file_path: str | Path) -> list[tuple[str, str]]:
+        """Extrai texto do PDF uma única vez e retorna blocos tipados."""
+        text = self._read_pdf_as_markdown(file_path)
+        if not text:
+            raise ValueError('pdfplumber não retornou texto para o arquivo informado.')
         return self._split_all_blocks(text)
 
     def extract_all_sections_with_pdfplumber(self, file_path: str | Path) -> tuple[dict[str, list[dict]], dict[str, float]]:
@@ -721,40 +748,9 @@ class FapContestationJudgmentReportService:
         posicionado com linhas horizontais.
 
         """
-        path = Path(file_path)
-        if not path.exists():
-            raise FileNotFoundError(f'Arquivo não encontrado: {path}')
-
-        if path.suffix.lower() != '.pdf':
-            raise ValueError('O método com pdfplumber aceita apenas arquivos PDF.')
-
-        try:
-            import pdfplumber
-        except ImportError as exc:
-            raise ImportError('pdfplumber não está instalado no ambiente atual.') from exc
-
-        def normalize_page_text(page_text: str) -> str:
-            text = page_text.replace('\r\n', '\n').replace('\r', '\n')
-            text = re.sub(r'[ \t]+', ' ', text)
-            text = re.sub(r'\n{3,}', '\n\n', text)
-            return text.strip()
-
-        page_texts: list[str] = []
-        with pdfplumber.open(str(path)) as pdf:
-            for page in pdf.pages:
-                page_text = page.extract_text(
-                    x_tolerance=2,
-                    y_tolerance=3,
-                    layout=False,
-                    use_text_flow=True,
-                )
-                if page_text:
-                    page_texts.append(normalize_page_text(page_text))
-
-        if not page_texts:
+        text = self._read_pdf_as_markdown(file_path)
+        if not text:
             raise ValueError('pdfplumber não retornou texto para o arquivo informado.')
-
-        text = self.normalize_markdown('\n\n'.join(page_texts))
         typed_blocks = self._split_all_blocks(text)
 
         benefits: list[dict] = []
@@ -771,40 +767,9 @@ class FapContestationJudgmentReportService:
 
     def extract_cats_with_pdfplumber(self, file_path: str | Path) -> list[dict]:
         """Extrai CATs diretamente do PDF com pdfplumber."""
-        path = Path(file_path)
-        if not path.exists():
-            raise FileNotFoundError(f'Arquivo não encontrado: {path}')
-
-        if path.suffix.lower() != '.pdf':
-            raise ValueError('O método com pdfplumber aceita apenas arquivos PDF.')
-
-        try:
-            import pdfplumber
-        except ImportError as exc:
-            raise ImportError('pdfplumber não está instalado no ambiente atual.') from exc
-
-        def normalize_page_text(page_text: str) -> str:
-            text = page_text.replace('\r\n', '\n').replace('\r', '\n')
-            text = re.sub(r'[ \t]+', ' ', text)
-            text = re.sub(r'\n{3,}', '\n\n', text)
-            return text.strip()
-
-        page_texts: list[str] = []
-        with pdfplumber.open(str(path)) as pdf:
-            for page in pdf.pages:
-                page_text = page.extract_text(
-                    x_tolerance=2,
-                    y_tolerance=3,
-                    layout=False,
-                    use_text_flow=True,
-                )
-                if page_text:
-                    page_texts.append(normalize_page_text(page_text))
-
-        if not page_texts:
+        text = self._read_pdf_as_markdown(file_path)
+        if not text:
             return []
-
-        text = self.normalize_markdown('\n\n'.join(page_texts))
         typed_blocks = self._split_all_blocks(text)
 
         cats: list[dict] = []
@@ -821,40 +786,9 @@ class FapContestationJudgmentReportService:
 
     def extract_payroll_masses_with_pdfplumber(self, file_path: str | Path) -> list[dict]:
         """Extrai entradas de Massa Salarial diretamente do PDF com pdfplumber."""
-        path = Path(file_path)
-        if not path.exists():
-            raise FileNotFoundError(f'Arquivo não encontrado: {path}')
-
-        if path.suffix.lower() != '.pdf':
-            raise ValueError('O método com pdfplumber aceita apenas arquivos PDF.')
-
-        try:
-            import pdfplumber
-        except ImportError as exc:
-            raise ImportError('pdfplumber não está instalado no ambiente atual.') from exc
-
-        def normalize_page_text(page_text: str) -> str:
-            text = page_text.replace('\r\n', '\n').replace('\r', '\n')
-            text = re.sub(r'[ \t]+', ' ', text)
-            text = re.sub(r'\n{3,}', '\n\n', text)
-            return text.strip()
-
-        page_texts: list[str] = []
-        with pdfplumber.open(str(path)) as pdf:
-            for page in pdf.pages:
-                page_text = page.extract_text(
-                    x_tolerance=2,
-                    y_tolerance=3,
-                    layout=False,
-                    use_text_flow=True,
-                )
-                if page_text:
-                    page_texts.append(normalize_page_text(page_text))
-
-        if not page_texts:
+        text = self._read_pdf_as_markdown(file_path)
+        if not text:
             return []
-
-        text = self.normalize_markdown('\n\n'.join(page_texts))
         typed_blocks = self._split_all_blocks(text)
 
         payroll_masses: list[dict] = []
@@ -871,40 +805,9 @@ class FapContestationJudgmentReportService:
 
     def extract_employment_links_with_pdfplumber(self, file_path: str | Path) -> list[dict]:
         """Extrai entradas de Número Médio de Vínculos diretamente do PDF com pdfplumber."""
-        path = Path(file_path)
-        if not path.exists():
-            raise FileNotFoundError(f'Arquivo não encontrado: {path}')
-
-        if path.suffix.lower() != '.pdf':
-            raise ValueError('O método com pdfplumber aceita apenas arquivos PDF.')
-
-        try:
-            import pdfplumber
-        except ImportError as exc:
-            raise ImportError('pdfplumber não está instalado no ambiente atual.') from exc
-
-        def normalize_page_text(page_text: str) -> str:
-            text = page_text.replace('\r\n', '\n').replace('\r', '\n')
-            text = re.sub(r'[ \t]+', ' ', text)
-            text = re.sub(r'\n{3,}', '\n\n', text)
-            return text.strip()
-
-        page_texts: list[str] = []
-        with pdfplumber.open(str(path)) as pdf:
-            for page in pdf.pages:
-                page_text = page.extract_text(
-                    x_tolerance=2,
-                    y_tolerance=3,
-                    layout=False,
-                    use_text_flow=True,
-                )
-                if page_text:
-                    page_texts.append(normalize_page_text(page_text))
-
-        if not page_texts:
+        text = self._read_pdf_as_markdown(file_path)
+        if not text:
             return []
-
-        text = self.normalize_markdown('\n\n'.join(page_texts))
         typed_blocks = self._split_all_blocks(text)
 
         employment_links: list[dict] = []
@@ -921,40 +824,9 @@ class FapContestationJudgmentReportService:
 
     def extract_turnover_rates_with_pdfplumber(self, file_path: str | Path) -> list[dict]:
         """Extrai entradas de Taxa Média de Rotatividade diretamente do PDF com pdfplumber."""
-        path = Path(file_path)
-        if not path.exists():
-            raise FileNotFoundError(f'Arquivo não encontrado: {path}')
-
-        if path.suffix.lower() != '.pdf':
-            raise ValueError('O método com pdfplumber aceita apenas arquivos PDF.')
-
-        try:
-            import pdfplumber
-        except ImportError as exc:
-            raise ImportError('pdfplumber não está instalado no ambiente atual.') from exc
-
-        def normalize_page_text(page_text: str) -> str:
-            text = page_text.replace('\r\n', '\n').replace('\r', '\n')
-            text = re.sub(r'[ \t]+', ' ', text)
-            text = re.sub(r'\n{3,}', '\n\n', text)
-            return text.strip()
-
-        page_texts: list[str] = []
-        with pdfplumber.open(str(path)) as pdf:
-            for page in pdf.pages:
-                page_text = page.extract_text(
-                    x_tolerance=2,
-                    y_tolerance=3,
-                    layout=False,
-                    use_text_flow=True,
-                )
-                if page_text:
-                    page_texts.append(normalize_page_text(page_text))
-
-        if not page_texts:
+        text = self._read_pdf_as_markdown(file_path)
+        if not text:
             return []
-
-        text = self.normalize_markdown('\n\n'.join(page_texts))
         typed_blocks = self._split_all_blocks(text)
 
         turnover_rates: list[dict] = []
@@ -991,19 +863,20 @@ class FapContestationJudgmentReportService:
             if not pdf.pages:
                 raise ValueError('PDF sem páginas para extração de metadados.')
 
-            first_page_text = pdf.pages[0].extract_text(
+            first_page = pdf.pages[0]
+            first_page_text = first_page.extract_text(
                 x_tolerance=2,
                 y_tolerance=3,
                 layout=False,
                 use_text_flow=True,
             )
+            # Libera os objetos da página assim que o texto é copiado.
+            first_page.flush_cache()
 
         if not first_page_text or not first_page_text.strip():
             raise ValueError('pdfplumber não retornou texto da primeira página.')
 
-        normalized_first_page = first_page_text.replace('\r\n', '\n').replace('\r', '\n')
-        normalized_first_page = re.sub(r'[ \t]+', ' ', normalized_first_page)
-        normalized_first_page = re.sub(r'\n{3,}', '\n\n', normalized_first_page)
+        normalized_first_page = self._normalize_pdf_page_text(first_page_text)
         normalized_first_page = self.normalize_markdown(normalized_first_page)
 
         return self.metadata_agent.extract_from_first_page(normalized_first_page)
@@ -3198,6 +3071,10 @@ class FapContestationJudgmentReportService:
             db.session.commit()
             print(f'Erro ao processar relatório #{report_id}: {exc}')
             return False, 0, str(exc)
+        finally:
+            # Força a coleta dos objetos do pdfplumber/parsing antes do próximo
+            # relatório, evitando acúmulo de memória entre PDFs no mesmo worker.
+            gc.collect()
 
     def process_pending_reports(
         self,
