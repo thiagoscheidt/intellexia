@@ -7,6 +7,11 @@ serve para ambientes que não recriam a base do zero.
 Uso:
   uv run python database/add_benefit_contestation_decisions_table.py
 """
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
 from main import app
 from app.models import db, BenefitContestationDecision
 from sqlalchemy import inspect
