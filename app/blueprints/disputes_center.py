@@ -1532,10 +1532,11 @@ def _apply_benefits_filters(
     return query
 
 
-def _serialize_benefit_row(benefit, client_name):
+def _serialize_benefit_row(benefit, client_name, decisions_count=0):
     topics_text = _benefit_topics_text(benefit)
     return {
         'id': benefit.id,
+        'decisions_count': int(decisions_count or 0),
         'benefit_number': benefit.benefit_number or '',
         'client_name': client_name or '',
         'insured_name': benefit.insured_name or '',
@@ -2979,7 +2980,25 @@ def list_disputes_center_api():
         .all()
     )
 
-    data = [_serialize_benefit_row(benefit, client_name) for benefit, client_name in paged_results]
+    # Contagem de decisões (ocorrências) da página em uma única query agregada.
+    benefit_ids = [benefit.id for benefit, _ in paged_results]
+    decisions_counts = {}
+    if benefit_ids:
+        count_rows = (
+            db.session.query(
+                BenefitContestationDecision.benefit_id,
+                func.count(BenefitContestationDecision.id),
+            )
+            .filter(BenefitContestationDecision.benefit_id.in_(benefit_ids))
+            .group_by(BenefitContestationDecision.benefit_id)
+            .all()
+        )
+        decisions_counts = {bid: cnt for bid, cnt in count_rows}
+
+    data = [
+        _serialize_benefit_row(benefit, client_name, decisions_counts.get(benefit.id, 0))
+        for benefit, client_name in paged_results
+    ]
 
     return jsonify(
         {

@@ -1178,15 +1178,21 @@
         data: null,
         className: 'text-center',
         render: function (_, __, row) {
+          const decCount = Number(row.decisions_count || 0);
+          const decBadge = decCount > 1
+            ? `<span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-primary" style="font-size:0.6rem;">${decCount}<span class="visually-hidden">ocorrências</span></span>`
+            : '';
+          const decTitle = decCount === 1 ? 'Ver decisões (1 ocorrência)'
+            : (decCount > 1 ? `Ver decisões (${decCount} ocorrências)` : 'Ver decisões');
           return `
               <div class="d-flex flex-wrap justify-content-center gap-2">
-                <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal"
+                <button type="button" class="btn btn-outline-primary btn-sm position-relative" data-bs-toggle="modal"
                   data-bs-target="#benefitDecisionModal"
                   data-benefit-id="${escapeAttr(row.id || '')}"
                   data-benefit-number="${escapeAttr(row.benefit_number || '')}"
                   data-benefit-insured="${escapeAttr(row.insured_name || '')}"
-                  title="Ver decisões" aria-label="Ver decisões">
-                  <i class="bi bi-card-list"></i>
+                  title="${escapeAttr(decTitle)}" aria-label="${escapeAttr(decTitle)}">
+                  <i class="bi bi-card-list"></i>${decBadge}
                 </button>
                 <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-toggle="modal"
                   data-bs-target="#benefitDocumentsModal" data-benefit-number="${escapeAttr(row.benefit_number || '')}"
