@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 import gc
+import hashlib
 import json
 import re
 from time import perf_counter
@@ -17,6 +18,7 @@ from app.agents.fap.fap_contestation_judgment_metadata_agent import (
 from app.agents.fap.fap_contestation_classifier_agent import FAPContestationClassifierAgent
 from app.models import (
     Benefit,
+    BenefitContestationDecision,
     BenefitFapSourceHistory,
     FapVigenciaCnpj,
     Client,
@@ -2152,6 +2154,102 @@ class FapContestationJudgmentReportService:
 
         return reference_dt > latest_reference
 
+    @staticmethod
+    def _decision_fingerprint(instancia: int, justification: str | None, opinion: str | None) -> str:
+        """Impressão estável de uma análise para idempotência (upsert por conteúdo)."""
+        norm_just = FapContestationJudgmentReportService._text_fingerprint(justification or '')
+        norm_op = FapContestationJudgmentReportService._text_fingerprint(opinion or '')
+        raw = f'{int(instancia)}|{norm_just}|{norm_op}'
+        return hashlib.sha256(raw.encode('utf-8')).hexdigest()
+
+    @staticmethod
+    def _extract_block_decisions(item: dict) -> list[dict]:
+        """Converte um bloco parseado em 0..2 análises (uma por instância presente)."""
+        decisions: list[dict] = []
+        instances = (
+            (1, 'first_instance_status', 'first_instance_status_raw',
+             'first_instance_justification', 'first_instance_opinion'),
+            (2, 'second_instance_status', 'second_instance_status_raw',
+             'second_instance_justification', 'second_instance_opinion'),
+        )
+        for instancia, status_key, status_raw_key, just_key, op_key in instances:
+            status = item.get(status_key)
+            status_raw = item.get(status_raw_key)
+            justification = item.get(just_key)
+            opinion = item.get(op_key)
+            # Só cria decisão se a instância tem algum conteúdo real.
+            if not any([status, status_raw, justification, opinion]):
+                continue
+            decisions.append({
+                'instancia': instancia,
+                'status': status,
+                'status_raw': status_raw,
+                'justification': justification,
+                'opinion': opinion,
+            })
+        return decisions
+
+    def _upsert_benefit_decisions(
+        self,
+        report: FapContestationJudgmentReport,
+        benefit: Benefit,
+        item: dict,
+        seq_state: dict[tuple[int, int], int],
+    ) -> tuple[int, int]:
+        """Cria/atualiza as decisões de um bloco. Retorna (criadas, atualizadas).
+
+        seq_state mapeia (benefit_id, instancia) -> próximo sequence, garantindo
+        ordenação estável das sub-abas entre blocos do mesmo relatório.
+        """
+        created = 0
+        updated = 0
+        for dec in self._extract_block_decisions(item):
+            fingerprint = self._decision_fingerprint(
+                dec['instancia'], dec['justification'], dec['opinion']
+            )
+            existing = BenefitContestationDecision.query.filter_by(
+                law_firm_id=report.law_firm_id,
+                benefit_id=benefit.id,
+                fingerprint=fingerprint,
+            ).first()
+
+            if existing is not None:
+                existing.report_id = report.id
+                existing.status = dec['status']
+                existing.status_raw = dec['status_raw']
+                existing.updated_at = datetime.now()
+                updated += 1
+                continue
+
+            key = (benefit.id, dec['instancia'])
+            if key not in seq_state:
+                seq_state[key] = (
+                    BenefitContestationDecision.query
+                    .filter_by(
+                        law_firm_id=report.law_firm_id,
+                        benefit_id=benefit.id,
+                        instancia=dec['instancia'],
+                    )
+                    .count()
+                )
+            sequence = seq_state[key]
+            seq_state[key] = sequence + 1
+
+            db.session.add(BenefitContestationDecision(
+                law_firm_id=report.law_firm_id,
+                benefit_id=benefit.id,
+                report_id=report.id,
+                instancia=dec['instancia'],
+                sequence=sequence,
+                status=dec['status'],
+                status_raw=dec['status_raw'],
+                justification=dec['justification'],
+                opinion=dec['opinion'],
+                fingerprint=fingerprint,
+            ))
+            created += 1
+        return created, updated
+
     def _upsert_benefits_from_report(
         self,
         report: FapContestationJudgmentReport,
@@ -2195,6 +2293,11 @@ class FapContestationJudgmentReportService:
         # Diagnóstico: quantos blocos, quantos NBs distintos e quantas repetições.
         empty_number_count = 0
         number_counts: dict[str, int] = {}
+
+        # Estado das decisões (uma linha por análise de contestação).
+        seq_state: dict[tuple[int, int], int] = {}
+        decisions_created = 0
+        decisions_updated = 0
 
         for item in extracted_benefits:
             benefit_number = str(item.get('benefit_number') or '').strip()
@@ -2304,20 +2407,23 @@ class FapContestationJudgmentReportService:
             )
             db.session.execute(history_upsert_stmt)
 
+            d_created, d_updated = self._upsert_benefit_decisions(report, benefit, item, seq_state)
+            decisions_created += d_created
+            decisions_updated += d_updated
+
             if should_apply_update:
                 imported_count += 1
 
-        # ── Detalhamento (diagnóstico de duplicatas) ────────────────────
+        # ── Detalhamento (diagnóstico) ──────────────────────────────────
         total_blocks = len(extracted_benefits)
         distinct_numbers = len(number_counts)
         repeated = {num: cnt for num, cnt in number_counts.items() if cnt > 1}
-        duplicate_occurrences = sum(cnt - 1 for cnt in repeated.values())
 
         print(
             f'Relatório #{report.id} | detalhamento benefícios: '
             f'blocos={total_blocks} | distintos={distinct_numbers} | '
-            f'duplicados={duplicate_occurrences} | sem_número={empty_number_count} | '
-            f'aplicados={imported_count}'
+            f'sem_número={empty_number_count} | aplicados={imported_count} | '
+            f'decisões(criadas={decisions_created}, atualizadas={decisions_updated})'
         )
 
         if repeated:
