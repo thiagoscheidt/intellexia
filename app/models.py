@@ -1705,9 +1705,64 @@ class Benefit(db.Model):
         cascade='all, delete-orphan',
         order_by='BenefitManualHistory.created_at.desc()'
     )
+    contestation_decisions = db.relationship(
+        'BenefitContestationDecision',
+        back_populates='benefit',
+        cascade='all, delete-orphan',
+        order_by='BenefitContestationDecision.instancia, BenefitContestationDecision.sequence',
+    )
 
     def __repr__(self):
         return f'<Benefit {self.benefit_number}>'
+
+
+class BenefitContestationDecision(db.Model):
+    """Uma análise/insumo de contestação FAP de um benefício.
+
+    Um mesmo benefício (NB) pode ser analisado várias vezes no relatório —
+    uma vez por insumo do cálculo do FAP (ex.: CAT e 'Nexo Técnico sem CAT'),
+    cada uma com justificativa, parecer e status próprios, na mesma instância.
+    Esta tabela guarda cada análise separadamente; os campos planos em `benefits`
+    permanecem como espelho da análise principal (sequence=0) de cada instância.
+    """
+    __tablename__ = 'benefit_contestation_decisions'
+    __table_args__ = (
+        db.UniqueConstraint(
+            'law_firm_id', 'benefit_id', 'fingerprint',
+            name='uq_benefit_decision_fingerprint',
+        ),
+        db.Index(
+            'ix_benefit_decisions_lookup',
+            'law_firm_id', 'benefit_id', 'instancia', 'sequence',
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    benefit_id = db.Column(db.Integer, db.ForeignKey('benefits.id'), nullable=False, index=True)
+    report_id = db.Column(
+        db.Integer, db.ForeignKey('fap_contestation_judgment_reports.id'), index=True
+    )
+
+    instancia = db.Column(db.SmallInteger, nullable=False)  # 1 ou 2
+    sequence = db.Column(db.Integer, nullable=False, default=0)
+
+    status = db.Column(db.String(30), index=True)
+    status_raw = db.Column(db.String(255))
+    justification = db.Column(db.Text)
+    opinion = db.Column(db.Text)
+
+    source_page = db.Column(db.Integer)  # best-effort; pode ser NULL
+    fingerprint = db.Column(db.String(64), nullable=False)
+    fap_contestation_topics_json = db.Column(db.Text)
+
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    benefit = db.relationship('Benefit', back_populates='contestation_decisions')
+
+    def __repr__(self):
+        return f'<BenefitContestationDecision benefit={self.benefit_id} inst={self.instancia} seq={self.sequence}>'
 
 
 class BenefitFapSourceHistory(db.Model):

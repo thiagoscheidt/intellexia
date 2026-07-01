@@ -23,6 +23,7 @@ from werkzeug.utils import secure_filename
 
 from app.models import (
     Benefit,
+    BenefitContestationDecision,
     BenefitManualHistory,
     BenefitFapSourceHistory,
     FapVigenciaCnpj,
@@ -2117,6 +2118,56 @@ def benefit_file_timeline(benefit_id):
             'benefit_id': benefit.id,
             'benefit_number': benefit.benefit_number,
             'events': events,
+        }
+    )
+
+
+@disputes_center_bp.route('/benefits/<int:benefit_id>/decisions', methods=['GET'])
+@require_law_firm
+def benefit_decisions(benefit_id):
+    """Retorna as decisões de contestação de um benefício (multi-tenant)."""
+    law_firm_id = get_current_law_firm_id()
+    benefit = Benefit.query.filter_by(id=benefit_id, law_firm_id=law_firm_id).first_or_404()
+
+    decisions = (
+        BenefitContestationDecision.query
+        .filter_by(law_firm_id=law_firm_id, benefit_id=benefit_id)
+        .order_by(
+            BenefitContestationDecision.instancia.asc(),
+            BenefitContestationDecision.sequence.asc(),
+        )
+        .all()
+    )
+
+    def _topics(raw):
+        raw = str(raw or '').strip()
+        if not raw:
+            return []
+        try:
+            parsed = json.loads(raw)
+        except Exception:
+            return []
+        if not isinstance(parsed, list):
+            return []
+        return [str(t).strip() for t in parsed if str(t).strip()]
+
+    return jsonify(
+        {
+            'benefit_number': benefit.benefit_number,
+            'insured_name': benefit.insured_name or '',
+            'decisions': [
+                {
+                    'instancia': d.instancia,
+                    'sequence': d.sequence,
+                    'status': d.status or '',
+                    'status_raw': d.status_raw or '',
+                    'justification': d.justification or '',
+                    'opinion': d.opinion or '',
+                    'source_page': d.source_page,
+                    'topics': _topics(d.fap_contestation_topics_json),
+                }
+                for d in decisions
+            ],
         }
     )
 

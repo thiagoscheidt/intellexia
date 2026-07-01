@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime
 from pathlib import Path
 import gc
+import hashlib
 import json
 import re
 from time import perf_counter
@@ -17,6 +18,7 @@ from app.agents.fap.fap_contestation_judgment_metadata_agent import (
 from app.agents.fap.fap_contestation_classifier_agent import FAPContestationClassifierAgent
 from app.models import (
     Benefit,
+    BenefitContestationDecision,
     BenefitFapSourceHistory,
     FapVigenciaCnpj,
     Client,
@@ -85,6 +87,22 @@ class FapContestationJudgmentReportService:
             context_block = "\n".join(context_lines)
             return f"{context_block}\n\n{justification_text}".strip()
 
+        return justification_text
+
+    @staticmethod
+    def _build_decision_classification_text(decision, benefit: Benefit) -> str:
+        """Monta o texto de classificação de UMA decisão (usa o cabeçalho de contexto do benefício)."""
+        selected_value = decision.justification or decision.opinion
+        if not selected_value or not str(selected_value).strip():
+            return ""
+
+        justification_text = FapContestationJudgmentReportService._clean_classification_text_block(
+            str(selected_value)
+        )
+        context_lines = FapContestationJudgmentReportService._build_benefit_context_lines(benefit)
+        if context_lines:
+            context_block = "\n".join(context_lines)
+            return f"{context_block}\n\n{justification_text}".strip()
         return justification_text
 
     @staticmethod
@@ -306,6 +324,25 @@ class FapContestationJudgmentReportService:
 
         return topics
 
+    @staticmethod
+    def _parse_topics_json(raw_json: str | None) -> list[str]:
+        """Lê uma lista de tópicos de um campo JSON, tolerante a valor inválido/vazio."""
+        raw = str(raw_json or '').strip()
+        if not raw:
+            return []
+        try:
+            parsed = json.loads(raw)
+        except Exception:
+            return []
+        if not isinstance(parsed, list):
+            return []
+        result: list[str] = []
+        for item in parsed:
+            topic = str(item or '').strip()
+            if topic and topic not in result:
+                result.append(topic)
+        return result
+
     def classify_single_benefit_contestation_topic(
         self,
         *,
@@ -363,29 +400,21 @@ class FapContestationJudgmentReportService:
         with self.app.app_context():
             effective_batch_size = max(1, int(batch_size))
             effective_workers = max(1, int(parallel_workers))
-            query = Benefit.query
 
+            dec_query = BenefitContestationDecision.query
             if benefit_id is not None:
-                query = query.filter(Benefit.id == benefit_id)
-
+                dec_query = dec_query.filter(BenefitContestationDecision.benefit_id == benefit_id)
             if law_firm_id is not None:
-                query = query.filter(Benefit.law_firm_id == law_firm_id)
-
+                dec_query = dec_query.filter(BenefitContestationDecision.law_firm_id == law_firm_id)
             if not force_reclassify:
-                query = query.filter(
-                    (
-                        (Benefit.fap_contestation_topic.is_(None))
-                        | (Benefit.fap_contestation_topic == '')
-                    )
-                    & (
-                        (Benefit.fap_contestation_topics_json.is_(None))
-                        | (Benefit.fap_contestation_topics_json == '')
-                    )
+                dec_query = dec_query.filter(
+                    (BenefitContestationDecision.fap_contestation_topics_json.is_(None))
+                    | (BenefitContestationDecision.fap_contestation_topics_json == '')
                 )
 
-            benefits = query.order_by(Benefit.id.asc()).all()
-            if not benefits:
-                print('Nenhum benefício elegível para classificação.')
+            decisions = dec_query.order_by(BenefitContestationDecision.id.asc()).all()
+            if not decisions:
+                print('Nenhuma decisão elegível para classificação.')
                 return {
                     'total': 0,
                     'classified': 0,
@@ -393,75 +422,81 @@ class FapContestationJudgmentReportService:
                     'updated': 0,
                 }
 
-            total = len(benefits)
+            total = len(decisions)
             classified = 0
             errors = 0
-            updated = 0
+            benefits_touched: set[int] = set()
 
-            # Extrai textos na thread principal para não passar objetos SQLAlchemy às threads.
+            # Monta textos na thread principal (não passa objetos SQLAlchemy às threads).
             tasks = [
-                (benefit, self._build_benefit_classification_text(benefit), benefit.law_firm_id)
-                for benefit in benefits
+                (decision, self._build_decision_classification_text(decision, decision.benefit),
+                 decision.law_firm_id)
+                for decision in decisions
             ]
 
-            def _classify_text(text: str, benefit_law_firm_id: int | None) -> list[str]:
-                # Cada thread precisa do próprio app context — Flask-SQLAlchemy usa
-                # sessões thread-local vinculadas ao contexto da aplicação.
+            def _classify_text(text: str, dec_law_firm_id: int | None) -> list[str]:
                 with self.app.app_context():
-                    result = self.classifier_agent.classify(text, law_firm_id=benefit_law_firm_id)
+                    result = self.classifier_agent.classify(text, law_firm_id=dec_law_firm_id)
                 return self._extract_topics_from_classifier_result(result)
 
             completed = 0
             with ThreadPoolExecutor(max_workers=effective_workers) as executor:
-                future_to_benefit = {
-                    executor.submit(_classify_text, text, benefit_law_firm_id): benefit
-                    for benefit, text, benefit_law_firm_id in tasks
+                future_to_decision = {
+                    executor.submit(_classify_text, text, dec_law_firm_id): decision
+                    for decision, text, dec_law_firm_id in tasks
                 }
 
-                for future in as_completed(future_to_benefit):
-                    benefit = future_to_benefit[future]
+                for future in as_completed(future_to_decision):
+                    decision = future_to_decision[future]
                     completed += 1
 
                     try:
-                        classified_topics = future.result()
-                        if force_reclassify:
-                            topics_to_persist = classified_topics
-                        else:
-                            existing_topics = self._parse_benefit_topics(benefit)
-                            topics_to_persist = existing_topics.copy()
-                            for topic in classified_topics:
-                                if topic not in topics_to_persist:
-                                    topics_to_persist.append(topic)
-                        if self._persist_benefit_topics(benefit, topics_to_persist):
-                            updated += 1
+                        topics = future.result()
+                        decision.fap_contestation_topics_json = json.dumps(topics, ensure_ascii=False)
+                        benefits_touched.add(decision.benefit_id)
                         classified += 1
                     except Exception as exc:
                         errors += 1
-                        print(f'Erro ao classificar benefício #{benefit.id}: {exc}')
+                        print(f'Erro ao classificar decisão #{decision.id}: {exc}')
 
                     if completed % effective_batch_size == 0:
                         try:
                             db.session.commit()
                         except Exception as commit_exc:
                             db.session.rollback()
-                            print(f'Erro ao salvar lote na classificação de benefícios: {commit_exc}')
+                            print(f'Erro ao salvar lote na classificação de decisões: {commit_exc}')
                             raise
 
                         print(
-                            f'Classificação de benefícios: {completed}/{total} '
-                            f'(classificados={classified}, atualizados={updated}, erros={errors})'
+                            f'Classificação de decisões: {completed}/{total} '
+                            f'(classificadas={classified}, erros={errors})'
                         )
 
             try:
                 db.session.commit()
             except Exception as commit_exc:
                 db.session.rollback()
-                print(f'Erro ao salvar classificação final de benefícios: {commit_exc}')
+                print(f'Erro ao salvar classificação final de decisões: {commit_exc}')
                 raise
+
+            # Recompõe a união dos tópicos em cada benefício tocado.
+            updated = 0
+            for b_id in benefits_touched:
+                benefit = db.session.get(Benefit, b_id)
+                if benefit is None:
+                    continue
+                merged: list[str] = []
+                for dec in benefit.contestation_decisions:
+                    for topic in self._parse_topics_json(dec.fap_contestation_topics_json):
+                        if topic not in merged:
+                            merged.append(topic)
+                if self._persist_benefit_topics(benefit, merged):
+                    updated += 1
+            db.session.commit()
 
             print(
                 'Classificação concluída: '
-                f'total={total}, classificados={classified}, atualizados={updated}, erros={errors}'
+                f'total={total}, classificadas={classified}, erros={errors}, benefícios_atualizados={updated}'
             )
 
             return {
@@ -2152,6 +2187,102 @@ class FapContestationJudgmentReportService:
 
         return reference_dt > latest_reference
 
+    @staticmethod
+    def _decision_fingerprint(instancia: int, justification: str | None, opinion: str | None) -> str:
+        """Impressão estável de uma análise para idempotência (upsert por conteúdo)."""
+        norm_just = FapContestationJudgmentReportService._text_fingerprint(justification or '')
+        norm_op = FapContestationJudgmentReportService._text_fingerprint(opinion or '')
+        raw = f'{int(instancia)}|{norm_just}|{norm_op}'
+        return hashlib.sha256(raw.encode('utf-8')).hexdigest()
+
+    @staticmethod
+    def _extract_block_decisions(item: dict) -> list[dict]:
+        """Converte um bloco parseado em 0..2 análises (uma por instância presente)."""
+        decisions: list[dict] = []
+        instances = (
+            (1, 'first_instance_status', 'first_instance_status_raw',
+             'first_instance_justification', 'first_instance_opinion'),
+            (2, 'second_instance_status', 'second_instance_status_raw',
+             'second_instance_justification', 'second_instance_opinion'),
+        )
+        for instancia, status_key, status_raw_key, just_key, op_key in instances:
+            status = item.get(status_key)
+            status_raw = item.get(status_raw_key)
+            justification = item.get(just_key)
+            opinion = item.get(op_key)
+            # Só cria decisão se a instância tem algum conteúdo real.
+            if not any([status, status_raw, justification, opinion]):
+                continue
+            decisions.append({
+                'instancia': instancia,
+                'status': status,
+                'status_raw': status_raw,
+                'justification': justification,
+                'opinion': opinion,
+            })
+        return decisions
+
+    def _upsert_benefit_decisions(
+        self,
+        report: FapContestationJudgmentReport,
+        benefit: Benefit,
+        item: dict,
+        seq_state: dict[tuple[int, int], int],
+    ) -> tuple[int, int]:
+        """Cria/atualiza as decisões de um bloco. Retorna (criadas, atualizadas).
+
+        seq_state mapeia (benefit_id, instancia) -> próximo sequence, garantindo
+        ordenação estável das sub-abas entre blocos do mesmo relatório.
+        """
+        created = 0
+        updated = 0
+        for dec in self._extract_block_decisions(item):
+            fingerprint = self._decision_fingerprint(
+                dec['instancia'], dec['justification'], dec['opinion']
+            )
+            existing = BenefitContestationDecision.query.filter_by(
+                law_firm_id=report.law_firm_id,
+                benefit_id=benefit.id,
+                fingerprint=fingerprint,
+            ).first()
+
+            if existing is not None:
+                existing.report_id = report.id
+                existing.status = dec['status']
+                existing.status_raw = dec['status_raw']
+                existing.updated_at = datetime.now()
+                updated += 1
+                continue
+
+            key = (benefit.id, dec['instancia'])
+            if key not in seq_state:
+                seq_state[key] = (
+                    BenefitContestationDecision.query
+                    .filter_by(
+                        law_firm_id=report.law_firm_id,
+                        benefit_id=benefit.id,
+                        instancia=dec['instancia'],
+                    )
+                    .count()
+                )
+            sequence = seq_state[key]
+            seq_state[key] = sequence + 1
+
+            db.session.add(BenefitContestationDecision(
+                law_firm_id=report.law_firm_id,
+                benefit_id=benefit.id,
+                report_id=report.id,
+                instancia=dec['instancia'],
+                sequence=sequence,
+                status=dec['status'],
+                status_raw=dec['status_raw'],
+                justification=dec['justification'],
+                opinion=dec['opinion'],
+                fingerprint=fingerprint,
+            ))
+            created += 1
+        return created, updated
+
     def _upsert_benefits_from_report(
         self,
         report: FapContestationJudgmentReport,
@@ -2195,6 +2326,11 @@ class FapContestationJudgmentReportService:
         # Diagnóstico: quantos blocos, quantos NBs distintos e quantas repetições.
         empty_number_count = 0
         number_counts: dict[str, int] = {}
+
+        # Estado das decisões (uma linha por análise de contestação).
+        seq_state: dict[tuple[int, int], int] = {}
+        decisions_created = 0
+        decisions_updated = 0
 
         for item in extracted_benefits:
             benefit_number = str(item.get('benefit_number') or '').strip()
@@ -2304,20 +2440,23 @@ class FapContestationJudgmentReportService:
             )
             db.session.execute(history_upsert_stmt)
 
+            d_created, d_updated = self._upsert_benefit_decisions(report, benefit, item, seq_state)
+            decisions_created += d_created
+            decisions_updated += d_updated
+
             if should_apply_update:
                 imported_count += 1
 
-        # ── Detalhamento (diagnóstico de duplicatas) ────────────────────
+        # ── Detalhamento (diagnóstico) ──────────────────────────────────
         total_blocks = len(extracted_benefits)
         distinct_numbers = len(number_counts)
         repeated = {num: cnt for num, cnt in number_counts.items() if cnt > 1}
-        duplicate_occurrences = sum(cnt - 1 for cnt in repeated.values())
 
         print(
             f'Relatório #{report.id} | detalhamento benefícios: '
             f'blocos={total_blocks} | distintos={distinct_numbers} | '
-            f'duplicados={duplicate_occurrences} | sem_número={empty_number_count} | '
-            f'aplicados={imported_count}'
+            f'sem_número={empty_number_count} | aplicados={imported_count} | '
+            f'decisões(criadas={decisions_created}, atualizadas={decisions_updated})'
         )
 
         if repeated:
