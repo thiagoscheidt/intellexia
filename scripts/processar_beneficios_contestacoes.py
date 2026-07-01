@@ -182,7 +182,13 @@ def _run_year(args, ano_vigencia: int, app, db, FapWebContestacao, FapAutoImport
         # Mapa report_id → fap_web_contestacao.id para reset em caso de erro
         report_to_fap_rec: dict[int, int] = {}
 
+        # report_meta guarda dados necessários para criar FapAutoImportedContestacao após sucesso
+        report_meta: dict[int, dict] = {}
+
         # ── Fase 1: Registro (single-thread) ─────────────────────────────
+        # Cria apenas FapContestationJudgmentReport + KnowledgeBase.
+        # FapAutoImportedContestacao só é criado após processamento bem-sucedido
+        # na Fase 2, evitando que interrupções marquem contestações como processadas.
         _log('Fase 1/2 — Registrando relatórios...')
         for idx, fap_rec in enumerate(contestacoes, start=1):
             if os.path.isabs(fap_rec.file_path):
@@ -200,52 +206,45 @@ def _run_year(args, ano_vigencia: int, app, db, FapWebContestacao, FapAutoImport
             file_size = os.path.getsize(abs_path)
 
             try:
-                existing = FapAutoImportedContestacao.query.filter_by(
-                    law_firm_id=law_firm_id,
-                    contestacao_id=fap_rec.contestacao_id,
-                    cnpj=cnpj14,
-                ).first()
-
-                report = FapContestationJudgmentReport(
-                    user_id=user_id,
-                    law_firm_id=law_firm_id,
-                    original_filename=filename,
-                    file_path=abs_path,
-                    file_size=file_size,
-                    file_type='PDF',
-                    status='pending',
-                )
-                db.session.add(report)
-                db.session.flush()
-
-                knowledge_file = _ensure_knowledge_base(
-                    db=db,
-                    KnowledgeBase=KnowledgeBase,
-                    law_firm_id=law_firm_id,
-                    user_id=user_id,
-                    filename=filename,
-                    file_path=abs_path,
-                    file_size=file_size,
-                    file_type='PDF',
-                )
-                report.knowledge_base_id = knowledge_file.id
-                db.session.flush()
-
-                if existing and args.force_reimport:
-                    existing.report_id = report.id
-                    existing.year = fap_rec.ano_vigencia
-                    existing.original_filename = filename
-                    existing.imported_at = datetime.now()
-                else:
-                    imported = FapAutoImportedContestacao(
+                # Reaproveta report existente de run anterior interrompido
+                report = None
+                if fap_rec.report_id and not args.force_reimport:
+                    report = FapContestationJudgmentReport.query.filter_by(
+                        id=fap_rec.report_id,
                         law_firm_id=law_firm_id,
-                        report_id=report.id,
-                        contestacao_id=fap_rec.contestacao_id,
-                        cnpj=cnpj14,
-                        year=fap_rec.ano_vigencia,
+                    ).filter(FapContestationJudgmentReport.status.in_(
+                        ['pending', 'queued', 'processing', 'error']
+                    )).first()
+                    if report:
+                        report.status = 'pending'
+                        report.error_message = None
+                        db.session.flush()
+
+                if report is None:
+                    report = FapContestationJudgmentReport(
+                        user_id=user_id,
+                        law_firm_id=law_firm_id,
                         original_filename=filename,
+                        file_path=abs_path,
+                        file_size=file_size,
+                        file_type='PDF',
+                        status='pending',
                     )
-                    db.session.add(imported)
+                    db.session.add(report)
+                    db.session.flush()
+
+                    knowledge_file = _ensure_knowledge_base(
+                        db=db,
+                        KnowledgeBase=KnowledgeBase,
+                        law_firm_id=law_firm_id,
+                        user_id=user_id,
+                        filename=filename,
+                        file_path=abs_path,
+                        file_size=file_size,
+                        file_type='PDF',
+                    )
+                    report.knowledge_base_id = knowledge_file.id
+                    db.session.flush()
 
                 fap_rec.needs_reprocess = False
                 fap_rec.report_id = report.id
@@ -253,6 +252,12 @@ def _run_year(args, ano_vigencia: int, app, db, FapWebContestacao, FapAutoImport
                 db.session.commit()
                 report_ids.append(report.id)
                 report_to_fap_rec[report.id] = fap_rec.id
+                report_meta[report.id] = {
+                    'cnpj': cnpj14,
+                    'contestacao_id': fap_rec.contestacao_id,
+                    'year': fap_rec.ano_vigencia,
+                    'filename': filename,
+                }
                 _log(f'  [{idx}/{total}] Registrado report_id={report.id} | contestacao={fap_rec.contestacao_id} | {cnpj14}')
 
             except Exception as exc:
@@ -325,14 +330,44 @@ def _run_year(args, ano_vigencia: int, app, db, FapWebContestacao, FapAutoImport
                         continue
                     return report_id, False, 0, str(exc)
 
-        def _reset_failed(report_id: int) -> None:
-            """Remove o registro de importação e reseta o FapWebContestacao para pendente."""
+        def _mark_success(report_id: int) -> None:
+            """Cria FapAutoImportedContestacao após processamento bem-sucedido."""
+            meta = report_meta.get(report_id)
+            if not meta:
+                return
             try:
                 with app.app_context():
-                    FapAutoImportedContestacao.query.filter_by(report_id=report_id).delete()
+                    existing = FapAutoImportedContestacao.query.filter_by(
+                        law_firm_id=law_firm_id,
+                        contestacao_id=meta['contestacao_id'],
+                        cnpj=meta['cnpj'],
+                    ).first()
+                    if existing:
+                        existing.report_id = report_id
+                        existing.year = meta['year']
+                        existing.original_filename = meta['filename']
+                        existing.imported_at = datetime.now()
+                    else:
+                        db.session.add(FapAutoImportedContestacao(
+                            law_firm_id=law_firm_id,
+                            report_id=report_id,
+                            contestacao_id=meta['contestacao_id'],
+                            cnpj=meta['cnpj'],
+                            year=meta['year'],
+                            original_filename=meta['filename'],
+                        ))
+                    db.session.commit()
+            except Exception as exc:
+                db.session.rollback()
+                _log(f'  AVISO: não foi possível marcar importado report_id={report_id}: {exc}')
+
+        def _reset_failed(report_id: int) -> None:
+            """Reseta FapWebContestacao para pendente após falha."""
+            try:
+                with app.app_context():
                     fap_rec_id = report_to_fap_rec.get(report_id)
                     if fap_rec_id:
-                        fap_rec = FapWebContestacao.query.get(fap_rec_id)
+                        fap_rec = db.session.get(FapWebContestacao, fap_rec_id)
                         if fap_rec:
                             fap_rec.needs_reprocess = True
                             fap_rec.report_id = None
@@ -348,11 +383,12 @@ def _run_year(args, ano_vigencia: int, app, db, FapWebContestacao, FapAutoImport
                 done += 1
                 report_id, ok, cnt, err = future.result()
                 if ok:
+                    _mark_success(report_id)
                     _log(f'  [{done}/{len(report_ids)}] ✓ report_id={report_id} — {cnt} benefício(s)')
                     success_count += 1
                 else:
-                    _log(f'  [{done}/{len(report_ids)}] ✗ report_id={report_id} — {err}')
                     _reset_failed(report_id)
+                    _log(f'  [{done}/{len(report_ids)}] ✗ report_id={report_id} — {err}')
                     error_count += 1
 
         _log('─' * 60)
