@@ -2188,10 +2188,30 @@ class FapContestationJudgmentReportService:
         return reference_dt > latest_reference
 
     @staticmethod
+    def _strip_decision_noise(text: str | None) -> str:
+        """Remove o despejo de sistema DATAPREV/CONBAS do fim do texto.
+
+        Esses blocos (ex.: ``BCC01.12 MPAS/INSS...CONBAS -Dados Basicos...``,
+        ``HISMED``, ``DATAPREV 07/07/2022``) são extrato bruto do sistema, não o
+        parecer em si, e carregam ruído de borda de bloco (ex.: um "CNPJ do
+        Empregador ..." que vaza do próximo benefício). Cortá-los antes de gerar
+        o fingerprint garante que a mesma análise reextraída (arquivos de 2ª
+        instância repetem os textos da 1ª) produza a mesma impressão → UPDATE em
+        vez de duplicar.
+        """
+        raw = str(text or '')
+        marker = re.search(r'([A-Za-z]{3}\d{2}\.\d{2}|\bCONBAS\b|\bHISMED\b|\bDATAPREV\b)', raw)
+        if marker:
+            raw = raw[:marker.start()]
+        return raw
+
+    @staticmethod
     def _decision_fingerprint(instancia: int, justification: str | None, opinion: str | None) -> str:
         """Impressão estável de uma análise para idempotência (upsert por conteúdo)."""
-        norm_just = FapContestationJudgmentReportService._text_fingerprint(justification or '')
-        norm_op = FapContestationJudgmentReportService._text_fingerprint(opinion or '')
+        clean_just = FapContestationJudgmentReportService._strip_decision_noise(justification)
+        clean_op = FapContestationJudgmentReportService._strip_decision_noise(opinion)
+        norm_just = FapContestationJudgmentReportService._text_fingerprint(clean_just)
+        norm_op = FapContestationJudgmentReportService._text_fingerprint(clean_op)
         raw = f'{int(instancia)}|{norm_just}|{norm_op}'
         return hashlib.sha256(raw.encode('utf-8')).hexdigest()
 
