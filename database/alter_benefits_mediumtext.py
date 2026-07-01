@@ -23,23 +23,25 @@ from main import app
 from app.models import db
 
 
-COLUMNS = [
-    'notes',
-    'first_instance_justification',
-    'first_instance_opinion',
-    'second_instance_justification',
-    'second_instance_opinion',
-    'justification',
-    'opinion',
+ALTERATIONS = [
+    ('benefits', 'notes'),
+    ('benefits', 'first_instance_justification'),
+    ('benefits', 'first_instance_opinion'),
+    ('benefits', 'second_instance_justification'),
+    ('benefits', 'second_instance_opinion'),
+    ('benefits', 'justification'),
+    ('benefits', 'opinion'),
+    ('benefit_contestation_decisions', 'justification'),
+    ('benefit_contestation_decisions', 'opinion'),
 ]
 
 
 def main():
     with app.app_context():
         with db.engine.connect() as conn:
-            for col in COLUMNS:
-                sql = f'ALTER TABLE benefits MODIFY COLUMN `{col}` MEDIUMTEXT'
-                print(f'  Alterando benefits.{col} → MEDIUMTEXT...', end=' ', flush=True)
+            for table, col in ALTERATIONS:
+                sql = f'ALTER TABLE `{table}` MODIFY COLUMN `{col}` MEDIUMTEXT'
+                print(f'  Alterando {table}.{col} → MEDIUMTEXT...', end=' ', flush=True)
                 try:
                     conn.execute(db.text(sql))
                     conn.commit()

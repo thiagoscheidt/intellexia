@@ -1749,8 +1749,8 @@ class BenefitContestationDecision(db.Model):
 
     status = db.Column(db.String(30), index=True)
     status_raw = db.Column(db.String(255))
-    justification = db.Column(db.Text)
-    opinion = db.Column(db.Text)
+    justification = db.Column(db.Text(16777215))
+    opinion = db.Column(db.Text(16777215))
 
     source_page = db.Column(db.Integer)  # best-effort; pode ser NULL
     fingerprint = db.Column(db.String(64), nullable=False)
