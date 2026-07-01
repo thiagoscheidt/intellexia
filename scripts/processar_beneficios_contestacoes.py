@@ -11,6 +11,11 @@ Uso:
   uv run python scripts/processar_beneficios_contestacoes.py --ano_vigencia 2026 --dry_run
   uv run python scripts/processar_beneficios_contestacoes.py --ano_vigencia 2026 --force_reimport
 
+  # Processar UMA contestação específica (pelo ID) — reimportando mesmo se já processada:
+  uv run python scripts/processar_beneficios_contestacoes.py --ano_vigencia 2017 --contestacao_id 28660 --force_reimport
+  # Ou pelo protocolo (aceita com ou sem separadores):
+  uv run python scripts/processar_beneficios_contestacoes.py --ano_vigencia 2017 --protocolo 1611170019944011 --force_reimport
+
 Filtros equivalentes à URL:
   /fap-panel/contestacoes?ano_vigencia=2026&cnpj_raiz=&instancia=&situacao=&protocolo=
 
@@ -50,7 +55,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument('--cnpj_raiz', default='', help='Filtro por CNPJ raiz (8 dígitos)')
     parser.add_argument('--instancia', default='', help='Filtro por código de instância')
     parser.add_argument('--situacao', default='', help='Filtro por código de situação')
-    parser.add_argument('--protocolo', default='', help='Filtro por protocolo (busca parcial)')
+    parser.add_argument('--contestacao_id', type=int, default=None, help='Processa apenas a contestação com este ID (ex: 28660)')
+    parser.add_argument('--protocolo', default='', help='Filtro por protocolo (busca parcial; dígitos são comparados sem separadores)')
     parser.add_argument('--batch_size', type=int, default=0, help='Limite de contestações a processar (0 = sem limite)')
     parser.add_argument('--workers', type=int, default=1, help='Workers paralelos para processar PDFs (padrão: 1)')
     parser.add_argument('--force_reimport', action='store_true', help='Reimporta mesmo que já exista registro anterior')
@@ -104,7 +110,7 @@ def _ensure_knowledge_base(db, KnowledgeBase, law_firm_id, user_id, filename, fi
 
 def _run_year(args, ano_vigencia: int, app, db, FapWebContestacao, FapAutoImportedContestacao,
               FapContestationJudgmentReport, FapVigenciaCnpj, KnowledgeBase, User, service) -> None:
-    from sqlalchemy import and_, exists
+    from sqlalchemy import and_, exists, or_
 
     with app.app_context():
         law_firm_id = args.law_firm_id
@@ -136,8 +142,18 @@ def _run_year(args, ano_vigencia: int, app, db, FapWebContestacao, FapAutoImport
             conds.append(FapWebContestacao.instancia_codigo == args.instancia)
         if args.situacao:
             conds.append(FapWebContestacao.situacao_codigo == args.situacao)
+        if args.contestacao_id is not None:
+            conds.append(FapWebContestacao.contestacao_id == args.contestacao_id)
         if args.protocolo:
-            conds.append(FapWebContestacao.protocolo.ilike(f'%{args.protocolo}%'))
+            # Compara também ignorando separadores (ex: "1611170019944/01-1" == "1611170019944011").
+            protocolo_digits = ''.join(ch for ch in args.protocolo if ch.isdigit())
+            if protocolo_digits and protocolo_digits != args.protocolo:
+                conds.append(or_(
+                    FapWebContestacao.protocolo.ilike(f'%{args.protocolo}%'),
+                    FapWebContestacao.protocolo.ilike(f'%{protocolo_digits}%'),
+                ))
+            else:
+                conds.append(FapWebContestacao.protocolo.ilike(f'%{args.protocolo}%'))
 
         # Apenas registros com arquivo local
         conds.append(FapWebContestacao.file_path.isnot(None))
