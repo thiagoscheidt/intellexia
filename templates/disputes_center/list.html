@@ -2175,7 +2175,7 @@
         const b = document.createElement('button');
         b.type = 'button';
         b.className = 'nav-link' + (i === 0 ? ' active' : '');
-        b.textContent = 'Análise ' + (i + 1) + (dec.source_page ? ' (p.' + dec.source_page + ')' : '');
+        b.textContent = 'Ocorrência ' + (i + 1) + (dec.source_page ? ' (p.' + dec.source_page + ')' : '');
         b.addEventListener('click', function () {
           tabs.querySelectorAll('.nav-link').forEach(function (n) { n.classList.remove('active'); });
           b.classList.add('active');
