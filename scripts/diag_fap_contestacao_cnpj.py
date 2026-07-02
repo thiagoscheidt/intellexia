@@ -61,6 +61,8 @@ def main() -> None:
     parser.add_argument('--limit', type=int, default=25, help='Máx. de linhas na amostra por ano (padrão: 25)')
     parser.add_argument('--try_download', action='store_true',
                         help='Com --contestacao_id: tenta baixar o PDF de verdade (auth do .env) e mostra o status HTTP')
+    parser.add_argument('--probe_formats', action='store_true',
+                        help='Com --contestacao_id: testa vários formatos de CNPJ no endpoint de download')
     args = parser.parse_args()
 
     from main import app
@@ -91,9 +93,8 @@ def main() -> None:
                 print(f"  {rec.raw_data!r}")
 
             # ── Teste de download real (mesma auth do cron: FAP_AUTH_JSON) ──
-            if args.try_download:
+            if args.try_download or args.probe_formats:
                 print("\n" + "-" * 70)
-                print("  Tentando download real (auth do .env / FAP_AUTH_JSON)...")
                 raw = _FAP_AUTH_RAW
                 if not raw:
                     print("  ! FAP_AUTH_JSON vazio/não carregado — não é possível testar.")
@@ -111,16 +112,50 @@ def main() -> None:
                 chk = svc.check_session()
                 print(f"  Sessão FAP: {'ativa' if chk.ok else 'INATIVA/EXPIRADA'} "
                       f"(expired={getattr(chk, 'expired', None)}, msg={chk.message!r})")
-                dl = svc.download_contestacao(
-                    year=rec.ano_vigencia, cnpj=rec.cnpj, contestacao_id=rec.contestacao_id,
-                )
-                print(f"  URL usada: /vigencias/{rec.ano_vigencia}/empresa/{rec.cnpj}/contestacoes/{rec.contestacao_id}/imprimir")
-                print(f"  Resultado: ok={dl.ok} expired={getattr(dl, 'expired', None)} "
-                      f"status_code={getattr(dl, 'status_code', None)}")
-                print(f"  message  : {dl.message!r}")
-                if dl.ok and dl.data:
-                    print(f"  PDF      : {len(dl.data.get('pdf_bytes') or b'')} bytes, "
-                          f"filename={dl.data.get('filename')!r}")
+
+                def _try(cnpj_variant: str, label: str) -> None:
+                    dl = svc.download_contestacao(
+                        year=rec.ano_vigencia, cnpj=cnpj_variant, contestacao_id=rec.contestacao_id,
+                    )
+                    tag = 'OK' if dl.ok else f"status={getattr(dl, 'status_code', None)}"
+                    size = f", {len(dl.data.get('pdf_bytes') or b'')} bytes" if (dl.ok and dl.data) else ''
+                    print(f"    [{tag:>10}] {label:<22} cnpj={cnpj_variant!r}{size}")
+
+                if args.try_download and not args.probe_formats:
+                    print("  Download (cnpj gravado):")
+                    _try(rec.cnpj, 'rec.cnpj (gravado)')
+
+                if args.probe_formats:
+                    print("  Testando formatos de CNPJ no endpoint de download:")
+                    # Deriva candidatos a partir do cnpjRaiz do raw_data e da empresa.
+                    raw_fields = _cnpj_fields_from_raw(rec.raw_data)
+                    raiz_num = str(raw_fields.get('cnpjRaiz') or '').strip()
+                    candidates: list[tuple[str, str]] = []
+                    if rec.cnpj:
+                        candidates.append((rec.cnpj, 'rec.cnpj (gravado)'))
+                        stripped = rec.cnpj.lstrip('0')
+                        if stripped and stripped != rec.cnpj:
+                            candidates.append((stripped, 'rec.cnpj sem zeros'))
+                    if raiz_num:
+                        candidates.append((raiz_num, 'cnpjRaiz cru'))
+                        candidates.append((raiz_num.zfill(8), 'cnpjRaiz zfill(8)'))
+                        candidates.append((raiz_num.zfill(14), 'cnpjRaiz zfill(14)'))
+                    # CNPJ da empresa mãe cadastrada (FapCompany)
+                    if rec.fap_company_id:
+                        from app.models import FapCompany
+                        comp = db.session.get(FapCompany, rec.fap_company_id)
+                        if comp and comp.cnpj:
+                            cdig = ''.join(c for c in comp.cnpj if c.isdigit())
+                            candidates.append((comp.cnpj, 'company.cnpj'))
+                            if cdig and cdig != comp.cnpj:
+                                candidates.append((cdig, 'company.cnpj dígitos'))
+                    # Remove duplicados preservando ordem
+                    seen = set()
+                    for cnpj_variant, label in candidates:
+                        if cnpj_variant in seen:
+                            continue
+                        seen.add(cnpj_variant)
+                        _try(cnpj_variant, label)
             return
 
         # ── Modo 2: resumo por ano ────────────────────────────────────────
