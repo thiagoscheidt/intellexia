@@ -1163,6 +1163,20 @@ def contestacoes_page():
     total_contestacoes = 0
     imported_count = 0
     pending_count = 0
+    with_file_count = 0
+    without_file_count = 0
+    count_and1 = count_tra1 = count_and2 = count_tra2 = 0
+
+    # Classificação (mesma lógica usada para montar a tabela) — definida aqui
+    # para também alimentar os cards de estatística sobre TODO o conjunto filtrado.
+    #   instancia_codigo contém "SEGUNDA" → recurso (2ª); senão → contestação (1ª)
+    #   "em andamento" = situacao com "ANDAMENTO"/"PRAZO" e sem "TRANSMIT"/"RESULT"/"DIVULG"
+    def _is_segunda(cod):
+        return cod and 'SEGUNDA' in cod.upper()
+
+    def _is_em_andamento(cod, desc):
+        s = ((cod or '') + ' ' + (desc or '')).upper()
+        return ('ANDAMENTO' in s or 'PRAZO' in s) and 'TRANSMIT' not in s and 'RESULT' not in s and 'DIVULG' not in s
 
     if has_active_filters:
         # Estatísticas sobre TODO o conjunto filtrado (não só a página)
@@ -1173,6 +1187,25 @@ def contestacoes_page():
         ))
         imported_count = query.filter(imported_exists).count()
         pending_count = total_contestacoes - imported_count
+
+        # Arquivos locais sobre TODO o conjunto filtrado (não só a página exibida)
+        with_file_count = query.filter(FapWebContestacao.file_path.isnot(None)).count()
+        without_file_count = total_contestacoes - with_file_count
+
+        # Contadores por instância/situação sobre TODO o conjunto filtrado
+        # (reusa a mesma classificação da tabela para não divergir).
+        for inst_cod, sit_cod, sit_desc in query.with_entities(
+            FapWebContestacao.instancia_codigo,
+            FapWebContestacao.situacao_codigo,
+            FapWebContestacao.situacao_descricao,
+        ).all():
+            em_and = _is_em_andamento(sit_cod, sit_desc)
+            if _is_segunda(inst_cod):
+                count_and2 += 1 if em_and else 0
+                count_tra2 += 0 if em_and else 1
+            else:
+                count_and1 += 1 if em_and else 0
+                count_tra1 += 0 if em_and else 1
 
         # Grupos (vigência, cnpj) distintos — unidade de paginação
         groups_q = (
@@ -1234,16 +1267,7 @@ def contestacoes_page():
 
     # ── Agrupamento por (ano_vigencia, cnpj) para montar a tabela ────────
     # Cada célula contém a lista de contestações naquela categoria.
-    # Classificação:
-    #   instancia_codigo contém "SEGUNDA" → recurso (cols 5,6); senão → contestação (cols 3,4)
-    #   "em andamento" = situacao que contém "ANDAMENTO" ou não contém "TRANSMIT"/"RESULT"/"DIVULG"
-    def _is_segunda(cod):
-        return cod and 'SEGUNDA' in cod.upper()
-
-    def _is_em_andamento(cod, desc):
-        s = ((cod or '') + ' ' + (desc or '')).upper()
-        return ('ANDAMENTO' in s or 'PRAZO' in s) and 'TRANSMIT' not in s and 'RESULT' not in s and 'DIVULG' not in s
-
+    # (Classificação _is_segunda/_is_em_andamento definida acima.)
     grouped = defaultdict(lambda: {'c_and1': [], 'c_tra1': [], 'c_and2': [], 'c_tra2': []})
 
     for r in all_rows:
@@ -1280,6 +1304,12 @@ def contestacoes_page():
         years=FAP_AVAILABLE_YEARS,
         table_rows=table_rows,
         total=total_contestacoes,
+        with_file_count=with_file_count,
+        without_file_count=without_file_count,
+        count_and1=count_and1,
+        count_tra1=count_tra1,
+        count_and2=count_and2,
+        count_tra2=count_tra2,
         instancias=sorted(instancias),
         situacoes=sorted(situacoes),
         imported_map=imported_map,

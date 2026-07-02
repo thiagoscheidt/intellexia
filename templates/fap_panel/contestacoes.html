@@ -580,26 +580,7 @@ vigência, empresa e instância.', icon='bi bi-table') %}
 <div class="app-content">
   <div class="container-fluid">
 
-    {# ── Stats cards ─────────────────────────────────────────────────── #}
-    {% set cnt_and1 = namespace(v=0) %}
-    {% set cnt_tra1 = namespace(v=0) %}
-    {% set cnt_and2 = namespace(v=0) %}
-    {% set cnt_tra2 = namespace(v=0) %}
-    {% set cnt_local = namespace(v=0) %}
-    {% set cnt_nlocal = namespace(v=0) %}
-    {% for row in table_rows %}
-    {% set cnt_and1.v = cnt_and1.v + row.c_and1|length %}
-    {% set cnt_tra1.v = cnt_tra1.v + row.c_tra1|length %}
-    {% set cnt_and2.v = cnt_and2.v + row.c_and2|length %}
-    {% set cnt_tra2.v = cnt_tra2.v + row.c_tra2|length %}
-    {% for cell_list in [row.c_and1, row.c_tra1, row.c_and2, row.c_tra2] %}
-    {% for c in cell_list %}
-    {% if c.file_path %}{% set cnt_local.v = cnt_local.v + 1 %}
-    {% else %}{% set cnt_nlocal.v = cnt_nlocal.v + 1 %}
-    {% endif %}
-    {% endfor %}
-    {% endfor %}
-    {% endfor %}
+    {# ── Stats cards (contadores calculados no backend sobre todo o filtro) ── #}
     {% if has_active_filters %}
     <div class="stat-cards mb-3">
       <div class="stat-card" style="--sc-color:#0d6efd;--sc-soft:rgba(13,110,253,.10);">
@@ -615,8 +596,8 @@ vigência, empresa e instância.', icon='bi bi-table') %}
           <span class="sc-label">Inst. em Andamento</span>
         </div>
         <div class="d-flex align-items-center gap-2">
-          <span class="badge text-bg-warning">1ª: {{ cnt_and1.v }}</span>
-          <span class="badge text-bg-secondary">2ª: {{ cnt_and2.v }}</span>
+          <span class="badge text-bg-warning">1ª: {{ count_and1 }}</span>
+          <span class="badge text-bg-secondary">2ª: {{ count_and2 }}</span>
         </div>
       </div>
       <div class="stat-card" style="--sc-color:#198754;--sc-soft:rgba(25,135,84,.10);">
@@ -625,8 +606,8 @@ vigência, empresa e instância.', icon='bi bi-table') %}
           <span class="sc-label">Inst. Transmitidas</span>
         </div>
         <div class="d-flex align-items-center gap-2">
-          <span class="badge text-bg-success">1ª: {{ cnt_tra1.v }}</span>
-          <span class="badge text-bg-secondary">2ª: {{ cnt_tra2.v }}</span>
+          <span class="badge text-bg-success">1ª: {{ count_tra1 }}</span>
+          <span class="badge text-bg-secondary">2ª: {{ count_tra2 }}</span>
         </div>
       </div>
       <div class="stat-card" style="--sc-color:#6f42c1;--sc-soft:rgba(111,66,193,.10);">
@@ -634,14 +615,14 @@ vigência, empresa e instância.', icon='bi bi-table') %}
           <span class="sc-icon"><i class="bi bi-arrow-repeat"></i></span>
           <span class="sc-label">Recursos</span>
         </div>
-        <div class="sc-value">{{ cnt_and2.v + cnt_tra2.v }}</div>
+        <div class="sc-value">{{ count_and2 + count_tra2 }}</div>
       </div>
       <div class="stat-card" style="--sc-color:#0d9488;--sc-soft:rgba(13,148,136,.10);">
         <div class="d-flex align-items-center gap-2 mb-1">
           <span class="sc-icon"><i class="bi bi-hdd-fill"></i></span>
           <span class="sc-label">Arq. Local</span>
         </div>
-        <div class="sc-value">{{ cnt_local.v }}</div>
+        <div class="sc-value">{{ with_file_count }}</div>
         <div style="font-size:.68rem;color:#6c7a8d;margin-top:.2rem;">PDF salvo</div>
       </div>
       <div class="stat-card" style="--sc-color:#dc2626;--sc-soft:rgba(220,38,38,.10);">
@@ -649,7 +630,7 @@ vigência, empresa e instância.', icon='bi bi-table') %}
           <span class="sc-icon"><i class="bi bi-cloud-slash"></i></span>
           <span class="sc-label">Sem Arq. Local</span>
         </div>
-        <div class="sc-value">{{ cnt_nlocal.v }}</div>
+        <div class="sc-value">{{ without_file_count }}</div>
         <div style="font-size:.68rem;color:#6c7a8d;margin-top:.2rem;">Sem PDF salvo</div>
       </div>
     </div>
