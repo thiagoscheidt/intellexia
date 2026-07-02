@@ -495,69 +495,116 @@
   </div>
 </div>
 
-<!-- ÚLTIMAS PUBLICAÇÕES NO D.O.U. -->
+<!-- CONTESTAÇÕES FAP — RECENTES (abas: D.O.U. / Cadastro / Atualização) -->
+{% macro contestacoes_recent_table(items, date_label, date_icon, empty_msg, date_class='bg-primary-subtle text-primary-emphasis', show_changed=false) %}
+{% if items %}
+<div class="table-responsive">
+  <table class="table table-hover align-middle mb-0">
+    <thead>
+      <tr class="text-body-secondary">
+        <th scope="col" style="white-space:nowrap;"><i class="bi {{ date_icon }} me-1"></i>{{ date_label }}</th>
+        <th scope="col">Empresa / CNPJ</th>
+        <th scope="col">Protocolo</th>
+        <th scope="col">Instância</th>
+        <th scope="col">Situação</th>
+        {% if show_changed %}<th scope="col">Alterou</th>{% endif %}
+        <th scope="col" class="text-center">Vigência</th>
+        <th scope="col" class="text-end">Ações</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for c in items %}
+      <tr>
+        <td style="white-space:nowrap;">
+          <span class="badge {{ date_class }}">
+            <i class="bi {{ date_icon }} me-1"></i>{{ c.data }}
+          </span>
+        </td>
+        <td>
+          {% if c.empresa %}<div class="fw-semibold">{{ c.empresa }}</div>{% endif %}
+          <small class="text-muted">{{ c.cnpj_fmt }}</small>
+        </td>
+        <td><span class="font-monospace">{{ c.protocolo }}</span></td>
+        <td><small>{{ c.instancia or '—' }}</small></td>
+        <td><small>{{ c.situacao or '—' }}</small></td>
+        {% if show_changed %}
+        <td>
+          {% for lbl in c.changed %}<span class="badge bg-warning-subtle text-warning-emphasis me-1 mb-1">{{ lbl }}</span>{% else %}<small class="text-muted">—</small>{% endfor %}
+        </td>
+        {% endif %}
+        <td class="text-center">{{ c.ano_vigencia }}</td>
+        <td class="text-end">
+          <a href="{{ url_for('fap_panel.contestacoes_page', ano_vigencia=c.ano_vigencia, cnpj_raiz=c.cnpj_raiz) }}"
+             class="btn btn-sm btn-outline-secondary dash-link-btn" title="Abrir no Painel FAP">
+            <i class="bi bi-box-arrow-up-right"></i>
+          </a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="alert alert-light mb-0">
+  <i class="bi bi-info-circle me-1"></i>{{ empty_msg }}
+</div>
+{% endif %}
+{% endmacro %}
+
 <div class="row g-3 mb-4">
   <div class="col-12">
     <div class="card dash-card">
       <div class="card-header bg-transparent border-0 pb-2 d-flex align-items-center justify-content-between flex-wrap gap-2">
         <div>
           <h3 class="card-title fw-semibold mb-0">
-            <i class="bi bi-newspaper me-2 text-primary"></i>Últimas Publicações no D.O.U.
+            <i class="bi bi-newspaper me-2 text-primary"></i>Contestações FAP — recentes
           </h3>
-          <small class="text-muted">Contestações FAP com resultado publicado no Diário Oficial da União — acompanhe o que saiu de novo</small>
+          <small class="text-muted">Acompanhe o que saiu de novo — por publicação no D.O.U., cadastro ou atualização</small>
         </div>
         <a href="{{ url_for('fap_panel.contestacoes_page') }}" class="btn btn-sm btn-outline-primary dash-link-btn">
           Ver todas as contestações
         </a>
       </div>
       <div class="card-body pt-0">
-        {% if latest_dou_contestacoes %}
-        <div class="table-responsive">
-          <table class="table table-hover align-middle mb-0">
-            <thead>
-              <tr class="text-body-secondary">
-                <th scope="col" style="white-space:nowrap;"><i class="bi bi-calendar-event me-1"></i>Publicação D.O.U.</th>
-                <th scope="col">Empresa / CNPJ</th>
-                <th scope="col">Protocolo</th>
-                <th scope="col">Instância</th>
-                <th scope="col">Situação</th>
-                <th scope="col" class="text-center">Vigência</th>
-                <th scope="col" class="text-end">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {% for c in latest_dou_contestacoes %}
-              <tr>
-                <td style="white-space:nowrap;">
-                  <span class="badge text-bg-primary-subtle text-primary-emphasis">
-                    <i class="bi bi-newspaper me-1"></i>{{ c.data_dou }}
-                  </span>
-                </td>
-                <td>
-                  {% if c.empresa %}<div class="fw-semibold">{{ c.empresa }}</div>{% endif %}
-                  <small class="text-muted">{{ c.cnpj_fmt }}</small>
-                </td>
-                <td><span class="font-monospace">{{ c.protocolo }}</span></td>
-                <td><small>{{ c.instancia or '—' }}</small></td>
-                <td><small>{{ c.situacao or '—' }}</small></td>
-                <td class="text-center">{{ c.ano_vigencia }}</td>
-                <td class="text-end">
-                  <a href="{{ url_for('fap_panel.contestacoes_page', ano_vigencia=c.ano_vigencia, cnpj_raiz=c.cnpj_raiz) }}"
-                     class="btn btn-sm btn-outline-secondary dash-link-btn" title="Abrir no Painel FAP">
-                    <i class="bi bi-box-arrow-up-right"></i>
-                  </a>
-                </td>
-              </tr>
-              {% endfor %}
-            </tbody>
-          </table>
+        <ul class="nav nav-tabs mb-3" id="contestacoesRecentTabs" role="tablist">
+          <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="tab-dou" data-bs-toggle="tab" data-bs-target="#pane-dou"
+                    type="button" role="tab" aria-controls="pane-dou" aria-selected="true">
+              <i class="bi bi-newspaper me-1"></i>Publicadas no D.O.U.
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-cadastro" data-bs-toggle="tab" data-bs-target="#pane-cadastro"
+                    type="button" role="tab" aria-controls="pane-cadastro" aria-selected="false">
+              <i class="bi bi-calendar-plus me-1"></i>Cadastradas
+            </button>
+          </li>
+          <li class="nav-item" role="presentation">
+            <button class="nav-link" id="tab-atualizacao" data-bs-toggle="tab" data-bs-target="#pane-atualizacao"
+                    type="button" role="tab" aria-controls="pane-atualizacao" aria-selected="false">
+              <i class="bi bi-clock-history me-1"></i>Atualizadas
+            </button>
+          </li>
+        </ul>
+        <div class="tab-content">
+          <div class="tab-pane fade show active" id="pane-dou" role="tabpanel" aria-labelledby="tab-dou">
+            {{ contestacoes_recent_table(
+                 latest_dou_contestacoes, 'Publicação D.O.U.', 'bi-newspaper',
+                 'Nenhuma contestação com publicação no D.O.U. registrada ainda.') }}
+          </div>
+          <div class="tab-pane fade" id="pane-cadastro" role="tabpanel" aria-labelledby="tab-cadastro">
+            {{ contestacoes_recent_table(
+                 latest_cadastro_contestacoes, 'Cadastrada em', 'bi-calendar-plus',
+                 'Nenhuma contestação cadastrada ainda. Sincronize no Painel FAP.',
+                 date_class='bg-success-subtle text-success-emphasis') }}
+          </div>
+          <div class="tab-pane fade" id="pane-atualizacao" role="tabpanel" aria-labelledby="tab-atualizacao">
+            {{ contestacoes_recent_table(
+                 latest_atualizacao_contestacoes, 'Atualizada em', 'bi-clock-history',
+                 'Nenhuma contestação teve mudança registrada ainda.',
+                 date_class='bg-warning-subtle text-warning-emphasis', show_changed=true) }}
+          </div>
         </div>
-        {% else %}
-        <div class="alert alert-light mb-0">
-          <i class="bi bi-info-circle me-1"></i>Nenhuma contestação com publicação no D.O.U. registrada ainda.
-          Sincronize as contestações no <a href="{{ url_for('fap_panel.index') }}">Painel FAP</a> para acompanhar os resultados.
-        </div>
-        {% endif %}
       </div>
     </div>
   </div>

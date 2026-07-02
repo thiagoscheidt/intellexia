@@ -1111,6 +1111,9 @@ def contestacoes_page():
     f_situacao  = request.args.get('situacao', '').strip()
     f_protocolo = request.args.get('protocolo', '').strip()
     f_prazo2    = request.args.get('prazo_2_instancia') == '1'
+    f_sort      = request.args.get('ordenar', 'padrao').strip()
+    if f_sort not in ('padrao', 'dou', 'transmissao', 'cadastro', 'atualizacao'):
+        f_sort = 'padrao'
     f_year_all  = f_year == '__all__'
 
     has_active_filters = any([
@@ -1144,7 +1147,7 @@ def contestacoes_page():
         cnpjs_by_raiz[raiz].sort()
 
     # ── Paginação por grupo (vigência × CNPJ) ────────────────────────────
-    from sqlalchemy import and_, or_, exists
+    from sqlalchemy import and_, or_, exists, func
 
     try:
         page = max(1, int(request.args.get('page', 1)))
@@ -1158,6 +1161,7 @@ def contestacoes_page():
         page_size = 50
 
     all_rows = []
+    group_keys = []
     total_groups = 0
     total_pages = 1
     total_contestacoes = 0
@@ -1218,9 +1222,37 @@ def contestacoes_page():
         if page > total_pages:
             page = total_pages
 
+        # Ordenação dos grupos (linhas = empresa × vigência). Padrão = vigência
+        # desc, CNPJ asc. Nas ordenações por data, reordena os grupos pela data
+        # MAIS RECENTE de cada um (grupos sem essa data caem para o fim).
+        tiebreak = [FapWebContestacao.ano_vigencia.desc(), FapWebContestacao.cnpj.asc()]
+        ordered_q = (
+            db.session.query(FapWebContestacao.ano_vigencia, FapWebContestacao.cnpj)
+            .filter(*filter_conds)
+        )
+        if f_sort == 'dou':
+            order_by = [func.max(FapWebContestacao.data_dou_date).desc(), *tiebreak]
+        elif f_sort == 'transmissao':
+            order_by = [func.max(FapWebContestacao.data_transmissao).desc(), *tiebreak]
+        elif f_sort == 'cadastro':
+            order_by = [func.max(FapWebContestacao.created_at).desc(), *tiebreak]
+        elif f_sort == 'atualizacao':
+            # Data da última mudança real (histórico), agregada por grupo.
+            ordered_q = ordered_q.outerjoin(
+                FapWebContestacaoChangeHistory,
+                and_(
+                    FapWebContestacaoChangeHistory.contestacao_db_id == FapWebContestacao.id,
+                    FapWebContestacaoChangeHistory.change_type == 'updated',
+                ),
+            )
+            order_by = [func.max(FapWebContestacaoChangeHistory.synced_at).desc(), *tiebreak]
+        else:
+            order_by = tiebreak
+
         group_keys = (
-            groups_q
-            .order_by(FapWebContestacao.ano_vigencia.desc(), FapWebContestacao.cnpj.asc())
+            ordered_q
+            .group_by(FapWebContestacao.ano_vigencia, FapWebContestacao.cnpj)
+            .order_by(*order_by)
             .limit(page_size)
             .offset((page - 1) * page_size)
             .all()
@@ -1286,8 +1318,12 @@ def contestacoes_page():
             return f'{s[:2]}.{s[2:5]}.{s[5:8]}/{s[8:12]}-{s[12:]}'
         return digits
 
+    # Preserva a ordem definida por group_keys (já reflete a ordenação escolhida).
     table_rows = []
-    for (ano, cnpj_raw), cells in sorted(grouped.items(), key=lambda x: (-x[0][0], x[0][1])):
+    for (ano, cnpj_raw) in group_keys:
+        cells = grouped.get((ano, cnpj_raw))
+        if not cells:
+            continue
         table_rows.append({
             'ano_vigencia': ano,
             'cnpj_raw':     cnpj_raw,
@@ -1330,6 +1366,7 @@ def contestacoes_page():
         f_situacao=f_situacao,
         f_protocolo=f_protocolo,
         f_prazo2=f_prazo2,
+        f_sort=f_sort,
     )
 
 

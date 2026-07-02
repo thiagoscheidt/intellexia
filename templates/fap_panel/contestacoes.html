@@ -731,6 +731,19 @@ vigência, empresa e instância.', icon='bi bi-table') %}
                 value="{{ f_protocolo }}" inputmode="numeric">
             </div>
 
+            {# Ordenar por #}
+            <div class="col-sm-2 col-6">
+              <label class="form-label">Ordenar por</label>
+              <select name="ordenar" class="form-select form-select-sm" id="selectOrdenar"
+                onchange="document.getElementById('filterForm').submit();">
+                <option value="padrao" {{ 'selected' if f_sort=='padrao' }}>Padrão (vigência)</option>
+                <option value="dou" {{ 'selected' if f_sort=='dou' }}>Publicação D.O.U. (mais recente)</option>
+                <option value="transmissao" {{ 'selected' if f_sort=='transmissao' }}>Transmissão (mais recente)</option>
+                <option value="cadastro" {{ 'selected' if f_sort=='cadastro' }}>Cadastro (mais recente)</option>
+                <option value="atualizacao" {{ 'selected' if f_sort=='atualizacao' }}>Atualização (mais recente)</option>
+              </select>
+            </div>
+
             {# Prazo 2ª instância + Consultar #}
             <div class="col-12 d-flex align-items-center justify-content-between mt-1">
               <div class="form-check mb-0">
@@ -770,7 +783,8 @@ vigência, empresa e instância.', icon='bi bi-table') %}
           'cnpj': f_cnpj or '',
           'instancia': f_instancia or '',
           'situacao': f_situacao or '',
-          'protocolo': f_protocolo or ''
+          'protocolo': f_protocolo or '',
+          'ordenar': f_sort or 'padrao'
           } -%}
           <button type="button" id="btnImportAll" class="btn btn-sm btn-warning"
             title="Processa os benefícios das contestações do filtro atual">
@@ -920,7 +934,8 @@ vigência, empresa e instância.', icon='bi bi-table') %}
         'cnpj': f_cnpj or '',
         'instancia': f_instancia or '',
         'situacao': f_situacao or '',
-        'protocolo': f_protocolo or ''
+        'protocolo': f_protocolo or '',
+        'ordenar': f_sort or 'padrao'
       } -%}
       <div class="pagination-shell" id="paginationShell">
         <div class="d-flex align-items-center gap-2">

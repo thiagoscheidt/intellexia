@@ -25,13 +25,86 @@ def get_current_law_firm_id():
     return session.get('law_firm_id')
 
 
-def _build_latest_dou_contestacoes(law_firm_id, limit=10):
-    """Retorna as contestações mais recentemente publicadas no D.O.U.
+# Rótulos amigáveis dos campos rastreados no histórico de mudanças
+# (usado na aba "Atualizadas" para mostrar o que mudou na última alteração).
+_FAP_CHANGE_FIELD_LABELS = {
+    'situacao_codigo': 'Situação',
+    'situacao_descricao': 'Situação',
+    'instancia_codigo': 'Instância',
+    'instancia_descricao': 'Instância',
+    'protocolo': 'Protocolo',
+    'data_transmissao': 'Transmissão',
+    'data_dou_date': 'Publicação D.O.U.',
+    'cnpj': 'CNPJ',
+    'cnpj_raiz': 'CNPJ',
+    'ano_vigencia': 'Vigência',
+    'fap_company_id': 'Empresa',
+}
 
-    Ordena diretamente em SQL pela coluna indexada ``data_dou_date`` (populada
-    na sincronização), trazendo as ``limit`` publicações mais recentes.
-    """
-    from app.models import FapWebContestacao, FapCompany
+
+def _fmt_cnpj_digits(digits):
+    s = (digits or '').zfill(14)
+    if len(s) == 14:
+        return f'{s[:2]}.{s[2:5]}.{s[5:8]}/{s[8:12]}-{s[12:]}'
+    return digits or ''
+
+
+def _fap_company_name_map(law_firm_id):
+    """Mapa CNPJ → nome da empresa (para exibir junto às contestações)."""
+    from app.models import FapCompany
+    return {
+        c.cnpj: c.nome
+        for c in FapCompany.query.filter_by(law_firm_id=law_firm_id)
+        .with_entities(FapCompany.cnpj, FapCompany.nome).all()
+        if c.cnpj
+    }
+
+
+def _changed_field_labels(changed_fields_json):
+    """Converte o JSON de changed_fields em rótulos amigáveis, sem repetição."""
+    import json
+    if not changed_fields_json:
+        return []
+    try:
+        fields = json.loads(changed_fields_json)
+    except (ValueError, TypeError):
+        return []
+    labels = []
+    for f in fields:
+        lbl = _FAP_CHANGE_FIELD_LABELS.get(f, f)
+        if lbl not in labels:
+            labels.append(lbl)
+    return labels
+
+
+def _contestacao_item(r, company_map, data_str, extra=None):
+    """Monta o dict de exibição de uma contestação (comum às três abas)."""
+    nome = (
+        company_map.get(r.cnpj)
+        or company_map.get(r.cnpj_raiz)
+        or company_map.get((r.cnpj or '')[:8])
+        or ''
+    )
+    item = {
+        'id': r.id,
+        'contestacao_id': r.contestacao_id,
+        'cnpj_raiz': r.cnpj_raiz,
+        'cnpj_fmt': _fmt_cnpj_digits(r.cnpj),
+        'empresa': nome,
+        'ano_vigencia': r.ano_vigencia,
+        'protocolo': r.protocolo or '—',
+        'situacao': r.situacao_descricao or '',
+        'instancia': r.instancia_descricao or '',
+        'data': data_str,
+    }
+    if extra:
+        item.update(extra)
+    return item
+
+
+def _build_latest_dou_contestacoes(law_firm_id, limit=10):
+    """Contestações mais recentemente publicadas no D.O.U. (por ``data_dou_date``)."""
+    from app.models import FapWebContestacao
 
     rows = (
         FapWebContestacao.query
@@ -41,42 +114,79 @@ def _build_latest_dou_contestacoes(law_firm_id, limit=10):
         .limit(limit)
         .all()
     )
+    cmap = _fap_company_name_map(law_firm_id)
+    return [
+        _contestacao_item(r, cmap, r.data_dou_date.strftime('%d/%m/%Y'))
+        for r in rows
+    ]
 
-    # Mapa de nome de empresa (chaveado pelo CNPJ cadastrado em FapCompany)
-    company_map = {
-        c.cnpj: c.nome
-        for c in FapCompany.query.filter_by(law_firm_id=law_firm_id)
-        .with_entities(FapCompany.cnpj, FapCompany.nome).all()
-        if c.cnpj
-    }
 
-    def _fmt_cnpj(digits):
-        s = (digits or '').zfill(14)
-        if len(s) == 14:
-            return f'{s[:2]}.{s[2:5]}.{s[5:8]}/{s[8:12]}-{s[12:]}'
-        return digits or ''
+def _build_latest_cadastro_contestacoes(law_firm_id, limit=10):
+    """Contestações trazidas mais recentemente (por ``created_at``)."""
+    from app.models import FapWebContestacao
 
-    items = []
-    for r in rows:
-        nome = (
-            company_map.get(r.cnpj)
-            or company_map.get(r.cnpj_raiz)
-            or company_map.get((r.cnpj or '')[:8])
-            or ''
+    rows = (
+        FapWebContestacao.query
+        .filter_by(law_firm_id=law_firm_id)
+        .order_by(FapWebContestacao.created_at.desc(), FapWebContestacao.id.desc())
+        .limit(limit)
+        .all()
+    )
+    cmap = _fap_company_name_map(law_firm_id)
+    return [
+        _contestacao_item(r, cmap, r.created_at.strftime('%d/%m/%Y') if r.created_at else '—')
+        for r in rows
+    ]
+
+
+def _build_latest_atualizacao_contestacoes(law_firm_id, limit=10):
+    """Contestações com mudança real de conteúdo mais recente.
+
+    Usa ``FapWebContestacaoChangeHistory`` (change_type='updated'): a data
+    exibida é a da última mudança e os rótulos indicam o que mudou nela.
+    """
+    from sqlalchemy import func
+    from app.models import FapWebContestacao, FapWebContestacaoChangeHistory
+
+    # Última mudança real por contestação → top N por essa data.
+    subq = (
+        db.session.query(
+            FapWebContestacaoChangeHistory.contestacao_db_id.label('cid'),
+            func.max(FapWebContestacaoChangeHistory.synced_at).label('last_change'),
         )
-        items.append({
-            'id': r.id,
-            'contestacao_id': r.contestacao_id,
-            'cnpj_raiz': r.cnpj_raiz,
-            'cnpj_fmt': _fmt_cnpj(r.cnpj),
-            'empresa': nome,
-            'ano_vigencia': r.ano_vigencia,
-            'protocolo': r.protocolo or '—',
-            'situacao': r.situacao_descricao or '',
-            'instancia': r.instancia_descricao or '',
-            'data_dou': r.data_dou_date.strftime('%d/%m/%Y'),
-        })
+        .filter(
+            FapWebContestacaoChangeHistory.law_firm_id == law_firm_id,
+            FapWebContestacaoChangeHistory.change_type == 'updated',
+        )
+        .group_by(FapWebContestacaoChangeHistory.contestacao_db_id)
+        .subquery()
+    )
+    rows = (
+        db.session.query(FapWebContestacao, subq.c.last_change)
+        .join(subq, FapWebContestacao.id == subq.c.cid)
+        .order_by(subq.c.last_change.desc())
+        .limit(limit)
+        .all()
+    )
+    if not rows:
+        return []
 
+    cmap = _fap_company_name_map(law_firm_id)
+    items = []
+    for r, last_change in rows:
+        # Entrada específica da última mudança (para saber o que mudou).
+        last_entry = (
+            FapWebContestacaoChangeHistory.query
+            .filter_by(law_firm_id=law_firm_id, contestacao_db_id=r.id, change_type='updated')
+            .order_by(FapWebContestacaoChangeHistory.synced_at.desc(),
+                      FapWebContestacaoChangeHistory.id.desc())
+            .first()
+        )
+        items.append(_contestacao_item(
+            r, cmap,
+            last_change.strftime('%d/%m/%Y') if last_change else '—',
+            extra={'changed': _changed_field_labels(last_entry.changed_fields if last_entry else None)},
+        ))
     return items
 
 
@@ -218,8 +328,10 @@ def dashboard():
         contestacoes_por_deferimento, contestacoes_deferimento_por_empresa = \
             _build_deferimento_distribution(law_firm_id)
 
-        # ── Últimas contestações publicadas no D.O.U. ────────────────
-        latest_dou_contestacoes = _build_latest_dou_contestacoes(law_firm_id)
+        # ── Contestações recentes (abas: D.O.U. / Cadastro / Atualização) ──
+        latest_dou_contestacoes = _build_latest_dou_contestacoes(law_firm_id, limit=20)
+        latest_cadastro_contestacoes = _build_latest_cadastro_contestacoes(law_firm_id, limit=20)
+        latest_atualizacao_contestacoes = _build_latest_atualizacao_contestacoes(law_firm_id, limit=20)
 
         # ── Disputes Center — Benefit ─────────────────────────────────
         total_benefits_dc = Benefit.query.filter_by(law_firm_id=law_firm_id).count()
@@ -303,6 +415,8 @@ def dashboard():
             contestacoes_por_deferimento=contestacoes_por_deferimento,
             contestacoes_deferimento_por_empresa=contestacoes_deferimento_por_empresa,
             latest_dou_contestacoes=latest_dou_contestacoes,
+            latest_cadastro_contestacoes=latest_cadastro_contestacoes,
+            latest_atualizacao_contestacoes=latest_atualizacao_contestacoes,
             total_benefits_dc=total_benefits_dc,
             benefits_classified=benefits_classified,
             benefits_deferidos=benefits_deferidos,
@@ -340,6 +454,8 @@ def dashboard():
             contestacoes_por_deferimento={},
             contestacoes_deferimento_por_empresa={},
             latest_dou_contestacoes=[],
+            latest_cadastro_contestacoes=[],
+            latest_atualizacao_contestacoes=[],
             total_benefits_dc=0,
             benefits_classified=0,
             benefits_deferidos=0,
