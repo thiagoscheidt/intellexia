@@ -373,8 +373,9 @@ def sync_run_year():
             # Garante string com 14 dígitos
             cnpj_digits = ''.join(ch for ch in cnpj_full if ch.isdigit())
             cnpj_full_14 = cnpj_digits.zfill(14) if len(cnpj_digits) <= 14 else cnpj_digits
-            # cnpj_raiz deve ser derivado do CNPJ já com zeros à esquerda
-            cnpj_raiz_14 = cnpj_full_14
+            # Raiz = primeiros 8 dígitos do CNPJ ORIGINAL (antes do zfill à esquerda).
+            # Se derivada de cnpj_full_14, o padding desloca a raiz (ex.: "79894168" → "00000079").
+            cnpj_raiz_8 = cnpj_digits[:8]
 
             instancia   = item.get('instancia') or {}
             situacao    = item.get('situacao') or {}
@@ -400,16 +401,20 @@ def sync_run_year():
                 except Exception:
                     pass
 
+            # Dedup pela mesma chave única do banco
+            # (uq_fap_web_contestacoes_law_firm_contestacao = law_firm_id + contestacao_id).
+            # NÃO incluir cnpj_raiz aqui: o valor gravado na coluna pode divergir
+            # do calculado agora (ex.: CNPJ zero-padded para 14 → raiz "00000079"),
+            # fazendo a busca falhar e o INSERT violar a constraint (Duplicate entry).
             existing = FapWebContestacao.query.filter_by(
                 law_firm_id=law_firm_id,
                 contestacao_id=int(cid),
-                cnpj_raiz=cnpj_digits[:8],
             ).first()
 
             if existing:
                 next_values = {
                     'cnpj': cnpj_full_14,
-                    'cnpj_raiz': cnpj_raiz_14[:8],
+                    'cnpj_raiz': cnpj_raiz_8,
                     'ano_vigencia': year_int,
                     'fap_company_id': fap_company_id,
                     'instancia_codigo': instancia.get('codigo'),
@@ -436,7 +441,7 @@ def sync_run_year():
                         contestacao_db_id=existing.id,
                         contestacao_id=existing.contestacao_id,
                         cnpj=cnpj_full_14,
-                        cnpj_raiz=cnpj_raiz_14[:8],
+                        cnpj_raiz=cnpj_raiz_8,
                         ano_vigencia=year_int,
                         change_type='updated',
                         changed_fields=json.dumps(sorted(changed_new.keys()), ensure_ascii=False),
@@ -474,7 +479,7 @@ def sync_run_year():
                     fap_company_id      = fap_company_id,
                     contestacao_id      = int(cid),
                     cnpj                = cnpj_full_14,
-                    cnpj_raiz           = cnpj_raiz_14[:8],
+                    cnpj_raiz           = cnpj_raiz_8,
                     ano_vigencia        = year_int,
                     instancia_codigo    = instancia.get('codigo'),
                     instancia_descricao = instancia.get('descricao'),
@@ -491,7 +496,7 @@ def sync_run_year():
 
                 created_values = {
                     'cnpj': cnpj_full_14,
-                    'cnpj_raiz': cnpj_raiz_14[:8],
+                    'cnpj_raiz': cnpj_raiz_8,
                     'ano_vigencia': year_int,
                     'fap_company_id': fap_company_id,
                     'instancia_codigo': instancia.get('codigo'),
@@ -508,7 +513,7 @@ def sync_run_year():
                     contestacao_db_id=rec.id,
                     contestacao_id=rec.contestacao_id,
                     cnpj=cnpj_full_14,
-                    cnpj_raiz=cnpj_raiz_14[:8],
+                    cnpj_raiz=cnpj_raiz_8,
                     ano_vigencia=year_int,
                     change_type='created',
                     changed_fields=json.dumps(sorted(created_values.keys()), ensure_ascii=False),
