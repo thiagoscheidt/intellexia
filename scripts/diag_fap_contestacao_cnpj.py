@@ -53,6 +53,8 @@ def main() -> None:
     parser.add_argument('--contestacao_id', type=int, default=None, help='Uma contestação específica (imprime raw_data completo)')
     parser.add_argument('--only_missing', action='store_true', help='Somente contestações sem PDF (file_path nulo)')
     parser.add_argument('--limit', type=int, default=25, help='Máx. de linhas na amostra por ano (padrão: 25)')
+    parser.add_argument('--try_download', action='store_true',
+                        help='Com --contestacao_id: tenta baixar o PDF de verdade (auth do .env) e mostra o status HTTP')
     args = parser.parse_args()
 
     from main import app
@@ -81,6 +83,36 @@ def main() -> None:
                 print(json.dumps(json.loads(rec.raw_data), ensure_ascii=False, indent=2))
             except Exception:
                 print(f"  {rec.raw_data!r}")
+
+            # ── Teste de download real (mesma auth do cron: FAP_AUTH_JSON) ──
+            if args.try_download:
+                import os
+                print("\n" + "-" * 70)
+                print("  Tentando download real (auth do .env / FAP_AUTH_JSON)...")
+                auth_json = os.environ.get('FAP_AUTH_JSON', '').strip()
+                if not auth_json:
+                    print("  ! FAP_AUTH_JSON não encontrado no .env — não é possível testar.")
+                    return
+                from app.services.fap_web_service import FapWebAuthPayload, FapWebService
+                try:
+                    auth = FapWebAuthPayload.from_json(auth_json)
+                except Exception as e:
+                    print(f"  ! FAP_AUTH_JSON inválido: {e}")
+                    return
+                svc = FapWebService(auth)
+                chk = svc.check_session()
+                print(f"  Sessão FAP: {'ativa' if chk.ok else 'INATIVA/EXPIRADA'} "
+                      f"(expired={getattr(chk, 'expired', None)}, msg={chk.message!r})")
+                dl = svc.download_contestacao(
+                    year=rec.ano_vigencia, cnpj=rec.cnpj, contestacao_id=rec.contestacao_id,
+                )
+                print(f"  URL usada: /vigencias/{rec.ano_vigencia}/empresa/{rec.cnpj}/contestacoes/{rec.contestacao_id}/imprimir")
+                print(f"  Resultado: ok={dl.ok} expired={getattr(dl, 'expired', None)} "
+                      f"status_code={getattr(dl, 'status_code', None)}")
+                print(f"  message  : {dl.message!r}")
+                if dl.ok and dl.data:
+                    print(f"  PDF      : {len(dl.data.get('pdf_bytes') or b'')} bytes, "
+                          f"filename={dl.data.get('filename')!r}")
             return
 
         # ── Modo 2: resumo por ano ────────────────────────────────────────
