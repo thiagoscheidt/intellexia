@@ -317,7 +317,9 @@ def persist_contestacoes_for_company(
             cnpj_full = str(item.get('cnpj') or '').strip() or cnpj_digits[:8]
             cnpj_item_digits = ''.join(ch for ch in cnpj_full if ch.isdigit())
             cnpj_full_14 = cnpj_item_digits.zfill(14) if len(cnpj_item_digits) <= 14 else cnpj_item_digits
-            cnpj_raiz_item = cnpj_full_14[:8]
+            # Raiz = primeiros 8 dígitos do CNPJ ORIGINAL (antes do zfill à esquerda).
+            # Se derivada de cnpj_full_14, o padding desloca a raiz (ex.: "79894168" → "00000079").
+            cnpj_raiz_item = cnpj_item_digits[:8]
 
             instancia = item.get('instancia') or {}
             situacao = item.get('situacao') or {}
@@ -340,10 +342,14 @@ def persist_contestacoes_for_company(
                 except Exception:
                     pass
 
+            # Dedup pela mesma chave única do banco
+            # (uq_fap_web_contestacoes_law_firm_contestacao = law_firm_id + contestacao_id).
+            # NÃO incluir cnpj_raiz aqui: o valor gravado na coluna pode divergir
+            # do calculado agora (ex.: CNPJ zero-padded para 14 → raiz "00000079"),
+            # fazendo a busca falhar e o INSERT violar a constraint (Duplicate entry).
             existing = FapWebContestacao.query.filter_by(
                 law_firm_id=law_firm_id,
                 contestacao_id=int(cid),
-                cnpj_raiz=cnpj_digits[:8],
             ).first()
 
             next_values = {

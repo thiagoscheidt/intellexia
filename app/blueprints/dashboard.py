@@ -144,6 +144,8 @@ def dashboard():
         from app.models import (
             Lawyer, KnowledgeBase, KnowledgeCategory,
             JudicialProcess, Benefit, FapWebContestacao, FapCompany,
+            FapContestationCat, FapContestationPayrollMass,
+            FapContestationEmploymentLink, FapContestationTurnoverRate,
         )
 
         # ── Painel de Processos ───────────────────────────────────────
@@ -221,14 +223,55 @@ def dashboard():
 
         # ── Disputes Center — Benefit ─────────────────────────────────
         total_benefits_dc = Benefit.query.filter_by(law_firm_id=law_firm_id).count()
-        benefits_exclusao = Benefit.query.filter_by(law_firm_id=law_firm_id, request_type='exclusao').count()
-        benefits_inclusao = Benefit.query.filter_by(law_firm_id=law_firm_id, request_type='inclusao').count()
-        benefits_revisao = Benefit.query.filter_by(law_firm_id=law_firm_id, request_type='revisao').count()
         benefits_classified = Benefit.query.filter_by(law_firm_id=law_firm_id).filter(
             Benefit.fap_contestation_topics_json.isnot(None)
         ).count()
         benefits_deferidos = Benefit.query.filter_by(law_firm_id=law_firm_id, first_instance_status='deferido').count()
         benefits_indeferidos = Benefit.query.filter_by(law_firm_id=law_firm_id, first_instance_status='indeferido').count()
+
+        # ── Distribuição por categoria FAP (categoria principal) ──────
+        topic_rows = db.session.query(
+            Benefit.fap_contestation_topic,
+            db.func.count(Benefit.id),
+        ).filter(
+            Benefit.law_firm_id == law_firm_id
+        ).group_by(Benefit.fap_contestation_topic).all()
+        topic_bucket = {}
+        for topic, cnt in topic_rows:
+            label = (topic or '').strip() or 'Não classificado'
+            topic_bucket[label] = topic_bucket.get(label, 0) + cnt
+        benefits_topic_distribution = [
+            {'label': label, 'count': cnt}
+            for label, cnt in sorted(topic_bucket.items(), key=lambda kv: kv[1], reverse=True)
+        ]
+
+        # ── Status por instância (Deferido/Indeferido/Em análise/Pendente) ──
+        def _status_by_instance(column):
+            rows = db.session.query(column, db.func.count(Benefit.id)).filter(
+                Benefit.law_firm_id == law_firm_id
+            ).group_by(column).all()
+            buckets = {'deferido': 0, 'indeferido': 0, 'analyzing': 0, 'pending': 0}
+            alias = {
+                'deferido': 'deferido', 'approved': 'deferido',
+                'indeferido': 'indeferido', 'rejected': 'indeferido',
+                'analyzing': 'analyzing', 'in_review': 'analyzing',
+                'em análise': 'analyzing', 'em analise': 'analyzing',
+                'pending': 'pending', 'pendente': 'pending',
+            }
+            for value, cnt in rows:
+                key = alias.get(str(value or '').strip().lower())
+                if key:
+                    buckets[key] += cnt
+            return buckets
+
+        benefits_status_first = _status_by_instance(Benefit.first_instance_status)
+        benefits_status_second = _status_by_instance(Benefit.second_instance_status)
+
+        # ── Contadores das demais categorias de contestação ───────────
+        count_cats = FapContestationCat.query.filter_by(law_firm_id=law_firm_id).count()
+        count_payroll_masses = FapContestationPayrollMass.query.filter_by(law_firm_id=law_firm_id).count()
+        count_employment_links = FapContestationEmploymentLink.query.filter_by(law_firm_id=law_firm_id).count()
+        count_turnover_rates = FapContestationTurnoverRate.query.filter_by(law_firm_id=law_firm_id).count()
 
         # ── Base de Conhecimento ──────────────────────────────────────
         knowledge_count = KnowledgeBase.query.filter_by(law_firm_id=law_firm_id, is_active=True).count()
@@ -261,12 +304,16 @@ def dashboard():
             contestacoes_deferimento_por_empresa=contestacoes_deferimento_por_empresa,
             latest_dou_contestacoes=latest_dou_contestacoes,
             total_benefits_dc=total_benefits_dc,
-            benefits_exclusao=benefits_exclusao,
-            benefits_inclusao=benefits_inclusao,
-            benefits_revisao=benefits_revisao,
             benefits_classified=benefits_classified,
             benefits_deferidos=benefits_deferidos,
             benefits_indeferidos=benefits_indeferidos,
+            benefits_topic_distribution=benefits_topic_distribution,
+            benefits_status_first=benefits_status_first,
+            benefits_status_second=benefits_status_second,
+            count_cats=count_cats,
+            count_payroll_masses=count_payroll_masses,
+            count_employment_links=count_employment_links,
+            count_turnover_rates=count_turnover_rates,
             knowledge_count=knowledge_count,
             knowledge_categories_count=knowledge_categories_count,
             knowledge_tags_count=knowledge_tags_count,
@@ -294,12 +341,16 @@ def dashboard():
             contestacoes_deferimento_por_empresa={},
             latest_dou_contestacoes=[],
             total_benefits_dc=0,
-            benefits_exclusao=0,
-            benefits_inclusao=0,
-            benefits_revisao=0,
             benefits_classified=0,
             benefits_deferidos=0,
             benefits_indeferidos=0,
+            benefits_topic_distribution=[],
+            benefits_status_first={'deferido': 0, 'indeferido': 0, 'analyzing': 0, 'pending': 0},
+            benefits_status_second={'deferido': 0, 'indeferido': 0, 'analyzing': 0, 'pending': 0},
+            count_cats=0,
+            count_payroll_masses=0,
+            count_employment_links=0,
+            count_turnover_rates=0,
             knowledge_count=0,
             knowledge_categories_count=0,
             knowledge_tags_count=0,

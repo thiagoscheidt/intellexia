@@ -640,51 +640,94 @@
   </div>
 </div>
 
-<!-- GRÁFICO BENEFÍCIOS POR TIPO -->
+<!-- CONTADORES DAS DEMAIS CATEGORIAS DE CONTESTAÇÃO -->
 <div class="row g-3 mb-4">
-  <div class="col-lg-5">
+  <div class="col-lg-3 col-sm-6">
+    <div class="card dash-stat h-100">
+      <div class="card-body d-flex justify-content-between align-items-start">
+        <div>
+          <div class="text-body-secondary small">CATs</div>
+          <div class="display-6 fw-semibold lh-1 mt-1">{{ count_cats or 0 }}</div>
+        </div>
+        <span class="dash-stat__icon text-bg-primary-subtle text-primary-emphasis"><i class="bi bi-file-earmark-medical-fill"></i></span>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-3 col-sm-6">
+    <div class="card dash-stat h-100">
+      <div class="card-body d-flex justify-content-between align-items-start">
+        <div>
+          <div class="text-body-secondary small">Massas Salariais</div>
+          <div class="display-6 fw-semibold lh-1 mt-1">{{ count_payroll_masses or 0 }}</div>
+        </div>
+        <span class="dash-stat__icon text-bg-info-subtle text-info-emphasis"><i class="bi bi-cash-stack"></i></span>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-3 col-sm-6">
+    <div class="card dash-stat h-100">
+      <div class="card-body d-flex justify-content-between align-items-start">
+        <div>
+          <div class="text-body-secondary small">Vínculos Médios</div>
+          <div class="display-6 fw-semibold lh-1 mt-1">{{ count_employment_links or 0 }}</div>
+        </div>
+        <span class="dash-stat__icon text-bg-secondary-subtle text-secondary-emphasis"><i class="bi bi-people"></i></span>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-3 col-sm-6">
+    <div class="card dash-stat h-100">
+      <div class="card-body d-flex justify-content-between align-items-start">
+        <div>
+          <div class="text-body-secondary small">Taxas de Rotatividade</div>
+          <div class="display-6 fw-semibold lh-1 mt-1">{{ count_turnover_rates or 0 }}</div>
+        </div>
+        <span class="dash-stat__icon text-bg-warning-subtle text-warning-emphasis"><i class="bi bi-arrow-repeat"></i></span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- GRÁFICO: BENEFÍCIOS POR CATEGORIA FAP -->
+<div class="row g-3 mb-4">
+  <div class="col-12">
     <div class="card dash-card h-100">
       <div class="card-header bg-transparent border-0 pb-0">
-        <h3 class="card-title fw-semibold mb-0"><i class="bi bi-pie-chart me-2 text-danger"></i>Benefícios por Tipo de Pedido</h3>
+        <h3 class="card-title fw-semibold mb-0"><i class="bi bi-tags-fill me-2 text-danger"></i>Benefícios por Categoria FAP</h3>
       </div>
       <div class="card-body">
-        {% if total_benefits_dc %}
-        <canvas id="chartBenefitsTipo" height="220"></canvas>
+        {% if benefits_topic_distribution %}
+        <canvas id="chartBenefitsCategoria" height="120"></canvas>
         {% else %}
-        <div class="alert alert-light mb-0">Nenhum benefício cadastrado ainda.</div>
+        <div class="alert alert-light mb-0">Nenhum benefício classificado ainda.</div>
         {% endif %}
       </div>
     </div>
   </div>
-  <div class="col-lg-7">
+</div>
+
+<!-- GRÁFICO: STATUS POR INSTÂNCIA -->
+<div class="row g-3 mb-4">
+  <div class="col-lg-3 col-sm-12">
+    <div class="card dash-stat h-100">
+      <div class="card-body d-flex flex-column justify-content-center">
+        <div class="text-body-secondary small">Total de Benefícios</div>
+        <div class="display-5 fw-semibold lh-1 mt-1">{{ total_benefits_dc or 0 }}</div>
+        <div class="mt-2 small text-muted">Distribuição por status e instância &rarr;</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-9 col-sm-12">
     <div class="card dash-card h-100">
       <div class="card-header bg-transparent border-0 pb-0">
-        <h3 class="card-title fw-semibold mb-0"><i class="bi bi-bar-chart me-2 text-primary"></i>Resumo por Tipo de Pedido</h3>
+        <h3 class="card-title fw-semibold mb-0"><i class="bi bi-bar-chart-fill me-2 text-primary"></i>Status por Instância</h3>
       </div>
       <div class="card-body">
-        <div class="row g-3">
-          <div class="col-sm-4">
-            <div class="kb-metric text-center">
-              <span class="kb-metric__icon text-bg-danger-subtle text-danger-emphasis mb-2 mx-auto d-flex"><i class="bi bi-dash-circle-fill"></i></span>
-              <div class="kb-metric__label">Exclusão</div>
-              <div class="kb-metric__value">{{ benefits_exclusao or 0 }}</div>
-            </div>
-          </div>
-          <div class="col-sm-4">
-            <div class="kb-metric text-center">
-              <span class="kb-metric__icon text-bg-success-subtle text-success-emphasis mb-2 mx-auto d-flex"><i class="bi bi-plus-circle-fill"></i></span>
-              <div class="kb-metric__label">Inclusão</div>
-              <div class="kb-metric__value">{{ benefits_inclusao or 0 }}</div>
-            </div>
-          </div>
-          <div class="col-sm-4">
-            <div class="kb-metric text-center">
-              <span class="kb-metric__icon text-bg-warning-subtle text-warning-emphasis mb-2 mx-auto d-flex"><i class="bi bi-arrow-clockwise"></i></span>
-              <div class="kb-metric__label">Revisão</div>
-              <div class="kb-metric__value">{{ benefits_revisao or 0 }}</div>
-            </div>
-          </div>
-        </div>
+        {% if total_benefits_dc %}
+        <canvas id="chartStatusInstancia" height="200"></canvas>
+        {% else %}
+        <div class="alert alert-light mb-0">Nenhum benefício cadastrado ainda.</div>
+        {% endif %}
       </div>
     </div>
   </div>
@@ -833,9 +876,9 @@
   'situacaoPorEmpresa': contestacoes_situacao_por_empresa or {},
   'contestacoesPorDeferimento': contestacoes_por_deferimento or {},
   'deferimentoPorEmpresa': contestacoes_deferimento_por_empresa or {},
-  'benefitsExclusao': benefits_exclusao or 0,
-  'benefitsInclusao': benefits_inclusao or 0,
-  'benefitsRevisao': benefits_revisao or 0,
+  'topicDistribution': benefits_topic_distribution or [],
+  'statusFirst': benefits_status_first or {},
+  'statusSecond': benefits_status_second or {},
   'activeProcesses': active_processes or 0,
   'suspendedProcesses': suspended_processes or 0,
   'closedProcesses': closed_processes or 0
@@ -1057,21 +1100,62 @@
       }
     }
 
-    // Benefícios por tipo (doughnut)
-    const tipoLabels = ['Exclusão', 'Inclusão', 'Revisão'];
-    const tipoData = [data.benefitsExclusao, data.benefitsInclusao, data.benefitsRevisao];
-    if (tipoData.some(v => v > 0)) {
-      const ctx = document.getElementById('chartBenefitsTipo');
+    // Benefícios por Categoria FAP (barras horizontais)
+    const topicDist = Array.isArray(data.topicDistribution) ? data.topicDistribution : [];
+    if (topicDist.length) {
+      const ctx = document.getElementById('chartBenefitsCategoria');
       if (ctx) {
         new Chart(ctx, {
-          type: 'doughnut',
+          type: 'bar',
           data: {
-            labels: tipoLabels,
-            datasets: [{ data: tipoData, backgroundColor: ['#dc3545', '#198754', '#ffc107'] }]
+            labels: topicDist.map(t => t.label),
+            datasets: [{
+              label: 'Benefícios',
+              data: topicDist.map(t => t.count),
+              backgroundColor: '#dc3545',
+              borderRadius: 6,
+            }]
           },
-          options: { plugins: { legend: { position: 'bottom' } } }
+          options: {
+            indexAxis: 'y',
+            plugins: { legend: { display: false } },
+            scales: { x: { beginAtZero: true, ticks: { precision: 0 } } }
+          }
         });
       }
+    }
+
+    // Status por Instância (barras agrupadas)
+    const sf = data.statusFirst || {};
+    const ss = data.statusSecond || {};
+    const statusCtx = document.getElementById('chartStatusInstancia');
+    if (statusCtx) {
+      const keys = ['deferido', 'indeferido', 'analyzing', 'pending'];
+      const labels = ['Deferidos', 'Indeferidos', 'Em análise', 'Pendentes'];
+      new Chart(statusCtx, {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [
+            {
+              label: '1ª instância',
+              data: keys.map(k => sf[k] || 0),
+              backgroundColor: '#0d6efd',
+              borderRadius: 6,
+            },
+            {
+              label: '2ª instância',
+              data: keys.map(k => ss[k] || 0),
+              backgroundColor: '#6f42c1',
+              borderRadius: 6,
+            }
+          ]
+        },
+        options: {
+          plugins: { legend: { position: 'bottom' } },
+          scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+        }
+      });
     }
   });
 </script>
