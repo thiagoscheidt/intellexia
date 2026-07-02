@@ -381,21 +381,33 @@ class FapWebService:
         """Formatos de CNPJ a tentar no endpoint de download, em ordem.
 
         Vigências recentes usam o CNPJ completo (14 dígitos). Vigências antigas
-        (2016 e anteriores) exigem a raiz da empresa em 8 dígitos, com zeros à
-        esquerda (ex.: cnpjRaiz 80782 → '00080782'). O valor gravado no banco
+        (2016 e anteriores) usam a raiz da empresa em 8 dígitos, com zeros à
+        esquerda (ex.: cnpjRaiz 80782 → '00080782'); o valor gravado no banco
         para essas vem como raiz em 14 dígitos ('00000000080782'), que o portal
-        rejeita com 403 — daí a necessidade da alternativa.
+        rejeita com 403.
+
+        IMPORTANTE: o portal bloqueia (403) a requisição imediatamente seguinte
+        a um 403, então NÃO basta ter o formato certo como fallback — é preciso
+        tentá-lo PRIMEIRO. Por isso escolhemos o formato mais provável na frente:
+        se o CNPJ, sem zeros à esquerda, tem <= 8 dígitos significativos, é a
+        "raiz mascarada" das vigências antigas → tenta a raiz de 8 dígitos antes.
         """
         original = str(cnpj or '')
-        variants = [original]
         digits = ''.join(c for c in original if c.isdigit())
-        if digits:
-            stripped = digits.lstrip('0')
-            # Raiz de 8 dígitos (formato aceito pelas vigências antigas).
-            raiz8 = stripped.zfill(8) if 0 < len(stripped) <= 8 else digits[:8]
-            if raiz8 and raiz8 not in variants:
-                variants.append(raiz8)
-        return variants
+        if not digits:
+            return [original]
+
+        stripped = digits.lstrip('0')
+        if 0 < len(stripped) <= 8:
+            # Raiz mascarada (vigências antigas): raiz de 8 dígitos primeiro.
+            raiz8 = stripped.zfill(8)
+            variants = [raiz8]
+            if original and original != raiz8:
+                variants.append(original)  # fallback defensivo
+            return variants
+
+        # CNPJ completo (vigências recentes): usa como está.
+        return [original]
 
     def _download_contestacao_once(
         self,
