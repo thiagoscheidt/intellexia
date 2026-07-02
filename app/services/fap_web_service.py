@@ -376,17 +376,34 @@ class FapWebService:
 
     # ── Baixar PDF de uma contestação ─────────────────────────────────────
 
-    def download_contestacao(
+    @staticmethod
+    def _cnpj_download_variants(cnpj: str) -> list[str]:
+        """Formatos de CNPJ a tentar no endpoint de download, em ordem.
+
+        Vigências recentes usam o CNPJ completo (14 dígitos). Vigências antigas
+        (2016 e anteriores) exigem a raiz da empresa em 8 dígitos, com zeros à
+        esquerda (ex.: cnpjRaiz 80782 → '00080782'). O valor gravado no banco
+        para essas vem como raiz em 14 dígitos ('00000000080782'), que o portal
+        rejeita com 403 — daí a necessidade da alternativa.
+        """
+        original = str(cnpj or '')
+        variants = [original]
+        digits = ''.join(c for c in original if c.isdigit())
+        if digits:
+            stripped = digits.lstrip('0')
+            # Raiz de 8 dígitos (formato aceito pelas vigências antigas).
+            raiz8 = stripped.zfill(8) if 0 < len(stripped) <= 8 else digits[:8]
+            if raiz8 and raiz8 not in variants:
+                variants.append(raiz8)
+        return variants
+
+    def _download_contestacao_once(
         self,
         year: int | str,
         cnpj: str,
         contestacao_id: int | str,
     ) -> FapWebResult:
-        """Faz download do PDF de julgamento de uma contestação.
-
-        Returns:
-            FapWebResult com data={'pdf_bytes': bytes, 'filename': str} em caso de sucesso.
-        """
+        """Uma única tentativa de download para um formato de CNPJ."""
         url = (
             f'{_BASE_URL}/gateway/fap/v1'
             f'/vigencias/{year}/empresa/{cnpj}/contestacoes/{contestacao_id}/imprimir'
@@ -415,6 +432,33 @@ class FapWebService:
             return FapWebResult(ok=False, message=f'Erro ao processar resposta do servidor: {str(e)}')
 
         return FapWebResult(ok=True, data={'pdf_bytes': pdf_bytes, 'filename': filename})
+
+    def download_contestacao(
+        self,
+        year: int | str,
+        cnpj: str,
+        contestacao_id: int | str,
+    ) -> FapWebResult:
+        """Faz download do PDF de julgamento de uma contestação.
+
+        Tenta o CNPJ informado e, se falhar, a raiz em 8 dígitos (necessária
+        para vigências antigas — ver ``_cnpj_download_variants``). É seguro:
+        o portal só devolve o PDF quando o par (cnpj, contestacao_id) casa;
+        um CNPJ que não bate com a contestação retorna 403, não um PDF errado.
+
+        Returns:
+            FapWebResult com data={'pdf_bytes': bytes, 'filename': str} em caso de sucesso.
+        """
+        first_result: FapWebResult | None = None
+        for variant in self._cnpj_download_variants(cnpj):
+            result = self._download_contestacao_once(year, variant, contestacao_id)
+            if result.ok:
+                return result
+            if first_result is None:
+                first_result = result
+        return first_result if first_result is not None else FapWebResult(
+            ok=False, message='Falha no download da contestação.'
+        )
 
 
 # ---------------------------------------------------------------------------
