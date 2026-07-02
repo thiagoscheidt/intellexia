@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -28,6 +29,11 @@ sys.path.insert(0, str(project_root))
 
 from dotenv import load_dotenv  # type: ignore[import]
 load_dotenv(project_root / '.env')
+
+# Captura o FAP_AUTH_JSON AGORA — antes de importar main.py, cujo loader manual
+# de .env (linha-a-linha) pode sobrescrever/esvaziar a variável. Mesmo caminho
+# que o fap_sync_cron.py usa e que funciona em produção.
+_FAP_AUTH_RAW = (os.environ.get('FAP_AUTH_JSON') or '').strip()
 
 
 def _cnpj_fields_from_raw(raw_data: str | None) -> dict:
@@ -86,16 +92,18 @@ def main() -> None:
 
             # ── Teste de download real (mesma auth do cron: FAP_AUTH_JSON) ──
             if args.try_download:
-                import os
                 print("\n" + "-" * 70)
                 print("  Tentando download real (auth do .env / FAP_AUTH_JSON)...")
-                auth_json = os.environ.get('FAP_AUTH_JSON', '').strip()
-                if not auth_json:
-                    print("  ! FAP_AUTH_JSON não encontrado no .env — não é possível testar.")
+                raw = _FAP_AUTH_RAW
+                if not raw:
+                    print("  ! FAP_AUTH_JSON vazio/não carregado — não é possível testar.")
                     return
+                # Remove aspas externas, caso o .env as preserve.
+                if len(raw) >= 2 and raw[0] == raw[-1] and raw[0] in ('"', "'"):
+                    raw = raw[1:-1].strip()
                 from app.services.fap_web_service import FapWebAuthPayload, FapWebService
                 try:
-                    auth = FapWebAuthPayload.from_json(auth_json)
+                    auth = FapWebAuthPayload.from_json(raw)
                 except Exception as e:
                     print(f"  ! FAP_AUTH_JSON inválido: {e}")
                     return
