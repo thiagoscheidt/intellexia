@@ -8,7 +8,7 @@
 
 O **Centro de Contestações** organiza tudo que foi **contestado no FAP** e já teve **relatório de julgamento** analisado. Diferente do Painel FAP (que conversa com o portal ao vivo), aqui os dados vêm de outra fonte:
 
-> **De onde vêm os dados deste módulo:** de **PDFs de "Relatório de Julgamento de Contestação do FAP"**. Esses PDFs são enviados na tela de **Relatórios** (ou trazidos pela **Importação Automática**) e uma **IA extrai** deles os benefícios, CATs, massas salariais, vínculos e taxas de rotatividade. Ou seja: o conteúdo que você vê nas listas foi **lido automaticamente dos relatórios**, não digitado à mão (embora tudo possa ser editado manualmente depois).
+> [!INFO] **De onde vêm os dados deste módulo:** de **PDFs de "Relatório de Julgamento de Contestação do FAP"**. Esses PDFs são enviados na tela de **Relatórios** (ou trazidos pela **Importação Automática**) e uma **IA extrai** deles os benefícios, CATs, massas salariais, vínculos e taxas de rotatividade. Ou seja: o conteúdo que você vê nas listas foi **lido automaticamente dos relatórios**, não digitado à mão (embora tudo possa ser editado manualmente depois).
 
 Todos os dados são do **seu escritório** — você nunca vê dados de outro.
 
@@ -47,15 +47,15 @@ Em ambos: Total, Deferidos, Indeferidos, Em análise, Pendentes, Categorizados e
 
 | Coluna | O que significa | De onde vem |
 |---|---|---|
-| **ID** | Identificador interno do benefício. | Sistema. |
-| **Número / NIT / Tipo** | Nº do benefício, **NIT** do segurado e **tipo** (B91, B94 etc.). | Extraído do relatório. |
-| **Segurado** | Nome, CPF e data de nascimento do segurado. | Extraído do relatório. |
-| **CNPJ Empregador** | CNPJ e nome da empresa empregadora. | Extraído do relatório. |
-| **Status 1ª instância** | Deferido/Indeferido/Em análise/Pendente + texto original abaixo. | Extraído do relatório. |
-| **Status 2ª instância** | Mesmo esquema, para o recurso. | Extraído do relatório. |
-| **Vigência FAP** | Ano(s) de vigência FAP afetados por esse benefício. | Extraído do relatório. |
-| **Categoria FAP** | Categoria/tópico da contestação, atribuída pela **IA** (ex.: "Erro de Estabelecimento"). Se vazio, aparece o botão **Classificar**; se preenchido, **Reclassificar**. | IA de classificação. |
-| **DIB / DCB** | **DIB** = Data de Início do Benefício; **DCB** = Data de Cessação do Benefício. | Extraído do relatório. Datas passadas. |
+| **ID** | Identificador interno do benefício. | Sistema |
+| **Número / NIT / Tipo** | Nº do benefício, **NIT** do segurado e **tipo** (B91, B94 etc.). | Relatório |
+| **Segurado** | Nome, CPF e data de nascimento do segurado. | Relatório |
+| **CNPJ Empregador** | CNPJ e nome da empresa empregadora. | Relatório |
+| **Status 1ª instância** | Deferido/Indeferido/Em análise/Pendente + texto original abaixo. | Relatório |
+| **Status 2ª instância** | Mesmo esquema, para o recurso. | Relatório |
+| **Vigência FAP** | Ano(s) de vigência FAP afetados por esse benefício. | Relatório |
+| **Categoria FAP** | Categoria/tópico da contestação, atribuída pela **IA** (ex.: "Erro de Estabelecimento"). Se vazio, aparece o botão **Classificar**; se preenchido, **Reclassificar**. | IA |
+| **DIB / DCB** | **DIB** = Data de Início do Benefício; **DCB** = Data de Cessação do Benefício (datas passadas). | Relatório |
 | **Ações** | Ver decisões, editar, excluir, ver linha do tempo. | — |
 
 > **Sobre DIB e DCB:** são datas do próprio benefício (quando começou e quando cessou). São sempre **datas passadas** — não são prazos.

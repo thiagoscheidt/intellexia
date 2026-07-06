@@ -13,7 +13,7 @@ O **Painel FAP** é a ponte entre o IntellexIA e o **portal FAP Web (Dataprev)**
 3. **Baixa os PDFs** das contestações em lote;
 4. **Exibe** tudo em telas organizadas, com filtros e exportação para Excel.
 
-> **Importante:** as telas do Painel FAP mostram o que **já foi sincronizado**. Elas leem do banco do IntellexIA, não do portal ao vivo (exceto a verificação de sessão e o download de um PDF específico). Se um dado novo apareceu no portal e você ainda não sincronizou, ele não estará aqui.
+> [!INFO] **Importante:** as telas do Painel FAP mostram o que **já foi sincronizado**. Elas leem do banco do IntellexIA, não do portal ao vivo (exceto a verificação de sessão e o download de um PDF específico). Se um dado novo apareceu no portal e você ainda não sincronizou, ele não estará aqui.
 
 ### Como a autenticação funciona
 
@@ -33,7 +33,7 @@ A rotina executa nesta ordem:
 4. **Contestações** — varre **todas as empresas, ano a ano** (por padrão de 2010 até o ano atual), criando as novas e atualizando as que mudaram. Toda mudança fica registrada no histórico (aba "Atualizadas").
 5. **PDFs** — baixa automaticamente os arquivos das contestações que ainda não têm PDF salvo (pula os que já existem em disco).
 
-> **O que esperar no dia a dia:** você **não precisa sincronizar manualmente** — a rotina noturna já cuida disso. A **Tela de Sincronização** (abaixo) serve para casos pontuais: rodar uma sincronização na hora ou **atualizar as credenciais** quando a sessão do portal expira. Uma sessão expirada é, na prática, a única coisa que trava a rotina automática — quando isso acontece, os dados param de atualizar até alguém colar novos dados de acesso.
+> [!INFO] **O que esperar no dia a dia:** você **não precisa sincronizar manualmente** — a rotina noturna já cuida disso. A **Tela de Sincronização** (abaixo) serve para casos pontuais: rodar uma sincronização na hora ou **atualizar as credenciais** quando a sessão do portal expira. Uma sessão expirada é, na prática, a única coisa que trava a rotina automática — quando isso acontece, os dados param de atualizar até alguém colar novos dados de acesso.
 
 ---
 
@@ -124,12 +124,14 @@ Também há campos de responsável, e-mail, observação, efeito suspensivo e in
 
 Esta é a data que gera mais dúvidas, então vale um destaque.
 
+> [!DOU] **Data D.O.U. = data de publicação do resultado no Diário Oficial da União.** Vem do sistema FAP. **Geralmente já ocorreu, mas pode ser futura** quando a publicação foi programada. Nunca é um prazo de ação.
+
 - **O que é:** **Data de Publicação no Diário Oficial da União (D.O.U.)**. É o dia em que o **resultado/julgamento da contestação é publicado oficialmente**.
 - **De onde vem:** é o campo `dataDOU`, informado pelo **próprio portal/sistema FAP**. O IntellexIA apenas copia — não inventa nem calcula essa data.
 - **É passada ou futura?** ➜ **Geralmente passada, mas pode ser futura.** Na maioria das vezes marca uma publicação que **já ocorreu**; porém, quando o sistema FAP **programa** a publicação para uma data ainda por vir, a Data D.O.U. aponta para o **futuro**. Em nenhum caso é um prazo de ação.
 - **Quando ela existe:** quando o resultado é publicado ou tem publicação programada. Enquanto a contestação está em andamento e sem previsão de publicação, ela **não tem** Data D.O.U.
 
-> **Não confundir:**
+> [!ALERTA] **Não confundir:**
 > - **Data D.O.U.** = quando o resultado *é publicado* no Diário Oficial (já ocorrida ou programada).
 > - **Fim de Prazo (1ª/2ª instância)** = até quando você *pode agir* (prazo futuro).
 > - **Data Transmissão** = quando a contestação *foi enviada* (passado).

@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manual de Uso — IntellexIA</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --surface: #ffffff; --surface-2: #eef1f6; --ink: #1b2431;
+    --ink-soft: #3f4a5a; --muted: #6a7688; --border: #e2e7ee; --border-strong: #cfd7e2;
+    --accent: #27508a; --accent-2: #3e6fb0; --accent-soft: #e9f0f9;
+    --dou: #9a6c1c; --dou-ink: #78530f; --dou-soft: #fbf3e1; --dou-border: #ecd7a4;
+    --ok: #2f7d53; --ok-soft: #e4f2ea; --bad: #bd3b2f; --bad-soft: #f8e7e4;
+    --warn: #b07d1e; --warn-soft: #f8efdb; --neutral: #64707f; --neutral-soft: #e9edf2;
+    --shadow: 0 1px 2px rgba(20,32,52,.04), 0 8px 24px rgba(20,32,52,.06);
+    --serif: "Charter", "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", "Cascadia Code", "Consolas", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f141c; --surface: #161d27; --surface-2: #1d2632; --ink: #e7ecf3;
+      --ink-soft: #b6c1cf; --muted: #8493a5; --border: #283240; --border-strong: #384454;
+      --accent: #6fa0db; --accent-2: #85b2e6; --accent-soft: #1a2a3d;
+      --dou: #dcac54; --dou-ink: #e7bd6f; --dou-soft: #241d10; --dou-border: #4a3c1d;
+      --ok: #5cb185; --ok-soft: #16281f; --bad: #e0776b; --bad-soft: #2c1a18;
+      --warn: #d9a94e; --warn-soft: #2a2214; --neutral: #9aa6b4; --neutral-soft: #222b37;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #f6f7f9; --surface: #ffffff; --surface-2: #eef1f6; --ink: #1b2431;
+    --ink-soft: #3f4a5a; --muted: #6a7688; --border: #e2e7ee; --border-strong: #cfd7e2;
+    --accent: #27508a; --accent-2: #3e6fb0; --accent-soft: #e9f0f9;
+    --dou: #9a6c1c; --dou-ink: #78530f; --dou-soft: #fbf3e1; --dou-border: #ecd7a4;
+    --ok: #2f7d53; --ok-soft: #e4f2ea; --bad: #bd3b2f; --bad-soft: #f8e7e4;
+    --warn: #b07d1e; --warn-soft: #f8efdb; --neutral: #64707f; --neutral-soft: #e9edf2;
+    --shadow: 0 1px 2px rgba(20,32,52,.04), 0 8px 24px rgba(20,32,52,.06);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f141c; --surface: #161d27; --surface-2: #1d2632; --ink: #e7ecf3;
+    --ink-soft: #b6c1cf; --muted: #8493a5; --border: #283240; --border-strong: #384454;
+    --accent: #6fa0db; --accent-2: #85b2e6; --accent-soft: #1a2a3d;
+    --dou: #dcac54; --dou-ink: #e7bd6f; --dou-soft: #241d10; --dou-border: #4a3c1d;
+    --ok: #5cb185; --ok-soft: #16281f; --bad: #e0776b; --bad-soft: #2c1a18;
+    --warn: #d9a94e; --warn-soft: #2a2214; --neutral: #9aa6b4; --neutral-soft: #222b37;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans);
+    line-height: 1.65; font-size: 16px; -webkit-font-smoothing: antialiased; }
+  .layout { display: grid; grid-template-columns: 268px minmax(0, 1fr); max-width: 1240px; margin: 0 auto; }
+
+  .sidebar { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto;
+    padding: 28px 20px 40px 28px; border-right: 1px solid var(--border); }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .brand-mark { width: 30px; height: 30px; border-radius: 8px; flex: none;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: grid; place-items: center; color: #fff; font-weight: 700; font-family: var(--serif); font-size: 17px; }
+  .brand-name { font-weight: 650; letter-spacing: -.01em; font-size: 15px; }
+  .brand-sub { color: var(--muted); font-size: 12px; margin: 2px 0 22px 40px; }
+  .nav-group { margin-bottom: 20px; }
+  .nav-group > .nav-title { font-size: 11px; text-transform: uppercase; letter-spacing: .09em;
+    color: var(--muted); font-weight: 650; margin: 0 0 8px 8px; }
+  .nav a { display: block; padding: 6px 10px; border-radius: 7px; color: var(--ink-soft);
+    text-decoration: none; font-size: 13.5px; border-left: 2px solid transparent; transition: background .15s, color .15s; }
+  .nav a:hover { background: var(--surface-2); color: var(--ink); }
+  .nav a.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .nav a.sub { margin-left: 10px; font-size: 12.5px; padding: 4px 10px; }
+
+  main { padding: 44px 52px 100px; min-width: 0; }
+  .eyebrow { text-transform: uppercase; letter-spacing: .12em; font-size: 12px; font-weight: 650; color: var(--accent); }
+  h1 { font-family: var(--serif); font-weight: 650; letter-spacing: -.02em;
+    font-size: clamp(2rem, 4vw, 2.9rem); line-height: 1.08; margin: 10px 0 14px; text-wrap: balance; }
+  .lede { font-size: 1.12rem; color: var(--ink-soft); max-width: 62ch; margin: 0 0 8px; }
+  h2 { font-family: var(--serif); font-weight: 620; letter-spacing: -.015em; font-size: 1.75rem; margin: 8px 0 6px; text-wrap: balance; }
+  h3 { font-weight: 640; font-size: 1.16rem; letter-spacing: -.01em; margin: 30px 0 10px; color: var(--ink); }
+  h4 { font-weight: 640; font-size: .98rem; margin: 22px 0 8px; color: var(--ink); }
+  p { max-width: 68ch; }
+  a.inline { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+
+  .module { scroll-margin-top: 20px; padding-top: 46px; margin-top: 42px; border-top: 1px solid var(--border); }
+  .module:first-of-type { border-top: 0; margin-top: 28px; padding-top: 8px; }
+  .module-num { font-family: var(--serif); font-size: 1rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+  /* Conteúdo renderizado do markdown */
+  .module p { color: var(--ink-soft); }
+  .module ul, .module ol { color: var(--ink-soft); padding-left: 22px; margin: 12px 0; max-width: 70ch; }
+  .module li { margin: 5px 0; }
+  .module li > ul { margin: 4px 0; }
+  .module strong { color: var(--ink); }
+  .module code { font-family: var(--mono); font-size: .87em; background: color-mix(in srgb, var(--surface-2) 72%, transparent);
+    padding: 1px 6px; border-radius: 5px; }
+  .module a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+  .module hr { border: 0; border-top: 1px solid var(--border); margin: 30px 0; }
+
+  .table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 12px; margin: 16px 0 8px;
+    box-shadow: var(--shadow); background: var(--surface); }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 520px; }
+  thead th { background: var(--surface-2); text-align: left; font-weight: 640; font-size: 11.5px;
+    text-transform: uppercase; letter-spacing: .05em; color: var(--muted); padding: 11px 16px; white-space: nowrap;
+    border-bottom: 1px solid var(--border); }
+  tbody td { padding: 12px 16px; border-top: 1px solid var(--border); vertical-align: top; color: var(--ink-soft); }
+  tbody tr:first-child td { border-top: 0; }
+  tbody td:first-child { color: var(--ink); font-weight: 600; }
+  tbody tr:hover td { background: color-mix(in srgb, var(--surface-2) 55%, transparent); }
+
+  .tag { display: inline-block; font-family: var(--mono); font-size: 11px; padding: 2px 8px; border-radius: 999px;
+    white-space: nowrap; font-weight: 500; border: 1px solid transparent; }
+  .tag.fap { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 22%, transparent); }
+  .tag.ia { background: #efe9fb; color: #6a4bbc; border-color: #d9cdf3; }
+  .tag.sys { background: var(--neutral-soft); color: var(--neutral); border-color: var(--border-strong); }
+  .tag.rel { background: var(--dou-soft); color: var(--dou-ink); border-color: var(--dou-border); }
+  :root[data-theme="dark"] .tag.ia { background: #221b38; color: #b69bef; border-color: #392c5e; }
+  @media (prefers-color-scheme: dark) { .tag.ia { background: #221b38; color: #b69bef; border-color: #392c5e; } }
+
+  .callout { border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; background: var(--surface);
+    box-shadow: var(--shadow); max-width: 74ch; margin: 16px 0; }
+  .callout > :first-child { margin-top: 0; }
+  .callout > :last-child { margin-bottom: 0; }
+  .callout p { margin: 6px 0; max-width: none; color: var(--ink-soft); }
+  .callout ul { margin: 6px 0; padding-left: 20px; }
+  .callout.dou { border-color: var(--dou-border); background: var(--dou-soft); border-left: 4px solid var(--dou); }
+  .callout.warn-note { border-left: 4px solid var(--warn); }
+  .callout.info { border-left: 4px solid var(--accent); }
+  .callout.ia-note { border-left: 4px solid #6a4bbc; }
+
+  .legend { display: flex; gap: 18px 20px; flex-wrap: wrap; padding: 14px 16px; margin: 18px 0;
+    background: var(--surface-2); border-radius: 10px; font-size: 13.5px; }
+  .datechip { display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13px; }
+
+  .topbar { display: none; position: sticky; top: 0; z-index: 20; align-items: center; justify-content: space-between;
+    gap: 12px; padding: 12px 18px; background: color-mix(in srgb, var(--surface) 88%, transparent);
+    backdrop-filter: blur(8px); border-bottom: 1px solid var(--border); }
+  .theme-toggle { margin-top: 20px; display: inline-flex; align-items: center; gap: 8px; background: var(--surface);
+    border: 1px solid var(--border); color: var(--ink-soft); border-radius: 999px; padding: 6px 14px; font: inherit;
+    font-size: 13px; cursor: pointer; }
+  .theme-toggle:hover { border-color: var(--border-strong); color: var(--ink); }
+  .menu-btn { display: none; background: var(--surface); border: 1px solid var(--border); border-radius: 9px;
+    padding: 8px 12px; font: inherit; color: var(--ink); cursor: pointer; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .topbar { display: flex; }
+    .menu-btn { display: inline-block; }
+    .sidebar { position: fixed; inset: 0 auto 0 0; z-index: 30; width: 280px; height: 100vh; background: var(--surface);
+      transform: translateX(-100%); transition: transform .22s ease; box-shadow: var(--shadow); }
+    .sidebar.open { transform: translateX(0); }
+    .scrim { position: fixed; inset: 0; background: rgba(10,15,22,.45); z-index: 25; display: none; }
+    .scrim.show { display: block; }
+    main { padding: 26px 20px 80px; }
+  }
+  @media (min-width: 901px) { .topbar { display: none; } }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+  html { scroll-behavior: smooth; }
+
+  /* ── Assistente do manual (chat flutuante) ───── */
+  .chat-fab { position: fixed; right: 22px; bottom: 22px; z-index: 40; display: inline-flex; align-items: center; gap: 9px;
+    padding: 12px 18px 12px 15px; border: none; border-radius: 999px;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; font: inherit; font-weight: 600;
+    font-size: 14.5px; cursor: pointer; box-shadow: 0 6px 20px rgba(20,32,52,.28); transition: transform .16s, box-shadow .16s; }
+  .chat-fab:hover { transform: translateY(-1px); box-shadow: 0 10px 26px rgba(20,32,52,.34); }
+  .chat-fab svg { width: 20px; height: 20px; flex: none; }
+  .chat-fab.hidden { display: none; }
+  .chat-panel { position: fixed; right: 22px; bottom: 22px; z-index: 41;
+    width: min(400px, calc(100vw - 32px)); height: min(600px, calc(100vh - 44px));
+    display: none; flex-direction: column; overflow: hidden; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 16px; box-shadow: 0 12px 40px rgba(20,32,52,.28); }
+  .chat-panel.open { display: flex; }
+  .chat-head { display: flex; align-items: center; gap: 11px; padding: 14px 16px; border-bottom: 1px solid var(--border);
+    background: linear-gradient(180deg, var(--accent-soft), transparent); }
+  .chat-head .avatar { width: 34px; height: 34px; border-radius: 9px; flex: none; display: grid; place-items: center;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2)); color: #fff; }
+  .chat-head .avatar svg { width: 19px; height: 19px; }
+  .chat-head .h-title { font-weight: 650; font-size: 14.5px; line-height: 1.2; }
+  .chat-head .h-sub { font-size: 11.5px; color: var(--muted); }
+  .chat-close { margin-left: auto; background: transparent; border: none; color: var(--muted); font-size: 22px;
+    line-height: 1; cursor: pointer; padding: 4px 6px; border-radius: 7px; }
+  .chat-close:hover { background: var(--surface-2); color: var(--ink); }
+  .chat-body { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
+  .chat-welcome { color: var(--ink-soft); font-size: 14px; }
+  .chat-welcome strong { color: var(--ink); }
+  .chat-chips { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+  .chat-chip { text-align: left; background: var(--surface-2); border: 1px solid var(--border); color: var(--ink);
+    border-radius: 10px; padding: 10px 13px; font: inherit; font-size: 13.5px; cursor: pointer; transition: border-color .15s, background .15s; }
+  .chat-chip:hover { border-color: var(--accent); background: var(--accent-soft); }
+  .msg { display: flex; }
+  .msg.user { justify-content: flex-end; }
+  .msg .bubble { max-width: 84%; padding: 10px 13px; border-radius: 13px; font-size: 14px; line-height: 1.55; word-wrap: break-word; }
+  .msg.user .bubble { background: var(--accent); color: #fff; border-bottom-right-radius: 5px; }
+  .msg.bot .bubble { background: var(--surface-2); color: var(--ink); border-bottom-left-radius: 5px; }
+  .msg .bubble p { max-width: none; margin: 0 0 8px; }
+  .msg .bubble p:last-child { margin-bottom: 0; }
+  .msg .bubble ul { margin: 6px 0; padding-left: 20px; }
+  .msg .bubble li { margin: 3px 0; }
+  .msg .bubble code { font-family: var(--mono); font-size: 12.5px; background: rgba(127,127,127,.16); padding: 1px 5px; border-radius: 5px; }
+  .msg .bubble a { color: var(--accent); text-decoration: underline; }
+  .msg.user .bubble a { color: #fff; }
+  .msg.error .bubble { background: var(--bad-soft); color: var(--bad); }
+  .typing { display: inline-flex; gap: 4px; align-items: center; padding: 3px 2px; }
+  .typing span { width: 7px; height: 7px; border-radius: 50%; background: var(--muted); animation: chatblink 1.2s infinite both; }
+  .typing span:nth-child(2) { animation-delay: .2s; }
+  .typing span:nth-child(3) { animation-delay: .4s; }
+  @keyframes chatblink { 0%, 60%, 100% { opacity: .3; } 30% { opacity: 1; } }
+  .chat-foot { border-top: 1px solid var(--border); padding: 10px 12px; }
+  .chat-form { display: flex; gap: 8px; align-items: flex-end; }
+  .chat-input { flex: 1; resize: none; max-height: 120px; min-height: 42px; padding: 10px 12px;
+    border: 1px solid var(--border-strong); border-radius: 10px; background: var(--bg); color: var(--ink);
+    font: inherit; font-size: 14px; line-height: 1.4; }
+  .chat-input:focus { outline: none; border-color: var(--accent); }
+  .chat-send { flex: none; width: 42px; height: 42px; border: none; border-radius: 10px; cursor: pointer;
+    background: var(--accent); color: #fff; display: grid; place-items: center; }
+  .chat-send:hover { background: var(--accent-2); }
+  .chat-send:disabled { opacity: .5; cursor: not-allowed; }
+  .chat-send svg { width: 19px; height: 19px; }
+  .chat-disclaimer { font-size: 11px; color: var(--muted); text-align: center; margin: 7px 2px 0; }
+  @media (prefers-reduced-motion: reduce) { .typing span { animation: none; } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <button class="menu-btn" id="menuBtn" aria-label="Abrir menu">☰ Índice</button>
+  <strong style="font-size:14px">Manual IntellexIA</strong>
+  <button class="theme-toggle" id="themeToggleTop" style="margin:0" aria-label="Alternar tema">Tema</button>
+</div>
+<div class="scrim" id="scrim"></div>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-mark">I</div>
+      <div class="brand-name">IntellexIA</div>
+    </div>
+    <div class="brand-sub">Manual de uso · painéis</div>
+
+    <nav class="nav">
+      <div class="nav-group">
+        <p class="nav-title">Começar aqui</p>
+        <a href="#intro">Visão geral</a>
+      </div>
+      {% for m in modules %}
+      <div class="nav-group">
+        <p class="nav-title">{{ loop.index }} · {{ m.title }}</p>
+        <a href="#{{ m.id }}">{{ m.title }}</a>
+        {% for item in m.toc %}
+        <a href="#{{ item.id }}" class="sub">{{ item.text }}</a>
+        {% endfor %}
+      </div>
+      {% endfor %}
+    </nav>
+    <button class="theme-toggle" id="themeToggle" aria-label="Alternar tema claro/escuro">◐ Tema claro/escuro</button>
+  </aside>
+
+  <main>
+    <header id="intro">
+      <p class="eyebrow">Documentação funcional</p>
+      <h1>Manual de uso dos painéis do IntellexIA</h1>
+      <p class="lede">O que cada tela mostra, o que cada campo significa e — principalmente — <strong>de onde vem cada dado</strong>. Escrito para quem usa e valida o sistema, sem jargão técnico.</p>
+      <div class="legend">
+        <span><strong>Origem dos campos:</strong></span>
+        <span class="datechip"><span class="tag fap">FAP Web</span> portal oficial</span>
+        <span class="datechip"><span class="tag rel">Relatório</span> extraído do PDF</span>
+        <span class="datechip"><span class="tag ia">IA</span> inteligência artificial</span>
+        <span class="datechip"><span class="tag sys">Sistema</span> calculado pelo IntellexIA</span>
+      </div>
+    </header>
+
+    {% for m in modules %}
+    <section class="module" id="{{ m.id }}">
+      <span class="module-num">Módulo {{ '%02d'|format(loop.index) }}</span>
+      <h2>{{ m.title }}</h2>
+      {{ m.html|safe }}
+    </section>
+    {% endfor %}
+  </main>
+</div>
+
+<!-- ── Assistente do manual (chat) ─────────────── -->
+<button class="chat-fab" id="chatFab" aria-label="Abrir assistente do manual">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+  Perguntar ao manual
+</button>
+
+<section class="chat-panel" id="chatPanel" aria-label="Assistente do manual" role="dialog" aria-modal="false">
+  <header class="chat-head">
+    <span class="avatar" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+    <div>
+      <div class="h-title">Assistente do manual</div>
+      <div class="h-sub">Responde com base neste manual</div>
+    </div>
+    <button class="chat-close" id="chatClose" aria-label="Fechar assistente">×</button>
+  </header>
+  <div class="chat-body" id="chatBody">
+    <div class="chat-welcome" id="chatWelcome">
+      Olá! Posso tirar dúvidas sobre o <strong>Dashboard</strong>, o <strong>Painel FAP</strong> e o <strong>Painel de Contestações</strong> — sempre com base neste manual. Pergunte algo ou comece por:
+      <div class="chat-chips">
+        <button class="chat-chip">De onde vem a Data D.O.U.?</button>
+        <button class="chat-chip">O que significa o status "Em análise"?</button>
+        <button class="chat-chip">Como funciona a sincronização automática do Painel FAP?</button>
+      </div>
+    </div>
+  </div>
+  <div class="chat-foot">
+    <form class="chat-form" id="chatForm">
+      <textarea class="chat-input" id="chatInput" rows="1" placeholder="Escreva sua pergunta..." aria-label="Sua pergunta"></textarea>
+      <button class="chat-send" id="chatSend" type="submit" aria-label="Enviar" disabled>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+      </button>
+    </form>
+    <p class="chat-disclaimer">Respostas geradas por IA a partir do manual. Confira informações críticas.</p>
+  </div>
+</section>
+
+<script>
+  // ===== Assistente do manual (chat) =====
+  (function () {
+    var CHAT_ENDPOINT = "/docs/chat";
+    var fab = document.getElementById("chatFab");
+    var panel = document.getElementById("chatPanel");
+    var closeBtn = document.getElementById("chatClose");
+    var body = document.getElementById("chatBody");
+    var welcome = document.getElementById("chatWelcome");
+    var form = document.getElementById("chatForm");
+    var input = document.getElementById("chatInput");
+    var sendBtn = document.getElementById("chatSend");
+    if (!fab || !panel) return;
+
+    var history = [];
+    var busy = false;
+
+    function openChat() { panel.classList.add("open"); fab.classList.add("hidden"); setTimeout(function () { input.focus(); }, 50); }
+    function closeChat() { panel.classList.remove("open"); fab.classList.remove("hidden"); fab.focus(); }
+    fab.addEventListener("click", openChat);
+    closeBtn.addEventListener("click", closeChat);
+    document.addEventListener("keydown", function (e) { if (e.key === "Escape" && panel.classList.contains("open")) closeChat(); });
+
+    function syncInput() {
+      input.style.height = "auto";
+      input.style.height = Math.min(input.scrollHeight, 120) + "px";
+      sendBtn.disabled = busy || input.value.trim() === "";
+    }
+    input.addEventListener("input", syncInput);
+    input.addEventListener("keydown", function (e) { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); form.requestSubmit(); } });
+
+    Array.prototype.forEach.call(document.querySelectorAll(".chat-chip"), function (chip) {
+      chip.addEventListener("click", function () { input.value = chip.textContent; syncInput(); form.requestSubmit(); });
+    });
+
+    function escapeHtml(s) {
+      return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
+    }
+    function renderMarkdown(text) {
+      var safe = escapeHtml(text);
+      safe = safe.replace(/`([^`]+)`/g, "<code>$1</code>");
+      safe = safe.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+      safe = safe.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+|\/[^\s)]*)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+      var lines = safe.split(/\n/), html = "", inList = false;
+      lines.forEach(function (ln) {
+        var li = ln.match(/^\s*[-*]\s+(.*)$/);
+        if (li) { if (!inList) { html += "<ul>"; inList = true; } html += "<li>" + li[1] + "</li>"; }
+        else { if (inList) { html += "</ul>"; inList = false; } if (ln.trim() !== "") html += "<p>" + ln + "</p>"; }
+      });
+      if (inList) html += "</ul>";
+      return html || "<p>" + safe + "</p>";
+    }
+    function addMessage(role, text, opts) {
+      opts = opts || {};
+      var wrap = document.createElement("div");
+      wrap.className = "msg " + (role === "user" ? "user" : (opts.error ? "bot error" : "bot"));
+      var bubble = document.createElement("div");
+      bubble.className = "bubble";
+      if (role === "user") bubble.textContent = text; else bubble.innerHTML = renderMarkdown(text);
+      wrap.appendChild(bubble); body.appendChild(wrap); body.scrollTop = body.scrollHeight;
+      return wrap;
+    }
+    function addTyping() {
+      var wrap = document.createElement("div");
+      wrap.className = "msg bot";
+      wrap.innerHTML = '<div class="bubble"><span class="typing"><span></span><span></span><span></span></span></div>';
+      body.appendChild(wrap); body.scrollTop = body.scrollHeight;
+      return wrap;
+    }
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      var text = input.value.trim();
+      if (!text || busy) return;
+      if (welcome) { welcome.remove(); welcome = null; }
+      addMessage("user", text);
+      history.push({ role: "user", content: text });
+      input.value = ""; syncInput();
+      busy = true; sendBtn.disabled = true;
+      var typing = addTyping();
+      fetch(CHAT_ENDPOINT, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: text, history: history.slice(0, -1) })
+      }).then(function (res) {
+        if (res.status === 404) throw { kind: "unavailable" };
+        if (!res.ok) throw { kind: "error" };
+        return res.json();
+      }).then(function (data) {
+        typing.remove();
+        var reply = (data && data.reply) || "Não consegui responder agora.";
+        addMessage("bot", reply); history.push({ role: "assistant", content: reply });
+      }).catch(function (err) {
+        typing.remove();
+        if (err && err.kind === "unavailable")
+          addMessage("bot", "O assistente só funciona **dentro do sistema IntellexIA** (na página do manual logado). Aqui, esta página está em modo somente leitura.", { error: true });
+        else
+          addMessage("bot", "Não consegui responder agora. Verifique sua conexão e tente novamente.", { error: true });
+      }).then(function () { busy = false; syncInput(); input.focus(); });
+    });
+  })();
+
+  // ===== Tema e navegação =====
+  (function () {
+    var root = document.documentElement;
+    function apply(t) { root.setAttribute("data-theme", t); }
+    function current() {
+      var set = root.getAttribute("data-theme");
+      if (set) return set;
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    function toggle() { apply(current() === "dark" ? "light" : "dark"); }
+    var t1 = document.getElementById("themeToggle");
+    var t2 = document.getElementById("themeToggleTop");
+    if (t1) t1.addEventListener("click", toggle);
+    if (t2) t2.addEventListener("click", toggle);
+
+    var sidebar = document.getElementById("sidebar");
+    var scrim = document.getElementById("scrim");
+    var btn = document.getElementById("menuBtn");
+    function closeMenu() { sidebar.classList.remove("open"); scrim.classList.remove("show"); }
+    if (btn) btn.addEventListener("click", function () { sidebar.classList.toggle("open"); scrim.classList.toggle("show"); });
+    if (scrim) scrim.addEventListener("click", closeMenu);
+    sidebar.querySelectorAll("a").forEach(function (a) {
+      a.addEventListener("click", function () { if (window.innerWidth <= 900) closeMenu(); });
+    });
+
+    var links = Array.prototype.slice.call(sidebar.querySelectorAll(".nav a"));
+    var map = {};
+    links.forEach(function (a) {
+      var id = a.getAttribute("href").slice(1);
+      var el = document.getElementById(id);
+      if (el) map[id] = a;
+    });
+    var targets = Object.keys(map).map(function (id) { return document.getElementById(id); });
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          links.forEach(function (l) { l.classList.remove("active"); });
+          var a = map[e.target.id];
+          if (a) a.classList.add("active");
+        }
+      });
+    }, { rootMargin: "-10% 0px -80% 0px", threshold: 0 });
+    targets.forEach(function (t) { obs.observe(t); });
+  })();
+</script>
+</body>
+</html>

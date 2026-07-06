@@ -5,15 +5,9 @@ Serve a página estática de manuais dos painéis (``docs/manual_paineis.html``)
 por uma URL amigável. Exige apenas autenticação — o prefixo ``docs.`` não está
 mapeado a nenhum módulo de permissão, então qualquer usuário logado acessa.
 """
-import os
-
-from flask import Blueprint, send_file, abort, request, jsonify, session
+from flask import Blueprint, render_template, request, jsonify, session
 
 docs_bp = Blueprint('docs', __name__, url_prefix='/docs')
-
-# Raiz do projeto: .../app/blueprints/docs.py -> sobe 3 níveis
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-_MANUAL_PATH = os.path.join(_PROJECT_ROOT, 'docs', 'manual_paineis.html')
 
 # Instância única do assistente (compartilha o cache dos manuais). Criada de forma
 # preguiçosa para não construir o cliente LLM no import do blueprint.
@@ -30,10 +24,14 @@ def _get_assistant():
 
 @docs_bp.route('/manuais')
 def manuais():
-    """Manual de uso dos painéis (Dashboard, Painel FAP, Painel de Contestações)."""
-    if not os.path.exists(_MANUAL_PATH):
-        abort(404)
-    return send_file(_MANUAL_PATH, mimetype='text/html')
+    """Manual de uso dos painéis, renderizado a partir dos markdowns em docs/.
+
+    Fonte única: ``docs/MANUAL_*.md`` — os mesmos arquivos que o assistente lê.
+    O HTML é gerado em runtime (com cache por data de modificação), então editar
+    o markdown é suficiente; nada precisa ser gerado manualmente.
+    """
+    from app.services.manual_renderer import render_modules
+    return render_template('docs/manuais.html', modules=render_modules())
 
 
 @docs_bp.route('/chat', methods=['POST'])

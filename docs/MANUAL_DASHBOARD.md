@@ -48,6 +48,8 @@ Este é o painel que costuma gerar dúvida sobre **"a data da coluna da esquerda
 
 ### Aba "Publicadas no D.O.U." (aba padrão)
 
+> [!DOU] A data desta aba é a **Publicação no Diário Oficial da União** — quando o resultado da contestação foi (ou será) publicado. Vem do sistema FAP; geralmente já ocorreu, mas pode ser futura se a publicação foi programada.
+
 - **Coluna de data: "Publicação D.O.U."**
 - **O que é essa data:** é a data de **publicação do resultado da contestação no Diário Oficial da União (D.O.U.)**.
 - **É passada ou futura?** ➜ **Normalmente é uma data passada** (o resultado já foi publicado), **mas pode ser futura** quando a publicação foi **programada** para uma data ainda por vir. Essa data vem do **sistema FAP**, que pode agendar a publicação no D.O.U. **Não é um prazo de ação.**
