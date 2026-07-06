@@ -1,0 +1,675 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Manual de Uso — IntellexIA</title>
+<style>
+  :root {
+    --bg: #f6f7f9;
+    --surface: #ffffff;
+    --surface-2: #eef1f6;
+    --ink: #1b2431;
+    --ink-soft: #3f4a5a;
+    --muted: #6a7688;
+    --border: #e2e7ee;
+    --border-strong: #cfd7e2;
+    --accent: #27508a;
+    --accent-2: #3e6fb0;
+    --accent-soft: #e9f0f9;
+    --dou: #9a6c1c;
+    --dou-ink: #78530f;
+    --dou-soft: #fbf3e1;
+    --dou-border: #ecd7a4;
+    --ok: #2f7d53;
+    --ok-soft: #e4f2ea;
+    --bad: #bd3b2f;
+    --bad-soft: #f8e7e4;
+    --warn: #b07d1e;
+    --warn-soft: #f8efdb;
+    --neutral: #64707f;
+    --neutral-soft: #e9edf2;
+    --shadow: 0 1px 2px rgba(20,32,52,.04), 0 8px 24px rgba(20,32,52,.06);
+    --serif: "Charter", "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Palatino, Georgia, serif;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    --mono: ui-monospace, "SFMono-Regular", "Cascadia Code", "Consolas", monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f141c;
+      --surface: #161d27;
+      --surface-2: #1d2632;
+      --ink: #e7ecf3;
+      --ink-soft: #b6c1cf;
+      --muted: #8493a5;
+      --border: #283240;
+      --border-strong: #384454;
+      --accent: #6fa0db;
+      --accent-2: #85b2e6;
+      --accent-soft: #1a2a3d;
+      --dou: #dcac54;
+      --dou-ink: #e7bd6f;
+      --dou-soft: #241d10;
+      --dou-border: #4a3c1d;
+      --ok: #5cb185;
+      --ok-soft: #16281f;
+      --bad: #e0776b;
+      --bad-soft: #2c1a18;
+      --warn: #d9a94e;
+      --warn-soft: #2a2214;
+      --neutral: #9aa6b4;
+      --neutral-soft: #222b37;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="light"] {
+    --bg: #f6f7f9; --surface: #ffffff; --surface-2: #eef1f6; --ink: #1b2431;
+    --ink-soft: #3f4a5a; --muted: #6a7688; --border: #e2e7ee; --border-strong: #cfd7e2;
+    --accent: #27508a; --accent-2: #3e6fb0; --accent-soft: #e9f0f9;
+    --dou: #9a6c1c; --dou-ink: #78530f; --dou-soft: #fbf3e1; --dou-border: #ecd7a4;
+    --ok: #2f7d53; --ok-soft: #e4f2ea; --bad: #bd3b2f; --bad-soft: #f8e7e4;
+    --warn: #b07d1e; --warn-soft: #f8efdb; --neutral: #64707f; --neutral-soft: #e9edf2;
+    --shadow: 0 1px 2px rgba(20,32,52,.04), 0 8px 24px rgba(20,32,52,.06);
+  }
+  :root[data-theme="dark"] {
+    --bg: #0f141c; --surface: #161d27; --surface-2: #1d2632; --ink: #e7ecf3;
+    --ink-soft: #b6c1cf; --muted: #8493a5; --border: #283240; --border-strong: #384454;
+    --accent: #6fa0db; --accent-2: #85b2e6; --accent-soft: #1a2a3d;
+    --dou: #dcac54; --dou-ink: #e7bd6f; --dou-soft: #241d10; --dou-border: #4a3c1d;
+    --ok: #5cb185; --ok-soft: #16281f; --bad: #e0776b; --bad-soft: #2c1a18;
+    --warn: #d9a94e; --warn-soft: #2a2214; --neutral: #9aa6b4; --neutral-soft: #222b37;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    line-height: 1.65;
+    font-size: 16px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .layout {
+    display: grid;
+    grid-template-columns: 268px minmax(0, 1fr);
+    max-width: 1240px;
+    margin: 0 auto;
+    gap: 0;
+  }
+
+  /* ── Sidebar nav ─────────────────────────────── */
+  .sidebar {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    height: 100vh;
+    overflow-y: auto;
+    padding: 28px 20px 40px 28px;
+    border-right: 1px solid var(--border);
+  }
+  .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+  .brand-mark {
+    width: 30px; height: 30px; border-radius: 8px; flex: none;
+    background: linear-gradient(135deg, var(--accent), var(--accent-2));
+    display: grid; place-items: center; color: #fff; font-weight: 700;
+    font-family: var(--serif); font-size: 17px;
+  }
+  .brand-name { font-weight: 650; letter-spacing: -.01em; font-size: 15px; }
+  .brand-sub { color: var(--muted); font-size: 12px; margin: 2px 0 22px 40px; }
+  .nav-group { margin-bottom: 20px; }
+  .nav-group > .nav-title {
+    font-size: 11px; text-transform: uppercase; letter-spacing: .09em;
+    color: var(--muted); font-weight: 650; margin: 0 0 8px 8px;
+  }
+  .nav a {
+    display: block; padding: 6px 10px; border-radius: 7px;
+    color: var(--ink-soft); text-decoration: none; font-size: 13.5px;
+    border-left: 2px solid transparent; transition: background .15s, color .15s;
+  }
+  .nav a:hover { background: var(--surface-2); color: var(--ink); }
+  .nav a.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  .nav a.sub { margin-left: 10px; font-size: 12.5px; padding: 4px 10px; }
+
+  /* ── Main column ─────────────────────────────── */
+  main { padding: 44px 52px 100px; min-width: 0; }
+  .eyebrow {
+    text-transform: uppercase; letter-spacing: .12em; font-size: 12px;
+    font-weight: 650; color: var(--accent);
+  }
+  h1 {
+    font-family: var(--serif); font-weight: 650; letter-spacing: -.02em;
+    font-size: clamp(2rem, 4vw, 2.9rem); line-height: 1.08; margin: 10px 0 14px;
+    text-wrap: balance;
+  }
+  .lede { font-size: 1.12rem; color: var(--ink-soft); max-width: 62ch; margin: 0 0 8px; }
+  h2 {
+    font-family: var(--serif); font-weight: 620; letter-spacing: -.015em;
+    font-size: 1.75rem; margin: 8px 0 6px; text-wrap: balance;
+  }
+  h3 {
+    font-weight: 640; font-size: 1.16rem; letter-spacing: -.01em;
+    margin: 30px 0 10px; color: var(--ink);
+  }
+  h4 { font-weight: 640; font-size: .98rem; margin: 22px 0 8px; color: var(--ink); }
+  p { max-width: 68ch; }
+  section > p, section > .callout { margin-block: 14px; }
+  a.inline { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+
+  .module {
+    scroll-margin-top: 20px;
+    padding-top: 46px;
+    margin-top: 42px;
+    border-top: 1px solid var(--border);
+  }
+  .module:first-of-type { border-top: 0; margin-top: 28px; padding-top: 8px; }
+  .module-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  .module-num {
+    font-family: var(--serif); font-size: 1rem; color: var(--muted);
+    font-variant-numeric: tabular-nums;
+  }
+  .sub { scroll-margin-top: 20px; }
+
+  /* ── Tables ──────────────────────────────────── */
+  .table-wrap {
+    overflow-x: auto; border: 1px solid var(--border); border-radius: 12px;
+    margin: 16px 0 8px; box-shadow: var(--shadow); background: var(--surface);
+  }
+  table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 520px; }
+  thead th {
+    background: var(--surface-2); text-align: left; font-weight: 640;
+    font-size: 11.5px; text-transform: uppercase; letter-spacing: .05em;
+    color: var(--muted); padding: 11px 16px; white-space: nowrap;
+    border-bottom: 1px solid var(--border);
+  }
+  tbody td { padding: 12px 16px; border-top: 1px solid var(--border); vertical-align: top; color: var(--ink-soft); }
+  tbody tr:first-child td { border-top: 0; }
+  tbody td:first-child { color: var(--ink); font-weight: 600; white-space: nowrap; }
+  tbody tr:hover td { background: color-mix(in srgb, var(--surface-2) 55%, transparent); }
+
+  /* ── Origin tags ─────────────────────────────── */
+  .tag {
+    display: inline-block; font-family: var(--mono); font-size: 11px;
+    padding: 2px 8px; border-radius: 999px; white-space: nowrap; font-weight: 500;
+    border: 1px solid transparent;
+  }
+  .tag.fap { background: var(--accent-soft); color: var(--accent); border-color: color-mix(in srgb, var(--accent) 22%, transparent); }
+  .tag.ia { background: #efe9fb; color: #6a4bbc; border-color: #d9cdf3; }
+  .tag.sys { background: var(--neutral-soft); color: var(--neutral); border-color: var(--border-strong); }
+  .tag.rel { background: var(--dou-soft); color: var(--dou-ink); border-color: var(--dou-border); }
+  @media (prefers-color-scheme: dark) {
+    .tag.ia { background: #221b38; color: #b69bef; border-color: #392c5e; }
+  }
+  :root[data-theme="dark"] .tag.ia { background: #221b38; color: #b69bef; border-color: #392c5e; }
+
+  /* ── Status pills ────────────────────────────── */
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px;
+    padding: 3px 10px 3px 8px; border-radius: 999px; font-weight: 600;
+    border: 1px solid transparent;
+  }
+  .pill::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
+  .pill.ok { background: var(--ok-soft); color: var(--ok); }
+  .pill.bad { background: var(--bad-soft); color: var(--bad); }
+  .pill.warn { background: var(--warn-soft); color: var(--warn); }
+  .pill.neutral { background: var(--neutral-soft); color: var(--neutral); }
+  .pills-row { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0; }
+
+  /* ── Callouts ────────────────────────────────── */
+  .callout {
+    border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px;
+    background: var(--surface); box-shadow: var(--shadow); max-width: 72ch;
+  }
+  .callout .c-title { font-weight: 660; margin: 0 0 4px; display: flex; align-items: center; gap: 8px; }
+  .callout p { margin: 6px 0 0; max-width: none; }
+  .callout.dou {
+    border-color: var(--dou-border);
+    background: var(--dou-soft);
+    border-left: 4px solid var(--dou);
+  }
+  .callout.dou .c-title { color: var(--dou-ink); }
+  .callout.warn-note { border-left: 4px solid var(--warn); }
+
+  /* ── Featured D.O.U. answer ──────────────────── */
+  .feature {
+    margin: 30px 0 8px; border-radius: 16px; overflow: hidden;
+    border: 1px solid var(--dou-border); box-shadow: var(--shadow);
+  }
+  .feature-head {
+    background: linear-gradient(180deg, var(--dou-soft), color-mix(in srgb, var(--dou-soft) 60%, var(--surface)));
+    padding: 20px 24px 18px; border-bottom: 1px solid var(--dou-border);
+  }
+  .feature-head .eyebrow { color: var(--dou); }
+  .feature-head h3 {
+    font-family: var(--serif); font-size: 1.5rem; margin: 6px 0 0; color: var(--ink);
+    letter-spacing: -.015em;
+  }
+  .feature-body { padding: 20px 24px; background: var(--surface); }
+  .feature-body p { margin: 0 0 12px; }
+  .qa { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); margin-top: 6px; }
+  .qa-item { background: var(--surface-2); border-radius: 10px; padding: 13px 15px; }
+  .qa-item .q { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 650; margin: 0 0 4px; }
+  .qa-item .a { margin: 0; font-size: 14.5px; color: var(--ink); }
+  .qa-item .a strong { color: var(--dou-ink); }
+
+  /* ── Date legend chips ───────────────────────── */
+  .datechip {
+    display: inline-flex; align-items: center; gap: 6px; font-weight: 600; font-size: 13px;
+  }
+  .dot { width: 8px; height: 8px; border-radius: 50%; flex: none; }
+  .dot.past { background: var(--accent); }
+  .dot.future { background: var(--warn); }
+  .dot.dou { background: var(--dou); }
+
+  /* ── Tabs note strip (module dashboard) ──────── */
+  .abas { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); margin: 18px 0; }
+  .aba {
+    border: 1px solid var(--border); border-radius: 12px; padding: 15px 16px;
+    background: var(--surface); box-shadow: var(--shadow);
+  }
+  .aba h4 { margin: 0 0 6px; font-size: .96rem; display: flex; align-items: center; gap: 8px; }
+  .aba .col-label { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+  .aba p { margin: 6px 0 0; font-size: 13.5px; max-width: none; color: var(--ink-soft); }
+  .aba.star { border-color: var(--dou-border); background: var(--dou-soft); }
+  .aba.star h4 { color: var(--dou-ink); }
+
+  .legend {
+    display: flex; gap: 20px; flex-wrap: wrap; padding: 14px 16px; margin: 14px 0;
+    background: var(--surface-2); border-radius: 10px; font-size: 13.5px;
+  }
+
+  /* ── Topbar (mobile) ─────────────────────────── */
+  .topbar {
+    display: none; position: sticky; top: 0; z-index: 20;
+    align-items: center; justify-content: space-between; gap: 12px;
+    padding: 12px 18px; background: color-mix(in srgb, var(--surface) 88%, transparent);
+    backdrop-filter: blur(8px); border-bottom: 1px solid var(--border);
+  }
+  .theme-toggle {
+    margin-left: auto; margin-top: 20px; display: inline-flex; align-items: center; gap: 8px;
+    background: var(--surface); border: 1px solid var(--border); color: var(--ink-soft);
+    border-radius: 999px; padding: 6px 14px; font: inherit; font-size: 13px; cursor: pointer;
+  }
+  .theme-toggle:hover { border-color: var(--border-strong); color: var(--ink); }
+  .menu-btn {
+    display: none; background: var(--surface); border: 1px solid var(--border);
+    border-radius: 9px; padding: 8px 12px; font: inherit; color: var(--ink); cursor: pointer;
+  }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+
+  @media (max-width: 900px) {
+    .layout { grid-template-columns: 1fr; }
+    .topbar { display: flex; }
+    .menu-btn { display: inline-block; }
+    .sidebar {
+      position: fixed; inset: 0 auto 0 0; z-index: 30; width: 280px; height: 100vh;
+      background: var(--surface); transform: translateX(-100%); transition: transform .22s ease;
+      box-shadow: var(--shadow);
+    }
+    .sidebar.open { transform: translateX(0); }
+    .scrim { position: fixed; inset: 0; background: rgba(10,15,22,.45); z-index: 25; display: none; }
+    .scrim.show { display: block; }
+    main { padding: 26px 20px 80px; }
+  }
+  @media (min-width: 901px) { .topbar { display: none; } }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; scroll-behavior: auto !important; } }
+  html { scroll-behavior: smooth; }
+</style>
+
+</head>
+<body>
+<div class="topbar">
+  <button class="menu-btn" id="menuBtn" aria-label="Abrir menu">☰ Índice</button>
+  <strong style="font-size:14px">Manual IntellexIA</strong>
+  <button class="theme-toggle" id="themeToggleTop" style="margin:0" aria-label="Alternar tema">Tema</button>
+</div>
+
+<div class="scrim" id="scrim"></div>
+
+<div class="layout">
+  <aside class="sidebar" id="sidebar">
+    <div class="brand">
+      <div class="brand-mark">I</div>
+      <div class="brand-name">IntellexIA</div>
+    </div>
+    <div class="brand-sub">Manual de uso · painéis</div>
+
+    <nav class="nav">
+      <div class="nav-group">
+        <p class="nav-title">Começar aqui</p>
+        <a href="#intro">Visão geral</a>
+      </div>
+      <div class="nav-group">
+        <p class="nav-title">Módulos</p>
+        <a href="#dashboard">1 · Dashboard Principal</a>
+        <a href="#dash-abas" class="sub">Painel de recentes (3 abas)</a>
+        <a href="#painel-fap">2 · Painel FAP</a>
+        <a href="#fap-contestacoes" class="sub">Tela de Contestações</a>
+        <a href="#fap-datas" class="sub">Datas: passado × futuro</a>
+        <a href="#contestacoes">3 · Painel de Contestações</a>
+        <a href="#cont-beneficios" class="sub">Benefícios</a>
+        <a href="#cont-ia" class="sub">Categoria FAP (IA)</a>
+      </div>
+      <div class="nav-group">
+        <p class="nav-title">Apoio</p>
+        <a href="#glossario">Glossário</a>
+      </div>
+    </nav>
+    <button class="theme-toggle" id="themeToggle" aria-label="Alternar tema claro/escuro">◐ Tema claro/escuro</button>
+  </aside>
+
+  <main>
+    <header id="intro" class="module" style="border:0;margin:0;padding:0">
+      <p class="eyebrow">Documentação funcional</p>
+      <h1>Manual de uso dos painéis do IntellexIA</h1>
+      <p class="lede">O que cada tela mostra, o que cada campo significa e — principalmente — <strong>de onde vem cada dado</strong>. Escrito para quem usa e valida o sistema, sem jargão técnico.</p>
+      <div class="legend" style="margin-top:18px">
+        <span><strong>Como ler a origem dos campos:</strong></span>
+        <span class="datechip"><span class="tag fap">FAP Web</span> vem do portal oficial</span>
+        <span class="datechip"><span class="tag rel">Relatório</span> extraído do PDF de julgamento</span>
+        <span class="datechip"><span class="tag ia">IA</span> gerado por inteligência artificial</span>
+        <span class="datechip"><span class="tag sys">Sistema</span> calculado/controlado pelo IntellexIA</span>
+      </div>
+    </header>
+
+    <!-- ══════════ MÓDULO 1 — DASHBOARD ══════════ -->
+    <section class="module" id="dashboard">
+      <div class="module-head">
+        <span class="module-num">Módulo 01</span>
+      </div>
+      <h2>Dashboard Principal</h2>
+      <p class="lede" style="font-size:1.05rem">A visão geral do escritório: reúne indicadores do Painel FAP, do Centro de Contestações, dos processos judiciais e da base de conhecimento.</p>
+
+      <div class="callout" style="border-left:4px solid var(--accent)">
+        <p class="c-title">Duas regras que valem para a tela inteira</p>
+        <p><strong>Tudo é do seu escritório.</strong> Você nunca vê dados de outro escritório. E se algo falhar ao carregar, os números aparecem <strong>zerados</strong> com uma mensagem de erro — zerado aqui significa “não consegui carregar”, não “não existe”.</p>
+      </div>
+
+      <h3>Painel FAP — cartões e gráficos</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Campo</th><th>O que significa</th><th>Origem</th></tr></thead>
+          <tbody>
+            <tr><td>Total de Contestações</td><td>Quantas contestações foram baixadas do FAP Web para o escritório.</td><td><span class="tag fap">FAP Web</span></td></tr>
+            <tr><td>Com PDF Baixado</td><td>Quantas já tiveram o arquivo PDF salvo no sistema. O rodapé mostra o % do total.</td><td><span class="tag sys">Sistema</span></td></tr>
+            <tr><td>Sem PDF</td><td>Quantas ainda não tiveram o PDF baixado. É simplesmente <em>Total − Com PDF</em>.</td><td><span class="tag sys">Cálculo</span></td></tr>
+            <tr><td>Vigências Cadastradas</td><td>Quantos anos de vigência FAP distintos existem. <strong>Mostra no máximo 5</strong> (os mais recentes).</td><td><span class="tag fap">FAP Web</span></td></tr>
+            <tr><td>Gráfico “por Situação”</td><td>Distribuição das contestações pela situação. Sem situação → “Indefinida”.</td><td><span class="tag fap">FAP Web</span></td></tr>
+            <tr><td>Gráfico “por Deferimento”</td><td>Deferido / Indeferido / Parcial / Sem julgamento. Ainda não julgadas caem em “Sem julgamento”.</td><td><span class="tag fap">FAP Web</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout warn-note" style="box-shadow:none;margin-top:12px">
+        <p style="margin:0"><strong>Atenção ao limite de 5 anos:</strong> os cartões e gráficos “por Ano de Vigência” mostram apenas os <strong>5 anos mais recentes</strong>. Se houver mais anos, o número fica limitado a 5.</p>
+      </div>
+
+      <div class="sub" id="dash-abas">
+        <h3>Painel de contestações recentes — as 3 abas ⭐</h3>
+        <p>Este painel tem três abas e <strong>cada uma mostra uma data diferente</strong>. Sempre confira o título da coluna de data — é a maior fonte de confusão.</p>
+        <div class="abas">
+          <div class="aba star">
+            <h4>Publicadas no D.O.U.</h4>
+            <span class="col-label">coluna: “Publicação D.O.U.”</span>
+            <p>Data de publicação do resultado no Diário Oficial da União. Vem do sistema FAP e pode ser uma data <strong>já ocorrida ou programada</strong> (futura). <em>(aba padrão)</em></p>
+          </div>
+          <div class="aba">
+            <h4>Cadastradas</h4>
+            <span class="col-label">coluna: “Cadastrada em”</span>
+            <p>Quando o registro <strong>entrou no IntellexIA</strong> (na sincronização). Controle interno — não tem relação com o D.O.U.</p>
+          </div>
+          <div class="aba">
+            <h4>Atualizadas</h4>
+            <span class="col-label">coluna: “Atualizada em” + “Alterou”</span>
+            <p>Última vez que uma sincronização detectou <strong>mudança real</strong>. A coluna “Alterou” mostra o que mudou.</p>
+          </div>
+        </div>
+        <p>Colunas comuns às três abas: Empresa/CNPJ, Protocolo, Instância, Situação, Vigência e um botão <strong>Ações</strong> que leva ao Painel FAP já filtrado.</p>
+      </div>
+
+      <h3>Centro de Contestações e demais seções</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Cartão</th><th>O que conta</th><th>Origem</th></tr></thead>
+          <tbody>
+            <tr><td>Total de Benefícios</td><td>Benefícios contestados no escritório.</td><td><span class="tag rel">Relatório</span></td></tr>
+            <tr><td>Classificados por IA</td><td>Benefícios que já receberam a Categoria FAP. Rodapé com o % classificado.</td><td><span class="tag ia">IA</span></td></tr>
+            <tr><td>1ª Instância — Deferidos / Indeferidos</td><td>Benefícios conforme a decisão de 1ª instância.</td><td><span class="tag rel">Relatório</span></td></tr>
+            <tr><td>CATs · Massas · Vínculos · Rotatividade</td><td>Contagem de cada categoria contestada.</td><td><span class="tag rel">Relatório</span></td></tr>
+            <tr><td>Painel Judicial (Ativos/Suspensos/Encerrados)</td><td>Processos judiciais por status.</td><td><span class="tag sys">Sistema</span></td></tr>
+            <tr><td>Base de Conhecimento</td><td>Documentos, categorias e tags únicas ativas.</td><td><span class="tag sys">Sistema</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ══════════ MÓDULO 2 — PAINEL FAP ══════════ -->
+    <section class="module" id="painel-fap">
+      <span class="module-num">Módulo 02</span>
+      <h2>Painel FAP</h2>
+      <p class="lede" style="font-size:1.05rem">A ponte entre o IntellexIA e o portal FAP Web (Dataprev): sincroniza empresas, procurações e contestações, baixa os PDFs e exibe tudo com filtros e exportação.</p>
+
+      <div class="callout" style="border-left:4px solid var(--accent)">
+        <p class="c-title">As telas mostram o que já foi sincronizado</p>
+        <p>O Painel FAP lê do banco do IntellexIA, não do portal ao vivo (exceto a checagem de sessão e o download de um PDF). Se um dado novo apareceu no portal e você <strong>ainda não sincronizou</strong>, ele não estará aqui.</p>
+      </div>
+
+      <h3>Sincronização automática (rotina de madrugada)</h3>
+      <p>O Painel FAP <strong>se mantém atualizado sozinho</strong>. Todas as madrugadas, uma rotina automática roda no servidor e sincroniza o sistema com o portal FAP Web — sem ninguém clicar em nada. Quando o time chega de manhã, os dados já estão atualizados. A rotina executa nesta ordem:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Passo</th><th>O que faz</th></tr></thead>
+          <tbody>
+            <tr><td>1 · Sessão FAP</td><td>Confere se o acesso ao portal está válido. Se as credenciais expiraram, a rotina <strong>para aqui</strong> e nada é sincronizado.</td></tr>
+            <tr><td>2 · Empresas</td><td>Traz as novas e atualiza as existentes. Remove as que saíram do portal — <strong>exceto</strong> as que já têm contestações (preserva o histórico).</td></tr>
+            <tr><td>3 · Procurações</td><td>Cria as novas e atualiza as existentes.</td></tr>
+            <tr><td>4 · Contestações</td><td>Varre todas as empresas, ano a ano (por padrão de 2010 ao ano atual). Toda mudança fica registrada no histórico (aba “Atualizadas”).</td></tr>
+            <tr><td>5 · PDFs</td><td>Baixa os arquivos das contestações que ainda não têm PDF salvo (pula os que já existem).</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="callout" style="border-left:4px solid var(--accent)">
+        <p class="c-title">O que esperar no dia a dia</p>
+        <p>Você <strong>não precisa sincronizar manualmente</strong> — a rotina noturna já cuida disso. A <strong>Tela de Sincronização</strong> (abaixo) serve para casos pontuais: rodar uma sincronização na hora ou <strong>atualizar as credenciais</strong> quando a sessão do portal expira — que é, na prática, a única coisa capaz de travar a rotina automática.</p>
+      </div>
+
+      <h3>As quatro telas</h3>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Tela</th><th>Para que serve</th></tr></thead>
+          <tbody>
+            <tr><td>Sincronização</td><td>Colar os dados de sessão do portal e sincronizar empresas, procurações e contestações (e baixar PDFs em lote).</td></tr>
+            <tr><td>Empresas</td><td>Lista as empresas com procuração: nome, CNPJ, tipo de procuração, nº de contestações e última sincronização.</td></tr>
+            <tr><td>Contestações</td><td>Tela principal — detalhada abaixo.</td></tr>
+            <tr><td>Procurações</td><td>Procurações eletrônicas, com alerta para as que “vencem em 30 dias”.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="sub" id="fap-contestacoes">
+        <h3>Tela de Contestações</h3>
+        <p><strong>Só mostra dados quando há pelo menos um filtro ativo</strong> — sem filtro, aparece vazia (para não carregar tudo de uma vez). A tabela é <strong>agrupada por Vigência × Estabelecimento</strong>, e cada linha separa as contestações em quatro quadrantes:</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Quadrante</th><th>O que reúne</th></tr></thead>
+            <tbody>
+              <tr><td>1ª Instância — Em Andamento</td><td>Contestação de 1ª instância ainda em tramitação.</td></tr>
+              <tr><td>1ª Instância — Transmitidas</td><td>Contestação de 1ª instância já transmitida/concluída.</td></tr>
+              <tr><td>2ª Instância — Em Andamento</td><td>Recurso (2ª instância) ainda em tramitação.</td></tr>
+              <tr><td>2ª Instância — Transmitidos</td><td>Recurso (2ª instância) já transmitido/concluído.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout" style="box-shadow:none;margin-top:12px">
+          <p style="margin:0"><strong>Como o sistema decide “Em Andamento” vs “Transmitida”:</strong> ele lê o texto da situação vindo do portal. Situações que falam em “andamento” ou “prazo” (e não em “transmitido”, “resultado” ou “divulgado”) são tratadas como <strong>em andamento</strong>.</p>
+        </div>
+        <p>Dentro de cada contestação você vê: <strong>Protocolo</strong>, <strong>Situação</strong>, <strong>Data D.O.U.</strong> (ícone de jornal), <strong>Deferimento</strong> (quando já houve), um selo <strong>“Local”</strong> se o PDF está salvo, e ações para visualizar, baixar, ver histórico e detalhes.</p>
+      </div>
+
+      <div class="sub" id="fap-datas">
+        <h3>As datas de uma contestação — passado × futuro</h3>
+        <p>O modal de <strong>Detalhes</strong> mostra todas as datas do portal. Aqui fica clara a diferença entre o que já aconteceu e o que é prazo:</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Campo</th><th>O que é</th><th>Quando</th></tr></thead>
+            <tbody>
+              <tr><td>Data Inicial</td><td>Início da contestação.</td><td><span class="datechip"><span class="dot past"></span>Passado</span></td></tr>
+              <tr><td>Data Transmissão</td><td>Quando a contestação foi transmitida.</td><td><span class="datechip"><span class="dot past"></span>Passado</span></td></tr>
+              <tr><td>Publicação D.O.U.</td><td>Publicação do resultado no Diário Oficial. Vem do sistema FAP.</td><td><span class="datechip"><span class="dot dou"></span>Passado ou futuro (programável)</span></td></tr>
+              <tr><td>Fim Prazo 1ª Instância</td><td>Prazo final para agir na 1ª instância.</td><td><span class="datechip"><span class="dot future"></span>Futuro</span></td></tr>
+              <tr><td>Fim Prazo 2ª Instância</td><td>Prazo final para agir na 2ª instância.</td><td><span class="datechip"><span class="dot future"></span>Futuro</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="callout dou">
+          <p class="c-title">◆ A Data D.O.U. em uma frase</p>
+          <p>É a data de <strong>publicação do resultado</strong> no Diário Oficial da União. Vem do <strong>sistema FAP</strong> e geralmente já ocorreu, mas <strong>pode ser futura</strong> quando a publicação foi programada para uma data ainda por vir. Não é um prazo de ação.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════════ MÓDULO 3 — CONTESTAÇÕES ══════════ -->
+    <section class="module" id="contestacoes">
+      <span class="module-num">Módulo 03</span>
+      <h2>Painel de Contestações</h2>
+      <p class="lede" style="font-size:1.05rem">O Centro de Contestações organiza tudo que foi contestado no FAP e já teve relatório de julgamento analisado.</p>
+
+      <div class="callout rel-note" style="border-left:4px solid var(--dou)">
+        <p class="c-title">De onde vêm os dados deste módulo</p>
+        <p>De <strong>PDFs de “Relatório de Julgamento de Contestação do FAP”</strong>. Eles são enviados na tela de Relatórios (ou trazidos pela Importação Automática) e uma <strong>IA extrai</strong> deles os benefícios, CATs, massas salariais, vínculos e taxas. O que você vê nas listas foi <strong>lido automaticamente dos relatórios</strong> — e pode ser editado à mão depois.</p>
+      </div>
+
+      <h3>Como o status funciona (em todas as telas)</h3>
+      <p>Cada item tem status em <strong>duas instâncias</strong>. O sistema padroniza os textos dos relatórios em quatro situações:</p>
+      <div class="pills-row">
+        <span class="pill ok">Deferido — contestação aceita</span>
+        <span class="pill bad">Indeferido — negada</span>
+        <span class="pill warn">Em análise — ainda em avaliação</span>
+        <span class="pill neutral">Pendente — sem decisão registrada</span>
+      </div>
+      <p>O <strong>“Status geral”</strong> prioriza a 2ª instância; se não houver, usa a 1ª; se não houver nenhuma, fica <strong>Pendente</strong>. Abaixo do status padronizado, o sistema mostra o <strong>texto original do relatório</strong> para conferência.</p>
+
+      <div class="sub" id="cont-beneficios">
+        <h3>Tela de Benefícios</h3>
+        <p>A tela principal, com dois conjuntos de cartões: <strong>Painel geral</strong> (toda a base) e <strong>Painel filtrado</strong> (recalcula conforme os filtros). Colunas da tabela:</p>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Coluna</th><th>O que significa</th><th>Origem</th></tr></thead>
+            <tbody>
+              <tr><td>Número / NIT / Tipo</td><td>Nº do benefício, NIT do segurado e tipo (B91, B94…).</td><td><span class="tag rel">Relatório</span></td></tr>
+              <tr><td>Segurado</td><td>Nome, CPF e data de nascimento.</td><td><span class="tag rel">Relatório</span></td></tr>
+              <tr><td>CNPJ Empregador</td><td>CNPJ e nome da empresa empregadora.</td><td><span class="tag rel">Relatório</span></td></tr>
+              <tr><td>Status 1ª / 2ª instância</td><td>Deferido/Indeferido/Em análise/Pendente + o texto original abaixo.</td><td><span class="tag rel">Relatório</span></td></tr>
+              <tr><td>Vigência FAP</td><td>Ano(s) de vigência FAP afetados pelo benefício.</td><td><span class="tag rel">Relatório</span></td></tr>
+              <tr><td>Categoria FAP</td><td>Tópico da contestação atribuído pela IA. Vazio → botão “Classificar”; preenchido → “Reclassificar”.</td><td><span class="tag ia">IA</span></td></tr>
+              <tr><td>DIB / DCB</td><td>Data de Início e de Cessação do Benefício. Sempre datas passadas — não são prazos.</td><td><span class="tag rel">Relatório</span></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Um mesmo benefício pode ter <strong>várias decisões</strong> (ex.: uma para a CAT e outra para “nexo técnico sem CAT”) — visíveis no modal “Decisões do Benefício”.</p>
+      </div>
+
+      <h3>Vigências, CATs, Massa Salarial, Vínculos e Rotatividade</h3>
+      <p>A tela de <strong>Vigências</strong> agrupa as contestações por CNPJ + ano e vincula ao cliente, com contagens de cada categoria e um botão para <em>“marcar 1ª instância como deferido”</em> em lote (quando o caso já subiu para a 2ª instância). As outras quatro telas têm a mesma estrutura (status, filtros, edição, Excel); mudam só as colunas específicas:</p>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Tela</th><th>Colunas específicas</th></tr></thead>
+          <tbody>
+            <tr><td>CATs</td><td>Nº da CAT, empregador, NIT, data do acidente/registro, bloqueio.</td></tr>
+            <tr><td>Massa Salarial</td><td>Competência (mês/ano), total de remunerações, valor solicitado na 1ª instância.</td></tr>
+            <tr><td>Nº Médio de Vínculos</td><td>Competência, quantidade original, quantidade solicitada na 1ª instância.</td></tr>
+            <tr><td>Taxa de Rotatividade</td><td>Ano, taxa (%), admissões (edição também tem rescisões e vínculos no início do ano).</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="sub" id="cont-ia">
+        <h3>A Categoria FAP e a classificação por IA</h3>
+        <p>A coluna <strong>Categoria FAP</strong> é preenchida por uma IA classificadora, que escolhe entre uma lista fechada de cerca de 20 tópicos (ex.: “Erro de Estabelecimento”, “Pré-FAP”, “Nexo Afastado”, “Restabelecimento de Benefício – B91 60 dias”).</p>
+        <div class="callout ia-note" style="border-left:4px solid #6a4bbc">
+          <p class="c-title">Regra de confiança: 80%</p>
+          <p>A IA <strong>só atribui</strong> uma categoria quando tem confiança de <strong>pelo menos 80%</strong>. Abaixo disso, o benefício fica <strong>sem categoria</strong> — para não classificar errado. Um mesmo benefício pode receber mais de uma categoria, e a classificação pode ser refeita com “Reclassificar”.</p>
+        </div>
+        <p style="color:var(--muted);font-size:14px">Para administradores: o prompt da IA, o material de referência jurídica e o modelo usado são configuráveis por escritório, com histórico de versões.</p>
+      </div>
+    </section>
+
+    <!-- ══════════ GLOSSÁRIO ══════════ -->
+    <section class="module" id="glossario">
+      <span class="module-num">Apoio</span>
+      <h2>Glossário</h2>
+      <div class="table-wrap">
+        <table>
+          <thead><tr><th>Termo</th><th>Significado</th></tr></thead>
+          <tbody>
+            <tr><td>FAP</td><td>Fator Acidentário de Prevenção — índice que ajusta a alíquota previdenciária da empresa.</td></tr>
+            <tr><td>D.O.U.</td><td>Diário Oficial da União — onde o resultado das contestações é publicado.</td></tr>
+            <tr><td>Vigência</td><td>Ano de referência do FAP contestado.</td></tr>
+            <tr><td>1ª / 2ª Instância</td><td>Fases da contestação. 2ª instância = recurso.</td></tr>
+            <tr><td>Deferimento</td><td>Resultado do julgamento (deferido, indeferido, parcial).</td></tr>
+            <tr><td>Benefício B91</td><td>Auxílio-doença acidentário.</td></tr>
+            <tr><td>Benefício B94</td><td>Auxílio-acidente.</td></tr>
+            <tr><td>NIT</td><td>Número de Identificação do Trabalhador.</td></tr>
+            <tr><td>CAT</td><td>Comunicação de Acidente de Trabalho.</td></tr>
+            <tr><td>DIB / DCB</td><td>Data de Início / de Cessação do Benefício.</td></tr>
+            <tr><td>Procuração</td><td>Autorização eletrônica para o escritório atuar em nome da empresa.</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p style="color:var(--muted);font-size:13.5px;margin-top:24px">Versões em Markdown deste manual estão em <code>docs/MANUAL_DASHBOARD.md</code>, <code>docs/MANUAL_PAINEL_FAP.md</code> e <code>docs/MANUAL_PAINEL_CONTESTACOES.md</code>.</p>
+    </section>
+  </main>
+</div>
+
+<script>
+  (function () {
+    var root = document.documentElement;
+    function apply(t) { root.setAttribute("data-theme", t); }
+    function current() {
+      var set = root.getAttribute("data-theme");
+      if (set) return set;
+      return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+    }
+    function toggle() { apply(current() === "dark" ? "light" : "dark"); }
+    var t1 = document.getElementById("themeToggle");
+    var t2 = document.getElementById("themeToggleTop");
+    if (t1) t1.addEventListener("click", toggle);
+    if (t2) t2.addEventListener("click", toggle);
+
+    // Mobile menu
+    var sidebar = document.getElementById("sidebar");
+    var scrim = document.getElementById("scrim");
+    var btn = document.getElementById("menuBtn");
+    function closeMenu() { sidebar.classList.remove("open"); scrim.classList.remove("show"); }
+    if (btn) btn.addEventListener("click", function () {
+      sidebar.classList.toggle("open"); scrim.classList.toggle("show");
+    });
+    if (scrim) scrim.addEventListener("click", closeMenu);
+    sidebar.querySelectorAll("a").forEach(function (a) {
+      a.addEventListener("click", function () { if (window.innerWidth <= 900) closeMenu(); });
+    });
+
+    // Scrollspy
+    var links = Array.prototype.slice.call(sidebar.querySelectorAll(".nav a"));
+    var map = {};
+    links.forEach(function (a) {
+      var id = a.getAttribute("href").slice(1);
+      var el = document.getElementById(id);
+      if (el) map[id] = a;
+    });
+    var targets = Object.keys(map).map(function (id) { return document.getElementById(id); });
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) {
+          links.forEach(function (l) { l.classList.remove("active"); });
+          var a = map[e.target.id];
+          if (a) a.classList.add("active");
+        }
+      });
+    }, { rootMargin: "-10% 0px -80% 0px", threshold: 0 });
+    targets.forEach(function (t) { obs.observe(t); });
+  })();
+</script>
+</body>
+</html>
