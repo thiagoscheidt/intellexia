@@ -117,7 +117,7 @@ intellexia/
 
 ### Blueprints Registrados
 
-`auth`, `dashboard`, `cases`, `clients`, `lawyers`, `courts`, `benefits`, `documents`, `petitions`, `assistant`, `tools`, `settings`, `knowledge_base`, `admin_users`, `process_panel`, `disputes_center`, `case_comments`, `fap_reasons`, `fap_panel`, `fap_review`. Cada um em `app/blueprints/<nome>.py`, expondo `<nome>_bp`.
+`auth`, `dashboard`, `cases`, `clients`, `lawyers`, `courts`, `benefits`, `documents`, `petitions`, `assistant`, `tools`, `settings`, `knowledge_base`, `admin_users`, `process_panel`, `disputes_center`, `case_comments`, `fap_reasons`, `fap_panel`, `fap_review`, `docs`. Cada um em `app/blueprints/<nome>.py`, expondo `<nome>_bp`.
 
 **Função de cada blueprint:**
 
@@ -142,6 +142,19 @@ intellexia/
 | `case_comments` | — | Threads de comentários em casos |
 | `settings` | — | Preferências e integrações por usuário |
 | `admin_users` | — | Gerenciamento de usuários (admin-only) |
+| `docs` | `/docs` | Manual de uso dos painéis (renderizado dos markdowns) + assistente "pergunte ao manual" |
+
+### Documentação do usuário (Manual + Assistente "pergunte ao manual")
+
+O manual de uso dos painéis tem **fonte única em Markdown**: `docs/MANUAL_DASHBOARD.md`, `docs/MANUAL_PAINEL_FAP.md`, `docs/MANUAL_PAINEL_CONTESTACOES.md`. **Edite apenas esses `.md`** — a página `/docs/manuais` é renderizada em runtime a partir deles (cache por mtime). Não há HTML a gerar/manter manualmente; não existe mais `docs/manual_paineis.html`.
+
+- **Pipeline de render**: `app/services/manual_renderer.py` (markdown-it-py + BeautifulSoup) → template `templates/docs/manuais.html`. Rota em `app/blueprints/docs.py`.
+- **Convenções de realce no markdown** (interpretadas pelo renderer):
+  - Avisos coloridos: citação (`>`) com marcador na 1ª linha — `> [!DOU]` (dourado/Diário Oficial), `> [!ALERTA]` (âmbar), `> [!INFO]` (azul), `> [!IA]` (roxo); `>` sem marcador = callout neutro.
+  - Pílulas de origem: numa célula de tabela, escrever só o rótulo `FAP Web` / `IA` / `Sistema` / `Relatório` / `Cálculo` (ou lista separada por vírgula) vira pílula colorida.
+  - Índice lateral: gerado automaticamente dos títulos `##`.
+- **Assistente** (`ManualAssistantService` em `app/services/`, endpoint `POST /docs/chat`): chat flutuante na própria página, responde **só com base nos manuais** (lidos inteiros no prompt, sem RAG), modelo `DEFAULT_MODEL_MINI` (override via env `MANUAL_ASSISTANT_MODEL`). Lê os mesmos `.md`, então página e chat nunca dessincronizam.
+- **Acesso**: `/docs/*` exige login, mas o prefixo `docs.` não está mapeado a módulo de permissão — qualquer usuário logado acessa.
 
 ### Multi-Tenancy (CRÍTICO)
 
