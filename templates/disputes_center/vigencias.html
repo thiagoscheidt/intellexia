@@ -668,8 +668,14 @@ icon='bi bi-diagram-3') %}
                     </button>
                 </form>
                 {% endif %}
-                <span class="badge text-bg-light border text-dark px-3 py-2">{{ grouped_clients|length }} grupo{{ 's' if
-                    grouped_clients|length != 1 else '' }}</span>
+                <span class="badge text-bg-light border text-dark px-3 py-2">
+                    {% if pagination and pagination.total_groups > pagination.per_page %}
+                    {{ pagination.start_index }}–{{ pagination.end_index }} de {{ pagination.total_groups }} grupo{{ 's'
+                    if pagination.total_groups != 1 else '' }}
+                    {% else %}
+                    {{ pagination.total_groups if pagination else grouped_clients|length }} grupo{{ 's' if (pagination.total_groups if pagination else grouped_clients|length) != 1 else '' }}
+                    {% endif %}
+                </span>
             </div>
         </div>
 
@@ -872,6 +878,54 @@ icon='bi bi-diagram-3') %}
             </section>
             {% endfor %}
         </div>
+
+        {% if pagination and pagination.total_pages > 1 %}
+        <nav class="d-flex flex-wrap justify-content-between align-items-center gap-2 px-3 pb-3 pt-1"
+            aria-label="Paginação de clientes">
+            <span class="text-muted small">
+                Página {{ pagination.page }} de {{ pagination.total_pages }}
+            </span>
+            <ul class="pagination pagination-sm mb-0">
+                <li class="page-item {{ 'disabled' if not pagination.has_prev else '' }}">
+                    <a class="page-link"
+                        href="{{ url_for('disputes_center.list_fap_vigencias', page=pagination.prev_page, **pagination_query) if pagination.has_prev else '#' }}"
+                        aria-label="Anterior"><i class="bi bi-chevron-left"></i></a>
+                </li>
+                {% set window_start = [pagination.page - 2, 1]|max %}
+                {% set window_end = [pagination.page + 2, pagination.total_pages]|min %}
+                {% if window_start > 1 %}
+                <li class="page-item">
+                    <a class="page-link"
+                        href="{{ url_for('disputes_center.list_fap_vigencias', page=1, **pagination_query) }}">1</a>
+                </li>
+                {% if window_start > 2 %}
+                <li class="page-item disabled"><span class="page-link">…</span></li>
+                {% endif %}
+                {% endif %}
+                {% for p in range(window_start, window_end + 1) %}
+                <li class="page-item {{ 'active' if p == pagination.page else '' }}">
+                    <a class="page-link"
+                        href="{{ url_for('disputes_center.list_fap_vigencias', page=p, **pagination_query) }}">{{ p }}</a>
+                </li>
+                {% endfor %}
+                {% if window_end < pagination.total_pages %}
+                {% if window_end < pagination.total_pages - 1 %}
+                <li class="page-item disabled"><span class="page-link">…</span></li>
+                {% endif %}
+                <li class="page-item">
+                    <a class="page-link"
+                        href="{{ url_for('disputes_center.list_fap_vigencias', page=pagination.total_pages, **pagination_query) }}">{{
+                        pagination.total_pages }}</a>
+                </li>
+                {% endif %}
+                <li class="page-item {{ 'disabled' if not pagination.has_next else '' }}">
+                    <a class="page-link"
+                        href="{{ url_for('disputes_center.list_fap_vigencias', page=pagination.next_page, **pagination_query) if pagination.has_next else '#' }}"
+                        aria-label="Próxima"><i class="bi bi-chevron-right"></i></a>
+                </li>
+            </ul>
+        </nav>
+        {% endif %}
         {% else %}
         <div class="empty-state m-3">
             <div class="mb-3">

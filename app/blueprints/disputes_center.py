@@ -2799,9 +2799,41 @@ def list_fap_vigencias():
 
     cnpj_by_root = _build_cnpj_by_root([(client.cnpj, client.name) for client in clients])
 
+    # Paginação server-side por cliente (grupo). Os agregados e a ação em lote
+    # acima já foram calculados sobre o conjunto inteiro filtrado; aqui apenas
+    # fatiamos os grupos que serão renderizados para aliviar o navegador.
+    VIGENCIAS_PER_PAGE = 20
+    total_groups = len(grouped_client_list)
+    total_pages = max((total_groups + VIGENCIAS_PER_PAGE - 1) // VIGENCIAS_PER_PAGE, 1)
+    try:
+        current_page = int(request.args.get('page', 1))
+    except (TypeError, ValueError):
+        current_page = 1
+    current_page = min(max(current_page, 1), total_pages)
+    start_offset = (current_page - 1) * VIGENCIAS_PER_PAGE
+    end_offset = start_offset + VIGENCIAS_PER_PAGE
+    page_groups = grouped_client_list[start_offset:end_offset]
+
+    pagination = {
+        'page': current_page,
+        'per_page': VIGENCIAS_PER_PAGE,
+        'total_groups': total_groups,
+        'total_pages': total_pages,
+        'has_prev': current_page > 1,
+        'has_next': current_page < total_pages,
+        'prev_page': current_page - 1,
+        'next_page': current_page + 1,
+        'start_index': start_offset + 1 if total_groups else 0,
+        'end_index': min(end_offset, total_groups),
+    }
+    # Filtros ativos preservados nos links de paginação (tudo menos 'page').
+    pagination_query = {k: v for k, v in request.args.items() if k != 'page' and v}
+
     return render_template(
         'disputes_center/vigencias.html',
-        grouped_clients=grouped_client_list,
+        grouped_clients=page_groups,
+        pagination=pagination,
+        pagination_query=pagination_query,
         total_vigencias=total_filtered_vigencias,
         total_benefits_linked=total_benefits_linked,
         linked_clients_count=linked_clients_count,
