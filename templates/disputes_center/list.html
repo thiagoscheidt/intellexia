@@ -1784,6 +1784,7 @@
       allowClear: true,
       placeholder: 'Todos os CNPJ raiz',
       width: '100%',
+      matcher: window.cnpjSelect2Matcher,
       language: { noResults: function () { return 'Nenhum CNPJ raiz encontrado.'; } },
     });
     $('#quickCnpjFilter').select2({
@@ -1791,6 +1792,7 @@
       allowClear: true,
       placeholder: 'Todas as empresas',
       width: '100%',
+      matcher: window.cnpjSelect2Matcher,
       language: { noResults: function () { return 'Nenhuma empresa encontrada.'; } },
     });
   }

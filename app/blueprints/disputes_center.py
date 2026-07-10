@@ -232,6 +232,21 @@ def _normalize_status_key(value):
     return status_aliases.get(normalized, normalized)
 
 
+# Choices válidos dos SelectFields de status de instância (form.py::CentralBenefitForm).
+_INSTANCE_STATUS_CHOICES = {'deferido', 'indeferido', 'analyzing'}
+
+
+def _coerce_instance_status_choice(value):
+    """Normaliza um status de instância para o valor esperado pelo SelectField.
+
+    A importação grava valores capitalizados/legados ('Deferido', 'Em análise').
+    Sem esta normalização o SelectField não encontra a opção correspondente,
+    renderiza a primeira ('Não informado') e o valor é apagado ao salvar.
+    """
+    key = _normalize_status_key(value)
+    return key if key in _INSTANCE_STATUS_CHOICES else ''
+
+
 def _normalized_status_sql(column):
     raw = func.lower(func.trim(func.coalesce(cast(column, String), '')))
     return case(
@@ -3859,11 +3874,16 @@ def edit_dispute(benefit_id):
     if request.method == 'GET':
         form.client_id.data = benefit.client_id
         form.fap_contestation_topics.data = _parse_benefit_topics(benefit)
+        # Status de instância pode vir capitalizado/legado da importação ('Deferido',
+        # 'Em análise'). Normaliza para o valor do choice, senão o SelectField perde
+        # a seleção e o valor é apagado ao salvar (virava "Pendente" sem o usuário mexer).
+        form.first_instance_status.data = _coerce_instance_status_choice(benefit.first_instance_status)
+        form.second_instance_status.data = _coerce_instance_status_choice(benefit.second_instance_status)
 
     if form.validate_on_submit():
         user_id = session.get('user_id')
-        old_first_instance_status = _normalize_optional_status(benefit.first_instance_status)
-        new_first_instance_status = _normalize_optional_status(form.first_instance_status.data)
+        old_first_instance_status = _normalize_status_key(benefit.first_instance_status) or None
+        new_first_instance_status = _normalize_status_key(form.first_instance_status.data) or None
         selected_topics = _sanitize_selected_topics(form.fap_contestation_topics.data, classifier_topics)
 
         benefit.client_id = form.client_id.data
