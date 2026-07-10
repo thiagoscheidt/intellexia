@@ -2388,6 +2388,7 @@ def list_disputes_center():
                         func.trim(Benefit.employer_name) != '',
                     )
                     .order_by(Benefit.updated_at.desc(), Benefit.id.desc())
+                    .limit(1)
                     .scalar()
                     or ''
                 ).strip()
@@ -4139,6 +4140,7 @@ def list_cats():
                     func.trim(FapContestationCat.employer_name) != '',
                 )
                 .order_by(FapContestationCat.updated_at.desc(), FapContestationCat.id.desc())
+                .limit(1)
                 .scalar()
                 or ''
             ).strip()
@@ -4619,6 +4621,7 @@ def list_payroll_masses():
                     func.trim(FapContestationPayrollMass.employer_name) != '',
                 )
                 .order_by(FapContestationPayrollMass.updated_at.desc(), FapContestationPayrollMass.id.desc())
+                .limit(1)
                 .scalar()
                 or ''
             ).strip()
@@ -5087,6 +5090,7 @@ def list_employment_links():
                     func.trim(FapContestationEmploymentLink.employer_name) != '',
                 )
                 .order_by(FapContestationEmploymentLink.updated_at.desc(), FapContestationEmploymentLink.id.desc())
+                .limit(1)
                 .scalar()
                 or ''
             ).strip()
@@ -5542,6 +5546,7 @@ def list_turnover_rates():
                     func.trim(FapContestationTurnoverRate.employer_name) != '',
                 )
                 .order_by(FapContestationTurnoverRate.updated_at.desc(), FapContestationTurnoverRate.id.desc())
+                .limit(1)
                 .scalar()
                 or ''
             ).strip()
