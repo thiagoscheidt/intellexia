@@ -394,6 +394,32 @@ def _extract_cnpj_branch(cnpj):
     return digits[8:12] if len(digits) >= 12 else ''
 
 
+def _build_cnpj_by_root(clients_data):
+    """Mapa raiz(8 dígitos) -> [{'cnpj': formatado, 'company_name'}].
+
+    Alimenta os selects de "CNPJ completo" dependentes do CNPJ raiz. Recebe uma
+    lista de tuplas (cnpj, name). Mantém o mesmo formato usado na listagem de
+    disputas para os filtros Select2.
+    """
+    cnpj_by_root = {}
+    for cnpj, name in clients_data:
+        root = _extract_cnpj_root(cnpj)
+        digits = _normalize_cnpj_digits(cnpj)
+        if not root or len(digits) < 14:
+            continue
+        clean_name = (name or '').strip()
+        formatted = _format_cnpj(cnpj)
+        if root not in cnpj_by_root:
+            cnpj_by_root[root] = []
+        if not any(item['digits'] == digits for item in cnpj_by_root[root]):
+            cnpj_by_root[root].append({'cnpj': formatted, 'digits': digits, 'company_name': clean_name})
+    for root_key in cnpj_by_root:
+        cnpj_by_root[root_key].sort(key=lambda x: x['digits'])
+        for item in cnpj_by_root[root_key]:
+            del item['digits']
+    return cnpj_by_root
+
+
 def _get_cnpj_establishment_type(cnpj):
     branch = _extract_cnpj_branch(cnpj)
     if not branch:
@@ -2771,6 +2797,8 @@ def list_fap_vigencias():
         1 for value in (selected_client_id_raw, selected_client_cnpj, selected_client_root) if value
     ) + (1 if selected_show_deferivel else 0)
 
+    cnpj_by_root = _build_cnpj_by_root([(client.cnpj, client.name) for client in clients])
+
     return render_template(
         'disputes_center/vigencias.html',
         grouped_clients=grouped_client_list,
@@ -2780,6 +2808,7 @@ def list_fap_vigencias():
         unlinked_groups_count=unlinked_groups_count,
         client_filter_options=client_filter_options,
         root_filter_options=root_filter_options,
+        cnpj_by_root=cnpj_by_root,
         selected_client_id=selected_client_id_raw,
         selected_client_cnpj=_format_cnpj(selected_client_cnpj) if selected_client_cnpj else '',
         selected_client_root=selected_client_root,

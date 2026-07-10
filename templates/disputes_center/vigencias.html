@@ -7,6 +7,8 @@
 {% block title %}{{ page_title }} - IntellexIA{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet"
+    href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
 <style>
     .vigencias-page {
         --vigencias-accent: #0f5fd7;
@@ -587,12 +589,7 @@ icon='bi bi-diagram-3') %}
                         </select>
                     </div>
                     <div class="col-lg-2 col-md-6">
-                        <label for="clientCnpjFilter" class="form-label">CNPJ</label>
-                        <input id="clientCnpjFilter" name="client_cnpj" type="text" class="form-control"
-                            value="{{ selected_client_cnpj }}" placeholder="00.000.000/0001-00">
-                    </div>
-                    <div class="col-lg-2 col-md-6">
-                        <label for="clientRootFilter" class="form-label">Raiz do CNPJ</label>
+                        <label for="clientRootFilter" class="form-label">CNPJ raiz</label>
                         <select id="clientRootFilter" name="client_root" class="form-select">
                             <option value="">Todas as raízes</option>
                             {% for option in root_filter_options %}
@@ -601,6 +598,12 @@ icon='bi bi-diagram-3') %}
                                 {{ option.label }}
                             </option>
                             {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-lg-3 col-md-6">
+                        <label for="clientCnpjFilter" class="form-label">Empresa ou CNPJ completo</label>
+                        <select id="clientCnpjFilter" name="client_cnpj" class="form-select">
+                            <option value="">Todas as empresas</option>
                         </select>
                     </div>
                     <div class="col-lg-3 col-md-6 align-self-end pb-1">
@@ -895,5 +898,68 @@ icon='bi bi-diagram-3') %}
             }
         });
     });
+</script>
+<script>
+    /* Filtros pesquisáveis (Select2) — Cliente, CNPJ raiz e CNPJ dependente do raiz. */
+    (function () {
+        if (typeof window.jQuery === 'undefined') return;
+        var $ = window.jQuery;
+
+        $(function () {
+            var cnpjByRoot = {{ cnpj_by_root | tojson }};
+            var currentRoot = {{ selected_client_root | tojson }};
+            var currentCnpj = {{ selected_client_cnpj | tojson }};
+
+            var $root = $('#clientRootFilter');
+            var $cnpj = $('#clientCnpjFilter');
+
+            function onlyDigits(v) { return (v || '').replace(/\D/g, ''); }
+
+            function populateCnpj(root, selectedCnpj) {
+                $cnpj.empty().append('<option value="">Todas as empresas</option>');
+                (cnpjByRoot[root] || []).forEach(function (item) {
+                    var label = item.company_name ? (item.cnpj + ' — ' + item.company_name) : item.cnpj;
+                    $cnpj.append(new Option(label, item.cnpj, false, item.cnpj === selectedCnpj));
+                });
+                if ($cnpj.hasClass('select2-hidden-accessible')) {
+                    $cnpj.trigger('change.select2');
+                }
+            }
+
+            // Filtro antigo apenas por CNPJ: deriva o raiz pelos 8 primeiros dígitos.
+            if (!currentRoot && currentCnpj) {
+                var derived = onlyDigits(currentCnpj).slice(0, 8);
+                if (cnpjByRoot[derived]) {
+                    currentRoot = derived;
+                    $root.val(derived);
+                }
+            }
+
+            if (currentRoot) {
+                populateCnpj(currentRoot, currentCnpj);
+            }
+
+            if ($.fn.select2) {
+                $('#clientFilter').select2({
+                    theme: 'bootstrap-5', allowClear: true, placeholder: 'Todos os clientes', width: '100%',
+                    language: { noResults: function () { return 'Nenhum cliente encontrado.'; } }
+                });
+                $root.select2({
+                    theme: 'bootstrap-5', allowClear: true, placeholder: 'Todas as raízes', width: '100%',
+                    matcher: window.cnpjSelect2Matcher,
+                    language: { noResults: function () { return 'Nenhum CNPJ raiz encontrado.'; } }
+                });
+                $cnpj.select2({
+                    theme: 'bootstrap-5', allowClear: true, placeholder: 'Todas as empresas', width: '100%',
+                    matcher: window.cnpjSelect2Matcher,
+                    language: { noResults: function () { return 'Nenhuma empresa encontrada.'; } }
+                });
+            }
+
+            $root.on('change', function () {
+                populateCnpj($(this).val() || '', '');
+            });
+        });
+    })();
 </script>
 {% endblock %}
