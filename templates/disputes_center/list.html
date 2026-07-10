@@ -1716,7 +1716,7 @@
 
   $('#clearCentralFiltersBtn').on('click', function () {
     filters.splice(0, filters.length);
-    $('#quickClientFilter').val('');
+    $('#quickClientFilter').val('').trigger('change.select2');
     $('#quickRootCnpjFilter').val('').trigger('change.select2');
     $('#quickCnpjFilter').val('').empty().append('<option value="">Todas as empresas</option>');
     refreshCnpjSelect2();
@@ -1779,6 +1779,13 @@
   applyFiltersFromUrl();
 
   if (window.jQuery && $.fn.select2) {
+    $('#quickClientFilter').select2({
+      theme: 'bootstrap-5',
+      allowClear: true,
+      placeholder: 'Todos os clientes',
+      width: '100%',
+      language: { noResults: function () { return 'Nenhum cliente encontrado.'; } },
+    });
     $('#quickRootCnpjFilter').select2({
       theme: 'bootstrap-5',
       allowClear: true,
