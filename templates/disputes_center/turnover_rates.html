@@ -27,6 +27,8 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
   crossorigin="anonymous" />
 <link rel="stylesheet" href="https://cdn.datatables.net/1.13.7/css/dataTables.bootstrap5.min.css">
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
 <style>
   .table td,
   .table th {
@@ -1092,8 +1094,9 @@
 
     $('#clearTrFiltersBtn').on('click', function () {
       filters.splice(0, filters.length);
-      $('#quickRootCnpjFilter').val('');
+      $('#quickRootCnpjFilter').val('').trigger('change.select2');
       $('#quickCnpjFilter').val('').empty().append('<option value="">Todas as empresas</option>');
+      refreshCnpjSelect2();
       $('#quickCnpjFilterWrapper').hide();
       $('#quickCnpjFilterSpacer').show();
       renderActiveFilters();
@@ -1109,6 +1112,13 @@
         const lbl = item.company_name ? `${item.cnpj} — ${item.company_name}` : item.cnpj;
         select.append(`<option value="${item.cnpj}">${lbl}</option>`);
       });
+      refreshCnpjSelect2();
+    }
+
+    function refreshCnpjSelect2() {
+      if (window.jQuery && $.fn.select2 && $('#quickCnpjFilter').hasClass('select2-hidden-accessible')) {
+        $('#quickCnpjFilter').trigger('change.select2');
+      }
     }
 
     $('#quickRootCnpjFilter').on('change', function () {
@@ -1119,6 +1129,7 @@
         $('#quickCnpjFilterSpacer').hide();
       } else {
         $('#quickCnpjFilter').val('').empty().append('<option value="">Todas as empresas</option>');
+        refreshCnpjSelect2();
         $('#quickCnpjFilterWrapper').hide();
         $('#quickCnpjFilterSpacer').show();
       }
@@ -1287,6 +1298,23 @@
           .catch(function () {
             content.innerHTML = '<p class="text-danger text-center">Erro ao carregar histórico.</p>';
           });
+      });
+    }
+
+    if (window.jQuery && $.fn.select2) {
+      $('#quickRootCnpjFilter').select2({
+        theme: 'bootstrap-5',
+        allowClear: true,
+        placeholder: 'Todos os CNPJ raiz',
+        width: '100%',
+        language: { noResults: function () { return 'Nenhum CNPJ raiz encontrado.'; } },
+      });
+      $('#quickCnpjFilter').select2({
+        theme: 'bootstrap-5',
+        allowClear: true,
+        placeholder: 'Todas as empresas',
+        width: '100%',
+        language: { noResults: function () { return 'Nenhuma empresa encontrada.'; } },
       });
     }
 
