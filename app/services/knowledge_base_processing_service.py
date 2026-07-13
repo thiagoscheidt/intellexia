@@ -716,6 +716,8 @@ class KnowledgeBaseProcessingService:
                 if not file_path.exists():
                     raise FileNotFoundError(f"Arquivo não encontrado no caminho: {item.file_path}")
 
+                is_fap_report = self._is_fap_benefits_report(item)
+
                 document_processor = DocumentProcessorService()
                 ingestion_agent = None if skip_indexing else KnowledgeIngestionAgent()
                 document_data = document_processor.process_document(file_path=str(file_path))
@@ -725,7 +727,11 @@ class KnowledgeBaseProcessingService:
                 else:
                     document_full_text = str(getattr(document_data, "full_text", "") or "")
 
-                document_faiss_vector = document_processor.build_faiss_index(document_full_text)
+                # O índice FAISS só alimenta a busca semântica interna do extractor.
+                # Relatórios FAP não passam pelo LLM, então construí-lo seria desperdício.
+                document_faiss_vector = (
+                    None if is_fap_report else document_processor.build_faiss_index(document_full_text)
+                )
 
                 extractor_agent = AgentDocumentExtractor(
                     file_id=item.id,
@@ -747,22 +753,27 @@ class KnowledgeBaseProcessingService:
                         category=item.category,
                         description=item.description,
                         tags=item.tags,
-                        lawsuit_number=None if self._is_fap_benefits_report(item) else item.lawsuit_number,
+                        lawsuit_number=None if is_fap_report else item.lawsuit_number,
                         file_id=item.id,
                     )
 
                 if not markdown_content:
                     raise RuntimeError("Processamento não retornou conteúdo.")
 
-                extraction_payload = extractor_agent.extract_document_data()
-                if not extraction_payload:
-                    raise RuntimeError("Extração estruturada não retornou conteúdo.")
+                if is_fap_report:
+                    # Categoria, tags e vínculo do relatório já vêm do painel de contestações,
+                    # e os campos judiciais extraídos seriam descartados adiante. Sem LLM aqui.
+                    print(f"Relatório FAP {item.id}: extração via LLM ignorada (metadados já conhecidos).")
+                    extraction_payload = {}
+                else:
+                    extraction_payload = extractor_agent.extract_document_data()
+                    if not extraction_payload:
+                        raise RuntimeError("Extração estruturada não retornou conteúdo.")
 
                 sections_overview = extractor_agent.extract_sections_overview(max_sections=12)
                 pedidos_excerpt = extractor_agent.extract_pedidos_section_text()
 
                 if isinstance(extraction_payload, dict):
-                    is_fap_report = self._is_fap_benefits_report(item, extraction_payload)
                     extracted_process_number = str(extraction_payload.get("process_number", "") or "").strip()
                     extracted_category = str(extraction_payload.get("suggested_category", "") or "").strip()
                     extracted_doc_type_name = str(
@@ -892,7 +903,7 @@ class KnowledgeBaseProcessingService:
                 summary_payload = dict(summary_payload)
                 summary_payload["sections_overview"] = sections_overview
                 summary_payload["pedidos_excerpt"] = pedidos_excerpt
-                if self._is_fap_benefits_report(item, summary_payload):
+                if is_fap_report:
                     summary_payload.pop("process_number", None)
                     item.lawsuit_number = None
 

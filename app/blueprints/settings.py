@@ -1,9 +1,14 @@
+import re
+
 from flask import Blueprint, render_template, session, redirect, url_for, jsonify, flash, request
 from app.models import db, LawFirm, User
 from datetime import datetime
 from functools import wraps
 
 settings_bp = Blueprint('settings', __name__, url_prefix='/settings')
+
+EMAIL_PATTERN = re.compile(r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$')
+MIN_PASSWORD_LENGTH = 6
 
 def require_law_firm(f):
     @wraps(f)
@@ -81,6 +86,107 @@ def law_firm_settings_post():
     except Exception as e:
         db.session.rollback()
         return jsonify({
-            "success": False, 
+            "success": False,
             "message": f"Erro ao atualizar dados: {str(e)}"
         }), 500
+
+
+def _get_logged_user():
+    """Usuário da sessão. Nunca aceita id vindo da requisição."""
+    user_id = session.get('user_id')
+    if not user_id:
+        return None
+    return User.query.get(user_id)
+
+
+@settings_bp.route('/profile', methods=['GET'])
+@require_law_firm
+def profile():
+    """Página de perfil do usuário logado"""
+    user = _get_logged_user()
+    if not user:
+        flash('Usuário não encontrado.', 'danger')
+        return redirect(url_for('auth.login'))
+
+    return render_template('settings/profile.html', user=user)
+
+
+@settings_bp.route('/profile', methods=['POST'])
+@require_law_firm
+def profile_post():
+    """Atualizar dados pessoais do usuário logado"""
+    user = _get_logged_user()
+    if not user:
+        return jsonify({"success": False, "message": "Usuário não encontrado"}), 404
+
+    name = (request.form.get('name') or '').strip()
+    email = (request.form.get('email') or '').strip()
+
+    if not name or not email:
+        return jsonify({"success": False, "message": "Nome e e-mail são obrigatórios"}), 400
+
+    if not EMAIL_PATTERN.match(email):
+        return jsonify({"success": False, "message": "E-mail inválido"}), 400
+
+    email_owner = User.query.filter(User.email == email, User.id != user.id).first()
+    if email_owner:
+        return jsonify({"success": False, "message": "Este e-mail já está em uso por outro usuário"}), 400
+
+    try:
+        # role, law_firm_id e is_active não são editáveis aqui, mesmo que venham no form.
+        user.name = name
+        user.email = email
+        user.phone = (request.form.get('phone') or '').strip() or None
+        user.oab_number = (request.form.get('oab_number') or '').strip() or None
+        user.updated_at = datetime.now()
+
+        db.session.commit()
+
+        session['user_name'] = user.name
+        session['user_email'] = user.email
+
+        return jsonify({"success": True, "message": "Perfil atualizado com sucesso!"})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": f"Erro ao atualizar perfil: {str(e)}"}), 500
+
+
+@settings_bp.route('/profile/password', methods=['POST'])
+@require_law_firm
+def profile_password_post():
+    """Alterar a senha do usuário logado"""
+    user = _get_logged_user()
+    if not user:
+        return jsonify({"success": False, "message": "Usuário não encontrado"}), 404
+
+    current_password = request.form.get('current_password') or ''
+    new_password = request.form.get('new_password') or ''
+    confirm_password = request.form.get('confirm_password') or ''
+
+    if not all([current_password, new_password, confirm_password]):
+        return jsonify({"success": False, "message": "Preencha todos os campos de senha"}), 400
+
+    if not user.check_password(current_password):
+        return jsonify({"success": False, "message": "A senha atual está incorreta"}), 400
+
+    if new_password != confirm_password:
+        return jsonify({"success": False, "message": "A nova senha e a confirmação não coincidem"}), 400
+
+    if len(new_password) < MIN_PASSWORD_LENGTH:
+        return jsonify({
+            "success": False,
+            "message": f"A nova senha deve ter pelo menos {MIN_PASSWORD_LENGTH} caracteres",
+        }), 400
+
+    if new_password == current_password:
+        return jsonify({"success": False, "message": "A nova senha deve ser diferente da atual"}), 400
+
+    try:
+        user.set_password(new_password)
+        user.updated_at = datetime.now()
+        db.session.commit()
+
+        return jsonify({"success": True, "message": "Senha alterada com sucesso!"})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": f"Erro ao alterar senha: {str(e)}"}), 500
