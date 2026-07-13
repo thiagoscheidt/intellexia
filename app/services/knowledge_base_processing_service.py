@@ -81,6 +81,10 @@ class KnowledgeBaseProcessingService:
         return text_value[:25]
 
     @staticmethod
+    def _get_linked_judicial_document(knowledge_base_id: int) -> JudicialDocument | None:
+        return JudicialDocument.query.filter_by(knowledge_base_id=knowledge_base_id).first()
+
+    @staticmethod
     def _is_fap_benefits_report(item: KnowledgeBase, extraction_payload: dict | None = None) -> bool:
         linked_report = FapContestationJudgmentReport.query.filter_by(
             knowledge_base_id=item.id,
@@ -380,7 +384,7 @@ class KnowledgeBaseProcessingService:
             process.liminar_tutela = bool(liminar_tutela)
 
     def _link_knowledge_to_process_if_needed(self, item: KnowledgeBase, extraction_payload: dict) -> None:
-        existing_link = self.judicial_document_service.get_link_by_knowledge_base_id(item.id)
+        existing_link = self._get_linked_judicial_document(item.id)
         if existing_link:
             process = JudicialProcess.query.filter_by(id=existing_link.process_id).first()
             if process:
@@ -494,7 +498,7 @@ class KnowledgeBaseProcessingService:
         process.updated_at = datetime.now()
 
     def _resolve_target_process(self, item: KnowledgeBase, extraction_payload: dict) -> JudicialProcess | None:
-        existing_link = self.judicial_document_service.get_link_by_knowledge_base_id(item.id)
+        existing_link = self._get_linked_judicial_document(item.id)
         if existing_link:
             return JudicialProcess.query.filter_by(id=existing_link.process_id).first()
 
@@ -785,7 +789,7 @@ class KnowledgeBaseProcessingService:
                         self._link_knowledge_to_process_if_needed(item, extraction_payload)
 
                     if not is_fap_report and extracted_process_number:
-                        linked_doc = self.judicial_document_service.get_link_by_knowledge_base_id(item.id)
+                        linked_doc = self._get_linked_judicial_document(item.id)
                         if linked_doc:
                             linked_process = JudicialProcess.query.filter_by(id=linked_doc.process_id).first()
                             if linked_process and str(linked_process.process_number or "").startswith("TEMP-"):
@@ -936,7 +940,7 @@ class KnowledgeBaseProcessingService:
                 item.processing_error_message = None
                 db.session.commit()
 
-                linked_document = self.judicial_document_service.get_link_by_knowledge_base_id(item.id)
+                linked_document = self._get_linked_judicial_document(item.id)
                 if linked_document:
                     linked_document.status = "completed"
                     linked_document.processed_at = datetime.now()
@@ -956,7 +960,7 @@ class KnowledgeBaseProcessingService:
                         item.processing_error_message = str(error)
                         db.session.commit()
 
-                        linked_document = self.judicial_document_service.get_link_by_knowledge_base_id(item.id)
+                        linked_document = self._get_linked_judicial_document(item.id)
                         if linked_document:
                             linked_document.status = "error"
                             linked_document.error_message = str(error)

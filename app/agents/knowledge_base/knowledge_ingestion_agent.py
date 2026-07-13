@@ -240,6 +240,11 @@ class KnowledgeIngestionAgent:
                 return None
             chunks = self._chunk_text(cleaned)
 
+        if file_id is not None:
+            # Reingestão do mesmo arquivo: remove os pontos da versão anterior,
+            # pois cada chunk recebe um point_id novo e o upsert não os sobrescreve.
+            self.delete_document_by_file_id(file_id)
+
         point_ids: list[str] = []
         total = len(chunks)
         print(f"Dividindo documento '{source}' em {total} chunks")
