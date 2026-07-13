@@ -61,9 +61,11 @@ uv run python scripts/process_knowledge_base.py --include-errors
 
 | Argumento          | Padrão  | Descrição                              |
 | ------------------ | ------- | -------------------------------------- |
-| `--batch-size`     | `10`    | Máximo de arquivos por execução        |
+| `--batch-size`     | `5`     | Quantidade de arquivos por execução    |
 | `--file-id`        | —       | Processa apenas um arquivo pelo ID     |
 | `--include-errors` | `false` | Reprocessa arquivos com status `error` |
+
+O processamento é **sequencial** (um arquivo por vez), então lotes grandes levam proporcionalmente mais tempo.
 
 ---
 

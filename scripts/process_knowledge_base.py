@@ -22,7 +22,7 @@ from main import app
 from app.services.knowledge_base_processing_service import KnowledgeBaseProcessingService
 
 
-MAX_FILES_PER_EXECUTION = 5
+DEFAULT_BATCH_SIZE = 5
 
 
 def parse_args():
@@ -30,8 +30,8 @@ def parse_args():
     parser.add_argument(
         "--batch-size",
         type=int,
-        default=MAX_FILES_PER_EXECUTION,
-        help=f"Quantidade máxima de itens por execução (máximo {MAX_FILES_PER_EXECUTION})",
+        default=DEFAULT_BATCH_SIZE,
+        help=f"Quantidade de itens por execução (padrão: {DEFAULT_BATCH_SIZE})",
     )
     parser.add_argument("--file-id", type=int, help="Processa apenas o arquivo com esse ID")
     parser.add_argument(
@@ -46,7 +46,7 @@ if __name__ == "__main__":
     args = parse_args()
     service = KnowledgeBaseProcessingService(
         flask_app=app,
-        max_files_per_execution=MAX_FILES_PER_EXECUTION,
+        max_files_per_execution=max(1, args.batch_size),
     )
     total = service.process_pending_knowledge_files(
         batch_size=args.batch_size,
