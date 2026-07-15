@@ -193,6 +193,7 @@ class IntellexiaOAuthProvider(OAuthProvider):
                     status_code=403)
             client = txn["client"]
             client_name = getattr(client, "client_name", None) or client.client_id
+            client_logo_uri = getattr(client, "logo_uri", None)
             return HTMLResponse(self._render_consent(
                 txn_id=txn_id,
                 csrf=txn["csrf"],
@@ -200,6 +201,7 @@ class IntellexiaOAuthProvider(OAuthProvider):
                 user_email=user.email,
                 law_firm_name=user.law_firm.name,
                 client_name=client_name,
+                client_logo_uri=str(client_logo_uri) if client_logo_uri else None,
             ))
 
     async def consent_submit(self, request: Request) -> Response:
@@ -403,8 +405,7 @@ class IntellexiaOAuthProvider(OAuthProvider):
     # acento indigo, fonte Inter) — o usuário chega aqui vindo do login e a tela
     # de autorização precisa ser reconhecível como a mesma plataforma.
 
-    def _page(self, title: str, body: str) -> str:
-        logo_url = f"{self.app_public_url}/static/assets/img/logo_maior.png"
+    def _page(self, title: str, head_inner: str, body_inner: str) -> str:
         return f"""<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -430,14 +431,42 @@ class IntellexiaOAuthProvider(OAuthProvider):
     animation: rise .35s ease-out;
   }}
   @keyframes rise {{ from {{ opacity: 0; transform: translateY(8px); }} to {{ opacity: 1; transform: none; }} }}
-  @media (prefers-reduced-motion: reduce) {{ .card {{ animation: none; }} }}
   .head {{ padding: 28px 32px 24px; text-align: center; border-bottom: 1px solid #1e293b; }}
-  .head img {{ height: 56px; width: auto; object-fit: contain; }}
+  .head > img {{ height: 56px; width: auto; object-fit: contain; }}
   .brand-fallback {{ display: none; font-weight: 700; font-size: 1.3rem; color: #a5b4fc; letter-spacing: .3px; }}
   h1 {{ font-size: 1.15rem; font-weight: 600; color: #fff; margin: 14px 0 4px; letter-spacing: -.01em; }}
   .sub {{ color: #94a3b8; font-size: .875rem; margin: 0; line-height: 1.5; }}
   .sub strong {{ color: #e2e8f0; font-weight: 600; }}
   .body {{ padding: 24px 32px 28px; }}
+
+  /* Handshake: app ⇄ app */
+  .handshake {{ display: flex; align-items: center; justify-content: center; gap: 14px; }}
+  .tile {{
+    width: 64px; height: 64px; flex: none; border-radius: 18px;
+    background: #0d0f15; border: 1px solid #263149;
+    display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 6px 18px rgba(0,0,0,.35);
+  }}
+  .tile img, .tile svg {{ width: 42px; height: 42px; object-fit: contain; }}
+  .tile .letter {{ font-weight: 700; font-size: 1.4rem; color: #a5b4fc; }}
+  .wire {{ display: flex; align-items: center; width: 96px; }}
+  .wire .line {{
+    flex: 1; height: 2px;
+    background-image: linear-gradient(90deg, #4f46e5 55%, transparent 45%);
+    background-size: 9px 2px; background-repeat: repeat-x;
+    animation: flow 1.1s linear infinite;
+  }}
+  @keyframes flow {{ to {{ background-position: 9px 0; }} }}
+  .wire .plug {{
+    width: 26px; height: 26px; flex: none; border-radius: 50%; margin: 0 4px;
+    background: #4f46e5; display: flex; align-items: center; justify-content: center;
+    box-shadow: 0 0 0 5px rgba(79,70,229,.16);
+  }}
+  @media (prefers-reduced-motion: reduce) {{
+    .card {{ animation: none; }}
+    .wire .line {{ animation: none; }}
+  }}
+
   .who {{
     display: flex; align-items: center; gap: 12px;
     background: #0d0f15; border: 1px solid #1e293b; border-radius: 14px; padding: 14px 16px;
@@ -473,15 +502,54 @@ class IntellexiaOAuthProvider(OAuthProvider):
 <body>
 <main class="card">
   <div class="head">
-    <img src="{html.escape(logo_url)}" alt="IntellexIA"
-         onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
-    <div class="brand-fallback">IntellexIA</div>
-    {body}
+{head_inner}
+  </div>
+  <div class="body">
+{body_inner}
+  </div>
 </main>
 </body></html>"""
 
+    def _intellexia_tile(self) -> str:
+        logo_url = f"{self.app_public_url}/static/assets/img/logo_maior.png"
+        return (
+            f'<div class="tile" title="IntellexIA">'
+            f'<img src="{html.escape(logo_url)}" alt="IntellexIA" '
+            f'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'">'
+            f'<span class="letter" style="display:none">Ix</span></div>'
+        )
+
+    @staticmethod
+    def _client_tile(client_name: str, client_logo_uri: str | None) -> str:
+        """Tile do app cliente: spark do Claude para clientes Claude, logo_uri
+        registrado via DCR quando houver, ou a inicial do nome."""
+        name = client_name or "?"
+        if "claude" in name.lower():
+            rays = []
+            for i in range(12):
+                length = 19 if i % 2 == 0 else 14.5
+                rays.append(
+                    f'<line x1="0" y1="-7.5" x2="0" y2="-{length}" '
+                    f'transform="rotate({i * 30})" stroke="#D97757" '
+                    f'stroke-width="4.6" stroke-linecap="round"/>'
+                )
+            spark = (
+                '<svg viewBox="-24 -24 48 48" role="img" aria-label="Claude">'
+                + "".join(rays) + "</svg>"
+            )
+            return f'<div class="tile" title="{html.escape(name)}">{spark}</div>'
+        if client_logo_uri and client_logo_uri.startswith("https://"):
+            return (
+                f'<div class="tile" title="{html.escape(name)}">'
+                f'<img src="{html.escape(client_logo_uri)}" alt="{html.escape(name)}" '
+                f'onerror="this.style.display=\'none\';this.nextElementSibling.style.display=\'block\'">'
+                f'<span class="letter" style="display:none">{html.escape(name[0].upper())}</span></div>'
+            )
+        return f'<div class="tile" title="{html.escape(name)}"><span class="letter">{html.escape(name[0].upper())}</span></div>'
+
     def _render_consent(self, *, txn_id: str, csrf: str, user_name: str, user_email: str,
-                        law_firm_name: str, client_name: str) -> str:
+                        law_firm_name: str, client_name: str,
+                        client_logo_uri: str | None = None) -> str:
         initials = "".join(p[0] for p in user_name.split()[:2]).upper() if user_name else "?"
         check_icon = (
             '<svg width="15" height="15" viewBox="0 0 20 20" fill="none">'
@@ -489,11 +557,20 @@ class IntellexiaOAuthProvider(OAuthProvider):
             '<path d="M6.5 10.5l2.2 2.2 4.8-5.4" stroke="#a5b4fc" stroke-width="1.8" '
             'stroke-linecap="round" stroke-linejoin="round"/></svg>'
         )
-        body = f"""
+        plug_icon = (
+            '<svg width="14" height="14" viewBox="0 0 24 24" fill="none">'
+            '<path d="M8 7v5a4 4 0 0 0 8 0V7M9.5 3v4M14.5 3v4M12 16v5" '
+            'stroke="#fff" stroke-width="2" stroke-linecap="round"/></svg>'
+        )
+        head = f"""
+    <div class="handshake">
+      {self._client_tile(client_name, client_logo_uri)}
+      <div class="wire"><span class="line"></span><span class="plug">{plug_icon}</span><span class="line"></span></div>
+      {self._intellexia_tile()}
+    </div>
     <h1>Autorizar acesso</h1>
-    <p class="sub"><strong>{html.escape(client_name)}</strong> quer acessar o IntellexIA em seu nome.</p>
-  </div>
-  <div class="body">
+    <p class="sub"><strong>{html.escape(client_name)}</strong> quer se conectar ao IntellexIA em seu nome.</p>"""
+        body = f"""
     <div class="who">
       <div class="avatar">{html.escape(initials)}</div>
       <div>
@@ -514,15 +591,12 @@ class IntellexiaOAuthProvider(OAuthProvider):
         <button class="approve" type="submit" name="action" value="approve">Autorizar acesso</button>
       </div>
     </form>
-    <p class="foot">Você será redirecionado de volta ao aplicativo.</p>
-  </div>"""
-        return self._page("Autorizar acesso", body)
+    <p class="foot">Você será redirecionado de volta ao aplicativo.</p>"""
+        return self._page("Autorizar acesso", head, body)
 
     def _render_error(self, title: str, message: str) -> str:
-        body = f"""
-    <h1>{html.escape(title)}</h1>
-  </div>
-  <div class="body">
-    <p class="error-msg">{html.escape(message)}</p>
-  </div>"""
-        return self._page(title, body)
+        head = f"""
+    {self._intellexia_tile().replace('class="tile"', 'class="tile" style="margin:0 auto"')}
+    <h1>{html.escape(title)}</h1>"""
+        body = f'<p class="error-msg">{html.escape(message)}</p>'
+        return self._page(title, head, body)
