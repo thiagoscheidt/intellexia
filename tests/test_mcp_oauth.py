@@ -171,7 +171,7 @@ async def main():
 
                 # Chamada MCP autenticada
                 headers = await mcp_initialize(client, tokens["access_token"])
-                r, payload = await mcp_tool_call(client, headers, "list_fap_companies", {})
+                r, payload = await mcp_tool_call(client, headers, "listar_empresas_fap", {})
                 ok = r.status_code == 200 and not payload["result"].get("isError")
                 check("tool com permissão executa", ok, f"{r.status_code} {json.dumps(payload)[:300]}")
 
@@ -192,7 +192,7 @@ async def main():
                         expires_at=None))
                     db.session.commit()
                 headers2 = await mcp_initialize(client, f"iax_at_limited_{suffix}")
-                r, payload = await mcp_tool_call(client, headers2, "list_fap_companies", {})
+                r, payload = await mcp_tool_call(client, headers2, "listar_empresas_fap", {})
                 is_err = payload["result"].get("isError")
                 msg = json.dumps(payload["result"].get("content", ""), ensure_ascii=False)
                 check("tool sem módulo é negada", bool(is_err) and "Painel FAP" in msg, msg[:200])

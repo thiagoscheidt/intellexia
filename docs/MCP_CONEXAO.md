@@ -63,12 +63,17 @@ Em **Settings → Connectors → Add custom connector**, informe a URL
 
 | Ferramenta | O que faz |
 |---|---|
-| `query_knowledge_base` | Pergunta em linguagem natural à base de conhecimento (RAG com fontes) |
-| `list_fap_companies` | Lista empresas FAP sincronizadas do escritório |
-| `list_fap_contestacoes` | Lista contestações FAP (filtros: CNPJ, vigência, situação, instância) |
-| `list_fap_benefits` | Lista benefícios vinculados a contestações (filtros: CNPJ, status, tipo...) |
-| `get_benefit_detail` | Detalhes completos de um benefício |
-| `review_initial_petition` | Revisor de petições iniciais (em desenvolvimento) |
+| `consultar_base_conhecimento` | Pergunta em linguagem natural à base de conhecimento (RAG com fontes) |
+| `listar_empresas_fap` | Lista empresas FAP sincronizadas do escritório |
+| `listar_contestacoes_fap` | Lista contestações FAP (filtros: CNPJ, raiz, vigência, situação, instância) |
+| `listar_beneficios_fap` | Lista benefícios (filtros: CNPJ, segurado, NIT, CPF, nº benefício, tópico, vigência) |
+| `detalhar_beneficio` | Detalhes completos de um benefício |
+| `resumo_fap` | Estatísticas agregadas de contestações e benefícios |
+| `alteracoes_recentes_fap` | Mudanças detectadas nas sincronizações com o FAP Web |
+| `listar_procuracoes_fap` | Procurações eletrônicas sincronizadas |
+| `listar_processos` | Processos judiciais com fase atual |
+| `detalhar_processo` | Processo completo: fases, benefícios, teses e decisões |
+| `revisar_peticao_inicial` | Revisor de petições iniciais (em desenvolvimento) |
 
 Exemplos de uso no Claude:
 
@@ -80,9 +85,10 @@ Exemplos de uso no Claude:
 
 | Ferramenta | Módulo exigido no IntellexIA |
 |---|---|
-| `query_knowledge_base` | Base de Conhecimento |
-| `list_fap_companies`, `list_fap_contestacoes`, `list_fap_benefits`, `get_benefit_detail` | Painel FAP |
-| `review_initial_petition` | Revisor de Petições |
+| `consultar_base_conhecimento` | Base de Conhecimento |
+| `listar_empresas_fap`, `listar_contestacoes_fap`, `listar_beneficios_fap`, `detalhar_beneficio`, `resumo_fap`, `alteracoes_recentes_fap`, `listar_procuracoes_fap` | Painel FAP |
+| `listar_processos`, `detalhar_processo` | Painel de Processos |
+| `revisar_peticao_inicial` | Revisor de Petições |
 
 Sem o módulo liberado, a ferramenta retorna um erro de permissão claro. Permissões são
 reavaliadas automaticamente a cada renovação de token (no máximo 1 hora).

@@ -58,12 +58,17 @@ Use exatamente este endereço (sem barra no final).
 
 | Ferramenta | O que faz | Origem |
 |---|---|---|
-| Consulta à base de conhecimento | Pergunta em linguagem natural, resposta com fontes | IA |
-| Empresas FAP | Lista as empresas sincronizadas do escritório | Sistema |
-| Contestações FAP | Lista contestações com filtros (CNPJ, vigência, situação, instância) | FAP Web |
-| Benefícios | Lista benefícios das contestações, com filtros | FAP Web |
-| Detalhe de benefício | Todos os campos de um benefício específico | Sistema |
-| Revisor de petições | Em desenvolvimento | IA |
+| `consultar_base_conhecimento` | Pergunta em linguagem natural, resposta com fontes | IA |
+| `listar_empresas_fap` | Empresas sincronizadas do escritório | Sistema |
+| `listar_contestacoes_fap` | Contestações com filtros (CNPJ, raiz, vigência, situação, instância) e status do PDF | FAP Web |
+| `listar_beneficios_fap` | Benefícios com filtros (CNPJ, segurado, NIT, CPF, nº benefício, tópico, vigência...) | FAP Web |
+| `detalhar_beneficio` | Todos os campos de um benefício específico | Sistema |
+| `resumo_fap` | Contagens agregadas: contestações por vigência/situação/instância, benefícios por tipo/status/tópico | Cálculo |
+| `alteracoes_recentes_fap` | O que mudou nas últimas sincronizações com o portal ("o que mudou essa semana?") | FAP Web |
+| `listar_procuracoes_fap` | Procurações eletrônicas com situação e vigência | FAP Web |
+| `listar_processos` | Processos judiciais com fase atual, partes e valor da causa | Sistema |
+| `detalhar_processo` | Processo completo: fases, benefícios vinculados, teses e decisões | Sistema |
+| `revisar_peticao_inicial` | Em desenvolvimento | IA |
 
 ---
 
@@ -74,7 +79,8 @@ O acesso da IA **espelha as suas permissões** no IntellexIA:
 | Para usar... | Você precisa do módulo... |
 |---|---|
 | Consulta à base de conhecimento | Base de Conhecimento |
-| Empresas, contestações e benefícios FAP | Painel FAP |
+| Empresas, contestações, benefícios, resumo, alterações e procurações FAP | Painel FAP |
+| Processos judiciais | Painel de Processos |
 | Revisor de petições | Revisor de Petições |
 
 Sem o módulo liberado, a IA recebe uma mensagem clara de acesso negado. Permissões alteradas por um administrador passam a valer em **até 1 hora** (na renovação automática da sessão da IA).
