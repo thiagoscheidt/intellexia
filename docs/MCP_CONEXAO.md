@@ -74,6 +74,8 @@ Em **Settings → Connectors → Add custom connector**, informe a URL
 | `resumo_fap` | Estatísticas agregadas de contestações e benefícios |
 | `alteracoes_recentes_fap` | Mudanças detectadas nas sincronizações com o FAP Web |
 | `listar_procuracoes_fap` | Procurações eletrônicas sincronizadas |
+| `exportar_beneficios_excel` | Planilha XLSX dos benefícios filtrados (link assinado, 1 h de validade) |
+| `exportar_contestacoes_excel` | Planilha XLSX das contestações filtradas (link assinado, 1 h de validade) |
 | `listar_processos` | Processos judiciais com fase atual |
 | `detalhar_processo` | Processo completo: fases, benefícios, teses e decisões |
 | `revisar_peticao_inicial` | Revisor de petições iniciais (em desenvolvimento) |
@@ -89,7 +91,7 @@ Exemplos de uso no Claude:
 | Ferramenta | Módulo exigido no IntellexIA |
 |---|---|
 | `consultar_base_conhecimento` | Base de Conhecimento |
-| `listar_empresas_fap`, `listar_contestacoes_fap`, `detalhar_contestacao`, `listar_beneficios_fap`, `detalhar_beneficio`, `resumo_fap`, `alteracoes_recentes_fap`, `listar_procuracoes_fap`, `valores_de_filtro_fap` | Painel FAP |
+| `listar_empresas_fap`, `listar_contestacoes_fap`, `detalhar_contestacao`, `listar_beneficios_fap`, `detalhar_beneficio`, `resumo_fap`, `alteracoes_recentes_fap`, `listar_procuracoes_fap`, `valores_de_filtro_fap`, `exportar_beneficios_excel`, `exportar_contestacoes_excel` | Painel FAP |
 | `listar_cats_fap` | Painel de Contestações |
 | `listar_processos`, `detalhar_processo` | Painel de Processos |
 | `revisar_peticao_inicial` | Revisor de Petições |

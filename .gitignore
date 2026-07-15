@@ -14,4 +14,4 @@ wheels/
 *.db
 instance/
 
-uv.lock
+uv.lockuploads/mcp_exports/

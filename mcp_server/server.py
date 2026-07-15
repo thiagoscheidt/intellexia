@@ -58,6 +58,11 @@ from mcp_server.tools.fap import (
     fap_filter_values_handler,
 )
 from mcp_server.tools.disputes import list_cats_handler
+from mcp_server.tools.exports import (
+    build_download_response,
+    export_benefits_excel_handler,
+    export_contestacoes_excel_handler,
+)
 from mcp_server.tools.process_panel import (
     list_processes_handler,
     get_process_detail_handler,
@@ -132,6 +137,12 @@ async def consent_page(request: Request) -> Response:
 @mcp.custom_route("/consent", methods=["POST"])
 async def consent_submit(request: Request) -> Response:
     return await auth_provider.consent_submit(request)
+
+
+@mcp.custom_route("/export/{token:path}", methods=["GET"])
+async def export_download(request: Request) -> Response:
+    """Download de planilhas exportadas (link assinado com validade de 1h)."""
+    return build_download_response(request.path_params["token"])
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -381,6 +392,85 @@ def listar_cats_fap(
     claims = require_module("disputes_center")
     with app.app_context():
         return list_cats_handler(claims["law_firm_id"], vigencia, cnpj, nit, numero_cat, limite)
+
+
+@mcp.tool()
+def exportar_beneficios_excel(
+    cnpj: str | None = None,
+    status: str | None = None,
+    tipo_pedido: str | None = None,
+    tipo_beneficio: str | None = None,
+    topico_contestacao: str | None = None,
+    segurado: str | None = None,
+    nit: str | None = None,
+    cpf: str | None = None,
+    numero_beneficio: str | None = None,
+    ano_vigencia: str | None = None,
+) -> dict:
+    """Exporta benefícios FAP para uma planilha Excel (XLSX) e retorna o link de download.
+
+    Use quando o usuário pedir muitos registros ou uma planilha — em vez de listar
+    tudo no chat. Aceita os mesmos filtros de listar_beneficios_fap, sem limite de
+    registros (até 50.000 linhas). O link expira em 1 hora.
+
+    Args:
+        cnpj: CNPJ do empregador (apenas números).
+        status: Status do benefício.
+        tipo_pedido: exclusao, inclusao ou revisao.
+        tipo_beneficio: Ex: B91, B94.
+        topico_contestacao: Tópico jurídico da contestação.
+        segurado: Nome (ou parte do nome) do segurado.
+        nit: NIT do segurado.
+        cpf: CPF do segurado.
+        numero_beneficio: Número do benefício.
+        ano_vigencia: Ano de vigência FAP (ex: "2023").
+
+    Returns:
+        Dicionário com 'arquivo', 'total_linhas', 'url_download' e 'validade_minutos'.
+        Apresente o url_download ao usuário como link clicável.
+    """
+    claims = require_module("fap_panel")
+    with app.app_context():
+        return export_benefits_excel_handler(
+            claims["law_firm_id"], MCP_PUBLIC_URL,
+            cnpj=cnpj, status=status, request_type=tipo_pedido, benefit_type=tipo_beneficio,
+            fap_contestation_topic=topico_contestacao, segurado=segurado, nit=nit, cpf=cpf,
+            numero_beneficio=numero_beneficio, ano_vigencia=ano_vigencia,
+        )
+
+
+@mcp.tool()
+def exportar_contestacoes_excel(
+    cnpj: str | None = None,
+    cnpj_raiz: str | None = None,
+    ano_vigencia: int | None = None,
+    situacao_codigo: str | None = None,
+    instancia_codigo: str | None = None,
+) -> dict:
+    """Exporta contestações FAP para uma planilha Excel (XLSX) e retorna o link de download.
+
+    Use quando o usuário pedir muitos registros ou uma planilha. Aceita os mesmos
+    filtros de listar_contestacoes_fap, sem limite de registros (até 50.000 linhas).
+    O link expira em 1 hora.
+
+    Args:
+        cnpj: CNPJ do estabelecimento (apenas números).
+        cnpj_raiz: Raiz do CNPJ (8 dígitos).
+        ano_vigencia: Ano de vigência FAP.
+        situacao_codigo: Código de situação (consulte valores_de_filtro_fap).
+        instancia_codigo: Código de instância (consulte valores_de_filtro_fap).
+
+    Returns:
+        Dicionário com 'arquivo', 'total_linhas', 'url_download' e 'validade_minutos'.
+        Apresente o url_download ao usuário como link clicável.
+    """
+    claims = require_module("fap_panel")
+    with app.app_context():
+        return export_contestacoes_excel_handler(
+            claims["law_firm_id"], MCP_PUBLIC_URL,
+            cnpj=cnpj, cnpj_raiz=cnpj_raiz, ano_vigencia=ano_vigencia,
+            situacao_codigo=situacao_codigo, instancia_codigo=instancia_codigo,
+        )
 
 
 # ──────────────────────────────────────────────────────────────────────────────

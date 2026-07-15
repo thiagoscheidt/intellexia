@@ -69,6 +69,8 @@ Use exatamente este endereço (sem barra no final).
 | `resumo_fap` | Contagens agregadas: contestações por vigência/situação/instância, benefícios por tipo/status/tópico | Cálculo |
 | `alteracoes_recentes_fap` | O que mudou nas últimas sincronizações com o portal ("o que mudou essa semana?") | FAP Web |
 | `listar_procuracoes_fap` | Procurações eletrônicas com situação e vigência | FAP Web |
+| `exportar_beneficios_excel` | Gera planilha Excel dos benefícios filtrados (até 50 mil linhas) com link de download | Sistema |
+| `exportar_contestacoes_excel` | Gera planilha Excel das contestações filtradas com link de download | Sistema |
 | `listar_processos` | Processos judiciais com fase atual, partes e valor da causa | Sistema |
 | `detalhar_processo` | Processo completo: fases, benefícios vinculados, teses e decisões | Sistema |
 | `revisar_peticao_inicial` | Em desenvolvimento | IA |
