@@ -27,12 +27,16 @@ Env:
 """
 from __future__ import annotations
 
+import base64
 import os
 import sys
+from urllib.parse import urlparse
 
 # Garante que a raiz do projeto está no Python path
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, _PROJECT_ROOT)
 
+import mcp.types
 from fastmcp import FastMCP
 from starlette.requests import Request
 from starlette.responses import Response
@@ -58,14 +62,48 @@ from mcp_server.tools.process_panel import (
 from mcp_server.tools.petition_reviewer import review_petition_handler
 
 MCP_PUBLIC_URL = os.environ.get("MCP_PUBLIC_URL", "https://rs-dev.intellexia.com.br/mcp")
+_parsed_public = urlparse(MCP_PUBLIC_URL)
+APP_PUBLIC_URL = (
+    os.environ.get("APP_PUBLIC_URL")
+    or f"{_parsed_public.scheme}://{_parsed_public.netloc}"
+).rstrip("/")
 
 auth_provider = IntellexiaOAuthProvider(
     base_url=MCP_PUBLIC_URL,
     app_public_url=os.environ.get("APP_PUBLIC_URL"),
 )
 
+
+def _server_icons() -> list[mcp.types.Icon]:
+    """Ícone do IntellexIA exibido pelos clientes MCP (conectores do Claude).
+
+    Publica a URL do logo e, como fallback à prova de rede/CORS, o mesmo PNG
+    embutido em data URI.
+    """
+    icons = [
+        mcp.types.Icon(
+            src=f"{APP_PUBLIC_URL}/static/assets/img/logo.png",
+            mimeType="image/png",
+            sizes=["128x128"],
+        )
+    ]
+    try:
+        with open(os.path.join(_PROJECT_ROOT, "static", "assets", "img", "logo.png"), "rb") as f:
+            encoded = base64.b64encode(f.read()).decode()
+        icons.append(mcp.types.Icon(
+            src=f"data:image/png;base64,{encoded}",
+            mimeType="image/png",
+            sizes=["128x128"],
+        ))
+    except OSError:
+        pass
+    return icons
+
+
 mcp = FastMCP(
     "IntellexIA",
+    icons=_server_icons(),
+    website_url=APP_PUBLIC_URL,
     instructions=(
         "Sistema de automação jurídica especializado em direito trabalhista e previdenciário "
         "(FAP — Fator Acidentário de Prevenção). Oferece base de conhecimento via RAG, painel "
