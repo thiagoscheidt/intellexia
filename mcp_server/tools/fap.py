@@ -23,6 +23,26 @@ def _iso(value):
     return value.isoformat() if value else None
 
 
+def _company_name_map(law_firm_id: int) -> dict[str, str]:
+    """Mapa cnpj_raiz (8 dígitos) → nome da empresa FAP do escritório."""
+    from app.models import FapCompany
+
+    rows = (
+        FapCompany.query.filter_by(law_firm_id=law_firm_id)
+        .with_entities(FapCompany.cnpj, FapCompany.nome)
+        .all()
+    )
+    return {cnpj: nome for cnpj, nome in rows if cnpj}
+
+
+def _empresa_por_cnpj(cnpj: str | None, names: dict[str, str]) -> str | None:
+    """Resolve o nome da empresa a partir de um CNPJ completo ou raiz (aceita formatado)."""
+    if not cnpj:
+        return None
+    digits = "".join(ch for ch in cnpj if ch.isdigit())
+    return names.get(digits) or names.get(digits[:8])
+
+
 # ── Empresas ──────────────────────────────────────────────────────────────────
 
 
@@ -82,10 +102,13 @@ def list_fap_contestacoes_handler(
         .all()
     )
 
+    names = _company_name_map(law_firm_id)
     itens = [
         {
             "id": c.id,
             "contestacao_id": c.contestacao_id,
+            "empresa_nome": (c.fap_company.nome if c.fap_company else None)
+            or _empresa_por_cnpj(c.cnpj_raiz, names),
             "cnpj": c.cnpj,
             "cnpj_raiz": c.cnpj_raiz,
             "ano_vigencia": c.ano_vigencia,
@@ -154,6 +177,7 @@ def list_fap_benefits_handler(
     total = query.count()
     benefits = query.order_by(Benefit.created_at.desc()).limit(limit).all()
 
+    names = _company_name_map(law_firm_id)
     itens = [
         {
             "id": b.id,
@@ -165,14 +189,17 @@ def list_fap_benefits_handler(
             "segurado_nit": b.insured_nit,
             "segurado_cpf": b.insured_cpf,
             "empregador_cnpj": b.employer_cnpj,
-            "empregador_nome": b.employer_name,
+            "empregador_nome": b.employer_name or _empresa_por_cnpj(b.employer_cnpj, names),
             "data_inicio_beneficio": _iso(b.benefit_start_date),
             "data_fim_beneficio": _iso(b.benefit_end_date),
             "data_acidente": _iso(b.accident_date),
+            "empresa_acidente": b.accident_company_name,
+            "numero_cat": b.cat_number,
             "vigencias_fap": b.fap_vigencia_years,
             "topicos_contestacao": _parse_topics(b),
             "status_primeira_instancia": b.first_instance_status,
             "status_segunda_instancia": b.second_instance_status,
+            "mensalidade_inicial": float(b.initial_monthly_benefit) if b.initial_monthly_benefit is not None else None,
             "total_pago": float(b.total_paid) if b.total_paid is not None else None,
         }
         for b in benefits
@@ -262,11 +289,19 @@ def fap_summary_handler(
         )
         return {str(k) if k is not None else "(vazio)": v for k, v in rows}
 
+    names = _company_name_map(law_firm_id)
+    por_raiz = _count_by(cont_q, FapWebContestacao.cnpj_raiz)
+    por_empresa = {}
+    for raiz, qtd in sorted(por_raiz.items(), key=lambda kv: -kv[1]):
+        label = _empresa_por_cnpj(raiz, names) or f"CNPJ raiz {raiz}"
+        por_empresa[label] = por_empresa.get(label, 0) + qtd
+
     contestacoes = {
         "total": cont_q.count(),
         "por_ano_vigencia": _count_by(cont_q, FapWebContestacao.ano_vigencia),
         "por_situacao": _count_by(cont_q, FapWebContestacao.situacao_descricao),
         "por_instancia": _count_by(cont_q, FapWebContestacao.instancia_descricao),
+        "por_empresa": por_empresa,
     }
 
     # Benefícios
@@ -339,9 +374,11 @@ def fap_changes_handler(
         except (ValueError, TypeError):
             return value
 
+    names = _company_name_map(law_firm_id)
     itens = [
         {
             "contestacao_id": ch.contestacao_id,
+            "empresa_nome": _empresa_por_cnpj(ch.cnpj_raiz or ch.cnpj, names),
             "cnpj": ch.cnpj,
             "ano_vigencia": ch.ano_vigencia,
             "tipo_mudanca": ch.change_type,
