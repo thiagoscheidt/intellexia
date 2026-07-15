@@ -282,12 +282,18 @@ def listar_beneficios_fap(
     cpf: str | None = None,
     numero_beneficio: str | None = None,
     ano_vigencia: str | None = None,
+    empresa: str | None = None,
     limite: int = 50,
 ) -> dict:
     """Lista benefícios previdenciários vinculados a contestações FAP, com total encontrado.
 
+    Para apenas CONTAR benefícios (ex: "quantos benefícios da empresa X?"),
+    prefira resumo_fap — responde em uma única chamada, sem listar registros.
+
     Args:
-        cnpj: CNPJ do empregador (apenas números).
+        empresa: Nome (ou parte do nome) da empresa/empregador — casa nome do
+            empregador e as raízes de CNPJ da empresa FAP correspondente.
+        cnpj: CNPJ do empregador (aceita formatado, só dígitos ou raiz de 8).
         status: Status do benefício (ex: pending, approved, rejected).
         tipo_pedido: exclusao, inclusao ou revisao.
         tipo_beneficio: Ex: B91 (auxílio-acidente), B94 (auxílio-doença acidentário).
@@ -307,7 +313,8 @@ def listar_beneficios_fap(
     with app.app_context():
         return list_fap_benefits_handler(
             claims["law_firm_id"], cnpj, status, tipo_pedido, tipo_beneficio,
-            topico_contestacao, segurado, nit, cpf, numero_beneficio, ano_vigencia, limite,
+            topico_contestacao, segurado, nit, cpf, numero_beneficio, ano_vigencia,
+            empresa, limite,
         )
 
 
@@ -327,20 +334,28 @@ def detalhar_beneficio(beneficio_id: int) -> dict:
 
 
 @mcp.tool()
-def resumo_fap(ano_vigencia: int | None = None, cnpj: str | None = None) -> dict:
-    """Resumo estatístico do FAP do escritório: contagens agregadas.
+def resumo_fap(
+    ano_vigencia: int | None = None,
+    cnpj: str | None = None,
+    empresa: str | None = None,
+) -> dict:
+    """Resumo estatístico do FAP do escritório: contagens agregadas em uma chamada.
 
-    Contestações por ano de vigência, situação e instância; benefícios por tipo,
-    tipo de pedido, status de primeira/segunda instância e tópico de contestação.
-    Ideal para perguntas gerenciais ("quantas deferidas em 2023?") sem listar tudo.
+    SEMPRE prefira esta tool para perguntas de contagem/quantidade ("quantos
+    benefícios da empresa X?", "quantas contestações deferidas em 2023?") —
+    é muito mais rápido do que listar registros. Retorna contestações por ano
+    de vigência, situação, instância e empresa; benefícios por tipo, tipo de
+    pedido, status de 1ª/2ª instância, tópico e financeiro (total pago).
 
     Args:
         ano_vigencia: Restringe a um ano de vigência FAP (opcional).
-        cnpj: Restringe a um estabelecimento (opcional, apenas números).
+        cnpj: Restringe a um estabelecimento — aceita formatado, só dígitos ou
+            raiz de 8 dígitos (opcional).
+        empresa: Nome (ou parte do nome) da empresa (opcional) — ex: "bistek".
     """
     claims = require_module("fap_panel")
     with app.app_context():
-        return fap_summary_handler(claims["law_firm_id"], ano_vigencia, cnpj)
+        return fap_summary_handler(claims["law_firm_id"], ano_vigencia, cnpj, empresa)
 
 
 @mcp.tool()
@@ -456,6 +471,7 @@ def exportar_beneficios_excel(
     cpf: str | None = None,
     numero_beneficio: str | None = None,
     ano_vigencia: str | None = None,
+    empresa: str | None = None,
 ) -> dict:
     """Exporta benefícios FAP para uma planilha Excel (XLSX) e retorna o link de download.
 
@@ -485,7 +501,7 @@ def exportar_beneficios_excel(
             claims["law_firm_id"], MCP_PUBLIC_URL,
             cnpj=cnpj, status=status, request_type=tipo_pedido, benefit_type=tipo_beneficio,
             fap_contestation_topic=topico_contestacao, segurado=segurado, nit=nit, cpf=cpf,
-            numero_beneficio=numero_beneficio, ano_vigencia=ano_vigencia,
+            numero_beneficio=numero_beneficio, ano_vigencia=ano_vigencia, empresa=empresa,
         )
 
 

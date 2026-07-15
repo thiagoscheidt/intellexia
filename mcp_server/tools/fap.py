@@ -43,6 +43,46 @@ def _empresa_por_cnpj(cnpj: str | None, names: dict[str, str]) -> str | None:
     return names.get(digits) or names.get(digits[:8])
 
 
+def _cnpj_digits_col(col):
+    """Expressão SQL: coluna de CNPJ sem pontuação (benefícios guardam formatado)."""
+    from app.models import db
+
+    return db.func.replace(db.func.replace(db.func.replace(col, ".", ""), "/", ""), "-", "")
+
+
+def _filter_benefit_cnpj(query, cnpj: str):
+    """Filtra Benefit.employer_cnpj aceitando CNPJ formatado, só dígitos ou raiz (8)."""
+    from app.models import Benefit
+
+    digits = "".join(ch for ch in cnpj if ch.isdigit())
+    expr = _cnpj_digits_col(Benefit.employer_cnpj)
+    if len(digits) <= 8:
+        return query.filter(expr.like(f"{digits}%"))
+    return query.filter(expr == digits)
+
+
+def _filter_benefit_empresa(query, empresa: str, law_firm_id: int):
+    """Filtra benefícios por nome de empresa: casa o nome do empregador e/ou
+    as raízes de CNPJ das empresas FAP cujo nome contém os termos."""
+    from app.models import Benefit, FapCompany, db
+
+    tokens = [t for t in empresa.split() if t]
+    name_cond = db.and_(*[Benefit.employer_name.ilike(f"%{t}%") for t in tokens]) if tokens else None
+
+    raiz_query = FapCompany.query.filter_by(law_firm_id=law_firm_id)
+    for t in tokens:
+        raiz_query = raiz_query.filter(FapCompany.nome.ilike(f"%{t}%"))
+    raizes = [c.cnpj for c in raiz_query.with_entities(FapCompany.cnpj).limit(20).all() if c.cnpj]
+
+    conds = [c for c in [name_cond] if c is not None]
+    if raizes:
+        expr = _cnpj_digits_col(Benefit.employer_cnpj)
+        conds.append(db.or_(*[expr.like(f"{r}%") for r in raizes]))
+    if not conds:
+        return query
+    return query.filter(db.or_(*conds))
+
+
 # ── Empresas ──────────────────────────────────────────────────────────────────
 
 
@@ -244,6 +284,7 @@ def list_fap_benefits_handler(
     cpf: str | None = None,
     numero_beneficio: str | None = None,
     ano_vigencia: str | None = None,
+    empresa: str | None = None,
     limit: int = 50,
 ) -> dict:
     """Retorna benefícios FAP filtrados, com total encontrado."""
@@ -252,7 +293,9 @@ def list_fap_benefits_handler(
     query = Benefit.query.filter_by(law_firm_id=law_firm_id)
 
     if cnpj:
-        query = query.filter(Benefit.employer_cnpj == cnpj)
+        query = _filter_benefit_cnpj(query, cnpj)
+    if empresa:
+        query = _filter_benefit_empresa(query, empresa, law_firm_id)
     if status:
         query = query.filter(Benefit.status == status)
     if request_type:
@@ -394,16 +437,30 @@ def fap_summary_handler(
     law_firm_id: int,
     ano_vigencia: int | None = None,
     cnpj: str | None = None,
+    empresa: str | None = None,
 ) -> dict:
     """Resumo estatístico do FAP: contestações e benefícios agregados."""
-    from app.models import Benefit, FapWebContestacao, db
+    from app.models import Benefit, FapCompany, FapWebContestacao, db
+
+    empresa_raizes: list[str] = []
+    if empresa:
+        raiz_query = FapCompany.query.filter_by(law_firm_id=law_firm_id)
+        for t in empresa.split():
+            raiz_query = raiz_query.filter(FapCompany.nome.ilike(f"%{t}%"))
+        empresa_raizes = [c.cnpj for c in raiz_query.with_entities(FapCompany.cnpj).limit(20).all() if c.cnpj]
 
     # Contestações
     cont_q = FapWebContestacao.query.filter_by(law_firm_id=law_firm_id)
     if ano_vigencia:
         cont_q = cont_q.filter(FapWebContestacao.ano_vigencia == ano_vigencia)
     if cnpj:
-        cont_q = cont_q.filter(FapWebContestacao.cnpj == cnpj)
+        digits = "".join(ch for ch in cnpj if ch.isdigit())
+        if len(digits) <= 8:
+            cont_q = cont_q.filter(FapWebContestacao.cnpj_raiz == digits)
+        else:
+            cont_q = cont_q.filter(FapWebContestacao.cnpj == digits)
+    if empresa:
+        cont_q = cont_q.filter(FapWebContestacao.cnpj_raiz.in_(empresa_raizes or ["__nenhuma__"]))
 
     def _count_by(query, column):
         rows = (
@@ -431,7 +488,9 @@ def fap_summary_handler(
     # Benefícios
     ben_q = Benefit.query.filter_by(law_firm_id=law_firm_id)
     if cnpj:
-        ben_q = ben_q.filter(Benefit.employer_cnpj == cnpj)
+        ben_q = _filter_benefit_cnpj(ben_q, cnpj)
+    if empresa:
+        ben_q = _filter_benefit_empresa(ben_q, empresa, law_firm_id)
     if ano_vigencia:
         ben_q = ben_q.filter(Benefit.fap_vigencia_years.like(f"%{ano_vigencia}%"))
 

@@ -107,11 +107,14 @@ def export_benefits_excel_handler(law_firm_id: int, mcp_public_url: str, **filte
     )
     from app.models import Benefit, db
 
+    from mcp_server.tools.fap import _filter_benefit_cnpj, _filter_benefit_empresa
+
     query = _base_benefits_query(law_firm_id)
 
-    cnpj = filters.get("cnpj")
-    if cnpj:
-        query = query.filter(Benefit.employer_cnpj == cnpj)
+    if filters.get("cnpj"):
+        query = _filter_benefit_cnpj(query, filters["cnpj"])
+    if filters.get("empresa"):
+        query = _filter_benefit_empresa(query, filters["empresa"], law_firm_id)
     if filters.get("status"):
         query = query.filter(Benefit.status == filters["status"])
     if filters.get("request_type"):
