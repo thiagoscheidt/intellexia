@@ -12,6 +12,7 @@ Toda a documentação do projeto está organizada na pasta [`docs/`](docs/):
 - **[ARQUITETURA_VISUAL.md](docs/ARQUITETURA_VISUAL.md)** - Diagramas e fluxos visuais da arquitetura
 - **[TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)** - FAQ e solução de problemas
 - **[RESUMO_REORGANIZACAO.md](docs/RESUMO_REORGANIZACAO.md)** - Resumo completo da reorganização
+- **[MCP_CONEXAO.md](docs/MCP_CONEXAO.md)** - Como conectar assistentes de IA (Claude) via MCP com OAuth
 
 Veja a pasta [`docs/`](docs/) para documentação adicional sobre funcionalidades, autenticação, dashboards e mais.
 

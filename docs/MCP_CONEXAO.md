@@ -1,0 +1,142 @@
+# Conectando ao Servidor MCP do IntellexIA
+
+O IntellexIA expõe um servidor **MCP (Model Context Protocol)** que permite a assistentes de IA
+(Claude Code, Claude Desktop, etc.) consultar a base de conhecimento, o painel FAP e as
+contestações do seu escritório — com autenticação **OAuth 2.1 na sua conta do IntellexIA**.
+
+- **URL do servidor:** `https://rs-dev.intellexia.com.br/mcp`
+- **Autenticação:** OAuth no navegador, reusando o login do IntellexIA (sem chaves ou tokens manuais)
+- **Isolamento:** todo acesso é restrito ao escritório do usuário autenticado e respeita as
+  permissões de módulo configuradas em *Administração de Usuários*
+
+---
+
+## Pré-requisitos
+
+1. Ter uma conta ativa no IntellexIA (`https://rs-dev.intellexia.com.br`).
+2. Usuário e escritório ativos.
+3. Permissão nos módulos que pretende usar (veja [Permissões](#permissões-por-ferramenta)).
+
+---
+
+## Claude Code (CLI / VS Code)
+
+### 1. Adicionar o servidor
+
+```bash
+claude mcp add --transport http intellexia https://rs-dev.intellexia.com.br/mcp
+```
+
+> Use `--scope user` para disponibilizar em todos os projetos, ou rode dentro de um projeto
+> para escopo local.
+
+### 2. Autenticar
+
+Dentro do Claude Code:
+
+1. Digite `/mcp`
+2. Selecione **intellexia** → **Authenticate**
+3. O navegador abre em `rs-dev.intellexia.com.br`:
+   - **Já logado no IntellexIA?** Aparece direto a tela "Autorizar acesso" — clique em **Autorizar**.
+   - **Não logado?** Faça login normalmente; você volta automaticamente para a tela de autorização.
+4. Pronto — o Claude Code confirma a conexão e as ferramentas ficam disponíveis.
+
+### 3. Verificar
+
+```bash
+claude mcp list
+```
+
+Deve mostrar `intellexia: ... - ✓ Connected`.
+
+---
+
+## Claude Desktop / claude.ai
+
+Em **Settings → Connectors → Add custom connector**, informe a URL
+`https://rs-dev.intellexia.com.br/mcp` e conclua a autorização no navegador
+(mesmo fluxo de login do IntellexIA).
+
+---
+
+## Ferramentas disponíveis
+
+| Ferramenta | O que faz |
+|---|---|
+| `query_knowledge_base` | Pergunta em linguagem natural à base de conhecimento (RAG com fontes) |
+| `list_fap_companies` | Lista empresas FAP sincronizadas do escritório |
+| `list_fap_contestacoes` | Lista contestações FAP (filtros: CNPJ, vigência, situação, instância) |
+| `list_fap_benefits` | Lista benefícios vinculados a contestações (filtros: CNPJ, status, tipo...) |
+| `get_benefit_detail` | Detalhes completos de um benefício |
+| `review_initial_petition` | Revisor de petições iniciais (em desenvolvimento) |
+
+Exemplos de uso no Claude:
+
+> "Liste as contestações FAP da vigência 2023 que estão indeferidas"
+> "Consulte na base de conhecimento o que temos sobre acidente de trajeto"
+> "Traga os detalhes do benefício 123"
+
+### Permissões por ferramenta
+
+| Ferramenta | Módulo exigido no IntellexIA |
+|---|---|
+| `query_knowledge_base` | Base de Conhecimento |
+| `list_fap_companies`, `list_fap_contestacoes`, `list_fap_benefits`, `get_benefit_detail` | Painel FAP |
+| `review_initial_petition` | Revisor de Petições |
+
+Sem o módulo liberado, a ferramenta retorna um erro de permissão claro. Permissões são
+reavaliadas automaticamente a cada renovação de token (no máximo 1 hora).
+
+---
+
+## Sessão e revogação
+
+- **Access token:** 1 hora (renovado automaticamente pelo cliente via refresh token).
+- **Refresh token:** 30 dias — depois disso é preciso autorizar de novo.
+- **Revogar acesso:** remova o servidor no cliente (`claude mcp remove intellexia`) ou
+  desative o usuário no IntellexIA — usuários/escritórios inativos perdem o acesso na
+  próxima renovação de token.
+
+---
+
+## Solução de problemas
+
+| Sintoma | Causa provável | Solução |
+|---|---|---|
+| `401 invalid_token` | Token expirado/revogado | `/mcp` → **Authenticate** novamente |
+| Navegador abre no login e não volta | Sessão do IntellexIA expirada | Faça login e o fluxo continua sozinho |
+| "Acesso negado: ... módulo" | Usuário sem o módulo liberado | Peça a um administrador em *Administração de Usuários* |
+| "Solicitação expirada" na tela de autorização | Demorou mais de 10 min para autorizar | Reinicie a conexão no cliente |
+| `Protected resource ... does not match` | Cliente configurado com URL divergente | Use exatamente `https://rs-dev.intellexia.com.br/mcp` (sem barra final) |
+| Falha geral de conexão | Serviço fora do ar | No servidor: `systemctl status intellexia-mcp` |
+
+---
+
+## Desenvolvimento local
+
+```bash
+# Sobe o servidor MCP local (porta 8001), apontando para o app Flask local
+MCP_PUBLIC_URL=http://localhost:8001 uv run python mcp_server/server.py
+
+# Conectar o Claude Code ao ambiente local
+claude mcp add --transport http intellexia-dev http://localhost:8001
+
+# Teste ponta a ponta do fluxo OAuth (sem rede)
+uv run python tests/test_mcp_oauth.py
+```
+
+> No modo local o consentimento redireciona o login para a raiz do próprio
+> `MCP_PUBLIC_URL`; para reusar a sessão do Flask local, defina também
+> `APP_PUBLIC_URL=http://localhost:5051` (ou a porta onde o app roda).
+
+## Deploy (servidor)
+
+```bash
+sudo bash deploy/deploy_mcp.sh
+```
+
+O script atualiza o código em `/sites/intellexia`, roda a migration das tabelas OAuth,
+instala/reinicia o serviço systemd `intellexia-mcp` (porta 8001) e garante os `location`
+de `/mcp` e do discovery OAuth no nginx de `rs-dev.intellexia.com.br`.
+
+Arquitetura e decisões de design: [superpowers/specs/2026-07-15-mcp-oauth-design.md](superpowers/specs/2026-07-15-mcp-oauth-design.md).

@@ -34,6 +34,7 @@ _MANUALS = (
     ("dashboard", "Dashboard Principal", "MANUAL_DASHBOARD.md"),
     ("painel-fap", "Painel FAP", "MANUAL_PAINEL_FAP.md"),
     ("contestacoes", "Painel de Contestações", "MANUAL_PAINEL_CONTESTACOES.md"),
+    ("conectar-ia", "Conectar sua IA (MCP)", "MANUAL_MCP.md"),
 )
 
 # Marcador de callout -> classe CSS (string vazia = callout neutro).
