@@ -136,7 +136,7 @@
             setLoading(true);
 
             try {
-                const response = await fetch("{{ url_for('auth.login_post') }}", {
+                const response = await fetch("{{ url_for('auth.login_post') }}" + window.location.search, {
                     method: 'POST',
                     body: formData,
                     headers: { 'X-Requested-With': 'XMLHttpRequest' }

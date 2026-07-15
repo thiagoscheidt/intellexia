@@ -3161,3 +3161,46 @@ class ImpugnacaoReferenceChunk(db.Model):
 
     def __repr__(self):
         return f'<ImpugnacaoReferenceChunk ref={self.reference_id} kind={self.section_kind}>'
+
+
+class McpOAuthClient(db.Model):
+    """Tabela mcp_oauth_clients - Clientes OAuth registrados via Dynamic Client Registration (MCP)."""
+    __tablename__ = 'mcp_oauth_clients'
+
+    id = db.Column(db.Integer, primary_key=True)
+    client_id = db.Column(db.String(255), nullable=False, unique=True, index=True)
+    client_info_json = db.Column(db.Text, nullable=False)  # OAuthClientInformationFull serializado
+
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    def __repr__(self):
+        return f'<McpOAuthClient client_id={self.client_id}>'
+
+
+class McpOAuthToken(db.Model):
+    """Tabela mcp_oauth_tokens - Access/refresh tokens emitidos pelo servidor MCP OAuth."""
+    __tablename__ = 'mcp_oauth_tokens'
+
+    id = db.Column(db.Integer, primary_key=True)
+    token = db.Column(db.String(255), nullable=False, unique=True, index=True)
+    token_type = db.Column(db.String(20), nullable=False)  # 'access' | 'refresh'
+    client_id = db.Column(db.String(255), nullable=False, index=True)
+
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False, index=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+
+    claims_json = db.Column(db.Text)   # snapshot: user_id, law_firm_id, email, name, role, modules
+    scopes_json = db.Column(db.Text)   # lista de scopes
+
+    expires_at = db.Column(db.Integer)  # epoch em segundos; NULL = sem expiração
+    revoked = db.Column(db.Boolean, default=False, nullable=False)
+    pair_token = db.Column(db.String(255), index=True)  # token par (access<->refresh) para revogação conjunta
+
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+
+    user = db.relationship('User')
+    law_firm = db.relationship('LawFirm')
+
+    def __repr__(self):
+        return f'<McpOAuthToken type={self.token_type} user_id={self.user_id} revoked={self.revoked}>'

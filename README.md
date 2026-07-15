@@ -507,7 +507,21 @@ Este projeto é proprietário. Todos os direitos reservados.
 **GitHub**: [@thiagoscheidt](https://github.com/thiagoscheidt)
 **Projeto**: [intellexia](https://github.com/thiagoscheidt/intellexia)
 
-## Conctar claude ao MCP:
+## Servidor MCP (OAuth)
+
+O servidor MCP autentica via OAuth 2.1 contra a base de usuários do IntellexIA,
+reusando o login do sistema (mesmo domínio). As tools respeitam as permissões de
+módulo do usuário e são isoladas por escritório.
+
+Conectar o Claude Code:
+
 ```
-claude mcp add-json intellexia '{"type":"http","url":"http://127.0.0.1:8001/mcp","headers":{"Authorization":"Bearer c048a4c192958164fe6dc5259f272341a2ea3c597281b9292fe51ad90478721a"}}' --scope user
-```# intellexia-site
+claude mcp add --transport http intellexia https://rs-dev.intellexia.com.br/mcp
+```
+
+Depois, no Claude Code: `/mcp` → Authenticate → autorizar no navegador (login do IntellexIA).
+
+Deploy no servidor: `sudo bash deploy/deploy_mcp.sh` (systemd `intellexia-mcp` + locations no nginx).
+Desenvolvimento local: `MCP_PUBLIC_URL=http://localhost:8001 uv run python mcp_server/server.py`.
+Teste ponta a ponta: `uv run python tests/test_mcp_oauth.py`.
+# intellexia-site

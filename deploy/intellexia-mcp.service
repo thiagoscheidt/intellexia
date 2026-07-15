@@ -1,0 +1,17 @@
+[Unit]
+Description=IntellexIA MCP Server (OAuth)
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/sites/intellexia
+ExecStart=/root/.local/bin/uv run python mcp_server/server.py
+Restart=always
+RestartSec=5
+Environment=PYTHONUNBUFFERED=1
+Environment=MCP_PUBLIC_URL=https://rs-dev.intellexia.com.br/mcp
+Environment=MCP_HOST=127.0.0.1
+Environment=MCP_PORT=8001
+
+[Install]
+WantedBy=multi-user.target

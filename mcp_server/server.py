@@ -1,24 +1,28 @@
 """
 IntellexIA MCP Server
 =====================
-Servidor MCP que expõe ferramentas de:
-  - Base de conhecimento (RAG)
-  - Painel FAP e contestações
-  - Revisor de petições iniciais (futuro)
+Servidor MCP com OAuth 2.1 autenticado contra a base de usuários do IntellexIA.
+
+Expõe ferramentas de:
+  - Base de conhecimento (RAG)          [módulo knowledge_base]
+  - Painel FAP e contestações           [módulo fap_panel]
+  - Revisor de petições iniciais (stub) [módulo fap_review]
+
+A identidade (user_id, law_firm_id, permissões de módulo) vem do access token
+emitido no fluxo OAuth — o usuário autoriza no navegador reusando o login do
+sistema em rs-dev.intellexia.com.br.
 
 Uso:
     uv run python mcp_server/server.py
 
-Configuração no cliente MCP (ex: Claude Desktop):
-    {
-      "mcpServers": {
-        "intellexia": {
-          "command": "uv",
-          "args": ["run", "python", "mcp_server/server.py"],
-          "cwd": "<caminho_para_o_projeto>"
-        }
-      }
-    }
+Conexão no Claude Code:
+    claude mcp add --transport http intellexia https://rs-dev.intellexia.com.br/mcp
+    (depois: /mcp → Authenticate → autorizar no navegador)
+
+Env:
+    MCP_PUBLIC_URL  URL pública do MCP (default https://rs-dev.intellexia.com.br/mcp)
+    APP_PUBLIC_URL  URL pública do app Flask (default: raiz do domínio do MCP_PUBLIC_URL)
+    MCP_HOST/MCP_PORT  bind local do uvicorn (default 127.0.0.1:8001)
 """
 from __future__ import annotations
 
@@ -29,36 +33,14 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastmcp import FastMCP
-from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import Response
 
 from main import app  # noqa: E402 — importa o app Flask com DB e configs
 
-# ── Autenticação Bearer (só ativa quando MCP_API_KEY está definida) ───────────
-_MCP_API_KEY = os.environ.get("MCP_API_KEY", "")
-
-
-class BearerAuthMiddleware(BaseHTTPMiddleware):
-    """Valida o header Authorization: Bearer <token> em todas as requisições."""
-
-    async def dispatch(self, request: Request, call_next):
-        if not _MCP_API_KEY:
-            return await call_next(request)  # sem chave configurada: acesso livre
-
-        auth_header = request.headers.get("Authorization", "")
-        if not auth_header.startswith("Bearer "):
-            return JSONResponse({"error": "Authorization header ausente ou inválido"}, status_code=401)
-
-        token = auth_header.removeprefix("Bearer ").strip()
-        if token != _MCP_API_KEY:
-            return JSONResponse({"error": "Token inválido"}, status_code=403)
-
-        return await call_next(request)
-
-from mcp_server.tools.knowledge import (
-    query_knowledge_base_handler,
-)
+from mcp_server.identity import require_module
+from mcp_server.oauth_provider import IntellexiaOAuthProvider
+from mcp_server.tools.knowledge import query_knowledge_base_handler
 from mcp_server.tools.fap import (
     list_fap_companies_handler,
     list_fap_contestacoes_handler,
@@ -67,15 +49,39 @@ from mcp_server.tools.fap import (
 )
 from mcp_server.tools.petition_reviewer import review_petition_handler
 
+MCP_PUBLIC_URL = os.environ.get("MCP_PUBLIC_URL", "https://rs-dev.intellexia.com.br/mcp")
+
+auth_provider = IntellexiaOAuthProvider(
+    base_url=MCP_PUBLIC_URL,
+    app_public_url=os.environ.get("APP_PUBLIC_URL"),
+)
+
 mcp = FastMCP(
     "IntellexIA",
     instructions=(
         "Sistema de automação jurídica especializado em direito trabalhista e previdenciário. "
         "Oferece acesso à base de conhecimento via RAG, painel FAP (Fator Acidentário de Prevenção), "
         "contestações e revisão de petições iniciais. "
-        "Todos os recursos são isolados por escritório (law_firm_id)."
+        "Todos os recursos são isolados pelo escritório do usuário autenticado e respeitam "
+        "suas permissões de módulo."
     ),
+    auth=auth_provider,
 )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# CONSENTIMENTO OAUTH (reusa a sessão de login do Flask)
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@mcp.custom_route("/consent", methods=["GET"])
+async def consent_page(request: Request) -> Response:
+    return await auth_provider.consent_page(request)
+
+
+@mcp.custom_route("/consent", methods=["POST"])
+async def consent_submit(request: Request) -> Response:
+    return await auth_provider.consent_submit(request)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -84,11 +90,7 @@ mcp = FastMCP(
 
 
 @mcp.tool()
-def query_knowledge_base(
-    question: str,
-    law_firm_id: int,
-    search_mode: str = "semantic",
-) -> dict:
+def query_knowledge_base(question: str, search_mode: str = "semantic") -> dict:
     """Consulta a base de conhecimento jurídica do escritório usando IA (RAG).
 
     Busca documentos relevantes no Qdrant (semântico) ou Meilisearch (full-text)
@@ -96,14 +98,14 @@ def query_knowledge_base(
 
     Args:
         question: Pergunta em linguagem natural.
-        law_firm_id: ID do escritório de advocacia.
         search_mode: "semantic" (padrão) ou "full_text" (para CPF, CNPJ, número de processo).
 
     Returns:
         Dicionário com 'answer', 'sources', 'suggested_questions'.
     """
+    claims = require_module("knowledge_base")
     with app.app_context():
-        return query_knowledge_base_handler(question, law_firm_id, search_mode)
+        return query_knowledge_base_handler(question, claims["law_firm_id"], search_mode)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -112,22 +114,19 @@ def query_knowledge_base(
 
 
 @mcp.tool()
-def list_fap_companies(law_firm_id: int) -> list[dict]:
+def list_fap_companies() -> list[dict]:
     """Lista as empresas FAP cadastradas e sincronizadas do escritório.
-
-    Args:
-        law_firm_id: ID do escritório de advocacia.
 
     Returns:
         Lista de empresas com id, cnpj, nome e data da última sincronização.
     """
+    claims = require_module("fap_panel")
     with app.app_context():
-        return list_fap_companies_handler(law_firm_id)
+        return list_fap_companies_handler(claims["law_firm_id"])
 
 
 @mcp.tool()
 def list_fap_contestacoes(
-    law_firm_id: int,
     cnpj: str | None = None,
     ano_vigencia: int | None = None,
     situacao_codigo: str | None = None,
@@ -139,7 +138,6 @@ def list_fap_contestacoes(
     Permite filtrar por CNPJ, ano de vigência, situação e instância.
 
     Args:
-        law_firm_id: ID do escritório de advocacia.
         cnpj: CNPJ do estabelecimento (14 dígitos, apenas números).
         ano_vigencia: Ano de vigência FAP (ex: 2023).
         situacao_codigo: Código de situação (ex: DEFERIDO, INDEFERIDO).
@@ -149,15 +147,15 @@ def list_fap_contestacoes(
     Returns:
         Lista de contestações com dados de identificação, instância e situação.
     """
+    claims = require_module("fap_panel")
     with app.app_context():
         return list_fap_contestacoes_handler(
-            law_firm_id, cnpj, ano_vigencia, situacao_codigo, instancia_codigo, limit
+            claims["law_firm_id"], cnpj, ano_vigencia, situacao_codigo, instancia_codigo, limit
         )
 
 
 @mcp.tool()
 def list_fap_benefits(
-    law_firm_id: int,
     cnpj: str | None = None,
     status: str | None = None,
     request_type: str | None = None,
@@ -168,7 +166,6 @@ def list_fap_benefits(
     """Lista benefícios previdenciários vinculados a contestações FAP.
 
     Args:
-        law_firm_id: ID do escritório de advocacia.
         cnpj: CNPJ do empregador (apenas números).
         status: Status do benefício (ex: pending, approved, rejected).
         request_type: Tipo de pedido (exclusao, inclusao, revisao).
@@ -179,25 +176,27 @@ def list_fap_benefits(
     Returns:
         Lista de benefícios com dados do segurado, empregador, período e status de instâncias.
     """
+    claims = require_module("fap_panel")
     with app.app_context():
         return list_fap_benefits_handler(
-            law_firm_id, cnpj, status, request_type, benefit_type, fap_contestation_topic, limit
+            claims["law_firm_id"], cnpj, status, request_type, benefit_type,
+            fap_contestation_topic, limit,
         )
 
 
 @mcp.tool()
-def get_benefit_detail(benefit_id: int, law_firm_id: int) -> dict:
+def get_benefit_detail(benefit_id: int) -> dict:
     """Retorna detalhes completos de um benefício FAP específico.
 
     Args:
         benefit_id: ID interno do benefício.
-        law_firm_id: ID do escritório de advocacia (validação de tenant).
 
     Returns:
         Dicionário completo com todos os campos do benefício.
     """
+    claims = require_module("fap_panel")
     with app.app_context():
-        return get_benefit_detail_handler(benefit_id, law_firm_id)
+        return get_benefit_detail_handler(benefit_id, claims["law_firm_id"])
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -206,37 +205,33 @@ def get_benefit_detail(benefit_id: int, law_firm_id: int) -> dict:
 
 
 @mcp.tool()
-def review_initial_petition(
-    petition_text: str,
-    law_firm_id: int,
-    case_type: str = "trabalhista",
-) -> dict:
+def review_initial_petition(petition_text: str, case_type: str = "trabalhista") -> dict:
     """Revisa uma petição inicial jurídica, apontando inconsistências e sugestões de melhoria.
 
     Módulo em desenvolvimento — retorna análise preliminar baseada em regras gerais.
 
     Args:
         petition_text: Texto completo da petição inicial.
-        law_firm_id: ID do escritório de advocacia.
         case_type: Tipo do caso (trabalhista, previdenciario). Padrão: trabalhista.
 
     Returns:
         Dicionário com 'status', 'analysis' e 'suggestions'.
     """
+    claims = require_module("fap_review")
     with app.app_context():
-        return review_petition_handler(petition_text, law_firm_id, case_type)
+        return review_petition_handler(petition_text, claims["law_firm_id"], case_type)
 
 
 if __name__ == "__main__":
-    transport = os.environ.get("MCP_TRANSPORT", "streamable-http")  # streamable-http | stdio
     host = os.environ.get("MCP_HOST", "127.0.0.1")
     port = int(os.environ.get("MCP_PORT", "8001"))
 
-    if transport == "streamable-http":
-        mcp_app = mcp.http_app()
-        mcp_app.add_middleware(BearerAuthMiddleware)
+    import uvicorn
 
-        import uvicorn
-        uvicorn.run(mcp_app, host=host, port=port)
-    else:
-        mcp.run(transport="stdio")
+    uvicorn.run(
+        mcp.http_app(path="/"),
+        host=host,
+        port=port,
+        proxy_headers=True,
+        forwarded_allow_ips="127.0.0.1",
+    )

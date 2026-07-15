@@ -6,10 +6,19 @@ import re
 
 auth_bp = Blueprint('auth', __name__)
 
+
+def _safe_next_url(value):
+    """Aceita apenas paths relativos do próprio site (evita open redirect)."""
+    if value and value.startswith('/') and not value.startswith('//') and '\\' not in value:
+        return value
+    return None
+
+
 @auth_bp.route('/login', methods=['GET'])
 def login():
     if 'user_id' in session:
-        return redirect(url_for('dashboard.dashboard'))
+        next_url = _safe_next_url(request.args.get('next'))
+        return redirect(next_url or url_for('dashboard.dashboard'))
     return render_template('login.html')
 
 @auth_bp.route('/login', methods=['POST'])
@@ -48,13 +57,15 @@ def login_post():
     session['law_firm_name'] = user.law_firm.name
 
     landing_endpoint = get_landing_endpoint(user.role, user.module_permissions)
-    
+
     if remember:
         session.permanent = True
-    
+
+    next_url = _safe_next_url(request.args.get('next'))
+
     return jsonify({
-        "success": True, 
-        "redirect": url_for(landing_endpoint),
+        "success": True,
+        "redirect": next_url or url_for(landing_endpoint),
         "user": user.to_dict()
     })
 
