@@ -399,51 +399,130 @@ class IntellexiaOAuthProvider(OAuthProvider):
             db.session.commit()
 
     # ── HTML ──────────────────────────────────────────────────────────────────
+    # Visual alinhado à tela de login do IntellexIA (fundo #0A0B0F, card #11131A,
+    # acento indigo, fonte Inter) — o usuário chega aqui vindo do login e a tela
+    # de autorização precisa ser reconhecível como a mesma plataforma.
 
-    @staticmethod
-    def _page(title: str, body: str) -> str:
+    def _page(self, title: str, body: str) -> str:
+        logo_url = f"{self.app_public_url}/static/assets/img/logo_maior.png"
         return f"""<!doctype html>
 <html lang="pt-BR"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{html.escape(title)} — IntellexIA</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <style>
-  body {{ font-family: -apple-system, 'Segoe UI', Roboto, sans-serif; background: #f4f6f9;
-         display: flex; align-items: center; justify-content: center; min-height: 100vh; margin: 0; }}
-  .card {{ background: #fff; border-radius: 12px; box-shadow: 0 4px 24px rgba(0,0,0,.08);
-          max-width: 420px; width: 100%; padding: 32px; margin: 16px; }}
-  h1 {{ font-size: 1.15rem; margin: 0 0 4px; color: #1f2937; }}
-  p  {{ color: #4b5563; font-size: .92rem; line-height: 1.5; }}
-  .muted {{ color: #6b7280; font-size: .85rem; }}
-  .box {{ background: #f9fafb; border: 1px solid #e5e7eb; border-radius: 8px; padding: 12px 16px; margin: 16px 0; }}
-  .actions {{ display: flex; gap: 12px; margin-top: 20px; }}
-  button {{ flex: 1; padding: 10px 0; border-radius: 8px; border: 0; font-size: .95rem; cursor: pointer; }}
-  .approve {{ background: #2563eb; color: #fff; }}
-  .deny {{ background: #e5e7eb; color: #374151; }}
-  .brand {{ font-weight: 700; color: #2563eb; letter-spacing: .3px; margin-bottom: 16px; }}
+  * {{ box-sizing: border-box; }}
+  body {{
+    font-family: 'Inter', -apple-system, 'Segoe UI', Roboto, sans-serif;
+    background: #0A0B0F; color: #f1f5f9; margin: 0;
+    min-height: 100vh; display: flex; align-items: center; justify-content: center;
+    padding: 40px 16px;
+    background-image:
+      radial-gradient(circle at 20% 20%, rgba(148,163,184,.08), transparent 35%),
+      radial-gradient(circle at 80% 70%, rgba(99,102,241,.12), transparent 40%);
+  }}
+  .card {{
+    width: 100%; max-width: 420px; background: #11131A;
+    border: 1px solid #1e293b; border-radius: 24px;
+    box-shadow: 0 24px 80px rgba(0,0,0,.45); overflow: hidden;
+    animation: rise .35s ease-out;
+  }}
+  @keyframes rise {{ from {{ opacity: 0; transform: translateY(8px); }} to {{ opacity: 1; transform: none; }} }}
+  @media (prefers-reduced-motion: reduce) {{ .card {{ animation: none; }} }}
+  .head {{ padding: 28px 32px 24px; text-align: center; border-bottom: 1px solid #1e293b; }}
+  .head img {{ height: 56px; width: auto; object-fit: contain; }}
+  .brand-fallback {{ display: none; font-weight: 700; font-size: 1.3rem; color: #a5b4fc; letter-spacing: .3px; }}
+  h1 {{ font-size: 1.15rem; font-weight: 600; color: #fff; margin: 14px 0 4px; letter-spacing: -.01em; }}
+  .sub {{ color: #94a3b8; font-size: .875rem; margin: 0; line-height: 1.5; }}
+  .sub strong {{ color: #e2e8f0; font-weight: 600; }}
+  .body {{ padding: 24px 32px 28px; }}
+  .who {{
+    display: flex; align-items: center; gap: 12px;
+    background: #0d0f15; border: 1px solid #1e293b; border-radius: 14px; padding: 14px 16px;
+  }}
+  .avatar {{
+    width: 40px; height: 40px; border-radius: 50%; flex: none;
+    background: linear-gradient(135deg, #4f46e5, #7c3aed);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 600; font-size: .875rem; color: #fff;
+  }}
+  .who .name {{ font-weight: 600; font-size: .9rem; color: #f1f5f9; }}
+  .who .meta {{ font-size: .78rem; color: #94a3b8; margin-top: 1px; }}
+  ul.grants {{ list-style: none; margin: 18px 0 0; padding: 0; }}
+  ul.grants li {{
+    display: flex; gap: 10px; align-items: flex-start;
+    font-size: .82rem; color: #cbd5e1; line-height: 1.45; padding: 5px 0;
+  }}
+  ul.grants svg {{ flex: none; margin-top: 2px; }}
+  .actions {{ display: flex; gap: 12px; margin-top: 22px; }}
+  button {{
+    flex: 1; padding: 11px 0; border-radius: 12px; border: 0;
+    font-family: inherit; font-size: .875rem; font-weight: 600; cursor: pointer;
+    transition: background .15s ease;
+  }}
+  button:focus-visible {{ outline: none; box-shadow: 0 0 0 4px rgba(99,102,241,.3); }}
+  .approve {{ background: #4f46e5; color: #fff; }}
+  .approve:hover {{ background: #6366f1; }}
+  .deny {{ background: transparent; color: #cbd5e1; border: 1px solid #334155; }}
+  .deny:hover {{ background: #1e293b33; }}
+  .foot {{ margin: 18px 0 0; text-align: center; font-size: .75rem; color: #64748b; }}
+  p.error-msg {{ color: #94a3b8; font-size: .9rem; line-height: 1.6; margin: 0; }}
 </style></head>
-<body><div class="card"><div class="brand">IntellexIA</div>{body}</div></body></html>"""
+<body>
+<main class="card">
+  <div class="head">
+    <img src="{html.escape(logo_url)}" alt="IntellexIA"
+         onerror="this.style.display='none';this.nextElementSibling.style.display='block'">
+    <div class="brand-fallback">IntellexIA</div>
+    {body}
+</main>
+</body></html>"""
 
     def _render_consent(self, *, txn_id: str, csrf: str, user_name: str, user_email: str,
                         law_firm_name: str, client_name: str) -> str:
+        initials = "".join(p[0] for p in user_name.split()[:2]).upper() if user_name else "?"
+        check_icon = (
+            '<svg width="15" height="15" viewBox="0 0 20 20" fill="none">'
+            '<circle cx="10" cy="10" r="9" stroke="#4f46e5" stroke-width="1.5"/>'
+            '<path d="M6.5 10.5l2.2 2.2 4.8-5.4" stroke="#a5b4fc" stroke-width="1.8" '
+            'stroke-linecap="round" stroke-linejoin="round"/></svg>'
+        )
         body = f"""
-<h1>Autorizar acesso</h1>
-<p><strong>{html.escape(client_name)}</strong> quer acessar o IntellexIA em seu nome.</p>
-<div class="box">
-  <div><strong>{html.escape(user_name)}</strong></div>
-  <div class="muted">{html.escape(user_email)}</div>
-  <div class="muted">Escritório: {html.escape(law_firm_name)}</div>
-</div>
-<p class="muted">O acesso respeita suas permissões de módulo e é restrito ao seu escritório.
-Você pode revogar a qualquer momento desconectando o cliente.</p>
-<form method="post" action="{html.escape(self.consent_public_path)}">
-  <input type="hidden" name="txn" value="{html.escape(txn_id)}">
-  <input type="hidden" name="csrf" value="{html.escape(csrf)}">
-  <div class="actions">
-    <button class="deny" type="submit" name="action" value="deny">Negar</button>
-    <button class="approve" type="submit" name="action" value="approve">Autorizar</button>
+    <h1>Autorizar acesso</h1>
+    <p class="sub"><strong>{html.escape(client_name)}</strong> quer acessar o IntellexIA em seu nome.</p>
   </div>
-</form>"""
+  <div class="body">
+    <div class="who">
+      <div class="avatar">{html.escape(initials)}</div>
+      <div>
+        <div class="name">{html.escape(user_name)}</div>
+        <div class="meta">{html.escape(user_email)} · {html.escape(law_firm_name)}</div>
+      </div>
+    </div>
+    <ul class="grants">
+      <li>{check_icon}<span>Consultar dados conforme <strong>suas permissões de módulo</strong> (FAP, base de conhecimento, processos...)</span></li>
+      <li>{check_icon}<span>Acesso restrito aos dados do escritório <strong>{html.escape(law_firm_name)}</strong></span></li>
+      <li>{check_icon}<span>Você pode revogar o acesso a qualquer momento desconectando o aplicativo</span></li>
+    </ul>
+    <form method="post" action="{html.escape(self.consent_public_path)}">
+      <input type="hidden" name="txn" value="{html.escape(txn_id)}">
+      <input type="hidden" name="csrf" value="{html.escape(csrf)}">
+      <div class="actions">
+        <button class="deny" type="submit" name="action" value="deny">Negar</button>
+        <button class="approve" type="submit" name="action" value="approve">Autorizar acesso</button>
+      </div>
+    </form>
+    <p class="foot">Você será redirecionado de volta ao aplicativo.</p>
+  </div>"""
         return self._page("Autorizar acesso", body)
 
     def _render_error(self, title: str, message: str) -> str:
-        return self._page(title, f"<h1>{html.escape(title)}</h1><p>{html.escape(message)}</p>")
+        body = f"""
+    <h1>{html.escape(title)}</h1>
+  </div>
+  <div class="body">
+    <p class="error-msg">{html.escape(message)}</p>
+  </div>"""
+        return self._page(title, body)
