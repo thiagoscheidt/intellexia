@@ -63,6 +63,13 @@ class IntellexiaOAuthProvider(OAuthProvider):
         self._txns: dict[str, dict] = {}
         self._codes: dict[str, tuple[AuthorizationCode, dict]] = {}
 
+    def _get_resource_url(self, path: str | None = None):
+        # O endpoint MCP roda na raiz do app interno (path="/") e o path público
+        # já está no base_url (/mcp). Sem isso, o resource anunciado ganharia
+        # barra final (".../mcp/") e clientes com comparação estrita (RFC 9728,
+        # ex.: Claude Code) rejeitariam por não bater com ".../mcp".
+        return super()._get_resource_url(None if path == "/" else path)
+
     # ── Helpers de app/banco ──────────────────────────────────────────────────
 
     @staticmethod
