@@ -46,16 +46,33 @@ def _empresa_por_cnpj(cnpj: str | None, names: dict[str, str]) -> str | None:
 # ── Empresas ──────────────────────────────────────────────────────────────────
 
 
-def list_fap_companies_handler(law_firm_id: int) -> list[dict]:
-    """Retorna empresas FAP do escritório."""
+def list_fap_companies_handler(
+    law_firm_id: int,
+    nome: str | None = None,
+    cnpj: str | None = None,
+    tipo_procuracao: str | None = None,
+    limit: int = 100,
+) -> dict:
+    """Retorna empresas FAP do escritório, com filtros e total encontrado."""
     from app.models import FapCompany
 
-    companies = (
-        FapCompany.query.filter_by(law_firm_id=law_firm_id)
-        .order_by(FapCompany.nome)
-        .all()
-    )
-    return [
+    query = FapCompany.query.filter_by(law_firm_id=law_firm_id)
+
+    if nome:
+        # Cada palavra do termo precisa aparecer no nome (ordem livre):
+        # "banco bradesco" encontra "BRADESCO S.A. - BANCO"
+        for token in nome.split():
+            query = query.filter(FapCompany.nome.ilike(f"%{token}%"))
+    if cnpj:
+        digits = "".join(ch for ch in cnpj if ch.isdigit())
+        query = query.filter(FapCompany.cnpj.like(f"{digits[:8]}%"))
+    if tipo_procuracao:
+        query = query.filter(FapCompany.tipo_procuracao_descricao.ilike(f"%{tipo_procuracao}%"))
+
+    total = query.count()
+    companies = query.order_by(FapCompany.nome).limit(limit).all()
+
+    itens = [
         {
             "id": c.id,
             "cnpj": c.cnpj,
@@ -65,6 +82,7 @@ def list_fap_companies_handler(law_firm_id: int) -> list[dict]:
         }
         for c in companies
     ]
+    return {"total_encontrado": total, "retornados": len(itens), "itens": itens}
 
 
 # ── Contestações ──────────────────────────────────────────────────────────────

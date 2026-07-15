@@ -207,16 +207,30 @@ def pesquisar_base_conhecimento(
 
 
 @mcp.tool()
-def listar_empresas_fap() -> list[dict]:
+def listar_empresas_fap(
+    nome: str | None = None,
+    cnpj: str | None = None,
+    tipo_procuracao: str | None = None,
+    limite: int = 100,
+) -> dict:
     """Lista as empresas FAP cadastradas e sincronizadas do escritório.
 
+    Prefira filtrar por nome parcial em vez de listar tudo — a busca aceita
+    partes do nome em qualquer ordem (ex: "bradesco" encontra "BANCO BRADESCO S.A.").
+
+    Args:
+        nome: Nome ou parte do nome da empresa (palavras em qualquer ordem).
+        cnpj: CNPJ ou raiz do CNPJ (aceita formatado; compara pela raiz de 8 dígitos).
+        tipo_procuracao: Filtra pelo tipo de procuração (busca parcial).
+        limite: Número máximo de registros (padrão 100).
+
     Returns:
-        Lista de empresas com id, cnpj, nome, tipo de procuração e data da
-        última sincronização com o portal FAP Web.
+        Dicionário com 'total_encontrado', 'retornados' e 'itens' (id, cnpj — raiz
+        de 8 dígitos —, nome, tipo de procuração e última sincronização).
     """
     claims = require_module("fap_panel")
     with app.app_context():
-        return list_fap_companies_handler(claims["law_firm_id"])
+        return list_fap_companies_handler(claims["law_firm_id"], nome, cnpj, tipo_procuracao, limite)
 
 
 @mcp.tool()
