@@ -127,6 +127,90 @@ def list_fap_contestacoes_handler(
     return {"total_encontrado": total, "retornados": len(itens), "itens": itens}
 
 
+def get_contestacao_detail_handler(contestacao_id: int, law_firm_id: int) -> dict:
+    """Detalhe completo de uma contestação: dados, mudanças e benefícios da vigência."""
+    from app.models import Benefit, FapVigenciaCnpj, FapWebContestacao, FapWebContestacaoChangeHistory, db
+
+    c = FapWebContestacao.query.filter_by(id=contestacao_id, law_firm_id=law_firm_id).first()
+    if not c:
+        return {"erro": f"Contestação {contestacao_id} não encontrada para este escritório."}
+
+    names = _company_name_map(law_firm_id)
+
+    # Benefícios da mesma vigência/CNPJ (vínculo oficial + fallback textual)
+    vigencia_ids = [
+        v.id for v in FapVigenciaCnpj.query.filter_by(
+            law_firm_id=law_firm_id, employer_cnpj=c.cnpj, vigencia_year=str(c.ano_vigencia)
+        ).all()
+    ]
+    ben_q = Benefit.query.filter_by(law_firm_id=law_firm_id)
+    if vigencia_ids:
+        ben_q = ben_q.filter(Benefit.fap_vigencia_cnpj_id.in_(vigencia_ids))
+    else:
+        ben_q = ben_q.filter(
+            db.func.replace(db.func.replace(db.func.replace(
+                Benefit.employer_cnpj, ".", ""), "/", ""), "-", "") == c.cnpj,
+            Benefit.fap_vigencia_years.like(f"%{c.ano_vigencia}%"),
+        )
+    beneficios = ben_q.order_by(Benefit.created_at.desc()).limit(50).all()
+
+    por_status_1a: dict[str, int] = {}
+    for b in beneficios:
+        key = b.first_instance_status or "(sem status)"
+        por_status_1a[key] = por_status_1a.get(key, 0) + 1
+
+    alteracoes = (
+        FapWebContestacaoChangeHistory.query.filter_by(contestacao_db_id=c.id)
+        .order_by(FapWebContestacaoChangeHistory.synced_at.desc())
+        .limit(10)
+        .all()
+    )
+
+    return {
+        "id": c.id,
+        "contestacao_id": c.contestacao_id,
+        "empresa_nome": (c.fap_company.nome if c.fap_company else None)
+        or _empresa_por_cnpj(c.cnpj_raiz, names),
+        "cnpj": c.cnpj,
+        "cnpj_raiz": c.cnpj_raiz,
+        "ano_vigencia": c.ano_vigencia,
+        "instancia_codigo": c.instancia_codigo,
+        "instancia_descricao": c.instancia_descricao,
+        "situacao_codigo": c.situacao_codigo,
+        "situacao_descricao": c.situacao_descricao,
+        "protocolo": c.protocolo,
+        "data_transmissao": _iso(c.data_transmissao),
+        "data_dou": _iso(c.data_dou_date),
+        "pdf_baixado": bool(c.file_path),
+        "ultima_sincronizacao": _iso(c.last_synced_at),
+        "beneficios_vinculados": {
+            "total": ben_q.count(),
+            "por_status_primeira_instancia": por_status_1a,
+            "itens": [
+                {
+                    "id": b.id,
+                    "numero_beneficio": b.benefit_number,
+                    "tipo_beneficio": b.benefit_type,
+                    "segurado_nome": b.insured_name,
+                    "topicos_contestacao": _parse_topics(b),
+                    "status_primeira_instancia": b.first_instance_status,
+                    "status_segunda_instancia": b.second_instance_status,
+                    "total_pago": float(b.total_paid) if b.total_paid is not None else None,
+                }
+                for b in beneficios
+            ],
+        },
+        "alteracoes_recentes": [
+            {
+                "tipo_mudanca": a.change_type,
+                "campos_alterados": a.changed_fields,
+                "sincronizado_em": _iso(a.synced_at),
+            }
+            for a in alteracoes
+        ],
+    }
+
+
 # ── Benefícios ────────────────────────────────────────────────────────────────
 
 
@@ -258,9 +342,31 @@ def get_benefit_detail_handler(benefit_id: int, law_firm_id: int) -> dict:
         "justificativa": benefit.justification,
         "parecer": benefit.opinion,
         "notas": benefit.notes,
+        # Decisões de julgamento extraídas de relatórios (quando houver)
+        "decisoes_julgamento": _benefit_decisions(benefit.id),
         "criado_em": _iso(benefit.created_at),
         "atualizado_em": _iso(benefit.updated_at),
     }
+
+
+def _benefit_decisions(benefit_id: int) -> list[dict]:
+    from app.models import BenefitContestationDecision
+
+    decisions = (
+        BenefitContestationDecision.query.filter_by(benefit_id=benefit_id)
+        .order_by(BenefitContestationDecision.instancia, BenefitContestationDecision.sequence)
+        .all()
+    )
+    return [
+        {
+            "instancia": d.instancia,
+            "sequencia": d.sequence,
+            "status": d.status,
+            "justificativa": d.justification,
+            "parecer": d.opinion,
+        }
+        for d in decisions
+    ]
 
 
 # ── Resumo estatístico ────────────────────────────────────────────────────────
@@ -325,13 +431,24 @@ def fap_summary_handler(
         for t in topics:
             por_topico[str(t)] = por_topico.get(str(t), 0) + 1
 
+    total_pago_soma = ben_q.with_entities(db.func.sum(Benefit.total_paid)).scalar()
+    com_valor = ben_q.filter(Benefit.total_paid.isnot(None)).count()
+    com_cat = ben_q.filter(Benefit.cat_number.isnot(None), Benefit.cat_number != "").count()
+    total_beneficios = ben_q.count()
+
     beneficios = {
-        "total": ben_q.count(),
+        "total": total_beneficios,
         "por_tipo": _count_by(ben_q, Benefit.benefit_type),
         "por_tipo_pedido": _count_by(ben_q, Benefit.request_type),
         "por_status_primeira_instancia": _count_by(ben_q, Benefit.first_instance_status),
         "por_status_segunda_instancia": _count_by(ben_q, Benefit.second_instance_status),
         "por_topico_contestacao": dict(sorted(por_topico.items(), key=lambda kv: -kv[1])),
+        "financeiro": {
+            "total_pago_soma": float(total_pago_soma) if total_pago_soma is not None else 0.0,
+            "beneficios_com_valor_informado": com_valor,
+        },
+        "com_cat": com_cat,
+        "sem_cat": total_beneficios - com_cat,
     }
 
     return {
@@ -428,3 +545,72 @@ def list_fap_procuracoes_handler(
         for p in procuracoes
     ]
     return {"total_encontrado": total, "retornados": len(itens), "itens": itens}
+
+
+# ── Valores válidos de filtro ─────────────────────────────────────────────────
+
+
+def fap_filter_values_handler(law_firm_id: int) -> dict:
+    """Valores em uso no escritório para os filtros das tools FAP."""
+    from app.models import Benefit, FapReason, FapWebContestacao, FapWebProcuracao, db
+
+    def _distinct_pairs(model, code_col, desc_col):
+        rows = (
+            model.query.filter_by(law_firm_id=law_firm_id)
+            .with_entities(code_col, desc_col)
+            .distinct()
+            .all()
+        )
+        return {code: desc for code, desc in rows if code}
+
+    def _distinct(model, col):
+        rows = (
+            model.query.filter_by(law_firm_id=law_firm_id)
+            .with_entities(col)
+            .distinct()
+            .all()
+        )
+        return sorted(str(r[0]) for r in rows if r[0] is not None)
+
+    topicos: set[str] = set()
+    for row in (
+        Benefit.query.filter_by(law_firm_id=law_firm_id)
+        .with_entities(Benefit.fap_contestation_topics_json, Benefit.fap_contestation_topic)
+        .all()
+    ):
+        if row[0]:
+            try:
+                parsed = json.loads(row[0])
+                if isinstance(parsed, list):
+                    topicos.update(str(t) for t in parsed)
+            except (ValueError, TypeError):
+                pass
+        if row[1]:
+            topicos.add(row[1])
+
+    motivos = [
+        r.display_name
+        for r in FapReason.query.filter_by(law_firm_id=law_firm_id, is_active=True)
+        .order_by(FapReason.display_name)
+        .all()
+    ]
+
+    return {
+        "contestacoes": {
+            "situacoes": _distinct_pairs(FapWebContestacao, FapWebContestacao.situacao_codigo, FapWebContestacao.situacao_descricao),
+            "instancias": _distinct_pairs(FapWebContestacao, FapWebContestacao.instancia_codigo, FapWebContestacao.instancia_descricao),
+            "anos_vigencia": _distinct(FapWebContestacao, FapWebContestacao.ano_vigencia),
+        },
+        "beneficios": {
+            "tipos_beneficio": _distinct(Benefit, Benefit.benefit_type),
+            "tipos_pedido": _distinct(Benefit, Benefit.request_type),
+            "status": _distinct(Benefit, Benefit.status),
+            "status_primeira_instancia": _distinct(Benefit, Benefit.first_instance_status),
+            "status_segunda_instancia": _distinct(Benefit, Benefit.second_instance_status),
+            "topicos_contestacao": sorted(topicos),
+        },
+        "procuracoes": {
+            "situacoes": _distinct_pairs(FapWebProcuracao, FapWebProcuracao.situacao_codigo, FapWebProcuracao.situacao_descricao),
+        },
+        "motivos_fap_catalogo": motivos,
+    }

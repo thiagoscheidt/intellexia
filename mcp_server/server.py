@@ -49,12 +49,15 @@ from mcp_server.tools.knowledge import query_knowledge_base_handler
 from mcp_server.tools.fap import (
     list_fap_companies_handler,
     list_fap_contestacoes_handler,
+    get_contestacao_detail_handler,
     list_fap_benefits_handler,
     get_benefit_detail_handler,
     fap_summary_handler,
     fap_changes_handler,
     list_fap_procuracoes_handler,
+    fap_filter_values_handler,
 )
+from mcp_server.tools.disputes import list_cats_handler
 from mcp_server.tools.process_panel import (
     list_processes_handler,
     get_process_detail_handler,
@@ -322,6 +325,62 @@ def listar_procuracoes_fap(
     claims = require_module("fap_panel")
     with app.app_context():
         return list_fap_procuracoes_handler(claims["law_firm_id"], cnpj_raiz, situacao_codigo, limite)
+
+
+@mcp.tool()
+def detalhar_contestacao(contestacao_id: int) -> dict:
+    """Detalhe completo de uma contestação FAP.
+
+    Inclui todos os dados da contestação, os benefícios vinculados à mesma
+    vigência/CNPJ (com contagem por status de 1ª instância) e as alterações
+    recentes detectadas na sincronização.
+
+    Args:
+        contestacao_id: ID interno da contestação (campo 'id' de listar_contestacoes_fap).
+    """
+    claims = require_module("fap_panel")
+    with app.app_context():
+        return get_contestacao_detail_handler(contestacao_id, claims["law_firm_id"])
+
+
+@mcp.tool()
+def valores_de_filtro_fap() -> dict:
+    """Valores válidos (em uso no escritório) para os filtros das tools FAP.
+
+    Retorna situações e instâncias de contestação (código → descrição), anos de
+    vigência, tipos de benefício/pedido, status e tópicos de contestação em uso,
+    além do catálogo de motivos FAP. Consulte antes de filtrar para usar códigos
+    exatos em vez de adivinhar.
+    """
+    claims = require_module("fap_panel")
+    with app.app_context():
+        return fap_filter_values_handler(claims["law_firm_id"])
+
+
+@mcp.tool()
+def listar_cats_fap(
+    vigencia: str | None = None,
+    cnpj: str | None = None,
+    nit: str | None = None,
+    numero_cat: str | None = None,
+    limite: int = 50,
+) -> dict:
+    """Lista CATs (Comunicações de Acidente de Trabalho) das contestações FAP.
+
+    Args:
+        vigencia: Ano de vigência FAP (ex: "2023").
+        cnpj: CNPJ do empregador (apenas números).
+        nit: NIT do segurado.
+        numero_cat: Número da CAT (busca exata).
+        limite: Número máximo de registros (padrão 50).
+
+    Returns:
+        Dicionário com 'total_encontrado', 'retornados' e 'itens' (dados da CAT,
+        segurado, datas e status/justificativas por instância).
+    """
+    claims = require_module("disputes_center")
+    with app.app_context():
+        return list_cats_handler(claims["law_firm_id"], vigencia, cnpj, nit, numero_cat, limite)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

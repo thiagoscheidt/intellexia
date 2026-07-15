@@ -66,6 +66,9 @@ Em **Settings → Connectors → Add custom connector**, informe a URL
 | `consultar_base_conhecimento` | Pergunta em linguagem natural à base de conhecimento (RAG com fontes) |
 | `listar_empresas_fap` | Lista empresas FAP sincronizadas do escritório |
 | `listar_contestacoes_fap` | Lista contestações FAP (filtros: CNPJ, raiz, vigência, situação, instância) |
+| `detalhar_contestacao` | Contestação completa + benefícios vinculados + alterações recentes |
+| `valores_de_filtro_fap` | Códigos/valores válidos para os filtros (situações, instâncias, tópicos...) |
+| `listar_cats_fap` | CATs das contestações (módulo Painel de Contestações) |
 | `listar_beneficios_fap` | Lista benefícios (filtros: CNPJ, segurado, NIT, CPF, nº benefício, tópico, vigência) |
 | `detalhar_beneficio` | Detalhes completos de um benefício |
 | `resumo_fap` | Estatísticas agregadas de contestações e benefícios |
@@ -86,7 +89,8 @@ Exemplos de uso no Claude:
 | Ferramenta | Módulo exigido no IntellexIA |
 |---|---|
 | `consultar_base_conhecimento` | Base de Conhecimento |
-| `listar_empresas_fap`, `listar_contestacoes_fap`, `listar_beneficios_fap`, `detalhar_beneficio`, `resumo_fap`, `alteracoes_recentes_fap`, `listar_procuracoes_fap` | Painel FAP |
+| `listar_empresas_fap`, `listar_contestacoes_fap`, `detalhar_contestacao`, `listar_beneficios_fap`, `detalhar_beneficio`, `resumo_fap`, `alteracoes_recentes_fap`, `listar_procuracoes_fap`, `valores_de_filtro_fap` | Painel FAP |
+| `listar_cats_fap` | Painel de Contestações |
 | `listar_processos`, `detalhar_processo` | Painel de Processos |
 | `revisar_peticao_inicial` | Revisor de Petições |
 

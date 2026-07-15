@@ -61,6 +61,9 @@ Use exatamente este endereço (sem barra no final).
 | `consultar_base_conhecimento` | Pergunta em linguagem natural, resposta com fontes | IA |
 | `listar_empresas_fap` | Empresas sincronizadas do escritório | Sistema |
 | `listar_contestacoes_fap` | Contestações com filtros (CNPJ, raiz, vigência, situação, instância) e status do PDF | FAP Web |
+| `detalhar_contestacao` | Contestação completa com benefícios vinculados e alterações recentes | FAP Web |
+| `valores_de_filtro_fap` | Códigos e valores válidos para filtros (situações, instâncias, tópicos, motivos) | Sistema |
+| `listar_cats_fap` | CATs das contestações com status por instância | Relatório |
 | `listar_beneficios_fap` | Benefícios com filtros (CNPJ, segurado, NIT, CPF, nº benefício, tópico, vigência...) | FAP Web |
 | `detalhar_beneficio` | Todos os campos de um benefício específico | Sistema |
 | `resumo_fap` | Contagens agregadas: contestações por vigência/situação/instância, benefícios por tipo/status/tópico | Cálculo |
@@ -79,7 +82,8 @@ O acesso da IA **espelha as suas permissões** no IntellexIA:
 | Para usar... | Você precisa do módulo... |
 |---|---|
 | Consulta à base de conhecimento | Base de Conhecimento |
-| Empresas, contestações, benefícios, resumo, alterações e procurações FAP | Painel FAP |
+| Empresas, contestações, benefícios, resumo, alterações, procurações e filtros FAP | Painel FAP |
+| CATs das contestações | Painel de Contestações |
 | Processos judiciais | Painel de Processos |
 | Revisor de petições | Revisor de Petições |
 
