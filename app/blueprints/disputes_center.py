@@ -3147,31 +3147,15 @@ def classify_single_benefit_topic_api(benefit_id):
     )
 
 
-@disputes_center_bp.route('/export-excel', methods=['POST'])
-@require_law_firm
-def export_disputes_center_excel():
-    law_firm_id = get_current_law_firm_id()
-    payload = _collect_listing_payload(default_length=1000)
+def build_benefits_export_workbook(benefits):
+    """Planilha oficial de benefícios do Painel de Contestações.
 
-    filtered_query = _apply_benefits_filters(
-        _base_benefits_query(law_firm_id),
-        search_value=payload['search'],
-        custom_filters=payload['filters'],
-        quick_client=payload['quick_client'],
-        quick_root=payload['quick_root'],
-        quick_cnpj=payload.get('quick_cnpj', ''),
-        quick_category_mode=payload.get('quick_category_mode', 'all'),
-        vigencia_id=payload.get('vigencia_id'),
-    )
+    Compartilhada entre a tela (export-excel) e o servidor MCP — mesmas
+    colunas e formatação nos dois caminhos.
 
-    order_column = ORDER_COLUMN_MAP.get(payload['order_column'], Benefit.id)
-    if payload['order_dir'] == 'asc':
-        filtered_query = filtered_query.order_by(order_column.asc(), Benefit.id.asc())
-    else:
-        filtered_query = filtered_query.order_by(order_column.desc(), Benefit.id.desc())
-
-    benefits = filtered_query.all()
-
+    Args:
+        benefits: iterável de tuplas (Benefit, client_name).
+    """
     workbook = Workbook()
     sheet = workbook.active
     sheet.title = 'Beneficios'
@@ -3262,6 +3246,36 @@ def export_disputes_center_excel():
 
     for idx, _ in enumerate(headers, start=1):
         sheet.column_dimensions[get_column_letter(idx)].width = 22
+
+    return workbook
+
+
+@disputes_center_bp.route('/export-excel', methods=['POST'])
+@require_law_firm
+def export_disputes_center_excel():
+    law_firm_id = get_current_law_firm_id()
+    payload = _collect_listing_payload(default_length=1000)
+
+    filtered_query = _apply_benefits_filters(
+        _base_benefits_query(law_firm_id),
+        search_value=payload['search'],
+        custom_filters=payload['filters'],
+        quick_client=payload['quick_client'],
+        quick_root=payload['quick_root'],
+        quick_cnpj=payload.get('quick_cnpj', ''),
+        quick_category_mode=payload.get('quick_category_mode', 'all'),
+        vigencia_id=payload.get('vigencia_id'),
+    )
+
+    order_column = ORDER_COLUMN_MAP.get(payload['order_column'], Benefit.id)
+    if payload['order_dir'] == 'asc':
+        filtered_query = filtered_query.order_by(order_column.asc(), Benefit.id.asc())
+    else:
+        filtered_query = filtered_query.order_by(order_column.desc(), Benefit.id.desc())
+
+    benefits = filtered_query.all()
+
+    workbook = build_benefits_export_workbook(benefits)
 
     stream = BytesIO()
     workbook.save(stream)

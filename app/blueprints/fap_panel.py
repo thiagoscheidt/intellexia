@@ -1370,38 +1370,22 @@ def contestacoes_page():
     )
 
 
-@fap_panel_bp.route('/contestacoes/export-excel')
-@require_law_firm
-def contestacoes_export_excel():
-    """Exporta as contestações filtradas para Excel (sem paginação) — planilha elaborada."""
-    law_firm_id = get_current_law_firm_id()
+def build_contestacoes_export_workbook(law_firm_id, rows, filters):
+    """Planilha oficial de contestações do Painel FAP.
 
-    f_year      = request.args.get('ano_vigencia', '').strip()
-    f_cnpj_raiz = request.args.get('cnpj_raiz', '').strip()
-    f_cnpj      = request.args.get('cnpj', '').strip()
-    f_instancia = request.args.get('instancia', '').strip()
-    f_situacao  = request.args.get('situacao', '').strip()
-    f_protocolo = request.args.get('protocolo', '').strip()
+    Compartilhada entre a tela (export-excel) e o servidor MCP — mesmas
+    colunas e formatação nos dois caminhos.
 
-    query = FapWebContestacao.query.filter_by(law_firm_id=law_firm_id)
-    if f_year and f_year != '__all__':
-        query = query.filter(FapWebContestacao.ano_vigencia == int(f_year))
-    if f_cnpj_raiz:
-        query = query.filter(FapWebContestacao.cnpj_raiz == f_cnpj_raiz)
-    if f_cnpj:
-        query = query.filter(FapWebContestacao.cnpj == f_cnpj)
-    if f_instancia:
-        query = query.filter(FapWebContestacao.instancia_codigo == f_instancia)
-    if f_situacao:
-        query = query.filter(FapWebContestacao.situacao_codigo == f_situacao)
-    if f_protocolo:
-        query = query.filter(FapWebContestacao.protocolo.ilike(f'%{f_protocolo}%'))
-
-    rows = query.order_by(
-        FapWebContestacao.ano_vigencia.desc(),
-        FapWebContestacao.cnpj.asc(),
-        FapWebContestacao.contestacao_id.asc(),
-    ).all()
+    Args:
+        rows: lista de FapWebContestacao já filtrada/ordenada.
+        filters: dict com ano_vigencia, cnpj_raiz, cnpj, instancia, situacao, protocolo.
+    """
+    f_year      = str(filters.get('ano_vigencia') or '')
+    f_cnpj_raiz = filters.get('cnpj_raiz') or ''
+    f_cnpj      = filters.get('cnpj') or ''
+    f_instancia = filters.get('instancia') or ''
+    f_situacao  = filters.get('situacao') or ''
+    f_protocolo = filters.get('protocolo') or ''
 
     # Mapa de importados
     contestacao_ids = [r.contestacao_id for r in rows]
@@ -1632,6 +1616,47 @@ def contestacoes_export_excel():
         c.fill   = total_fill
         c.border = cell_border
     sheet.row_dimensions[total_row].height = 18
+
+    return workbook
+
+
+@fap_panel_bp.route('/contestacoes/export-excel')
+@require_law_firm
+def contestacoes_export_excel():
+    """Exporta as contestações filtradas para Excel (sem paginação) — planilha elaborada."""
+    law_firm_id = get_current_law_firm_id()
+
+    f_year      = request.args.get('ano_vigencia', '').strip()
+    f_cnpj_raiz = request.args.get('cnpj_raiz', '').strip()
+    f_cnpj      = request.args.get('cnpj', '').strip()
+    f_instancia = request.args.get('instancia', '').strip()
+    f_situacao  = request.args.get('situacao', '').strip()
+    f_protocolo = request.args.get('protocolo', '').strip()
+
+    query = FapWebContestacao.query.filter_by(law_firm_id=law_firm_id)
+    if f_year and f_year != '__all__':
+        query = query.filter(FapWebContestacao.ano_vigencia == int(f_year))
+    if f_cnpj_raiz:
+        query = query.filter(FapWebContestacao.cnpj_raiz == f_cnpj_raiz)
+    if f_cnpj:
+        query = query.filter(FapWebContestacao.cnpj == f_cnpj)
+    if f_instancia:
+        query = query.filter(FapWebContestacao.instancia_codigo == f_instancia)
+    if f_situacao:
+        query = query.filter(FapWebContestacao.situacao_codigo == f_situacao)
+    if f_protocolo:
+        query = query.filter(FapWebContestacao.protocolo.ilike(f'%{f_protocolo}%'))
+
+    rows = query.order_by(
+        FapWebContestacao.ano_vigencia.desc(),
+        FapWebContestacao.cnpj.asc(),
+        FapWebContestacao.contestacao_id.asc(),
+    ).all()
+
+    workbook = build_contestacoes_export_workbook(law_firm_id, rows, {
+        'ano_vigencia': f_year, 'cnpj_raiz': f_cnpj_raiz, 'cnpj': f_cnpj,
+        'instancia': f_instancia, 'situacao': f_situacao, 'protocolo': f_protocolo,
+    })
 
     # ── Gerar arquivo ─────────────────────────────────────────────────────────
     stream = BytesIO()
