@@ -4,7 +4,37 @@ Tools: Base de Conhecimento (RAG)
 from __future__ import annotations
 
 
-def query_knowledge_base_handler(question: str, law_firm_id: int, user_id: int | None = None) -> dict:
+def _attach_file_links(items: list[dict], law_firm_id: int, app_public_url: str,
+                       file_id_key: str = "file_id") -> list[dict]:
+    """Adiciona 'url_abrir' (rota /knowledge-base/<id>/view do sistema) aos itens.
+
+    Só gera link para arquivos ativos do escritório do usuário — a própria rota
+    também revalida login e tenant ao abrir.
+    """
+    from app.models import KnowledgeBase
+
+    file_ids = {item.get(file_id_key) for item in items if item.get(file_id_key)}
+    if not file_ids:
+        return items
+
+    allowed = {
+        kb.id
+        for kb in KnowledgeBase.query.filter(
+            KnowledgeBase.id.in_(file_ids),
+            KnowledgeBase.law_firm_id == law_firm_id,
+            KnowledgeBase.is_active.is_(True),
+        ).with_entities(KnowledgeBase.id).all()
+    }
+    base = app_public_url.rstrip("/")
+    for item in items:
+        file_id = item.get(file_id_key)
+        if file_id in allowed:
+            item["url_abrir"] = f"{base}/knowledge-base/{file_id}/view"
+    return items
+
+
+def query_knowledge_base_handler(question: str, law_firm_id: int, user_id: int | None = None,
+                                 app_public_url: str = "") -> dict:
     """Invoca KnowledgeQueryAgent.ask_with_llm e retorna resposta formatada.
 
     O modo de busca (semântico vs. full-text) é decidido automaticamente pelo
@@ -20,10 +50,14 @@ def query_knowledge_base_handler(question: str, law_firm_id: int, user_id: int |
         law_firm_id=law_firm_id,
     )
 
+    fontes_detalhe = result.get("sources_detail", []) or []
+    if app_public_url:
+        fontes_detalhe = _attach_file_links(fontes_detalhe, law_firm_id, app_public_url)
+
     return {
         "resposta": result.get("answer", ""),
         "fontes": result.get("sources", []),
-        "fontes_detalhe": result.get("sources_detail", []),
+        "fontes_detalhe": fontes_detalhe,
         "perguntas_sugeridas": result.get("suggested_questions", []),
     }
 
@@ -33,6 +67,7 @@ def kb_search_handler(
     law_firm_id: int,
     search_mode: str | None = None,
     limit: int = 20,
+    app_public_url: str = "",
 ) -> dict:
     """Pesquisa Inteligente da base de conhecimento (mesmo pipeline da tela).
 
@@ -117,6 +152,8 @@ def kb_search_handler(
                 "descricao": kb.description,
                 "tipo": kb.file_type,
             },
+            **({"url_abrir": f"{app_public_url.rstrip('/')}/knowledge-base/{kb.id}/view"}
+               if app_public_url else {}),
         })
 
     resultados.sort(key=lambda r: r["relevancia_percentual"], reverse=True)

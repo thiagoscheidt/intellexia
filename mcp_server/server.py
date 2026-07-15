@@ -162,12 +162,15 @@ def consultar_base_conhecimento(pergunta: str) -> dict:
         pergunta: Pergunta em linguagem natural.
 
     Returns:
-        Dicionário com 'resposta', 'fontes', 'fontes_detalhe' e 'perguntas_sugeridas'.
+        Dicionário com 'resposta', 'fontes', 'fontes_detalhe' (cada fonte com
+        'url_abrir' para o usuário visualizar o documento no navegador — apresente
+        como link clicável) e 'perguntas_sugeridas'.
     """
     claims = require_module("knowledge_base")
     with app.app_context():
         return query_knowledge_base_handler(
-            pergunta, claims["law_firm_id"], user_id=claims.get("user_id")
+            pergunta, claims["law_firm_id"], user_id=claims.get("user_id"),
+            app_public_url=APP_PUBLIC_URL,
         )
 
 
@@ -194,11 +197,14 @@ def pesquisar_base_conhecimento(
 
     Returns:
         Dicionário com 'modo_busca', 'modo_decidido_por', 'pergunta_melhorada',
-        'total_resultados' e 'resultados' (trecho, fonte, página, relevância, arquivo).
+        'total_resultados' e 'resultados' (trecho, fonte, página, relevância,
+        arquivo e 'url_abrir' para o usuário visualizar o documento no navegador —
+        apresente como link clicável).
     """
     claims = require_module("knowledge_base")
     with app.app_context():
-        return kb_search_handler(pergunta, claims["law_firm_id"], modo_busca, limite)
+        return kb_search_handler(pergunta, claims["law_firm_id"], modo_busca, limite,
+                                 app_public_url=APP_PUBLIC_URL)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
