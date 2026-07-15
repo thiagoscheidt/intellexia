@@ -21,10 +21,12 @@ from app.agents.document_processing.agent_document_summary import AgentDocumentS
 from app.agents.knowledge_base.knowledge_ingestion_agent import KnowledgeIngestionAgent
 from app.services.knowledge_base.chat_context import build_attachments_context
 from app.services.knowledge_base.search_helpers import (
+    adjust_search_score,
     highlight_search_terms,
     looks_like_name_query,
     name_tokens,
     normalize_for_match,
+    passes_score_cutoff,
 )
 from app.services.knowledge_base.session_helpers import (
     generate_chat_title_from_question,
@@ -1656,10 +1658,6 @@ def intelligent_search():
                 
                 # Processar os resultados
                 if search_data and search_data.get('results') and search_data['results'].points:
-                    query_normalized = normalize_for_match(search_query)
-                    name_query = looks_like_name_query(search_query)
-                    query_tokens = name_tokens(search_query)
-
                     for idx, point in enumerate(search_data['results'].points):
                         payload = point.payload
                         point_score = getattr(point, 'score', None)
@@ -1686,29 +1684,11 @@ def intelligent_search():
                         source_name = payload.get('source', '') or ''
                         description_text = payload.get('description', '') or ''
                         candidate_text = f"{original_text} {source_name} {description_text}"
-                        candidate_normalized = normalize_for_match(candidate_text)
 
-                        has_literal_match = (
-                            bool(query_normalized) and query_normalized in candidate_normalized
+                        adjusted_score, has_literal_match = adjust_search_score(
+                            search_query, search_mode, base_score, candidate_text
                         )
-
-                        adjusted_score = base_score
-                        if search_mode == 'semantic':
-                            if has_literal_match:
-                                adjusted_score += 0.30 if name_query else 0.08
-
-                            if name_query and query_tokens:
-                                matched_tokens = sum(1 for token in query_tokens if token in candidate_normalized)
-                                token_coverage = matched_tokens / len(query_tokens)
-
-                                adjusted_score += 0.22 * token_coverage
-                                if token_coverage >= 0.95:
-                                    adjusted_score += 0.10
-                                elif token_coverage >= 0.75:
-                                    adjusted_score += 0.05
-
-                        adjusted_score = min(adjusted_score, 1.0)
-                        if (adjusted_score <= 0.30 and search_mode == 'semantic') or (adjusted_score < 0.40 and search_mode == 'full_text'):
+                        if not passes_score_cutoff(adjusted_score, search_mode):
                             continue
                         
                         result_item = {

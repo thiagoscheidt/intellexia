@@ -45,7 +45,7 @@ from main import app  # noqa: E402 — importa o app Flask com DB e configs
 
 from mcp_server.identity import require_module
 from mcp_server.oauth_provider import IntellexiaOAuthProvider
-from mcp_server.tools.knowledge import query_knowledge_base_handler
+from mcp_server.tools.knowledge import kb_search_handler, query_knowledge_base_handler
 from mcp_server.tools.fap import (
     list_fap_companies_handler,
     list_fap_contestacoes_handler,
@@ -169,6 +169,36 @@ def consultar_base_conhecimento(pergunta: str) -> dict:
         return query_knowledge_base_handler(
             pergunta, claims["law_firm_id"], user_id=claims.get("user_id")
         )
+
+
+@mcp.tool()
+def pesquisar_base_conhecimento(
+    pergunta: str,
+    modo_busca: str | None = None,
+    limite: int = 20,
+) -> dict:
+    """Pesquisa na base de conhecimento e retorna os trechos encontrados (sem gerar resposta).
+
+    É a Pesquisa Inteligente do sistema: um roteador LLM decide automaticamente
+    entre busca semântica (conceitos) e textual (termos exatos como CPF, CNPJ,
+    número de processo), a pergunta é otimizada antes da busca, e os resultados
+    voltam ranqueados com fonte, página e relevância. Use quando quiser os
+    documentos/trechos em si; para uma resposta elaborada use
+    consultar_base_conhecimento.
+
+    Args:
+        pergunta: O que pesquisar, em linguagem natural ou termo exato.
+        modo_busca: Força "semantic" ou "full_text" (opcional — sem informar,
+            o roteador LLM decide).
+        limite: Número máximo de trechos retornados (padrão 20).
+
+    Returns:
+        Dicionário com 'modo_busca', 'modo_decidido_por', 'pergunta_melhorada',
+        'total_resultados' e 'resultados' (trecho, fonte, página, relevância, arquivo).
+    """
+    claims = require_module("knowledge_base")
+    with app.app_context():
+        return kb_search_handler(pergunta, claims["law_firm_id"], modo_busca, limite)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

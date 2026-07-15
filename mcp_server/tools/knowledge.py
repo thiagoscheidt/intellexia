@@ -26,3 +26,109 @@ def query_knowledge_base_handler(question: str, law_firm_id: int, user_id: int |
         "fontes_detalhe": result.get("sources_detail", []),
         "perguntas_sugeridas": result.get("suggested_questions", []),
     }
+
+
+def kb_search_handler(
+    question: str,
+    law_firm_id: int,
+    search_mode: str | None = None,
+    limit: int = 20,
+) -> dict:
+    """Pesquisa Inteligente da base de conhecimento (mesmo pipeline da tela).
+
+    Sem modo explícito, o roteador LLM decide entre busca semântica e textual;
+    o enriquecimento da pergunta (semântica) e a extração de termos-chave
+    (textual) acontecem dentro de ask_knowledge_base. A pontuação/corte usa as
+    mesmas funções compartilhadas da tela (search_helpers). Retorna apenas
+    trechos de arquivos do escritório do usuário.
+    """
+    from app.agents.knowledge_base.knowledge_query_agent import KnowledgeQueryAgent
+    from app.models import KnowledgeBase
+    from app.services.knowledge_base.search_helpers import adjust_search_score, passes_score_cutoff
+
+    agent = KnowledgeQueryAgent()
+
+    mode = (search_mode or "").strip().lower() or None
+    if mode in {"full-text", "literal", "textual"}:
+        mode = "full_text"
+    if mode in {"semantic", "full_text"}:
+        decidido_por = "usuario"
+    else:
+        decision = agent.context_retrieval_routing.decide_retrieval_and_mode(question)
+        mode = decision.search_mode if decision.search_mode in ("semantic", "full_text") else "semantic"
+        decidido_por = "roteador_llm"
+
+    aviso = None
+    try:
+        data = agent.ask_knowledge_base(question, limit=50, search_mode=mode)
+    except Exception:
+        if mode != "full_text":
+            mode = "full_text"
+            aviso = "Busca semântica indisponível no momento; foi usada a busca textual."
+            data = agent.ask_knowledge_base(question, limit=50, search_mode=mode)
+        else:
+            raise
+
+    points = data["results"].points if data.get("results") else []
+
+    # Isolamento de tenant: só trechos de arquivos do escritório do usuário
+    file_ids = {p.payload.get("file_id") for p in points if (p.payload or {}).get("file_id")}
+    allowed: dict = {}
+    if file_ids:
+        rows = KnowledgeBase.query.filter(
+            KnowledgeBase.id.in_(file_ids),
+            KnowledgeBase.law_firm_id == law_firm_id,
+            KnowledgeBase.is_active.is_(True),
+        ).all()
+        allowed = {kb.id: kb for kb in rows}
+
+    resultados = []
+    for idx, point in enumerate(points):
+        payload = point.payload or {}
+        file_id = payload.get("file_id")
+        if file_id not in allowed:
+            continue
+
+        base_score = getattr(point, "score", None)
+        if base_score is None:
+            base_score = payload.get("_rankingScore")
+        if base_score is None and mode == "full_text":
+            base_score = max(0.35, 1.0 - (idx * 0.02))
+
+        text = payload.get("text", "") or ""
+        candidate_text = f"{text} {payload.get('source', '') or ''} {payload.get('description', '') or ''}"
+        adjusted_score, literal = adjust_search_score(question, mode, float(base_score or 0), candidate_text)
+        if not passes_score_cutoff(adjusted_score, mode):
+            continue
+
+        kb = allowed[file_id]
+        resultados.append({
+            "trecho": text[:1200] + ("…" if len(text) > 1200 else ""),
+            "fonte": payload.get("source") or kb.original_filename or "Documento sem nome",
+            "pagina": payload.get("page"),
+            "categoria": payload.get("category") or None,
+            "tags": [t for t in (payload.get("tags") or "").split(",") if t],
+            "numero_processo": payload.get("lawsuit_number") or None,
+            "relevancia_percentual": round(adjusted_score * 100, 2),
+            "match_literal": literal,
+            "arquivo": {
+                "id": kb.id,
+                "nome": kb.original_filename,
+                "descricao": kb.description,
+                "tipo": kb.file_type,
+            },
+        })
+
+    resultados.sort(key=lambda r: r["relevancia_percentual"], reverse=True)
+    resultados = resultados[:limit]
+
+    out = {
+        "modo_busca": mode,
+        "modo_decidido_por": decidido_por,
+        "pergunta_melhorada": data.get("improved_question"),
+        "total_resultados": len(resultados),
+        "resultados": resultados,
+    }
+    if aviso:
+        out["aviso"] = aviso
+    return out

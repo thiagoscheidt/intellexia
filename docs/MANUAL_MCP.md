@@ -59,6 +59,7 @@ Use exatamente este endereço (sem barra no final).
 | Ferramenta | O que faz | Origem |
 |---|---|---|
 | `consultar_base_conhecimento` | Pergunta em linguagem natural, resposta com fontes | IA |
+| `pesquisar_base_conhecimento` | Pesquisa Inteligente: retorna os trechos/documentos encontrados, com fonte, página e relevância (roteador decide busca semântica ou textual) | IA |
 | `listar_empresas_fap` | Empresas sincronizadas do escritório | Sistema |
 | `listar_contestacoes_fap` | Contestações com filtros (CNPJ, raiz, vigência, situação, instância) e status do PDF | FAP Web |
 | `detalhar_contestacao` | Contestação completa com benefícios vinculados e alterações recentes | FAP Web |

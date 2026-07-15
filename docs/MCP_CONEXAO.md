@@ -64,6 +64,7 @@ Em **Settings → Connectors → Add custom connector**, informe a URL
 | Ferramenta | O que faz |
 |---|---|
 | `consultar_base_conhecimento` | Pergunta em linguagem natural à base de conhecimento (RAG com fontes) |
+| `pesquisar_base_conhecimento` | Pesquisa Inteligente: trechos ranqueados com fonte/página (roteador LLM escolhe semântica vs. textual) |
 | `listar_empresas_fap` | Lista empresas FAP sincronizadas do escritório |
 | `listar_contestacoes_fap` | Lista contestações FAP (filtros: CNPJ, raiz, vigência, situação, instância) |
 | `detalhar_contestacao` | Contestação completa + benefícios vinculados + alterações recentes |
@@ -90,7 +91,7 @@ Exemplos de uso no Claude:
 
 | Ferramenta | Módulo exigido no IntellexIA |
 |---|---|
-| `consultar_base_conhecimento` | Base de Conhecimento |
+| `consultar_base_conhecimento`, `pesquisar_base_conhecimento` | Base de Conhecimento |
 | `listar_empresas_fap`, `listar_contestacoes_fap`, `detalhar_contestacao`, `listar_beneficios_fap`, `detalhar_beneficio`, `resumo_fap`, `alteracoes_recentes_fap`, `listar_procuracoes_fap`, `valores_de_filtro_fap`, `exportar_beneficios_excel`, `exportar_contestacoes_excel` | Painel FAP |
 | `listar_cats_fap` | Painel de Contestações |
 | `listar_processos`, `detalhar_processo` | Painel de Processos |
