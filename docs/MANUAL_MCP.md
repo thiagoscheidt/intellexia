@@ -18,7 +18,9 @@ O MCP é uma "ponte" segura entre um assistente de IA e o IntellexIA. Em vez de 
 - "Pesquise o NB 6320957810 nos documentos" — retorna os trechos com link para abrir o PDF;
 - "Me traga todos os benefícios B91 de 2023 **em planilha**" — gera o Excel oficial do sistema com link de download;
 - "O que mudou nas contestações esta semana?";
-- "Quem é o CNPJ 59.104.422/0103-84?" — consulta pública da Receita.
+- "Quem é o CNPJ 59.104.422/0103-84?" — consulta pública da Receita;
+- "**Revise esta petição**" (colando o texto) — o agente revisor oficial aponta achados e documentos faltantes;
+- Comando pronto `/analise_empresa` — análise completa de uma empresa em um clique.
 
 ---
 
@@ -151,7 +153,7 @@ O acesso da IA **espelha as suas permissões** no IntellexIA:
 |---|---|
 | Base de Conhecimento (consulta e pesquisa) | Base de Conhecimento |
 | Painel FAP (consultas, análises e relatórios Excel) | Painel FAP |
-| CATs das contestações | Painel de Contestações |
+| CATs, folha de pagamento, vínculos e rotatividade | Painel de Contestações |
 | Processos judiciais | Painel de Processos |
 | Revisor de petições | Revisor de Petições |
 | Consulta de CNPJ | Qualquer usuário logado (dados públicos) |
