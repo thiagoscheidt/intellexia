@@ -6,6 +6,8 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta
 
+from mcp_server.tools.pagination import clamp_limit, clamp_offset, fetch_page, page_envelope
+
 
 def _parse_topics(benefit) -> list[str]:
     """Tópicos de contestação do benefício: array atual com fallback no campo legado."""
@@ -92,9 +94,13 @@ def list_fap_companies_handler(
     cnpj: str | None = None,
     tipo_procuracao: str | None = None,
     limit: int = 100,
+    offset: int = 0,
 ) -> dict:
     """Retorna empresas FAP do escritório, com filtros e total encontrado."""
     from app.models import FapCompany
+
+    limit = clamp_limit(limit, 100)
+    offset = clamp_offset(offset)
 
     query = FapCompany.query.filter_by(law_firm_id=law_firm_id)
 
@@ -110,7 +116,9 @@ def list_fap_companies_handler(
         query = query.filter(FapCompany.tipo_procuracao_descricao.ilike(f"%{tipo_procuracao}%"))
 
     total = query.count()
-    companies = query.order_by(FapCompany.nome).limit(limit).all()
+    companies = fetch_page(
+        query.order_by(FapCompany.nome, FapCompany.id), limit, offset
+    )
 
     itens = [
         {
@@ -122,7 +130,7 @@ def list_fap_companies_handler(
         }
         for c in companies
     ]
-    return {"total_encontrado": total, "retornados": len(itens), "itens": itens}
+    return page_envelope(total, offset, itens)
 
 
 # ── Contestações ──────────────────────────────────────────────────────────────
@@ -147,10 +155,14 @@ def list_fap_contestacoes_handler(
     situacao_codigo: str | None = None,
     instancia_codigo: str | None = None,
     limit: int = 100,
+    offset: int = 0,
     app_public_url: str | None = None,
 ) -> dict:
     """Retorna contestações FAP filtradas, com total encontrado."""
     from app.models import FapWebContestacao
+
+    limit = clamp_limit(limit, 100)
+    offset = clamp_offset(offset)
 
     query = FapWebContestacao.query.filter_by(law_firm_id=law_firm_id)
 
@@ -166,10 +178,10 @@ def list_fap_contestacoes_handler(
         query = query.filter(FapWebContestacao.instancia_codigo == instancia_codigo)
 
     total = query.count()
-    contestacoes = (
-        query.order_by(FapWebContestacao.data_transmissao.desc())
-        .limit(limit)
-        .all()
+    contestacoes = fetch_page(
+        # data_transmissao é nula/repetida em muitos registros: o id desempata.
+        query.order_by(FapWebContestacao.data_transmissao.desc(), FapWebContestacao.id.desc()),
+        limit, offset,
     )
 
     names = _company_name_map(law_firm_id)
@@ -195,7 +207,7 @@ def list_fap_contestacoes_handler(
         }
         for c in contestacoes
     ]
-    return {"total_encontrado": total, "retornados": len(itens), "itens": itens}
+    return page_envelope(total, offset, itens)
 
 
 def get_contestacao_detail_handler(contestacao_id: int, law_firm_id: int,
@@ -301,9 +313,13 @@ def list_fap_benefits_handler(
     ano_vigencia: str | None = None,
     empresa: str | None = None,
     limit: int = 50,
+    offset: int = 0,
 ) -> dict:
     """Retorna benefícios FAP filtrados, com total encontrado."""
     from app.models import Benefit, db
+
+    limit = clamp_limit(limit, 50)
+    offset = clamp_offset(offset)
 
     query = Benefit.query.filter_by(law_firm_id=law_firm_id)
 
@@ -335,7 +351,12 @@ def list_fap_benefits_handler(
         query = query.filter(Benefit.fap_vigencia_years.like(f"%{ano_vigencia}%"))
 
     total = query.count()
-    benefits = query.order_by(Benefit.created_at.desc()).limit(limit).all()
+    benefits = fetch_page(
+        # Centenas de benefícios compartilham o mesmo created_at (carga em lote):
+        # sem o id, o banco não garante ordem entre eles e a paginação pularia linhas.
+        query.order_by(Benefit.created_at.desc(), Benefit.id.desc()),
+        limit, offset,
+    )
 
     names = _company_name_map(law_firm_id)
     itens = [
@@ -364,7 +385,7 @@ def list_fap_benefits_handler(
         }
         for b in benefits
     ]
-    return {"total_encontrado": total, "retornados": len(itens), "itens": itens}
+    return page_envelope(total, offset, itens)
 
 
 def get_benefit_detail_handler(benefit_id: int, law_firm_id: int) -> dict:
@@ -559,9 +580,13 @@ def fap_changes_handler(
     ano_vigencia: int | None = None,
     dias: int = 7,
     limit: int = 100,
+    offset: int = 0,
 ) -> dict:
     """Alterações detectadas nas últimas sincronizações com o portal FAP Web."""
     from app.models import FapWebContestacaoChangeHistory
+
+    limit = clamp_limit(limit, 100)
+    offset = clamp_offset(offset)
 
     query = FapWebContestacaoChangeHistory.query.filter_by(law_firm_id=law_firm_id)
     if cnpj:
@@ -573,7 +598,12 @@ def fap_changes_handler(
         query = query.filter(FapWebContestacaoChangeHistory.synced_at >= since)
 
     total = query.count()
-    changes = query.order_by(FapWebContestacaoChangeHistory.synced_at.desc()).limit(limit).all()
+    changes = fetch_page(
+        # Uma sincronização grava dezenas de mudanças no mesmo synced_at.
+        query.order_by(FapWebContestacaoChangeHistory.synced_at.desc(),
+                       FapWebContestacaoChangeHistory.id.desc()),
+        limit, offset,
+    )
 
     def _json_or_raw(value):
         if not value:
@@ -598,7 +628,7 @@ def fap_changes_handler(
         }
         for ch in changes
     ]
-    return {"total_encontrado": total, "retornados": len(itens), "periodo_dias": dias, "itens": itens}
+    return {**page_envelope(total, offset, itens), "periodo_dias": dias}
 
 
 # ── Procurações ───────────────────────────────────────────────────────────────
@@ -609,9 +639,13 @@ def list_fap_procuracoes_handler(
     cnpj_raiz: str | None = None,
     situacao_codigo: str | None = None,
     limit: int = 100,
+    offset: int = 0,
 ) -> dict:
     """Procurações eletrônicas sincronizadas do portal FAP Web."""
     from app.models import FapWebProcuracao
+
+    limit = clamp_limit(limit, 100)
+    offset = clamp_offset(offset)
 
     query = FapWebProcuracao.query.filter_by(law_firm_id=law_firm_id)
     if cnpj_raiz:
@@ -620,7 +654,10 @@ def list_fap_procuracoes_handler(
         query = query.filter(FapWebProcuracao.situacao_codigo == situacao_codigo)
 
     total = query.count()
-    procuracoes = query.order_by(FapWebProcuracao.data_fim.desc()).limit(limit).all()
+    procuracoes = fetch_page(
+        query.order_by(FapWebProcuracao.data_fim.desc(), FapWebProcuracao.id.desc()),
+        limit, offset,
+    )
 
     itens = [
         {
@@ -636,7 +673,7 @@ def list_fap_procuracoes_handler(
         }
         for p in procuracoes
     ]
-    return {"total_encontrado": total, "retornados": len(itens), "itens": itens}
+    return page_envelope(total, offset, itens)
 
 
 # ── Valores válidos de filtro ─────────────────────────────────────────────────

@@ -95,6 +95,8 @@ Use exatamente este endereço (sem barra no final) — é o endereço **desta** 
 
 > [!INFO] Para perguntas de **quantidade** ("quantos benefícios da empresa X?"), a IA usa o `resumo_fap` — resposta em segundos, sem listar registro por registro.
 
+> [!IA] **Listas grandes:** as consultas trazem uma página por vez (e dizem quantos registros existem no total). Havendo mais, a IA busca as páginas seguintes sozinha quando fizer sentido — mas para *todos* os registros o caminho certo é pedir a **planilha em Excel**, e para números agregados, o resumo.
+
 ### 📑 Relatórios em Excel
 
 | Ferramenta | O que faz | Origem |

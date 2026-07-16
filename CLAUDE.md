@@ -390,6 +390,7 @@ SUMMARY_MAX_CHARS=50000
 - **Tabelas PDF**: lógica de carry-over para células vazias (CNPJ/NIT que se repetem em linhas).
 - **Dual vector store**: Qdrant para busca conceitual, Meilisearch para busca por termos exatos (CPF, CNPJ, número de processo).
 - **Filtro de tenant obrigatório**: toda query de listagem filtra por `law_firm_id`. Nunca expor dados de outro escritório.
+- **Paginação das tools MCP**: listagens usam `mcp_server/tools/pagination.py` (`limite`/`deslocamento`, envelope com `tem_mais` + `proximo_deslocamento`). Todo `order_by` paginado **precisa terminar no `id`** — os dados vêm de carga em lote e empates no critério de ordenação fazem `LIMIT/OFFSET` pular e repetir linhas sem avisar.
 - **Datetimes em UTC no banco**; exibição em SP via filtros Jinja.
 - **Poppler** é dependência externa para converter PDF → imagem em petições (`pdf2image`). Instale via chocolatey/scoop/apt/brew.
 

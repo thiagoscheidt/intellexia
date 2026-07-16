@@ -3,6 +3,8 @@ Tools: Painel de Processos Judiciais
 """
 from __future__ import annotations
 
+from mcp_server.tools.pagination import clamp_limit, clamp_offset, fetch_page, page_envelope
+
 
 def _iso(value):
     return value.isoformat() if value else None
@@ -32,9 +34,13 @@ def list_processes_handler(
     status: str | None = None,
     numero_processo: str | None = None,
     limit: int = 50,
+    offset: int = 0,
 ) -> dict:
     """Lista processos judiciais do escritório, com fase atual."""
     from app.models import JudicialProcess
+
+    limit = clamp_limit(limit, 50)
+    offset = clamp_offset(offset)
 
     query = JudicialProcess.query.filter_by(law_firm_id=law_firm_id)
     if status:
@@ -43,7 +49,10 @@ def list_processes_handler(
         query = query.filter(JudicialProcess.process_number.like(f"%{numero_processo}%"))
 
     total = query.count()
-    processes = query.order_by(JudicialProcess.created_at.desc()).limit(limit).all()
+    processes = fetch_page(
+        query.order_by(JudicialProcess.created_at.desc(), JudicialProcess.id.desc()),
+        limit, offset,
+    )
 
     itens = [
         {
@@ -62,7 +71,7 @@ def list_processes_handler(
         }
         for p in processes
     ]
-    return {"total_encontrado": total, "retornados": len(itens), "itens": itens}
+    return page_envelope(total, offset, itens)
 
 
 def get_process_detail_handler(process_id: int, law_firm_id: int) -> dict:

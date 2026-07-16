@@ -93,6 +93,30 @@ Em **Settings → Connectors → Add custom connector**, informe a URL
 
 Prompts MCP (comandos prontos): `relatorio_semanal_fap`, `analise_empresa`, `agenda_do_dia`, `minuta_recurso`, `resumir_decisao`, `email_cliente`, `analise_risco_empresa`.
 
+### Paginação das listagens
+
+As tools `listar_*` e `alteracoes_recentes_fap` devolvem uma página por vez:
+
+| Campo da resposta | Significado |
+|---|---|
+| `total_encontrado` | Quantos registros o filtro encontrou (não quantos vieram) |
+| `retornados` / `deslocamento` | Tamanho e início desta página |
+| `tem_mais` | `true` = resposta parcial |
+| `proximo_deslocamento` | Valor a repassar em `deslocamento` para a próxima página |
+
+Parâmetros: `limite` (teto de 200 por página — acima disso a resposta só enche o
+contexto) e `deslocamento` (padrão 0). Chamadas sem `deslocamento` se comportam
+como antes.
+
+> **Ordenação estável:** todo `order_by` paginado termina no `id`. Os dados vêm de
+> carga em lote e centenas de registros compartilham o mesmo `created_at`; sem o
+> desempate, `LIMIT/OFFSET` repetiria linhas e pularia outras silenciosamente
+> (medido: 168 benefícios perdidos numa varredura de 2.899). Ao criar uma nova
+> listagem, use `mcp_server/tools/pagination.py` e mantenha essa regra.
+
+Para volume, prefira `exportar_*_excel` (até 50 mil linhas); para contagens,
+`resumo_fap`.
+
 Exemplos de uso no Claude:
 
 > "Liste as contestações FAP da vigência 2023 que estão indeferidas"

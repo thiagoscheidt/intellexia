@@ -3,6 +3,8 @@ Tools: Painel de Contestações — CATs (Comunicações de Acidente de Trabalho
 """
 from __future__ import annotations
 
+from mcp_server.tools.pagination import clamp_limit, clamp_offset, fetch_page, page_envelope
+
 
 def _iso(value):
     return value.isoformat() if value else None
@@ -15,9 +17,13 @@ def list_cats_handler(
     nit: str | None = None,
     cat_number: str | None = None,
     limit: int = 50,
+    offset: int = 0,
 ) -> dict:
     """CATs vinculadas às contestações FAP, com filtros."""
     from app.models import FapContestationCat
+
+    limit = clamp_limit(limit, 50)
+    offset = clamp_offset(offset)
 
     query = FapContestationCat.query.filter_by(law_firm_id=law_firm_id)
     if vigencia_year:
@@ -30,7 +36,11 @@ def list_cats_handler(
         query = query.filter(FapContestationCat.cat_number == cat_number)
 
     total = query.count()
-    cats = query.order_by(FapContestationCat.accident_date.desc()).limit(limit).all()
+    cats = fetch_page(
+        # accident_date repete (e é nula em parte dos registros): o id desempata.
+        query.order_by(FapContestationCat.accident_date.desc(), FapContestationCat.id.desc()),
+        limit, offset,
+    )
 
     itens = [
         {
@@ -52,7 +62,7 @@ def list_cats_handler(
         }
         for c in cats
     ]
-    return {"total_encontrado": total, "retornados": len(itens), "itens": itens}
+    return page_envelope(total, offset, itens)
 
 
 def _instance_fields(row) -> dict:
@@ -73,9 +83,13 @@ def list_payroll_masses_handler(
     vigencia_year: str | None = None,
     cnpj: str | None = None,
     limit: int = 50,
+    offset: int = 0,
 ) -> dict:
     """Massas salariais (folha de pagamento) contestadas, por competência."""
     from app.models import FapContestationPayrollMass as M
+
+    limit = clamp_limit(limit, 50)
+    offset = clamp_offset(offset)
 
     query = M.query.filter_by(law_firm_id=law_firm_id)
     if vigencia_year:
@@ -84,7 +98,10 @@ def list_payroll_masses_handler(
         query = query.filter(M.employer_cnpj == cnpj)
 
     total = query.count()
-    rows = query.order_by(M.vigencia_year.desc(), M.competence).limit(limit).all()
+    rows = fetch_page(
+        query.order_by(M.vigencia_year.desc(), M.competence, M.id),
+        limit, offset,
+    )
     itens = [
         {
             "id": r.id,
@@ -99,7 +116,7 @@ def list_payroll_masses_handler(
         }
         for r in rows
     ]
-    return {"total_encontrado": total, "retornados": len(itens), "itens": itens}
+    return page_envelope(total, offset, itens)
 
 
 def list_employment_links_handler(
@@ -107,9 +124,13 @@ def list_employment_links_handler(
     vigencia_year: str | None = None,
     cnpj: str | None = None,
     limit: int = 50,
+    offset: int = 0,
 ) -> dict:
     """Vínculos empregatícios contestados, por competência."""
     from app.models import FapContestationEmploymentLink as M
+
+    limit = clamp_limit(limit, 50)
+    offset = clamp_offset(offset)
 
     query = M.query.filter_by(law_firm_id=law_firm_id)
     if vigencia_year:
@@ -118,7 +139,10 @@ def list_employment_links_handler(
         query = query.filter(M.employer_cnpj == cnpj)
 
     total = query.count()
-    rows = query.order_by(M.vigencia_year.desc(), M.competence).limit(limit).all()
+    rows = fetch_page(
+        query.order_by(M.vigencia_year.desc(), M.competence, M.id),
+        limit, offset,
+    )
     itens = [
         {
             "id": r.id,
@@ -133,7 +157,7 @@ def list_employment_links_handler(
         }
         for r in rows
     ]
-    return {"total_encontrado": total, "retornados": len(itens), "itens": itens}
+    return page_envelope(total, offset, itens)
 
 
 def list_turnover_rates_handler(
@@ -141,9 +165,13 @@ def list_turnover_rates_handler(
     vigencia_year: str | None = None,
     cnpj: str | None = None,
     limit: int = 50,
+    offset: int = 0,
 ) -> dict:
     """Taxas de rotatividade contestadas, por ano."""
     from app.models import FapContestationTurnoverRate as M
+
+    limit = clamp_limit(limit, 50)
+    offset = clamp_offset(offset)
 
     query = M.query.filter_by(law_firm_id=law_firm_id)
     if vigencia_year:
@@ -152,7 +180,10 @@ def list_turnover_rates_handler(
         query = query.filter(M.employer_cnpj == cnpj)
 
     total = query.count()
-    rows = query.order_by(M.vigencia_year.desc(), M.year).limit(limit).all()
+    rows = fetch_page(
+        query.order_by(M.vigencia_year.desc(), M.year, M.id),
+        limit, offset,
+    )
     itens = [
         {
             "id": r.id,
@@ -168,4 +199,4 @@ def list_turnover_rates_handler(
         }
         for r in rows
     ]
-    return {"total_encontrado": total, "retornados": len(itens), "itens": itens}
+    return page_envelope(total, offset, itens)

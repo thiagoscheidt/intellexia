@@ -229,6 +229,7 @@ def listar_empresas_fap(
     cnpj: str | None = None,
     tipo_procuracao: str | None = None,
     limite: int = 100,
+    deslocamento: int = 0,
 ) -> dict:
     """Lista as empresas FAP cadastradas e sincronizadas do escritório.
 
@@ -240,6 +241,8 @@ def listar_empresas_fap(
         cnpj: CNPJ ou raiz do CNPJ (aceita formatado; compara pela raiz de 8 dígitos).
         tipo_procuracao: Filtra pelo tipo de procuração (busca parcial).
         limite: Número máximo de registros (padrão 100).
+        deslocamento: Pula os N primeiros resultados (paginação). Repasse aqui o
+            'proximo_deslocamento' que veio na resposta anterior.
 
     Returns:
         Dicionário com 'total_encontrado', 'retornados' e 'itens' (id, cnpj — raiz
@@ -247,7 +250,8 @@ def listar_empresas_fap(
     """
     claims = require_module("fap_panel")
     with app.app_context():
-        return list_fap_companies_handler(claims["law_firm_id"], nome, cnpj, tipo_procuracao, limite)
+        return list_fap_companies_handler(claims["law_firm_id"], nome, cnpj, tipo_procuracao,
+                                          limite, deslocamento)
 
 
 @mcp.tool()
@@ -258,6 +262,7 @@ def listar_contestacoes_fap(
     situacao_codigo: str | None = None,
     instancia_codigo: str | None = None,
     limite: int = 100,
+    deslocamento: int = 0,
 ) -> dict:
     """Lista contestações FAP sincronizadas do portal Dataprev, com total encontrado.
 
@@ -268,6 +273,8 @@ def listar_contestacoes_fap(
         situacao_codigo: Código de situação (ex: DEFERIDO, INDEFERIDO).
         instancia_codigo: Código de instância (ex: ADMINISTRATIVO_PRIMEIRA_INSTANCIA).
         limite: Número máximo de registros retornados (padrão 100).
+        deslocamento: Pula os N primeiros resultados (paginação). Repasse aqui o
+            'proximo_deslocamento' que veio na resposta anterior.
 
     Returns:
         Dicionário com 'total_encontrado', 'retornados' e 'itens' (cada item com
@@ -277,7 +284,7 @@ def listar_contestacoes_fap(
     with app.app_context():
         return list_fap_contestacoes_handler(
             claims["law_firm_id"], cnpj, cnpj_raiz, ano_vigencia,
-            situacao_codigo, instancia_codigo, limite,
+            situacao_codigo, instancia_codigo, limite, deslocamento,
             app_public_url=APP_PUBLIC_URL,
         )
 
@@ -296,6 +303,7 @@ def listar_beneficios_fap(
     ano_vigencia: str | None = None,
     empresa: str | None = None,
     limite: int = 50,
+    deslocamento: int = 0,
 ) -> dict:
     """Lista benefícios previdenciários vinculados a contestações FAP, com total encontrado.
 
@@ -316,6 +324,8 @@ def listar_beneficios_fap(
         numero_beneficio: Número do benefício (busca exata).
         ano_vigencia: Ano de vigência FAP em que o benefício aparece (ex: "2023").
         limite: Número máximo de registros retornados (padrão 50).
+        deslocamento: Pula os N primeiros resultados (paginação). Repasse aqui o
+            'proximo_deslocamento' que veio na resposta anterior.
 
     Returns:
         Dicionário com 'total_encontrado', 'retornados' e 'itens' (cada item com
@@ -326,7 +336,7 @@ def listar_beneficios_fap(
         return list_fap_benefits_handler(
             claims["law_firm_id"], cnpj, status, tipo_pedido, tipo_beneficio,
             topico_contestacao, segurado, nit, cpf, numero_beneficio, ano_vigencia,
-            empresa, limite,
+            empresa, limite, deslocamento,
         )
 
 
@@ -439,6 +449,7 @@ def alteracoes_recentes_fap(
     ano_vigencia: int | None = None,
     dias: int = 7,
     limite: int = 100,
+    deslocamento: int = 0,
 ) -> dict:
     """Alterações detectadas nas sincronizações com o portal FAP Web.
 
@@ -450,10 +461,13 @@ def alteracoes_recentes_fap(
         ano_vigencia: Filtra por ano de vigência (opcional).
         dias: Janela de tempo em dias (padrão 7; use 0 para todo o histórico).
         limite: Número máximo de registros (padrão 100).
+        deslocamento: Pula os N primeiros resultados (paginação). Repasse aqui o
+            'proximo_deslocamento' que veio na resposta anterior.
     """
     claims = require_module("fap_panel")
     with app.app_context():
-        return fap_changes_handler(claims["law_firm_id"], cnpj, ano_vigencia, dias, limite)
+        return fap_changes_handler(claims["law_firm_id"], cnpj, ano_vigencia, dias, limite,
+                                  deslocamento)
 
 
 @mcp.tool()
@@ -461,6 +475,7 @@ def listar_procuracoes_fap(
     cnpj_raiz: str | None = None,
     situacao_codigo: str | None = None,
     limite: int = 100,
+    deslocamento: int = 0,
 ) -> dict:
     """Lista procurações eletrônicas sincronizadas do portal FAP Web.
 
@@ -468,6 +483,8 @@ def listar_procuracoes_fap(
         cnpj_raiz: Raiz do CNPJ da empresa outorgante (8 dígitos, opcional).
         situacao_codigo: Código de situação da procuração (opcional).
         limite: Número máximo de registros (padrão 100).
+        deslocamento: Pula os N primeiros resultados (paginação). Repasse aqui o
+            'proximo_deslocamento' que veio na resposta anterior.
 
     Returns:
         Dicionário com 'total_encontrado', 'retornados' e 'itens' (protocolo, tipo,
@@ -475,7 +492,8 @@ def listar_procuracoes_fap(
     """
     claims = require_module("fap_panel")
     with app.app_context():
-        return list_fap_procuracoes_handler(claims["law_firm_id"], cnpj_raiz, situacao_codigo, limite)
+        return list_fap_procuracoes_handler(claims["law_firm_id"], cnpj_raiz, situacao_codigo,
+                                            limite, deslocamento)
 
 
 @mcp.tool()
@@ -516,6 +534,7 @@ def listar_cats_fap(
     nit: str | None = None,
     numero_cat: str | None = None,
     limite: int = 50,
+    deslocamento: int = 0,
 ) -> dict:
     """Lista CATs (Comunicações de Acidente de Trabalho) das contestações FAP.
 
@@ -525,6 +544,8 @@ def listar_cats_fap(
         nit: NIT do segurado.
         numero_cat: Número da CAT (busca exata).
         limite: Número máximo de registros (padrão 50).
+        deslocamento: Pula os N primeiros resultados (paginação). Repasse aqui o
+            'proximo_deslocamento' que veio na resposta anterior.
 
     Returns:
         Dicionário com 'total_encontrado', 'retornados' e 'itens' (dados da CAT,
@@ -532,7 +553,8 @@ def listar_cats_fap(
     """
     claims = require_module("disputes_center")
     with app.app_context():
-        return list_cats_handler(claims["law_firm_id"], vigencia, cnpj, nit, numero_cat, limite)
+        return list_cats_handler(claims["law_firm_id"], vigencia, cnpj, nit, numero_cat,
+                                 limite, deslocamento)
 
 
 @mcp.tool()
@@ -540,6 +562,7 @@ def listar_massas_salariais_fap(
     vigencia: str | None = None,
     cnpj: str | None = None,
     limite: int = 50,
+    deslocamento: int = 0,
 ) -> dict:
     """Lista massas salariais (folha de pagamento) contestadas no FAP, por competência.
 
@@ -549,10 +572,13 @@ def listar_massas_salariais_fap(
         vigencia: Ano de vigência FAP (ex: "2023").
         cnpj: CNPJ do empregador (apenas números).
         limite: Número máximo de registros (padrão 50).
+        deslocamento: Pula os N primeiros resultados (paginação). Repasse aqui o
+            'proximo_deslocamento' que veio na resposta anterior.
     """
     claims = require_module("disputes_center")
     with app.app_context():
-        return list_payroll_masses_handler(claims["law_firm_id"], vigencia, cnpj, limite)
+        return list_payroll_masses_handler(claims["law_firm_id"], vigencia, cnpj, limite,
+                                           deslocamento)
 
 
 @mcp.tool()
@@ -560,6 +586,7 @@ def listar_vinculos_fap(
     vigencia: str | None = None,
     cnpj: str | None = None,
     limite: int = 50,
+    deslocamento: int = 0,
 ) -> dict:
     """Lista vínculos empregatícios contestados no FAP, por competência.
 
@@ -569,10 +596,13 @@ def listar_vinculos_fap(
         vigencia: Ano de vigência FAP (ex: "2023").
         cnpj: CNPJ do empregador (apenas números).
         limite: Número máximo de registros (padrão 50).
+        deslocamento: Pula os N primeiros resultados (paginação). Repasse aqui o
+            'proximo_deslocamento' que veio na resposta anterior.
     """
     claims = require_module("disputes_center")
     with app.app_context():
-        return list_employment_links_handler(claims["law_firm_id"], vigencia, cnpj, limite)
+        return list_employment_links_handler(claims["law_firm_id"], vigencia, cnpj, limite,
+                                             deslocamento)
 
 
 @mcp.tool()
@@ -580,6 +610,7 @@ def listar_rotatividade_fap(
     vigencia: str | None = None,
     cnpj: str | None = None,
     limite: int = 50,
+    deslocamento: int = 0,
 ) -> dict:
     """Lista taxas de rotatividade contestadas no FAP, por ano.
 
@@ -590,10 +621,13 @@ def listar_rotatividade_fap(
         vigencia: Ano de vigência FAP (ex: "2023").
         cnpj: CNPJ do empregador (apenas números).
         limite: Número máximo de registros (padrão 50).
+        deslocamento: Pula os N primeiros resultados (paginação). Repasse aqui o
+            'proximo_deslocamento' que veio na resposta anterior.
     """
     claims = require_module("disputes_center")
     with app.app_context():
-        return list_turnover_rates_handler(claims["law_firm_id"], vigencia, cnpj, limite)
+        return list_turnover_rates_handler(claims["law_firm_id"], vigencia, cnpj, limite,
+                                           deslocamento)
 
 
 @mcp.tool()
@@ -686,6 +720,7 @@ def listar_processos(
     status: str | None = None,
     numero_processo: str | None = None,
     limite: int = 50,
+    deslocamento: int = 0,
 ) -> dict:
     """Lista processos judiciais do escritório, com fase atual de cada um.
 
@@ -693,6 +728,8 @@ def listar_processos(
         status: ativo, suspenso, encerrado ou aguardando (opcional).
         numero_processo: Número CNJ (busca parcial, opcional).
         limite: Número máximo de registros (padrão 50).
+        deslocamento: Pula os N primeiros resultados (paginação). Repasse aqui o
+            'proximo_deslocamento' que veio na resposta anterior.
 
     Returns:
         Dicionário com 'total_encontrado', 'retornados' e 'itens' (número, título,
@@ -700,7 +737,8 @@ def listar_processos(
     """
     claims = require_module("process_panel")
     with app.app_context():
-        return list_processes_handler(claims["law_firm_id"], status, numero_processo, limite)
+        return list_processes_handler(claims["law_firm_id"], status, numero_processo, limite,
+                                      deslocamento)
 
 
 @mcp.tool()
