@@ -14,9 +14,13 @@ Converte os arquivos ``docs/MANUAL_*.md`` em HTML pronto para a página
   exatamente um rótulo conhecido (``FAP Web``, ``IA``, ``Sistema``, ``Relatório``,
   ``Cálculo``) — ou uma lista deles separada por vírgula — vira pílula colorida.
 - **Índice lateral (TOC)**: gerado a partir dos títulos de cada manual.
+- **Endereços do sistema**: ``:url_mcp:`` e ``:url_app:`` viram a URL real desta
+  instalação (produção e dev têm domínios diferentes — nunca escreva a URL fixa
+  no markdown).
 
 Os manuais são a **fonte única**: esta função é chamada em runtime pela rota e
-o resultado é mantido em cache, invalidado quando qualquer ``.md`` muda.
+o resultado é mantido em cache, invalidado quando qualquer ``.md`` muda ou quando
+o domínio resolvido muda.
 """
 import os
 import re
@@ -24,6 +28,8 @@ import unicodedata
 
 from bs4 import BeautifulSoup
 from markdown_it import MarkdownIt
+
+from app.utils.urls import app_public_url, mcp_public_url
 
 # Raiz do projeto: .../app/services/manual_renderer.py -> sobe 3 níveis
 _PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -147,12 +153,23 @@ def _process(html: str, module_id: str) -> tuple[str, list[dict]]:
         wrapper["class"] = "table-wrap"
         table.wrap(wrapper)
 
-    # Marcador :claude: -> ícone inline (títulos e corpo)
-    html_out = str(soup).replace(":claude:", _CLAUDE_SVG)
+    # Marcadores finais: ícone do Claude e endereços desta instalação.
+    html_out = (
+        str(soup)
+        .replace(":claude:", _CLAUDE_SVG)
+        .replace(":url_mcp:", mcp_public_url())
+        .replace(":url_app:", app_public_url())
+    )
     return html_out, toc
 
 
-def _mtimes() -> tuple:
+def _cache_key() -> tuple:
+    """Invalida o cache quando um manual muda **ou** quando o domínio muda.
+
+    O domínio entra na chave porque os marcadores ``:url_mcp:``/``:url_app:``
+    são resolvidos no render: sem isso, uma instalação poderia servir a URL de
+    outra a partir do cache.
+    """
     out = []
     for _mid, _label, filename in _MANUALS:
         path = os.path.join(_DOCS_DIR, filename)
@@ -160,6 +177,8 @@ def _mtimes() -> tuple:
             out.append(os.path.getmtime(path))
         except OSError:
             out.append(0.0)
+    out.append(mcp_public_url())
+    out.append(app_public_url())
     return tuple(out)
 
 
@@ -170,7 +189,7 @@ def render_modules() -> list[dict]:
 
     Usa cache invalidado pela data de modificação dos arquivos.
     """
-    key = _mtimes()
+    key = _cache_key()
     if _cache["key"] == key and _cache["modules"] is not None:
         return _cache["modules"]
 

@@ -4,7 +4,10 @@ O IntellexIA expõe um servidor **MCP (Model Context Protocol)** que permite a a
 (Claude Code, Claude Desktop, etc.) consultar a base de conhecimento, o painel FAP e as
 contestações do seu escritório — com autenticação **OAuth 2.1 na sua conta do IntellexIA**.
 
-- **URL do servidor:** `https://rs-dev.intellexia.com.br/mcp`
+- **URL do servidor:** `https://SEU-DOMINIO/mcp` — o domínio desta instalação do IntellexIA
+  (ex.: `https://rs-dev.intellexia.com.br/mcp` no ambiente de desenvolvimento). A URL exata
+  aparece pronta para copiar no sistema: menu do topo → ícone do Claude, ou em
+  *Manuais → Conectar sua IA (MCP)*.
 - **Autenticação:** OAuth no navegador, reusando o login do IntellexIA (sem chaves ou tokens manuais)
 - **Isolamento:** todo acesso é restrito ao escritório do usuário autenticado e respeita as
   permissões de módulo configuradas em *Administração de Usuários*
@@ -13,7 +16,7 @@ contestações do seu escritório — com autenticação **OAuth 2.1 na sua cont
 
 ## Pré-requisitos
 
-1. Ter uma conta ativa no IntellexIA (`https://rs-dev.intellexia.com.br`).
+1. Ter uma conta ativa no IntellexIA.
 2. Usuário e escritório ativos.
 3. Permissão nos módulos que pretende usar (veja [Permissões](#permissões-por-ferramenta)).
 
@@ -24,7 +27,7 @@ contestações do seu escritório — com autenticação **OAuth 2.1 na sua cont
 ### 1. Adicionar o servidor
 
 ```bash
-claude mcp add --transport http intellexia https://rs-dev.intellexia.com.br/mcp
+claude mcp add --transport http intellexia https://SEU-DOMINIO/mcp
 ```
 
 > Use `--scope user` para disponibilizar em todos os projetos, ou rode dentro de um projeto
@@ -36,7 +39,7 @@ Dentro do Claude Code:
 
 1. Digite `/mcp`
 2. Selecione **intellexia** → **Authenticate**
-3. O navegador abre em `rs-dev.intellexia.com.br`:
+3. O navegador abre no IntellexIA:
    - **Já logado no IntellexIA?** Aparece direto a tela "Autorizar acesso" — clique em **Autorizar**.
    - **Não logado?** Faça login normalmente; você volta automaticamente para a tela de autorização.
 4. Pronto — o Claude Code confirma a conexão e as ferramentas ficam disponíveis.
@@ -54,7 +57,7 @@ Deve mostrar `intellexia: ... - ✓ Connected`.
 ## Claude Desktop / claude.ai
 
 Em **Settings → Connectors → Add custom connector**, informe a URL
-`https://rs-dev.intellexia.com.br/mcp` e conclua a autorização no navegador
+`https://SEU-DOMINIO/mcp` e conclua a autorização no navegador
 (mesmo fluxo de login do IntellexIA).
 
 ---
@@ -129,7 +132,7 @@ reavaliadas automaticamente a cada renovação de token (no máximo 1 hora).
 | Navegador abre no login e não volta | Sessão do IntellexIA expirada | Faça login e o fluxo continua sozinho |
 | "Acesso negado: ... módulo" | Usuário sem o módulo liberado | Peça a um administrador em *Administração de Usuários* |
 | "Solicitação expirada" na tela de autorização | Demorou mais de 10 min para autorizar | Reinicie a conexão no cliente |
-| `Protected resource ... does not match` | Cliente configurado com URL divergente | Use exatamente `https://rs-dev.intellexia.com.br/mcp` (sem barra final) |
+| `Protected resource ... does not match` | Cliente configurado com URL divergente | Use exatamente a URL mostrada no sistema, **sem barra final** |
 | Falha geral de conexão | Serviço fora do ar | No servidor: `systemctl status intellexia-mcp` |
 
 ---
@@ -159,6 +162,6 @@ sudo bash deploy/deploy_mcp.sh
 
 O script atualiza o código em `/sites/intellexia`, roda a migration das tabelas OAuth,
 instala/reinicia o serviço systemd `intellexia-mcp` (porta 8001) e garante os `location`
-de `/mcp` e do discovery OAuth no nginx de `rs-dev.intellexia.com.br`.
+de `/mcp` e do discovery OAuth no nginx do domínio configurado em `NGINX_SITE`.
 
 Arquitetura e decisões de design: [superpowers/specs/2026-07-15-mcp-oauth-design.md](superpowers/specs/2026-07-15-mcp-oauth-design.md).

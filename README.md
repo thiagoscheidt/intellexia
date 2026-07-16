@@ -517,7 +517,7 @@ módulo do usuário e são isoladas por escritório.
 Conectar o Claude Code:
 
 ```
-claude mcp add --transport http intellexia https://rs-dev.intellexia.com.br/mcp
+claude mcp add --transport http intellexia https://SEU-DOMINIO/mcp
 ```
 
 Depois, no Claude Code: `/mcp` → Authenticate → autorizar no navegador (login do IntellexIA).

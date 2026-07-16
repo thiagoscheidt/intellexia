@@ -26,6 +26,7 @@ Cron sugerido (de hora em hora):
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -55,12 +56,18 @@ def main() -> int:
 
     from main import app
     from app.services import email_service, notification_service
+    from app.utils.urls import app_public_url
 
     with app.app_context():
         # O dry-run só monta os e-mails, então roda mesmo sem SMTP.
         if not email_service.is_configured() and not args.dry_run:
             _log('⚠️  SMTP não configurado (SMTP_HOST/SMTP_FROM_EMAIL no .env). Nada a fazer.')
             return 1
+
+        # Sem requisição em curso, só o .env diz qual é o domínio desta instalação.
+        if not os.environ.get('APP_PUBLIC_URL'):
+            _log(f'⚠️  APP_PUBLIC_URL não definido no .env — os links dos e-mails vão '
+                 f'apontar para {app_public_url()}. Defina o domínio desta instalação.')
 
         if args.force:
             if not args.law_firm_id:

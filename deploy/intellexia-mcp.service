@@ -9,7 +9,9 @@ ExecStart=/root/.local/bin/uv run python mcp_server/server.py
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
-Environment=MCP_PUBLIC_URL=https://rs-dev.intellexia.com.br/mcp
+# __MCP_PUBLIC_URL__ é substituído pelo deploy/deploy_mcp.sh conforme o domínio
+# da instalação (MCP_DOMAIN). Cada ambiente — dev e produção — tem o seu.
+Environment=MCP_PUBLIC_URL=__MCP_PUBLIC_URL__
 Environment=MCP_HOST=127.0.0.1
 Environment=MCP_PORT=8001
 

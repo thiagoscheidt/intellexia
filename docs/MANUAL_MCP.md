@@ -27,10 +27,10 @@ O MCP é uma "ponte" segura entre um assistente de IA e o IntellexIA. Em vez de 
 ## Endereço do servidor
 
 ```
-https://rs-dev.intellexia.com.br/mcp
+:url_mcp:
 ```
 
-Use exatamente este endereço (sem barra no final).
+Use exatamente este endereço (sem barra no final) — é o endereço **desta** instalação do IntellexIA, já preenchido acima.
 
 ---
 
@@ -39,7 +39,7 @@ Use exatamente este endereço (sem barra no final).
 1. No terminal, adicione o servidor:
 
    ```
-   claude mcp add --transport http intellexia https://rs-dev.intellexia.com.br/mcp
+   claude mcp add --transport http intellexia :url_mcp:
    ```
 
 2. Dentro do Claude Code, digite `/mcp`, selecione **intellexia** e escolha **Authenticate**.
@@ -55,7 +55,7 @@ Use exatamente este endereço (sem barra no final).
 ## :claude: Conectar no Claude Desktop / claude.ai
 
 1. Abra **Settings → Connectors → Add custom connector**.
-2. Informe a URL `https://rs-dev.intellexia.com.br/mcp`.
+2. Informe a URL `:url_mcp:`.
 3. Conclua a autorização no navegador (mesmo fluxo: login do IntellexIA + botão **Autorizar**).
 
 ---

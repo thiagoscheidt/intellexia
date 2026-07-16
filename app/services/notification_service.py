@@ -19,6 +19,7 @@ from app.models import db, LawFirm, NotificationSetting
 from app.services import email_service
 from app.services.fap_digest_service import build_fap_digest
 from app.utils.timezone import SP_TZ
+from app.utils.urls import app_public_url
 
 logger = logging.getLogger(__name__)
 
@@ -31,11 +32,6 @@ _FIRST_WINDOW = {
 }
 
 WEEKDAY_LABELS = ['Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado', 'Domingo']
-
-
-def app_public_url() -> str:
-    """URL pública do sistema, para os links do e-mail (sem barra final)."""
-    return (os.environ.get('APP_PUBLIC_URL') or 'https://rs-dev.intellexia.com.br').rstrip('/')
 
 
 def get_or_create_setting(law_firm_id: int, notification_type: str) -> NotificationSetting:

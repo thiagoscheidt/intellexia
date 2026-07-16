@@ -11,6 +11,7 @@ from app.utils.permissions import (
     has_module_permission,
     parse_module_permissions,
 )
+from app.utils.urls import app_public_url, mcp_public_url
 from datetime import datetime
 from functools import wraps
 
@@ -85,6 +86,14 @@ def init_app_middlewares(app):
         return {
             'recent_case_comments': recent_items,
             'recent_case_comments_count': len(recent_items)
+        }
+
+    @app.context_processor
+    def inject_public_urls():
+        """URLs públicas para os templates (modal do conector MCP, manual)."""
+        return {
+            'app_public_url': app_public_url(),
+            'mcp_public_url': mcp_public_url(),
         }
 
     @app.context_processor

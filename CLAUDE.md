@@ -153,6 +153,8 @@ O manual de uso dos painéis tem **fonte única em Markdown**: `docs/MANUAL_DASH
   - Avisos coloridos: citação (`>`) com marcador na 1ª linha — `> [!DOU]` (dourado/Diário Oficial), `> [!ALERTA]` (âmbar), `> [!INFO]` (azul), `> [!IA]` (roxo); `>` sem marcador = callout neutro.
   - Pílulas de origem: numa célula de tabela, escrever só o rótulo `FAP Web` / `IA` / `Sistema` / `Relatório` / `Cálculo` (ou lista separada por vírgula) vira pílula colorida.
   - Índice lateral: gerado automaticamente dos títulos `##`.
+  - Ícone do Claude: `:claude:` no texto ou no título (no título, o ícone também vai para o índice).
+  - Endereços: `:url_mcp:` e `:url_app:` viram a URL real da instalação em runtime. **Nunca escreva o domínio fixo** em manual, template ou doc de usuário — dev e produção têm domínios diferentes; use `app/utils/urls.py` (`mcp_public_url()` / `app_public_url()`, expostos aos templates via context processor).
 - **Assistente** (`ManualAssistantService` em `app/services/`, endpoint `POST /docs/chat`): chat flutuante na própria página, responde **só com base nos manuais** (lidos inteiros no prompt, sem RAG), modelo `DEFAULT_MODEL_MINI` (override via env `MANUAL_ASSISTANT_MODEL`). Lê os mesmos `.md`, então página e chat nunca dessincronizam.
 - **Acesso**: `/docs/*` exige login, mas o prefixo `docs.` não está mapeado a módulo de permissão — qualquer usuário logado acessa.
 

@@ -188,7 +188,7 @@
         <label class="form-label fw-semibold mb-1" for="claude-mcp-url">URL do conector</label>
         <div class="input-group mb-3">
           <input type="text" class="form-control font-monospace" id="claude-mcp-url"
-            value="https://rs-dev.intellexia.com.br/mcp" readonly>
+            value="{{ mcp_public_url }}" readonly>
           <button class="btn btn-outline-primary" type="button" id="claude-mcp-copy" title="Copiar URL">
             <i class="bi bi-clipboard"></i>
           </button>
@@ -196,7 +196,7 @@
 
         <p class="text-muted small mb-0">
           <i class="bi bi-terminal me-1"></i>No <strong>Claude Code</strong> (terminal):
-          <code>claude mcp add --transport http intellexia https://rs-dev.intellexia.com.br/mcp</code>
+          <code>claude mcp add --transport http intellexia {{ mcp_public_url }}</code>
         </p>
       </div>
       <div class="modal-footer">
