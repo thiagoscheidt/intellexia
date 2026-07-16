@@ -1,6 +1,6 @@
 # Manual do Usuário — Conectar sua IA ao IntellexIA (MCP)
 
-> O IntellexIA pode ser acessado por assistentes de IA — como o **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos e mais — com **21 ferramentas** organizadas por área e **comandos prontos** para relatórios.
+> O IntellexIA pode ser acessado por assistentes de IA — como o **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos e mais — com **24 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
 
 ---
 
@@ -89,6 +89,9 @@ Use exatamente este endereço (sem barra no final).
 |---|---|---|
 | `resumo_fap` | Contagens agregadas em uma chamada: contestações por vigência/situação/instância/**empresa**; benefícios por tipo/status/tópico + **financeiro** (total pago) | Cálculo |
 | `alteracoes_recentes_fap` | O que mudou nas sincronizações com o portal ("o que mudou essa semana?") | FAP Web |
+| `prazos_e_alertas` | O que pede atenção: contestações aguardando resultado, decisões recentes (janela de recurso) e processos por fase | Cálculo |
+| `comparar_vigencias` | Compara resultados entre vigências (ex: 2023 vs 2024): deferidos/indeferidos, tópicos e financeiro | Cálculo |
+| `buscar_por_segurado` | Visão 360º de uma pessoa: benefícios + CATs + processos (por NIT, CPF ou nome) | Sistema |
 
 > [!INFO] Para perguntas de **quantidade** ("quantos benefícios da empresa X?"), a IA usa o `resumo_fap` — resposta em segundos, sem listar registro por registro.
 
@@ -142,6 +145,11 @@ no menu do assistente — no Claude Code, digite `/` e procure por `intellexia`:
 |---|---|
 | `relatorio_semanal_fap` | Relatório semanal completo: panorama geral + o que mudou na semana + pontos de atenção |
 | `analise_empresa` | Análise completa de uma empresa no FAP: benefícios, resultados por instância, impacto financeiro e recomendações |
+| `agenda_do_dia` | O que precisa de atenção hoje: prazos, decisões recentes e processos, por prioridade |
+| `minuta_recurso` | Esqueleto de recurso para um benefício indeferido, com fundamentos da base de conhecimento |
+| `resumir_decisao` | Resume uma decisão/parecer FAP: resultado, fundamentação, efeito no FAP e próximos passos |
+| `email_cliente` | Redige um e-mail ao cliente explicando o resultado do FAP em linguagem simples |
+| `analise_risco_empresa` | Onde concentrar esforço: tópicos com mais chance de deferimento para uma empresa |
 
 ---
 

@@ -74,6 +74,11 @@ from mcp_server.tools.process_panel import (
 )
 from mcp_server.tools.petition_reviewer import review_petition_handler
 from mcp_server.tools.utilities import consultar_cnpj_handler
+from mcp_server.tools.insights import (
+    prazos_e_alertas_handler,
+    comparar_vigencias_handler,
+    buscar_por_segurado_handler,
+)
 
 MCP_PUBLIC_URL = os.environ.get("MCP_PUBLIC_URL", "https://rs-dev.intellexia.com.br/mcp")
 _parsed_public = urlparse(MCP_PUBLIC_URL)
@@ -338,6 +343,69 @@ def detalhar_beneficio(beneficio_id: int) -> dict:
     claims = require_module("fap_panel")
     with app.app_context():
         return get_benefit_detail_handler(beneficio_id, claims["law_firm_id"])
+
+
+@mcp.tool()
+def prazos_e_alertas(dias: int = 30) -> dict:
+    """Itens do FAP que pedem atenção: contestações transmitidas aguardando
+    resultado, decisões recentes (possível janela de recurso) e, se você tiver
+    acesso ao Painel de Processos, a distribuição de processos por fase.
+
+    Ideal para "o que preciso olhar hoje/esta semana?".
+
+    Args:
+        dias: Janela para considerar uma decisão "recente" (padrão 30).
+    """
+    claims = require_module("fap_panel")
+    with app.app_context():
+        return prazos_e_alertas_handler(
+            claims["law_firm_id"], claims.get("modules") or [], dias
+        )
+
+
+@mcp.tool()
+def comparar_vigencias(
+    vigencias: list[str],
+    empresa: str | None = None,
+    cnpj: str | None = None,
+) -> dict:
+    """Compara resultados de benefícios FAP entre vigências (ex: 2023 vs 2024).
+
+    Mostra, por vigência: total de benefícios, deferidos/indeferidos em 1ª
+    instância, total pago em disputa e distribuição por tópico de contestação —
+    para ver se a empresa melhorou ou piorou de um ano para o outro.
+
+    Args:
+        vigencias: Anos de vigência a comparar, ex: ["2023", "2024"].
+        empresa: Nome (ou parte) da empresa (opcional).
+        cnpj: CNPJ do empregador (opcional; aceita formatado ou raiz).
+    """
+    claims = require_module("fap_panel")
+    with app.app_context():
+        return comparar_vigencias_handler(claims["law_firm_id"], vigencias, empresa, cnpj)
+
+
+@mcp.tool()
+def buscar_por_segurado(
+    nit: str | None = None,
+    cpf: str | None = None,
+    nome: str | None = None,
+) -> dict:
+    """Visão 360º de um segurado: reúne benefícios, CATs e processos judiciais.
+
+    Útil quando chega uma intimação ou consulta sobre uma pessoa específica.
+    CATs e processos só entram se você tiver acesso aos respectivos módulos.
+
+    Args:
+        nit: NIT do segurado (identificador mais completo para o cruzamento).
+        cpf: CPF do segurado (apenas números).
+        nome: Nome ou parte do nome do segurado.
+    """
+    claims = require_module("fap_panel")
+    with app.app_context():
+        return buscar_por_segurado_handler(
+            claims["law_firm_id"], claims.get("modules") or [], nit, cpf, nome
+        )
 
 
 @mcp.tool()
@@ -730,6 +798,90 @@ def analise_empresa(nome_empresa: str) -> str:
         "indeferidos por instância), **Impacto financeiro** (total pago em disputa) e "
         "**Recomendações** (onde concentrar esforço).\n"
         "Use tabelas Markdown para os números e cite benefícios específicos como exemplos."
+    )
+
+
+@mcp.prompt(name="agenda_do_dia", description="O que precisa de atenção hoje: prazos, decisões recentes e processos")
+def agenda_do_dia() -> str:
+    return (
+        "Monte a agenda de atenção do escritório em português:\n"
+        "1. Chame prazos_e_alertas (dias=15) para contestações aguardando resultado, "
+        "decisões recentes e processos por fase.\n"
+        "2. Organize por prioridade: **Ação urgente** (decisões recentes que podem ter "
+        "prazo de recurso), **Acompanhar** (contestações transmitidas aguardando D.O.U., "
+        "as mais antigas primeiro) e **Panorama** (processos por fase).\n"
+        "Seja direto e acionável: diga o que fazer, não só o que existe."
+    )
+
+
+@mcp.prompt(name="minuta_recurso", description="Esqueleto de recurso para um benefício indeferido em 1ª instância")
+def minuta_recurso(numero_beneficio: str) -> str:
+    return (
+        f"Prepare o esqueleto de um recurso administrativo para o benefício "
+        f"{numero_beneficio}, em português:\n"
+        "1. Chame listar_beneficios_fap com numero_beneficio=\"" + numero_beneficio + "\" e "
+        "depois detalhar_beneficio para obter o parecer da 1ª instância, os tópicos de "
+        "contestação e os dados do segurado/empregador.\n"
+        "2. Chame pesquisar_base_conhecimento com os tópicos de contestação e o número do "
+        "benefício para reunir fundamentos e precedentes já usados pelo escritório (cite as "
+        "fontes com o link para abrir).\n"
+        "3. Monte a minuta com: **Síntese dos fatos**, **Do indeferimento em 1ª instância** "
+        "(resumo do parecer da Receita), **Das razões do recurso** (rebatendo cada ponto, "
+        "amparado nos tópicos e fundamentos encontrados), **Dos pedidos** e **Documentos a "
+        "anexar**.\n"
+        "IMPORTANTE: é um rascunho de apoio — sinalize claramente onde o advogado deve "
+        "revisar, complementar ou confirmar informação. Não invente fundamentos que não "
+        "vieram das fontes."
+    )
+
+
+@mcp.prompt(name="resumir_decisao", description="Resume uma decisão/parecer FAP: resultado, fundamentação e efeito no FAP")
+def resumir_decisao(texto_decisao: str) -> str:
+    return (
+        "Analise o texto da decisão/parecer FAP abaixo e resuma em português, de forma "
+        "objetiva, extraindo:\n"
+        "- **Resultado** (deferido / indeferido / parcial) e a instância;\n"
+        "- **Benefício(s) e empresa** mencionados;\n"
+        "- **Fundamentação** da decisão (por que decidiram assim), em 2–4 pontos;\n"
+        "- **Efeito no FAP** (implica recálculo? exclui/mantém a ocorrência?);\n"
+        "- **Próximos passos** sugeridos (cabe recurso? qual prazo/instância?).\n"
+        "Se algum item não estiver claro no texto, diga explicitamente que não consta.\n\n"
+        "--- TEXTO DA DECISÃO ---\n" + texto_decisao
+    )
+
+
+@mcp.prompt(name="email_cliente", description="Redige um e-mail ao cliente explicando o resultado do FAP em linguagem simples")
+def email_cliente(nome_empresa: str, vigencia: str) -> str:
+    return (
+        f"Redija um e-mail para o cliente \"{nome_empresa}\" explicando o resultado do FAP "
+        f"da vigência {vigencia}, em português claro e sem juridiquês:\n"
+        "1. Chame resumo_fap com empresa=\"" + nome_empresa + "\" e ano_vigencia=" + vigencia + " "
+        "para os números reais.\n"
+        "2. Escreva um e-mail profissional e acolhedor com: saudação, um parágrafo com o "
+        "resultado geral (quantos benefícios contestados, quantos deferidos/indeferidos, "
+        "impacto), o que isso significa na prática para a empresa, os próximos passos do "
+        "escritório e uma despedida cordial.\n"
+        "Evite termos técnicos (ou explique-os em uma frase). Use os números que vieram do "
+        "sistema, não invente. Deixe [espaços] para o remetente personalizar antes de enviar."
+    )
+
+
+@mcp.prompt(name="analise_risco_empresa", description="Onde concentrar esforço: tópicos com mais chance de deferimento para uma empresa")
+def analise_risco_empresa(nome_empresa: str) -> str:
+    return (
+        f"Faça uma análise estratégica de risco/oportunidade da empresa \"{nome_empresa}\" "
+        "no FAP, em português:\n"
+        "1. Chame resumo_fap com empresa para a distribuição por tópico e status.\n"
+        "2. Se houver mais de uma vigência, chame comparar_vigencias para ver a evolução "
+        "dos resultados.\n"
+        "3. Cruze os dados: para cada tópico de contestação, estime a **taxa de êxito** "
+        "(deferidos / total decididos) com base no histórico do escritório.\n"
+        "4. Entregue: **Tópicos mais promissores** (maior taxa de deferimento — priorizar), "
+        "**Tópicos de baixo retorno** (muito indeferimento — repensar a tese), **Evolução** "
+        "(melhorou ou piorou entre vigências) e **Recomendação** (onde concentrar esforço no "
+        "próximo ciclo).\n"
+        "Baseie tudo nos números reais retornados; deixe claro quando a amostra for pequena "
+        "demais para conclusão firme."
     )
 
 

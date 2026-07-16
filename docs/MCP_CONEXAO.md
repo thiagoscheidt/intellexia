@@ -76,6 +76,9 @@ Em **Settings → Connectors → Add custom connector**, informe a URL
 | `listar_beneficios_fap` | Lista benefícios (filtros: CNPJ, segurado, NIT, CPF, nº benefício, tópico, vigência) |
 | `detalhar_beneficio` | Detalhes completos de um benefício |
 | `resumo_fap` | Estatísticas agregadas de contestações e benefícios |
+| `prazos_e_alertas` | Contestações aguardando resultado, decisões recentes e processos por fase |
+| `comparar_vigencias` | Compara resultados de benefícios entre vigências FAP |
+| `buscar_por_segurado` | Visão 360º de um segurado (benefícios, CATs, processos) |
 | `alteracoes_recentes_fap` | Mudanças detectadas nas sincronizações com o FAP Web |
 | `listar_procuracoes_fap` | Procurações eletrônicas sincronizadas |
 | `exportar_beneficios_excel` | Planilha XLSX dos benefícios filtrados (link assinado, 1 h de validade) |
@@ -85,7 +88,7 @@ Em **Settings → Connectors → Add custom connector**, informe a URL
 | `consultar_cnpj` | Dados cadastrais públicos de um CNPJ (OpenCNPJ/Receita) — qualquer usuário logado |
 | `revisar_peticao_inicial` | Revisão real com o FapPetitionReviewerAgent (prompts/referências do escritório) |
 
-Prompts MCP (comandos prontos): `relatorio_semanal_fap` e `analise_empresa`.
+Prompts MCP (comandos prontos): `relatorio_semanal_fap`, `analise_empresa`, `agenda_do_dia`, `minuta_recurso`, `resumir_decisao`, `email_cliente`, `analise_risco_empresa`.
 
 Exemplos de uso no Claude:
 
