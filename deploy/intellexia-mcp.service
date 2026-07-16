@@ -9,11 +9,11 @@ ExecStart=/root/.local/bin/uv run python mcp_server/server.py
 Restart=always
 RestartSec=5
 Environment=PYTHONUNBUFFERED=1
-# __MCP_PUBLIC_URL__ é substituído pelo deploy/deploy_mcp.sh conforme o domínio
-# da instalação (MCP_DOMAIN). Cada ambiente — dev e produção — tem o seu.
-Environment=MCP_PUBLIC_URL=__MCP_PUBLIC_URL__
 Environment=MCP_HOST=127.0.0.1
 Environment=MCP_PORT=8001
+# O domínio NÃO entra aqui: vem do .env da instalação (APP_PUBLIC_URL), que o
+# main.py carrega por cima do ambiente do processo — um valor nesta unit seria
+# sobrescrito pelo .env e só geraria confusão sobre quem manda.
 
 [Install]
 WantedBy=multi-user.target

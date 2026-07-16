@@ -155,6 +155,13 @@ O manual de uso dos painéis tem **fonte única em Markdown**: `docs/MANUAL_DASH
   - Índice lateral: gerado automaticamente dos títulos `##`.
   - Ícone do Claude: `:claude:` no texto ou no título (no título, o ícone também vai para o índice).
   - Endereços: `:url_mcp:` e `:url_app:` viram a URL real da instalação em runtime. **Nunca escreva o domínio fixo** em manual, template ou doc de usuário — dev e produção têm domínios diferentes; use `app/utils/urls.py` (`mcp_public_url()` / `app_public_url()`, expostos aos templates via context processor).
+
+### Domínio da instalação
+
+`APP_PUBLIC_URL` no `.env` é a única variável de domínio necessária: dela saem os links dos e-mails do cron, o endereço que o MCP anuncia no OAuth (`+ /mcp`) e o domínio usado por `deploy/deploy_mcp.sh`. O `main.py` carrega o `.env` **por cima** do ambiente do processo, então o `.env` vence até o systemd — por isso a unit do MCP não declara domínio.
+
+- **Em requisição** (telas, modal do conector, manual): o domínio vem do Host acessado (`app/utils/urls.py`, lendo `X-Forwarded-*`), então uma instalação nova nunca mostra endereço errado, mesmo com `.env` copiado de outro ambiente.
+- **Fora de requisição** (cron, servidor MCP): só o `.env` resolve. No MCP isso é intrínseco — o OAuth fixa `issuer`/`resource` nos handlers no start, e um issuer variável por Host quebraria clientes que cachearam a metadata.
 - **Assistente** (`ManualAssistantService` em `app/services/`, endpoint `POST /docs/chat`): chat flutuante na própria página, responde **só com base nos manuais** (lidos inteiros no prompt, sem RAG), modelo `DEFAULT_MODEL_MINI` (override via env `MANUAL_ASSISTANT_MODEL`). Lê os mesmos `.md`, então página e chat nunca dessincronizam.
 - **Acesso**: `/docs/*` exige login, mas o prefixo `docs.` não está mapeado a módulo de permissão — qualquer usuário logado acessa.
 

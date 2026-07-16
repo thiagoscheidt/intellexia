@@ -181,14 +181,40 @@ uv run python tests/test_mcp_oauth.py
 > `MCP_PUBLIC_URL`; para reusar a sessão do Flask local, defina também
 > `APP_PUBLIC_URL=http://localhost:5051` (ou a porta onde o app roda).
 
+## Domínio da instalação
+
+O domínio **não** se define na linha de comando nem no serviço systemd: sai do `.env`
+daquela instalação, o mesmo arquivo que configura o resto do sistema.
+
+```bash
+# .env — única variável de domínio necessária
+APP_PUBLIC_URL=https://seu-dominio.com.br
+# MCP_PUBLIC_URL só quando o MCP vive em outro domínio/subdomínio que o app
+```
+
+Ordem de resolução no servidor MCP: `MCP_PUBLIC_URL` → `APP_PUBLIC_URL` + `/mcp` →
+domínio de desenvolvimento (com aviso no log). O `main.py` carrega o `.env` por cima do
+ambiente do processo, então o `.env` vence inclusive o systemd — por isso a unit não
+declara domínio nenhum.
+
+> **Por que aqui não vale "usar o domínio que o usuário está acessando"**, como no modal
+> e no manual: o OAuth fixa `issuer` e `resource` dentro dos handlers quando o processo
+> sobe, antes de existir requisição (verificado: uma requisição em outro Host continua
+> recebendo o endereço configurado no start). Além disso, um issuer que mudasse por
+> requisição quebraria clientes que já cachearam a metadata — o erro
+> `Protected resource ... does not match`.
+
 ## Deploy (servidor)
 
 ```bash
 sudo bash deploy/deploy_mcp.sh
 ```
 
-O script atualiza o código em `/sites/intellexia`, roda a migration das tabelas OAuth,
-instala/reinicia o serviço systemd `intellexia-mcp` (porta 8001) e garante os `location`
-de `/mcp` e do discovery OAuth no nginx do domínio configurado em `NGINX_SITE`.
+O script descobre o domínio nesta ordem: `MCP_DOMAIN` (override) → `APP_PUBLIC_URL` ou
+`MCP_PUBLIC_URL` do `.env` → detecção pelo site do nginx que faz proxy para a aplicação →
+falha com instrução (melhor do que publicar o domínio errado). Depois atualiza o código em
+`/sites/intellexia`, roda as migrations (OAuth e notificações), instala/reinicia o serviço
+systemd `intellexia-mcp` (porta 8001), garante os `location` de `/mcp` e do discovery OAuth
+no nginx e, ao final, confere se o endereço anunciado bate com o esperado.
 
 Arquitetura e decisões de design: [superpowers/specs/2026-07-15-mcp-oauth-design.md](superpowers/specs/2026-07-15-mcp-oauth-design.md).

@@ -11,23 +11,28 @@ Expõe ferramentas de:
 
 A identidade (user_id, law_firm_id, permissões de módulo) vem do access token
 emitido no fluxo OAuth — o usuário autoriza no navegador reusando o login do
-sistema em rs-dev.intellexia.com.br.
+sistema, no domínio desta instalação.
 
 Uso:
     uv run python mcp_server/server.py
 
 Conexão no Claude Code:
-    claude mcp add --transport http intellexia https://rs-dev.intellexia.com.br/mcp
+    claude mcp add --transport http intellexia https://SEU-DOMINIO/mcp
     (depois: /mcp → Authenticate → autorizar no navegador)
 
-Env:
-    MCP_PUBLIC_URL  URL pública do MCP (default https://rs-dev.intellexia.com.br/mcp)
-    APP_PUBLIC_URL  URL pública do app Flask (default: raiz do domínio do MCP_PUBLIC_URL)
+Env (o `.env` do projeto é a fonte — importar `main` já o carrega):
+    APP_PUBLIC_URL  Domínio desta instalação. **É só isto que precisa ser definido**:
+                    o endereço do MCP sai daqui + "/mcp".
+    MCP_PUBLIC_URL  Só quando o MCP vive em outro domínio/subdomínio que o app.
     MCP_HOST/MCP_PORT  bind local do uvicorn (default 127.0.0.1:8001)
+
+Ao contrário das telas, aqui o domínio não pode sair do Host da requisição: o
+OAuth fixa issuer e resource no start (ver _resolve_public_urls).
 """
 from __future__ import annotations
 
 import base64
+import logging
 import os
 import sys
 from urllib.parse import urlparse
@@ -85,16 +90,44 @@ from mcp_server.tools.insights import (
     buscar_por_segurado_handler,
 )
 
-MCP_PUBLIC_URL = os.environ.get("MCP_PUBLIC_URL", "https://rs-dev.intellexia.com.br/mcp")
-_parsed_public = urlparse(MCP_PUBLIC_URL)
-APP_PUBLIC_URL = (
-    os.environ.get("APP_PUBLIC_URL")
-    or f"{_parsed_public.scheme}://{_parsed_public.netloc}"
-).rstrip("/")
+def _resolve_public_urls() -> tuple[str, str]:
+    """Domínio desta instalação, a partir do `.env` (importar `main` já o carregou).
+
+    Ordem: ``MCP_PUBLIC_URL`` → ``APP_PUBLIC_URL`` + ``/mcp`` → domínio de
+    desenvolvimento. Basta ``APP_PUBLIC_URL`` no `.env` para configurar tudo.
+
+    Aqui **não** dá para descobrir o domínio pelo Host da requisição, como as telas
+    fazem: o OAuth grava o issuer e o resource dentro dos handlers no start, antes
+    de existir requisição — e um issuer que mudasse por requisição quebraria os
+    clientes que já cachearam a metadata (o erro "resource does not match").
+    """
+    app_url = (os.environ.get("APP_PUBLIC_URL") or "").strip().rstrip("/")
+    mcp_url = (os.environ.get("MCP_PUBLIC_URL") or "").strip().rstrip("/")
+
+    if not mcp_url and app_url:
+        mcp_url = f"{app_url}/mcp"
+
+    if not mcp_url:
+        from app.utils.urls import FALLBACK_BASE_URL
+        mcp_url = f"{FALLBACK_BASE_URL}/mcp"
+        logging.getLogger(__name__).warning(
+            "APP_PUBLIC_URL/MCP_PUBLIC_URL ausentes no .env: o MCP vai anunciar %s. "
+            "Em produção isto está errado — defina APP_PUBLIC_URL no .env com o "
+            "domínio desta instalação e reinicie o serviço.", mcp_url,
+        )
+
+    if not app_url:
+        parsed = urlparse(mcp_url)
+        app_url = f"{parsed.scheme}://{parsed.netloc}"
+
+    return mcp_url, app_url
+
+
+MCP_PUBLIC_URL, APP_PUBLIC_URL = _resolve_public_urls()
 
 auth_provider = IntellexiaOAuthProvider(
     base_url=MCP_PUBLIC_URL,
-    app_public_url=os.environ.get("APP_PUBLIC_URL"),
+    app_public_url=APP_PUBLIC_URL,
 )
 
 
