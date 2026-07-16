@@ -128,6 +128,17 @@ def list_fap_companies_handler(
 # ── Contestações ──────────────────────────────────────────────────────────────
 
 
+def _pdf_url(contestacao, app_public_url: str | None) -> str | None:
+    """Link para visualizar o PDF da contestação (rota do Painel de Contestações)."""
+    if not app_public_url:
+        return None
+    cnpj14 = (contestacao.cnpj or "").zfill(14)
+    return (
+        f"{app_public_url.rstrip('/')}/disputes-center/fap-auto-import/download-contestacao/"
+        f"{contestacao.ano_vigencia}/{cnpj14}/{contestacao.contestacao_id}?inline=1"
+    )
+
+
 def list_fap_contestacoes_handler(
     law_firm_id: int,
     cnpj: str | None = None,
@@ -136,6 +147,7 @@ def list_fap_contestacoes_handler(
     situacao_codigo: str | None = None,
     instancia_codigo: str | None = None,
     limit: int = 100,
+    app_public_url: str | None = None,
 ) -> dict:
     """Retorna contestações FAP filtradas, com total encontrado."""
     from app.models import FapWebContestacao
@@ -178,6 +190,7 @@ def list_fap_contestacoes_handler(
             "data_transmissao": _iso(c.data_transmissao),
             "data_dou": _iso(c.data_dou_date),
             "pdf_baixado": bool(c.file_path),
+            "url_abrir_pdf": _pdf_url(c, app_public_url),
             "ultima_sincronizacao": _iso(c.last_synced_at),
         }
         for c in contestacoes
@@ -185,7 +198,8 @@ def list_fap_contestacoes_handler(
     return {"total_encontrado": total, "retornados": len(itens), "itens": itens}
 
 
-def get_contestacao_detail_handler(contestacao_id: int, law_firm_id: int) -> dict:
+def get_contestacao_detail_handler(contestacao_id: int, law_firm_id: int,
+                                   app_public_url: str | None = None) -> dict:
     """Detalhe completo de uma contestação: dados, mudanças e benefícios da vigência."""
     from app.models import Benefit, FapVigenciaCnpj, FapWebContestacao, FapWebContestacaoChangeHistory, db
 
@@ -240,6 +254,7 @@ def get_contestacao_detail_handler(contestacao_id: int, law_firm_id: int) -> dic
         "data_transmissao": _iso(c.data_transmissao),
         "data_dou": _iso(c.data_dou_date),
         "pdf_baixado": bool(c.file_path),
+        "url_abrir_pdf": _pdf_url(c, app_public_url),
         "ultima_sincronizacao": _iso(c.last_synced_at),
         "beneficios_vinculados": {
             "total": ben_q.count(),

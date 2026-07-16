@@ -57,7 +57,12 @@ from mcp_server.tools.fap import (
     list_fap_procuracoes_handler,
     fap_filter_values_handler,
 )
-from mcp_server.tools.disputes import list_cats_handler
+from mcp_server.tools.disputes import (
+    list_cats_handler,
+    list_employment_links_handler,
+    list_payroll_masses_handler,
+    list_turnover_rates_handler,
+)
 from mcp_server.tools.exports import (
     build_download_response,
     export_benefits_excel_handler,
@@ -268,6 +273,7 @@ def listar_contestacoes_fap(
         return list_fap_contestacoes_handler(
             claims["law_firm_id"], cnpj, cnpj_raiz, ano_vigencia,
             situacao_codigo, instancia_codigo, limite,
+            app_public_url=APP_PUBLIC_URL,
         )
 
 
@@ -417,7 +423,8 @@ def detalhar_contestacao(contestacao_id: int) -> dict:
     """
     claims = require_module("fap_panel")
     with app.app_context():
-        return get_contestacao_detail_handler(contestacao_id, claims["law_firm_id"])
+        return get_contestacao_detail_handler(contestacao_id, claims["law_firm_id"],
+                                              app_public_url=APP_PUBLIC_URL)
 
 
 @mcp.tool()
@@ -458,6 +465,67 @@ def listar_cats_fap(
     claims = require_module("disputes_center")
     with app.app_context():
         return list_cats_handler(claims["law_firm_id"], vigencia, cnpj, nit, numero_cat, limite)
+
+
+@mcp.tool()
+def listar_massas_salariais_fap(
+    vigencia: str | None = None,
+    cnpj: str | None = None,
+    limite: int = 50,
+) -> dict:
+    """Lista massas salariais (folha de pagamento) contestadas no FAP, por competência.
+
+    Inclui remuneração total, valores pleiteados e status/justificativas por instância.
+
+    Args:
+        vigencia: Ano de vigência FAP (ex: "2023").
+        cnpj: CNPJ do empregador (apenas números).
+        limite: Número máximo de registros (padrão 50).
+    """
+    claims = require_module("disputes_center")
+    with app.app_context():
+        return list_payroll_masses_handler(claims["law_firm_id"], vigencia, cnpj, limite)
+
+
+@mcp.tool()
+def listar_vinculos_fap(
+    vigencia: str | None = None,
+    cnpj: str | None = None,
+    limite: int = 50,
+) -> dict:
+    """Lista vínculos empregatícios contestados no FAP, por competência.
+
+    Inclui quantidade de vínculos, quantidades pleiteadas e status por instância.
+
+    Args:
+        vigencia: Ano de vigência FAP (ex: "2023").
+        cnpj: CNPJ do empregador (apenas números).
+        limite: Número máximo de registros (padrão 50).
+    """
+    claims = require_module("disputes_center")
+    with app.app_context():
+        return list_employment_links_handler(claims["law_firm_id"], vigencia, cnpj, limite)
+
+
+@mcp.tool()
+def listar_rotatividade_fap(
+    vigencia: str | None = None,
+    cnpj: str | None = None,
+    limite: int = 50,
+) -> dict:
+    """Lista taxas de rotatividade contestadas no FAP, por ano.
+
+    Inclui taxa, admissões, rescisões, vínculos iniciais, valores pleiteados e
+    status por instância.
+
+    Args:
+        vigencia: Ano de vigência FAP (ex: "2023").
+        cnpj: CNPJ do empregador (apenas números).
+        limite: Número máximo de registros (padrão 50).
+    """
+    claims = require_module("disputes_center")
+    with app.app_context():
+        return list_turnover_rates_handler(claims["law_firm_id"], vigencia, cnpj, limite)
 
 
 @mcp.tool()
@@ -611,17 +679,58 @@ def consultar_cnpj(cnpj: str) -> dict:
 
 @mcp.tool()
 def revisar_peticao_inicial(texto_peticao: str, tipo_caso: str = "trabalhista") -> dict:
-    """Revisa uma petição inicial jurídica, apontando inconsistências e sugestões.
+    """Revisa uma petição FAP com o agente revisor oficial do escritório.
 
-    Módulo em desenvolvimento — retorna análise preliminar baseada em regras gerais.
+    Usa os mesmos prompts, manual FAP e casos de referência configurados no
+    módulo Revisor de Petições. Retorna achados (findings) com severidade,
+    documentos faltantes, teses identificadas, checagem de benefícios e resumo
+    executivo. A revisão pode levar ~1 minuto em petições longas.
 
     Args:
-        texto_peticao: Texto completo da petição inicial.
+        texto_peticao: Texto completo da petição (mínimo ~200 caracteres).
         tipo_caso: trabalhista ou previdenciario (padrão: trabalhista).
     """
     claims = require_module("fap_review")
     with app.app_context():
-        return review_petition_handler(texto_peticao, claims["law_firm_id"], tipo_caso)
+        return review_petition_handler(
+            texto_peticao, claims["law_firm_id"], tipo_caso, user_id=claims.get("user_id")
+        )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# PROMPTS (comandos prontos que aparecem no cliente MCP)
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@mcp.prompt(name="relatorio_semanal_fap", description="Relatório semanal do FAP: resumo geral + o que mudou na semana")
+def relatorio_semanal_fap() -> str:
+    return (
+        "Monte um relatório semanal do FAP do escritório em português, seguindo estes passos:\n"
+        "1. Chame resumo_fap (sem filtros) para o panorama geral: contestações por vigência, "
+        "situação e instância; benefícios por tipo, status e tópico.\n"
+        "2. Chame alteracoes_recentes_fap com dias=7 para o que mudou na última semana.\n"
+        "3. Estruture o relatório com: **Panorama geral** (números-chave e destaques), "
+        "**Mudanças da semana** (o que mudou, por empresa, com antes/depois relevante) e "
+        "**Pontos de atenção** (situações que merecem ação, ex.: indeferimentos novos, "
+        "contestações transmitidas aguardando resultado).\n"
+        "Seja objetivo: números primeiro, interpretação depois. Formate em Markdown."
+    )
+
+
+@mcp.prompt(name="analise_empresa", description="Análise completa de uma empresa no FAP: benefícios, contestações e financeiro")
+def analise_empresa(nome_empresa: str) -> str:
+    return (
+        f"Faça uma análise completa da empresa \"{nome_empresa}\" no FAP, em português:\n"
+        "1. Chame resumo_fap com empresa=\"" + nome_empresa + "\" para os agregados "
+        "(benefícios por tipo/status/tópico, financeiro, contestações).\n"
+        "2. Chame listar_beneficios_fap com empresa e limite=20 para exemplos concretos.\n"
+        "3. Se houver contestações, chame listar_contestacoes_fap para as situações e PDFs.\n"
+        "4. Estruture: **Visão geral** (quem é, volumes), **Benefícios em contestação** "
+        "(distribuição por tipo e tópico, casos relevantes), **Resultados** (deferidos vs. "
+        "indeferidos por instância), **Impacto financeiro** (total pago em disputa) e "
+        "**Recomendações** (onde concentrar esforço).\n"
+        "Use tabelas Markdown para os números e cite benefícios específicos como exemplos."
+    )
 
 
 if __name__ == "__main__":

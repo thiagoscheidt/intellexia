@@ -70,6 +70,9 @@ Em **Settings → Connectors → Add custom connector**, informe a URL
 | `detalhar_contestacao` | Contestação completa + benefícios vinculados + alterações recentes |
 | `valores_de_filtro_fap` | Códigos/valores válidos para os filtros (situações, instâncias, tópicos...) |
 | `listar_cats_fap` | CATs das contestações (módulo Painel de Contestações) |
+| `listar_massas_salariais_fap` | Folha de pagamento contestada por competência |
+| `listar_vinculos_fap` | Vínculos empregatícios contestados por competência |
+| `listar_rotatividade_fap` | Taxas de rotatividade contestadas |
 | `listar_beneficios_fap` | Lista benefícios (filtros: CNPJ, segurado, NIT, CPF, nº benefício, tópico, vigência) |
 | `detalhar_beneficio` | Detalhes completos de um benefício |
 | `resumo_fap` | Estatísticas agregadas de contestações e benefícios |
@@ -80,7 +83,9 @@ Em **Settings → Connectors → Add custom connector**, informe a URL
 | `listar_processos` | Processos judiciais com fase atual |
 | `detalhar_processo` | Processo completo: fases, benefícios, teses e decisões |
 | `consultar_cnpj` | Dados cadastrais públicos de um CNPJ (OpenCNPJ/Receita) — qualquer usuário logado |
-| `revisar_peticao_inicial` | Revisor de petições iniciais (em desenvolvimento) |
+| `revisar_peticao_inicial` | Revisão real com o FapPetitionReviewerAgent (prompts/referências do escritório) |
+
+Prompts MCP (comandos prontos): `relatorio_semanal_fap` e `analise_empresa`.
 
 Exemplos de uso no Claude:
 
@@ -94,7 +99,7 @@ Exemplos de uso no Claude:
 |---|---|
 | `consultar_base_conhecimento`, `pesquisar_base_conhecimento` | Base de Conhecimento |
 | `listar_empresas_fap`, `listar_contestacoes_fap`, `detalhar_contestacao`, `listar_beneficios_fap`, `detalhar_beneficio`, `resumo_fap`, `alteracoes_recentes_fap`, `listar_procuracoes_fap`, `valores_de_filtro_fap`, `exportar_beneficios_excel`, `exportar_contestacoes_excel` | Painel FAP |
-| `listar_cats_fap` | Painel de Contestações |
+| `listar_cats_fap`, `listar_massas_salariais_fap`, `listar_vinculos_fap`, `listar_rotatividade_fap` | Painel de Contestações |
 | `listar_processos`, `detalhar_processo` | Painel de Processos |
 | `revisar_peticao_inicial` | Revisor de Petições |
 

@@ -1,6 +1,6 @@
 # Manual do Usuário — Conectar sua IA ao IntellexIA (MCP)
 
-> O IntellexIA pode ser acessado por assistentes de IA — como o **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos e mais — com **18 ferramentas** organizadas por área.
+> O IntellexIA pode ser acessado por assistentes de IA — como o **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos e mais — com **21 ferramentas** organizadas por área e **comandos prontos** para relatórios.
 
 ---
 
@@ -75,7 +75,7 @@ Use exatamente este endereço (sem barra no final).
 |---|---|---|
 | `listar_empresas_fap` | Empresas sincronizadas — busca por **parte do nome**, CNPJ ou tipo de procuração | FAP Web |
 | `listar_contestacoes_fap` | Contestações com filtros (CNPJ, raiz, vigência, situação, instância), nome da empresa e status do PDF | FAP Web |
-| `detalhar_contestacao` | Contestação completa + **benefícios vinculados** + alterações recentes | FAP Web |
+| `detalhar_contestacao` | Contestação completa + **benefícios vinculados** + alterações recentes + **link do PDF** | FAP Web |
 | `listar_beneficios_fap` | Benefícios com filtros ricos (**empresa por nome**, CNPJ, segurado, NIT, CPF, nº benefício, tópico, vigência...) | FAP Web |
 | `detalhar_beneficio` | Todos os campos de um benefício, incluindo justificativas, pareceres e decisões de julgamento | Sistema |
 | `listar_procuracoes_fap` | Procurações eletrônicas com situação e vigência | FAP Web |
@@ -104,6 +104,9 @@ Use exatamente este endereço (sem barra no final).
 | Ferramenta | O que faz | Origem |
 |---|---|---|
 | `listar_cats_fap` | CATs das contestações com datas e status por instância | Relatório |
+| `listar_massas_salariais_fap` | Folha de pagamento contestada por competência, com valores pleiteados | Relatório |
+| `listar_vinculos_fap` | Vínculos empregatícios contestados por competência | Relatório |
+| `listar_rotatividade_fap` | Taxas de rotatividade contestadas (admissões, rescisões, vínculos) | Relatório |
 
 ### 🏛️ Processos Judiciais
 
@@ -118,11 +121,25 @@ Use exatamente este endereço (sem barra no final).
 |---|---|---|
 | `consultar_cnpj` | Dados cadastrais públicos de um CNPJ (Receita Federal): razão social, situação, endereço, sócios e **matriz/filial** | Sistema |
 
-### 🚧 Em desenvolvimento
+### ✍️ Revisão de Petições
 
 | Ferramenta | O que faz | Origem |
 |---|---|---|
-| `revisar_peticao_inicial` | Revisor de petições iniciais | IA |
+| `revisar_peticao_inicial` | Revisa o texto de uma petição com o **agente revisor oficial** do escritório (mesmos prompts, manual FAP e casos de referência do módulo Revisor): achados com severidade, documentos faltantes, teses e resumo executivo | IA |
+
+> [!IA] A revisão usa as configurações do módulo **Revisor de Petições** (modelo, manual e prompts ativos do escritório) e pode levar cerca de 1 minuto em petições longas.
+
+---
+
+## Comandos prontos
+
+Além das ferramentas, o IntellexIA publica **comandos prontos** (prompts MCP) que aparecem
+no menu do assistente — no Claude Code, digite `/` e procure por `intellexia`:
+
+| Comando | O que faz |
+|---|---|
+| `relatorio_semanal_fap` | Relatório semanal completo: panorama geral + o que mudou na semana + pontos de atenção |
+| `analise_empresa` | Análise completa de uma empresa no FAP: benefícios, resultados por instância, impacto financeiro e recomendações |
 
 ---
 
