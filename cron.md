@@ -38,7 +38,16 @@ PATH=/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin
 
 # Processa recursos judiciais pendentes (a cada 4 minutos)
 */4 * * * * cd /opt/intellexia && flock -n /tmp/intellexia_appeals.lock uv run scripts/process_judicial_appeals.py >> /var/log/intellexia/process_judicial_appeals.log 2>&1
+
+# Envia as notificações por e-mail agendadas (de hora em hora)
+0 * * * * cd /opt/intellexia && flock -n /tmp/intellexia_notifications.lock uv run scripts/send_notifications.py >> /var/log/intellexia/send_notifications.log 2>&1
 ```
+
+> O script de notificações roda **de hora em hora** e envia apenas o que estiver no horário
+> configurado em *Configurações → Notificações* de cada escritório (frequência diária ou
+> semanal). Exige `SMTP_HOST` e `SMTP_FROM_EMAIL` no `.env`; sem isso ele apenas avisa e sai.
+>
+> Para simular sem enviar: `uv run python scripts/send_notifications.py --dry-run`
 
 ## 3) Verificação rápida
 
@@ -60,6 +69,10 @@ tail -f /var/log/intellexia/process_judicial_sentence_analysis.log
 
 ```bash
 tail -f /var/log/intellexia/process_judicial_appeals.log
+```
+
+```bash
+tail -f /var/log/intellexia/send_notifications.log
 ```
 
 ## 4) Observações importantes

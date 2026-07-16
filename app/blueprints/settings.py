@@ -1,7 +1,8 @@
 import re
 
 from flask import Blueprint, render_template, session, redirect, url_for, jsonify, flash, request
-from app.models import db, LawFirm, User
+from app.models import db, LawFirm, NotificationSetting, User
+from app.services import email_service, notification_service
 from datetime import datetime
 from functools import wraps
 
@@ -89,6 +90,132 @@ def law_firm_settings_post():
             "success": False,
             "message": f"Erro ao atualizar dados: {str(e)}"
         }), 500
+
+
+@settings_bp.route('/notifications', methods=['GET'])
+@require_law_firm
+def notifications():
+    """Página de notificações por e-mail (apenas admin)."""
+    if session.get('user_role') != 'admin':
+        flash('Acesso negado. Apenas administradores podem acessar esta página.', 'danger')
+        return redirect(url_for('dashboard.dashboard'))
+
+    fap_digest = notification_service.get_or_create_setting(
+        session.get('law_firm_id'), NotificationSetting.TYPE_FAP_DIGEST
+    )
+
+    return render_template(
+        'settings/notifications.html',
+        fap_digest=fap_digest,
+        smtp_configured=email_service.is_configured(),
+        smtp_config=email_service.get_config(),
+        weekday_labels=notification_service.WEEKDAY_LABELS,
+        user_email=session.get('user_email'),
+    )
+
+
+@settings_bp.route('/notifications/fap-digest', methods=['POST'])
+@require_law_firm
+def notifications_fap_digest_post():
+    """Salvar a configuração do Resumo FAP (apenas admin)."""
+    if session.get('user_role') != 'admin':
+        return jsonify({"success": False, "message": "Acesso negado"}), 403
+
+    setting = notification_service.get_or_create_setting(
+        session.get('law_firm_id'), NotificationSetting.TYPE_FAP_DIGEST
+    )
+
+    frequency = (request.form.get('frequency') or '').strip()
+    if frequency not in (NotificationSetting.FREQUENCY_DAILY, NotificationSetting.FREQUENCY_WEEKLY):
+        return jsonify({"success": False, "message": "Frequência inválida"}), 400
+
+    send_hour = _parse_int_in_range(request.form.get('send_hour'), 0, 23)
+    if send_hour is None:
+        return jsonify({"success": False, "message": "Horário inválido"}), 400
+
+    send_weekday = _parse_int_in_range(request.form.get('send_weekday'), 0, 6)
+    if send_weekday is None:
+        return jsonify({"success": False, "message": "Dia da semana inválido"}), 400
+
+    raw_recipients = request.form.get('recipients') or ''
+    recipients = email_service.normalize_recipients(raw_recipients)
+    informed = [r for r in re.split(r'[,;\s]+', raw_recipients) if r.strip()]
+    invalid = [r for r in informed if not email_service.is_valid_email(r)]
+    if invalid:
+        return jsonify({
+            "success": False,
+            "message": f"E-mail(s) inválido(s): {', '.join(invalid[:3])}",
+        }), 400
+
+    is_enabled = (request.form.get('is_enabled') or '').lower() in ('1', 'true', 'on', 'yes')
+    if is_enabled and not recipients:
+        return jsonify({
+            "success": False,
+            "message": "Informe ao menos um destinatário para ativar o envio",
+        }), 400
+
+    try:
+        setting.is_enabled = is_enabled
+        setting.frequency = frequency
+        setting.send_hour = send_hour
+        setting.send_weekday = send_weekday
+        setting.set_recipients(recipients)
+        setting.updated_at = datetime.now()
+
+        db.session.commit()
+
+        return jsonify({
+            "success": True,
+            "message": "Configuração de notificação salva com sucesso!",
+            "recipients": recipients,
+        })
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": f"Erro ao salvar: {str(e)}"}), 500
+
+
+@settings_bp.route('/notifications/fap-digest/send-now', methods=['POST'])
+@require_law_firm
+def notifications_fap_digest_send_now():
+    """Envia o Resumo FAP de teste para o próprio admin logado.
+
+    Nunca dispara para a lista de destinatários (evita envio acidental a clientes)
+    e não altera ``last_sent_at``.
+    """
+    if session.get('user_role') != 'admin':
+        return jsonify({"success": False, "message": "Acesso negado"}), 403
+
+    user = _get_logged_user()
+    if not user or not user.email:
+        return jsonify({"success": False, "message": "Usuário sem e-mail cadastrado"}), 400
+
+    if not email_service.is_configured():
+        return jsonify({
+            "success": False,
+            "message": "SMTP não configurado. Defina SMTP_HOST e SMTP_FROM_EMAIL no .env do servidor.",
+        }), 400
+
+    try:
+        result = notification_service.send_fap_digest(
+            session.get('law_firm_id'), force=True, override_recipients=[user.email]
+        )
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({"success": False, "message": f"Erro ao enviar: {str(e)}"}), 500
+
+    if result.get('status') != 'sent':
+        return jsonify({"success": False, "message": result.get('message', 'Falha no envio')}), 500
+
+    return jsonify({"success": True, "message": f"E-mail de teste enviado para {user.email}."})
+
+
+def _parse_int_in_range(raw, minimum, maximum):
+    """Int dentro do intervalo, ou None se inválido."""
+    try:
+        value = int(str(raw).strip())
+    except (TypeError, ValueError):
+        return None
+    return value if minimum <= value <= maximum else None
 
 
 def _get_logged_user():

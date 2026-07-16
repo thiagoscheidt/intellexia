@@ -3204,3 +3204,57 @@ class McpOAuthToken(db.Model):
 
     def __repr__(self):
         return f'<McpOAuthToken type={self.token_type} user_id={self.user_id} revoked={self.revoked}>'
+
+
+class NotificationSetting(db.Model):
+    """Tabela notification_settings - Configuração de notificações por escritório.
+
+    Uma linha por (escritório, tipo de notificação). Novos tipos de notificação
+    reaproveitam a tabela — não precisam de schema novo.
+    """
+    __tablename__ = 'notification_settings'
+    __table_args__ = (
+        db.UniqueConstraint('law_firm_id', 'notification_type',
+                            name='uq_notification_settings_firm_type'),
+    )
+
+    TYPE_FAP_DIGEST = 'fap_digest'
+
+    FREQUENCY_DAILY = 'daily'
+    FREQUENCY_WEEKLY = 'weekly'
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    notification_type = db.Column(db.String(50), nullable=False, index=True)
+
+    is_enabled = db.Column(db.Boolean, default=False, nullable=False)
+    frequency = db.Column(db.String(20), default=FREQUENCY_DAILY, nullable=False)
+    send_hour = db.Column(db.Integer, default=8, nullable=False)      # 0-23, horário de São Paulo
+    send_weekday = db.Column(db.Integer, default=0, nullable=False)   # 0=segunda ... 6=domingo (só weekly)
+
+    recipients_json = db.Column(db.Text)      # lista de e-mails
+    last_sent_at = db.Column(db.DateTime)     # UTC; marca a janela do "desde o último envio"
+
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now, nullable=False)
+
+    law_firm = db.relationship('LawFirm')
+
+    def get_recipients(self):
+        """Lista de destinatários (sempre uma lista, mesmo com JSON inválido)."""
+        import json as _json
+        if not self.recipients_json:
+            return []
+        try:
+            data = _json.loads(self.recipients_json)
+        except (TypeError, ValueError):
+            return []
+        return [str(e).strip() for e in data if str(e or '').strip()] if isinstance(data, list) else []
+
+    def set_recipients(self, recipients):
+        import json as _json
+        self.recipients_json = _json.dumps(list(recipients or []), ensure_ascii=False)
+
+    def __repr__(self):
+        return (f'<NotificationSetting type={self.notification_type} '
+                f'law_firm_id={self.law_firm_id} enabled={self.is_enabled}>')

@@ -140,7 +140,7 @@ intellexia/
 | `fap_review` | `/fap-review` | Revisão de petições FAP com IA, score de qualidade por advogado |
 | `fap_reasons` | `/cases/fap-reasons` | Catálogo de motivos FAP configurável |
 | `case_comments` | — | Threads de comentários em casos |
-| `settings` | — | Preferências e integrações por usuário |
+| `settings` | `/settings` | Perfil do usuário, dados do escritório e **Notificações** por e-mail (admin) |
 | `admin_users` | — | Gerenciamento de usuários (admin-only) |
 | `docs` | `/docs` | Manual de uso dos painéis (renderizado dos markdowns) + assistente "pergunte ao manual" |
 
@@ -172,6 +172,14 @@ Uploads também são segregados por escritório (ex.: `uploads/cases_knowledge_b
 Sessão Flask (cookie) com `user_id` + `law_firm_id`. `app/middlewares.py::check_session` é um `before_request` global que redireciona para `auth.login` se não autenticado (exceto endpoints `public_endpoints`). Também atualiza `User.last_activity` a cada request autenticada. Para APIs JSON, retorna `401`.
 
 Decorator `@require_law_firm` garante que há escritório na sessão.
+
+### Notificações por e-mail
+
+SMTP configurado **só via `.env`** (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME`, `SMTP_USE_TLS`) — senha nunca vai para o banco. Sem configuração, `email_service.send_email()` apenas loga e retorna `False` (degradação graciosa).
+
+- **Config por escritório**: tabela genérica `notification_settings`, uma linha por `(law_firm_id, notification_type)`. Tela admin-only em `/settings/notifications`, um card por tipo. Novo tipo de notificação = novo `notification_type` + função `send_<tipo>` registrada em `notification_service.SENDERS` — sem schema novo.
+- **Disparo**: `scripts/send_notifications.py` roda de hora em hora no cron e envia o que está no horário (`is_due`). Sem novidades no período não envia e-mail (só avança `last_sent_at`); falha de envio **não** avança a janela, para a próxima execução tentar de novo.
+- **Resumo FAP**: reusa `fap_digest_service`, o mesmo código do widget do dashboard — nunca duplique essas queries. Templates de e-mail em `templates/emails/` usam tabelas + CSS inline (cliente de e-mail não roda Bootstrap); links absolutos via `APP_PUBLIC_URL` + `test_request_context`.
 
 ### Timezone
 
@@ -307,6 +315,9 @@ FapReview.revision [POST]
 | `TokenAnalyticsService`                | Agregações/relatórios de uso de tokens                    |
 | `FapContestationJudgmentReportService` | Processa relatórios de julgamento FAP                     |
 | `FapWebService`                        | Integração web para dados FAP                             |
+| `email_service`                        | Envio de e-mail por SMTP (`smtplib`); config no `.env`    |
+| `fap_digest_service`                   | Contestações recentes — fonte única do widget do dashboard e do e-mail |
+| `notification_service`                 | Agendamento e envio das notificações (hoje: Resumo FAP)   |
 | `JudicialSentenceAnalysisService`      | Análise de sentenças judiciais                            |
 | `DataJudApi`                           | Integração com API DataJud do CNJ                         |
 | `SgtTpuService`                        | Integração com SGT-TPU (tabelas processuais unificadas)   |

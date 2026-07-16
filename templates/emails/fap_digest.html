@@ -1,0 +1,184 @@
+{#
+  E-mail do Resumo FAP — espelha o widget "Contestações FAP — recentes" do dashboard.
+
+  Restrições de cliente de e-mail: sem Bootstrap, sem <style> externo, sem abas
+  e sem flex/grid — tudo em tabelas com CSS inline. As abas do dashboard viram
+  seções empilhadas.
+
+  Contexto: digest, law_firm, periodo_inicio, gerado_em, is_test.
+  Os links usam url_for(_external=True) — o serviço renderiza com base_url=APP_PUBLIC_URL.
+#}
+{%- set BORDA = '#dee2e6' -%}
+{%- set TEXTO = '#212529' -%}
+{%- set SUAVE = '#6c757d' -%}
+{%- set FUNDO = '#f8f9fa' -%}
+
+{%- macro secao(titulo, subtitulo, items, cor, cor_fundo, vazio_msg, show_changed=false) -%}
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 24px 0;">
+  <tr>
+    <td style="padding:0 0 8px 0;">
+      <span style="display:inline-block;background:{{ cor_fundo }};color:{{ cor }};font-size:13px;font-weight:700;padding:5px 12px;border-radius:999px;">
+        {{ titulo }}{% if items %} · {{ items|length }}{% endif %}
+      </span>
+      {% if subtitulo %}<span style="color:{{ SUAVE }};font-size:12px;padding-left:8px;">{{ subtitulo }}</span>{% endif %}
+    </td>
+  </tr>
+  <tr>
+    <td>
+      {% if items %}
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse:collapse;font-size:13px;">
+        <tr style="background:{{ FUNDO }};">
+          <th align="left" style="padding:8px 10px;border-bottom:1px solid {{ BORDA }};color:{{ SUAVE }};font-weight:600;white-space:nowrap;">Data</th>
+          <th align="left" style="padding:8px 10px;border-bottom:1px solid {{ BORDA }};color:{{ SUAVE }};font-weight:600;">Empresa</th>
+          <th align="left" style="padding:8px 10px;border-bottom:1px solid {{ BORDA }};color:{{ SUAVE }};font-weight:600;">Protocolo</th>
+          <th align="left" style="padding:8px 10px;border-bottom:1px solid {{ BORDA }};color:{{ SUAVE }};font-weight:600;">Situação</th>
+          {% if show_changed %}<th align="left" style="padding:8px 10px;border-bottom:1px solid {{ BORDA }};color:{{ SUAVE }};font-weight:600;">Alterou</th>{% endif %}
+          <th align="center" style="padding:8px 10px;border-bottom:1px solid {{ BORDA }};color:{{ SUAVE }};font-weight:600;">Vigência</th>
+        </tr>
+        {% for c in items %}
+        <tr>
+          <td style="padding:10px;border-bottom:1px solid {{ BORDA }};white-space:nowrap;">
+            <span style="background:{{ cor_fundo }};color:{{ cor }};font-size:12px;font-weight:600;padding:3px 8px;border-radius:4px;">{{ c.data }}</span>
+          </td>
+          <td style="padding:10px;border-bottom:1px solid {{ BORDA }};">
+            {% if c.empresa %}<div style="font-weight:600;color:{{ TEXTO }};">{{ c.empresa }}</div>{% endif %}
+            <div style="color:{{ SUAVE }};font-size:12px;">{{ c.cnpj_fmt }}</div>
+          </td>
+          <td style="padding:10px;border-bottom:1px solid {{ BORDA }};font-family:Menlo,Consolas,monospace;color:{{ TEXTO }};">{{ c.protocolo }}</td>
+          <td style="padding:10px;border-bottom:1px solid {{ BORDA }};color:{{ TEXTO }};">
+            {{ c.situacao or '—' }}
+            {% if c.instancia %}<div style="color:{{ SUAVE }};font-size:12px;">{{ c.instancia }}</div>{% endif %}
+          </td>
+          {% if show_changed %}
+          <td style="padding:10px;border-bottom:1px solid {{ BORDA }};">
+            {% for lbl in c.changed %}<span style="display:inline-block;background:#fff3cd;color:#664d03;font-size:11px;font-weight:600;padding:2px 7px;border-radius:4px;margin:0 3px 3px 0;">{{ lbl }}</span>
+            {% else %}<span style="color:{{ SUAVE }};">—</span>{% endfor %}
+          </td>
+          {% endif %}
+          <td align="center" style="padding:10px;border-bottom:1px solid {{ BORDA }};color:{{ TEXTO }};">
+            <a href="{{ url_for('fap_panel.contestacoes_page', ano_vigencia=c.ano_vigencia, cnpj_raiz=c.cnpj_raiz, _external=True) }}"
+               style="color:#0d6efd;text-decoration:none;font-weight:600;">{{ c.ano_vigencia }}</a>
+          </td>
+        </tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <div style="background:{{ FUNDO }};border:1px solid {{ BORDA }};border-radius:6px;padding:12px;color:{{ SUAVE }};font-size:13px;">
+        {{ vazio_msg }}
+      </div>
+      {% endif %}
+    </td>
+  </tr>
+</table>
+{%- endmacro -%}
+
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+       style="background:#eef1f5;margin:0;padding:24px 12px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <tr>
+    <td align="center">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="720"
+             style="max-width:720px;width:100%;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+
+        <!-- Cabeçalho -->
+        <tr>
+          <td style="background:#0d6efd;padding:20px 24px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+              <tr>
+                <td width="52" valign="middle">
+                  {# Fundo branco: o logo é escuro e sumiria sobre o azul do cabeçalho. #}
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td align="center" valign="middle" width="48" height="48"
+                          style="background:#ffffff;border-radius:10px;">
+                        <img src="cid:logo" width="34" alt="IntellexIA" style="display:block;border:0;">
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+                <td valign="middle" style="padding-left:12px;">
+                  <div style="color:#ffffff;font-size:18px;font-weight:700;">Resumo FAP</div>
+                  <div style="color:#cfe0ff;font-size:13px;">Contestações FAP — o que saiu de novo</div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        {% if is_test %}
+        <tr>
+          <td style="background:#fff3cd;color:#664d03;padding:10px 24px;font-size:13px;font-weight:600;">
+            E-mail de teste — enviado só para você, sem afetar o agendamento.
+          </td>
+        </tr>
+        {% endif %}
+
+        <tr>
+          <td style="padding:24px;">
+            <p style="margin:0 0 4px 0;color:{{ TEXTO }};font-size:14px;">
+              {% if law_firm %}{{ law_firm.trade_name or law_firm.name }}{% endif %}
+            </p>
+            <p style="margin:0 0 24px 0;color:{{ SUAVE }};font-size:13px;">
+              Período: desde {{ periodo_inicio|datetime_sp if periodo_inicio else '—' }} ·
+              Gerado em {{ gerado_em.strftime('%d/%m/%Y %H:%M') }}
+            </p>
+
+            <!-- O que mudou no período -->
+            <h2 style="margin:0 0 4px 0;color:{{ TEXTO }};font-size:16px;">O que mudou no período</h2>
+            <p style="margin:0 0 16px 0;color:{{ SUAVE }};font-size:13px;">
+              {% if digest.has_novidades %}
+                {{ digest.totais.total }} contestação(ões) com novidade desde o último resumo.
+              {% else %}
+                Nenhuma contestação teve novidade neste período.
+              {% endif %}
+            </p>
+
+            {{ secao('Publicadas no D.O.U.', '', digest.novidades.dou, '#084298', '#cfe2ff',
+                     'Nenhuma publicação no D.O.U. no período.') }}
+            {{ secao('Cadastradas', '', digest.novidades.cadastro, '#0a3622', '#d1e7dd',
+                     'Nenhuma contestação nova no período.') }}
+            {{ secao('Atualizadas', '', digest.novidades.atualizacao, '#664d03', '#fff3cd',
+                     'Nenhuma atualização no período.', show_changed=true) }}
+
+            <hr style="border:0;border-top:1px solid {{ BORDA }};margin:8px 0 24px 0;">
+
+            <!-- Panorama -->
+            <h2 style="margin:0 0 4px 0;color:{{ TEXTO }};font-size:16px;">Mais recentes</h2>
+            <p style="margin:0 0 16px 0;color:{{ SUAVE }};font-size:13px;">
+              Panorama atual do painel, independente do período acima.
+            </p>
+
+            {{ secao('Publicadas no D.O.U.', '', digest.recentes.dou, '#084298', '#cfe2ff',
+                     'Nenhuma contestação com publicação no D.O.U. registrada ainda.') }}
+            {{ secao('Cadastradas', '', digest.recentes.cadastro, '#0a3622', '#d1e7dd',
+                     'Nenhuma contestação cadastrada ainda. Sincronize no Painel FAP.') }}
+            {{ secao('Atualizadas', '', digest.recentes.atualizacao, '#664d03', '#fff3cd',
+                     'Nenhuma contestação teve mudança registrada ainda.', show_changed=true) }}
+
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+              <tr>
+                <td align="center" style="padding:8px 0 0 0;">
+                  <a href="{{ url_for('fap_panel.contestacoes_page', _external=True) }}"
+                     style="display:inline-block;background:#0d6efd;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:11px 22px;border-radius:6px;">
+                    Ver todas as contestações
+                  </a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Rodapé -->
+        <tr>
+          <td style="background:{{ FUNDO }};border-top:1px solid {{ BORDA }};padding:16px 24px;color:{{ SUAVE }};font-size:12px;">
+            <p style="margin:0 0 4px 0;">
+              Você recebe este e-mail porque está na lista de destinatários do Resumo FAP
+              {% if law_firm %} de {{ law_firm.trade_name or law_firm.name }}{% endif %}.
+              Para deixar de receber, fale com o administrador do escritório.
+            </p>
+            <p style="margin:0;">IntellexIA · mensagem automática, não responda.</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>

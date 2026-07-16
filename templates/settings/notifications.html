@@ -1,0 +1,245 @@
+{% extends "layout/base.html" %}
+
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}Notificações{% endblock %}
+
+{% block content %}
+{% call page_hero(title='Notificações', subtitle='Configure os e-mails automáticos enviados pelo IntellexIA', icon='bi bi-bell') %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb mb-0 bg-transparent small"><li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li><li class="breadcrumb-item active" aria-current="page">Notificações</li></ol></nav>
+{% endcall %}
+
+<div class="app-content">
+  <div class="container-fluid">
+
+    <!-- Alert Container -->
+    <div id="alert-container" style="display: none;">
+      <div class="alert alert-dismissible fade show" role="alert">
+        <i class="bi me-2" id="alert-icon"></i>
+        <span id="alert-message"></span>
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+      </div>
+    </div>
+
+    {% if not smtp_configured %}
+    <div class="alert alert-warning">
+      <i class="bi bi-exclamation-triangle-fill me-2"></i>
+      <strong>Servidor de e-mail não configurado.</strong>
+      As notificações não serão enviadas até que <code>SMTP_HOST</code> e <code>SMTP_FROM_EMAIL</code>
+      sejam definidos no <code>.env</code> do servidor.
+    </div>
+    {% endif %}
+
+    <div class="row">
+      <div class="col-lg-9">
+
+        <!-- Card: Resumo FAP -->
+        <div class="card card-primary card-outline">
+          <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <h3 class="card-title mb-0">
+              <i class="bi bi-newspaper me-2"></i>Resumo FAP
+            </h3>
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox" role="switch" id="is_enabled" name="is_enabled"
+                {% if fap_digest.is_enabled %}checked{% endif %}>
+              <label class="form-check-label" for="is_enabled" id="enabledLabel">
+                {{ 'Ativo' if fap_digest.is_enabled else 'Inativo' }}
+              </label>
+            </div>
+          </div>
+
+          <form id="fapDigestForm" method="POST" action="{{ url_for('settings.notifications_fap_digest_post') }}">
+            <div class="card-body">
+              <p class="text-muted mb-4">
+                E-mail periódico com as contestações FAP que tiveram novidade no período
+                (publicação no D.O.U., cadastro ou atualização), seguido do panorama das mais
+                recentes — o mesmo conteúdo do painel do dashboard.
+                <strong>Sem novidades no período, nenhum e-mail é enviado.</strong>
+              </p>
+
+              <h5 class="mb-3"><i class="bi bi-clock me-2"></i>Quando enviar</h5>
+              <div class="row">
+                <div class="col-md-4">
+                  <div class="mb-3">
+                    <label for="frequency" class="form-label">Frequência</label>
+                    <select class="form-select" id="frequency" name="frequency">
+                      <option value="daily" {% if fap_digest.frequency == 'daily' %}selected{% endif %}>Diário</option>
+                      <option value="weekly" {% if fap_digest.frequency == 'weekly' %}selected{% endif %}>Semanal</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="col-md-4" id="weekdayGroup">
+                  <div class="mb-3">
+                    <label for="send_weekday" class="form-label">Dia da semana</label>
+                    <select class="form-select" id="send_weekday" name="send_weekday">
+                      {% for label in weekday_labels %}
+                      <option value="{{ loop.index0 }}" {% if fap_digest.send_weekday == loop.index0 %}selected{% endif %}>{{ label }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="mb-3">
+                    <label for="send_hour" class="form-label">Horário</label>
+                    <select class="form-select" id="send_hour" name="send_hour">
+                      {% for h in range(24) %}
+                      <option value="{{ h }}" {% if fap_digest.send_hour == h %}selected{% endif %}>{{ '%02d:00'|format(h) }}</option>
+                      {% endfor %}
+                    </select>
+                    <small class="text-muted">Horário de Brasília</small>
+                  </div>
+                </div>
+              </div>
+
+              <hr>
+
+              <h5 class="mb-3"><i class="bi bi-people me-2"></i>Destinatários</h5>
+              <div class="mb-3">
+                <label for="recipients" class="form-label">E-mails</label>
+                <textarea class="form-control" id="recipients" name="recipients" rows="3"
+                  placeholder="fulano@escritorio.com.br, cliente@empresa.com.br">{{ fap_digest.get_recipients()|join(', ') }}</textarea>
+                <small class="text-muted">Separe por vírgula, ponto e vírgula ou quebra de linha.</small>
+              </div>
+
+              {% if fap_digest.last_sent_at %}
+              <div class="alert alert-light border mb-0">
+                <i class="bi bi-info-circle me-1"></i>
+                Último envio: <strong>{{ fap_digest.last_sent_at|datetime_sp }}</strong>.
+                O próximo e-mail traz o que mudou a partir dessa data.
+              </div>
+              {% else %}
+              <div class="alert alert-light border mb-0">
+                <i class="bi bi-info-circle me-1"></i>
+                Nenhum envio ainda. O primeiro e-mail cobre as últimas 24 horas (diário) ou 7 dias (semanal).
+              </div>
+              {% endif %}
+            </div>
+
+            <div class="card-footer d-flex flex-wrap gap-2">
+              <button type="submit" class="btn btn-primary" id="submitBtn">
+                <i class="bi bi-save me-2"></i>
+                <span id="btnText">Salvar Alterações</span>
+              </button>
+              <button type="button" class="btn btn-outline-secondary" id="sendNowBtn"
+                {% if not smtp_configured %}disabled{% endif %}
+                title="Envia um e-mail de teste só para você, sem afetar o agendamento">
+                <i class="bi bi-send me-2"></i>
+                <span id="sendNowText">Enviar teste para mim</span>
+              </button>
+              <span class="text-muted align-self-center small">
+                O teste vai só para <strong>{{ user_email }}</strong> — a lista de destinatários não recebe.
+              </span>
+            </div>
+          </form>
+        </div>
+
+      </div>
+
+      <div class="col-lg-3">
+        <div class="card">
+          <div class="card-header">
+            <h3 class="card-title"><i class="bi bi-envelope-gear me-2"></i>Servidor de e-mail</h3>
+          </div>
+          <div class="card-body small">
+            <p class="mb-2">
+              {% if smtp_configured %}
+              <span class="badge bg-success-subtle text-success-emphasis"><i class="bi bi-check-circle me-1"></i>Configurado</span>
+              {% else %}
+              <span class="badge bg-danger-subtle text-danger-emphasis"><i class="bi bi-x-circle me-1"></i>Não configurado</span>
+              {% endif %}
+            </p>
+            <dl class="row mb-0">
+              <dt class="col-5 text-muted fw-normal">Servidor</dt>
+              <dd class="col-7 text-truncate">{{ smtp_config.host or '—' }}</dd>
+              <dt class="col-5 text-muted fw-normal">Porta</dt>
+              <dd class="col-7">{{ smtp_config.port }}</dd>
+              <dt class="col-5 text-muted fw-normal">Remetente</dt>
+              <dd class="col-7 text-truncate">{{ smtp_config.from_email or '—' }}</dd>
+              <dt class="col-5 text-muted fw-normal">Autenticação</dt>
+              <dd class="col-7">{{ 'Sim' if smtp_config.has_password else 'Não' }}</dd>
+            </dl>
+            <hr>
+            <p class="text-muted mb-0">
+              Definido no <code>.env</code> do servidor. Fale com o suporte técnico para alterar.
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const form = document.getElementById('fapDigestForm');
+    const submitBtn = document.getElementById('submitBtn');
+    const btnText = document.getElementById('btnText');
+    const sendNowBtn = document.getElementById('sendNowBtn');
+    const sendNowText = document.getElementById('sendNowText');
+    const enabledCheck = document.getElementById('is_enabled');
+    const enabledLabel = document.getElementById('enabledLabel');
+    const frequency = document.getElementById('frequency');
+    const weekdayGroup = document.getElementById('weekdayGroup');
+    const alertContainer = document.getElementById('alert-container');
+    const alertMessage = document.getElementById('alert-message');
+    const alertIcon = document.getElementById('alert-icon');
+
+    function showAlert(message, type) {
+      const iconClass = type === 'success' ? 'bi-check-circle-fill' : 'bi-x-circle-fill';
+      alertContainer.querySelector('.alert').className = `alert alert-${type} alert-dismissible fade show`;
+      alertIcon.className = `bi me-2 ${iconClass}`;
+      alertMessage.textContent = message;
+      alertContainer.style.display = 'block';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // O dia da semana só faz sentido no envio semanal.
+    function syncWeekdayVisibility() {
+      weekdayGroup.style.display = frequency.value === 'weekly' ? '' : 'none';
+    }
+    frequency.addEventListener('change', syncWeekdayVisibility);
+    syncWeekdayVisibility();
+
+    enabledCheck.addEventListener('change', function () {
+      enabledLabel.textContent = this.checked ? 'Ativo' : 'Inativo';
+    });
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+
+      submitBtn.disabled = true;
+      btnText.textContent = 'Salvando...';
+
+      const formData = new FormData(form);
+      formData.set('is_enabled', enabledCheck.checked ? '1' : '0');
+
+      fetch(form.action, { method: 'POST', body: formData })
+        .then(response => response.json())
+        .then(data => {
+          showAlert(data.message, data.success ? 'success' : 'danger');
+        })
+        .catch(() => showAlert('Erro de comunicação com o servidor.', 'danger'))
+        .finally(() => {
+          submitBtn.disabled = false;
+          btnText.textContent = 'Salvar Alterações';
+        });
+    });
+
+    sendNowBtn.addEventListener('click', function () {
+      sendNowBtn.disabled = true;
+      sendNowText.textContent = 'Enviando...';
+
+      fetch('{{ url_for("settings.notifications_fap_digest_send_now") }}', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => {
+          showAlert(data.message, data.success ? 'success' : 'danger');
+        })
+        .catch(() => showAlert('Erro de comunicação com o servidor.', 'danger'))
+        .finally(() => {
+          sendNowBtn.disabled = false;
+          sendNowText.textContent = 'Enviar teste para mim';
+        });
+    });
+  });
+</script>
+{% endblock %}
