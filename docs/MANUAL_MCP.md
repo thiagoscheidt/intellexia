@@ -1,6 +1,6 @@
 # Manual do Usuário — Conectar sua IA ao IntellexIA (MCP)
 
-> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos e mais — com **24 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
+> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos e mais — com **27 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
 
 ---
 
@@ -20,6 +20,8 @@ O MCP é uma "ponte" segura entre um assistente de IA e o IntellexIA. Em vez de 
 - "O que mudou nas contestações esta semana?";
 - "Quem é o CNPJ 59.104.422/0103-84?" — consulta pública da Receita;
 - "**Revise esta petição**" (colando o texto) — o agente revisor oficial aponta achados e documentos faltantes;
+- "**Revise esta petição, identificador FAP-2024-013**" — a revisão entra no painel do Revisor, com histórico e custo;
+- "O que a revisão da FAP-2024-013 apontou?" — lê os achados sem gastar outra rodada de IA;
 - Comando pronto `/analise_empresa` — análise completa de uma empresa em um clique.
 
 ---
@@ -133,8 +135,15 @@ Use exatamente este endereço (sem barra no final) — é o endereço **desta** 
 | Ferramenta | O que faz | Origem |
 |---|---|---|
 | `revisar_peticao_inicial` | Revisa o texto de uma petição com o **agente revisor oficial** do escritório (mesmos prompts, manual FAP e casos de referência do módulo Revisor): achados com severidade, documentos faltantes, teses e resumo executivo | IA |
+| `listar_peticoes_revisao` | Petições do Revisor com o estágio de cada uma, nº de revisões e data da última — "o que está aguardando ajuste?" | Sistema |
+| `detalhar_revisao` | Os achados de uma revisão **já feita**: gravidade, localização, correção sugerida e referência do manual | Sistema |
+| `historico_revisoes_peticao` | Evolução entre as revisões da mesma petição: o que foi resolvido, o que **reincidiu** e o que é novo | Sistema |
 
 > [!IA] A revisão usa as configurações do módulo **Revisor de Petições** (modelo, manual e prompts ativos do escritório) e pode levar cerca de 1 minuto em petições longas.
+
+> [!ALERTA] **Para a revisão entrar no sistema, informe o identificador do documento** (ex.: "revise esta petição, identificador FAP-2024-013"). Com ele, a revisão vira uma revisão da petição como qualquer outra: aparece no painel, conta no histórico e no custo. Sem ele, a IA responde a análise mas **nada fica salvo**.
+
+> [!INFO] Pedir para *ler* uma revisão que já existe (`detalhar_revisao`) é instantâneo e não gasta IA — prefira isso a mandar revisar de novo.
 
 ---
 
@@ -152,6 +161,9 @@ no menu do assistente — no Claude Code, digite `/` e procure por `intellexia`:
 | `resumir_decisao` | Resume uma decisão/parecer FAP: resultado, fundamentação, efeito no FAP e próximos passos |
 | `email_cliente` | Redige um e-mail ao cliente explicando o resultado do FAP em linguagem simples |
 | `analise_risco_empresa` | Onde concentrar esforço: tópicos com mais chance de deferimento para uma empresa |
+| `corrigir_peticao` | Pega a revisão já feita e devolve, achado a achado, o trecho reescrito pronto para colar |
+| `pronto_para_protocolo` | Veredito objetivo: a petição pode ser protocolada? (críticos em aberto + documentos faltantes) |
+| `devolutiva_ao_advogado` | Transforma os achados em uma devolutiva construtiva para quem redigiu |
 
 ---
 

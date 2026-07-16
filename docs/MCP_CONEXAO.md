@@ -89,9 +89,12 @@ Em **Settings → Connectors → Add custom connector**, informe a URL
 | `listar_processos` | Processos judiciais com fase atual |
 | `detalhar_processo` | Processo completo: fases, benefícios, teses e decisões |
 | `consultar_cnpj` | Dados cadastrais públicos de um CNPJ (OpenCNPJ/Receita) — qualquer usuário logado |
-| `revisar_peticao_inicial` | Revisão real com o FapPetitionReviewerAgent (prompts/referências do escritório) |
+| `revisar_peticao_inicial` | Revisão real com o FapPetitionReviewerAgent (prompts/referências do escritório). Com `identificador_documento`, registra a revisão no módulo (petição, histórico, custo, status) |
+| `listar_peticoes_revisao` | Petições do Revisor com workflow_status, nº de revisões e última revisão (paginada) |
+| `detalhar_revisao` | Achados de uma revisão existente: gravidade, localização, correção, referência do manual, documentos faltantes e teses |
+| `historico_revisoes_peticao` | Evolução entre revisões da mesma petição: novos, reincidentes e resolvidos |
 
-Prompts MCP (comandos prontos): `relatorio_semanal_fap`, `analise_empresa`, `agenda_do_dia`, `minuta_recurso`, `resumir_decisao`, `email_cliente`, `analise_risco_empresa`.
+Prompts MCP (comandos prontos): `relatorio_semanal_fap`, `analise_empresa`, `agenda_do_dia`, `minuta_recurso`, `resumir_decisao`, `email_cliente`, `analise_risco_empresa`, `corrigir_peticao`, `pronto_para_protocolo`, `devolutiva_ao_advogado`.
 
 ### Paginação das listagens
 
@@ -131,7 +134,7 @@ Exemplos de uso no Claude:
 | `listar_empresas_fap`, `listar_contestacoes_fap`, `detalhar_contestacao`, `listar_beneficios_fap`, `detalhar_beneficio`, `resumo_fap`, `alteracoes_recentes_fap`, `listar_procuracoes_fap`, `valores_de_filtro_fap`, `exportar_beneficios_excel`, `exportar_contestacoes_excel` | Painel FAP |
 | `listar_cats_fap`, `listar_massas_salariais_fap`, `listar_vinculos_fap`, `listar_rotatividade_fap` | Painel de Contestações |
 | `listar_processos`, `detalhar_processo` | Painel de Processos |
-| `revisar_peticao_inicial` | Revisor de Petições |
+| `revisar_peticao_inicial`, `listar_peticoes_revisao`, `detalhar_revisao`, `historico_revisoes_peticao` | Revisor de Petições |
 
 Sem o módulo liberado, a ferramenta retorna um erro de permissão claro. Permissões são
 reavaliadas automaticamente a cada renovação de token (no máximo 1 hora).

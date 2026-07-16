@@ -319,6 +319,7 @@ FapReview.revision [POST]
 | `FapWebService`                        | Integração web para dados FAP                             |
 | `email_service`                        | Envio de e-mail por SMTP (`smtplib`); config no `.env`    |
 | `fap_digest_service`                   | Contestações recentes — fonte única do widget do dashboard e do e-mail |
+| `fap_review_service`                   | Regras de workflow do Revisor (status da petição, auditoria) — fonte única da tela e do MCP; `record_text_review` registra a revisão vinda do MCP |
 | `notification_service`                 | Agendamento e envio das notificações (hoje: Resumo FAP)   |
 | `JudicialSentenceAnalysisService`      | Análise de sentenças judiciais                            |
 | `DataJudApi`                           | Integração com API DataJud do CNJ                         |

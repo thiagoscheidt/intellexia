@@ -16,8 +16,16 @@ def review_petition_handler(
     law_firm_id: int,
     case_type: str = "trabalhista",
     user_id: int | None = None,
+    identificador_documento: str | None = None,
+    titulo: str = "",
 ) -> dict:
-    """Revisa o texto de uma petição com o agente revisor oficial do escritório."""
+    """Revisa o texto de uma petição com o agente revisor oficial do escritório.
+
+    Com ``identificador_documento``, a revisão é **registrada no módulo** (entra no
+    histórico da petição, no custo e no status do fluxo), igual à feita pela tela.
+    Sem ele, a revisão é efêmera — e a resposta diz isso, para o agente não dar a
+    entender que ficou salva.
+    """
     from app.agents.fap_review.reviewer_agent import FapPetitionReviewerAgent
     from app.models import FapReviewPromptVersion, FapReviewReferenceVersion, FapReviewSetting
 
@@ -72,4 +80,33 @@ def review_petition_handler(
     payload = result.model_dump(mode="json")
     payload["modelo_utilizado"] = model
     payload["tipo_caso"] = case_type
+
+    identificador = (identificador_documento or "").strip()
+    if not identificador:
+        payload["registrado_no_sistema"] = False
+        payload["aviso_registro"] = (
+            "Revisão não registrada no módulo Revisor: informe 'identificador_documento' "
+            "para que ela entre no histórico da petição, no custo e no status do fluxo."
+        )
+        return payload
+
+    from app.services.fap_review_service import record_text_review
+
+    try:
+        registro = record_text_review(
+            law_firm_id=law_firm_id,
+            user_id=user_id,
+            identifier=identificador,
+            petition_text=petition_text,
+            result_payload=payload,
+            title=titulo,
+        )
+    except ValueError as e:
+        # A revisão foi feita; só o registro falhou — devolve o resultado assim mesmo.
+        payload["registrado_no_sistema"] = False
+        payload["aviso_registro"] = f"Revisão não registrada: {e}"
+        return payload
+
+    payload["registrado_no_sistema"] = True
+    payload.update(registro)
     return payload

@@ -73,6 +73,11 @@ from mcp_server.tools.process_panel import (
     get_process_detail_handler,
 )
 from mcp_server.tools.petition_reviewer import review_petition_handler
+from mcp_server.tools.petition_review_read import (
+    get_review_detail_handler,
+    list_review_petitions_handler,
+    petition_review_history_handler,
+)
 from mcp_server.tools.utilities import consultar_cnpj_handler
 from mcp_server.tools.insights import (
     prazos_e_alertas_handler,
@@ -784,23 +789,116 @@ def consultar_cnpj(cnpj: str) -> dict:
 
 
 @mcp.tool()
-def revisar_peticao_inicial(texto_peticao: str, tipo_caso: str = "trabalhista") -> dict:
+def revisar_peticao_inicial(
+    texto_peticao: str,
+    tipo_caso: str = "trabalhista",
+    identificador_documento: str | None = None,
+    titulo: str = "",
+) -> dict:
     """Revisa uma petição FAP com o agente revisor oficial do escritório.
 
     Usa os mesmos prompts, manual FAP e casos de referência configurados no
     módulo Revisor de Petições. Retorna achados (findings) com severidade,
-    documentos faltantes, teses identificadas, checagem de benefícios e resumo
-    executivo. A revisão pode levar ~1 minuto em petições longas.
+    documentos faltantes, teses identificadas e resumo executivo. A revisão pode
+    levar ~1 minuto em petições longas.
+
+    Informando 'identificador_documento', a revisão é **registrada no módulo**
+    como uma revisão da petição (histórico, custo e status do fluxo) — igual à
+    feita pela tela. Sem ele, a revisão é descartada depois da resposta.
 
     Args:
         texto_peticao: Texto completo da petição (mínimo ~200 caracteres).
         tipo_caso: trabalhista ou previdenciario (padrão: trabalhista).
+        identificador_documento: Identificador da petição no escritório (ex.: "FAP-2024-013").
+            Se a petição já existir com esse identificador, entra como nova revisão dela.
+        titulo: Título da petição, usado só quando ela é criada agora.
+
+    Returns:
+        Achados e resumo da revisão. 'registrado_no_sistema' indica se ficou salva;
+        quando true, traz 'peticao_id', 'revisao_id' e 'numero_revisao'.
     """
     claims = require_module("fap_review")
     with app.app_context():
         return review_petition_handler(
-            texto_peticao, claims["law_firm_id"], tipo_caso, user_id=claims.get("user_id")
+            texto_peticao, claims["law_firm_id"], tipo_caso, user_id=claims.get("user_id"),
+            identificador_documento=identificador_documento, titulo=titulo,
         )
+
+
+@mcp.tool()
+def listar_peticoes_revisao(
+    status: str | None = None,
+    identificador: str | None = None,
+    titulo: str | None = None,
+    limite: int = 50,
+    deslocamento: int = 0,
+) -> dict:
+    """Lista as petições do módulo Revisor com o estágio de cada uma.
+
+    Responde "o que está aguardando ajuste?", "o que já está pronto para protocolo?".
+
+    Args:
+        status: Filtra pelo estágio: new (nova), in_review (em revisão),
+            awaiting_adjustments (aguardando ajustes), ready_for_filing (aprovada
+            pelo revisor), filed (processo iniciado), archived (arquivada).
+        identificador: Identificador do documento no escritório (busca parcial).
+        titulo: Título ou parte do título (palavras em qualquer ordem).
+        limite: Número máximo de registros (padrão 50).
+        deslocamento: Pula os N primeiros resultados (paginação). Repasse aqui o
+            'proximo_deslocamento' que veio na resposta anterior.
+
+    Returns:
+        Dicionário com 'total_encontrado', 'retornados', 'tem_mais' e 'itens'
+        (peticao_id, identificador, título, status, nº de revisões, última revisão).
+    """
+    claims = require_module("fap_review")
+    with app.app_context():
+        return list_review_petitions_handler(
+            claims["law_firm_id"], status, identificador, titulo, limite, deslocamento
+        )
+
+
+@mcp.tool()
+def detalhar_revisao(revisao_id: int) -> dict:
+    """Achados completos de uma revisão já feita (pela tela ou pelo Claude).
+
+    Use isto em vez de revisar de novo: a revisão já existe, custa ~1 minuto de IA
+    para refazer e o resultado ficaria fora do histórico. Pegue o 'revisao_id' em
+    listar_peticoes_revisao ('ultima_revisao_id') ou em historico_revisoes_peticao.
+
+    Args:
+        revisao_id: Id da revisão (execução) no módulo Revisor.
+
+    Returns:
+        Achados com gravidade, localização, correção sugerida e referência do manual;
+        documentos faltantes, teses identificadas, resumo executivo e custo.
+    """
+    claims = require_module("fap_review")
+    with app.app_context():
+        return get_review_detail_handler(claims["law_firm_id"], revisao_id)
+
+
+@mcp.tool()
+def historico_revisoes_peticao(
+    peticao_id: int | None = None,
+    identificador: str | None = None,
+) -> dict:
+    """Evolução das revisões de uma petição: o que foi resolvido e o que reincidiu.
+
+    Útil para "a segunda versão corrigiu o que o revisor apontou?".
+
+    Args:
+        peticao_id: Id da petição no módulo Revisor.
+        identificador: Alternativa ao id — identificador do documento no escritório.
+
+    Returns:
+        Lista das revisões em ordem, cada uma com total de achados por gravidade e,
+        em relação à revisão anterior: 'novos', 'reincidentes' e
+        'resolvidos_desde_a_anterior'.
+    """
+    claims = require_module("fap_review")
+    with app.app_context():
+        return petition_review_history_handler(claims["law_firm_id"], peticao_id, identificador)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -920,6 +1018,57 @@ def analise_risco_empresa(nome_empresa: str) -> str:
         "próximo ciclo).\n"
         "Baseie tudo nos números reais retornados; deixe claro quando a amostra for pequena "
         "demais para conclusão firme."
+    )
+
+
+@mcp.prompt(name="corrigir_peticao", description="Pega uma revisão já feita e devolve os trechos reescritos, achado a achado")
+def corrigir_peticao(identificador_documento: str) -> str:
+    return (
+        f"Ajude a corrigir a petição \"{identificador_documento}\" a partir da revisão que o "
+        "escritório já fez — não refaça a revisão:\n"
+        f"1. Chame historico_revisoes_peticao com identificador=\"{identificador_documento}\" "
+        "para achar a revisão mais recente (e ver o que já reincidiu).\n"
+        "2. Chame detalhar_revisao com o 'revisao_id' dela para ler os achados.\n"
+        "3. Para cada achado, na ordem CRÍTICO → MODERADO → FORMAL, apresente: o **problema** "
+        "(descrição e localização na petição), o **texto sugerido** pronto para colar e a "
+        "**referência do manual** que sustenta a correção.\n"
+        "4. Liste à parte os **documentos faltantes**, porque não se resolvem reescrevendo texto.\n"
+        "Regras: reescreva apenas o que o achado aponta, preservando o estilo da peça; não "
+        "invente fatos, número de benefício, data ou tese que não estejam na revisão; onde "
+        "faltar informação, deixe [colchetes] indicando o que o advogado precisa completar."
+    )
+
+
+@mcp.prompt(name="pronto_para_protocolo", description="Checklist objetivo: a petição pode ser protocolada?")
+def pronto_para_protocolo(identificador_documento: str) -> str:
+    return (
+        f"Avalie se a petição \"{identificador_documento}\" pode ser protocolada:\n"
+        f"1. Chame historico_revisoes_peticao com identificador=\"{identificador_documento}\".\n"
+        "2. Chame detalhar_revisao na revisão mais recente.\n"
+        "3. Responda começando por um veredito claro — **PODE PROTOCOLAR** ou "
+        "**NÃO PODE AINDA** — e só depois a justificativa.\n"
+        "Critérios: qualquer achado CRÍTICO em aberto ou documento obrigatório faltante "
+        "impede o protocolo; achados FORMAIS não impedem, mas liste-os como ressalva.\n"
+        "Mostre também: quantas revisões a peça já teve, se algum achado **reincidiu** entre "
+        "elas (sinal de que a correção não pegou) e qual o status atual no fluxo.\n"
+        "Se a revisão mais recente não estiver concluída, diga isso em vez de opinar."
+    )
+
+
+@mcp.prompt(name="devolutiva_ao_advogado", description="Transforma os achados da revisão em uma devolutiva construtiva")
+def devolutiva_ao_advogado(identificador_documento: str) -> str:
+    return (
+        f"Escreva a devolutiva para quem redigiu a petição \"{identificador_documento}\":\n"
+        f"1. Chame historico_revisoes_peticao com identificador=\"{identificador_documento}\" e "
+        "detalhar_revisao na revisão mais recente.\n"
+        "2. Redija uma mensagem em português, profissional e construtiva, com: um parágrafo de "
+        "abertura com o balanço geral, **o que precisa ser ajustado** (agrupado por gravidade, "
+        "explicando o porquê e citando a seção do manual), **documentos a anexar** e um "
+        "fechamento com os próximos passos.\n"
+        "Tom: colega ajudando colega — aponte o que está errado com clareza, sem rispidez, e "
+        "reconheça o que está correto quando houver. Se algum achado **reincidiu** de uma "
+        "revisão anterior, diga isso explicitamente, pois é o ponto que mais gera retrabalho.\n"
+        "Não invente achado que não esteja na revisão nem atribua culpa a pessoas."
     )
 
 

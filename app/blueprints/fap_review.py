@@ -36,6 +36,7 @@ from app.agents.fap_review import (
     FapTrainingApplySubAgent,
 )
 from app.services.openrouter_models_service import fetch_openrouter_text_models_for_info
+from app.services import fap_review_service as _svc
 from app.utils.timezone import now_sp
 
 # Document processing
@@ -70,14 +71,8 @@ ALLOWED_BENEFITS_SPREADSHEET_EXTENSIONS = {'xlsx'}
 MAX_UPLOAD_SIZE = 50 * 1024 * 1024  # 50MB
 READ_ONLY_PROMPT_TYPES = {'revisor_output_format'}
 READ_ONLY_REFERENCE_TYPES = {'project_instructions'}
-PETITION_WORKFLOW_STATUSES = {
-    'new': 'Nova',
-    'in_review': 'Em revisão',
-    'awaiting_adjustments': 'Aguardando ajustes',
-    'ready_for_filing': 'Aprovada pelo revisor',
-    'filed': 'Processo iniciado',
-    'archived': 'Arquivada',
-}
+# Rótulos e regras de workflow vivem no serviço (compartilhados com o MCP).
+PETITION_WORKFLOW_STATUSES = _svc.PETITION_WORKFLOW_STATUSES
 
 
 def _get_file_extension(filename: str) -> str:
@@ -151,24 +146,12 @@ def _get_fap_setting(law_firm_id: int) -> FapReviewSetting:
     return setting
 
 
-def _log_audit(law_firm_id: int, action: str, entity_type: str, 
-               entity_id: int = None, description: str = "", 
+def _log_audit(law_firm_id: int, action: str, entity_type: str,
+               entity_id: int = None, description: str = "",
                old_value: str = "", new_value: str = ""):
-    """Registra ação de auditoria"""
-    user_id = session.get('user_id')
-    
-    log_entry = FapReviewAuditLog(
-        law_firm_id=law_firm_id,
-        user_id=user_id,
-        action=action,
-        entity_type=entity_type,
-        entity_id=entity_id,
-        change_description=description,
-        old_value=old_value,
-        new_value=new_value
-    )
-    db.session.add(log_entry)
-    db.session.commit()
+    """Registra ação de auditoria com o usuário da sessão (regra no serviço)."""
+    _svc.log_audit(law_firm_id, session.get('user_id'), action, entity_type,
+                   entity_id, description, old_value, new_value)
 
 
 def _create_upload_directory(law_firm_id: int, subdir: str = "") -> Path:
@@ -746,52 +729,14 @@ def _append_reference_version(
     return version
 
 
-def _build_petition_title(raw_title: str, fallback_filename: str = '', fallback_identifier: str = '') -> str:
-    """Monta um título amigável para a petição."""
-    title = ' '.join(str(raw_title or '').strip().split())
-    if title:
-        return title
+# _build_petition_title -> app/services/fap_review_service.py (fonte única, usada também pelo MCP)
+_build_petition_title = _svc.build_petition_title
 
-    filename = Path(str(fallback_filename or '')).stem.strip()
-    if filename:
-        return filename
+# _derive_petition_workflow_status -> app/services/fap_review_service.py (fonte única, usada também pelo MCP)
+_derive_petition_workflow_status = _svc.derive_petition_workflow_status
 
-    identifier = str(fallback_identifier or '').strip()
-    return identifier or 'Petição sem título'
-
-
-def _derive_petition_workflow_status(execution_status: str) -> str:
-    """Traduz o status da revisão para o status agregado da petição."""
-    if execution_status in {'pending', 'processing'}:
-        return 'in_review'
-    if execution_status == 'completed':
-        return 'awaiting_adjustments'
-    if execution_status == 'failed':
-        return 'awaiting_adjustments'
-    return 'new'
-
-
-def _sync_petition_after_revision(execution: FapReviewExecution) -> None:
-    """Atualiza a visão agregada da petição depois de uma revisão."""
-    petition = execution.petition
-    if not petition or execution.execution_type != 'revision':
-        return
-
-    if execution.revision_number is None:
-        execution.revision_number = FapReviewExecution.query.filter_by(
-            petition_id=petition.id,
-            execution_type='revision',
-        ).count()
-
-    petition.latest_revision_id = execution.id
-    petition.revision_count = max(petition.revision_count or 0, execution.revision_number or 0)
-    petition.last_reviewed_at = execution.completed_at or execution.updated_at or execution.created_at
-
-    if petition.workflow_status not in {'filed', 'archived'}:
-        petition.workflow_status = _derive_petition_workflow_status(execution.status)
-
-    petition.updated_at = datetime.now()
-
+# _sync_petition_after_revision -> app/services/fap_review_service.py (fonte única, usada também pelo MCP)
+_sync_petition_after_revision = _svc.sync_petition_after_revision
 
 def _build_petition_status_badge(workflow_status: str) -> dict[str, str]:
     """Retorna classes e label para o status da petição na UI."""
@@ -810,19 +755,8 @@ def _build_petition_status_badge(workflow_status: str) -> dict[str, str]:
     }
 
 
-def _load_execution_result_payload(execution: FapReviewExecution) -> dict:
-    """Lê o payload JSON da revisão com fallback seguro."""
-    if not execution.result_json:
-        return {}
-
-    try:
-        payload = json.loads(execution.result_json)
-    except (TypeError, json.JSONDecodeError):
-        current_app.logger.warning('Falha ao interpretar result_json da execução %s', execution.id)
-        return {}
-
-    return payload if isinstance(payload, dict) else {}
-
+# _load_execution_result_payload -> app/services/fap_review_service.py (fonte única, usada também pelo MCP)
+_load_execution_result_payload = _svc.load_execution_result_payload
 
 def _calculate_lawyer_score(total_findings: int, completed_revisions: int, rework_ratio: float, recurrence_rate: float) -> int:
     """Gera score heurístico simples para incentivar redução de retrabalho e reincidência."""
