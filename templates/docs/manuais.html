@@ -55,9 +55,7 @@
   .sidebar { position: sticky; top: 0; align-self: start; height: 100vh; overflow-y: auto;
     padding: 28px 20px 40px 28px; border-right: 1px solid var(--border); }
   .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
-  .brand-mark { width: 30px; height: 30px; border-radius: 8px; flex: none;
-    background: linear-gradient(135deg, var(--accent), var(--accent-2));
-    display: grid; place-items: center; color: #fff; font-weight: 700; font-family: var(--serif); font-size: 17px; }
+  .brand-logo { height: 34px; width: auto; object-fit: contain; flex: none; }
   .brand-name { font-weight: 650; letter-spacing: -.01em; font-size: 15px; }
   .brand-sub { color: var(--muted); font-size: 12px; margin: 2px 0 22px 40px; }
   .nav-group { margin-bottom: 20px; }
@@ -231,7 +229,7 @@
 <div class="layout">
   <aside class="sidebar" id="sidebar">
     <div class="brand">
-      <div class="brand-mark">I</div>
+      <img class="brand-logo" src="{{ url_for('static', filename='assets/img/logo_maior.png') }}" alt="IntellexIA">
       <div class="brand-name">IntellexIA</div>
     </div>
     <div class="brand-sub">Manual de uso · painéis</div>
