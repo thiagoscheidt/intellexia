@@ -220,3 +220,270 @@ def petition_review_history_handler(
         "total_revisoes": len(revisoes),
         "revisoes": revisoes,
     }
+
+
+# ── Referências: o manual FAP e os casos que o revisor usa como régua ─────────
+
+REFERENCE_TYPES = {
+    "manual_fap": "Manual FAP (a régua das revisões)",
+    "casos_referencia": "Casos de referência",
+    "project_instructions": "Instruções do projeto",
+}
+
+# Acima disso, devolver o documento inteiro afogaria o contexto do agente —
+# melhor obrigar a filtrar por seção/termo.
+MAX_REFERENCE_CHARS = 40_000
+
+
+def _split_sections(content: str) -> list[dict]:
+    """Quebra o markdown por títulos, para permitir ler só uma seção."""
+    import re
+
+    sections: list[dict] = []
+    current = {"titulo": "(início)", "nivel": 0, "conteudo": []}
+    for line in (content or "").splitlines():
+        m = re.match(r"^(#{1,6})\s+(.*)$", line)
+        if m:
+            if current["conteudo"] or sections:
+                sections.append(current)
+            current = {"titulo": m.group(2).strip(), "nivel": len(m.group(1)), "conteudo": []}
+        else:
+            current["conteudo"].append(line)
+    sections.append(current)
+    return [
+        {"titulo": s["titulo"], "nivel": s["nivel"], "conteudo": "\n".join(s["conteudo"]).strip()}
+        for s in sections
+        if s["titulo"] != "(início)" or "\n".join(s["conteudo"]).strip()
+    ]
+
+
+def read_reviewer_manual_handler(
+    law_firm_id: int,
+    tipo: str = "manual_fap",
+    secao: str | None = None,
+    termo: str | None = None,
+) -> dict:
+    """Lê a referência ativa do revisor (manual FAP por padrão).
+
+    É o que permite ao agente explicar um achado citando a seção real do manual —
+    os achados trazem 'referencia_manual' e sem isto não há como abrir.
+    """
+    from app.models import FapReviewReferenceVersion
+
+    if tipo not in REFERENCE_TYPES:
+        return {
+            "erro": f"Tipo inválido: {tipo}.",
+            "tipos_validos": REFERENCE_TYPES,
+        }
+
+    ref = FapReviewReferenceVersion.query.filter_by(
+        law_firm_id=law_firm_id, reference_type=tipo, is_active=True
+    ).first()
+
+    if not ref or not (ref.content or "").strip():
+        return {
+            "tipo": tipo,
+            "tipo_descricao": REFERENCE_TYPES[tipo],
+            "configurado": False,
+            "aviso": (
+                f"O escritório não tem '{REFERENCE_TYPES[tipo]}' cadastrado no módulo "
+                "Revisor de Petições. As revisões rodam sem essa régua — avise um "
+                "administrador (Revisor → Configurações → Referências)."
+            ),
+        }
+
+    content = ref.content
+    secoes = _split_sections(content)
+    base = {
+        "tipo": tipo,
+        "tipo_descricao": REFERENCE_TYPES[tipo],
+        "configurado": True,
+        "versao": ref.version_number,
+        "atualizado_em": _iso(ref.updated_at or ref.created_at),
+        "total_secoes": len(secoes),
+    }
+
+    if secao or termo:
+        alvo = (secao or termo or "").lower()
+        achadas = [
+            s for s in secoes
+            if alvo in s["titulo"].lower() or (termo and alvo in s["conteudo"].lower())
+        ]
+        if not achadas:
+            return {
+                **base,
+                "encontrado": False,
+                "secoes_disponiveis": [s["titulo"] for s in secoes],
+                "aviso": f"Nada encontrado para {secao or termo!r}. Veja as seções disponíveis.",
+            }
+        return {**base, "encontrado": True, "secoes": achadas}
+
+    if len(content) > MAX_REFERENCE_CHARS:
+        return {
+            **base,
+            "conteudo_completo": False,
+            "aviso": (
+                f"O documento tem {len(content)} caracteres — grande demais para devolver "
+                "inteiro. Peça uma seção ('secao') ou busque por um termo ('termo')."
+            ),
+            "secoes_disponiveis": [s["titulo"] for s in secoes],
+        }
+
+    return {**base, "conteudo_completo": True, "conteudo": content}
+
+
+def reference_versions_handler(law_firm_id: int, tipo: str | None = None) -> dict:
+    """Histórico de versões das referências do revisor.
+
+    O treinamento pode reescrever o manual e ativar uma versão nova; este é o
+    caminho para auditar o que mudou, quando e por quem.
+    """
+    from app.models import FapReviewReferenceVersion, User
+
+    query = FapReviewReferenceVersion.query.filter_by(law_firm_id=law_firm_id)
+    if tipo:
+        if tipo not in REFERENCE_TYPES:
+            return {"erro": f"Tipo inválido: {tipo}.", "tipos_validos": REFERENCE_TYPES}
+        query = query.filter_by(reference_type=tipo)
+
+    rows = query.order_by(
+        FapReviewReferenceVersion.reference_type,
+        FapReviewReferenceVersion.version_number.desc(),
+    ).all()
+
+    if not rows:
+        return {
+            "total": 0,
+            "versoes": [],
+            "aviso": "O escritório não tem referências cadastradas no módulo Revisor.",
+        }
+
+    autores = {
+        u.id: u.name
+        for u in User.query.filter(
+            User.id.in_([r.created_by_id for r in rows if r.created_by_id])
+        ).all()
+    } if any(r.created_by_id for r in rows) else {}
+
+    return {
+        "total": len(rows),
+        "versoes": [
+            {
+                "tipo": r.reference_type,
+                "tipo_descricao": REFERENCE_TYPES.get(r.reference_type, r.reference_type),
+                "versao": r.version_number,
+                "ativa": r.is_active,
+                "tamanho_caracteres": len(r.content or ""),
+                "criada_por": autores.get(r.created_by_id),
+                "criada_em": _iso(r.created_at),
+            }
+            for r in rows
+        ],
+    }
+
+
+# ── Auditoria ────────────────────────────────────────────────────────────────
+
+
+def review_audit_log_handler(
+    law_firm_id: int,
+    peticao_id: int | None = None,
+    acao: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+) -> dict:
+    """Trilha de auditoria do módulo Revisor: quem fez o quê e quando."""
+    from app.models import FapReviewAuditLog, User
+
+    limit = clamp_limit(limit, 50)
+    offset = clamp_offset(offset)
+
+    query = FapReviewAuditLog.query.filter_by(law_firm_id=law_firm_id)
+    if peticao_id:
+        query = query.filter(
+            FapReviewAuditLog.entity_type == 'petition',
+            FapReviewAuditLog.entity_id == peticao_id,
+        )
+    if acao:
+        query = query.filter(FapReviewAuditLog.action.ilike(f"%{acao}%"))
+
+    total = query.count()
+    rows = fetch_page(
+        query.order_by(FapReviewAuditLog.created_at.desc(), FapReviewAuditLog.id.desc()),
+        limit, offset,
+    )
+
+    autores = {
+        u.id: u.name
+        for u in User.query.filter(User.id.in_([r.user_id for r in rows if r.user_id])).all()
+    } if rows else {}
+
+    itens = [
+        {
+            "id": r.id,
+            "acao": r.action,
+            "entidade": r.entity_type,
+            "entidade_id": r.entity_id,
+            "descricao": r.change_description,
+            "valor_anterior": r.old_value or None,
+            "valor_novo": r.new_value or None,
+            "usuario": autores.get(r.user_id),
+            "quando": _iso(r.created_at),
+        }
+        for r in rows
+    ]
+    return page_envelope(total, offset, itens)
+
+
+# ── Estatísticas por advogado (admin) ────────────────────────────────────────
+
+
+def lawyer_statistics_handler(law_firm_id: int) -> dict:
+    """Score, retrabalho e reincidência por advogado — os mesmos números da tela."""
+    from app.services.fap_review_service import build_lawyer_statistics
+
+    stats = build_lawyer_statistics(law_firm_id)
+    overview = stats.get("overview") or {}
+    lawyers = stats.get("lawyers") or []
+
+    if not lawyers:
+        return {
+            "panorama": overview,
+            "advogados": [],
+            "aviso": "Ainda não há revisões concluídas para calcular estatísticas.",
+        }
+
+    return {
+        "panorama": {
+            "advogados": overview.get("total_lawyers"),
+            "revisoes": overview.get("total_revisions"),
+            "achados": overview.get("total_findings"),
+            "achados_reincidentes": overview.get("repeated_findings"),
+            "taxa_reincidencia": overview.get("recurrence_rate"),
+        },
+        "advogados": [
+            {
+                "usuario_id": l.get("user_id"),
+                "nome": l.get("name"),
+                "papel": l.get("role"),
+                "score": l.get("score"),
+                "revisoes": l.get("total_revisions"),
+                "peticoes": l.get("petitions_count"),
+                "achados": l.get("total_findings"),
+                "achados_criticos": l.get("critical_findings"),
+                "achados_moderados": l.get("moderate_findings"),
+                "achados_formais": l.get("formal_findings"),
+                "media_achados_por_revisao": l.get("avg_findings_per_revision"),
+                "peticoes_com_retrabalho": l.get("rework_petitions"),
+                "taxa_retrabalho": l.get("rework_ratio"),
+                "achados_reincidentes": l.get("repeated_findings"),
+                "taxa_reincidencia": l.get("recurrence_rate"),
+                "categorias_mais_frequentes": l.get("top_categories"),
+            }
+            for l in lawyers
+        ],
+        "nota": (
+            "Score é heurístico (100 menos penalidades por média de achados, retrabalho e "
+            "reincidência) — serve para orientar melhoria, não para ranquear pessoas."
+        ),
+    }

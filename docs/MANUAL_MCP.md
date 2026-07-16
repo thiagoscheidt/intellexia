@@ -1,6 +1,6 @@
 # Manual do Usuário — Conectar sua IA ao IntellexIA (MCP)
 
-> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos e mais — com **27 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
+> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos e mais — com **32 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
 
 ---
 
@@ -138,12 +138,19 @@ Use exatamente este endereço (sem barra no final) — é o endereço **desta** 
 | `listar_peticoes_revisao` | Petições do Revisor com o estágio de cada uma, nº de revisões e data da última — "o que está aguardando ajuste?" | Sistema |
 | `detalhar_revisao` | Os achados de uma revisão **já feita**: gravidade, localização, correção sugerida e referência do manual | Sistema |
 | `historico_revisoes_peticao` | Evolução entre as revisões da mesma petição: o que foi resolvido, o que **reincidiu** e o que é novo | Sistema |
+| `comparar_versoes_peticao` | Revisa **duas versões juntas** (original × revisada) com o agente oficial — "a v2 corrigiu o que foi apontado?" | IA |
+| `ler_manual_revisor` | Lê o **manual FAP do escritório** (e casos de referência) por seção ou termo — é o que permite explicar um achado citando a régua real | Sistema |
+| `versoes_manual_revisor` | Versões do manual e das referências: qual está ativa, quem criou e quando | Sistema |
+| `auditoria_revisor` | Quem fez o quê e quando no módulo | Sistema |
+| `estatisticas_revisor` | Score, retrabalho e reincidência por advogado — **só para administradores** | Cálculo |
 
 > [!IA] A revisão usa as configurações do módulo **Revisor de Petições** (modelo, manual e prompts ativos do escritório) e pode levar cerca de 1 minuto em petições longas.
 
 > [!ALERTA] **Para a revisão entrar no sistema, informe o identificador do documento** (ex.: "revise esta petição, identificador FAP-2024-013"). Com ele, a revisão vira uma revisão da petição como qualquer outra: aparece no painel, conta no histórico e no custo. Sem ele, a IA responde a análise mas **nada fica salvo**.
 
 > [!INFO] Pedir para *ler* uma revisão que já existe (`detalhar_revisao`) é instantâneo e não gasta IA — prefira isso a mandar revisar de novo.
+
+> [!ALERTA] As **estatísticas por advogado** seguem a mesma regra da tela: só administradores. Um usuário comum recebe acesso negado, mesmo tendo o módulo liberado.
 
 ---
 

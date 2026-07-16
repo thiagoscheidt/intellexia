@@ -32,3 +32,20 @@ def require_module(module_key: str) -> dict:
             "Solicite acesso a um administrador do escritório."
         )
     return claims
+
+
+def require_admin(module_key: str) -> dict:
+    """Módulo liberado **e** papel de administrador.
+
+    Espelha o ``require_admin_user`` das telas: há dados que a tela só mostra a
+    admin (ex.: desempenho individual de advogado), e o MCP não pode ser uma porta
+    lateral para eles. O papel vem das claims do token, renovadas a cada hora — um
+    usuário rebaixado perde o acesso na próxima renovação, como nos módulos.
+    """
+    claims = require_module(module_key)
+    if str(claims.get("role") or "").strip().lower() != "admin":
+        raise ToolError(
+            "Acesso negado: esta informação é restrita a administradores do escritório "
+            "(mesma regra da tela no sistema)."
+        )
+    return claims

@@ -48,7 +48,7 @@ from starlette.responses import Response
 
 from main import app  # noqa: E402 — importa o app Flask com DB e configs
 
-from mcp_server.identity import get_identity, require_module
+from mcp_server.identity import get_identity, require_admin, require_module
 from mcp_server.oauth_provider import IntellexiaOAuthProvider
 from mcp_server.tools.knowledge import kb_search_handler, query_knowledge_base_handler
 from mcp_server.tools.fap import (
@@ -77,11 +77,18 @@ from mcp_server.tools.process_panel import (
     list_processes_handler,
     get_process_detail_handler,
 )
-from mcp_server.tools.petition_reviewer import review_petition_handler
+from mcp_server.tools.petition_reviewer import (
+    compare_petition_versions_handler,
+    review_petition_handler,
+)
 from mcp_server.tools.petition_review_read import (
     get_review_detail_handler,
+    lawyer_statistics_handler,
     list_review_petitions_handler,
     petition_review_history_handler,
+    read_reviewer_manual_handler,
+    reference_versions_handler,
+    review_audit_log_handler,
 )
 from mcp_server.tools.utilities import consultar_cnpj_handler
 from mcp_server.tools.insights import (
@@ -932,6 +939,120 @@ def historico_revisoes_peticao(
     claims = require_module("fap_review")
     with app.app_context():
         return petition_review_history_handler(claims["law_firm_id"], peticao_id, identificador)
+
+
+@mcp.tool()
+def comparar_versoes_peticao(
+    texto_original: str,
+    texto_revisado: str,
+    identificador_documento: str | None = None,
+    titulo: str = "",
+) -> dict:
+    """Revisa duas versões de uma petição em conjunto (original × revisada).
+
+    Use quando existirem duas versões e a pergunta for "a v2 corrigiu o que o
+    revisor apontou?": o agente oficial analisa as mudanças, em vez de comparar
+    os textos por conta própria. Para uma versão só, use revisar_peticao_inicial.
+    Leva ~1 minuto.
+
+    Args:
+        texto_original: Texto completo da versão anterior (mínimo ~200 caracteres).
+        texto_revisado: Texto completo da versão nova (mínimo ~200 caracteres).
+        identificador_documento: Identificador da petição no escritório. Informando,
+            a comparação é registrada como uma revisão da petição (histórico e custo).
+        titulo: Título da petição, usado só quando ela é criada agora.
+
+    Returns:
+        Achados, mudanças entre as versões e resumo executivo. 'registrado_no_sistema'
+        indica se ficou salva.
+    """
+    claims = require_module("fap_review")
+    with app.app_context():
+        return compare_petition_versions_handler(
+            texto_original, texto_revisado, claims["law_firm_id"],
+            user_id=claims.get("user_id"),
+            identificador_documento=identificador_documento, titulo=titulo,
+        )
+
+
+@mcp.tool()
+def ler_manual_revisor(
+    tipo: str = "manual_fap",
+    secao: str | None = None,
+    termo: str | None = None,
+) -> dict:
+    """Lê a régua que o revisor usa: o manual FAP do escritório e seus anexos.
+
+    Use para explicar um achado citando o texto real: os achados trazem
+    'referencia_manual' (ex.: "2.1") e é aqui que se abre essa seção. Prefira
+    filtrar por 'secao' ou 'termo' — manuais longos não cabem inteiros na resposta.
+
+    Args:
+        tipo: manual_fap (padrão), casos_referencia ou project_instructions.
+        secao: Título (ou parte) da seção desejada.
+        termo: Busca por um termo no título ou no corpo das seções.
+
+    Returns:
+        Conteúdo pedido e a versão ativa. Se o escritório não tiver a referência
+        cadastrada, retorna 'configurado: false' com o aviso — nesse caso as
+        revisões estão rodando sem essa régua.
+    """
+    claims = require_module("fap_review")
+    with app.app_context():
+        return read_reviewer_manual_handler(claims["law_firm_id"], tipo, secao, termo)
+
+
+@mcp.tool()
+def versoes_manual_revisor(tipo: str | None = None) -> dict:
+    """Histórico de versões do manual e das referências do revisor.
+
+    O treinamento do módulo pode reescrever o manual e ativar uma versão nova —
+    isto mostra o que existe, qual está ativa, quem criou e quando.
+
+    Args:
+        tipo: Filtra por manual_fap, casos_referencia ou project_instructions.
+    """
+    claims = require_module("fap_review")
+    with app.app_context():
+        return reference_versions_handler(claims["law_firm_id"], tipo)
+
+
+@mcp.tool()
+def auditoria_revisor(
+    peticao_id: int | None = None,
+    acao: str | None = None,
+    limite: int = 50,
+    deslocamento: int = 0,
+) -> dict:
+    """Trilha de auditoria do módulo Revisor: quem fez o quê e quando.
+
+    Args:
+        peticao_id: Restringe aos eventos de uma petição.
+        acao: Filtra pelo tipo de ação (busca parcial), ex.: "status", "revision".
+        limite: Número máximo de registros (padrão 50).
+        deslocamento: Pula os N primeiros resultados (paginação). Repasse aqui o
+            'proximo_deslocamento' que veio na resposta anterior.
+    """
+    claims = require_module("fap_review")
+    with app.app_context():
+        return review_audit_log_handler(claims["law_firm_id"], peticao_id, acao,
+                                        limite, deslocamento)
+
+
+@mcp.tool()
+def estatisticas_revisor() -> dict:
+    """Score, retrabalho e reincidência por advogado — os mesmos números da tela.
+
+    **Restrito a administradores**, como a tela correspondente no sistema: são
+    dados de desempenho individual.
+
+    Returns:
+        Panorama do escritório e, por advogado, score, revisões, achados por
+        gravidade, taxa de retrabalho e de reincidência.
+    """
+    claims = require_admin("fap_review")
+    with app.app_context():
+        return lawyer_statistics_handler(claims["law_firm_id"])
 
 
 # ──────────────────────────────────────────────────────────────────────────────

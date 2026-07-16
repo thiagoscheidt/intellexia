@@ -93,6 +93,11 @@ Em **Settings → Connectors → Add custom connector**, informe a URL
 | `listar_peticoes_revisao` | Petições do Revisor com workflow_status, nº de revisões e última revisão (paginada) |
 | `detalhar_revisao` | Achados de uma revisão existente: gravidade, localização, correção, referência do manual, documentos faltantes e teses |
 | `historico_revisoes_peticao` | Evolução entre revisões da mesma petição: novos, reincidentes e resolvidos |
+| `comparar_versoes_peticao` | Revisão comparativa (original × revisada) com o agente oficial; registra se receber `identificador_documento` |
+| `ler_manual_revisor` | Lê a referência ativa (manual_fap, casos_referencia, project_instructions) por seção ou termo |
+| `versoes_manual_revisor` | Versões das referências: ativa, autor, data, tamanho |
+| `auditoria_revisor` | Trilha de auditoria do módulo (paginada) |
+| `estatisticas_revisor` | Score/retrabalho/reincidência por advogado — **exige papel de admin** (`require_admin`) |
 
 Prompts MCP (comandos prontos): `relatorio_semanal_fap`, `analise_empresa`, `agenda_do_dia`, `minuta_recurso`, `resumir_decisao`, `email_cliente`, `analise_risco_empresa`, `corrigir_peticao`, `pronto_para_protocolo`, `devolutiva_ao_advogado`.
 
@@ -134,7 +139,8 @@ Exemplos de uso no Claude:
 | `listar_empresas_fap`, `listar_contestacoes_fap`, `detalhar_contestacao`, `listar_beneficios_fap`, `detalhar_beneficio`, `resumo_fap`, `alteracoes_recentes_fap`, `listar_procuracoes_fap`, `valores_de_filtro_fap`, `exportar_beneficios_excel`, `exportar_contestacoes_excel` | Painel FAP |
 | `listar_cats_fap`, `listar_massas_salariais_fap`, `listar_vinculos_fap`, `listar_rotatividade_fap` | Painel de Contestações |
 | `listar_processos`, `detalhar_processo` | Painel de Processos |
-| `revisar_peticao_inicial`, `listar_peticoes_revisao`, `detalhar_revisao`, `historico_revisoes_peticao` | Revisor de Petições |
+| `revisar_peticao_inicial`, `listar_peticoes_revisao`, `detalhar_revisao`, `historico_revisoes_peticao`, `comparar_versoes_peticao`, `ler_manual_revisor`, `versoes_manual_revisor`, `auditoria_revisor` | Revisor de Petições |
+| `estatisticas_revisor` | Revisor de Petições **+ papel de administrador** (espelha o `require_admin_user` da tela) |
 
 Sem o módulo liberado, a ferramenta retorna um erro de permissão claro. Permissões são
 reavaliadas automaticamente a cada renovação de token (no máximo 1 hora).

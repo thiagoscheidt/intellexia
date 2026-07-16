@@ -32,8 +32,12 @@ from app.models import (
 from app.services.fap_review_service import record_text_review
 from mcp_server.tools.petition_review_read import (
     get_review_detail_handler,
+    lawyer_statistics_handler,
     list_review_petitions_handler,
     petition_review_history_handler,
+    read_reviewer_manual_handler,
+    reference_versions_handler,
+    review_audit_log_handler,
 )
 
 _falhas = []
@@ -204,6 +208,130 @@ def test_paridade_tela(primeiro, user_id, law_firm_id):
           r.status_code in (200, 302), str(r.status_code))
 
 
+
+def test_manual(law_firm_id):
+    print('\n6) Leitura do manual/referências')
+    from app.models import FapReviewReferenceVersion
+
+    r = read_reviewer_manual_handler(law_firm_id, tipo='tipo_invalido')
+    check('tipo inválido devolve erro e lista os válidos', 'erro' in r and 'tipos_validos' in r)
+
+    existente = FapReviewReferenceVersion.query.filter_by(
+        law_firm_id=law_firm_id, reference_type='manual_fap', is_active=True).first()
+
+    if not existente:
+        r = read_reviewer_manual_handler(law_firm_id)
+        check('manual ausente: avisa em vez de fingir que existe',
+              r.get('configurado') is False and 'aviso' in r, str(r)[:80])
+
+    # Cadastra um manual temporário para exercitar seção/termo/tamanho.
+    ref = FapReviewReferenceVersion(
+        law_firm_id=law_firm_id, version_number=999, reference_type='manual_fap',
+        content=('# Manual\n\n## 2.1 Nexo Técnico\nO NTEP deve ser fundamentado.\n\n'
+                 '## 3.2 Documentos\nA CAT é obrigatória nas teses de acidente.\n'),
+        is_active=False,
+    )
+    db.session.add(ref)
+    db.session.commit()
+    try:
+        ref.is_active = True
+        if existente:
+            existente.is_active = False
+        db.session.commit()
+
+        r = read_reviewer_manual_handler(law_firm_id)
+        check('manual cadastrado é devolvido inteiro quando cabe',
+              r.get('configurado') and r.get('conteudo_completo') and 'NTEP' in r['conteudo'])
+        check('conta as seções', r.get('total_secoes') == 3, str(r.get('total_secoes')))
+
+        r = read_reviewer_manual_handler(law_firm_id, secao='2.1')
+        check('lê só a seção pedida (fecha o laço do referencia_manual)',
+              r.get('encontrado') and len(r['secoes']) == 1 and 'NTEP' in r['secoes'][0]['conteudo'])
+
+        r = read_reviewer_manual_handler(law_firm_id, termo='CAT')
+        check('busca por termo no corpo', r.get('encontrado') and
+              any('CAT' in s['conteudo'] for s in r['secoes']))
+
+        r = read_reviewer_manual_handler(law_firm_id, secao='inexistente')
+        check('seção inexistente lista as disponíveis',
+              r.get('encontrado') is False and r.get('secoes_disponiveis'))
+
+        v = reference_versions_handler(law_firm_id, tipo='manual_fap')
+        check('versões listam a ativa', any(x['ativa'] for x in v['versoes']))
+        check('versão traz tamanho', v['versoes'][0]['tamanho_caracteres'] > 0)
+        check('tipo inválido em versões dá erro',
+              'erro' in reference_versions_handler(law_firm_id, tipo='xxx'))
+    finally:
+        db.session.delete(ref)
+        if existente:
+            existente.is_active = True
+        db.session.commit()
+
+
+def test_auditoria(law_firm_id, primeiro):
+    print('\n7) Auditoria')
+    r = review_audit_log_handler(law_firm_id, limit=10)
+    check('auditoria responde com envelope paginado',
+          {'total_encontrado', 'itens', 'tem_mais'} <= set(r))
+    check('registrou a revisão criada pelo MCP',
+          any('MCP' in (i.get('descricao') or '') for i in r['itens']), 'nenhum evento do MCP')
+    check('evento traz autor e data',
+          all('usuario' in i and 'quando' in i for i in r['itens']))
+    filtrado = review_audit_log_handler(law_firm_id, acao='revision')
+    check('filtro por ação funciona',
+          all('revision' in (i['acao'] or '') for i in filtrado['itens']))
+    outro = review_audit_log_handler(99999)
+    check('outro escritório não vê auditoria', outro['total_encontrado'] == 0)
+
+
+def test_estatisticas(law_firm_id):
+    print('\n8) Estatísticas (mesmos números da tela)')
+    from app.services.fap_review_service import build_lawyer_statistics
+
+    tool = lawyer_statistics_handler(law_firm_id)
+    tela = build_lawyer_statistics(law_firm_id)
+    check('panorama bate com o da tela',
+          tool['panorama']['revisoes'] == tela['overview']['total_revisions'])
+    check('mesma quantidade de advogados', len(tool['advogados']) == len(tela['lawyers']))
+    if tool['advogados']:
+        check('score idêntico ao da tela',
+              tool['advogados'][0]['score'] == tela['lawyers'][0]['score'])
+    check('explica que o score é heurístico', 'heurístico' in tool.get('nota', ''))
+
+
+def test_gate_admin():
+    print('\n9) Gate de administrador (require_admin)')
+    import mcp_server.identity as ident
+    from fastmcp.exceptions import ToolError
+
+    original = ident.get_identity
+    try:
+        ident.get_identity = lambda: {'user_id': 2, 'law_firm_id': 1,
+                                      'modules': ['fap_review'], 'role': 'lawyer'}
+        try:
+            ident.require_admin('fap_review')
+            check('não-admin é barrado', False, 'passou!')
+        except ToolError as e:
+            check('não-admin é barrado com mensagem clara',
+                  'restrita a administradores' in str(e))
+        check('não-admin ainda passa no require_module (só o módulo)',
+              ident.require_module('fap_review')['role'] == 'lawyer')
+
+        ident.get_identity = lambda: {'user_id': 1, 'law_firm_id': 1,
+                                      'modules': ['fap_review'], 'role': 'admin'}
+        check('admin passa', ident.require_admin('fap_review')['role'] == 'admin')
+
+        ident.get_identity = lambda: {'user_id': 1, 'law_firm_id': 1,
+                                      'modules': [], 'role': 'admin'}
+        try:
+            ident.require_admin('fap_review')
+            check('admin sem o módulo é barrado', False, 'passou!')
+        except ToolError:
+            check('admin sem o módulo é barrado', True)
+    finally:
+        ident.get_identity = original
+
+
 def _limpar(law_firm_id):
     petitions = FapReviewPetition.query.filter_by(
         law_firm_id=law_firm_id, office_document_identifier=IDENT).all()
@@ -234,6 +362,10 @@ def main():
             test_leitura(firm.id, primeiro, segundo)
             test_isolamento(firm.id, primeiro)
             test_paridade_tela(primeiro, user.id, firm.id)
+            test_manual(firm.id)
+            test_auditoria(firm.id, primeiro)
+            test_estatisticas(firm.id)
+            test_gate_admin()
         finally:
             _limpar(firm.id)
             print('\n(dados de teste removidos)')

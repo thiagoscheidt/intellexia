@@ -326,7 +326,7 @@ FapReview.revision [POST]
 | `FapWebService`                        | Integração web para dados FAP                             |
 | `email_service`                        | Envio de e-mail por SMTP (`smtplib`); config no `.env`    |
 | `fap_digest_service`                   | Contestações recentes — fonte única do widget do dashboard e do e-mail |
-| `fap_review_service`                   | Regras de workflow do Revisor (status da petição, auditoria) — fonte única da tela e do MCP; `record_text_review` registra a revisão vinda do MCP |
+| `fap_review_service`                   | Regras do Revisor (status da petição, auditoria, fingerprint de achado, estatísticas por advogado) — fonte única da tela e do MCP; `record_text_review` registra a revisão vinda do MCP |
 | `notification_service`                 | Agendamento e envio das notificações (hoje: Resumo FAP)   |
 | `JudicialSentenceAnalysisService`      | Análise de sentenças judiciais                            |
 | `DataJudApi`                           | Integração com API DataJud do CNJ                         |
@@ -398,6 +398,7 @@ SUMMARY_MAX_CHARS=50000
 - **Tabelas PDF**: lógica de carry-over para células vazias (CNPJ/NIT que se repetem em linhas).
 - **Dual vector store**: Qdrant para busca conceitual, Meilisearch para busca por termos exatos (CPF, CNPJ, número de processo).
 - **Filtro de tenant obrigatório**: toda query de listagem filtra por `law_firm_id`. Nunca expor dados de outro escritório.
+- **Permissão no MCP**: `require_module(k)` espelha o módulo; `require_admin(k)` espelha também o `require_admin_user` das telas (dados restritos a admin, como desempenho individual). O MCP não pode ser porta lateral para o que a tela protege.
 - **Paginação das tools MCP**: listagens usam `mcp_server/tools/pagination.py` (`limite`/`deslocamento`, envelope com `tem_mais` + `proximo_deslocamento`). Todo `order_by` paginado **precisa terminar no `id`** — os dados vêm de carga em lote e empates no critério de ordenação fazem `LIMIT/OFFSET` pular e repetir linhas sem avisar.
 - **Datetimes em UTC no banco**; exibição em SP via filtros Jinja.
 - **Poppler** é dependência externa para converter PDF → imagem em petições (`pdf2image`). Instale via chocolatey/scoop/apt/brew.
