@@ -93,71 +93,101 @@ def kb_search_handler(
         mode = decision.search_mode if decision.search_mode in ("semantic", "full_text") else "semantic"
         decidido_por = "roteador_llm"
 
+    import re as _re
+    from types import SimpleNamespace
+
+    def _raw_full_text_points(term: str):
+        raw = agent.meilisearch.index(agent.collection).search(
+            term, limit=50, show_ranking_score=True,
+        )
+        return [
+            SimpleNamespace(payload=hit, score=hit.get("_rankingScore"))
+            for hit in (raw.hits or [])
+        ]
+
     aviso = None
-    try:
-        data = agent.ask_knowledge_base(question, limit=50, search_mode=mode)
-    except Exception:
-        if mode != "full_text":
-            mode = "full_text"
-            aviso = "Busca semântica indisponível no momento; foi usada a busca textual."
+    # Identificadores (NB, NIT, CPF, CNPJ, nº de processo): busca textual direta,
+    # determinística — sem depender da extração de termos-chave por LLM.
+    if mode == "full_text" and _re.search(r"\d{6,}", question.replace(".", "").replace("-", "").replace("/", "")):
+        points = _raw_full_text_points(question)
+        data = {"improved_question": question}
+    else:
+        try:
             data = agent.ask_knowledge_base(question, limit=50, search_mode=mode)
-        else:
-            raise
+        except Exception:
+            if mode != "full_text":
+                mode = "full_text"
+                aviso = "Busca semântica indisponível no momento; foi usada a busca textual."
+                data = agent.ask_knowledge_base(question, limit=50, search_mode=mode)
+            else:
+                raise
+        points = data["results"].points if data.get("results") else []
 
-    points = data["results"].points if data.get("results") else []
+    def _process(points_list, current_mode):
+        # Isolamento de tenant: só trechos de arquivos do escritório do usuário
+        file_ids = {p.payload.get("file_id") for p in points_list if (p.payload or {}).get("file_id")}
+        allowed: dict = {}
+        if file_ids:
+            rows = KnowledgeBase.query.filter(
+                KnowledgeBase.id.in_(file_ids),
+                KnowledgeBase.law_firm_id == law_firm_id,
+                KnowledgeBase.is_active.is_(True),
+            ).all()
+            allowed = {kb.id: kb for kb in rows}
 
-    # Isolamento de tenant: só trechos de arquivos do escritório do usuário
-    file_ids = {p.payload.get("file_id") for p in points if (p.payload or {}).get("file_id")}
-    allowed: dict = {}
-    if file_ids:
-        rows = KnowledgeBase.query.filter(
-            KnowledgeBase.id.in_(file_ids),
-            KnowledgeBase.law_firm_id == law_firm_id,
-            KnowledgeBase.is_active.is_(True),
-        ).all()
-        allowed = {kb.id: kb for kb in rows}
+        collected = []
+        for idx, point in enumerate(points_list):
+            payload = point.payload or {}
+            file_id = payload.get("file_id")
+            if file_id not in allowed:
+                continue
 
-    resultados = []
-    for idx, point in enumerate(points):
-        payload = point.payload or {}
-        file_id = payload.get("file_id")
-        if file_id not in allowed:
-            continue
+            base_score = getattr(point, "score", None)
+            if base_score is None:
+                base_score = payload.get("_rankingScore")
+            if base_score is None and current_mode == "full_text":
+                base_score = max(0.35, 1.0 - (idx * 0.02))
 
-        base_score = getattr(point, "score", None)
-        if base_score is None:
-            base_score = payload.get("_rankingScore")
-        if base_score is None and mode == "full_text":
-            base_score = max(0.35, 1.0 - (idx * 0.02))
+            text = payload.get("text", "") or ""
+            candidate_text = f"{text} {payload.get('source', '') or ''} {payload.get('description', '') or ''}"
+            adjusted_score, literal = adjust_search_score(question, current_mode, float(base_score or 0), candidate_text)
+            if not passes_score_cutoff(adjusted_score, current_mode):
+                continue
 
-        text = payload.get("text", "") or ""
-        candidate_text = f"{text} {payload.get('source', '') or ''} {payload.get('description', '') or ''}"
-        adjusted_score, literal = adjust_search_score(question, mode, float(base_score or 0), candidate_text)
-        if not passes_score_cutoff(adjusted_score, mode):
-            continue
+            kb = allowed[file_id]
+            collected.append({
+                "trecho": text[:1200] + ("…" if len(text) > 1200 else ""),
+                "fonte": payload.get("source") or kb.original_filename or "Documento sem nome",
+                "pagina": payload.get("page"),
+                "categoria": payload.get("category") or None,
+                "tags": [t for t in (payload.get("tags") or "").split(",") if t],
+                "numero_processo": payload.get("lawsuit_number") or None,
+                "relevancia_percentual": round(adjusted_score * 100, 2),
+                "match_literal": literal,
+                "arquivo": {
+                    "id": kb.id,
+                    "nome": kb.original_filename,
+                    "descricao": kb.description,
+                    "tipo": kb.file_type,
+                },
+                **({"url_abrir": f"{app_public_url.rstrip('/')}/knowledge-base/{kb.id}/view"}
+                   if app_public_url else {}),
+            })
 
-        kb = allowed[file_id]
-        resultados.append({
-            "trecho": text[:1200] + ("…" if len(text) > 1200 else ""),
-            "fonte": payload.get("source") or kb.original_filename or "Documento sem nome",
-            "pagina": payload.get("page"),
-            "categoria": payload.get("category") or None,
-            "tags": [t for t in (payload.get("tags") or "").split(",") if t],
-            "numero_processo": payload.get("lawsuit_number") or None,
-            "relevancia_percentual": round(adjusted_score * 100, 2),
-            "match_literal": literal,
-            "arquivo": {
-                "id": kb.id,
-                "nome": kb.original_filename,
-                "descricao": kb.description,
-                "tipo": kb.file_type,
-            },
-            **({"url_abrir": f"{app_public_url.rstrip('/')}/knowledge-base/{kb.id}/view"}
-               if app_public_url else {}),
-        })
+        collected.sort(key=lambda r: r["relevancia_percentual"], reverse=True)
+        return collected[:limit]
 
-    resultados.sort(key=lambda r: r["relevancia_percentual"], reverse=True)
-    resultados = resultados[:limit]
+    resultados = _process(points, mode)
+
+    # Rede de segurança: se nada passou (ex.: a extração de termos-chave do LLM
+    # descartou um número exato, ou o score da query reescrita ficou baixo),
+    # refaz a busca textual DIRETA com o termo original, sem LLM.
+    if not resultados:
+        retried = _process(_raw_full_text_points(question), "full_text")
+        if retried:
+            mode = "full_text"
+            resultados = retried
+            aviso = "Resultados obtidos por busca textual direta com o termo original."
 
     out = {
         "modo_busca": mode,
