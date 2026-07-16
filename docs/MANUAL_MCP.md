@@ -74,6 +74,7 @@ Use exatamente este endereço (sem barra no final).
 | `exportar_contestacoes_excel` | Gera planilha Excel das contestações filtradas com link de download | Sistema |
 | `listar_processos` | Processos judiciais com fase atual, partes e valor da causa | Sistema |
 | `detalhar_processo` | Processo completo: fases, benefícios vinculados, teses e decisões | Sistema |
+| `consultar_cnpj` | Dados cadastrais públicos de um CNPJ (Receita Federal): razão social, situação, endereço, sócios, matriz/filial | Sistema |
 | `revisar_peticao_inicial` | Em desenvolvimento | IA |
 
 ---

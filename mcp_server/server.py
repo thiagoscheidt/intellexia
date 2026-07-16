@@ -43,7 +43,7 @@ from starlette.responses import Response
 
 from main import app  # noqa: E402 — importa o app Flask com DB e configs
 
-from mcp_server.identity import require_module
+from mcp_server.identity import get_identity, require_module
 from mcp_server.oauth_provider import IntellexiaOAuthProvider
 from mcp_server.tools.knowledge import kb_search_handler, query_knowledge_base_handler
 from mcp_server.tools.fap import (
@@ -68,6 +68,7 @@ from mcp_server.tools.process_panel import (
     get_process_detail_handler,
 )
 from mcp_server.tools.petition_reviewer import review_petition_handler
+from mcp_server.tools.utilities import consultar_cnpj_handler
 
 MCP_PUBLIC_URL = os.environ.get("MCP_PUBLIC_URL", "https://rs-dev.intellexia.com.br/mcp")
 _parsed_public = urlparse(MCP_PUBLIC_URL)
@@ -580,6 +581,27 @@ def detalhar_processo(processo_id: int) -> dict:
     claims = require_module("process_panel")
     with app.app_context():
         return get_process_detail_handler(processo_id, claims["law_firm_id"])
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# UTILIDADES
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@mcp.tool()
+def consultar_cnpj(cnpj: str) -> dict:
+    """Consulta dados cadastrais públicos de um CNPJ (Receita Federal via OpenCNPJ).
+
+    Retorna razão social, situação cadastral, endereço, CNAE, sócios e se o
+    estabelecimento é matriz ou filial. Cada filial tem CNPJ próprio (mesma
+    raiz de 8 dígitos, sufixo diferente) — consulte o CNPJ completo da filial.
+
+    Args:
+        cnpj: CNPJ completo de 14 dígitos (aceita formatado ou só números).
+    """
+    get_identity()  # dados públicos — exige apenas usuário autenticado
+    with app.app_context():
+        return consultar_cnpj_handler(cnpj)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

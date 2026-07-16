@@ -79,6 +79,7 @@ Em **Settings → Connectors → Add custom connector**, informe a URL
 | `exportar_contestacoes_excel` | Planilha XLSX das contestações filtradas (link assinado, 1 h de validade) |
 | `listar_processos` | Processos judiciais com fase atual |
 | `detalhar_processo` | Processo completo: fases, benefícios, teses e decisões |
+| `consultar_cnpj` | Dados cadastrais públicos de um CNPJ (OpenCNPJ/Receita) — qualquer usuário logado |
 | `revisar_peticao_inicial` | Revisor de petições iniciais (em desenvolvimento) |
 
 Exemplos de uso no Claude:
