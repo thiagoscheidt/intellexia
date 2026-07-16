@@ -57,6 +57,19 @@ _ORIGIN_TAGS = {
 
 _md = MarkdownIt("commonmark").enable("table")
 
+# Ícone (spark) do Claude — usado onde o texto menciona o Claude, via marcador
+# ``:claude:`` no markdown. SVG inline (sem asset externo), na cor da marca.
+_CLAUDE_SVG = (
+    '<svg class="claude-ico" viewBox="-24 -24 48 48" aria-label="Claude" role="img">'
+    + "".join(
+        f'<line x1="0" y1="-7.5" x2="0" y2="-{19 if i % 2 == 0 else 14.5}" '
+        f'transform="rotate({i * 30})" stroke="#D97757" stroke-width="4.6" '
+        f'stroke-linecap="round"/>'
+        for i in range(12)
+    )
+    + "</svg>"
+)
+
 # Cache: {"key": (mtimes,), "modules": [...]}
 _cache: dict = {"key": None, "modules": None}
 
@@ -82,10 +95,12 @@ def _process(html: str, module_id: str) -> tuple[str, list[dict]]:
     # IDs + TOC pelos níveis ORIGINAIS (h2 alimenta o índice lateral)...
     for h in soup.find_all(["h2", "h3"]):
         text = h.get_text(strip=True)
+        has_claude = ":claude:" in text
+        text = text.replace(":claude:", "").strip()
         hid = f"{module_id}-{_slugify(text)}"
         h["id"] = hid
         if h.name == "h2":
-            toc.append({"id": hid, "text": text})
+            toc.append({"id": hid, "text": text, "claude": has_claude})
 
     # ...e rebaixa um nível para o título do módulo (h2 no template) ser o topo:
     # markdown ## -> h3 (seção), markdown ### -> h4 (subseção).
@@ -132,7 +147,9 @@ def _process(html: str, module_id: str) -> tuple[str, list[dict]]:
         wrapper["class"] = "table-wrap"
         table.wrap(wrapper)
 
-    return str(soup), toc
+    # Marcador :claude: -> ícone inline (títulos e corpo)
+    html_out = str(soup).replace(":claude:", _CLAUDE_SVG)
+    return html_out, toc
 
 
 def _mtimes() -> tuple:

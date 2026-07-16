@@ -57,6 +57,8 @@
   .brand { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
   .brand-logo { height: 34px; width: auto; object-fit: contain; flex: none; }
   .brand-name { font-weight: 650; letter-spacing: -.01em; font-size: 15px; }
+  .claude-ico { width: 1em; height: 1em; flex: none; vertical-align: -0.14em; margin-right: 3px; }
+  a.sub .claude-ico { width: 13px; height: 13px; }
   .brand-sub { color: var(--muted); font-size: 12px; margin: 2px 0 22px 40px; }
   .nav-group { margin-bottom: 20px; }
   .nav-group > .nav-title { font-size: 11px; text-transform: uppercase; letter-spacing: .09em;
@@ -244,7 +246,7 @@
         <p class="nav-title">{{ loop.index }} · {{ m.title }}</p>
         <a href="#{{ m.id }}">{{ m.title }}</a>
         {% for item in m.toc %}
-        <a href="#{{ item.id }}" class="sub">{{ item.text }}</a>
+        <a href="#{{ item.id }}" class="sub">{% if item.claude %}<svg class="claude-ico" viewBox="-24 -24 48 48" aria-hidden="true">{% for i in range(12) %}<line x1="0" y1="-7.5" x2="0" y2="-{{ 19 if i % 2 == 0 else 14.5 }}" transform="rotate({{ i * 30 }})" stroke="#D97757" stroke-width="4.6" stroke-linecap="round"/>{% endfor %}</svg>{% endif %}{{ item.text }}</a>
         {% endfor %}
       </div>
       {% endfor %}

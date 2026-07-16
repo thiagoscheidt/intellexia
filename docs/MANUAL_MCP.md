@@ -1,6 +1,6 @@
 # Manual do Usuário — Conectar sua IA ao IntellexIA (MCP)
 
-> O IntellexIA pode ser acessado por assistentes de IA — como o **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos e mais — com **24 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
+> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos e mais — com **24 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
 
 ---
 
@@ -34,7 +34,7 @@ Use exatamente este endereço (sem barra no final).
 
 ---
 
-## Conectar no Claude Code
+## :claude: Conectar no Claude Code
 
 1. No terminal, adicione o servidor:
 
@@ -52,7 +52,7 @@ Use exatamente este endereço (sem barra no final).
 
 ---
 
-## Conectar no Claude Desktop / claude.ai
+## :claude: Conectar no Claude Desktop / claude.ai
 
 1. Abra **Settings → Connectors → Add custom connector**.
 2. Informe a URL `https://rs-dev.intellexia.com.br/mcp`.
