@@ -1,20 +1,24 @@
 # Manual do Usuário — Conectar sua IA ao IntellexIA (MCP)
 
-> O IntellexIA pode ser acessado por assistentes de IA — como o **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, contestações FAP, benefícios e mais.
+> O IntellexIA pode ser acessado por assistentes de IA — como o **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos e mais — com **18 ferramentas** organizadas por área.
 
 ---
 
 ## O que é a conexão MCP
 
-O MCP é uma "ponte" segura entre um assistente de IA e o IntellexIA. Com ela, você pode pedir coisas como:
-
-- "Liste as contestações FAP da vigência 2023 que estão indeferidas";
-- "O que temos na base de conhecimento sobre acidente de trajeto?";
-- "Traga os detalhes do benefício 123".
-
-A IA busca a resposta diretamente no sistema, **com o seu usuário** — respeitando o seu escritório e as suas permissões de módulo.
+O MCP é uma "ponte" segura entre um assistente de IA e o IntellexIA. Em vez de copiar e colar dados para o chat, você pergunta — e a IA busca a resposta diretamente no sistema, **com o seu usuário**, respeitando o seu escritório e as suas permissões de módulo.
 
 > [!IA] **Segurança:** a autorização usa o **seu login do IntellexIA** (OAuth). Nenhuma senha ou chave é copiada para o assistente; você apenas aprova o acesso em uma tela do próprio sistema, e pode revogá-lo quando quiser.
+
+### Exemplos do que você pode pedir
+
+- "Quantos benefícios temos do BISTEK?" — respondido em segundos pelo resumo estatístico;
+- "Liste as contestações FAP da vigência 2023 que estão indeferidas";
+- "O que temos na base de conhecimento sobre acidente de trajeto?";
+- "Pesquise o NB 6320957810 nos documentos" — retorna os trechos com link para abrir o PDF;
+- "Me traga todos os benefícios B91 de 2023 **em planilha**" — gera o Excel oficial do sistema com link de download;
+- "O que mudou nas contestações esta semana?";
+- "Quem é o CNPJ 59.104.422/0103-84?" — consulta pública da Receita.
 
 ---
 
@@ -54,28 +58,71 @@ Use exatamente este endereço (sem barra no final).
 
 ---
 
-## O que a IA consegue fazer
+## Ferramentas por categoria
+
+### 📚 Base de Conhecimento
 
 | Ferramenta | O que faz | Origem |
 |---|---|---|
-| `consultar_base_conhecimento` | Pergunta em linguagem natural, resposta com fontes | IA |
-| `pesquisar_base_conhecimento` | Pesquisa Inteligente: retorna os trechos/documentos encontrados, com fonte, página e relevância (roteador decide busca semântica ou textual) | IA |
-| `listar_empresas_fap` | Empresas sincronizadas do escritório | Sistema |
-| `listar_contestacoes_fap` | Contestações com filtros (CNPJ, raiz, vigência, situação, instância) e status do PDF | FAP Web |
-| `detalhar_contestacao` | Contestação completa com benefícios vinculados e alterações recentes | FAP Web |
-| `valores_de_filtro_fap` | Códigos e valores válidos para filtros (situações, instâncias, tópicos, motivos) | Sistema |
-| `listar_cats_fap` | CATs das contestações com status por instância | Relatório |
-| `listar_beneficios_fap` | Benefícios com filtros (CNPJ, segurado, NIT, CPF, nº benefício, tópico, vigência...) | FAP Web |
-| `detalhar_beneficio` | Todos os campos de um benefício específico | Sistema |
-| `resumo_fap` | Contagens agregadas: contestações por vigência/situação/instância, benefícios por tipo/status/tópico | Cálculo |
-| `alteracoes_recentes_fap` | O que mudou nas últimas sincronizações com o portal ("o que mudou essa semana?") | FAP Web |
+| `consultar_base_conhecimento` | Pergunta em linguagem natural com **resposta elaborada e fontes** (RAG) | IA |
+| `pesquisar_base_conhecimento` | Pesquisa Inteligente: retorna os **trechos/documentos** encontrados, com fonte, página, relevância e **link para abrir o arquivo** | IA |
+
+> [!IA] A pesquisa decide sozinha entre busca **semântica** (conceitos) e **textual** (termos exatos). Números de benefício, NIT, CPF e CNPJ são buscados de forma exata e determinística.
+
+### 📋 Painel FAP — consultas
+
+| Ferramenta | O que faz | Origem |
+|---|---|---|
+| `listar_empresas_fap` | Empresas sincronizadas — busca por **parte do nome**, CNPJ ou tipo de procuração | FAP Web |
+| `listar_contestacoes_fap` | Contestações com filtros (CNPJ, raiz, vigência, situação, instância), nome da empresa e status do PDF | FAP Web |
+| `detalhar_contestacao` | Contestação completa + **benefícios vinculados** + alterações recentes | FAP Web |
+| `listar_beneficios_fap` | Benefícios com filtros ricos (**empresa por nome**, CNPJ, segurado, NIT, CPF, nº benefício, tópico, vigência...) | FAP Web |
+| `detalhar_beneficio` | Todos os campos de um benefício, incluindo justificativas, pareceres e decisões de julgamento | Sistema |
 | `listar_procuracoes_fap` | Procurações eletrônicas com situação e vigência | FAP Web |
-| `exportar_beneficios_excel` | Gera planilha Excel dos benefícios filtrados (até 50 mil linhas) com link de download | Sistema |
-| `exportar_contestacoes_excel` | Gera planilha Excel das contestações filtradas com link de download | Sistema |
-| `listar_processos` | Processos judiciais com fase atual, partes e valor da causa | Sistema |
-| `detalhar_processo` | Processo completo: fases, benefícios vinculados, teses e decisões | Sistema |
-| `consultar_cnpj` | Dados cadastrais públicos de um CNPJ (Receita Federal): razão social, situação, endereço, sócios, matriz/filial | Sistema |
-| `revisar_peticao_inicial` | Em desenvolvimento | IA |
+| `valores_de_filtro_fap` | Códigos e valores válidos para filtros (situações, instâncias, tópicos, motivos) — a IA consulta antes de filtrar | Sistema |
+
+### 📊 Painel FAP — análises e acompanhamento
+
+| Ferramenta | O que faz | Origem |
+|---|---|---|
+| `resumo_fap` | Contagens agregadas em uma chamada: contestações por vigência/situação/instância/**empresa**; benefícios por tipo/status/tópico + **financeiro** (total pago) | Cálculo |
+| `alteracoes_recentes_fap` | O que mudou nas sincronizações com o portal ("o que mudou essa semana?") | FAP Web |
+
+> [!INFO] Para perguntas de **quantidade** ("quantos benefícios da empresa X?"), a IA usa o `resumo_fap` — resposta em segundos, sem listar registro por registro.
+
+### 📑 Relatórios em Excel
+
+| Ferramenta | O que faz | Origem |
+|---|---|---|
+| `exportar_beneficios_excel` | Planilha **idêntica à do sistema** (33 colunas) com os benefícios filtrados, até 50 mil linhas | Relatório |
+| `exportar_contestacoes_excel` | Planilha oficial das contestações, com links dos PDFs | Relatório |
+
+> [!ALERTA] O link de download expira em **1 hora**. Peça a exportação de novo se o link vencer.
+
+### ⚖️ Painel de Contestações
+
+| Ferramenta | O que faz | Origem |
+|---|---|---|
+| `listar_cats_fap` | CATs das contestações com datas e status por instância | Relatório |
+
+### 🏛️ Processos Judiciais
+
+| Ferramenta | O que faz | Origem |
+|---|---|---|
+| `listar_processos` | Processos com fase atual, partes e valor da causa | Sistema |
+| `detalhar_processo` | Processo completo: histórico de fases, benefícios vinculados, teses e decisões | Sistema |
+
+### 🧰 Utilidades
+
+| Ferramenta | O que faz | Origem |
+|---|---|---|
+| `consultar_cnpj` | Dados cadastrais públicos de um CNPJ (Receita Federal): razão social, situação, endereço, sócios e **matriz/filial** | Sistema |
+
+### 🚧 Em desenvolvimento
+
+| Ferramenta | O que faz | Origem |
+|---|---|---|
+| `revisar_peticao_inicial` | Revisor de petições iniciais | IA |
 
 ---
 
@@ -85,11 +132,12 @@ O acesso da IA **espelha as suas permissões** no IntellexIA:
 
 | Para usar... | Você precisa do módulo... |
 |---|---|
-| Consulta à base de conhecimento | Base de Conhecimento |
-| Empresas, contestações, benefícios, resumo, alterações, procurações e filtros FAP | Painel FAP |
+| Base de Conhecimento (consulta e pesquisa) | Base de Conhecimento |
+| Painel FAP (consultas, análises e relatórios Excel) | Painel FAP |
 | CATs das contestações | Painel de Contestações |
 | Processos judiciais | Painel de Processos |
 | Revisor de petições | Revisor de Petições |
+| Consulta de CNPJ | Qualquer usuário logado (dados públicos) |
 
 Sem o módulo liberado, a IA recebe uma mensagem clara de acesso negado. Permissões alteradas por um administrador passam a valer em **até 1 hora** (na renovação automática da sessão da IA).
 
@@ -113,4 +161,5 @@ Sem o módulo liberado, a IA recebe uma mensagem clara de acesso negado. Permiss
 | Navegador abre na tela de login | Sua sessão do IntellexIA expirou | Faça login; o fluxo continua sozinho |
 | "Acesso negado: ... módulo" | Seu usuário não tem o módulo liberado | Peça a um administrador do escritório |
 | "Solicitação expirada" | A tela de autorização ficou aberta mais de 10 minutos | Reinicie a conexão no assistente |
+| Link de planilha não abre | Download expirado (1 hora) | Peça a exportação novamente |
 | Erro de conexão | Serviço temporariamente indisponível | Tente novamente em instantes; persistindo, avise o suporte |
