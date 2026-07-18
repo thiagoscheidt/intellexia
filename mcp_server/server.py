@@ -497,6 +497,7 @@ except Exception as exc:  # pragma: no cover - defesa contra dependência 0.x in
         "Painel FAP indisponível (%s) — tool painel_fap não registrada; "
         "resumo_fap segue funcionando.",
         exc,
+        exc_info=True,
     )
 else:
 
@@ -527,6 +528,10 @@ else:
             dados = fap_summary_handler(
                 claims["law_firm_id"], ano_vigencia, cnpj, empresa
             )
+        # fap_summary_handler não devolve `empresa` em `filtros` (só
+        # ano_vigencia/cnpj) — sem isto, um painel filtrado por empresa
+        # aparece rotulado "sem filtros", como se fosse o escritório inteiro.
+        dados["filtros"]["empresa"] = empresa
         return ToolResult(
             content=resumo_em_texto(dados),
             structured_content=construir_painel(dados),

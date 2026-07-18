@@ -33,7 +33,42 @@ def _recorte_dos_filtros(filtros: dict) -> list[str]:
         recorte.append(f"vigência {filtros['ano_vigencia']}")
     if filtros.get("cnpj"):
         recorte.append(f"CNPJ {filtros['cnpj']}")
+    if filtros.get("empresa"):
+        recorte.append(f"empresa {filtros['empresa']}")
     return recorte
+
+
+def _descricao_cobertura_topico(ben: dict) -> str:
+    """Descrição honesta de cobertura para "Benefícios por tópico".
+
+    Um benefício pode ter vários tópicos de contestação simultaneamente, então
+    a soma das contagens por tópico NÃO é o número de benefícios com tópico —
+    ela pode superestimar (um benefício com 2 tópicos entra 2x na soma). Com
+    só as contagens agregadas por tópico (o dado disponível aqui, sem query
+    nova por benefício), não dá para saber o número exato de benefícios
+    distintos com ao menos um tópico — por isso o rótulo expõe limites, não
+    um número inventado:
+      - mínimo: o maior valor entre os tópicos (esses benefícios, sozinhos,
+        já garantem ao menos um tópico cada).
+      - máximo: min(soma das contagens, total de benefícios) — nunca pode
+        passar da soma nem do total.
+    """
+    total = ben.get("total", 0)
+    por_topico = ben.get("por_topico_contestacao") or {}
+    if not por_topico:
+        return f"0 de {total} benefícios têm tópico classificado"
+
+    soma = sum(por_topico.values())
+    minimo = max(por_topico.values())
+    maximo = min(soma, total)
+
+    if minimo == maximo:
+        return f"{minimo} de {total} benefícios têm ao menos um tópico (marcações somam {soma})"
+    return (
+        f"entre {minimo} e {maximo} de {total} benefícios têm ao menos um tópico — "
+        f"contagem exata indisponível pois um benefício pode ter vários tópicos "
+        f"(marcações somam {soma}, não é contagem de benefícios)"
+    )
 
 
 def _linha(titulo: str, contagens: dict) -> str:
@@ -71,18 +106,24 @@ def resumo_em_texto(dados: dict) -> str:
         _linha("Contestações por situação", cont.get("por_situacao") or {}),
         _linha("Contestações por ano", cont.get("por_ano_vigencia") or {}),
         _linha("Contestações por empresa", cont.get("por_empresa") or {}),
-        _linha("Benefícios por tópico", ben.get("por_topico_contestacao") or {}),
+        _linha("Benefícios por tópico", ben.get("por_topico_contestacao") or {})
+        + f" ({_descricao_cobertura_topico(ben)})",
         _linha("Benefícios 1ª instância", ben.get("por_status_primeira_instancia") or {}),
         _linha("Benefícios 2ª instância", ben.get("por_status_segunda_instancia") or {}),
     ])
 
 
-def _barras(titulo: str, contagens: dict) -> Card:
-    """Um cartão com barras horizontais de uma dimensão do resumo."""
+def _barras(titulo: str, contagens: dict, descricao: str | None = None) -> Card:
+    """Um cartão com barras horizontais de uma dimensão do resumo.
+
+    ``descricao`` vai no Metric do cartão — usado quando o número de cima
+    precisa de contexto para não ser lido como algo que não é (ex.: soma de
+    marcações por tópico, não contagem de benefícios).
+    """
     top = top_n(contagens)
     dados = [{"rotulo": k, "qtd": v} for k, v in top]
     return Card(children=[
-        Metric(label=titulo, value=sum(v for _, v in top)),
+        Metric(label=titulo, value=sum(v for _, v in top), description=descricao),
         BarChart(
             data=dados or [{"rotulo": "sem dados", "qtd": 0}],
             series=[ChartSeries(data_key="qtd", label="Quantidade")],
@@ -124,7 +165,11 @@ def construir_painel(dados: dict) -> Page:
         _barras("Contestações por situação", cont.get("por_situacao") or {}),
         _barras("Contestações por ano de vigência", cont.get("por_ano_vigencia") or {}),
         _barras("Contestações por empresa", cont.get("por_empresa") or {}),
-        _barras("Benefícios por tópico", ben.get("por_topico_contestacao") or {}),
+        _barras(
+            "Benefícios por tópico",
+            ben.get("por_topico_contestacao") or {},
+            _descricao_cobertura_topico(ben),
+        ),
         _barras("Benefícios — 1ª instância", ben.get("por_status_primeira_instancia") or {}),
         _barras("Benefícios — 2ª instância", ben.get("por_status_segunda_instancia") or {}),
     ])

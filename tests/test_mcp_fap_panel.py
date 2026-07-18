@@ -8,9 +8,11 @@ Cobre:
   1. top_n — corte nos 8 maiores com faixa "outros (N)" rotulada, ordenado
      por contagem (não por ordem de inserção)
   2. resumo_em_texto — fallback para host que não renderiza MCP Apps
-  3. _recorte_dos_filtros — helper compartilhado (Task 3 vai reusar)
+  3. _recorte_dos_filtros — helper compartilhado, inclui empresa no rótulo
   4. _moeda — formatação de valores em Real (padrão pt-BR)
   5. construir_painel — componente Prefab (Task 3)
+  6. _descricao_cobertura_topico — cobertura honesta de "Benefícios por
+     tópico" (a soma por tópico não é contagem de benefícios distintos)
 
 Nota sobre serialização: as asserções de `construir_painel` navegam
 `Component.to_json()`, não `model_dump()`/`model_dump_json()`. O pydantic
@@ -30,6 +32,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from mcp_server.apps.fap_panel import (
+    _descricao_cobertura_topico,
     _moeda,
     _recorte_dos_filtros,
     construir_painel,
@@ -141,11 +144,95 @@ def test_recorte_dos_filtros_vazio():
     print("OK  _recorte_dos_filtros sem filtros retorna lista vazia")
 
 
+def test_recorte_dos_filtros_com_empresa():
+    # MAJOR 1: fap_summary_handler não devolve "empresa" em filtros — quem
+    # chama (painel_fap, em server.py) precisa injetá-la. Este teste cobre o
+    # lado do helper: se a chave chegar em `filtros`, ela tem que aparecer no
+    # recorte. Sem a correção do MAJOR 1, este teste passaria mas o título
+    # real do painel continuaria "sem filtros" — por isso há também um teste
+    # de ponta a ponta (via tool) mais abaixo.
+    recorte = _recorte_dos_filtros({"ano_vigencia": None, "cnpj": None, "empresa": "bistek"})
+    assert recorte == ["empresa bistek"], recorte
+    print("OK  _recorte_dos_filtros com empresa")
+
+
+def test_recorte_dos_filtros_com_os_tres():
+    recorte = _recorte_dos_filtros(
+        {"ano_vigencia": 2023, "cnpj": "12345678", "empresa": "bistek"}
+    )
+    assert recorte == ["vigência 2023", "CNPJ 12345678", "empresa bistek"], recorte
+    print("OK  _recorte_dos_filtros com vigência, CNPJ e empresa juntos")
+
+
+def test_construir_painel_titulo_traz_empresa():
+    # MAJOR 1: sem o filtro de empresa no título, um recorte de uma única
+    # empresa fica indistinguível do escritório inteiro. Este teste falha se
+    # o rótulo de empresa sumir do título do painel.
+    com_empresa = dict(FIXTURE, filtros={**FIXTURE["filtros"], "empresa": "bistek"})
+    painel = construir_painel(com_empresa)
+    assert "empresa bistek" in painel.title, painel.title
+    print("OK  construir_painel título traz o filtro de empresa")
+
+
+def test_resumo_em_texto_cabecalho_traz_empresa():
+    com_empresa = dict(FIXTURE, filtros={**FIXTURE["filtros"], "empresa": "bistek"})
+    texto = resumo_em_texto(com_empresa)
+    cabecalho = texto.splitlines()[0]
+    assert "empresa bistek" in cabecalho, cabecalho
+    print("OK  resumo_em_texto cabeçalho traz o filtro de empresa")
+
+
 def test_moeda_em_padrao_brasileiro():
     assert _moeda(12345.67) == "R$ 12.345,67", _moeda(12345.67)
     assert _moeda(0.0) == "R$ 0,00", _moeda(0.0)
     assert _moeda(1234567.89) == "R$ 1.234.567,89", _moeda(1234567.89)
     print("OK  _moeda formata em padrão pt-BR (R$ 12.345,67)")
+
+
+def test_descricao_cobertura_topico_com_sobreposicao_possivel():
+    # MAJOR 2: soma das contagens (9 + 15 = 24) NÃO é o número de benefícios
+    # com tópico — um benefício pode ter os dois. Sem contagem por benefício
+    # (fora do dado disponível, sem query nova), o honesto é expor limites:
+    # mínimo = maior contagem isolada (15), máximo = min(soma, total) = 24.
+    ben = {"total": 30, "por_topico_contestacao": {"PRÉ-FAP": 9, "ACIDENTE DE TRAJETO": 15}}
+    desc = _descricao_cobertura_topico(ben)
+    assert "entre 15 e 24 de 30" in desc, desc
+    assert "marcações somam 24" in desc, desc
+    print("OK  _descricao_cobertura_topico expõe limites quando há sobreposição possível")
+
+
+def test_descricao_cobertura_topico_sem_sobreposicao_possivel():
+    # Um único tópico: soma == maior contagem, então mínimo == máximo — dá
+    # para afirmar o número exato, sem inventar precisão que os dados não têm.
+    ben = {"total": 10, "por_topico_contestacao": {"PRÉ-FAP": 4}}
+    desc = _descricao_cobertura_topico(ben)
+    assert desc == "4 de 10 benefícios têm ao menos um tópico (marcações somam 4)", desc
+    print("OK  _descricao_cobertura_topico é exata quando não há sobreposição possível")
+
+
+def test_descricao_cobertura_topico_sem_nenhum_topico():
+    ben = {"total": 5, "por_topico_contestacao": {}}
+    assert _descricao_cobertura_topico(ben) == "0 de 5 benefícios têm tópico classificado"
+    print("OK  _descricao_cobertura_topico com zero tópicos classificados")
+
+
+def test_construir_painel_topico_tem_descricao_honesta():
+    # O cartão "Benefícios por tópico" não pode mostrar só a soma (24) sem
+    # deixar claro, na description, que isso não é contagem de benefícios.
+    painel = construir_painel(FIXTURE)
+    arvore = painel.to_json()
+    metric = _metric(arvore, "Benefícios por tópico")
+    assert metric["value"] == 24, metric["value"]
+    assert metric.get("description"), "cartão de tópico sem description de cobertura"
+    assert "entre 15 e 24 de 30" in metric["description"], metric["description"]
+    print("OK  cartão de tópico traz description honesta sobre cobertura")
+
+
+def test_resumo_em_texto_topico_tem_descricao_honesta():
+    texto = resumo_em_texto(FIXTURE)
+    linha_topico = next(l for l in texto.splitlines() if l.startswith("Benefícios por tópico"))
+    assert "entre 15 e 24 de 30" in linha_topico, linha_topico
+    print("OK  resumo_em_texto linha de tópico traz descrição honesta sobre cobertura")
 
 
 def _coletar_por_tipo(no: dict, tipo: str, achados: list | None = None) -> list:
@@ -312,57 +399,72 @@ def test_tool_painel_fap_via_client_com_identidade_fingida():
         ident.get_identity = original
 
 
-def test_painel_respeita_o_escritorio():
-    """O painel só pode enxergar o law_firm_id do chamador."""
-    from main import app as flask_app
+def test_tool_painel_fap_empresa_aparece_no_titulo_e_no_texto():
+    """MAJOR 1, ponta a ponta: chama a tool de verdade com `empresa=` e prova
+    que o rótulo sobrevive até a resposta.
+
+    `fap_summary_handler` não devolve "empresa" em `filtros` — quem precisa
+    injetar é a tool `painel_fap` em `mcp_server/server.py`. O teste unitário
+    de `_recorte_dos_filtros`/`construir_painel` passaria mesmo se essa
+    injeção fosse removida de `server.py` (bastaria passar `filtros` com
+    "empresa" na mão). Este teste passa pela tool real via `fastmcp.Client`
+    — se alguém remover a linha que injeta `dados["filtros"]["empresa"]` em
+    `painel_fap`, é este teste que quebra.
+
+    O nome usado não precisa casar com nenhuma empresa real: o rótulo deve
+    aparecer mesmo quando o filtro não encontra nenhum registro (o usuário
+    ainda precisa saber que recorte pediu).
+    """
+    import asyncio
+
+    import fastmcp
+
+    import mcp_server.identity as ident
     from app.models import LawFirm
+    from main import app
+    from mcp_server.server import mcp
 
-    from mcp_server.apps.fap_panel import construir_painel, resumo_em_texto
-    from mcp_server.tools.fap import fap_summary_handler
+    with app.app_context():
+        firm = LawFirm.query.order_by(LawFirm.id).first()
+        assert firm is not None, "precisa de ao menos um escritório cadastrado"
+        law_firm_id = firm.id
 
-    with flask_app.app_context():
-        escritorios = LawFirm.query.limit(2).all()
-        if not escritorios:
-            print("PULADO  nenhum escritório no banco — teste requer dado real")
-            return
-
-        for firma in escritorios:
-            dados = fap_summary_handler(firma.id, None, None, None)
-            assert construir_painel(dados).model_dump_json()
-            assert resumo_em_texto(dados)
-
-        # Isolamento de verdade: o total do escritório A somado ao de B não pode
-        # ser menor que o total de qualquer um deles isoladamente, e nenhum dos
-        # dois pode enxergar o total global. Compara-se contra a contagem sem
-        # filtro de escritório, que é o vazamento que se quer impedir.
-        if len(escritorios) > 1:
-            from app.models import Benefit
-
-            a = fap_summary_handler(escritorios[0].id, None, None, None)
-            b = fap_summary_handler(escritorios[1].id, None, None, None)
-            global_ = Benefit.query.count()
-
-            ta = a["beneficios"]["total"]
-            tb = b["beneficios"]["total"]
-            assert ta + tb <= global_, (
-                f"vazamento: A={ta} + B={tb} excede o total global {global_}"
-            )
-            if global_ > 0 and ta > 0 and tb > 0:
-                assert ta < global_ and tb < global_, (
-                    "um escritório está enxergando o total global"
+    original = ident.get_identity
+    ident.get_identity = lambda: {
+        "user_id": 1,
+        "law_firm_id": law_firm_id,
+        "modules": ["fap_panel"],
+        "role": "admin",
+    }
+    try:
+        async def chamar():
+            async with fastmcp.Client(mcp) as cliente:
+                return await cliente.call_tool(
+                    "painel_fap", {"empresa": "zzz_teste_sem_correspondencia"}
                 )
-            print(f"OK  escritórios isolados (A={ta}, B={tb}, global={global_})")
-        else:
-            print("OK  painel monta com dado real (só um escritório no banco)")
+
+        resultado = asyncio.run(chamar())
+
+        estrutura = str(resultado.structured_content)
+        assert "empresa zzz_teste_sem_correspondencia" in estrutura, (
+            f"título do painel não traz o filtro de empresa: {estrutura[:300]}"
+        )
+        texto = resultado.content[0].text
+        assert "empresa zzz_teste_sem_correspondencia" in texto, (
+            f"resumo em texto não traz o filtro de empresa: {texto[:300]}"
+        )
+        print("OK  painel_fap(empresa=...) via Client real: rótulo de empresa chega no título e no texto")
+    finally:
+        ident.get_identity = original
 
 
 def test_painel_isolamento_com_escritorios_proprios():
     """Prova o isolamento com dado sob medida, não emprestado do banco real.
 
     O banco de desenvolvimento hoje só tem UM escritório real (`Silva &
-    Associados Advocacia`), então `test_painel_respeita_o_escritorio` acima
-    degenera para o ramo "só um escritório no banco" — não exercita a
-    comparação A-vs-B que realmente prova isolamento. Aqui criamos dois
+    Associados Advocacia`), então comparar dois escritórios exigiria dado sob
+    medida de qualquer forma — não dá para exercitar a comparação A-vs-B que
+    realmente prova isolamento emprestando o banco real. Aqui criamos dois
     escritórios de teste com quantidades de benefícios propositalmente
     diferentes e checamos o número exato que cada painel enxerga (não apenas
     "cabe dentro do total global", que um bug de OR mal escrito ainda
@@ -440,12 +542,21 @@ if __name__ == "__main__":
     test_recorte_dos_filtros_com_os_dois()
     test_recorte_dos_filtros_com_um_so()
     test_recorte_dos_filtros_vazio()
+    test_recorte_dos_filtros_com_empresa()
+    test_recorte_dos_filtros_com_os_tres()
+    test_construir_painel_titulo_traz_empresa()
+    test_resumo_em_texto_cabecalho_traz_empresa()
     test_moeda_em_padrao_brasileiro()
+    test_descricao_cobertura_topico_com_sobreposicao_possivel()
+    test_descricao_cobertura_topico_sem_sobreposicao_possivel()
+    test_descricao_cobertura_topico_sem_nenhum_topico()
+    test_construir_painel_topico_tem_descricao_honesta()
+    test_resumo_em_texto_topico_tem_descricao_honesta()
     test_construir_painel_serializa_com_os_numeros()
     test_construir_painel_com_escritorio_vazio()
     test_tool_registrada_no_servidor()
     test_tool_monta_resposta_com_os_dois_canais()
     test_tool_painel_fap_via_client_com_identidade_fingida()
-    test_painel_respeita_o_escritorio()
+    test_tool_painel_fap_empresa_aparece_no_titulo_e_no_texto()
     test_painel_isolamento_com_escritorios_proprios()
     print("\nTodos os testes passaram.")
