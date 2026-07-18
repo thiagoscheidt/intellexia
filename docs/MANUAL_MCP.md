@@ -1,6 +1,6 @@
 # Manual do Usuário — Conectar sua IA ao IntellexIA (MCP)
 
-> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos e mais — com **32 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
+> O IntellexIA pode ser acessado por assistentes de IA — como o :claude: **Claude** — por meio do protocolo **MCP** (Model Context Protocol). Depois de conectar, você conversa com a IA e ela consulta **os dados do seu escritório** no IntellexIA: base de conhecimento, painel FAP, contestações, processos e mais — com **33 ferramentas** organizadas por área e **comandos prontos** para relatórios, recursos e e-mails.
 
 ---
 
@@ -13,6 +13,7 @@ O MCP é uma "ponte" segura entre um assistente de IA e o IntellexIA. Em vez de 
 ### Exemplos do que você pode pedir
 
 - "Quantos benefícios temos do BISTEK?" — respondido em segundos pelo resumo estatístico;
+- "**Me mostra o painel do FAP do BISTEK**" — abre um painel visual, com cartões e gráficos, dentro da própria conversa;
 - "Liste as contestações FAP da vigência 2023 que estão indeferidas";
 - "O que temos na base de conhecimento sobre acidente de trajeto?";
 - "Pesquise o NB 6320957810 nos documentos" — retorna os trechos com link para abrir o PDF;
@@ -90,12 +91,17 @@ Use exatamente este endereço (sem barra no final) — é o endereço **desta** 
 | Ferramenta | O que faz | Origem |
 |---|---|---|
 | `resumo_fap` | Contagens agregadas em uma chamada: contestações por vigência/situação/instância/**empresa**; benefícios por tipo/status/tópico + **financeiro** (total pago) | Cálculo |
+| `painel_fap` | Os **mesmos números** do `resumo_fap`, só que como **painel visual** na conversa: cartões de totais e gráficos de barras por situação, vigência, empresa, tópico e instância | Cálculo |
 | `alteracoes_recentes_fap` | O que mudou nas sincronizações com o portal ("o que mudou essa semana?") | FAP Web |
 | `prazos_e_alertas` | O que pede atenção: contestações aguardando resultado, decisões recentes (janela de recurso) e processos por fase | Cálculo |
 | `comparar_vigencias` | Compara resultados entre vigências (ex: 2023 vs 2024): deferidos/indeferidos, tópicos e financeiro | Cálculo |
 | `buscar_por_segurado` | Visão 360º de uma pessoa: benefícios + CATs + processos (por NIT, CPF ou nome) | Sistema |
 
-> [!INFO] Para perguntas de **quantidade** ("quantos benefícios da empresa X?"), a IA usa o `resumo_fap` — resposta em segundos, sem listar registro por registro.
+> [!INFO] Para perguntas de **quantidade** ("quantos benefícios da empresa X?"), a IA usa o `resumo_fap` — resposta em segundos, sem listar registro por registro. Quando você pede para **ver** o panorama ("me mostra o painel", "faz um gráfico disso"), ela usa o `painel_fap`, que traz os mesmos números em forma visual.
+
+> [!IA] **O painel funciona em qualquer assistente.** Onde o aplicativo sabe desenhar painéis, você vê os cartões e gráficos; onde não sabe, a mesma resposta chega em texto, com os totais e as principais dimensões. Você nunca fica sem o número por causa do aplicativo que está usando.
+
+> [!ALERTA] **O painel diz o que está deixando de fora.** Em dimensões com muitos valores — tópicos de contestação e empresas — ele mostra os **8 maiores** e agrupa o restante numa faixa `outros (N)` visível. E no cartão de tópicos aparece a cobertura real da classificação (por exemplo, "206 de 2899 benefícios têm tópico classificado"), para que a leitura não sugira que todos os benefícios foram classificados.
 
 > [!IA] **Listas grandes:** as consultas trazem uma página por vez (e dizem quantos registros existem no total). Havendo mais, a IA busca as páginas seguintes sozinha quando fizer sentido — mas para *todos* os registros o caminho certo é pedir a **planilha em Excel**, e para números agregados, o resumo.
 
