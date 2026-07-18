@@ -312,6 +312,125 @@ def test_tool_painel_fap_via_client_com_identidade_fingida():
         ident.get_identity = original
 
 
+def test_painel_respeita_o_escritorio():
+    """O painel só pode enxergar o law_firm_id do chamador."""
+    from main import app as flask_app
+    from app.models import LawFirm
+
+    from mcp_server.apps.fap_panel import construir_painel, resumo_em_texto
+    from mcp_server.tools.fap import fap_summary_handler
+
+    with flask_app.app_context():
+        escritorios = LawFirm.query.limit(2).all()
+        if not escritorios:
+            print("PULADO  nenhum escritório no banco — teste requer dado real")
+            return
+
+        for firma in escritorios:
+            dados = fap_summary_handler(firma.id, None, None, None)
+            assert construir_painel(dados).model_dump_json()
+            assert resumo_em_texto(dados)
+
+        # Isolamento de verdade: o total do escritório A somado ao de B não pode
+        # ser menor que o total de qualquer um deles isoladamente, e nenhum dos
+        # dois pode enxergar o total global. Compara-se contra a contagem sem
+        # filtro de escritório, que é o vazamento que se quer impedir.
+        if len(escritorios) > 1:
+            from app.models import Benefit
+
+            a = fap_summary_handler(escritorios[0].id, None, None, None)
+            b = fap_summary_handler(escritorios[1].id, None, None, None)
+            global_ = Benefit.query.count()
+
+            ta = a["beneficios"]["total"]
+            tb = b["beneficios"]["total"]
+            assert ta + tb <= global_, (
+                f"vazamento: A={ta} + B={tb} excede o total global {global_}"
+            )
+            if global_ > 0 and ta > 0 and tb > 0:
+                assert ta < global_ and tb < global_, (
+                    "um escritório está enxergando o total global"
+                )
+            print(f"OK  escritórios isolados (A={ta}, B={tb}, global={global_})")
+        else:
+            print("OK  painel monta com dado real (só um escritório no banco)")
+
+
+def test_painel_isolamento_com_escritorios_proprios():
+    """Prova o isolamento com dado sob medida, não emprestado do banco real.
+
+    O banco de desenvolvimento hoje só tem UM escritório real (`Silva &
+    Associados Advocacia`), então `test_painel_respeita_o_escritorio` acima
+    degenera para o ramo "só um escritório no banco" — não exercita a
+    comparação A-vs-B que realmente prova isolamento. Aqui criamos dois
+    escritórios de teste com quantidades de benefícios propositalmente
+    diferentes e checamos o número exato que cada painel enxerga (não apenas
+    "cabe dentro do total global", que um bug de OR mal escrito ainda
+    satisfaria). Dados são removidos ao final, no padrão de
+    `tests/test_mcp_fap_review.py`.
+    """
+    from main import app as flask_app
+    from app.models import Benefit, LawFirm, db
+
+    from mcp_server.apps.fap_panel import construir_painel, resumo_em_texto
+    from mcp_server.tools.fap import fap_summary_handler
+
+    CNPJ_A = "11111111000101"
+    CNPJ_B = "22222222000102"
+
+    with flask_app.app_context():
+        # Resíduo de uma execução anterior interrompida antes do cleanup.
+        for cnpj in (CNPJ_A, CNPJ_B):
+            residuo = LawFirm.query.filter_by(cnpj=cnpj).first()
+            if residuo:
+                Benefit.query.filter_by(law_firm_id=residuo.id).delete()
+                db.session.delete(residuo)
+        db.session.commit()
+
+        firma_a = LawFirm(name="TESTE MCP PAINEL FAP — A", cnpj=CNPJ_A)
+        firma_b = LawFirm(name="TESTE MCP PAINEL FAP — B", cnpj=CNPJ_B)
+        db.session.add_all([firma_a, firma_b])
+        db.session.commit()
+
+        try:
+            beneficios_a = [
+                Benefit(law_firm_id=firma_a.id, benefit_number=f"TESTE-A-{i}", benefit_type="B91")
+                for i in range(3)
+            ]
+            beneficios_b = [
+                Benefit(law_firm_id=firma_b.id, benefit_number=f"TESTE-B-{i}", benefit_type="B94")
+                for i in range(5)
+            ]
+            db.session.add_all(beneficios_a + beneficios_b)
+            db.session.commit()
+
+            dados_a = fap_summary_handler(firma_a.id, None, None, None)
+            dados_b = fap_summary_handler(firma_b.id, None, None, None)
+
+            total_a = dados_a["beneficios"]["total"]
+            total_b = dados_b["beneficios"]["total"]
+
+            # Asserções fortes: o número exato criado para cada escritório —
+            # não a soma dos dois, não o total global (que inclui os 2899
+            # benefícios reais do escritório 1).
+            assert total_a == 3, f"escritório A deveria ver só os 3 dele, viu {total_a}"
+            assert total_b == 5, f"escritório B deveria ver só os 5 dele, viu {total_b}"
+
+            assert construir_painel(dados_a).model_dump_json()
+            assert construir_painel(dados_b).model_dump_json()
+            assert resumo_em_texto(dados_a)
+            assert resumo_em_texto(dados_b)
+
+            print("OK  escritórios sob medida ficam isolados (A=3, B=5, sem soma nem vazamento global)")
+        finally:
+            Benefit.query.filter(
+                Benefit.law_firm_id.in_([firma_a.id, firma_b.id])
+            ).delete(synchronize_session=False)
+            db.session.delete(firma_a)
+            db.session.delete(firma_b)
+            db.session.commit()
+
+
 if __name__ == "__main__":
     test_top_n_corta_e_rotula_o_resto()
     test_top_n_ordena_por_contagem_nao_por_insercao()
@@ -327,4 +446,6 @@ if __name__ == "__main__":
     test_tool_registrada_no_servidor()
     test_tool_monta_resposta_com_os_dois_canais()
     test_tool_painel_fap_via_client_com_identidade_fingida()
+    test_painel_respeita_o_escritorio()
+    test_painel_isolamento_com_escritorios_proprios()
     print("\nTodos os testes passaram.")
