@@ -1,8 +1,11 @@
 """Painel FAP como MCP App.
 
-Único módulo que importa Prefab. Duas funções puras sobre o dicionário
+Único módulo que importa Prefab. Funções puras sobre o dicionário
 devolvido por ``fap_summary_handler`` — nenhuma query, nenhum contexto Flask.
 """
+
+from prefab_ui.components import Card, Grid, Metric, Page
+from prefab_ui.components.charts import BarChart, ChartSeries
 
 TOP_N = 8
 
@@ -71,4 +74,57 @@ def resumo_em_texto(dados: dict) -> str:
         _linha("Benefícios por tópico", ben.get("por_topico_contestacao") or {}),
         _linha("Benefícios 1ª instância", ben.get("por_status_primeira_instancia") or {}),
         _linha("Benefícios 2ª instância", ben.get("por_status_segunda_instancia") or {}),
+    ])
+
+
+def _barras(titulo: str, contagens: dict) -> Card:
+    """Um cartão com barras horizontais de uma dimensão do resumo."""
+    top = top_n(contagens)
+    dados = [{"rotulo": k, "qtd": v} for k, v in top]
+    return Card(children=[
+        Metric(label=titulo, value=sum(v for _, v in top)),
+        BarChart(
+            data=dados or [{"rotulo": "sem dados", "qtd": 0}],
+            series=[ChartSeries(data_key="qtd", label="Quantidade")],
+            x_axis="rotulo",
+            horizontal=True,
+            show_legend=False,
+            height=240,
+        ),
+    ])
+
+
+def construir_painel(dados: dict) -> Page:
+    """Monta o painel visual a partir do dicionário de ``fap_summary_handler``."""
+    filtros = dados.get("filtros") or {}
+    cont = dados.get("contestacoes") or {}
+    ben = dados.get("beneficios") or {}
+    fin = ben.get("financeiro") or {}
+
+    recorte = _recorte_dos_filtros(filtros)
+    titulo = "Painel FAP" + (f" — {', '.join(recorte)}" if recorte else " — sem filtros")
+
+    cards = Grid(children=[
+        Metric(label="Contestações", value=cont.get("total", 0)),
+        Metric(label="Benefícios", value=ben.get("total", 0)),
+        Metric(
+            label="Total pago",
+            value=_moeda(fin.get("total_pago_soma", 0.0)),
+            description=f"{fin.get('beneficios_com_valor_informado', 0)} com valor informado",
+        ),
+        Metric(
+            label="Com CAT",
+            value=ben.get("com_cat", 0),
+            description=f"{ben.get('sem_cat', 0)} sem CAT",
+        ),
+    ])
+
+    return Page(title=titulo, children=[
+        cards,
+        _barras("Contestações por situação", cont.get("por_situacao") or {}),
+        _barras("Contestações por ano de vigência", cont.get("por_ano_vigencia") or {}),
+        _barras("Contestações por empresa", cont.get("por_empresa") or {}),
+        _barras("Benefícios por tópico", ben.get("por_topico_contestacao") or {}),
+        _barras("Benefícios — 1ª instância", ben.get("por_status_primeira_instancia") or {}),
+        _barras("Benefícios — 2ª instância", ben.get("por_status_segunda_instancia") or {}),
     ])
