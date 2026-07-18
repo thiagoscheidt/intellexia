@@ -40,6 +40,12 @@ def _linha(titulo: str, contagens: dict) -> str:
     return f"{titulo}: {partes}"
 
 
+def _moeda(valor: float) -> str:
+    """Formata em Real no padrão pt-BR: R$ 12.345,67."""
+    inteiro = f"{valor:,.2f}"
+    return "R$ " + inteiro.replace(",", "\x00").replace(".", ",").replace("\x00", ".")
+
+
 def resumo_em_texto(dados: dict) -> str:
     """Resumo textual do painel, para host que não renderiza MCP Apps.
 
@@ -57,7 +63,7 @@ def resumo_em_texto(dados: dict) -> str:
     return "\n".join([
         cabecalho,
         f"Contestações: {cont.get('total', 0)} | Benefícios: {ben.get('total', 0)}"
-        f" | Total pago: R$ {fin.get('total_pago_soma', 0.0):,.2f}"
+        f" | Total pago: {_moeda(fin.get('total_pago_soma', 0.0))}"
         f" | Com CAT: {ben.get('com_cat', 0)}, sem CAT: {ben.get('sem_cat', 0)}",
         _linha("Contestações por situação", cont.get("por_situacao") or {}),
         _linha("Contestações por ano", cont.get("por_ano_vigencia") or {}),

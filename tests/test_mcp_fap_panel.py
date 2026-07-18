@@ -5,9 +5,11 @@ Teste do painel FAP (MCP App).
     uv run python tests/test_mcp_fap_panel.py
 
 Cobre:
-  1. top_n — corte nos 8 maiores com faixa "outros (N)" rotulada
+  1. top_n — corte nos 8 maiores com faixa "outros (N)" rotulada, ordenado
+     por contagem (não por ordem de inserção)
   2. resumo_em_texto — fallback para host que não renderiza MCP Apps
   3. _recorte_dos_filtros — helper compartilhado (Task 3 vai reusar)
+  4. _moeda — formatação de valores em Real (padrão pt-BR)
 """
 
 import sys
@@ -15,16 +17,16 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from mcp_server.apps.fap_panel import _recorte_dos_filtros, resumo_em_texto, top_n
+from mcp_server.apps.fap_panel import _moeda, _recorte_dos_filtros, resumo_em_texto, top_n
 
 FIXTURE = {
     "filtros": {"ano_vigencia": 2023, "cnpj": None},
     "contestacoes": {
         "total": 12,
         "por_ano_vigencia": {"2023": 12},
-        "por_situacao": {"Deferida": 7, "Indeferida": 5},
+        "por_situacao": {"Indeferida": 5, "Deferida": 7},
         "por_instancia": {"1ª": 12},
-        "por_empresa": {"Bistek": 8, "Acme": 4},
+        "por_empresa": {"Acme": 4, "Bistek": 8},
     },
     "beneficios": {
         "total": 30,
@@ -32,7 +34,7 @@ FIXTURE = {
         "por_tipo_pedido": {"Exclusão": 30},
         "por_status_primeira_instancia": {"Deferido": 18, "Indeferido": 12},
         "por_status_segunda_instancia": {"(vazio)": 30},
-        "por_topico_contestacao": {"ACIDENTE DE TRAJETO": 15, "PRÉ-FAP": 9},
+        "por_topico_contestacao": {"PRÉ-FAP": 9, "ACIDENTE DE TRAJETO": 15},
         "financeiro": {"total_pago_soma": 12345.67, "beneficios_com_valor_informado": 25},
         "com_cat": 22,
         "sem_cat": 8,
@@ -41,15 +43,31 @@ FIXTURE = {
 
 
 def test_top_n_corta_e_rotula_o_resto():
-    contagens = {f"T{i}": 10 - i for i in range(12)}
+    # Ordem de inserção deliberadamente embaralhada em relação à contagem —
+    # se o sorted() da implementação sumir, estas asserções devem falhar.
+    contagens = {
+        "T5": 5, "T0": 10, "T11": -1, "T3": 7,
+        "T8": 2, "T1": 9, "T9": 1, "T4": 6,
+        "T6": 4, "T2": 8, "T10": 0, "T7": 3,
+    }
     resultado = top_n(contagens, n=8)
 
     assert len(resultado) == 9, f"esperado 8 + faixa outros, veio {len(resultado)}"
     rotulo, valor = resultado[-1]
     assert rotulo == "outros (4)", f"faixa mal rotulada: {rotulo}"
-    assert valor == sum(v for _, v in list(contagens.items())[8:])
+    esperado_resto = sum(sorted(contagens.values())[:4])  # os 4 menores valores
+    assert valor == esperado_resto, f"soma do resto errada: {valor} != {esperado_resto}"
     assert sum(v for _, v in resultado) == sum(contagens.values()), "soma não fecha"
     print("OK  top_n corta nos 8 maiores e rotula o restante")
+
+
+def test_top_n_ordena_por_contagem_nao_por_insercao():
+    # Ordem de inserção não é ordem de contagem — se o sorted() sumir,
+    # o resultado sai na ordem de inserção e este teste falha.
+    contagens = {"baixo": 1, "alto": 100, "medio": 50}
+    resultado = top_n(contagens, n=8)
+    assert resultado == [("alto", 100), ("medio", 50), ("baixo", 1)], resultado
+    print("OK  top_n ordena por contagem, não por ordem de inserção")
 
 
 def test_top_n_nao_corta_quando_cabe():
@@ -105,12 +123,21 @@ def test_recorte_dos_filtros_vazio():
     print("OK  _recorte_dos_filtros sem filtros retorna lista vazia")
 
 
+def test_moeda_em_padrao_brasileiro():
+    assert _moeda(12345.67) == "R$ 12.345,67", _moeda(12345.67)
+    assert _moeda(0.0) == "R$ 0,00", _moeda(0.0)
+    assert _moeda(1234567.89) == "R$ 1.234.567,89", _moeda(1234567.89)
+    print("OK  _moeda formata em padrão pt-BR (R$ 12.345,67)")
+
+
 if __name__ == "__main__":
     test_top_n_corta_e_rotula_o_resto()
+    test_top_n_ordena_por_contagem_nao_por_insercao()
     test_top_n_nao_corta_quando_cabe()
     test_resumo_em_texto_traz_os_totais()
     test_resumo_em_texto_com_escritorio_vazio()
     test_recorte_dos_filtros_com_os_dois()
     test_recorte_dos_filtros_com_um_so()
     test_recorte_dos_filtros_vazio()
+    test_moeda_em_padrao_brasileiro()
     print("\nTodos os testes passaram.")
