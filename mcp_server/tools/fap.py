@@ -531,6 +531,7 @@ def fap_summary_handler(
         ben_q = ben_q.filter(Benefit.fap_vigencia_years.like(f"%{ano_vigencia}%"))
 
     por_topico: dict[str, int] = {}
+    com_topico_contestacao = 0
     for b in ben_q.with_entities(Benefit.fap_contestation_topics_json, Benefit.fap_contestation_topic).all():
         topics = []
         if b[0]:
@@ -541,6 +542,8 @@ def fap_summary_handler(
                 topics = []
         if not topics and b[1]:
             topics = [b[1]]
+        if topics:
+            com_topico_contestacao += 1
         for t in topics:
             por_topico[str(t)] = por_topico.get(str(t), 0) + 1
 
@@ -556,6 +559,7 @@ def fap_summary_handler(
         "por_status_primeira_instancia": _count_by(ben_q, Benefit.first_instance_status),
         "por_status_segunda_instancia": _count_by(ben_q, Benefit.second_instance_status),
         "por_topico_contestacao": dict(sorted(por_topico.items(), key=lambda kv: -kv[1])),
+        "com_topico_contestacao": com_topico_contestacao,
         "financeiro": {
             "total_pago_soma": float(total_pago_soma) if total_pago_soma is not None else 0.0,
             "beneficios_com_valor_informado": com_valor,

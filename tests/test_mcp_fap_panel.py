@@ -11,8 +11,10 @@ Cobre:
   3. _recorte_dos_filtros — helper compartilhado, inclui empresa no rótulo
   4. _moeda — formatação de valores em Real (padrão pt-BR)
   5. construir_painel — componente Prefab (Task 3)
-  6. _descricao_cobertura_topico — cobertura honesta de "Benefícios por
-     tópico" (a soma por tópico não é contagem de benefícios distintos)
+  6. _descricao_cobertura_topico — cobertura exata de "Benefícios por
+     tópico" (usa `com_topico_contestacao`, contagem exata de benefícios
+     distintos vinda do handler; sobrevive a dado de versão anterior sem
+     essa chave)
 
 Nota sobre serialização: as asserções de `construir_painel` navegam
 `Component.to_json()`, não `model_dump()`/`model_dump_json()`. O pydantic
@@ -56,6 +58,7 @@ FIXTURE = {
         "por_status_primeira_instancia": {"Deferido": 18, "Indeferido": 12},
         "por_status_segunda_instancia": {"(vazio)": 30},
         "por_topico_contestacao": {"PRÉ-FAP": 9, "ACIDENTE DE TRAJETO": 15},
+        "com_topico_contestacao": 20,
         "financeiro": {"total_pago_soma": 12345.67, "beneficios_com_valor_informado": 25},
         "com_cat": 22,
         "sem_cat": 8,
@@ -189,49 +192,55 @@ def test_moeda_em_padrao_brasileiro():
     print("OK  _moeda formata em padrão pt-BR (R$ 12.345,67)")
 
 
-def test_descricao_cobertura_topico_com_sobreposicao_possivel():
-    # MAJOR 2: soma das contagens (9 + 15 = 24) NÃO é o número de benefícios
-    # com tópico — um benefício pode ter os dois. Sem contagem por benefício
-    # (fora do dado disponível, sem query nova), o honesto é expor limites:
-    # mínimo = maior contagem isolada (15), máximo = min(soma, total) = 24.
-    ben = {"total": 30, "por_topico_contestacao": {"PRÉ-FAP": 9, "ACIDENTE DE TRAJETO": 15}}
+def test_descricao_cobertura_topico_usa_contagem_exata():
+    # `com_topico_contestacao` vem pronto do handler (contagem exata de
+    # benefícios distintos, feita no mesmo loop que monta
+    # `por_topico_contestacao` — sem query nova). Um benefício com dois
+    # tópicos simultâneos não pode inflar esse número: por isso o valor
+    # (20) é menor que a soma das contagens por tópico (9 + 15 = 24).
+    ben = {
+        "total": 30,
+        "por_topico_contestacao": {"PRÉ-FAP": 9, "ACIDENTE DE TRAJETO": 15},
+        "com_topico_contestacao": 20,
+    }
     desc = _descricao_cobertura_topico(ben)
-    assert "entre 15 e 24 de 30" in desc, desc
-    assert "marcações somam 24" in desc, desc
-    print("OK  _descricao_cobertura_topico expõe limites quando há sobreposição possível")
-
-
-def test_descricao_cobertura_topico_sem_sobreposicao_possivel():
-    # Um único tópico: soma == maior contagem, então mínimo == máximo — dá
-    # para afirmar o número exato, sem inventar precisão que os dados não têm.
-    ben = {"total": 10, "por_topico_contestacao": {"PRÉ-FAP": 4}}
-    desc = _descricao_cobertura_topico(ben)
-    assert desc == "4 de 10 benefícios têm ao menos um tópico (marcações somam 4)", desc
-    print("OK  _descricao_cobertura_topico é exata quando não há sobreposição possível")
+    assert desc == "20 de 30 benefícios têm tópico classificado", desc
+    print("OK  _descricao_cobertura_topico usa a contagem exata do handler")
 
 
 def test_descricao_cobertura_topico_sem_nenhum_topico():
-    ben = {"total": 5, "por_topico_contestacao": {}}
+    ben = {"total": 5, "por_topico_contestacao": {}, "com_topico_contestacao": 0}
     assert _descricao_cobertura_topico(ben) == "0 de 5 benefícios têm tópico classificado"
     print("OK  _descricao_cobertura_topico com zero tópicos classificados")
 
 
+def test_descricao_cobertura_topico_sem_a_chave_nova():
+    # Dado de uma versão anterior do handler pode não ter
+    # `com_topico_contestacao` ainda — o painel não pode quebrar com isso,
+    # só cair de volta para "0" em vez de inventar um número.
+    ben = {"total": 8, "por_topico_contestacao": {"PRÉ-FAP": 3}}
+    assert _descricao_cobertura_topico(ben) == "0 de 8 benefícios têm tópico classificado"
+    print("OK  _descricao_cobertura_topico sobrevive a dado sem a chave nova")
+
+
 def test_construir_painel_topico_tem_descricao_honesta():
-    # O cartão "Benefícios por tópico" não pode mostrar só a soma (24) sem
-    # deixar claro, na description, que isso não é contagem de benefícios.
+    # O cartão "Benefícios por tópico" mostra a soma das marcações (24) no
+    # número de cima, mas a description precisa trazer a contagem exata de
+    # benefícios distintos (20), não a soma, para não ser lida como algo
+    # que não é.
     painel = construir_painel(FIXTURE)
     arvore = painel.to_json()
     metric = _metric(arvore, "Benefícios por tópico")
     assert metric["value"] == 24, metric["value"]
     assert metric.get("description"), "cartão de tópico sem description de cobertura"
-    assert "entre 15 e 24 de 30" in metric["description"], metric["description"]
+    assert metric["description"] == "20 de 30 benefícios têm tópico classificado", metric["description"]
     print("OK  cartão de tópico traz description honesta sobre cobertura")
 
 
 def test_resumo_em_texto_topico_tem_descricao_honesta():
     texto = resumo_em_texto(FIXTURE)
     linha_topico = next(l for l in texto.splitlines() if l.startswith("Benefícios por tópico"))
-    assert "entre 15 e 24 de 30" in linha_topico, linha_topico
+    assert "20 de 30 benefícios têm tópico classificado" in linha_topico, linha_topico
     print("OK  resumo_em_texto linha de tópico traz descrição honesta sobre cobertura")
 
 
@@ -547,9 +556,9 @@ if __name__ == "__main__":
     test_construir_painel_titulo_traz_empresa()
     test_resumo_em_texto_cabecalho_traz_empresa()
     test_moeda_em_padrao_brasileiro()
-    test_descricao_cobertura_topico_com_sobreposicao_possivel()
-    test_descricao_cobertura_topico_sem_sobreposicao_possivel()
+    test_descricao_cobertura_topico_usa_contagem_exata()
     test_descricao_cobertura_topico_sem_nenhum_topico()
+    test_descricao_cobertura_topico_sem_a_chave_nova()
     test_construir_painel_topico_tem_descricao_honesta()
     test_resumo_em_texto_topico_tem_descricao_honesta()
     test_construir_painel_serializa_com_os_numeros()

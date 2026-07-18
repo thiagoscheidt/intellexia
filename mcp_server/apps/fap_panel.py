@@ -41,34 +41,22 @@ def _recorte_dos_filtros(filtros: dict) -> list[str]:
 def _descricao_cobertura_topico(ben: dict) -> str:
     """Descrição honesta de cobertura para "Benefícios por tópico".
 
-    Um benefício pode ter vários tópicos de contestação simultaneamente, então
-    a soma das contagens por tópico NÃO é o número de benefícios com tópico —
-    ela pode superestimar (um benefício com 2 tópicos entra 2x na soma). Com
-    só as contagens agregadas por tópico (o dado disponível aqui, sem query
-    nova por benefício), não dá para saber o número exato de benefícios
-    distintos com ao menos um tópico — por isso o rótulo expõe limites, não
-    um número inventado:
-      - mínimo: o maior valor entre os tópicos (esses benefícios, sozinhos,
-        já garantem ao menos um tópico cada).
-      - máximo: min(soma das contagens, total de benefícios) — nunca pode
-        passar da soma nem do total.
+    ``com_topico_contestacao`` é a contagem exata de benefícios distintos com
+    ao menos um tópico — vem do mesmo loop que monta ``por_topico_contestacao``
+    em ``fap_summary_handler`` (nenhuma query nova). É diferente da soma das
+    contagens por tópico: essa soma superestima quando um benefício tem mais
+    de um tópico simultâneo. O denominador (total de benefícios) é mantido no
+    rótulo de propósito — sem ele, o leitor conclui que a classificação é
+    completa quando pode não ser.
+
+    Dados de uma versão anterior podem não ter a chave nova; nesse caso caímos
+    de volta para "0" em vez de quebrar o painel.
     """
     total = ben.get("total", 0)
-    por_topico = ben.get("por_topico_contestacao") or {}
-    if not por_topico:
-        return f"0 de {total} benefícios têm tópico classificado"
-
-    soma = sum(por_topico.values())
-    minimo = max(por_topico.values())
-    maximo = min(soma, total)
-
-    if minimo == maximo:
-        return f"{minimo} de {total} benefícios têm ao menos um tópico (marcações somam {soma})"
-    return (
-        f"entre {minimo} e {maximo} de {total} benefícios têm ao menos um tópico — "
-        f"contagem exata indisponível pois um benefício pode ter vários tópicos "
-        f"(marcações somam {soma}, não é contagem de benefícios)"
-    )
+    com_topico = ben.get("com_topico_contestacao")
+    if com_topico is None:
+        com_topico = 0
+    return f"{com_topico} de {total} benefícios têm tópico classificado"
 
 
 def _linha(titulo: str, contagens: dict) -> str:
