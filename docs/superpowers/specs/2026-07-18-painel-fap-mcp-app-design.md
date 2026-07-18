@@ -22,6 +22,11 @@ se a dependência de UI quebrar.
 
 - `fastmcp` 3.2.4 já instalado; o parâmetro `app` existe em `FastMCP.tool`.
 - `prefab-ui` **não** está instalado — entra via `fastmcp[apps]`.
+- `fastmcp[apps]==3.2.4` resolve sem conflito e traz `prefab-ui` 0.20.2
+  (~71 MB de dependências). **Nenhum upgrade do FastMCP é necessário** —
+  verificado com smoke test de `app=True` na própria versão 3.2.4.
+- Componentes disponíveis em `prefab_ui.components`: `Page`, `Card`, `Metric`,
+  `DataTable`, `Dashboard`, `Grid`, e `charts.BarChart` / `ChartSeries`.
 - A documentação do FastMCP avisa que Prefab está em desenvolvimento ativo com
   breaking changes frequentes, e recomenda pinar a versão.
 - O servidor MCP roda em produção sob systemd (`intellexia-mcp.service`), com
@@ -40,9 +45,13 @@ do mesmo lugar, seguindo a regra de fonte única já aplicada em
 
 ### `mcp_server/apps/fap_panel.py` — novo
 
-Único arquivo que importa Prefab. Contém a função que recebe o dicionário do
-handler e devolve o componente de UI. Função pura: sem acesso a banco, sem
-contexto Flask, sem sessão.
+Único arquivo que importa Prefab. Expõe duas funções puras — sem acesso a banco,
+sem contexto Flask, sem sessão:
+
+- `construir_painel(dados) -> Page` — recebe o dicionário do handler e devolve o
+  componente de UI.
+- `resumo_em_texto(dados) -> str` — o mesmo dicionário em texto compacto, para o
+  fallback descrito em Degradação.
 
 Essa fronteira é deliberada. O risco conhecido do projeto é o Prefab quebrar num
 upgrade; isolá-lo num arquivo pequeno e puro faz a quebra acontecer em código
@@ -79,9 +88,19 @@ vigência, status de instância, tipo) têm cardinalidade baixa e vão inteiras.
 
 Dois modos de falha, ambos resolvidos sem intervenção:
 
-**Host que não renderiza MCP Apps.** A tool devolve o dicionário do handler como
-conteúdo estruturado junto com o recurso de UI. Cliente sem suporte vê os
-números; não vê erro nem resposta vazia.
+**Host que não renderiza MCP Apps.** O slot `structured_content` é único e é
+onde o FastMCP coloca o envelope Prefab (`{"$prefab": ..., "view": ...}`) —
+verificado em `fastmcp/tools/base.py`. Pôr o dicionário do handler ali faria o
+painel deixar de renderizar. O padrão correto, validado com smoke test, é:
+
+```python
+ToolResult(content=resumo_em_texto(dados), structured_content=componente)
+```
+
+O envelope Prefab permanece intacto para quem renderiza, e `content` carrega um
+resumo textual para quem não renderiza. Isso exige uma função dedicada,
+`resumo_em_texto(dados) -> str`, com teste próprio — o fallback não é
+automático.
 
 **Prefab ausente ou quebrado.** O import de `mcp_server/apps/fap_panel.py` fica
 isolado no registro da tool. Se falhar, `painel_fap` não é registrada, o
@@ -98,8 +117,12 @@ seguem intactas.
    fixture.
 2. **Top-N**: fixture com mais tópicos que o limite; confere que a faixa
    `outros (N)` aparece e que a soma fecha com o total.
-3. **Fixture vazio**: escritório sem dado não quebra o componente.
-4. **Isolamento por escritório**: passada com dado real confirmando que o painel
+3. **Fixture vazio**: escritório sem dado não quebra nem o componente nem o
+   resumo textual.
+4. **Fallback textual**: `resumo_em_texto` sobre o fixture principal contém os
+   totais; e a tool devolve `content` textual **junto com** o envelope
+   `$prefab` em `structured_content` — a garantia central da degradação.
+5. **Isolamento por escritório**: passada com dado real confirmando que o painel
    só enxerga o `law_firm_id` do chamador.
 
 ## Deploy
