@@ -488,6 +488,51 @@ def resumo_fap(
         return fap_summary_handler(claims["law_firm_id"], ano_vigencia, cnpj, empresa)
 
 
+try:
+    from fastmcp.tools.tool import ToolResult
+
+    from mcp_server.apps.fap_panel import construir_painel, resumo_em_texto
+except ImportError as exc:  # pragma: no cover - depende de extra opcional
+    logging.getLogger(__name__).warning(
+        "Painel FAP indisponível (%s) — tool painel_fap não registrada; "
+        "resumo_fap segue funcionando.",
+        exc,
+    )
+else:
+
+    @mcp.tool(app=True)
+    def painel_fap(
+        ano_vigencia: int | None = None,
+        cnpj: str | None = None,
+        empresa: str | None = None,
+    ) -> ToolResult:
+        """Painel visual do resumo FAP: cartões e gráficos de barras.
+
+        Use quando o usuário pedir para *ver* o panorama do FAP — um painel,
+        gráfico, dashboard ou comparação visual. Para responder uma pergunta
+        pontual de contagem em texto, prefira `resumo_fap`.
+
+        Mostra contestações por situação, ano de vigência e empresa; benefícios
+        por tópico de contestação e status de 1ª/2ª instância; e cartões com
+        totais, valor pago e cobertura de CAT.
+
+        Args:
+            ano_vigencia: Restringe a um ano de vigência FAP (opcional).
+            cnpj: Restringe a um estabelecimento — aceita formatado, só dígitos
+                ou raiz de 8 dígitos (opcional).
+            empresa: Nome (ou parte do nome) da empresa (opcional).
+        """
+        claims = require_module("fap_panel")
+        with app.app_context():
+            dados = fap_summary_handler(
+                claims["law_firm_id"], ano_vigencia, cnpj, empresa
+            )
+        return ToolResult(
+            content=resumo_em_texto(dados),
+            structured_content=construir_painel(dados),
+        )
+
+
 @mcp.tool()
 def alteracoes_recentes_fap(
     cnpj: str | None = None,

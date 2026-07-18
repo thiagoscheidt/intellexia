@@ -225,6 +225,39 @@ def test_construir_painel_com_escritorio_vazio():
     print("OK  construir_painel sobrevive a escritório sem dado")
 
 
+def test_tool_registrada_no_servidor():
+    """painel_fap aparece no catálogo, sem derrubar as tools existentes."""
+    import asyncio
+
+    import fastmcp
+
+    from mcp_server.server import mcp
+
+    async def chamar():
+        async with fastmcp.Client(mcp) as cliente:
+            ferramentas = {t.name for t in await cliente.list_tools()}
+            assert "painel_fap" in ferramentas, "tool painel_fap não registrada"
+
+    asyncio.run(chamar())
+    print("OK  painel_fap registrada no servidor MCP")
+
+
+def test_tool_monta_resposta_com_os_dois_canais():
+    from fastmcp.tools.tool import ToolResult
+
+    from mcp_server.apps.fap_panel import construir_painel, resumo_em_texto
+
+    resultado = ToolResult(
+        content=resumo_em_texto(FIXTURE),
+        structured_content=construir_painel(FIXTURE),
+    )
+    bloco = resultado.to_mcp_result()[0][0]
+
+    assert "$prefab" in str(resultado.structured_content), "envelope Prefab ausente"
+    assert "Contestações" in bloco.text, "fallback textual ausente"
+    print("OK  resposta carrega envelope Prefab e fallback textual juntos")
+
+
 if __name__ == "__main__":
     test_top_n_corta_e_rotula_o_resto()
     test_top_n_ordena_por_contagem_nao_por_insercao()
@@ -237,4 +270,6 @@ if __name__ == "__main__":
     test_moeda_em_padrao_brasileiro()
     test_construir_painel_serializa_com_os_numeros()
     test_construir_painel_com_escritorio_vazio()
+    test_tool_registrada_no_servidor()
+    test_tool_monta_resposta_com_os_dois_canais()
     print("\nTodos os testes passaram.")
