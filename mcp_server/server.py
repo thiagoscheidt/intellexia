@@ -492,7 +492,7 @@ try:
     from fastmcp.tools.tool import ToolResult
 
     from mcp_server.apps.fap_panel import construir_painel, resumo_em_texto
-except ImportError as exc:  # pragma: no cover - depende de extra opcional
+except Exception as exc:  # pragma: no cover - defesa contra dependência 0.x instável
     logging.getLogger(__name__).warning(
         "Painel FAP indisponível (%s) — tool painel_fap não registrada; "
         "resumo_fap segue funcionando.",

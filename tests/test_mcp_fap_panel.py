@@ -258,6 +258,60 @@ def test_tool_monta_resposta_com_os_dois_canais():
     print("OK  resposta carrega envelope Prefab e fallback textual juntos")
 
 
+def test_tool_painel_fap_via_client_com_identidade_fingida():
+    """Chama a tool `painel_fap` de verdade (fastmcp.Client + identidade
+    fingida), não só as peças que ela compõe.
+
+    O teste irmão (`test_tool_monta_resposta_com_os_dois_canais`) monta o
+    `ToolResult` na mão, chamando `construir_painel`/`resumo_em_texto`
+    diretamente — prova que as peças compõem, mas não que a tool está fiada
+    corretamente (se alguém trocasse a ordem dos argumentos de `ToolResult`
+    dentro de `painel_fap`, nenhum teste pegaria). Aqui a chamada passa pelo
+    `require_module`, pelo `fap_summary_handler` e pelo `ToolResult` de
+    verdade, exatamente como um cliente MCP real veria.
+
+    Padrão de identidade fingida copiado de
+    `tests/test_mcp_fap_review.py::test_gate_admin` (fake de
+    `mcp_server.identity.get_identity`, restaurado no finally).
+    """
+    import asyncio
+
+    import fastmcp
+
+    import mcp_server.identity as ident
+    from app.models import LawFirm
+    from main import app
+    from mcp_server.server import mcp
+
+    with app.app_context():
+        firm = LawFirm.query.order_by(LawFirm.id).first()
+        assert firm is not None, "precisa de ao menos um escritório cadastrado"
+        law_firm_id = firm.id
+
+    original = ident.get_identity
+    ident.get_identity = lambda: {
+        "user_id": 1,
+        "law_firm_id": law_firm_id,
+        "modules": ["fap_panel"],
+        "role": "admin",
+    }
+    try:
+        async def chamar():
+            async with fastmcp.Client(mcp) as cliente:
+                return await cliente.call_tool("painel_fap", {})
+
+        resultado = asyncio.run(chamar())
+
+        assert "$prefab" in str(resultado.structured_content), \
+            "envelope Prefab ausente na resposta real da tool painel_fap"
+        texto = resultado.content[0].text
+        assert "Painel FAP" in texto, \
+            "fallback textual ausente na resposta real da tool painel_fap"
+        print("OK  painel_fap via Client real (identidade fingida): os dois canais chegam na mesma resposta")
+    finally:
+        ident.get_identity = original
+
+
 if __name__ == "__main__":
     test_top_n_corta_e_rotula_o_resto()
     test_top_n_ordena_por_contagem_nao_por_insercao()
@@ -272,4 +326,5 @@ if __name__ == "__main__":
     test_construir_painel_com_escritorio_vazio()
     test_tool_registrada_no_servidor()
     test_tool_monta_resposta_com_os_dois_canais()
+    test_tool_painel_fap_via_client_com_identidade_fingida()
     print("\nTodos os testes passaram.")
