@@ -1,7 +1,7 @@
 # Painel FAP como MCP App
 
 **Data:** 2026-07-18
-**Status:** aprovado, aguardando plano de implementação
+**Status:** implementado
 
 ## Objetivo
 
