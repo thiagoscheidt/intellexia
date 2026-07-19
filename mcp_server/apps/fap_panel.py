@@ -4,7 +4,7 @@
 devolvido por ``fap_summary_handler`` — nenhuma query, nenhum contexto Flask.
 """
 
-from prefab_ui.components import Card, Grid, Metric, Page
+from prefab_ui.components import Card, Column, Grid, Heading, Metric
 from prefab_ui.components.charts import BarChart, ChartSeries
 
 TOP_N = 8
@@ -123,8 +123,16 @@ def _barras(titulo: str, contagens: dict, descricao: str | None = None) -> Card:
     ])
 
 
-def construir_painel(dados: dict) -> Page:
-    """Monta o painel visual a partir do dicionário de ``fap_summary_handler``."""
+def construir_painel(dados: dict) -> Column:
+    """Monta o painel visual a partir do dicionário de ``fap_summary_handler``.
+
+    A raiz é um ``Column``, não um ``Page``: ``Page`` só renderiza dentro de
+    um ``Pages`` pai que o ativa por chave de estado — como raiz do app MCP,
+    sem esse pai, ele nunca fica ativo e o widget aparece preto/vazio (ver
+    docstrings de ``prefab_ui.components.pages.Page`` e ``Pages``). ``Column``
+    é um container flex vertical que renderiza por conta própria, adequado
+    para um painel empilhado de cartões.
+    """
     filtros = dados.get("filtros") or {}
     cont = dados.get("contestacoes") or {}
     ben = dados.get("beneficios") or {}
@@ -148,7 +156,8 @@ def construir_painel(dados: dict) -> Page:
         ),
     ])
 
-    return Page(title=titulo, children=[
+    return Column(gap=6, children=[
+        Heading(titulo, level=1),
         cards,
         _barras("Contestações por situação", cont.get("por_situacao") or {}),
         _barras("Contestações por ano de vigência", cont.get("por_ano_vigencia") or {}),

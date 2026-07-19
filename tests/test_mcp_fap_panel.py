@@ -173,7 +173,8 @@ def test_construir_painel_titulo_traz_empresa():
     # o rótulo de empresa sumir do título do painel.
     com_empresa = dict(FIXTURE, filtros={**FIXTURE["filtros"], "empresa": "bistek"})
     painel = construir_painel(com_empresa)
-    assert "empresa bistek" in painel.title, painel.title
+    titulo = _titulo(painel.to_json())
+    assert "empresa bistek" in titulo, titulo
     print("OK  construir_painel título traz o filtro de empresa")
 
 
@@ -268,6 +269,19 @@ def _metric(arvore: dict, label: str) -> dict:
     return achados[0]
 
 
+def _titulo(arvore: dict) -> str:
+    """Texto do título do painel: hoje mora no primeiro `Heading` da árvore.
+
+    Antes o título vinha de `Page(title=...).title` — atributo Python direto.
+    Depois da correção (raiz não é mais `Page`), o título é conteúdo de um
+    `Heading` normal, então a asserção precisa navegar `to_json()` como as
+    demais, em vez de ler um atributo que só `Page` tinha.
+    """
+    achados = _coletar_por_tipo(arvore, "Heading")
+    assert achados, "painel sem nenhum Heading — título não encontrado"
+    return achados[0]["content"]
+
+
 def _barchart_com_ponto(arvore: dict, rotulo: str) -> dict:
     for grafico in _coletar_por_tipo(arvore, "BarChart"):
         for ponto in grafico.get("data") or []:
@@ -280,8 +294,9 @@ def test_construir_painel_serializa_com_os_numeros():
     painel = construir_painel(FIXTURE)
     arvore = painel.to_json()
 
-    assert painel.title, "painel sem título"
-    assert painel.title == "Painel FAP — vigência 2023", painel.title
+    titulo = _titulo(arvore)
+    assert titulo, "painel sem título"
+    assert titulo == "Painel FAP — vigência 2023", titulo
 
     assert _metric(arvore, "Contestações")["value"] == 12, "total de contestações no campo errado"
     assert _metric(arvore, "Benefícios")["value"] == 30, "total de benefícios no campo errado"
@@ -311,14 +326,39 @@ def test_construir_painel_com_escritorio_vazio():
                        "com_cat": 0, "sem_cat": 0},
     }
     painel = construir_painel(vazio)
-    assert painel.title == "Painel FAP — sem filtros", painel.title
     arvore = painel.to_json()
+    assert _titulo(arvore) == "Painel FAP — sem filtros", _titulo(arvore)
     assert arvore, "componente vazio não serializa"
     assert _metric(arvore, "Contestações")["value"] == 0
     assert _metric(arvore, "Benefícios")["value"] == 0
     for grafico in _coletar_por_tipo(arvore, "BarChart"):
         assert grafico["data"] == [{"rotulo": "sem dados", "qtd": 0}], grafico["data"]
     print("OK  construir_painel sobrevive a escritório sem dado")
+
+
+def test_construir_painel_raiz_nao_e_page():
+    """Trava a causa raiz da tela preta: `Page` só renderiza dentro de um
+    `Pages` que o ative por chave de estado — ver docstring de
+    ``prefab_ui.components.pages.Page`` ("A single page within a Pages
+    container") e de ``Pages`` ("only the active Page renders"). Como raiz
+    do app MCP, sem nenhum `Pages` pai para ativá-lo, `Page` nunca fica
+    ativo e nada é desenhado, mesmo com os dados certos no canal de texto —
+    daí o widget preto/vazio. A raiz precisa ser um componente que renderiza
+    por conta própria (`Column`, `Div`, `Container`, ...), não um que exige
+    um pai controlador de estado.
+    """
+    painel = construir_painel(FIXTURE)
+    arvore = painel.to_json()
+
+    assert arvore["type"] != "Page", (
+        "raiz do painel é Page — só renderiza dentro de um Pages pai que a "
+        f"ative; sem pai, fica sempre inativa (tela preta). Tipo: {arvore['type']!r}"
+    )
+
+    # O título continua presente e com o texto certo — só migrou de
+    # `Page(title=...)` para um `Heading` como primeiro filho.
+    assert _titulo(arvore) == "Painel FAP — vigência 2023", arvore
+    print("OK  raiz do painel não é Page (renderiza sem depender de um Pages pai)")
 
 
 def test_tool_registrada_no_servidor():
@@ -563,6 +603,7 @@ if __name__ == "__main__":
     test_resumo_em_texto_topico_tem_descricao_honesta()
     test_construir_painel_serializa_com_os_numeros()
     test_construir_painel_com_escritorio_vazio()
+    test_construir_painel_raiz_nao_e_page()
     test_tool_registrada_no_servidor()
     test_tool_monta_resposta_com_os_dois_canais()
     test_tool_painel_fap_via_client_com_identidade_fingida()
