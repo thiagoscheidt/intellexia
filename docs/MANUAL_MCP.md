@@ -177,6 +177,10 @@ no menu do assistente — no Claude Code, digite `/` e procure por `intellexia`:
 | `corrigir_peticao` | Pega a revisão já feita e devolve, achado a achado, o trecho reescrito pronto para colar |
 | `pronto_para_protocolo` | Veredito objetivo: a petição pode ser protocolada? (críticos em aberto + documentos faltantes) |
 | `devolutiva_ao_advogado` | Transforma os achados em uma devolutiva construtiva para quem redigiu |
+| `ficha_empresa` | Ficha cadastral de uma empresa pelo CNPJ: razão social, situação, endereço, porte e resumo dos sócios |
+| `socios_empresa` | Só o quadro societário de um CNPJ: nome, CPF/CNPJ e qualificação de cada sócio |
+
+> [!INFO] Os dois comandos acima **pedem o CNPJ** antes de executar, e consultam dados públicos da Receita. Sendo um CNPJ de **filial**, a resposta avisa — o quadro societário é sempre o da matriz. Em MEI e empresa individual, a resposta diz que não há sócios registrados, em vez de vir vazia.
 
 ---
 

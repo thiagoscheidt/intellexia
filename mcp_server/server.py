@@ -1276,6 +1276,48 @@ def devolutiva_ao_advogado(identificador_documento: str) -> str:
     )
 
 
+@mcp.prompt(name="ficha_empresa", description="Ficha cadastral de uma empresa a partir do CNPJ (dados públicos da Receita)")
+def ficha_empresa(cnpj: str) -> str:
+    return (
+        f"Monte a ficha cadastral da empresa de CNPJ {cnpj}:\n"
+        f"1. Chame consultar_cnpj com cnpj=\"{cnpj}\".\n"
+        "2. Apresente, em português e bem organizado: **razão social** e nome fantasia, "
+        "**situação cadastral**, início de atividade, porte, natureza jurídica, "
+        "**endereço completo**, e-mail, e um resumo do **quadro societário** (quantos "
+        "sócios e quem são os administradores).\n"
+        "Regras de leitura, que valem mais que a formatação:\n"
+        "- Se `tipo_estabelecimento` for **Filial**, diga isso logo no início e avise que o "
+        "quadro societário é o da matriz — não apresente os dados como se fossem da empresa "
+        "inteira. Cada filial tem CNPJ próprio.\n"
+        "- Se `qsa` vier vazio, escreva **\"não há sócios registrados\"** de forma explícita "
+        "(é o normal em MEI e empresa individual). Não omita em silêncio, que se confunde com "
+        "falha de consulta.\n"
+        "- Se a resposta trouxer a chave `erro`, relate a falha com clareza (e o "
+        "`status_code`, se houver) e **não invente** nenhum dado.\n"
+        "Use apenas o que a tool devolveu; campo ausente é campo não informado, não é zero."
+    )
+
+
+@mcp.prompt(name="socios_empresa", description="Quadro societário de uma empresa a partir do CNPJ (dados públicos da Receita)")
+def socios_empresa(cnpj: str) -> str:
+    return (
+        f"Liste o quadro societário da empresa de CNPJ {cnpj}:\n"
+        f"1. Chame consultar_cnpj com cnpj=\"{cnpj}\".\n"
+        "2. Identifique a empresa em uma linha (razão social e situação cadastral) e, em "
+        "seguida, apresente **apenas os sócios** em tabela: nome, CPF/CNPJ, qualificação e "
+        "identificador. Informe o total de sócios.\n"
+        "Regras de leitura, que valem mais que a formatação:\n"
+        "- Se `qsa` vier vazio, responda que **não há sócios registrados** para este CNPJ — "
+        "é o esperado em MEI e empresa individual — e não tente deduzir sócios de outro campo.\n"
+        "- Se `tipo_estabelecimento` for **Filial**, avise que o quadro societário é o da "
+        "matriz, não da filial consultada.\n"
+        "- Se a resposta trouxer a chave `erro`, relate a falha com clareza (e o "
+        "`status_code`, se houver) e **não invente** sócios.\n"
+        "Não faça juízo sobre as pessoas listadas nem cruze com outras bases: são dados "
+        "cadastrais públicos, apresentados como estão."
+    )
+
+
 if __name__ == "__main__":
     host = os.environ.get("MCP_HOST", "127.0.0.1")
     port = int(os.environ.get("MCP_PORT", "8001"))
