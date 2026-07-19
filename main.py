@@ -86,6 +86,23 @@ app.register_blueprint(fap_review_bp)
 app.register_blueprint(impugnacao_references_bp)
 app.register_blueprint(docs_bp)
 
+
+@app.route('/favicon.ico')
+def favicon():
+    """Serve o favicon na raiz, sem exigir login.
+
+    Navegadores e clientes MCP (conectores do Claude) buscam ``/favicon.ico``
+    na raiz do domínio. Sem esta rota, o ``check_session`` redirecionava para
+    a tela de login e o pedido devolvia um HTML de login no lugar do ícone.
+    """
+    from flask import send_from_directory
+    return send_from_directory(
+        os.path.join(app.root_path, 'static'),
+        'favicon.ico',
+        mimetype='image/vnd.microsoft.icon',
+    )
+
+
 # Importar middlewares e contexto (mantém funcionalidade anterior)
 from app.middlewares import init_app_middlewares
 init_app_middlewares(app)

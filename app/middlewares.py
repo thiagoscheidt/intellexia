@@ -22,7 +22,8 @@ def init_app_middlewares(app):
     def check_session():
         """Verifica autenticação antes de cada requisição"""
         public_endpoints = ['auth.login', 'auth.login_post', 'auth.register', 'auth.register_post', 
-                           'auth.forgot_password', 'auth.forgot_password_post', 'static']
+                           'auth.forgot_password', 'auth.forgot_password_post', 'static',
+                           'favicon']
         
         if 'user_id' not in session and request.endpoint not in public_endpoints:
             if request.is_json:
