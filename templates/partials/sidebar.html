@@ -289,6 +289,21 @@
         </li>
         {% endif %}
 
+        {% if can_view_module('communications') %}
+        <li class="nav-item">
+          <a href="{{ url_for('communications.list_communications') }}"
+            class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('communications.') else '' }}">
+            <i class="nav-icon bi bi-broadcast"></i>
+            <p>
+              Comunicações
+              {% if communications_unread_count and communications_unread_count > 0 %}
+              <span class="badge bg-warning float-end me-3">{{ communications_unread_count }}</span>
+              {% endif %}
+            </p>
+          </a>
+        </li>
+        {% endif %}
+
         {% if can_view_module('cases') %}
         <li
           class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint.startswith('cases.') or request.endpoint.startswith('benefits.') or request.endpoint.startswith('documents.') or request.endpoint.startswith('petitions.') or request.endpoint.startswith('fap_reasons.')) else '' }}">

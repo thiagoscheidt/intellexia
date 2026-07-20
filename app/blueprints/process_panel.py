@@ -986,10 +986,23 @@ def list_processes():
     view_mode = request.args.get('view', 'table').strip().lower()
     if view_mode not in {'table', 'kanban'}:
         view_mode = 'table'
+    discovery_view = request.args.get('discovery', '').strip().lower()
+    if discovery_view not in {'descobertos', 'ignorados'}:
+        discovery_view = ''
     page = request.args.get('page', 1, type=int)
-    
+
     query = JudicialProcess.query.filter_by(law_firm_id=law_firm_id)
-    
+
+    # Aba "Descobertos": processos criados automaticamente pelo Monitoramento de
+    # Comunicações (DJEN) aguardando triagem. A lista principal só mostra os
+    # confirmados para não poluir o painel curado manualmente.
+    if discovery_view == 'descobertos':
+        query = query.filter(JudicialProcess.discovery_status == 'pending_review')
+    elif discovery_view == 'ignorados':
+        query = query.filter(JudicialProcess.discovery_status == 'ignored')
+    else:
+        query = query.filter(JudicialProcess.discovery_status == 'confirmed')
+
     # Filtro por busca
     if search_query:
         query = query.outerjoin(Court, JudicialProcess.court_id == Court.id)
@@ -1031,12 +1044,15 @@ def list_processes():
         processes = ordered_query.paginate(page=page, per_page=15)
         processes_list = processes.items
     
-    # Estatísticas
+    # Estatísticas (a lista principal e os cards contam só os confirmados)
+    confirmed_base = JudicialProcess.query.filter_by(law_firm_id=law_firm_id, discovery_status='confirmed')
     stats = {
-        'total': JudicialProcess.query.filter_by(law_firm_id=law_firm_id).count(),
-        'ativo': JudicialProcess.query.filter_by(law_firm_id=law_firm_id, status='ativo').count(),
-        'suspenso': JudicialProcess.query.filter_by(law_firm_id=law_firm_id, status='suspenso').count(),
-        'encerrado': JudicialProcess.query.filter_by(law_firm_id=law_firm_id, status='encerrado').count(),
+        'total': confirmed_base.count(),
+        'ativo': confirmed_base.filter_by(status='ativo').count(),
+        'suspenso': confirmed_base.filter_by(status='suspenso').count(),
+        'encerrado': confirmed_base.filter_by(status='encerrado').count(),
+        'descobertos': JudicialProcess.query.filter_by(
+            law_firm_id=law_firm_id, discovery_status='pending_review').count(),
     }
 
     process_phases = {}
@@ -1126,6 +1142,7 @@ def list_processes():
             process_phases=process_phases,
             process_legal_theses=process_legal_theses,
             current_view=view_mode,
+            discovery_view=discovery_view,
         )
 
     legal_theses = JudicialLegalThesis.query.filter_by(
@@ -1146,6 +1163,7 @@ def list_processes():
         process_legal_theses=process_legal_theses,
         judicial_phases_labels=JUDICIAL_PHASES,
         current_view=view_mode,
+        discovery_view=discovery_view,
     )
 
 
@@ -3544,3 +3562,47 @@ def update_status(process_id):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+
+
+@process_panel_bp.route('/<int:process_id>/descoberta', methods=['POST'])
+@require_law_firm
+def update_discovery_status(process_id):
+    """Triagem de processo descoberto pelo Monitoramento de Comunicações.
+
+    action=confirm → entra na lista principal do painel;
+    action=ignore  → sai das listas padrão (fica na aba Ignorados).
+    """
+    law_firm_id = get_current_law_firm_id()
+
+    process = JudicialProcess.query.filter_by(
+        id=process_id,
+        law_firm_id=law_firm_id
+    ).first_or_404()
+
+    action = (request.form.get('action') or '').strip().lower()
+    if action not in {'confirm', 'ignore', 'review'}:
+        flash('Ação inválida.', 'danger')
+        return redirect(url_for('process_panel.list_processes', discovery='descobertos'))
+
+    try:
+        process.discovery_status = {
+            'confirm': 'confirmed',
+            'ignore': 'ignored',
+            'review': 'pending_review',
+        }[action]
+        process.updated_at = datetime.now()
+        db.session.commit()
+        messages = {
+            'confirm': 'Processo confirmado e movido para a lista principal.',
+            'ignore': 'Processo ignorado — não aparecerá nas listas padrão.',
+            'review': 'Processo devolvido para triagem.',
+        }
+        flash(messages[action], 'success')
+    except Exception as e:
+        db.session.rollback()
+        flash(f'Erro ao atualizar processo: {e}', 'danger')
+
+    next_view = request.form.get('next') or 'descobertos'
+    if next_view == 'lista':
+        return redirect(url_for('process_panel.list_processes'))
+    return redirect(url_for('process_panel.list_processes', discovery=next_view))

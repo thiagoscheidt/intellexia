@@ -41,6 +41,9 @@ PATH=/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin
 
 # Envia as notificações por e-mail agendadas (de hora em hora)
 0 * * * * cd /opt/intellexia && flock -n /tmp/intellexia_notifications.lock uv run scripts/send_notifications.py >> /var/log/intellexia/send_notifications.log 2>&1
+
+# Sincroniza comunicações processuais do Comunica PJe/DJEN (diário, cedo)
+30 6 * * * cd /opt/intellexia && flock -n /tmp/intellexia_comunicacoes.lock uv run scripts/sync_process_communications.py >> /var/log/intellexia/sync_process_communications.log 2>&1
 ```
 
 > O script de notificações roda **de hora em hora** e envia apenas o que estiver no horário
@@ -48,6 +51,11 @@ PATH=/usr/local/bin:/usr/bin:/bin:/opt/homebrew/bin
 > semanal). Exige `SMTP_HOST` e `SMTP_FROM_EMAIL` no `.env`; sem isso ele apenas avisa e sai.
 >
 > Para simular sem enviar: `uv run python scripts/send_notifications.py --dry-run`
+>
+> O script de comunicações roda **1× por dia** — o DJEN publica uma vez ao dia em
+> dias úteis, então rodar mais vezes não traz dado novo. Falha de um advogado não
+> avança a marca d'água dele; a próxima execução tenta o mesmo período de novo.
+> Para simular: `uv run python scripts/sync_process_communications.py --dry-run`
 
 ## 3) Verificação rápida
 

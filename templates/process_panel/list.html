@@ -119,6 +119,39 @@
               {% endif %}
               {% endwith %}
 
+              <!-- Abas de triagem (Monitoramento de Comunicações) -->
+              <ul class="nav nav-tabs mb-3">
+                <li class="nav-item">
+                  <a class="nav-link {{ 'active' if not discovery_view }}"
+                    href="{{ url_for('process_panel.list_processes') }}">
+                    <i class="bi bi-list-ul"></i> Lista principal
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link {{ 'active' if discovery_view == 'descobertos' }}"
+                    href="{{ url_for('process_panel.list_processes', discovery='descobertos') }}">
+                    <i class="bi bi-broadcast"></i> Descobertos
+                    {% if stats.descobertos %}
+                    <span class="badge bg-warning text-dark ms-1">{{ stats.descobertos }}</span>
+                    {% endif %}
+                  </a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link {{ 'active' if discovery_view == 'ignorados' }}"
+                    href="{{ url_for('process_panel.list_processes', discovery='ignorados') }}">
+                    <i class="bi bi-eye-slash"></i> Ignorados
+                  </a>
+                </li>
+              </ul>
+
+              {% if discovery_view == 'descobertos' %}
+              <div class="alert alert-info">
+                <i class="bi bi-broadcast"></i>
+                Processos criados automaticamente pelo <strong>Monitoramento de Comunicações</strong> (DJEN).
+                Confirme os que interessam ao escritório ou ignore os demais.
+              </div>
+              {% endif %}
+
               <!-- Filtros -->
               <div class="border rounded-4 p-3 p-md-4 mb-4 bg-light-subtle">
                 <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
@@ -127,6 +160,7 @@
                 </div>
                 <form method="get" class="row g-3 align-items-end">
                   <input type="hidden" name="view" value="{{ current_view or 'table' }}">
+                  {% if discovery_view %}<input type="hidden" name="discovery" value="{{ discovery_view }}">{% endif %}
                   <div class="col-lg-5">
                     <label for="search_query" class="form-label mb-1">
                       <i class="bi bi-search"></i> Buscar
@@ -266,6 +300,33 @@
                           process.created_at.strftime('%d/%m/%Y') }}</small>
                       </td>
                       <td class="text-end">
+                        {% if discovery_view == 'descobertos' %}
+                        <form method="POST" action="{{ url_for('process_panel.update_discovery_status', process_id=process.id) }}"
+                          class="d-inline">
+                          <input type="hidden" name="action" value="confirm">
+                          <input type="hidden" name="next" value="descobertos">
+                          <button type="submit" class="btn btn-sm btn-success" title="Confirmar — mover para a lista principal">
+                            <i class="bi bi-check-lg"></i> Confirmar
+                          </button>
+                        </form>
+                        <form method="POST" action="{{ url_for('process_panel.update_discovery_status', process_id=process.id) }}"
+                          class="d-inline">
+                          <input type="hidden" name="action" value="ignore">
+                          <input type="hidden" name="next" value="descobertos">
+                          <button type="submit" class="btn btn-sm btn-outline-secondary" title="Ignorar — sai das listas padrão">
+                            <i class="bi bi-eye-slash"></i>
+                          </button>
+                        </form>
+                        {% elif discovery_view == 'ignorados' %}
+                        <form method="POST" action="{{ url_for('process_panel.update_discovery_status', process_id=process.id) }}"
+                          class="d-inline">
+                          <input type="hidden" name="action" value="review">
+                          <input type="hidden" name="next" value="ignorados">
+                          <button type="submit" class="btn btn-sm btn-outline-warning" title="Devolver para triagem">
+                            <i class="bi bi-arrow-counterclockwise"></i> Retriagem
+                          </button>
+                        </form>
+                        {% endif %}
                         <div class="btn-group btn-group-sm" role="group">
                           <a href="{{ url_for('process_panel.detail', process_id=process.id) }}"
                             class="btn btn-outline-primary" title="Ver detalhes">

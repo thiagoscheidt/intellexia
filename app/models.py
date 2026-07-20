@@ -245,6 +245,7 @@ class Lawyer(db.Model):
     law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
     name = db.Column(db.String(255), nullable=False)
     oab_number = db.Column(db.String(50), nullable=False, unique=True)
+    oab_uf = db.Column(db.String(2))  # UF da OAB — exigida pelo Comunica PJe; sem UF o advogado não é monitorado
     email = db.Column(db.String(255))
     phone = db.Column(db.String(50))
     is_default_for_publications = db.Column(db.Boolean, default=False)
@@ -1152,7 +1153,12 @@ class JudicialProcess(db.Model):
     
     # Status
     status = db.Column(db.String(50), default='ativo')  # ativo, suspenso, encerrado, aguardando
-    
+
+    # Origem do cadastro: 'manual' ou 'comunica_auto' (descoberto pelo Monitoramento de Comunicações)
+    origin = db.Column(db.String(20), default='manual', nullable=False)
+    # Triagem de processos descobertos: confirmed | pending_review | ignored
+    discovery_status = db.Column(db.String(20), default='confirmed', nullable=False, index=True)
+
     # Dados do processo (preenchidos por DataJud ou manualmente)
     judge_name = db.Column(db.String(255))
     tribunal = db.Column(db.String(255))
@@ -3219,6 +3225,7 @@ class NotificationSetting(db.Model):
     )
 
     TYPE_FAP_DIGEST = 'fap_digest'
+    TYPE_COMMUNICATIONS_DIGEST = 'communications_digest'
 
     FREQUENCY_DAILY = 'daily'
     FREQUENCY_WEEKLY = 'weekly'
@@ -3286,3 +3293,98 @@ class UserPageVisit(db.Model):
 
     def __repr__(self):
         return f'<UserPageVisit user_id={self.user_id} endpoint={self.endpoint} date={self.visit_date} hits={self.hits}>'
+
+
+class ProcessCommunication(db.Model):
+    """Tabela process_communications - Comunicações processuais do Comunica PJe (DJEN).
+
+    Dado bruto e imutável vindo da API pública do CNJ. Deduplicação pelo ``hash``
+    da API (unique por escritório): mesmo hash → UPDATE, não INSERT. O payload
+    completo fica em ``raw_json`` para resiliência a mudanças de schema do CNJ.
+    """
+    __tablename__ = 'process_communications'
+    __table_args__ = (
+        db.UniqueConstraint('law_firm_id', 'hash', name='uq_process_communications_firm_hash'),
+        db.Index('ix_process_communications_firm_data', 'law_firm_id', 'data_disponibilizacao'),
+        db.Index('ix_process_communications_firm_numero', 'law_firm_id', 'numero_processo'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    judicial_process_id = db.Column(db.Integer, db.ForeignKey('judicial_processes.id'), index=True)
+    matched_lawyer_id = db.Column(db.Integer, db.ForeignKey('lawyers.id'), index=True)  # qual OAB trouxe
+
+    # Identificação na API
+    comunica_id = db.Column(db.BigInteger)         # campo "id" da API
+    hash = db.Column(db.String(64), nullable=False)
+
+    # Metadados da comunicação
+    sigla_tribunal = db.Column(db.String(20), index=True)
+    tipo_comunicacao = db.Column(db.String(100), index=True)
+    tipo_documento = db.Column(db.String(255))
+    nome_orgao = db.Column(db.String(255))
+    nome_classe = db.Column(db.String(255))
+    codigo_classe = db.Column(db.String(20))
+    meio = db.Column(db.String(20))
+    data_disponibilizacao = db.Column(db.Date, index=True)
+
+    # Processo (dígitos para matching + máscara para exibição)
+    numero_processo = db.Column(db.String(25), index=True)
+    numero_processo_mascara = db.Column(db.String(30))
+
+    # Conteúdo
+    texto = db.Column(db.Text)                     # inteiro teor
+    link = db.Column(db.Text)                      # documento original no PJe
+    destinatarios_json = db.Column(db.JSON)
+    advogados_json = db.Column(db.JSON)
+    raw_json = db.Column(db.JSON)                  # payload completo da API
+
+    # Controle de leitura
+    read_at = db.Column(db.DateTime)
+    read_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    law_firm = db.relationship('LawFirm')
+    judicial_process = db.relationship('JudicialProcess', backref=db.backref(
+        'communications', order_by='ProcessCommunication.data_disponibilizacao.desc()'))
+    matched_lawyer = db.relationship('Lawyer')
+    read_by_user = db.relationship('User', foreign_keys=[read_by_user_id])
+
+    @property
+    def is_read(self):
+        return self.read_at is not None
+
+    def __repr__(self):
+        return f'<ProcessCommunication {self.hash} - {self.numero_processo}>'
+
+
+class CommunicationSyncState(db.Model):
+    """Tabela communication_sync_states - Marca d'água da sincronização por advogado.
+
+    Uma linha por (law_firm_id, lawyer_id). Falha de sincronização **não** avança
+    ``last_synced_date`` — a próxima execução tenta o mesmo período de novo
+    (mesmo contrato do notification_service).
+    """
+    __tablename__ = 'communication_sync_states'
+    __table_args__ = (
+        db.UniqueConstraint('law_firm_id', 'lawyer_id', name='uq_communication_sync_states_firm_lawyer'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    lawyer_id = db.Column(db.Integer, db.ForeignKey('lawyers.id'), nullable=False, index=True)
+
+    last_synced_date = db.Column(db.Date)          # até que data (inclusive) já sincronizou com sucesso
+    last_run_at = db.Column(db.DateTime)
+    last_error = db.Column(db.Text)
+
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    law_firm = db.relationship('LawFirm')
+    lawyer = db.relationship('Lawyer')
+
+    def __repr__(self):
+        return f'<CommunicationSyncState lawyer_id={self.lawyer_id} last={self.last_synced_date}>'

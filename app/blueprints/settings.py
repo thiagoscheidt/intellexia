@@ -103,6 +103,9 @@ def notifications():
     fap_digest = notification_service.get_or_create_setting(
         session.get('law_firm_id'), NotificationSetting.TYPE_FAP_DIGEST
     )
+    communications_digest = notification_service.get_or_create_setting(
+        session.get('law_firm_id'), NotificationSetting.TYPE_COMMUNICATIONS_DIGEST
+    )
 
     firm_users = (User.query
                   .filter_by(law_firm_id=session.get('law_firm_id'), is_active=True)
@@ -113,6 +116,7 @@ def notifications():
     return render_template(
         'settings/notifications.html',
         fap_digest=fap_digest,
+        communications_digest=communications_digest,
         smtp_configured=email_service.is_configured(),
         smtp_config=email_service.get_config(),
         weekday_labels=notification_service.WEEKDAY_LABELS,
@@ -125,11 +129,23 @@ def notifications():
 @require_law_firm
 def notifications_fap_digest_post():
     """Salvar a configuração do Resumo FAP (apenas admin)."""
+    return _save_digest_setting(NotificationSetting.TYPE_FAP_DIGEST)
+
+
+@settings_bp.route('/notifications/communications-digest', methods=['POST'])
+@require_law_firm
+def notifications_communications_digest_post():
+    """Salvar a configuração do resumo de Comunicações DJEN (apenas admin)."""
+    return _save_digest_setting(NotificationSetting.TYPE_COMMUNICATIONS_DIGEST)
+
+
+def _save_digest_setting(notification_type):
+    """Validação e persistência comuns aos cards de notificação periódica."""
     if session.get('user_role') != 'admin':
         return jsonify({"success": False, "message": "Acesso negado"}), 403
 
     setting = notification_service.get_or_create_setting(
-        session.get('law_firm_id'), NotificationSetting.TYPE_FAP_DIGEST
+        session.get('law_firm_id'), notification_type
     )
 
     frequency = (request.form.get('frequency') or '').strip()
@@ -190,6 +206,17 @@ def notifications_fap_digest_send_now():
     Nunca dispara para a lista de destinatários (evita envio acidental a clientes)
     e não altera ``last_sent_at``.
     """
+    return _send_digest_test(notification_service.send_fap_digest)
+
+
+@settings_bp.route('/notifications/communications-digest/send-now', methods=['POST'])
+@require_law_firm
+def notifications_communications_digest_send_now():
+    """Envia o resumo de Comunicações DJEN de teste (mesmas regras do Resumo FAP)."""
+    return _send_digest_test(notification_service.send_communications_digest)
+
+
+def _send_digest_test(sender):
     if session.get('user_role') != 'admin':
         return jsonify({"success": False, "message": "Acesso negado"}), 403
 
@@ -212,7 +239,7 @@ def notifications_fap_digest_send_now():
         }), 400
 
     try:
-        result = notification_service.send_fap_digest(
+        result = sender(
             session.get('law_firm_id'), force=True, override_recipients=[user.email]
         )
     except Exception as e:

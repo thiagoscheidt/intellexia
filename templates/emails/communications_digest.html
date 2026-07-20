@@ -1,0 +1,140 @@
+{#
+  E-mail do resumo de Comunicações processuais (Comunica PJe / DJEN).
+
+  Restrições de cliente de e-mail: sem Bootstrap, sem <style> externo — tudo em
+  tabelas com CSS inline. Comunicações agrupadas por processo.
+
+  Contexto: digest, law_firm, periodo_inicio, gerado_em, is_test.
+  Os links usam url_for(_external=True) — o serviço renderiza com base_url=APP_PUBLIC_URL.
+#}
+{%- set BORDA = '#dee2e6' -%}
+{%- set TEXTO = '#212529' -%}
+{%- set SUAVE = '#6c757d' -%}
+{%- set FUNDO = '#f8f9fa' -%}
+
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
+       style="background:#eef1f5;margin:0;padding:24px 12px;font-family:-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif;">
+  <tr>
+    <td align="center">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="720"
+             style="max-width:720px;width:100%;background:#ffffff;border-radius:10px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,0.08);">
+
+        <!-- Cabeçalho -->
+        <tr>
+          <td style="background:#0d6efd;padding:20px 24px;">
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+              <tr>
+                <td width="52" valign="middle">
+                  {# Fundo branco: o logo é escuro e sumiria sobre o azul do cabeçalho. #}
+                  <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                    <tr>
+                      <td align="center" valign="middle" width="48" height="48"
+                          style="background:#ffffff;border-radius:10px;">
+                        <img src="cid:logo" width="34" alt="IntellexIA" style="display:block;border:0;">
+                      </td>
+                    </tr>
+                  </table>
+                </td>
+                <td valign="middle" style="padding-left:12px;">
+                  <div style="color:#ffffff;font-size:18px;font-weight:700;">Comunicações processuais</div>
+                  <div style="color:#cfe0ff;font-size:13px;">Intimações e comunicações do DJEN — o que saiu de novo</div>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        {% if is_test %}
+        <tr>
+          <td style="background:#fff3cd;color:#664d03;padding:10px 24px;font-size:13px;font-weight:600;">
+            E-mail de teste — enviado só para você, sem afetar o agendamento.
+          </td>
+        </tr>
+        {% endif %}
+
+        <tr>
+          <td style="padding:24px;">
+            <p style="margin:0 0 4px 0;color:{{ TEXTO }};font-size:14px;">
+              {% if law_firm %}{{ law_firm.trade_name or law_firm.name }}{% endif %}
+            </p>
+            <p style="margin:0 0 24px 0;color:{{ SUAVE }};font-size:13px;">
+              Período: desde {{ periodo_inicio|datetime_sp if periodo_inicio else '—' }} ·
+              Gerado em {{ gerado_em.strftime('%d/%m/%Y %H:%M') }}
+            </p>
+
+            <h2 style="margin:0 0 4px 0;color:{{ TEXTO }};font-size:16px;">O que chegou no período</h2>
+            <p style="margin:0 0 16px 0;color:{{ SUAVE }};font-size:13px;">
+              {% if digest.has_novidades %}
+                {{ digest.totais.total }} comunicação(ões) em {{ digest.totais.processos }} processo(s)
+                {%- if digest.totais.novos_processos %} · {{ digest.totais.novos_processos }} processo(s) novo(s)
+                descoberto(s) pelo radar{% endif %}.
+              {% else %}
+                Nenhuma comunicação nova neste período.
+              {% endif %}
+            </p>
+
+            {% for grupo in digest.processos %}
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 18px 0;border:1px solid {{ BORDA }};border-radius:8px;">
+              <tr>
+                <td style="background:{{ FUNDO }};padding:10px 14px;border-bottom:1px solid {{ BORDA }};">
+                  {% if grupo.process_id %}
+                  <a href="{{ url_for('process_panel.detail', process_id=grupo.process_id, _external=True) }}"
+                     style="color:#0d6efd;text-decoration:none;font-weight:700;font-size:13px;">
+                    {{ grupo.numero_mascara or 'Processo sem número' }}
+                  </a>
+                  {% else %}
+                  <span style="color:{{ TEXTO }};font-weight:700;font-size:13px;">{{ grupo.numero_mascara or 'Processo sem número' }}</span>
+                  {% endif %}
+                  {% if grupo.sigla_tribunal %}
+                  <span style="display:inline-block;background:#212529;color:#ffffff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;margin-left:6px;">{{ grupo.sigla_tribunal }}</span>
+                  {% endif %}
+                  {% if grupo.nome_classe %}
+                  <div style="color:{{ SUAVE }};font-size:12px;margin-top:2px;">{{ grupo.nome_classe }}</div>
+                  {% endif %}
+                </td>
+              </tr>
+              {% for c in grupo.comunicacoes %}
+              <tr>
+                <td style="padding:9px 14px;{% if not loop.last %}border-bottom:1px solid {{ BORDA }};{% endif %}font-size:13px;">
+                  <span style="background:#cfe2ff;color:#084298;font-size:12px;font-weight:600;padding:2px 8px;border-radius:4px;">{{ c.data }}</span>
+                  <span style="color:{{ TEXTO }};font-weight:600;padding-left:6px;">{{ c.tipo }}</span>
+                  {% if c.tipo_documento %}<span style="color:{{ SUAVE }};"> · {{ c.tipo_documento }}</span>{% endif %}
+                  {% if c.orgao %}<div style="color:{{ SUAVE }};font-size:12px;margin-top:2px;">{{ c.orgao }}</div>{% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </table>
+            {% else %}
+            <div style="background:{{ FUNDO }};border:1px solid {{ BORDA }};border-radius:6px;padding:12px;color:{{ SUAVE }};font-size:13px;margin:0 0 18px 0;">
+              Nenhuma comunicação nova no período.
+            </div>
+            {% endfor %}
+
+            <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+              <tr>
+                <td align="center" style="padding:8px 0 0 0;">
+                  <a href="{{ url_for('communications.list_communications', _external=True) }}"
+                     style="display:inline-block;background:#0d6efd;color:#ffffff;text-decoration:none;font-size:14px;font-weight:600;padding:11px 22px;border-radius:6px;">
+                    Ver todas as comunicações
+                  </a>
+                </td>
+              </tr>
+            </table>
+          </td>
+        </tr>
+
+        <!-- Rodapé -->
+        <tr>
+          <td style="background:{{ FUNDO }};border-top:1px solid {{ BORDA }};padding:16px 24px;color:{{ SUAVE }};font-size:12px;">
+            <p style="margin:0 0 4px 0;">
+              Você recebe este e-mail porque está na lista de destinatários do resumo de Comunicações
+              {% if law_firm %} de {{ law_firm.trade_name or law_firm.name }}{% endif %}.
+              Para deixar de receber, fale com o administrador do escritório.
+            </p>
+            <p style="margin:0;">IntellexIA · mensagem automática, não responda.</p>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>

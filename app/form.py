@@ -76,6 +76,13 @@ class CourtForm(FlaskForm):
 class LawyerForm(FlaskForm):
     name = StringField('Nome Completo', validators=[DataRequired(), Length(min=2, max=255)])
     oab_number = StringField('Número da OAB', validators=[DataRequired(), Length(min=3, max=50)])
+    oab_uf = SelectField('UF da OAB', choices=[('', 'Selecione...')] + [
+        (uf, uf) for uf in (
+            'AC', 'AL', 'AM', 'AP', 'BA', 'CE', 'DF', 'ES', 'GO', 'MA', 'MG', 'MS',
+            'MT', 'PA', 'PB', 'PE', 'PI', 'PR', 'RJ', 'RN', 'RO', 'RR', 'RS', 'SC',
+            'SE', 'SP', 'TO',
+        )
+    ], validators=[Optional()])
     email = StringField('Email', validators=[Optional(), Email(), Length(max=255)])
     phone = StringField('Telefone', validators=[Optional(), Length(max=50)])
     is_default_for_publications = BooleanField('Advogado Padrão para Publicações?')

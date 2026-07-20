@@ -37,6 +37,7 @@ def lawyer_new():
             law_firm_id=get_current_law_firm_id(),
             name=form.name.data,
             oab_number=form.oab_number.data,
+            oab_uf=form.oab_uf.data or None,
             email=form.email.data,
             phone=form.phone.data,
             is_default_for_publications=form.is_default_for_publications.data
@@ -64,6 +65,7 @@ def lawyer_edit(lawyer_id):
     if form.validate_on_submit():
         lawyer.name = form.name.data
         lawyer.oab_number = form.oab_number.data
+        lawyer.oab_uf = form.oab_uf.data or None
         lawyer.email = form.email.data
         lawyer.phone = form.phone.data
         lawyer.is_default_for_publications = form.is_default_for_publications.data

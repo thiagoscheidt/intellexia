@@ -1,0 +1,100 @@
+{% extends "layout/base.html" %}
+
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}Comunicação {{ comm.numero_processo_mascara or comm.id }} - IntellexIA{% endblock %}
+
+{% block content %}
+{% call page_hero(title=comm.tipo_comunicacao or 'Comunicação', subtitle=(comm.numero_processo_mascara or comm.numero_processo or 'Processo não informado'), icon='bi bi-broadcast') %}
+<nav aria-label="breadcrumb"><ol class="breadcrumb mb-0 bg-transparent small"><li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li><li class="breadcrumb-item"><a href="{{ url_for('communications.list_communications') }}">Comunicações</a></li><li class="breadcrumb-item active" aria-current="page">Detalhe</li></ol></nav>
+{% endcall %}
+
+<div class="app-content">
+  <div class="container-fluid">
+    <div class="row">
+      <div class="col-lg-4">
+        <div class="card card-info card-outline mb-3">
+          <div class="card-header"><h3 class="card-title"><i class="bi bi-info-circle"></i> Dados da comunicação</h3></div>
+          <div class="card-body p-0">
+            <table class="table table-sm mb-0">
+              <tbody>
+                <tr><th class="ps-3" style="width: 45%;">Data de disponibilização</th>
+                    <td>{{ comm.data_disponibilizacao.strftime('%d/%m/%Y') if comm.data_disponibilizacao else '—' }}</td></tr>
+                <tr><th class="ps-3">Tribunal</th><td><span class="badge bg-dark">{{ comm.sigla_tribunal or '—' }}</span></td></tr>
+                <tr><th class="ps-3">Tipo</th><td>{{ comm.tipo_comunicacao or '—' }}</td></tr>
+                <tr><th class="ps-3">Tipo de documento</th><td>{{ comm.tipo_documento or '—' }}</td></tr>
+                <tr><th class="ps-3">Órgão</th><td>{{ comm.nome_orgao or '—' }}</td></tr>
+                <tr><th class="ps-3">Classe</th><td>{{ comm.nome_classe or '—' }}{% if comm.codigo_classe %} <small class="text-muted">({{ comm.codigo_classe }})</small>{% endif %}</td></tr>
+                <tr><th class="ps-3">Meio</th><td>{{ comm.meio or '—' }}</td></tr>
+                <tr><th class="ps-3">Processo</th>
+                    <td>
+                      {% if comm.judicial_process_id %}
+                      <a href="{{ url_for('process_panel.detail', process_id=comm.judicial_process_id) }}">
+                        {{ comm.numero_processo_mascara or comm.numero_processo }}
+                      </a>
+                      {% else %}
+                      {{ comm.numero_processo_mascara or comm.numero_processo or '—' }}
+                      {% endif %}
+                    </td></tr>
+                <tr><th class="ps-3">Capturada pela OAB de</th><td>{{ comm.matched_lawyer.name if comm.matched_lawyer else '—' }}</td></tr>
+                <tr><th class="ps-3">Lida em</th>
+                    <td>{{ comm.read_at|datetime_sp if comm.read_at else '—' }}
+                        {% if comm.read_by_user %}<small class="text-muted">por {{ comm.read_by_user.name }}</small>{% endif %}</td></tr>
+              </tbody>
+            </table>
+          </div>
+          {% if comm.link %}
+          <div class="card-footer">
+            <a href="{{ comm.link }}" target="_blank" rel="noopener" class="btn btn-sm btn-primary w-100">
+              <i class="bi bi-box-arrow-up-right"></i> Abrir documento original no PJe
+            </a>
+          </div>
+          {% endif %}
+        </div>
+
+        {% if comm.destinatarios_json %}
+        <div class="card card-outline mb-3">
+          <div class="card-header"><h3 class="card-title"><i class="bi bi-people"></i> Destinatários</h3></div>
+          <div class="card-body p-2">
+            {% for d in comm.destinatarios_json %}
+            <div class="mb-1">
+              <span class="badge {{ 'bg-success' if d.polo == 'A' else 'bg-secondary' }}">{{ 'Ativo' if d.polo == 'A' else ('Passivo' if d.polo == 'P' else d.polo or '—') }}</span>
+              {{ d.nome }}
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+
+        {% if comm.advogados_json %}
+        <div class="card card-outline mb-3">
+          <div class="card-header"><h3 class="card-title"><i class="bi bi-person-badge"></i> Advogados intimados</h3></div>
+          <div class="card-body p-2">
+            {% for adv in comm.advogados_json %}
+            <div class="mb-1">
+              <i class="bi bi-person-badge text-info"></i> {{ adv.nome }}
+              <span class="badge bg-dark">OAB {{ adv.numero_oab }}/{{ adv.uf_oab }}</span>
+            </div>
+            {% endfor %}
+          </div>
+        </div>
+        {% endif %}
+      </div>
+
+      <div class="col-lg-8">
+        <div class="card card-info card-outline">
+          <div class="card-header"><h3 class="card-title"><i class="bi bi-file-text"></i> Inteiro teor</h3></div>
+          <div class="card-body">
+            {% if comm.texto %}
+            <div style="white-space: pre-wrap; font-family: var(--bs-font-serif, Georgia, serif); line-height: 1.7;">{{ comm.texto }}</div>
+            {% else %}
+            <div class="alert alert-info mb-0">A API não retornou o texto desta comunicação.
+              {% if comm.link %}Use o botão "Abrir documento original".{% endif %}</div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

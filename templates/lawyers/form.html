@@ -32,15 +32,22 @@
                     {% endif %}
                   </div>
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-2">
                   <div class="mb-3">
                     {{ form.oab_number.label(class="form-label") }}
-                    {{ form.oab_number(class="form-control" + (" is-invalid" if form.oab_number.errors else ""), placeholder="Ex: SC 12345") }}
+                    {{ form.oab_number(class="form-control" + (" is-invalid" if form.oab_number.errors else ""), placeholder="Ex: 12345") }}
                     {% if form.oab_number.errors %}
                       <div class="invalid-feedback">
                         {% for error in form.oab_number.errors %}{{ error }}{% endfor %}
                       </div>
                     {% endif %}
+                  </div>
+                </div>
+                <div class="col-md-2">
+                  <div class="mb-3">
+                    {{ form.oab_uf.label(class="form-label") }}
+                    {{ form.oab_uf(class="form-select" + (" is-invalid" if form.oab_uf.errors else "")) }}
+                    <small class="form-text text-muted">Necessária para o Monitoramento de Comunicações (DJEN).</small>
                   </div>
                 </div>
               </div>
