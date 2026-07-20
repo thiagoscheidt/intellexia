@@ -104,6 +104,12 @@ def notifications():
         session.get('law_firm_id'), NotificationSetting.TYPE_FAP_DIGEST
     )
 
+    firm_users = (User.query
+                  .filter_by(law_firm_id=session.get('law_firm_id'), is_active=True)
+                  .filter(User.email.isnot(None), User.email != '')
+                  .order_by(User.name)
+                  .all())
+
     return render_template(
         'settings/notifications.html',
         fap_digest=fap_digest,
@@ -111,6 +117,7 @@ def notifications():
         smtp_config=email_service.get_config(),
         weekday_labels=notification_service.WEEKDAY_LABELS,
         user_email=session.get('user_email'),
+        firm_users=firm_users,
     )
 
 
@@ -177,7 +184,8 @@ def notifications_fap_digest_post():
 @settings_bp.route('/notifications/fap-digest/send-now', methods=['POST'])
 @require_law_firm
 def notifications_fap_digest_send_now():
-    """Envia o Resumo FAP de teste para o próprio admin logado.
+    """Envia o Resumo FAP de teste para o próprio admin logado ou, se
+    ``user_id`` vier no form, para um usuário específico do mesmo escritório.
 
     Nunca dispara para a lista de destinatários (evita envio acidental a clientes)
     e não altera ``last_sent_at``.
@@ -185,7 +193,15 @@ def notifications_fap_digest_send_now():
     if session.get('user_role') != 'admin':
         return jsonify({"success": False, "message": "Acesso negado"}), 403
 
-    user = _get_logged_user()
+    target_user_id = request.form.get('user_id', type=int)
+    if target_user_id:
+        user = User.query.filter_by(
+            id=target_user_id, law_firm_id=session.get('law_firm_id')
+        ).first()
+        if not user:
+            return jsonify({"success": False, "message": "Usuário não encontrado"}), 404
+    else:
+        user = _get_logged_user()
     if not user or not user.email:
         return jsonify({"success": False, "message": "Usuário sem e-mail cadastrado"}), 400
 

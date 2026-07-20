@@ -126,8 +126,23 @@
                 <i class="bi bi-send me-2"></i>
                 <span id="sendNowText">Enviar teste para mim</span>
               </button>
+              <div class="input-group" style="max-width: 420px;">
+                <select class="form-select" id="sendUserSelect" {% if not smtp_configured %}disabled{% endif %}>
+                  <option value="">Enviar para outro usuário...</option>
+                  {% for u in firm_users %}
+                  <option value="{{ u.id }}">{{ u.name }} ({{ u.email }})</option>
+                  {% endfor %}
+                </select>
+                <button type="button" class="btn btn-outline-secondary" id="sendUserBtn"
+                  {% if not smtp_configured %}disabled{% endif %}
+                  title="Envia um e-mail de teste para o usuário selecionado, sem afetar o agendamento">
+                  <i class="bi bi-send me-2"></i>
+                  <span id="sendUserText">Enviar</span>
+                </button>
+              </div>
               <span class="text-muted align-self-center small">
-                O teste vai só para <strong>{{ user_email }}</strong> — a lista de destinatários não recebe.
+                O teste vai só para o e-mail escolhido (o seu, por padrão: <strong>{{ user_email }}</strong>) —
+                a lista de destinatários não recebe.
               </span>
             </div>
           </form>
@@ -225,20 +240,38 @@
         });
     });
 
-    sendNowBtn.addEventListener('click', function () {
-      sendNowBtn.disabled = true;
-      sendNowText.textContent = 'Enviando...';
+    function sendTest(userId, btn, textEl, idleLabel) {
+      btn.disabled = true;
+      textEl.textContent = 'Enviando...';
 
-      fetch('{{ url_for("settings.notifications_fap_digest_send_now") }}', { method: 'POST' })
+      const body = new FormData();
+      if (userId) body.set('user_id', userId);
+
+      fetch('{{ url_for("settings.notifications_fap_digest_send_now") }}', { method: 'POST', body: body })
         .then(response => response.json())
         .then(data => {
           showAlert(data.message, data.success ? 'success' : 'danger');
         })
         .catch(() => showAlert('Erro de comunicação com o servidor.', 'danger'))
         .finally(() => {
-          sendNowBtn.disabled = false;
-          sendNowText.textContent = 'Enviar teste para mim';
+          btn.disabled = false;
+          textEl.textContent = idleLabel;
         });
+    }
+
+    sendNowBtn.addEventListener('click', function () {
+      sendTest(null, sendNowBtn, sendNowText, 'Enviar teste para mim');
+    });
+
+    const sendUserBtn = document.getElementById('sendUserBtn');
+    const sendUserText = document.getElementById('sendUserText');
+    const sendUserSelect = document.getElementById('sendUserSelect');
+    sendUserBtn.addEventListener('click', function () {
+      if (!sendUserSelect.value) {
+        showAlert('Selecione um usuário para enviar o teste.', 'danger');
+        return;
+      }
+      sendTest(sendUserSelect.value, sendUserBtn, sendUserText, 'Enviar');
     });
   });
 </script>
