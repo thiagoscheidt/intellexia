@@ -47,6 +47,7 @@ ENDPOINT_MODULE_MAP = {
     'courts.': 'courts',
     'settings.': 'settings',
     'admin_users.': 'admin_users',
+    'access_audit.': 'admin_users',
 }
 
 EXACT_ENDPOINT_MODULE_MAP = {

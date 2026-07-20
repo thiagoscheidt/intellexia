@@ -3258,3 +3258,31 @@ class NotificationSetting(db.Model):
     def __repr__(self):
         return (f'<NotificationSetting type={self.notification_type} '
                 f'law_firm_id={self.law_firm_id} enabled={self.is_enabled}>')
+
+
+class UserPageVisit(db.Model):
+    """Tabela user_page_visits - Agregado diário de telas acessadas por usuário.
+
+    Uma linha por (user_id, endpoint, visit_date); o middleware incrementa
+    `hits` no mesmo commit que já atualiza User.last_activity.
+    """
+    __tablename__ = 'user_page_visits'
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
+
+    endpoint = db.Column(db.String(150), nullable=False)
+    visit_date = db.Column(db.Date, nullable=False)      # dia em America/Sao_Paulo
+    hits = db.Column(db.Integer, nullable=False, default=1)
+    last_seen_at = db.Column(db.DateTime, nullable=False, default=datetime.now)
+
+    user = db.relationship('User')
+
+    __table_args__ = (
+        db.UniqueConstraint('user_id', 'endpoint', 'visit_date', name='uq_user_page_visits_user_endpoint_date'),
+        db.Index('ix_user_page_visits_firm_date', 'law_firm_id', 'visit_date'),
+    )
+
+    def __repr__(self):
+        return f'<UserPageVisit user_id={self.user_id} endpoint={self.endpoint} date={self.visit_date} hits={self.hits}>'

@@ -55,7 +55,7 @@ from app.blueprints import (
     auth_bp, dashboard_bp, cases_bp, clients_bp, 
     lawyers_bp, courts_bp, benefits_bp, documents_bp,
     petitions_bp, assistant_bp, tools_bp, settings_bp,
-    knowledge_base_bp, admin_users_bp, process_panel_bp,
+    knowledge_base_bp, admin_users_bp, access_audit_bp, process_panel_bp,
     disputes_center_bp, fap_panel_bp, fap_review_bp,
     impugnacao_references_bp, docs_bp,
 )
@@ -77,6 +77,7 @@ app.register_blueprint(assistant_bp)
 app.register_blueprint(tools_bp)
 app.register_blueprint(settings_bp)
 app.register_blueprint(admin_users_bp)
+app.register_blueprint(access_audit_bp)
 app.register_blueprint(knowledge_base_bp)
 app.register_blueprint(case_comments_bp)
 app.register_blueprint(process_panel_bp)

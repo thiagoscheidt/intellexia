@@ -12,6 +12,7 @@ from app.utils.permissions import (
     parse_module_permissions,
 )
 from app.utils.urls import app_public_url, mcp_public_url
+from app.services import access_audit_service
 from datetime import datetime
 from functools import wraps
 
@@ -41,17 +42,21 @@ def init_app_middlewares(app):
                 return redirect(url_for('auth.login'))
 
             user.last_activity = datetime.now()
-            db.session.commit()
 
             session['user_role'] = user.role
             session['user_module_permissions'] = user.get_module_permissions()
 
             if not can_access_endpoint(request.endpoint, user.role, user.module_permissions):
+                db.session.commit()
                 if request.is_json:
                     return jsonify({"error": "Acesso negado"}), 403
                 flash('Acesso negado para este modulo.', 'danger')
                 landing_endpoint = get_landing_endpoint(user.role, user.module_permissions)
                 return redirect(url_for(landing_endpoint))
+
+            # Só conta a tela se o acesso foi permitido; mesmo commit da last_activity
+            access_audit_service.record_page_visit(user)
+            db.session.commit()
 
     @app.context_processor
     def inject_recent_case_comments():

@@ -117,7 +117,7 @@ intellexia/
 
 ### Blueprints Registrados
 
-`auth`, `dashboard`, `cases`, `clients`, `lawyers`, `courts`, `benefits`, `documents`, `petitions`, `assistant`, `tools`, `settings`, `knowledge_base`, `admin_users`, `process_panel`, `disputes_center`, `case_comments`, `fap_reasons`, `fap_panel`, `fap_review`, `docs`. Cada um em `app/blueprints/<nome>.py`, expondo `<nome>_bp`.
+`auth`, `dashboard`, `cases`, `clients`, `lawyers`, `courts`, `benefits`, `documents`, `petitions`, `assistant`, `tools`, `settings`, `knowledge_base`, `admin_users`, `access_audit`, `process_panel`, `disputes_center`, `case_comments`, `fap_reasons`, `fap_panel`, `fap_review`, `docs`. Cada um em `app/blueprints/<nome>.py`, expondo `<nome>_bp`.
 
 **Função de cada blueprint:**
 
@@ -142,6 +142,7 @@ intellexia/
 | `case_comments` | — | Threads de comentários em casos |
 | `settings` | `/settings` | Perfil do usuário, dados do escritório e **Notificações** por e-mail (admin) |
 | `admin_users` | — | Gerenciamento de usuários (admin-only) |
+| `access_audit` | `/admin/access-audit` | Atividade de usuários (admin-only): último login, telas acessadas, online agora. Visitas de tela agregadas por dia em `user_page_visits`, gravadas pelo middleware no mesmo commit de `last_activity` |
 | `docs` | `/docs` | Manual de uso dos painéis (renderizado dos markdowns) + assistente "pergunte ao manual" |
 
 ### Documentação do usuário (Manual + Assistente "pergunte ao manual")
@@ -328,6 +329,7 @@ FapReview.revision [POST]
 | `fap_digest_service`                   | Contestações recentes — fonte única do widget do dashboard e do e-mail |
 | `fap_review_service`                   | Regras do Revisor (status da petição, auditoria, fingerprint de achado, estatísticas por advogado) — fonte única da tela e do MCP; `record_text_review` registra a revisão vinda do MCP |
 | `notification_service`                 | Agendamento e envio das notificações (hoje: Resumo FAP)   |
+| `access_audit_service`                 | Auditoria de acesso: registro de visitas de tela e estatísticas de atividade/online — fonte única do dashboard admin |
 | `JudicialSentenceAnalysisService`      | Análise de sentenças judiciais                            |
 | `DataJudApi`                           | Integração com API DataJud do CNJ                         |
 | `SgtTpuService`                        | Integração com SGT-TPU (tabelas processuais unificadas)   |

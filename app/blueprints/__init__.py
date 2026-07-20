@@ -15,6 +15,7 @@ from app.blueprints.tools import tools_bp
 from app.blueprints.settings import settings_bp
 from app.blueprints.knowledge_base import knowledge_base_bp
 from app.blueprints.admin_users import admin_users_bp
+from app.blueprints.access_audit import access_audit_bp
 from app.blueprints.process_panel import process_panel_bp
 from app.blueprints.disputes_center import disputes_center_bp
 from app.blueprints.fap_panel import fap_panel_bp
@@ -37,6 +38,7 @@ __all__ = [
     'settings_bp',
     'knowledge_base_bp',
     'admin_users_bp',
+    'access_audit_bp',
     'process_panel_bp',
     'disputes_center_bp',
     'fap_panel_bp',
