@@ -732,9 +732,11 @@
             <a href="{{ url_for('fap_review.revision') }}" class="btn btn-primary btn-sm">
                 <i class="bi bi-folder-plus me-1"></i> Nova Petição / Revisão
             </a>
+            {% if session.get('user_role') == 'admin' %}
             <a href="{{ url_for('fap_review.lawyer_stats') }}" class="btn btn-outline-secondary btn-sm">
                 <i class="bi bi-graph-up-arrow me-1"></i> Estatísticas dos Advogados
             </a>
+            {% endif %}
         </div>
     </div>
     {% endcall %}
