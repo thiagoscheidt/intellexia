@@ -117,6 +117,13 @@
                         {% endif %}
                     </div>
                     <div class="card-body">
+                        {% if not reference.is_active and not is_read_only_reference %}
+                        <div class="alert alert-warning py-2 px-3 d-flex align-items-center gap-2 mb-3">
+                            <i class="bi bi-exclamation-triangle"></i>
+                            <span>Você está vendo a versão <strong>v{{ reference.version_number }}</strong>, que está
+                                <strong>inativa</strong>. O revisor usa a versão marcada como "Ativa" no histórico.</span>
+                        </div>
+                        {% endif %}
                         <form id="referenceForm" class="d-flex flex-column gap-3">
                             <div>
                                 <label class="form-label small fw-semibold mb-2">Conteúdo Markdown</label>
@@ -131,10 +138,25 @@
                                 {% endif %}
                             </div>
 
+                            {% if not is_read_only_reference %}
+                            <div>
+                                <label for="changeNoteInput" class="form-label small fw-semibold mb-2">O que mudou
+                                    nesta versão? <span class="text-muted fw-normal">(opcional)</span></label>
+                                <input type="text" id="changeNoteInput" class="form-control form-control-sm"
+                                    maxlength="255" placeholder="Ex.: incluído capítulo sobre nexo técnico">
+                            </div>
+                            {% endif %}
+
                             <div class="d-flex flex-wrap gap-2 justify-content-end">
                                 <a href="{{ url_for('fap_review.settings') }}" class="btn btn-outline-secondary">
                                     <i class="bi bi-arrow-left me-1"></i> Voltar
                                 </a>
+                                {% if not is_read_only_reference %}
+                                <button type="button" class="btn btn-outline-dark" id="importFileBtn">
+                                    <i class="bi bi-upload me-1"></i> Importar de arquivo
+                                </button>
+                                <input type="file" id="importFileInput" accept=".md,.txt,.docx" class="d-none">
+                                {% endif %}
                                 {% if not reference.is_active and not is_read_only_reference %}
                                 <button type="button" class="btn btn-outline-success" id="activateBtn"
                                     data-activate-url="{{ url_for('fap_review.activate_reference', reference_version_id=reference.id) }}">
@@ -146,8 +168,11 @@
                                     <i class="bi bi-lock me-1"></i> Somente Visualização
                                 </button>
                                 {% else %}
-                                <button type="button" class="btn btn-primary" id="saveBtn">
-                                    <i class="bi bi-floppy me-1"></i> Salvar Nova Versão
+                                <button type="button" class="btn btn-outline-primary" id="saveBtn">
+                                    <i class="bi bi-floppy me-1"></i> Salvar Rascunho
+                                </button>
+                                <button type="button" class="btn btn-primary" id="saveActivateBtn">
+                                    <i class="bi bi-check2-circle me-1"></i> Salvar e Ativar
                                 </button>
                                 {% endif %}
                             </div>
@@ -208,6 +233,10 @@
                             <div>
                                 <div class="fw-semibold small">v{{ item.version_number }}</div>
                                 <div class="version-meta">{{ item.created_at.strftime('%d/%m/%Y %H:%M') }}</div>
+                                {% if item.change_note %}
+                                <div class="version-meta fst-italic" title="{{ item.change_note }}">{{
+                                    item.change_note|truncate(60) }}</div>
+                                {% endif %}
                             </div>
                             <div class="d-flex align-items-center gap-2">
                                 {% if item.is_active %}
@@ -423,37 +452,54 @@
             }
         }
 
-        if (saveBtn) {
-            saveBtn.addEventListener('click', async function () {
-                if (isReadOnlyReference) {
+        const saveActivateBtn = document.getElementById('saveActivateBtn');
+        const changeNoteInput = document.getElementById('changeNoteInput');
+
+        async function saveVersion(button, activate, restoreHtml) {
+            if (isReadOnlyReference) {
+                return;
+            }
+
+            const content = getEditorText();
+
+            try {
+                button.disabled = true;
+                button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Salvando...';
+
+                const response = await fetch('{{ url_for("fap_review.edit_reference", reference_version_id=reference.id) }}', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        content,
+                        activate,
+                        change_note: changeNoteInput ? changeNoteInput.value : '',
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    window.location.href = data.redirect_url;
                     return;
                 }
 
-                const content = getEditorText();
+                alert('Erro: ' + (data.error || 'Erro desconhecido'));
+            } catch (error) {
+                alert('Erro ao salvar: ' + error);
+            } finally {
+                button.disabled = false;
+                button.innerHTML = restoreHtml;
+            }
+        }
 
-                try {
-                    saveBtn.disabled = true;
-                    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Salvando...';
+        if (saveBtn && !isReadOnlyReference) {
+            saveBtn.addEventListener('click', function () {
+                saveVersion(saveBtn, false, '<i class="bi bi-floppy me-1"></i> Salvar Rascunho');
+            });
+        }
 
-                    const response = await fetch('{{ url_for("fap_review.edit_reference", reference_version_id=reference.id) }}', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ content })
-                    });
-
-                    const data = await response.json();
-                    if (data.success) {
-                        window.location.href = `{{ url_for("fap_review.edit_reference", reference_version_id=0) }}`.replace('/0', `/${data.version_id}`);
-                        return;
-                    }
-
-                    alert('Erro: ' + (data.error || 'Erro desconhecido'));
-                } catch (error) {
-                    alert('Erro ao salvar: ' + error);
-                } finally {
-                    saveBtn.disabled = false;
-                    saveBtn.innerHTML = '<i class="bi bi-floppy me-1"></i> Salvar Nova Versão';
-                }
+        if (saveActivateBtn) {
+            saveActivateBtn.addEventListener('click', function () {
+                saveVersion(saveActivateBtn, true, '<i class="bi bi-check2-circle me-1"></i> Salvar e Ativar');
             });
         }
 

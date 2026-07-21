@@ -2042,16 +2042,6 @@ def edit_prompt(prompt_version_id: int):
         law_firm_id=law_firm_id
     ).first_or_404()
 
-    # Evita abrir versão inativa por padrão; direciona para a ativa mais recente.
-    if request.method == 'GET' and not prompt.is_active:
-        active_prompt = FapReviewPromptVersion.query.filter_by(
-            law_firm_id=law_firm_id,
-            prompt_type=prompt.prompt_type,
-            is_active=True,
-        ).order_by(FapReviewPromptVersion.version_number.desc()).first()
-        if active_prompt and active_prompt.id != prompt.id:
-            return redirect(url_for('fap_review.edit_prompt', prompt_version_id=active_prompt.id))
-    
     # Carregar todas as versões deste tipo
     all_versions = FapReviewPromptVersion.query.filter_by(
         law_firm_id=law_firm_id,
@@ -2059,32 +2049,57 @@ def edit_prompt(prompt_version_id: int):
     ).order_by(FapReviewPromptVersion.version_number.desc()).all()
 
     is_read_only_prompt = prompt.prompt_type in READ_ONLY_PROMPT_TYPES
-    
+
     if request.method == 'POST':
         if is_read_only_prompt:
             return jsonify({'error': 'Este prompt é somente leitura e não pode ser editado.'}), 403
 
         try:
             content = request.json.get('content', '')
-            
-            # Criar nova versão
+            change_note = str(request.json.get('change_note') or '').strip()[:255] or None
+            activate = bool(request.json.get('activate'))
+
+            # max+1 do tipo: a versão da página pode não ser a mais recente,
+            # e dois saves seguidos não podem gerar números duplicados.
+            max_version = db.session.query(
+                func.max(FapReviewPromptVersion.version_number)
+            ).filter_by(
+                law_firm_id=law_firm_id,
+                prompt_type=prompt.prompt_type,
+            ).scalar() or 0
+
+            if activate:
+                FapReviewPromptVersion.query.filter_by(
+                    law_firm_id=law_firm_id,
+                    prompt_type=prompt.prompt_type,
+                    is_active=True,
+                ).update({'is_active': False})
+
             new_version = FapReviewPromptVersion(
                 law_firm_id=law_firm_id,
-                version_number=prompt.version_number + 1,
+                version_number=max_version + 1,
                 prompt_type=prompt.prompt_type,
                 content=content,
-                is_active=False,
+                change_note=change_note,
+                is_active=activate,
                 created_by_id=session.get('user_id')
             )
             db.session.add(new_version)
             db.session.commit()
-            
-            # Log
+
+            note_suffix = f' — {change_note}' if change_note else ''
             _log_audit(law_firm_id, 'prompt_updated', 'prompt', new_version.id,
-                      f'Nova versão criada: v{new_version.version_number}')
-            
-            return jsonify({'success': True, 'version_id': new_version.id})
-        
+                      f'Nova versão criada: v{new_version.version_number}{note_suffix}')
+            if activate:
+                _log_audit(law_firm_id, 'prompt_activated', 'prompt', new_version.id,
+                          f'Versão v{new_version.version_number} ativada')
+
+            return jsonify({
+                'success': True,
+                'version_id': new_version.id,
+                'redirect_url': url_for('fap_review.edit_prompt', prompt_version_id=new_version.id),
+            })
+
         except Exception as e:
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
@@ -2172,16 +2187,6 @@ def edit_reference(reference_version_id: int):
         law_firm_id=law_firm_id
     ).first_or_404()
 
-    # Evita abrir versão inativa por padrão; direciona para a ativa mais recente.
-    if request.method == 'GET' and not reference.is_active:
-        active_reference = FapReviewReferenceVersion.query.filter_by(
-            law_firm_id=law_firm_id,
-            reference_type=reference.reference_type,
-            is_active=True,
-        ).order_by(FapReviewReferenceVersion.version_number.desc()).first()
-        if active_reference and active_reference.id != reference.id:
-            return redirect(url_for('fap_review.edit_reference', reference_version_id=active_reference.id))
-    
     # Carregar todas as versões deste tipo
     all_versions = FapReviewReferenceVersion.query.filter_by(
         law_firm_id=law_firm_id,
@@ -2189,31 +2194,57 @@ def edit_reference(reference_version_id: int):
     ).order_by(FapReviewReferenceVersion.version_number.desc()).all()
 
     is_read_only_reference = reference.reference_type in READ_ONLY_REFERENCE_TYPES
-    
+
     if request.method == 'POST':
         if is_read_only_reference:
             return jsonify({'error': 'Esta referência é somente leitura e não pode ser editada.'}), 403
 
         try:
             content = request.json.get('content', '')
-            
-            # Criar nova versão
+            change_note = str(request.json.get('change_note') or '').strip()[:255] or None
+            activate = bool(request.json.get('activate'))
+
+            # max+1 do tipo: a versão da página pode não ser a mais recente,
+            # e dois saves seguidos não podem gerar números duplicados.
+            max_version = db.session.query(
+                func.max(FapReviewReferenceVersion.version_number)
+            ).filter_by(
+                law_firm_id=law_firm_id,
+                reference_type=reference.reference_type,
+            ).scalar() or 0
+
+            if activate:
+                FapReviewReferenceVersion.query.filter_by(
+                    law_firm_id=law_firm_id,
+                    reference_type=reference.reference_type,
+                    is_active=True,
+                ).update({'is_active': False})
+
             new_version = FapReviewReferenceVersion(
                 law_firm_id=law_firm_id,
-                version_number=reference.version_number + 1,
+                version_number=max_version + 1,
                 reference_type=reference.reference_type,
                 content=content,
-                is_active=False,
+                change_note=change_note,
+                is_active=activate,
                 created_by_id=session.get('user_id')
             )
             db.session.add(new_version)
             db.session.commit()
-            
+
+            note_suffix = f' — {change_note}' if change_note else ''
             _log_audit(law_firm_id, 'reference_updated', 'reference', new_version.id,
-                      f'Nova versão criada: v{new_version.version_number}')
-            
-            return jsonify({'success': True, 'version_id': new_version.id})
-        
+                      f'Nova versão criada: v{new_version.version_number}{note_suffix}')
+            if activate:
+                _log_audit(law_firm_id, 'reference_activated', 'reference', new_version.id,
+                          f'Versão v{new_version.version_number} ativada')
+
+            return jsonify({
+                'success': True,
+                'version_id': new_version.id,
+                'redirect_url': url_for('fap_review.edit_reference', reference_version_id=new_version.id),
+            })
+
         except Exception as e:
             db.session.rollback()
             return jsonify({'error': str(e)}), 500
