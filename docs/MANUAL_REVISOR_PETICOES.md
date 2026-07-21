@@ -171,13 +171,19 @@ Painel de aprendizado da equipe. Para cada advogado: **pontuação (0–100)**, 
 
 ## Configurações (apenas administradores)
 
-Tudo aqui é **por escritório** e **versionado**: editar cria uma nova versão inativa, que só passa a valer quando você clica em **Ativar** (a versão anterior fica no histórico).
+Tudo aqui é **por escritório** e **versionado**. No editor você escolhe entre **Salvar Rascunho** (cria a versão sem ativá-la) e **Salvar e Ativar** (a nova versão já passa a valer). Ao abrir uma versão antiga, um aviso deixa claro que ela está inativa.
 
 - **Agente Revisor** — modelo de IA e temperatura (padrão 0.0 — determinístico) usados nas revisões; pode ser desativado.
 - **Agente de Treinamento** — modelo e temperatura (padrão 0.7) do fluxo de Treinamento.
 - **Políticas de Atualização** — se o Treinamento pode atualizar o manual e os casos automaticamente, e se exige aprovação antes de publicar.
 - **Prompts** — a "personalidade" do revisor: **Identidade**, **Regras invioláveis** e os textos do Treinamento. O **Formato de saída** é protegido (somente leitura), para as telas não quebrarem.
-- **Referências** — o **Manual de revisão do FAP** (a régua das revisões), os **Casos de referência** e as **Instruções do projeto** (somente leitura).
+- **Referências** — o **Manual de revisão do FAP** (a régua das revisões), os **Casos de referência** e as **Instruções do projeto** (somente leitura). O botão **Importar de arquivo** carrega o conteúdo de um `.md`, `.txt` ou `.docx` para o editor — você revisa e salva como nova versão.
+
+Recursos do histórico de versões:
+
+- **O que mudou nesta versão?** — anote um resumo ao salvar; ele aparece no histórico e na auditoria.
+- **Comparar versões** — o botão de diff mostra, linha a linha, o que mudou entre a versão aberta e qualquer versão anterior (adições em verde, remoções em vermelho).
+- **Rastreabilidade** — cada revisão registra com quais versões de prompt e referência ela rodou (visível na aba de detalhes técnicos do resultado).
 
 ---
 

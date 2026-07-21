@@ -1527,6 +1527,16 @@
                                                 <td class="fw-semibold">Modelo LLM</td>
                                                 <td><code>{{ execution.model_name or 'gpt-4o-mini' }}</code></td>
                                             </tr>
+                                            {% if used_versions %}
+                                            <tr>
+                                                <td class="fw-semibold">Versões utilizadas</td>
+                                                <td>
+                                                    {% for key, info in used_versions.items() %}
+                                                    <code>{{ key }} v{{ info.version }}</code>{{ ' · ' if not loop.last }}
+                                                    {% endfor %}
+                                                </td>
+                                            </tr>
+                                            {% endif %}
                                         </table>
                                     </div>
                                 </div>

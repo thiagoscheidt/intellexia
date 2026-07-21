@@ -8,6 +8,7 @@ Rotas principais:
 - /fap-review/settings - Configurações do módulo
 """
 
+import difflib
 import os
 import json
 import asyncio
@@ -522,7 +523,12 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_file_p
             prompt_type='revisor_output_format',
             is_active=True
         ).first()
-        
+
+        # Snapshot das versões usadas nesta execução (rastreabilidade)
+        execution.used_versions_json = json.dumps(
+            _svc.collect_active_versions(law_firm_id), ensure_ascii=False)
+        db.session.commit()
+
         # Instanciar agente revisor
         agent = FapPetitionReviewerAgent(
             openai_api_key=openai_api_key,
@@ -1140,6 +1146,13 @@ def revision_result(execution_id: int):
         except json.JSONDecodeError:
             result_data = {}
 
+    used_versions = {}
+    if execution.used_versions_json:
+        try:
+            used_versions = json.loads(execution.used_versions_json)
+        except (TypeError, json.JSONDecodeError):
+            used_versions = {}
+
     ignored_finding_indices: list[int] = []
     if document_identifier and result_data.get('findings'):
         ignored_fingerprints = _get_ignored_finding_fingerprints(
@@ -1176,6 +1189,7 @@ def revision_result(execution_id: int):
                           petition=petition,
                           petition_status_badge=_build_petition_status_badge(petition.workflow_status) if petition else None,
                           result_data=result_data,
+                          used_versions=used_versions,
                           prior_revision_count=prior_revision_count,
                           ignored_finding_indices=ignored_finding_indices,
                           manual_content=manual_content,
@@ -2148,6 +2162,103 @@ def activate_prompt(prompt_version_id: int):
     except Exception as e:
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
+
+
+# Diff de referência pode ser grande; acima disso a resposta é um erro amigável.
+_MAX_DIFF_CHARS = 2_000_000
+
+
+def _build_version_diff(base, other):
+    """Diff unificado entre duas versões (other → base), pronto para a UI."""
+    if len(base.content or '') > _MAX_DIFF_CHARS or len(other.content or '') > _MAX_DIFF_CHARS:
+        return None
+    lines = list(difflib.unified_diff(
+        (other.content or '').splitlines(),
+        (base.content or '').splitlines(),
+        lineterm='',
+        n=3,
+    ))[2:]  # descarta cabeçalhos ---/+++; os rótulos vão à parte
+    return {
+        'success': True,
+        'from_label': f'v{other.version_number}',
+        'to_label': f'v{base.version_number}',
+        'lines': lines,
+        'identical': not lines,
+    }
+
+
+@fap_review_bp.route('/settings/prompts/<int:prompt_version_id>/diff/<int:other_version_id>', methods=['GET'])
+@require_law_firm
+@require_admin_user
+def prompt_version_diff(prompt_version_id: int, other_version_id: int):
+    """Diff entre duas versões do mesmo tipo de prompt."""
+    law_firm_id = get_current_law_firm_id()
+    base = FapReviewPromptVersion.query.filter_by(
+        id=prompt_version_id, law_firm_id=law_firm_id).first_or_404()
+    other = FapReviewPromptVersion.query.filter_by(
+        id=other_version_id, law_firm_id=law_firm_id,
+        prompt_type=base.prompt_type).first_or_404()
+
+    diff = _build_version_diff(base, other)
+    if diff is None:
+        return jsonify({'error': 'Conteúdo grande demais para comparar aqui.'}), 413
+    return jsonify(diff)
+
+
+@fap_review_bp.route('/settings/references/<int:reference_version_id>/diff/<int:other_version_id>', methods=['GET'])
+@require_law_firm
+@require_admin_user
+def reference_version_diff(reference_version_id: int, other_version_id: int):
+    """Diff entre duas versões do mesmo tipo de referência."""
+    law_firm_id = get_current_law_firm_id()
+    base = FapReviewReferenceVersion.query.filter_by(
+        id=reference_version_id, law_firm_id=law_firm_id).first_or_404()
+    other = FapReviewReferenceVersion.query.filter_by(
+        id=other_version_id, law_firm_id=law_firm_id,
+        reference_type=base.reference_type).first_or_404()
+
+    diff = _build_version_diff(base, other)
+    if diff is None:
+        return jsonify({'error': 'Conteúdo grande demais para comparar aqui.'}), 413
+    return jsonify(diff)
+
+
+@fap_review_bp.route('/settings/references/import-file', methods=['POST'])
+@require_law_firm
+@require_admin_user
+def reference_import_file():
+    """Extrai texto de um arquivo (.md/.txt/.docx) para preencher o editor de referência.
+
+    Não grava nada: o admin revisa o conteúdo no editor e salva como nova versão.
+    """
+    file = request.files.get('file')
+    if not file or not file.filename:
+        return jsonify({'error': 'Envie um arquivo.'}), 400
+
+    extension = _get_file_extension(file.filename)
+    if extension not in {'.md', '.txt', '.docx'}:
+        return jsonify({'error': 'Formato não suportado. Envie .md, .txt ou .docx.'}), 400
+
+    try:
+        if extension in {'.md', '.txt'}:
+            content = file.read().decode('utf-8', errors='replace')
+        else:
+            import tempfile
+            with tempfile.NamedTemporaryFile(suffix=extension, delete=False) as tmp:
+                file.save(tmp.name)
+                tmp_path = tmp.name
+            try:
+                content = _extract_text_from_document(tmp_path)
+            finally:
+                os.unlink(tmp_path)
+    except Exception as error:
+        current_app.logger.error(f'Erro ao importar referência de arquivo: {error}')
+        return jsonify({'error': 'Não foi possível extrair o texto do arquivo.'}), 500
+
+    if not (content or '').strip():
+        return jsonify({'error': 'O arquivo não contém texto extraível.'}), 400
+
+    return jsonify({'success': True, 'content': content})
 
 
 @fap_review_bp.route('/settings/references', methods=['GET'])

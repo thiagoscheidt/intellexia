@@ -17,7 +17,10 @@ from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
 
-from app.models import db, FapReviewAuditLog, FapReviewExecution, FapReviewPetition
+from app.models import (
+    db, FapReviewAuditLog, FapReviewExecution, FapReviewPetition,
+    FapReviewPromptVersion, FapReviewReferenceVersion,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -47,6 +50,32 @@ def build_petition_title(raw_title: str, fallback_filename: str = '',
 
     identifier = str(fallback_identifier or '').strip()
     return identifier or 'Petição sem título'
+
+
+REVIEWER_PROMPT_TYPES = ('revisor_identity', 'revisor_rules', 'revisor_output_format')
+REVIEWER_REFERENCE_TYPES = ('manual_fap', 'casos_referencia', 'project_instructions')
+
+
+def collect_active_versions(law_firm_id: int) -> dict:
+    """Snapshot das versões ativas de prompt/referência do revisor.
+
+    Gravado em ``FapReviewExecution.used_versions_json`` para responder, depois,
+    "com qual prompt esta revisão rodou?" — tela e MCP usam o mesmo helper.
+    """
+    versions: dict[str, dict] = {}
+    for prompt_type in REVIEWER_PROMPT_TYPES:
+        version = FapReviewPromptVersion.query.filter_by(
+            law_firm_id=law_firm_id, prompt_type=prompt_type, is_active=True,
+        ).first()
+        if version:
+            versions[prompt_type] = {'id': version.id, 'version': version.version_number}
+    for reference_type in REVIEWER_REFERENCE_TYPES:
+        version = FapReviewReferenceVersion.query.filter_by(
+            law_firm_id=law_firm_id, reference_type=reference_type, is_active=True,
+        ).first()
+        if version:
+            versions[reference_type] = {'id': version.id, 'version': version.version_number}
+    return versions
 
 
 def derive_petition_workflow_status(execution_status: str) -> str:
@@ -195,6 +224,7 @@ def record_text_review(law_firm_id: int, user_id: int | None, identifier: str,
         auxiliary_documents_json=json.dumps([]),
         comparative_analysis=comparative,
         result_json=json.dumps(result_payload, ensure_ascii=False, indent=2),
+        used_versions_json=json.dumps(collect_active_versions(law_firm_id), ensure_ascii=False),
         completed_at=now,
     )
 

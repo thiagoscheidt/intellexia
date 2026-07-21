@@ -42,6 +42,35 @@
         tab-size: 2;
     }
 
+    .diff-view {
+        font-size: .78rem;
+        line-height: 1.45;
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
+    .diff-line {
+        display: block;
+        padding: 0 .5rem;
+    }
+
+    .diff-line.add {
+        background: rgba(25, 135, 84, .12);
+        color: #146c43;
+    }
+
+    .diff-line.del {
+        background: rgba(220, 53, 69, .10);
+        color: #b02a37;
+    }
+
+    .diff-line.hunk {
+        background: rgba(13, 110, 253, .08);
+        color: #0d6efd;
+        font-weight: 700;
+        margin-top: .35rem;
+    }
+
     .markdown-preview {
         border: 1px solid var(--bs-border-color-translucent);
         border-radius: .5rem;
@@ -249,6 +278,13 @@
                                 <span
                                     class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">Bloqueada</span>
                                 {% endif %}
+                                {% if item.id != reference.id %}
+                                <button type="button" class="btn btn-sm btn-outline-secondary diff-version-btn"
+                                    data-diff-url="{{ url_for('fap_review.reference_version_diff', reference_version_id=reference.id, other_version_id=item.id) }}"
+                                    title="Comparar v{{ item.version_number }} com a versão aberta (v{{ reference.version_number }})">
+                                    <i class="bi bi-file-diff"></i>
+                                </button>
+                                {% endif %}
                                 <a href="{{ url_for('fap_review.edit_reference', reference_version_id=item.id) }}"
                                     class="btn btn-sm btn-outline-secondary"
                                     title="Abrir versão v{{ item.version_number }}">
@@ -262,6 +298,20 @@
                         {% endif %}
                     </div>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="diffModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="diffModalTitle">Comparar versões</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <pre id="diffModalBody" class="diff-view mb-0"></pre>
             </div>
         </div>
     </div>
@@ -430,6 +480,10 @@
             return (quill.getText() || '').replace(/\n$/, '');
         }
 
+        function setEditorText(text) {
+            quill.setText(text || '');
+        }
+
         function updatePreview() {
             const markdown = getEditorText();
             previewElement.innerHTML = markdownToHtml(markdown);
@@ -520,6 +574,90 @@
                 }
             });
         });
+
+        // ── Diff entre versões ────────────────────────────────
+        const diffModalEl = document.getElementById('diffModal');
+        document.querySelectorAll('.diff-version-btn').forEach(function (button) {
+            button.addEventListener('click', async function () {
+                try {
+                    const response = await fetch(button.dataset.diffUrl);
+                    const data = await response.json();
+                    if (!response.ok || !data.success) {
+                        alert('Erro: ' + (data.error || 'Não foi possível comparar as versões.'));
+                        return;
+                    }
+                    document.getElementById('diffModalTitle').textContent =
+                        'Diferenças: ' + data.from_label + ' → ' + data.to_label;
+                    const body = document.getElementById('diffModalBody');
+                    body.innerHTML = '';
+                    if (data.identical) {
+                        body.textContent = 'As duas versões têm conteúdo idêntico.';
+                    }
+                    data.lines.forEach(function (line) {
+                        const span = document.createElement('span');
+                        span.className = 'diff-line' +
+                            (line.startsWith('+') ? ' add' :
+                                line.startsWith('-') ? ' del' :
+                                    line.startsWith('@@') ? ' hunk' : '');
+                        span.textContent = line;
+                        body.appendChild(span);
+                    });
+                    new bootstrap.Modal(diffModalEl).show();
+                } catch (error) {
+                    alert('Erro ao comparar: ' + error);
+                }
+            });
+        });
+
+        // ── Importar conteúdo de arquivo (.md/.txt/.docx) ─────
+        const importFileBtn = document.getElementById('importFileBtn');
+        const importFileInput = document.getElementById('importFileInput');
+
+        if (importFileBtn && importFileInput) {
+            importFileBtn.addEventListener('click', function () {
+                importFileInput.click();
+            });
+
+            importFileInput.addEventListener('change', async function () {
+                const file = importFileInput.files[0];
+                if (!file) return;
+                if (file.size > 10 * 1024 * 1024) {
+                    alert('Arquivo grande demais (máximo 10 MB).');
+                    importFileInput.value = '';
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                try {
+                    importFileBtn.disabled = true;
+                    importFileBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Importando...';
+
+                    const response = await fetch('{{ url_for("fap_review.reference_import_file") }}', {
+                        method: 'POST',
+                        body: formData,
+                    });
+                    const data = await response.json();
+                    if (!response.ok || !data.success) {
+                        alert('Erro: ' + (data.error || 'Não foi possível importar o arquivo.'));
+                        return;
+                    }
+
+                    setEditorText(data.content);
+                    if (changeNoteInput && !changeNoteInput.value) {
+                        changeNoteInput.value = 'Importado de ' + file.name;
+                    }
+                    alert('Conteúdo importado para o editor. Revise e salve como nova versão.');
+                } catch (error) {
+                    alert('Erro ao importar: ' + error);
+                } finally {
+                    importFileBtn.disabled = false;
+                    importFileBtn.innerHTML = '<i class="bi bi-upload me-1"></i> Importar de arquivo';
+                    importFileInput.value = '';
+                }
+            });
+        }
     });
 </script>
 {% endblock %}
