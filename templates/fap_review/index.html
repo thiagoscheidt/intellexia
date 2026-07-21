@@ -906,7 +906,9 @@
                     <div class="pr-title">
                         <div class="pr-title-text">{{ petition.title }}</div>
                         <div class="pr-title-meta">
-                            {% if latest_revision %}R{{ latest_revision.revision_number or '?' }} · {% endif %}
+                            {% set rev_count = petition.revision_count or 0 %}
+                            <span title="Revisões realizadas nesta petição"><i class="bi bi-arrow-repeat"></i>
+                                {{ rev_count }} {{ 'revisão' if rev_count == 1 else 'revisões' }}</span> ·
                             Atualizada em {{ (petition.last_reviewed_at or petition.updated_at or
                             petition.created_at).strftime('%d/%m/%Y') }}
                         </div>
@@ -1011,7 +1013,8 @@
                                         {{ petition.office_document_identifier }}
                                     </span>
                                     {% endif %}
-                                    {% if latest_revision %}<span>R{{ latest_revision.revision_number or '?' }}</span>{% endif %}
+                                    {% set rev_count = petition.revision_count or 0 %}
+                                    <span title="Revisões realizadas nesta petição"><i class="bi bi-arrow-repeat"></i> {{ rev_count }}</span>
                                     <span>{{ (petition.last_reviewed_at or petition.updated_at or petition.created_at).strftime('%d/%m/%Y') }}</span>
                                 </div>
                                 <div class="kanban-card-footer">
