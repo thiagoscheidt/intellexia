@@ -2687,6 +2687,7 @@ class FapReviewPromptVersion(db.Model):
         comment='revisor, training, revisor_identity, revisor_rules, revisor_output_format, training_identity, training_rules, training_update_policy'
     )
     content = db.Column(db.Text, nullable=False)
+    change_note = db.Column(db.String(255), comment='Descrição curta do que mudou nesta versão')
     is_active = db.Column(db.Boolean, default=False, nullable=False)
     created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
@@ -2716,6 +2717,7 @@ class FapReviewReferenceVersion(db.Model):
         comment='manual_fap, casos_referencia, project_instructions'
     )
     content = db.Column(db.Text(16777215), nullable=False)  # MEDIUMTEXT — suporta até ~16MB
+    change_note = db.Column(db.String(255), comment='Descrição curta do que mudou nesta versão')
     is_active = db.Column(db.Boolean, default=False, nullable=False)
     created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
     created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
@@ -2855,6 +2857,7 @@ class FapReviewExecution(db.Model):
 
     # Resultados
     result_json = db.Column(db.Text, comment='JSON com resultado estruturado da análise')
+    used_versions_json = db.Column(db.Text, comment='JSON com versões de prompt/referência usadas na execução')
     error_message = db.Column(db.Text)
 
     # Tokens e custo
