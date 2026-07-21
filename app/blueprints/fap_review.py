@@ -22,7 +22,7 @@ from pathlib import Path
 
 from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session, url_for, send_file
 from werkzeug.utils import secure_filename
-from sqlalchemy import and_, func, case
+from sqlalchemy import and_, func, case, or_
 from sqlalchemy.orm import joinedload
 
 from app.models import (
@@ -1217,11 +1217,30 @@ def petition_detail(petition_id: int):
         ),
     }
 
+    execution_ids = [revision.id for revision in revisions]
+    audit_filters = [and_(
+        FapReviewAuditLog.entity_type == 'petition',
+        FapReviewAuditLog.entity_id == petition.id,
+    )]
+    if execution_ids:
+        audit_filters.append(and_(
+            FapReviewAuditLog.entity_type == 'execution',
+            FapReviewAuditLog.entity_id.in_(execution_ids),
+        ))
+    audit_entries = FapReviewAuditLog.query.filter(
+        FapReviewAuditLog.law_firm_id == law_firm_id,
+        or_(*audit_filters),
+    ).order_by(
+        FapReviewAuditLog.created_at.desc(),
+        FapReviewAuditLog.id.desc(),
+    ).limit(50).all()
+
     return render_template(
         'fap_review/petition_detail.html',
         petition=petition,
         revisions=revisions,
         revision_summary=revision_summary,
+        audit_entries=audit_entries,
         status_badge=_build_petition_status_badge(petition.workflow_status),
         petition_status_labels=PETITION_WORKFLOW_STATUSES,
     )
