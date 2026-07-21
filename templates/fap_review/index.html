@@ -399,6 +399,31 @@
         color: #198754;
     }
 
+    /* ── Toggle lista/kanban ─────────────────────────────── */
+    .view-toggle {
+        display: inline-flex;
+        border: 1px solid var(--fr-border);
+        border-radius: 999px;
+        overflow: hidden;
+        flex-shrink: 0;
+    }
+
+    .view-toggle-btn {
+        border: 0;
+        background: transparent;
+        padding: .3rem .8rem;
+        font-size: .8rem;
+        font-weight: 600;
+        color: var(--fr-slate-500);
+        cursor: pointer;
+        transition: background .15s ease, color .15s ease;
+    }
+
+    .view-toggle-btn.active {
+        background: var(--fr-slate-900);
+        color: #fff;
+    }
+
     .filter-pill.pill-success.active {
         background: #198754;
         border-color: #198754;
@@ -604,10 +629,19 @@
                 {% if others_count > 0 %}
                 <button class="filter-pill" data-filter="others">Outras ({{ others_count }})</button>
                 {% endif %}
+                <div class="view-toggle ms-auto" id="viewToggle" role="group" aria-label="Modo de exibição">
+                    <button type="button" class="view-toggle-btn active" data-view="list" title="Visão em lista">
+                        <i class="bi bi-list-ul"></i> Lista
+                    </button>
+                    <button type="button" class="view-toggle-btn" data-view="kanban" title="Visão kanban">
+                        <i class="bi bi-kanban"></i> Kanban
+                    </button>
+                </div>
             </div>
 
             <!-- Lista de petições -->
             {% if petition_rows %}
+            <div id="petitionListView">
             <div class="petition-list-header">
                 <span>Id Wrike</span>
                 <span>Petição</span>
@@ -707,7 +741,7 @@
                         </a>
                         <a href="{{ url_for('fap_review.revision', petition_id=petition.id) }}"
                             class="btn btn-sm btn-primary">
-                            <i class="bi bi-search-heart me-1"></i> Revisar
+                            <i class="bi bi-plus-circle me-1"></i> Nova Revisão
                         </a>
                     </div>
                 </div>
@@ -725,6 +759,10 @@
                 style="border-top: 1px solid rgba(15,23,42,.06); background: var(--bs-secondary-bg);">
                 <small class="text-muted" id="petitionCount">Exibindo {{ petition_rows|length }} petições</small>
             </div>
+            </div>
+
+            <!-- Visão kanban (populada na Task 2) -->
+            <div class="kanban-board" id="kanbanBoard" style="display:none;"></div>
 
             {% else %}
             <div class="text-center py-5">
@@ -799,6 +837,34 @@
         if (searchInput) {
             searchInput.addEventListener('input', applyFilters);
         }
+
+        // ── Toggle lista/kanban ───────────────────────────────
+        const VIEW_STORAGE_KEY = 'fapReviewPetitionView';
+        const viewButtons = document.querySelectorAll('.view-toggle-btn');
+        const listView = document.getElementById('petitionListView');
+        const kanbanBoard = document.getElementById('kanbanBoard');
+
+        function setView(view) {
+            if (!listView || !kanbanBoard) return;
+            const isKanban = view === 'kanban';
+            listView.style.display = isKanban ? 'none' : '';
+            kanbanBoard.style.display = isKanban ? '' : 'none';
+            // As colunas já agrupam por status: pílulas só fazem sentido na lista.
+            filterPills.forEach(function (p) { p.style.display = isKanban ? 'none' : ''; });
+            viewButtons.forEach(function (b) {
+                b.classList.toggle('active', b.dataset.view === view);
+            });
+            try { localStorage.setItem(VIEW_STORAGE_KEY, view); } catch (e) { /* modo privado */ }
+            applyFilters();
+        }
+
+        viewButtons.forEach(function (btn) {
+            btn.addEventListener('click', function () { setView(this.dataset.view); });
+        });
+
+        let savedView = 'list';
+        try { savedView = localStorage.getItem('fapReviewPetitionView') || 'list'; } catch (e) { /* modo privado */ }
+        if (savedView === 'kanban') setView('kanban');
     });
 </script>
 {% endblock %}
