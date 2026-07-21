@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ document_filename }}</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 1.5rem 2rem;
+            font-family: Georgia, 'Times New Roman', serif;
+            font-size: 0.95rem;
+            line-height: 1.7;
+            color: #212529;
+            background: #fff;
+        }
+
+        .docx-preview h1,
+        .docx-preview h2,
+        .docx-preview h3,
+        .docx-preview h4 {
+            font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+            line-height: 1.3;
+            margin: 1.5rem 0 0.75rem;
+        }
+
+        .docx-preview h1 { font-size: 1.25rem; }
+        .docx-preview h2 { font-size: 1.1rem; }
+        .docx-preview h3, .docx-preview h4 { font-size: 1rem; }
+
+        .docx-preview p {
+            margin: 0 0 0.75rem;
+            text-align: justify;
+        }
+
+        .docx-preview table {
+            border-collapse: collapse;
+            width: 100%;
+            margin: 1rem 0;
+            font-size: 0.85rem;
+            font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+        }
+
+        .docx-preview td,
+        .docx-preview th {
+            border: 1px solid #dee2e6;
+            padding: 0.35rem 0.5rem;
+            vertical-align: top;
+        }
+
+        .docx-preview img { max-width: 100%; }
+
+        .preview-highlight {
+            background: #fff3cd;
+            outline: 3px solid #ffc107;
+            border-radius: 2px;
+        }
+
+        .preview-error {
+            font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+            color: #842029;
+            background: #f8d7da;
+            border: 1px solid #f5c2c7;
+            border-radius: 6px;
+            padding: 1rem 1.25rem;
+        }
+
+        .preview-error a { color: #842029; }
+    </style>
+</head>
+
+<body>
+    {% if content_html %}
+    <div class="docx-preview">{{ content_html | safe }}</div>
+    {% else %}
+    <div class="preview-error">
+        Não foi possível gerar a visualização deste documento.
+        <a href="{{ download_url }}">Baixar o arquivo original</a>.
+    </div>
+    {% endif %}
+
+    {% if content_html and (highlight_text or highlight_excerpt) %}
+    <script>
+        // Melhor esforço: rola até o trecho da "Localização" do achado e o destaca.
+        // A localização é texto livre da IA (ex.: "Qualificação inicial e Síntese
+        // Fática"); títulos de seção têm prioridade sobre parágrafos comuns para
+        // evitar falsos positivos (ex.: "em síntese:" no meio de outro parágrafo).
+        (function () {
+            const target = {{ highlight_text | tojson }};
+            const excerpt = {{ highlight_excerpt | default('', true) | tojson }};
+
+            function normalize(text) {
+                return (text || '')
+                    .normalize('NFD')
+                    .replace(/[\u0300-\u036f]/g, '')
+                    .toLowerCase()
+                    .replace(/[^a-z0-9\s]/g, ' ')
+                    .replace(/\s+/g, ' ')
+                    .trim();
+            }
+
+            const blocks = Array.from(document.querySelectorAll(
+                '.docx-preview p, .docx-preview h1, .docx-preview h2, .docx-preview h3, .docx-preview h4, .docx-preview li, .docx-preview td'));
+            if (!normalize(target) && !normalize(excerpt)) return;
+
+            // Título de seção: heading real, ou parágrafo curto todo em maiúsculas /
+            // todo em negrito (padrão comum em petições)
+            function isTitleLike(block) {
+                if (/^h[1-4]$/i.test(block.tagName)) return true;
+                const text = (block.textContent || '').trim();
+                if (!text || text.length > 90) return false;
+                if (text === text.toUpperCase() && /[A-ZÀ-Ú]/.test(text)) return true;
+                const strong = block.querySelector('strong, b');
+                return !!(strong && normalize(strong.textContent) === normalize(text));
+            }
+
+            const titleBlocks = blocks.filter(isTitleLike);
+
+            function findIn(collection, needle, preferLast) {
+                // preferLast: títulos repetem no sumário e no corpo — o do corpo (último) vale mais
+                let found = null;
+                for (const block of collection) {
+                    if (normalize(block.textContent).includes(needle)) {
+                        if (!preferLast) return block;
+                        found = block;
+                    }
+                }
+                return found;
+            }
+
+            function findAllWords(collection, words) {
+                for (const block of collection) {
+                    const text = normalize(block.textContent);
+                    if (words.every(function (w) { return text.includes(w); })) {
+                        return block;
+                    }
+                }
+                return null;
+            }
+
+            function bestTitleMatch(words) {
+                // Título com mais palavras da localização vence; empate → o de texto
+                // mais curto (headings são tersos; sumário carrega numeração/página);
+                // persistindo o empate, o mais tardio (corpo vem depois do sumário).
+                let best = null;
+                let bestScore = 0;
+                let bestLength = Infinity;
+                titleBlocks.forEach(function (block) {
+                    const text = normalize(block.textContent);
+                    const score = words.filter(function (w) { return text.includes(w); }).length;
+                    if (!score) return;
+                    if (score > bestScore
+                        || (score === bestScore && text.length < bestLength)
+                        || (score === bestScore && text.length === bestLength)) {
+                        best = block;
+                        bestScore = score;
+                        bestLength = text.length;
+                    }
+                });
+                return best;
+            }
+
+            function findSegment(segment) {
+                const phrase = normalize(segment);
+                if (!phrase) return null;
+
+                const words = phrase.split(' ').filter(function (w) { return w.length >= 5; });
+
+                // 1. melhor título pela cobertura das palavras da localização
+                if (words.length) {
+                    const title = bestTitleMatch(words);
+                    if (title) return title;
+                }
+
+                // 2. frase completa em qualquer bloco do corpo
+                let match = findIn(blocks, phrase);
+                if (match) return match;
+
+                // 3. todas as palavras juntas num bloco do corpo
+                if (words.length > 1) {
+                    match = findAllWords(blocks, words);
+                    if (match) return match;
+                }
+
+                // 4. última cartada: palavra bem distintiva no corpo (evita genéricas)
+                const distinctive = words.filter(function (w) { return w.length >= 8; });
+                for (const word of distinctive) {
+                    match = findIn(blocks, word);
+                    if (match) return match;
+                }
+                return null;
+            }
+
+            // Âncora exata: trecho literal copiado do documento pela IA — precisão máxima.
+            // Tenta o trecho completo; se a extração tiver divergências mínimas, tenta
+            // uma janela com as primeiras/últimas palavras.
+            const excerptPhrase = normalize(excerpt);
+            if (excerptPhrase) {
+                let match = findIn(blocks, excerptPhrase);
+                if (!match) {
+                    const excerptWords = excerptPhrase.split(' ');
+                    if (excerptWords.length >= 6) {
+                        const head = excerptWords.slice(0, 6).join(' ');
+                        const tail = excerptWords.slice(-6).join(' ');
+                        match = findIn(blocks, head) || findIn(blocks, tail);
+                    }
+                }
+                if (match) {
+                    match.classList.add('preview-highlight');
+                    match.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return;
+                }
+            }
+
+            // A localização pode listar várias seções ("A; B", "A e B") — destaca todas
+            const segments = String(target).split(/;|·|,|\s+e\s+/i)
+                .map(function (s) { return s.trim(); })
+                .filter(Boolean);
+            if (!segments.length) segments.push(String(target));
+
+            const matches = [];
+            segments.forEach(function (segment) {
+                const match = findSegment(segment);
+                if (match && matches.indexOf(match) === -1) {
+                    matches.push(match);
+                }
+            });
+
+            if (matches.length) {
+                matches.forEach(function (m) { m.classList.add('preview-highlight'); });
+                matches.sort(function (a, b) {
+                    return a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1;
+                });
+                matches[0].scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        })();
+    </script>
+    {% endif %}
+</body>
+
+</html>

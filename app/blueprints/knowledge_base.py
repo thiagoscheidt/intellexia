@@ -82,6 +82,7 @@ def list():
     # Filtros opcionais
     category = request.args.get('category', '')
     search = request.args.get('search', '')
+    page = request.args.get('page', 1, type=int)
     
     # Query base
     query = KnowledgeBase.query.filter_by(law_firm_id=law_firm_id, is_active=True)
@@ -98,8 +99,12 @@ def list():
             )
         )
     
-    # Ordenar por data de upload (mais recente primeiro)
-    files = query.order_by(KnowledgeBase.uploaded_at.desc()).all()
+    # Ordenar por data de upload (mais recente primeiro); id como desempate
+    pagination = query.order_by(
+        KnowledgeBase.uploaded_at.desc(),
+        KnowledgeBase.id.desc(),
+    ).paginate(page=page, per_page=20, error_out=False)
+    files = pagination.items
     
     # Obter categorias únicas para o filtro
     categories = db.session.query(KnowledgeBase.category).filter_by(
@@ -120,6 +125,7 @@ def list():
     return render_template(
         'knowledge_base/list.html',
         files=files,
+        pagination=pagination,
         categories=categories,
         current_category=category,
         current_search=search,

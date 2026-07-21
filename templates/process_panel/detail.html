@@ -728,6 +728,11 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                         {% endif %}
                       </a>
                     </li>
+                    <li class="nav-item" role="presentation">
+                      <a class="nav-link" id="datajud-tab" data-bs-toggle="tab" href="#datajud-pane" role="tab">
+                        <i class="bi bi-clock-history me-2 text-primary"></i>Movimentação (DataJud)
+                      </a>
+                    </li>
                   </ul>
                 </div>
 
@@ -1252,7 +1257,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                       {% endif %}
                     </div>
 
-                    <!-- Tab: Comunicações DJEN (Monitoramento de Comunicações) -->
+                    <!-- Tab: Comunicações DJEN (Monitoramento de Processos) -->
                     <div class="tab-pane fade" id="communications-pane" role="tabpanel">
                       {% if process.communications %}
                       <div class="table-responsive">
@@ -1306,9 +1311,20 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                         <i class="bi bi-broadcast text-muted" style="font-size:2.5rem;"></i>
                         <p class="text-muted mt-3 mb-0">Nenhuma comunicação do DJEN vinculada a este processo.</p>
                         <p class="text-muted small mb-0">As comunicações chegam pela sincronização diária do
-                          Monitoramento de Comunicações.</p>
+                          Monitoramento de Processos.</p>
                       </div>
                       {% endif %}
+                    </div>
+
+                    <!-- Tab: Movimentação processual (DataJud/CNJ, consulta ao vivo) -->
+                    <div class="tab-pane fade" id="datajud-pane" role="tabpanel"
+                         data-url="{{ url_for('process_panel.datajud_movimentos', process_id=process.id) }}">
+                      <div id="datajudLoading" class="text-center py-5 d-none">
+                        <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Consultando...</span></div>
+                        <p class="text-muted mt-3 mb-0">Consultando a API pública do DataJud (CNJ)...</p>
+                      </div>
+                      <div id="datajudError" class="alert alert-warning d-none mb-0"></div>
+                      <div id="datajudContent" class="d-none"></div>
                     </div>
 
                   </div>
@@ -3279,5 +3295,114 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
 
       _previewModal.show();
     };
+  </script>
+
+  <script>
+    // Movimentação (DataJud): consulta ao vivo na primeira abertura da aba.
+    document.addEventListener('DOMContentLoaded', function () {
+      var tab = document.getElementById('datajud-tab');
+      var pane = document.getElementById('datajud-pane');
+      if (!tab || !pane) return;
+
+      var loaded = false;
+
+      function el(tag, className, text) {
+        var node = document.createElement(tag);
+        if (className) node.className = className;
+        if (text != null) node.textContent = text;
+        return node;
+      }
+
+      function fmtDataHora(iso) {
+        if (!iso) return '—';
+        var d = new Date(iso);
+        if (isNaN(d)) return iso;
+        return d.toLocaleDateString('pt-BR') + ' ' +
+          d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+      }
+
+      function render(payload) {
+        var content = document.getElementById('datajudContent');
+        content.innerHTML = '';
+
+        if (!payload.instancias.length) {
+          content.appendChild(el('p', 'text-muted text-center py-5 mb-0',
+            'O DataJud não retornou registros para este processo.'));
+          return;
+        }
+
+        payload.instancias.forEach(function (inst) {
+          var card = el('div', 'card mb-3');
+          var header = el('div', 'card-header d-flex flex-wrap align-items-center gap-2');
+          header.appendChild(el('span', 'badge bg-primary-subtle text-primary-emphasis',
+            'Grau ' + (inst.grau || '?')));
+          header.appendChild(el('strong', 'small', inst.orgao_julgador || 'Órgão não informado'));
+          if (inst.classe) header.appendChild(el('span', 'small text-body-secondary', '· ' + inst.classe));
+          header.appendChild(el('span', 'small text-body-tertiary ms-auto',
+            'Atualizado em ' + fmtDataHora(inst.ultima_atualizacao)));
+          card.appendChild(header);
+
+          var body = el('div', 'card-body p-0');
+          var wrap = el('div', 'table-responsive');
+          wrap.style.maxHeight = '420px';
+          wrap.style.overflowY = 'auto';
+          var table = el('table', 'table table-sm table-hover align-middle mb-0');
+          var thead = el('thead', 'table-light');
+          var trh = el('tr');
+          var thData = el('th', null, 'Data'); thData.style.width = '150px';
+          trh.appendChild(thData);
+          trh.appendChild(el('th', null, 'Movimento'));
+          thead.appendChild(trh);
+          table.appendChild(thead);
+          var tbody = el('tbody');
+          inst.movimentos.forEach(function (mov) {
+            var tr = el('tr');
+            tr.appendChild(el('td', 'small text-nowrap', fmtDataHora(mov.data_hora)));
+            var tdMov = el('td', 'small');
+            tdMov.appendChild(document.createTextNode(mov.nome || '—'));
+            (mov.complementos || []).forEach(function (comp) {
+              tdMov.appendChild(el('div', 'text-body-secondary', comp));
+            });
+            tr.appendChild(tdMov);
+            tbody.appendChild(tr);
+          });
+          table.appendChild(tbody);
+          wrap.appendChild(table);
+          body.appendChild(wrap);
+          card.appendChild(body);
+          content.appendChild(card);
+        });
+
+        content.appendChild(el('p', 'small text-body-tertiary mb-0', payload.fonte));
+      }
+
+      function load() {
+        var loading = document.getElementById('datajudLoading');
+        var error = document.getElementById('datajudError');
+        var content = document.getElementById('datajudContent');
+        loading.classList.remove('d-none');
+        error.classList.add('d-none');
+        content.classList.add('d-none');
+
+        fetch(pane.getAttribute('data-url'), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+          .then(function (resp) { return resp.json(); })
+          .then(function (payload) {
+            loading.classList.add('d-none');
+            if (!payload.success) throw new Error(payload.message || 'Falha na consulta ao DataJud.');
+            loaded = true;
+            content.classList.remove('d-none');
+            render(payload);
+          })
+          .catch(function (err) {
+            loading.classList.add('d-none');
+            error.textContent = err.message || 'Falha na consulta ao DataJud.';
+            error.classList.remove('d-none');
+          });
+      }
+
+      tab.addEventListener('shown.bs.tab', function () {
+        if (!loaded) load();
+      });
+    });
   </script>
   {% endblock %}

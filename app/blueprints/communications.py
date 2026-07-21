@@ -1,8 +1,10 @@
 """
-Monitoramento de Comunicações — comunicações processuais do Comunica PJe (DJEN).
+Monitoramento de Processos — comunicações processuais por fonte externa.
 
-Tela do radar por OAB: lista com filtros, detalhe com inteiro teor e link para o
-documento original, controle de lidas e sincronização manual.
+Hoje a única fonte é o Comunica PJe (DJEN); o campo ProcessCommunication.source
+identifica a origem e permite plugar novas fontes. Tela do radar: lista com
+filtros (inclusive por fonte), detalhe com inteiro teor e link para o documento
+original, controle de lidas e sincronização manual.
 """
 from datetime import datetime
 
@@ -51,6 +53,7 @@ def list_communications():
 
     sigla_tribunal = request.args.get('tribunal', '').strip()
     tipo = request.args.get('tipo', '').strip()
+    fonte = request.args.get('fonte', '').strip()
     lawyer_id = request.args.get('lawyer_id', type=int)
     numero_processo = request.args.get('processo', '').strip()
     only_unread = request.args.get('nao_lidas') == '1'
@@ -67,6 +70,7 @@ def list_communications():
         only_unread=only_unread,
         date_from=date_from,
         date_to=date_to,
+        source=fonte or None,
     )
     communications = query.paginate(page=page, per_page=PER_PAGE)
 
@@ -84,15 +88,61 @@ def list_communications():
         stats=stats,
         tribunais=options['tribunais'],
         tipos=options['tipos'],
+        fontes=options['fontes'],
+        fonte_labels=ProcessCommunication.SOURCE_LABELS,
         lawyers=lawyers,
         lawyers_skipped=lawyers_skipped,
         f_tribunal=sigla_tribunal,
         f_tipo=tipo,
+        f_fonte=fonte,
         f_lawyer_id=lawyer_id,
         f_processo=numero_processo,
         f_nao_lidas=only_unread,
         f_de=request.args.get('de', ''),
         f_ate=request.args.get('ate', ''),
+    )
+
+
+@communications_bp.route('/processo/<numero>')
+@require_law_firm
+def process_communications(numero):
+    """Todas as comunicações de um processo específico (número CNJ, com ou sem máscara)."""
+    from app.models import JudicialProcess
+    from app.services.comunica_pje_client import only_digits
+    from sqlalchemy import or_
+
+    law_firm_id = get_current_law_firm_id()
+    digits = only_digits(numero)
+    if not digits:
+        flash('Informe um número de processo válido.', 'warning')
+        return redirect(url_for('communications.list_communications'))
+
+    communications = (ProcessCommunication.query
+                      .filter_by(law_firm_id=law_firm_id)
+                      .filter(or_(ProcessCommunication.numero_processo == digits,
+                                  ProcessCommunication.numero_processo_mascara == numero))
+                      .order_by(ProcessCommunication.data_disponibilizacao.desc(),
+                                ProcessCommunication.id.desc())
+                      .all())
+
+    numero_display = (communications[0].numero_processo_mascara
+                      if communications and communications[0].numero_processo_mascara
+                      else numero)
+
+    process = (JudicialProcess.query
+               .filter_by(law_firm_id=law_firm_id)
+               .filter(or_(JudicialProcess.process_number == digits,
+                           JudicialProcess.process_number == numero_display,
+                           JudicialProcess.process_number == numero))
+               .first())
+
+    return render_template(
+        'communications/processo.html',
+        numero=numero,
+        numero_display=numero_display,
+        communications=communications,
+        process=process,
+        nao_lidas=sum(1 for c in communications if c.read_at is None),
     )
 
 
@@ -113,6 +163,25 @@ def communication_detail(communication_id):
     return render_template('communications/detail.html', comm=comm)
 
 
+@communications_bp.route('/<int:communication_id>/explicar', methods=['POST'])
+@require_law_firm
+def explain_communication(communication_id):
+    """Explicação da comunicação via IA (com cache — só paga o modelo uma vez)."""
+    try:
+        result = monitor.explain_communication(
+            get_current_law_firm_id(), communication_id, user_id=session.get('user_id')
+        )
+        return jsonify({"success": True, **result})
+    except ValueError as e:
+        return jsonify({"success": False, "message": str(e)}), 400
+    except Exception:
+        db.session.rollback()
+        return jsonify({
+            "success": False,
+            "message": "Não foi possível gerar a explicação agora. Tente novamente em instantes.",
+        }), 500
+
+
 @communications_bp.route('/<int:communication_id>/marcar-lida', methods=['POST'])
 @require_law_firm
 def mark_as_read(communication_id):
@@ -120,6 +189,28 @@ def mark_as_read(communication_id):
     if comm is None:
         return jsonify({"success": False, "message": "Comunicação não encontrada"}), 404
     return jsonify({"success": True})
+
+
+@communications_bp.route('/marcar-todas-lidas', methods=['POST'])
+@require_law_firm
+def mark_all_as_read():
+    """Marca como lidas todas as não lidas do filtro atual da tela."""
+    law_firm_id = get_current_law_firm_id()
+    count = monitor.mark_all_read(
+        law_firm_id,
+        session.get('user_id'),
+        sigla_tribunal=request.form.get('tribunal', '').strip() or None,
+        tipo_comunicacao=request.form.get('tipo', '').strip() or None,
+        source=request.form.get('fonte', '').strip() or None,
+        lawyer_id=request.form.get('lawyer_id', type=int),
+        numero_processo=request.form.get('processo', '').strip() or None,
+        date_from=_parse_date(request.form.get('de')),
+        date_to=_parse_date(request.form.get('ate')),
+    )
+    flash(f'{count} comunicação(ões) marcada(s) como lida(s).', 'success')
+
+    return_args = {k: v for k, v in request.form.items() if k != 'csrf_token' and v}
+    return redirect(url_for('communications.list_communications', **return_args))
 
 
 @communications_bp.route('/sincronizar', methods=['POST'])

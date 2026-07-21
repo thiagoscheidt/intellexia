@@ -418,11 +418,25 @@
                                 </table>
                             </div>
 
-                            <!-- Resumo -->
-                            <div class="mt-3">
+                            <!-- Resumo + paginação -->
+                            <div class="mt-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
                                 <small class="text-muted">
-                                    Total: <strong>{{ files|length }}</strong> arquivo(s)
+                                    Total: <strong>{{ pagination.total }}</strong> arquivo(s)
                                 </small>
+                                {% if pagination.pages > 1 %}
+                                <ul class="pagination pagination-sm m-0">
+                                    {% set args = request.args.to_dict() %}
+                                    {% if pagination.has_prev %}
+                                    {% set _ = args.update({'page': pagination.prev_num}) %}
+                                    <li class="page-item"><a class="page-link" href="{{ url_for('knowledge_base.list', **args) }}">&laquo;</a></li>
+                                    {% endif %}
+                                    <li class="page-item disabled"><span class="page-link">Página {{ pagination.page }} de {{ pagination.pages }}</span></li>
+                                    {% if pagination.has_next %}
+                                    {% set _ = args.update({'page': pagination.next_num}) %}
+                                    <li class="page-item"><a class="page-link" href="{{ url_for('knowledge_base.list', **args) }}">&raquo;</a></li>
+                                    {% endif %}
+                                </ul>
+                                {% endif %}
                             </div>
                             {% endif %}
                         </div>

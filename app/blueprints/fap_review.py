@@ -11,6 +11,7 @@ Rotas principais:
 import difflib
 import os
 import json
+import shutil
 import asyncio
 import hashlib
 import re
@@ -30,7 +31,8 @@ from app.models import (
     db, User, LawFirm,
     FapReviewPetition,
     FapReviewPromptVersion, FapReviewReferenceVersion, FapReviewSetting,
-    FapReviewExecution, FapReviewIgnoredFinding, FapReviewAuditLog
+    FapReviewExecution, FapReviewIgnoredFinding, FapReviewAuditLog,
+    FapReviewFindingCheck,
 )
 from app.agents.fap_review import (
     FapPetitionReviewerAgent,
@@ -39,6 +41,7 @@ from app.agents.fap_review import (
 )
 from app.services.openrouter_models_service import fetch_openrouter_text_models_for_info
 from app.services import fap_review_service as _svc
+from app.utils.document_utils import render_docx_preview_html
 from app.utils.timezone import now_sp
 
 # Document processing
@@ -273,50 +276,110 @@ def _document_mentions_benefit_number(document_text: str, normalized_benefit_num
 
 
 def _parse_benefits_spreadsheet(filepath: str) -> list[dict[str, str]]:
-    """Lê a planilha de benefícios e retorna apenas linhas com tese preenchida."""
+    """Lê a planilha de benefícios (todas as abas) e retorna as linhas com tese preenchida.
+
+    Planilhas reais costumam ter uma aba por vigência (2021, 2022, ...); abas sem
+    as colunas esperadas (ex.: anotações) são ignoradas.
+    """
     if not load_workbook:
         raise ImportError('openpyxl não está instalado')
 
     workbook = load_workbook(filename=filepath, read_only=True, data_only=True)
-    worksheet = workbook.active
 
     try:
-        header_row = next(worksheet.iter_rows(min_row=1, max_row=1, values_only=True), None)
-        if not header_row:
-            raise ValueError('A planilha de benefícios está vazia.')
-
-        header_map = {
-            _normalize_spreadsheet_header(value): index
-            for index, value in enumerate(header_row)
-        }
-        benefit_idx = header_map.get('numero do beneficio')
-        thesis_idx = header_map.get('teses')
-
-        if benefit_idx is None or thesis_idx is None:
-            raise ValueError(
-                'A planilha deve conter as colunas "Número do Benefício" e "TESES".'
-            )
-
         rows: list[dict[str, str]] = []
-        for row in worksheet.iter_rows(min_row=2, values_only=True):
-            thesis = ' '.join(str(row[thesis_idx] or '').strip().split()) if thesis_idx < len(row) else ''
-            if not thesis:
+        sheets_with_columns = 0
+
+        for worksheet in workbook.worksheets:
+            header_row = next(worksheet.iter_rows(min_row=1, max_row=1, values_only=True), None)
+            if not header_row:
                 continue
 
-            benefit_number = _format_benefit_number(row[benefit_idx] if benefit_idx < len(row) else '')
-            normalized_benefit_number = _normalize_benefit_number(benefit_number)
-            if not normalized_benefit_number:
-                continue
+            header_map = {
+                _normalize_spreadsheet_header(value): index
+                for index, value in enumerate(header_row)
+            }
+            benefit_idx = header_map.get('numero do beneficio')
+            thesis_idx = header_map.get('teses')
 
-            rows.append({
-                'benefit_number': benefit_number,
-                'benefit_number_normalized': normalized_benefit_number,
-                'thesis': thesis,
-            })
+            if benefit_idx is None or thesis_idx is None:
+                continue
+            sheets_with_columns += 1
+
+            for row in worksheet.iter_rows(min_row=2, values_only=True):
+                thesis = ' '.join(str(row[thesis_idx] or '').strip().split()) if thesis_idx < len(row) else ''
+                if not thesis:
+                    continue
+
+                benefit_number = _format_benefit_number(row[benefit_idx] if benefit_idx < len(row) else '')
+                normalized_benefit_number = _normalize_benefit_number(benefit_number)
+                if not normalized_benefit_number:
+                    continue
+
+                rows.append({
+                    'benefit_number': benefit_number,
+                    'benefit_number_normalized': normalized_benefit_number,
+                    'thesis': thesis,
+                    'sheet_name': worksheet.title,
+                })
+
+        if not sheets_with_columns:
+            raise ValueError(
+                'Nenhuma aba da planilha contém as colunas "Número do Benefício" e "TESES".'
+            )
 
         return rows
     finally:
         workbook.close()
+
+
+def _load_execution_benefits_spreadsheet(execution) -> dict | None:
+    """Lê o registro da planilha de benefícios persistido na execução."""
+    if not execution or not getattr(execution, 'benefits_spreadsheet_json', None):
+        return None
+    try:
+        data = json.loads(execution.benefits_spreadsheet_json)
+    except (TypeError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) and data.get('path') else None
+
+
+def _copy_reused_revision_files(previous_execution, upload_dir, timestamp: str,
+                                reuse_auxiliary: bool, reuse_benefits: bool) -> tuple[list[dict], dict | None]:
+    """Copia auxiliares/planilha da revisão anterior para a nova execução.
+
+    Copia (em vez de referenciar) para cada execução permanecer autocontida no
+    disco. Arquivos ausentes são ignorados sem erro.
+    """
+    upload_dir = Path(upload_dir)
+    auxiliary_files: list[dict] = []
+
+    if reuse_auxiliary and previous_execution and previous_execution.auxiliary_documents_json:
+        try:
+            prior_docs = json.loads(previous_execution.auxiliary_documents_json)
+        except (TypeError, json.JSONDecodeError):
+            prior_docs = []
+        for index, doc in enumerate(prior_docs if isinstance(prior_docs, list) else []):
+            source = Path(str(doc.get('path') or ''))
+            if not doc.get('path') or not source.is_file():
+                continue
+            original_name = str(doc.get('name') or source.name)
+            destination = upload_dir / f'{timestamp}reuse_aux_{index}_{secure_filename(original_name)}'
+            shutil.copy2(source, destination)
+            auxiliary_files.append({'name': original_name, 'path': str(destination)})
+
+    benefits_spreadsheet = None
+    if reuse_benefits:
+        prior_benefits = _load_execution_benefits_spreadsheet(previous_execution)
+        if prior_benefits:
+            source = Path(str(prior_benefits['path']))
+            if source.is_file():
+                original_name = str(prior_benefits.get('name') or source.name)
+                destination = upload_dir / f'{timestamp}reuse_benefits_{secure_filename(original_name)}'
+                shutil.copy2(source, destination)
+                benefits_spreadsheet = {'name': original_name, 'path': str(destination)}
+
+    return auxiliary_files, benefits_spreadsheet
 
 
 def _build_benefits_spreadsheet_review(
@@ -342,6 +405,7 @@ def _build_benefits_spreadsheet_review(
         items.append({
             'benefit_number': row['benefit_number'],
             'thesis': row['thesis'],
+            'sheet_name': row.get('sheet_name', ''),
             'found_in_document': found_in_document,
         })
 
@@ -735,6 +799,7 @@ def _build_petition_status_badge(workflow_status: str) -> dict[str, str]:
         'new': {'class': 'secondary', 'icon': 'bi bi-plus-circle'},
         'in_review': {'class': 'warning', 'icon': 'bi bi-hourglass-split'},
         'awaiting_adjustments': {'class': 'danger', 'icon': 'bi bi-pencil-square'},
+        'awaiting_approval': {'class': 'info', 'icon': 'bi bi-person-check'},
         'ready_for_filing': {'class': 'success', 'icon': 'bi bi-check-circle'},
         'filed': {'class': 'primary', 'icon': 'bi bi-send-check'},
         'archived': {'class': 'dark', 'icon': 'bi bi-archive'},
@@ -804,6 +869,27 @@ _build_lawyer_statistics = _svc.build_lawyer_statistics
 # ═══════════════════════════════════════════════════════════════════════════════
 
 
+@fap_review_bp.app_context_processor
+def inject_fap_review_pending_counts():
+    """Badge do Revisor na header (barato: um count agrupado com índice).
+
+    Sensível ao papel: o badge soma o que exige ação de quem está olhando —
+    "aguardando ajustes" para todos; "aguardando aprovação" só para admin.
+    """
+    law_firm_id = session.get('law_firm_id')
+    if not law_firm_id:
+        return {'fap_review_pending_counts': None}
+    try:
+        counts = _svc.count_pending_review_queues(law_firm_id)
+    except Exception:
+        return {'fap_review_pending_counts': None}
+
+    is_admin = session.get('user_role') == 'admin'
+    badge = (counts['in_review'] + counts['awaiting_adjustments']
+             + (counts['awaiting_approval'] if is_admin else 0))
+    return {'fap_review_pending_counts': {**counts, 'badge': badge, 'is_admin': is_admin}}
+
+
 @fap_review_bp.route('/')
 @require_law_firm
 def index():
@@ -823,6 +909,10 @@ def index():
         law_firm_id=law_firm_id,
         workflow_status='awaiting_adjustments',
     ).count()
+    awaiting_approval_petitions = FapReviewPetition.query.filter_by(
+        law_firm_id=law_firm_id,
+        workflow_status='awaiting_approval',
+    ).count()
     total_revisions = FapReviewExecution.query.filter_by(
         law_firm_id=law_firm_id,
         execution_type='revision',
@@ -830,9 +920,10 @@ def index():
 
     _priority_order = case(
         (FapReviewPetition.workflow_status == 'awaiting_adjustments', 0),
-        (FapReviewPetition.workflow_status.in_(['new', 'in_review']), 1),
-        (FapReviewPetition.workflow_status == 'ready_for_filing', 2),
-        else_=3
+        (FapReviewPetition.workflow_status == 'awaiting_approval', 1),
+        (FapReviewPetition.workflow_status.in_(['new', 'in_review']), 2),
+        (FapReviewPetition.workflow_status == 'ready_for_filing', 3),
+        else_=4
     )
 
     petitions = FapReviewPetition.query.options(
@@ -876,6 +967,7 @@ def index():
                           ready_petitions=ready_petitions,
                           in_review_petitions=in_review_petitions,
                           awaiting_adjustments_petitions=awaiting_adjustments_petitions,
+                          awaiting_approval_petitions=awaiting_approval_petitions,
                           total_revisions=total_revisions,
                           petition_rows=petition_rows)
 
@@ -924,7 +1016,19 @@ def revision():
                     return jsonify({'error': 'Informe o identificador do documento para o escritório.'}), 400
                 if len(law_firm_document_identifier) > 96:
                     return jsonify({'error': 'O identificador do documento deve ter no máximo 96 caracteres.'}), 400
-            
+                petition = FapReviewPetition.query.filter_by(
+                    law_firm_id=law_firm_id,
+                    office_document_identifier=law_firm_document_identifier,
+                ).first()
+
+            if petition and petition.workflow_status in _svc.NEW_REVISION_BLOCKED_STATUSES:
+                status_label = PETITION_WORKFLOW_STATUSES.get(petition.workflow_status, petition.workflow_status)
+                return jsonify({
+                    'error': f'Esta petição está "{status_label}" e não aceita nova revisão. '
+                             'Um administrador pode reabri-la para ajustes.'
+                }), 403
+
+
             # Salvar arquivo principal
             upload_dir = _create_upload_directory(law_firm_id, 'revisions')
             filename = secure_filename(main_file.filename)
@@ -966,6 +1070,31 @@ def revision():
                         'path': str(spreadsheet_filepath),
                     }
             
+            # Reuso de arquivos da revisão anterior (opcional, por checkbox)
+            reuse_previous_auxiliary = request.form.get('reuse_previous_auxiliary') == '1'
+            reuse_previous_benefits = request.form.get('reuse_previous_benefits') == '1'
+            if petition and (reuse_previous_auxiliary or reuse_previous_benefits):
+                previous_execution = FapReviewExecution.query.filter_by(
+                    petition_id=petition.id,
+                    execution_type='revision',
+                ).order_by(
+                    FapReviewExecution.revision_number.desc(),
+                    FapReviewExecution.id.desc(),
+                ).first()
+                reused_aux, reused_benefits = _copy_reused_revision_files(
+                    previous_execution,
+                    upload_dir,
+                    timestamp,
+                    reuse_auxiliary=reuse_previous_auxiliary,
+                    # Upload novo de planilha tem prioridade sobre o reuso
+                    reuse_benefits=reuse_previous_benefits and benefits_spreadsheet is None,
+                )
+                for doc in reused_aux:
+                    auxiliary_files.append(doc)
+                    auxiliary_count += 1
+                if reused_benefits:
+                    benefits_spreadsheet = reused_benefits
+
             # Verificar se há análise comparativa
             compared_document = None
             comparative_analysis = False
@@ -983,12 +1112,6 @@ def revision():
                     compared_file.save(str(compared_filepath))
                     compared_document = str(compared_filepath)
                     comparative_analysis = True
-
-            if not petition:
-                petition = FapReviewPetition.query.filter_by(
-                    law_firm_id=law_firm_id,
-                    office_document_identifier=law_firm_document_identifier,
-                ).first()
 
             petition_created = False
             petition_created_title = ''
@@ -1027,6 +1150,7 @@ def revision():
                 law_firm_document_identifier=law_firm_document_identifier,
                 auxiliary_documents_count=auxiliary_count,
                 auxiliary_documents_json=json.dumps(auxiliary_files),
+                benefits_spreadsheet_json=json.dumps(benefits_spreadsheet, ensure_ascii=False) if benefits_spreadsheet else None,
                 comparative_analysis=comparative_analysis,
                 compared_document_path=compared_document
             )
@@ -1183,7 +1307,20 @@ def revision_result(execution_id: int):
 
     manual_reference = _get_active_reference(law_firm_id, 'manual_fap')
     manual_content = (manual_reference.content if manual_reference else '').strip()
-    
+
+    checked_finding_indices = sorted(
+        row.finding_index
+        for row in FapReviewFindingCheck.query.filter_by(execution_id=execution.id).all()
+    )
+    total_findings = len(result_data.get('findings') or [])
+    triage_complete = _svc.is_triage_complete(
+        total_findings,
+        set(checked_finding_indices),
+        set(ignored_finding_indices),
+    )
+
+    execution_superseded = _svc.is_execution_superseded(execution)
+
     return render_template('fap_review/revision_result.html',
                           execution=execution,
                           petition=petition,
@@ -1192,6 +1329,9 @@ def revision_result(execution_id: int):
                           used_versions=used_versions,
                           prior_revision_count=prior_revision_count,
                           ignored_finding_indices=ignored_finding_indices,
+                          checked_finding_indices=checked_finding_indices,
+                          triage_complete=triage_complete,
+                          execution_superseded=execution_superseded,
                           manual_content=manual_content,
                           manual_reference=manual_reference)
 
@@ -1351,6 +1491,101 @@ def petition_update_details(petition_id: int):
     })
 
 
+@fap_review_bp.route('/petitions/<int:petition_id>/reusable-files', methods=['GET'])
+@require_law_firm
+def petition_reusable_files(petition_id: int):
+    """Arquivos da última revisão da petição reutilizáveis num novo envio (formulário)."""
+    law_firm_id = get_current_law_firm_id()
+
+    petition = FapReviewPetition.query.filter_by(
+        id=petition_id,
+        law_firm_id=law_firm_id,
+    ).first_or_404()
+
+    previous = FapReviewExecution.query.filter_by(
+        petition_id=petition.id,
+        execution_type='revision',
+    ).order_by(
+        FapReviewExecution.revision_number.desc(),
+        FapReviewExecution.id.desc(),
+    ).first()
+
+    auxiliary_names: list[str] = []
+    benefits_name = None
+    if previous:
+        try:
+            prior_docs = json.loads(previous.auxiliary_documents_json or '[]')
+        except (TypeError, json.JSONDecodeError):
+            prior_docs = []
+        auxiliary_names = [
+            str(doc.get('name') or Path(str(doc['path'])).name)
+            for doc in (prior_docs if isinstance(prior_docs, list) else [])
+            if isinstance(doc, dict) and doc.get('path') and Path(str(doc['path'])).is_file()
+        ]
+        prior_benefits = _load_execution_benefits_spreadsheet(previous)
+        if prior_benefits and Path(str(prior_benefits['path'])).is_file():
+            benefits_name = str(prior_benefits.get('name') or Path(str(prior_benefits['path'])).name)
+
+    return jsonify({
+        'auxiliary_documents': auxiliary_names,
+        'benefits_spreadsheet': benefits_name,
+    })
+
+
+@fap_review_bp.route('/petitions/<int:petition_id>/revisions-summary', methods=['GET'])
+@require_law_firm
+def petition_revisions_summary(petition_id: int):
+    """Resumo compacto das revisões anteriores da petição (coluna lateral do envio)."""
+    law_firm_id = get_current_law_firm_id()
+
+    petition = FapReviewPetition.query.filter_by(
+        id=petition_id,
+        law_firm_id=law_firm_id,
+    ).first_or_404()
+
+    executions = FapReviewExecution.query.options(
+        joinedload(FapReviewExecution.user),
+    ).filter_by(
+        petition_id=petition.id,
+        execution_type='revision',
+    ).order_by(
+        FapReviewExecution.revision_number.desc(),
+        FapReviewExecution.id.desc(),
+    ).limit(5).all()
+
+    items = []
+    for execution in executions:
+        payload = _load_execution_result_payload(execution)
+        summary = payload.get('executive_summary') or {}
+        benefits_review = payload.get('benefits_spreadsheet_review') or {}
+
+        benefits = None
+        if benefits_review.get('total_rows_with_theses'):
+            benefits = {
+                'found': benefits_review.get('found_count', 0),
+                'total': benefits_review.get('total_rows_with_theses', 0),
+            }
+
+        items.append({
+            'execution_id': execution.id,
+            'revision_number': execution.revision_number,
+            'status': execution.status,
+            'superseded': _svc.is_execution_superseded(execution),
+            'user_name': execution.user.name if execution.user else None,
+            'created_at': execution.created_at.strftime('%d/%m/%Y %H:%M') if execution.created_at else None,
+            'findings': {
+                'total': summary.get('total_findings', 0),
+                'critical': summary.get('critical_findings', 0),
+                'moderate': summary.get('moderate_findings', 0),
+                'formal': summary.get('formal_findings', 0),
+            } if execution.status == 'completed' else None,
+            'benefits': benefits,
+            'url': url_for('fap_review.revision_result', execution_id=execution.id),
+        })
+
+    return jsonify({'revisions': items})
+
+
 @fap_review_bp.route('/petitions/<int:petition_id>/status', methods=['POST'])
 @require_law_firm
 def petition_update_status(petition_id: int):
@@ -1370,6 +1605,11 @@ def petition_update_status(petition_id: int):
     old_status = petition.workflow_status
     if new_status == old_status:
         return jsonify({'success': True, 'workflow_status': new_status})
+
+    # Aprovar, devolver para ajustes e reabrir são exclusivos do admin (regra
+    # espelhada dos botões da tela).
+    if _svc.status_transition_requires_admin(old_status, new_status) and session.get('user_role') != 'admin':
+        return jsonify({'error': 'Apenas administradores podem executar esta mudança de status.'}), 403
 
     try:
         petition.workflow_status = new_status
@@ -1409,6 +1649,232 @@ def lawyer_stats():
     )
 
 
+def _get_execution_triage_state(execution, law_firm_id: int) -> dict:
+    """Estado consolidado da triagem de uma execução (fonte para tela e endpoints)."""
+    payload = _load_execution_result_payload(execution)
+    findings = payload.get('findings') or []
+    total_findings = len(findings) if isinstance(findings, list) else 0
+
+    checked_indices = {
+        row.finding_index
+        for row in FapReviewFindingCheck.query.filter_by(execution_id=execution.id).all()
+    }
+
+    ignored_indices: set[int] = set()
+    if execution.law_firm_document_identifier and total_findings:
+        ignored_fingerprints = _get_ignored_finding_fingerprints(
+            law_firm_id=law_firm_id,
+            law_firm_document_identifier=execution.law_firm_document_identifier,
+        )
+        ignored_indices = {
+            index
+            for index, finding in enumerate(findings, start=1)
+            if _build_finding_fingerprint(finding) in ignored_fingerprints
+        }
+
+    return {
+        'total_findings': total_findings,
+        'checked_indices': checked_indices,
+        'ignored_indices': ignored_indices,
+        'complete': _svc.is_triage_complete(total_findings, checked_indices, ignored_indices),
+    }
+
+
+@fap_review_bp.route('/revision/<int:execution_id>/findings/<int:finding_index>/check', methods=['POST'])
+@require_law_firm
+def revision_finding_check(execution_id: int, finding_index: int):
+    """Persiste o "Marcar como revisado" de um ponto de atenção (triagem por execução)."""
+    law_firm_id = get_current_law_firm_id()
+    user_id = session.get('user_id')
+
+    execution = FapReviewExecution.query.filter_by(
+        id=execution_id,
+        law_firm_id=law_firm_id,
+    ).first_or_404()
+
+    if _svc.is_execution_superseded(execution):
+        return jsonify({'error': 'Esta revisão foi substituída por uma versão mais recente — triagem encerrada.'}), 409
+
+    payload = _load_execution_result_payload(execution)
+    findings = payload.get('findings') or []
+    if finding_index < 1 or finding_index > len(findings):
+        return jsonify({'error': 'Ponto de atenção não encontrado nesta revisão.'}), 404
+
+    request_payload = request.get_json(silent=True) or {}
+    checked = bool(request_payload.get('checked'))
+
+    existing = FapReviewFindingCheck.query.filter_by(
+        execution_id=execution.id,
+        finding_index=finding_index,
+    ).first()
+
+    try:
+        if checked and not existing:
+            db.session.add(FapReviewFindingCheck(
+                law_firm_id=law_firm_id,
+                execution_id=execution.id,
+                finding_index=finding_index,
+                created_by_id=user_id,
+            ))
+        elif not checked and existing:
+            db.session.delete(existing)
+
+        # Triar achados significa que o usuário está revisando a petição
+        _svc.mark_petition_in_user_review(execution.petition)
+
+        db.session.commit()
+    except Exception as error:
+        db.session.rollback()
+        current_app.logger.error(f'Erro ao persistir check do ponto de atenção: {error}')
+        return jsonify({'error': 'Não foi possível salvar a marcação do ponto de atenção.'}), 500
+
+    triage = _get_execution_triage_state(execution, law_firm_id)
+    return jsonify({
+        'success': True,
+        'checked': checked,
+        'triage_complete': triage['complete'],
+        'petition_workflow_status': execution.petition.workflow_status if execution.petition else None,
+    })
+
+
+@fap_review_bp.route('/revision/<int:execution_id>/findings/check-all', methods=['POST'])
+@require_law_firm
+def revision_finding_check_all(execution_id: int):
+    """Marca como revisados todos os pontos ainda não triados da execução."""
+    law_firm_id = get_current_law_firm_id()
+    user_id = session.get('user_id')
+
+    execution = FapReviewExecution.query.filter_by(
+        id=execution_id,
+        law_firm_id=law_firm_id,
+    ).first_or_404()
+
+    if _svc.is_execution_superseded(execution):
+        return jsonify({'error': 'Esta revisão foi substituída por uma versão mais recente — triagem encerrada.'}), 409
+
+    triage = _get_execution_triage_state(execution, law_firm_id)
+    if not triage['total_findings']:
+        return jsonify({'error': 'Esta revisão não tem pontos de atenção para triar.'}), 400
+
+    to_check = [
+        index for index in range(1, triage['total_findings'] + 1)
+        if index not in triage['checked_indices'] and index not in triage['ignored_indices']
+    ]
+
+    try:
+        for index in to_check:
+            db.session.add(FapReviewFindingCheck(
+                law_firm_id=law_firm_id,
+                execution_id=execution.id,
+                finding_index=index,
+                created_by_id=user_id,
+            ))
+
+        _svc.mark_petition_in_user_review(execution.petition)
+        db.session.commit()
+    except Exception as error:
+        db.session.rollback()
+        current_app.logger.error(f'Erro ao marcar todos os pontos como revisados: {error}')
+        return jsonify({'error': 'Não foi possível marcar todos os pontos como revisados.'}), 500
+
+    if to_check:
+        try:
+            _log_audit(
+                law_firm_id,
+                'revision_findings_checked_all',
+                'execution',
+                execution.id,
+                f'{len(to_check)} ponto(s) de atenção marcados como revisados em lote',
+            )
+        except Exception as audit_error:
+            current_app.logger.warning(f'Marcação em lote salva, mas falha na auditoria: {audit_error}')
+
+    triage = _get_execution_triage_state(execution, law_firm_id)
+    return jsonify({
+        'success': True,
+        'checked_indices': sorted(triage['checked_indices']),
+        'newly_checked': to_check,
+        'triage_complete': triage['complete'],
+        'petition_workflow_status': execution.petition.workflow_status if execution.petition else None,
+    })
+
+
+@fap_review_bp.route('/revision/<int:execution_id>/complete-triage', methods=['POST'])
+@require_law_firm
+def revision_complete_triage(execution_id: int):
+    """Conclui a triagem: usuário decide entre nova versão ou versão final para aprovação."""
+    law_firm_id = get_current_law_firm_id()
+
+    execution = FapReviewExecution.query.filter_by(
+        id=execution_id,
+        law_firm_id=law_firm_id,
+    ).first_or_404()
+
+    petition = execution.petition
+    if not petition:
+        return jsonify({'error': 'Esta revisão não está vinculada a uma petição.'}), 400
+
+    if _svc.is_execution_superseded(execution):
+        return jsonify({'error': 'Esta revisão foi substituída por uma versão mais recente — conclua a triagem na revisão atual.'}), 409
+
+    request_payload = request.get_json(silent=True) or {}
+    outcome = str(request_payload.get('outcome') or '').strip()
+    new_status = _svc.TRIAGE_OUTCOME_STATUSES.get(outcome)
+    if not new_status:
+        return jsonify({'error': 'Desfecho de triagem inválido.'}), 400
+
+    if petition.workflow_status in _svc.NEW_REVISION_BLOCKED_STATUSES:
+        return jsonify({'error': 'Esta petição está travada para triagem. Um administrador pode reabri-la.'}), 403
+
+    # Gate no servidor: não confia no estado renderizado na tela
+    triage = _get_execution_triage_state(execution, law_firm_id)
+    if not triage['complete']:
+        pending = triage['total_findings'] - len(
+            (triage['checked_indices'] | triage['ignored_indices'])
+            & set(range(1, triage['total_findings'] + 1))
+        )
+        return jsonify({
+            'error': f'Ainda há {pending} ponto(s) de atenção sem triagem. '
+                     'Marque cada um como revisado ou não pertinente antes de concluir.'
+        }), 400
+
+    old_status = petition.workflow_status
+    try:
+        if petition.workflow_status != new_status:
+            petition.workflow_status = new_status
+            petition.status_changed_at = datetime.now()
+            petition.updated_at = datetime.now()
+        db.session.commit()
+    except Exception as error:
+        db.session.rollback()
+        current_app.logger.error(f'Erro ao concluir triagem da execução {execution_id}: {error}')
+        return jsonify({'error': 'Não foi possível concluir a triagem.'}), 500
+
+    outcome_labels = {
+        'new_version': 'Triagem concluída: usuário vai enviar nova versão',
+        'final_version': 'Triagem concluída: versão final aguardando aprovação do revisor',
+    }
+    _log_audit(
+        law_firm_id,
+        'revision_triage_completed',
+        'petition',
+        petition.id,
+        outcome_labels[outcome],
+        old_value=old_status,
+        new_value=new_status,
+    )
+
+    redirect_url = None
+    if outcome == 'new_version':
+        redirect_url = url_for('fap_review.revision', petition_id=petition.id)
+
+    return jsonify({
+        'success': True,
+        'workflow_status': new_status,
+        'redirect_url': redirect_url,
+    })
+
+
 @fap_review_bp.route('/revision/<int:execution_id>/findings/<int:finding_index>/dismiss-feedback', methods=['POST'])
 @require_law_firm
 def revision_finding_feedback(execution_id: int, finding_index: int):
@@ -1423,6 +1889,9 @@ def revision_finding_feedback(execution_id: int, finding_index: int):
 
     if not execution.law_firm_document_identifier:
         return jsonify({'error': 'Esta revisão não possui identificador de documento para persistir feedback.'}), 400
+
+    if _svc.is_execution_superseded(execution):
+        return jsonify({'error': 'Esta revisão foi substituída por uma versão mais recente — use a revisão atual.'}), 409
 
     try:
         payload = json.loads(execution.result_json or '{}')
@@ -1469,14 +1938,17 @@ def revision_finding_feedback(execution_id: int, finding_index: int):
             audit_action = 'revision_finding_dismiss_undone'
             audit_description = f'Ponto voltou a ser considerado no histórico: {description[:200]}'
 
+        # Triar achados significa que o usuário está revisando a petição
+        petition_status_changed = _svc.mark_petition_in_user_review(execution.petition)
+
         db.session.commit()
     except Exception as error:
         db.session.rollback()
         current_app.logger.error(f'Erro ao persistir feedback do ponto de atenção: {error}')
         return jsonify({'error': 'Não foi possível salvar o feedback do ponto de atenção.'}), 500
 
-    if audit_action and audit_description:
-        try:
+    try:
+        if audit_action and audit_description:
             _log_audit(
                 law_firm_id,
                 audit_action,
@@ -1484,10 +1956,23 @@ def revision_finding_feedback(execution_id: int, finding_index: int):
                 execution.id,
                 audit_description,
             )
-        except Exception as audit_error:
-            current_app.logger.warning(f'Feedback salvo, mas falha ao registrar auditoria: {audit_error}')
+        if petition_status_changed:
+            _log_audit(
+                law_firm_id,
+                'petition_status_updated',
+                'petition',
+                execution.petition.id,
+                'Status alterado para Em revisão ao triar pontos de atenção',
+                new_value='in_review',
+            )
+    except Exception as audit_error:
+        current_app.logger.warning(f'Feedback salvo, mas falha ao registrar auditoria: {audit_error}')
 
-    return jsonify({'success': True, 'dismissed': dismissed})
+    return jsonify({
+        'success': True,
+        'dismissed': dismissed,
+        'petition_workflow_status': execution.petition.workflow_status if execution.petition else None,
+    })
 
 
 @fap_review_bp.route('/revision/<int:execution_id>/document/main', methods=['GET'])
@@ -1515,6 +2000,42 @@ def revision_main_document(execution_id: int):
         path,
         as_attachment=False,
         download_name=execution.main_document_filename or path.name,
+    )
+
+
+@fap_review_bp.route('/revision/<int:execution_id>/document/main/preview', methods=['GET'])
+@require_law_firm
+def revision_main_document_preview(execution_id: int):
+    """Preview HTML do documento principal DOCX (o navegador não renderiza DOCX nativamente)."""
+    law_firm_id = get_current_law_firm_id()
+
+    execution = FapReviewExecution.query.filter_by(
+        id=execution_id,
+        law_firm_id=law_firm_id
+    ).first_or_404()
+
+    file_path = str(execution.main_document_path or '').strip()
+    path = Path(file_path)
+    if not file_path or not path.exists() or not path.is_file():
+        flash('Documento principal não disponível para esta execução.', 'warning')
+        return redirect(url_for('fap_review.revision_result', execution_id=execution_id))
+
+    if path.suffix.lower() != '.docx':
+        return redirect(url_for('fap_review.revision_main_document', execution_id=execution_id))
+
+    try:
+        content_html = render_docx_preview_html(path)
+    except ValueError as e:
+        current_app.logger.warning('Falha no preview DOCX da execução %s: %s', execution_id, e)
+        content_html = None
+
+    return render_template(
+        'fap_review/document_preview.html',
+        content_html=content_html,
+        document_filename=execution.main_document_filename or path.name,
+        highlight_text=(request.args.get('destaque') or '').strip(),
+        highlight_excerpt=(request.args.get('trecho') or '').strip(),
+        download_url=url_for('fap_review.revision_main_document', execution_id=execution_id),
     )
 
 

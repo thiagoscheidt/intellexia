@@ -1,5 +1,5 @@
 """
-Monitoramento de Comunicações (Comunica PJe / DJEN) — fonte única da tela,
+Monitoramento de Processos (Comunica PJe / DJEN) — fonte única da tela,
 do digest por e-mail e de futuras tools MCP.
 
 Fluxo de sincronização (cron diário):
@@ -144,10 +144,13 @@ def _resolve_process(law_firm_id, parsed, client, stats):
 
 
 def _upsert_communication(law_firm_id, parsed, raw_item, stats,
-                          matched_lawyer_id=None, known_process_id=None, client=None):
+                          matched_lawyer_id=None, known_process_id=None, client=None,
+                          source=ProcessCommunication.SOURCE_COMUNICA_PJE):
     """Dedup por (law_firm_id, hash): existe → UPDATE; novo → INSERT.
 
-    Retorna a ProcessCommunication persistida (ou None sem hash).
+    ``source`` identifica a fonte da informação (hoje só Comunica PJe; novas
+    fontes passam a sua constante SOURCE_*). Retorna a ProcessCommunication
+    persistida (ou None sem hash).
     """
     comm_hash = parsed.get('hash')
     if not comm_hash:
@@ -184,6 +187,7 @@ def _upsert_communication(law_firm_id, parsed, raw_item, stats,
         law_firm_id=law_firm_id,
         judicial_process_id=process_id,
         matched_lawyer_id=matched_lawyer_id,
+        source=source,
         raw_json=raw_item,
         **{k: parsed.get(k) for k in (
             'comunica_id', 'hash', 'sigla_tribunal', 'tipo_comunicacao',
@@ -267,6 +271,93 @@ def sync_law_firm(law_firm_id, client=None, dry_run=False):
     }
 
 
+def firm_tribunal_siglas(law_firm_id):
+    """Tribunais em que o escritório já recebeu comunicações (histórico próprio)."""
+    rows = (db.session.query(ProcessCommunication.sigla_tribunal)
+            .filter(ProcessCommunication.law_firm_id == law_firm_id,
+                    ProcessCommunication.sigla_tribunal.isnot(None))
+            .distinct()
+            .all())
+    return sorted(r[0] for r in rows)
+
+
+def sync_law_firm_from_cadernos(law_firm_id, data=None, siglas=None,
+                                client=None, dry_run=False):
+    """Sincroniza via cadernos diários do DJEN: 1 download por tribunal,
+    filtrando localmente pelas OABs do escritório.
+
+    Alternativa à consulta por advogado — vantajosa quando há muitos advogados
+    (N advogados = mesmas requisições; N tribunais costuma ser menor) e não
+    sofre o limite de 10.000 resultados das consultas por OAB. Usa o mesmo
+    upsert por hash, então rodar junto com a sincronização por OAB não duplica.
+    """
+    client = client or ComunicaPjeClient()
+    data = data or date.today()
+    siglas = siglas or firm_tribunal_siglas(law_firm_id)
+
+    summary = {'law_firm_id': law_firm_id, 'data': data.isoformat(),
+               'mode': 'caderno', 'siglas': list(siglas), 'results': []}
+    if not siglas:
+        summary['status'] = 'no_tribunals'
+        logger.warning('Escritório %s sem histórico de tribunais — informe as siglas '
+                       'explicitamente para sincronizar por caderno.', law_firm_id)
+        return summary
+
+    ready, _skipped = monitored_lawyers(law_firm_id)
+    oab_index = {}
+    for lawyer in ready:
+        key = (only_digits(lawyer.oab_number), (lawyer.oab_uf or '').strip().upper())
+        oab_index.setdefault(key, lawyer.id)
+    if not oab_index:
+        summary['status'] = 'no_lawyers'
+        return summary
+
+    for sigla in siglas:
+        stats = {'sigla': sigla, 'status': 'ok', 'error': None, 'scanned': 0,
+                 'matched': 0, 'created': 0, 'updated': 0,
+                 'processes_created': 0, 'skipped_no_hash': 0}
+        try:
+            meta = client.get_caderno(sigla, data)
+            caderno_status = (meta or {}).get('status') or ''
+            if caderno_status != 'Processado':
+                # 'Sem comunicações', 'Em processamento', 'Não Processado', 'Cancelado'
+                stats['status'] = 'skipped'
+                stats['error'] = f'caderno {caderno_status or "indisponível"}'
+                summary['results'].append(stats)
+                continue
+
+            for item in client.iter_caderno_comunicacoes(meta):
+                stats['scanned'] += 1
+                matched_lawyer_id = None
+                for entry in item.get('destinatarioadvogados') or []:
+                    adv = (entry or {}).get('advogado') or {}
+                    key = (only_digits(str(adv.get('numero_oab') or '')),
+                           str(adv.get('uf_oab') or '').strip().upper())
+                    if key in oab_index:
+                        matched_lawyer_id = oab_index[key]
+                        break
+                if matched_lawyer_id is None:
+                    continue
+                stats['matched'] += 1
+                parsed = client.parse_comunicacao(item)
+                _upsert_communication(law_firm_id, parsed, item, stats,
+                                      matched_lawyer_id=matched_lawyer_id, client=client)
+
+            if dry_run:
+                db.session.rollback()
+                stats['status'] = 'dry_run'
+            else:
+                db.session.commit()
+        except ComunicaPjeError as exc:
+            db.session.rollback()
+            stats['status'] = 'failed'
+            stats['error'] = str(exc)
+            logger.error('Caderno %s/%s falhou: %s', sigla, data, exc)
+        summary['results'].append(stats)
+
+    return summary
+
+
 def sync_all(law_firm_id=None, dry_run=False):
     """Sincroniza todos os escritórios (ou um específico). Usado pelo cron."""
     client = ComunicaPjeClient()
@@ -287,9 +378,11 @@ def sync_all(law_firm_id=None, dry_run=False):
 
 def communications_query(law_firm_id, sigla_tribunal=None, tipo_comunicacao=None,
                          lawyer_id=None, numero_processo=None, only_unread=False,
-                         date_from=None, date_to=None):
+                         date_from=None, date_to=None, source=None):
     """Query base da tela, com filtros. Sempre filtra o tenant."""
     query = ProcessCommunication.query.filter_by(law_firm_id=law_firm_id)
+    if source:
+        query = query.filter(ProcessCommunication.source == source)
     if sigla_tribunal:
         query = query.filter(ProcessCommunication.sigla_tribunal == sigla_tribunal)
     if tipo_comunicacao:
@@ -326,7 +419,103 @@ def filter_options(law_firm_id):
     tipos = [row[0] for row in base.with_entities(ProcessCommunication.tipo_comunicacao)
              .filter(ProcessCommunication.tipo_comunicacao.isnot(None))
              .distinct().order_by(ProcessCommunication.tipo_comunicacao).all()]
-    return {'tribunais': tribunais, 'tipos': tipos}
+    fontes = [row[0] for row in base.with_entities(ProcessCommunication.source)
+              .filter(ProcessCommunication.source.isnot(None))
+              .distinct().order_by(ProcessCommunication.source).all()]
+    return {'tribunais': tribunais, 'tipos': tipos, 'fontes': fontes}
+
+
+def explain_communication(law_firm_id, communication_id, user_id=None, force=False):
+    """Explicação da comunicação via IA, com cache em analysis_json.
+
+    O teor é imutável, então a análise é gerada uma única vez por comunicação
+    (``force=True`` regenera). Retorna dict: {'cached': bool, 'generated_at',
+    'model', 'data': {...}} ou levanta ValueError com mensagem amigável.
+    """
+    comm = ProcessCommunication.query.filter_by(
+        id=communication_id, law_firm_id=law_firm_id
+    ).first()
+    if not comm:
+        raise ValueError('Comunicação não encontrada')
+    if not comm.texto:
+        raise ValueError('Esta comunicação não tem teor para explicar — abra o documento original no PJe')
+
+    if comm.analysis_json and not force:
+        return {**comm.analysis_json, 'cached': True}
+
+    from app.agents.processes.communication_explainer_agent import CommunicationExplainerAgent
+
+    contexto_processo = None
+    if comm.judicial_process:
+        process = comm.judicial_process
+        recentes = (ProcessCommunication.query
+                    .filter(ProcessCommunication.judicial_process_id == process.id,
+                            ProcessCommunication.id != comm.id)
+                    .order_by(ProcessCommunication.data_disponibilizacao.desc())
+                    .limit(5).all())
+        historico = '; '.join(
+            f"{c.data_disponibilizacao.strftime('%d/%m/%Y') if c.data_disponibilizacao else '?'}: "
+            f"{c.tipo_comunicacao or 'comunicação'}"
+            for c in recentes
+        ) or 'sem outras comunicações registradas'
+        contexto_processo = (
+            f"Título: {process.title or '—'} | Tribunal: {process.tribunal or '—'} | "
+            f"Classe: {process.process_class or '—'} | Status: {process.status or '—'}\n"
+            f"Últimas comunicações: {historico}"
+        )
+
+    advogados = None
+    if comm.advogados_json:
+        advogados = ', '.join(
+            f"{a.get('nome')} (OAB {a.get('numero_oab')}/{a.get('uf_oab')})"
+            for a in comm.advogados_json if isinstance(a, dict)
+        )
+    if comm.matched_lawyer:
+        advogados = f"{advogados or ''} — capturada pela OAB de {comm.matched_lawyer.name}".strip(' —')
+
+    agent = CommunicationExplainerAgent()
+    explanation = agent.explain(
+        {
+            'teor': comm.texto,
+            'data_disponibilizacao': comm.data_disponibilizacao.strftime('%d/%m/%Y') if comm.data_disponibilizacao else None,
+            'sigla_tribunal': comm.sigla_tribunal,
+            'tipo_comunicacao': comm.tipo_comunicacao,
+            'tipo_documento': comm.tipo_documento,
+            'nome_orgao': comm.nome_orgao,
+            'nome_classe': comm.nome_classe,
+            'numero_processo': comm.numero_processo_mascara or comm.numero_processo,
+            'contexto_processo': contexto_processo,
+            'advogados_escritorio': advogados,
+        },
+        user_id=user_id,
+        law_firm_id=law_firm_id,
+    )
+
+    payload = {
+        'generated_at': datetime.now().strftime('%d/%m/%Y %H:%M'),
+        'model': agent.model_name,
+        'data': explanation.model_dump(),
+    }
+    comm.analysis_json = payload
+    db.session.commit()
+    return {**payload, 'cached': False}
+
+
+def mark_all_read(law_firm_id, user_id, **filters):
+    """Marca como lidas todas as não lidas que casam com os filtros da tela.
+
+    Retorna a quantidade marcada. ``filters`` aceita os mesmos parâmetros de
+    ``communications_query`` (tribunal, tipo, fonte, advogado, processo, datas).
+    """
+    query = communications_query(law_firm_id, only_unread=True, **filters)
+    now = datetime.now()
+    count = query.order_by(None).update(
+        {ProcessCommunication.read_at: now,
+         ProcessCommunication.read_by_user_id: user_id},
+        synchronize_session=False,
+    )
+    db.session.commit()
+    return count
 
 
 def mark_read(law_firm_id, communication_id, user_id):

@@ -20,6 +20,21 @@ O **Dashboard Principal** é a visão geral do escritório. Ele reúne, em uma �
 
 ---
 
+## Painel de notificações (barra superior)
+
+Em **todas as telas do sistema**, no lado esquerdo da barra superior — ao lado do nome do escritório — fica o **painel de notificações**: um grupo de chips, um por módulo, mostrando o que está **pendente de ação** naquele módulo. Cada chip traz o nome do módulo e um ou mais contadores coloridos; **passe o mouse** para ver o detalhe e **clique** para ir direto ao painel correspondente.
+
+| Chip | O que conta | Quem vê |
+|---|---|---|
+| **Monitoramento** | Comunicações processuais **não lidas** (contador âmbar). | Quem tem o módulo Monitoramento de Processos |
+| **Revisor** | As filas ativas das petições: **Em revisão** (contador **amarelo** — novas + em revisão), **Aguardando ajustes** (contador **vermelho**, ação do advogado) e, para administradores, **Aguardando aprovação** (contador **azul**, fila do revisor). | Quem tem o módulo Revisor de Petições |
+
+- O contador **some quando a fila está zerada** — chip sem número significa "nada pendente".
+- Cada chip só aparece para quem tem **acesso ao módulo**; alguns contadores dependem do papel (ex.: a fila azul de aprovação é exclusiva de administradores).
+- Novos módulos com pendências acionáveis ganham seus próprios chips aqui, no mesmo padrão.
+
+---
+
 ## 1. Painel FAP — Contestações FAP Web
 
 Quatro cartões no topo desta seção:

@@ -444,6 +444,36 @@
     }
 
     /* Dismiss button */
+    /* Barra flutuante de conclusão da triagem */
+    .triage-floating-bar {
+        position: fixed;
+        bottom: 1.5rem;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1050;
+        max-width: min(560px, calc(100vw - 2rem));
+        width: max-content;
+        padding: .9rem 1.25rem;
+        border-radius: .9rem;
+        text-align: center;
+        background: var(--bs-body-bg);
+        border: 1px solid rgba(25, 135, 84, .45);
+        box-shadow: 0 .75rem 2rem rgba(15, 23, 42, .22), 0 0 0 4px rgba(25, 135, 84, .08);
+        animation: triage-bar-in .25s ease-out;
+    }
+
+    @keyframes triage-bar-in {
+        from {
+            opacity: 0;
+            transform: translateX(-50%) translateY(12px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+    }
+
     .finding-dismiss-btn {
         background: none;
         border: 1.5px solid rgba(15, 23, 42, .18);
@@ -672,9 +702,12 @@
 {% endblock %}
 
 {% block content %}
+{% set main_document_is_docx = ((execution.main_document_filename or execution.main_document_path or '')|lower).endswith('.docx') %}
 <div id="stickyQuickNav"></div>
 
-<div class="fap-revision-result-page" data-execution-id="{{ execution.id }}">
+<div class="fap-revision-result-page" data-execution-id="{{ execution.id }}"
+    {% if petition %}data-petition-status="{{ petition.workflow_status }}"
+    data-petition-status-url="{{ url_for('fap_review.petition_update_status', petition_id=petition.id) }}"{% endif %}>
     {% call page_hero(title=page_title, subtitle='Visualize os achados e o diagnóstico gerado pelo agente revisor',
     icon='bi bi-file-earmark-check') %}
     <nav aria-label="breadcrumb">
@@ -690,6 +723,23 @@
 
     <div class="container-fluid">
         <div class="row g-4">
+            {% if execution_superseded %}
+            <div class="col-12">
+                <div class="alert alert-secondary d-flex align-items-center justify-content-between flex-wrap gap-2 mb-0">
+                    <div>
+                        <i class="bi bi-layers me-1"></i>
+                        <strong>Revisão substituída.</strong> Esta é a revisão R{{ execution.revision_number }}, mas a
+                        petição já tem uma versão mais recente — a triagem aqui está encerrada (somente leitura).
+                    </div>
+                    {% if petition and petition.latest_revision_id %}
+                    <a href="{{ url_for('fap_review.revision_result', execution_id=petition.latest_revision_id) }}"
+                        class="btn btn-sm btn-primary">
+                        <i class="bi bi-box-arrow-up-right me-1"></i> Abrir revisão atual
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
             <div class="col-12">
                 <div class="card info-card">
                     <div class="card-header d-flex align-items-center justify-content-between gap-2">
@@ -812,21 +862,41 @@
                                             {% endif %}
                                         </div>
 
+                                        {% set is_admin_user = session.get('user_role') == 'admin' %}
                                         {% if execution.status == 'completed' %}
                                         <div class="petition-ready-action">
-                                            {% if petition.workflow_status not in ['ready_for_filing', 'filed',
-                                            'archived'] %}
+                                            {% if petition.workflow_status == 'awaiting_approval' %}
+                                            {% if is_admin_user %}
                                             <button type="button" class="btn btn-sm btn-success"
                                                 id="markPetitionReadyButton"
                                                 data-update-url="{{ url_for('fap_review.petition_update_status', petition_id=petition.id) }}">
                                                 <i class="bi bi-check2-circle me-1"></i> Aprovar petição
                                             </button>
+                                            <button type="button" class="btn btn-sm btn-outline-danger"
+                                                id="returnForAdjustmentsButton"
+                                                data-update-url="{{ url_for('fap_review.petition_update_status', petition_id=petition.id) }}">
+                                                <i class="bi bi-arrow-counterclockwise me-1"></i> Devolver para ajustes
+                                            </button>
                                             <div id="petitionReadyFeedback" class="petition-ready-feedback"></div>
+                                            {% else %}
+                                            <div class="small text-info mt-2">
+                                                <i class="bi bi-person-check me-1"></i> Versão final aguardando
+                                                aprovação do revisor (administrador).
+                                            </div>
+                                            {% endif %}
                                             {% elif petition.workflow_status == 'ready_for_filing' %}
                                             <div class="small text-success mt-2">
                                                 <i class="bi bi-check2-circle me-1"></i> Esta petição já está marcada
                                                 como aprovada pelo revisor.
                                             </div>
+                                            {% if is_admin_user %}
+                                            <button type="button" class="btn btn-sm btn-outline-secondary mt-1"
+                                                id="reopenPetitionButton"
+                                                data-update-url="{{ url_for('fap_review.petition_update_status', petition_id=petition.id) }}">
+                                                <i class="bi bi-unlock me-1"></i> Reabrir petição
+                                            </button>
+                                            <div id="petitionReadyFeedback" class="petition-ready-feedback"></div>
+                                            {% endif %}
                                             {% endif %}
                                         </div>
                                         {% endif %}
@@ -1029,22 +1099,30 @@
                             <div class="small mb-0">{{ result_data.benefits_spreadsheet_review.error }}</div>
                         </div>
                         {% elif result_data.benefits_spreadsheet_review.get('items') %}
+                        {% set benefit_items = result_data.benefits_spreadsheet_review.get('items', []) %}
+                        {% set benefit_sheets = benefit_items | map(attribute='sheet_name', default='') | select | unique | list %}
+                        {% set show_sheet_column = benefit_sheets | length > 1 %}
                         <div class="table-responsive">
                             <table class="table table-hover mb-0">
                                 <thead class="table-light">
                                     <tr>
                                         <th class="ps-3">Numero do Beneficio</th>
+                                        {% if show_sheet_column %}<th>Aba</th>{% endif %}
                                         <th>Tese</th>
                                         <th class="pe-3">Status no Documento</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {% for item in result_data.benefits_spreadsheet_review.get('items', []) %}
+                                    {% for item in benefit_items %}
                                     <tr{% if not item.found_in_document %} style="background: rgba(220, 53, 69, 0.10);"
                                         {% endif %}>
                                         <td
                                             class="ps-3 fw-semibold{% if not item.found_in_document %} text-danger{% endif %}">
                                             {{ item.benefit_number }}</td>
+                                        {% if show_sheet_column %}
+                                        <td><span class="badge rounded-pill bg-light text-dark border">{{
+                                                item.sheet_name or '-' }}</span></td>
+                                        {% endif %}
                                         <td{% if not item.found_in_document %} class="text-danger fw-semibold" {% endif
                                             %}>{{ item.thesis }}</td>
                                             <td class="pe-3">
@@ -1129,12 +1207,20 @@
                                 <div class="small fw-semibold text-muted">
                                     <i class="bi bi-list-ol me-1"></i> Navegação Rápida
                                 </div>
-                                {% if manual_content %}
-                                <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal"
-                                    data-bs-target="#manualReferenceModal">
-                                    <i class="bi bi-book me-1"></i> Manual
-                                </button>
-                                {% endif %}
+                                <div class="d-flex align-items-center gap-2">
+                                    {% if not execution_superseded %}
+                                    <button type="button" class="btn btn-sm btn-outline-success check-all-findings-btn"
+                                        data-check-all-url="{{ url_for('fap_review.revision_finding_check_all', execution_id=execution.id) }}">
+                                        <i class="bi bi-check2-all me-1"></i> Marcar todos como revisados
+                                    </button>
+                                    {% endif %}
+                                    {% if manual_content %}
+                                    <button type="button" class="btn btn-sm btn-outline-secondary"
+                                        data-bs-toggle="modal" data-bs-target="#manualReferenceModal">
+                                        <i class="bi bi-book me-1"></i> Manual
+                                    </button>
+                                    {% endif %}
+                                </div>
                             </div>
                             <div class="d-flex flex-wrap gap-1">
                                 {% for finding in result_data.findings %}
@@ -1151,18 +1237,50 @@
                         <!-- Barra de Progresso de Revisão -->
                         <div class="mb-4 p-3 rounded"
                             style="background: var(--bs-secondary-bg); border: 1px solid rgba(15,23,42,.07);">
-                            <div class="d-flex justify-content-between align-items-center mb-2">
+                            <div class="d-flex justify-content-between align-items-center mb-2 gap-2 flex-wrap">
                                 <span class="small fw-semibold text-muted">
                                     <i class="bi bi-check2-square me-1"></i> Progresso de revisão
                                 </span>
-                                <span class="small fw-semibold" id="findingsProgressText" style="color: #198754;">
-                                    0 de {{ result_data.findings|length }} revisados
+                                <span class="d-flex align-items-center gap-2">
+                                    {% if not execution_superseded %}
+                                    <button type="button" class="btn btn-sm btn-outline-success check-all-findings-btn"
+                                        data-check-all-url="{{ url_for('fap_review.revision_finding_check_all', execution_id=execution.id) }}">
+                                        <i class="bi bi-check2-all me-1"></i> Marcar todos como revisados
+                                    </button>
+                                    {% endif %}
+                                    <span class="small fw-semibold" id="findingsProgressText" style="color: #198754;">
+                                        0 de {{ result_data.findings|length }} revisados
+                                    </span>
                                 </span>
                             </div>
                             <div class="findings-progress-bar">
                                 <div class="bar-fill" id="findingsProgressBar" style="width: 0%;"></div>
                             </div>
                         </div>
+
+                        {% if petition and execution.status == 'completed' and not execution_superseded
+                        and petition.workflow_status not in ['awaiting_approval', 'ready_for_filing', 'filed', 'archived'] %}
+                        <!-- Conclusão da triagem: barra flutuante quando todos os pontos foram triados -->
+                        <div id="triageCompleteActions" class="triage-floating-bar"
+                            style="display: {% if triage_complete %}block{% else %}none{% endif %};"
+                            data-complete-triage-url="{{ url_for('fap_review.revision_complete_triage', execution_id=execution.id) }}">
+                            <div class="small fw-semibold mb-2" style="color: #198754;">
+                                <i class="bi bi-clipboard2-check me-1"></i> Todos os pontos foram triados. Como deseja
+                                concluir esta versão?
+                            </div>
+                            <div class="d-flex flex-wrap gap-2 justify-content-center">
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="triageNewVersionBtn"
+                                    data-outcome="new_version">
+                                    <i class="bi bi-arrow-repeat me-1"></i> Revisada — enviar nova versão
+                                </button>
+                                <button type="button" class="btn btn-sm btn-primary" id="triageFinalVersionBtn"
+                                    data-outcome="final_version">
+                                    <i class="bi bi-send-check me-1"></i> Versão final — enviar para aprovação
+                                </button>
+                            </div>
+                            <div id="triageActionFeedback" class="small mt-2" style="display:none;"></div>
+                        </div>
+                        {% endif %}
 
                         <!-- Listagem redesenhada dos Pontos -->
                         {% for finding in result_data.findings %}
@@ -1211,10 +1329,13 @@
                                     <button type="button" class="btn btn-sm btn-outline-primary view-finding-page-btn"
                                         data-bs-toggle="modal" data-bs-target="#findingPageModal"
                                         data-finding-number="{{ loop.index }}" data-location="{{ finding.location }}"
+                                        data-location-excerpt="{{ finding.location_excerpt or '' }}"
                                         title="Visualizar no documento">
-                                        <i class="bi bi-eye me-1"></i> Ver Página
+                                        <i class="bi bi-eye me-1"></i>
+                                        {% if main_document_is_docx %}Ver Documento{% else %}Ver Página{% endif %}
                                     </button>
                                     {% endif %}
+                                    {% if not execution_superseded %}
                                     <button type="button" class="finding-dismiss-btn" title="Não pertinente"
                                         data-dismiss-feedback-url="{{ url_for('fap_review.revision_finding_feedback', execution_id=execution.id, finding_index=loop.index) }}">
                                         <i class="bi bi-x"></i>
@@ -1222,6 +1343,7 @@
                                     <button type="button" class="finding-check-btn" title="Marcar como revisado">
                                         <i class="bi bi-check"></i>
                                     </button>
+                                    {% endif %}
                                 </div>
                             </div>
 
@@ -1237,6 +1359,11 @@
                                             <i class="bi bi-map text-info"></i> Localização
                                         </div>
                                         <p class="finding-meta-value">{{ finding.location }}</p>
+                                        {% if finding.location_excerpt %}
+                                        <p class="finding-meta-value fst-italic text-muted mb-0"
+                                            style="font-size: .78rem;">
+                                            <i class="bi bi-quote"></i>{{ finding.location_excerpt }}</p>
+                                        {% endif %}
                                     </div>
                                     {% endif %}
                                     {% if finding.correction %}
@@ -1384,13 +1511,18 @@
             {% endif %}
 
             <!-- Modal: Visualizar Página do Ponto -->
-            <div class="modal fade" id="findingPageModal" tabindex="-1" aria-hidden="true">
+            <div class="modal fade" id="findingPageModal" tabindex="-1" aria-hidden="true"
+                data-doc-docx="{{ '1' if main_document_is_docx else '0' }}">
                 <div class="modal-dialog modal-lg modal-dialog-scrollable">
                     <div class="modal-content">
                         <div class="modal-header border-bottom">
                             <div>
                                 <h5 class="modal-title fw-semibold">
+                                    {% if main_document_is_docx %}
+                                    <i class="bi bi-file-earmark-word me-2 text-primary"></i>Visualizar Documento
+                                    {% else %}
                                     <i class="bi bi-file-pdf me-2 text-danger"></i>Visualizar Documento
+                                    {% endif %}
                                 </h5>
                                 <small class="text-muted d-block mt-1" id="findingPageSubtitle"></small>
                             </div>
@@ -1405,7 +1537,8 @@
                         <div class="modal-footer border-top">
                             <a id="findingPageDownloadLink" href="#" class="btn btn-sm btn-outline-secondary"
                                 target="_blank" rel="noopener noreferrer">
-                                <i class="bi bi-download me-1"></i> Baixar PDF
+                                <i class="bi bi-download me-1"></i>
+                                {% if main_document_is_docx %}Baixar arquivo{% else %}Baixar PDF{% endif %}
                             </a>
                             <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">
                                 <i class="bi bi-x me-1"></i> Fechar
@@ -1634,7 +1767,6 @@
     // Modal para Visualizar Página do Ponto de Atenção
     document.addEventListener('DOMContentLoaded', function () {
         const findingPageModal = document.getElementById('findingPageModal');
-        const markPetitionReadyButton = document.getElementById('markPetitionReadyButton');
         const petitionReadyFeedback = document.getElementById('petitionReadyFeedback');
 
         function showPetitionReadyFeedback(message, kind) {
@@ -1646,8 +1778,12 @@
             petitionReadyFeedback.className = `petition-ready-feedback is-visible ${kind === 'success' ? 'is-success' : 'is-error'}`;
         }
 
-        if (markPetitionReadyButton) {
-            markPetitionReadyButton.addEventListener('click', async function () {
+        // Ações de admin sobre o status da petição (aprovar / devolver / reabrir)
+        function bindPetitionStatusButton(buttonId, workflowStatus, successMessage, errorMessage) {
+            const button = document.getElementById(buttonId);
+            if (!button) return;
+
+            button.addEventListener('click', async function () {
                 const updateUrl = this.dataset.updateUrl;
                 this.disabled = true;
 
@@ -1657,22 +1793,29 @@
                         headers: {
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ workflow_status: 'ready_for_filing' })
+                        body: JSON.stringify({ workflow_status: workflowStatus })
                     });
 
                     const payload = await response.json().catch(() => ({}));
                     if (!response.ok) {
-                        throw new Error(payload.error || 'Não foi possível aprovar a petição.');
+                        throw new Error(payload.error || errorMessage);
                     }
 
-                    showPetitionReadyFeedback('Petição aprovada com sucesso.', 'success');
+                    showPetitionReadyFeedback(successMessage, 'success');
                     window.setTimeout(() => window.location.reload(), 900);
                 } catch (error) {
-                    showPetitionReadyFeedback(error.message || 'Não foi possível aprovar a petição.', 'error');
+                    showPetitionReadyFeedback(error.message || errorMessage, 'error');
                     this.disabled = false;
                 }
             });
         }
+
+        bindPetitionStatusButton('markPetitionReadyButton', 'ready_for_filing',
+            'Petição aprovada com sucesso.', 'Não foi possível aprovar a petição.');
+        bindPetitionStatusButton('returnForAdjustmentsButton', 'awaiting_adjustments',
+            'Petição devolvida para ajustes.', 'Não foi possível devolver a petição.');
+        bindPetitionStatusButton('reopenPetitionButton', 'awaiting_adjustments',
+            'Petição reaberta para ajustes.', 'Não foi possível reabrir a petição.');
 
         if (findingPageModal) {
             findingPageModal.addEventListener('show.bs.modal', function (e) {
@@ -1690,11 +1833,20 @@
                 const pageMatch = location.match(/(?:página|page|p\.?)\s*(\d+)/i);
                 const pageNumber = pageMatch ? parseInt(pageMatch[1]) : null;
 
-                // URL base do PDF
+                // URL base do documento
                 const baseUrl = `/fap-review/revision/${executionId}/document/main`;
 
                 // Link para download (sem fragmento)
                 document.getElementById('findingPageDownloadLink').href = baseUrl;
+
+                // DOCX não renderiza nativamente no navegador: usar preview HTML
+                // com destaque da localização e, quando houver, do trecho literal
+                if (findingPageModal.dataset.docDocx === '1') {
+                    const excerpt = btn.dataset.locationExcerpt || '';
+                    iframe.src = `${baseUrl}/preview?destaque=${encodeURIComponent(location || '')}`
+                        + (excerpt ? `&trecho=${encodeURIComponent(excerpt)}` : '');
+                    return;
+                }
 
                 // Tentar diferentes formatos de fragmento para navegação de página
                 if (pageNumber) {
@@ -1723,27 +1875,23 @@
 
     // ── Check / progresso de revisão ─────────────────────────────
     (function () {
-        const STORAGE_KEY = 'fap_checked_{{ execution.id }}';
+        // Triagem persistida no servidor: os checks vêm do banco (não mais do localStorage)
         const persistedDismissed = new Set('{{ ignored_finding_indices|default([], true)|join(",") }}'.split(',').filter(Boolean));
         const TOTAL = document.querySelectorAll('.finding-card').length;
+        const EXECUTION_ID = '{{ execution.id }}';
+
+        // Estado em memória, inicializado do servidor
+        const serverChecked = {{ checked_finding_indices|default([], true)|tojson }};
+        const initialState = {};
+        serverChecked.forEach(function (idx) {
+            if (!persistedDismissed.has(String(idx))) {
+                initialState[String(idx)] = 'checked';
+            }
+        });
+        let state = initialState;
 
         function load() {
-            try {
-                return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-            }
-            catch {
-                return {};
-            }
-        }
-
-        function save(state) {
-            const normalizedState = {};
-            Object.keys(state || {}).forEach(function (key) {
-                if (state[key] === 'checked') {
-                    normalizedState[key] = 'checked';
-                }
-            });
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(normalizedState));
+            return state;
         }
 
         function updateProgress(state) {
@@ -1753,6 +1901,17 @@
             const txt = document.getElementById('findingsProgressText');
             if (bar) bar.style.width = pct + '%';
             if (txt) txt.textContent = done + ' de ' + TOTAL + ' revisados';
+
+            // Todos os pontos triados (revisados + não pertinentes) → oferece a conclusão
+            const triaged = done + Array.from(persistedDismissed)
+                .filter(function (idx) { return state[idx] !== 'checked'; }).length;
+            const triageActions = document.getElementById('triageCompleteActions');
+            if (triageActions) {
+                triageActions.style.display = triaged >= TOTAL ? 'block' : 'none';
+            }
+            document.querySelectorAll('.check-all-findings-btn').forEach(function (btn) {
+                btn.style.display = triaged >= TOTAL ? 'none' : '';
+            });
         }
 
         function applyState(state) {
@@ -1763,31 +1922,64 @@
                 const navPill = document.getElementById('nav-pill-' + idx);
                 const val = persistedDismissed.has(String(idx)) ? 'dismissed' : state[idx];
 
-                // Reset
+                // Reset (botões podem não existir em revisão substituída — somente leitura)
                 card.classList.remove('is-checked', 'is-dismissed');
-                checkBtn.classList.remove('is-checked');
-                checkBtn.title = 'Marcar como revisado';
-                checkBtn.innerHTML = '<i class="bi bi-check"></i>';
-                dismissBtn.classList.remove('is-dismissed');
-                dismissBtn.title = 'Não pertinente';
-                dismissBtn.innerHTML = '<i class="bi bi-x"></i>';
+                if (checkBtn) {
+                    checkBtn.classList.remove('is-checked');
+                    checkBtn.title = 'Marcar como revisado';
+                    checkBtn.innerHTML = '<i class="bi bi-check"></i>';
+                }
+                if (dismissBtn) {
+                    dismissBtn.classList.remove('is-dismissed');
+                    dismissBtn.title = 'Não pertinente';
+                    dismissBtn.innerHTML = '<i class="bi bi-x"></i>';
+                }
                 if (navPill) { navPill.style.opacity = ''; navPill.textContent = idx; }
 
                 if (val === 'checked') {
                     card.classList.add('is-checked');
-                    checkBtn.classList.add('is-checked');
-                    checkBtn.title = 'Desmarcar';
-                    checkBtn.innerHTML = '<i class="bi bi-check-lg"></i>';
+                    if (checkBtn) {
+                        checkBtn.classList.add('is-checked');
+                        checkBtn.title = 'Desmarcar';
+                        checkBtn.innerHTML = '<i class="bi bi-check-lg"></i>';
+                    }
                     if (navPill) { navPill.style.opacity = '.4'; navPill.innerHTML = '✓'; }
                 } else if (val === 'dismissed') {
                     card.classList.add('is-dismissed');
-                    dismissBtn.classList.add('is-dismissed');
-                    dismissBtn.title = 'Desfazer';
-                    dismissBtn.innerHTML = '<i class="bi bi-x-lg"></i>';
+                    if (dismissBtn) {
+                        dismissBtn.classList.add('is-dismissed');
+                        dismissBtn.title = 'Desfazer';
+                        dismissBtn.innerHTML = '<i class="bi bi-x-lg"></i>';
+                    }
                     if (navPill) { navPill.style.opacity = '.3'; navPill.innerHTML = '–'; }
                 }
             });
             updateProgress(state);
+        }
+
+        // Triar achados (marcar revisado / não pertinente) coloca a petição "Em revisão".
+        // Só promove a partir de estados pré-triagem; o restante fica como está.
+        function markPetitionInReview() {
+            var pageEl = document.querySelector('.fap-revision-result-page');
+            if (!pageEl) return;
+            var url = pageEl.dataset.petitionStatusUrl;
+            var current = pageEl.dataset.petitionStatus;
+            if (!url || (current !== 'new' && current !== 'awaiting_adjustments')) return;
+            pageEl.dataset.petitionStatus = 'in_review';
+            fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ workflow_status: 'in_review' })
+            }).catch(function () {
+                pageEl.dataset.petitionStatus = current;
+            });
+        }
+
+        function syncPetitionStatus(workflowStatus) {
+            var pageEl = document.querySelector('.fap-revision-result-page');
+            if (pageEl && workflowStatus) {
+                pageEl.dataset.petitionStatus = workflowStatus;
+            }
         }
 
         document.addEventListener('DOMContentLoaded', function () {
@@ -1795,20 +1987,50 @@
             applyState(state);
 
             document.querySelectorAll('.finding-check-btn').forEach(function (btn) {
-                btn.addEventListener('click', function () {
+                btn.addEventListener('click', async function () {
                     var card = this.closest('.finding-card');
                     var idx = card.dataset.findingIndex;
                     if (persistedDismissed.has(String(idx))) {
                         return;
                     }
+                    markPetitionInReview();
                     var state = load();
-                    if (state[idx] === 'checked') {
-                        delete state[idx];
-                    } else {
+                    var willCheck = state[idx] !== 'checked';
+
+                    // Atualização otimista; reverte se o servidor recusar
+                    if (willCheck) {
                         state[idx] = 'checked';
+                    } else {
+                        delete state[idx];
                     }
-                    save(state);
                     applyState(state);
+
+                    this.disabled = true;
+                    try {
+                        var response = await fetch(`/fap-review/revision/${EXECUTION_ID}/findings/${idx}/check`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-Requested-With': 'XMLHttpRequest'
+                            },
+                            body: JSON.stringify({ checked: willCheck })
+                        });
+                        if (!response.ok) {
+                            var payload = {};
+                            try { payload = await response.json(); } catch { payload = {}; }
+                            throw new Error(payload.error || 'Não foi possível salvar a marcação.');
+                        }
+                    } catch (error) {
+                        if (willCheck) {
+                            delete state[idx];
+                        } else {
+                            state[idx] = 'checked';
+                        }
+                        applyState(state);
+                        alert(error.message || 'Não foi possível salvar a marcação.');
+                    } finally {
+                        this.disabled = false;
+                    }
                 });
             });
 
@@ -1840,8 +2062,9 @@
                             throw new Error(payload.error || 'Não foi possível salvar o feedback do ponto de atenção.');
                         }
 
+                        syncPetitionStatus(payload.petition_workflow_status);
+
                         delete state[idx];
-                        save(state);
 
                         if (shouldDismiss) {
                             persistedDismissed.add(String(idx));
@@ -1856,6 +2079,92 @@
                     }
                 });
             });
+
+            // ── Marcar todos como revisados ──────────────────────
+            // Delegação: o botão também existe no clone da barra sticky de navegação rápida
+            document.addEventListener('click', async function (event) {
+                const button = event.target.closest('.check-all-findings-btn');
+                if (!button) return;
+
+                if (!confirm('Marcar todos os pontos de atenção como revisados?')) {
+                    return;
+                }
+                const buttons = document.querySelectorAll('.check-all-findings-btn');
+                buttons.forEach(function (b) { b.disabled = true; });
+                try {
+                    const response = await fetch(button.dataset.checkAllUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-Requested-With': 'XMLHttpRequest'
+                        },
+                        body: '{}'
+                    });
+                    let payload = {};
+                    try { payload = await response.json(); } catch { payload = {}; }
+                    if (!response.ok) {
+                        throw new Error(payload.error || 'Não foi possível marcar todos os pontos.');
+                    }
+                    (payload.checked_indices || []).forEach(function (idx) {
+                        if (!persistedDismissed.has(String(idx))) {
+                            state[String(idx)] = 'checked';
+                        }
+                    });
+                    applyState(state);
+                } catch (error) {
+                    alert(error.message || 'Não foi possível marcar todos os pontos.');
+                } finally {
+                    buttons.forEach(function (b) { b.disabled = false; });
+                }
+            });
+
+            // ── Conclusão da triagem ─────────────────────────────
+            const triageActions = document.getElementById('triageCompleteActions');
+            if (triageActions) {
+                const feedback = document.getElementById('triageActionFeedback');
+
+                function showTriageFeedback(message, isError) {
+                    if (!feedback) return;
+                    feedback.textContent = message;
+                    feedback.style.display = 'block';
+                    feedback.style.color = isError ? '#dc3545' : '#198754';
+                }
+
+                triageActions.querySelectorAll('button[data-outcome]').forEach(function (btn) {
+                    btn.addEventListener('click', async function () {
+                        const outcome = this.dataset.outcome;
+                        const buttons = triageActions.querySelectorAll('button[data-outcome]');
+                        buttons.forEach(function (b) { b.disabled = true; });
+
+                        try {
+                            const response = await fetch(triageActions.dataset.completeTriageUrl, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-Requested-With': 'XMLHttpRequest'
+                                },
+                                body: JSON.stringify({ outcome: outcome })
+                            });
+                            let payload = {};
+                            try { payload = await response.json(); } catch { payload = {}; }
+                            if (!response.ok) {
+                                throw new Error(payload.error || 'Não foi possível concluir a triagem.');
+                            }
+
+                            if (payload.redirect_url) {
+                                showTriageFeedback('Triagem concluída. Redirecionando para a Nova Revisão...', false);
+                                window.setTimeout(function () { window.location = payload.redirect_url; }, 700);
+                            } else {
+                                showTriageFeedback('Versão final enviada para aprovação do revisor.', false);
+                                window.setTimeout(function () { window.location.reload(); }, 900);
+                            }
+                        } catch (error) {
+                            showTriageFeedback(error.message || 'Não foi possível concluir a triagem.', true);
+                            buttons.forEach(function (b) { b.disabled = false; });
+                        }
+                    });
+                });
+            }
         });
     })();
 

@@ -26,16 +26,20 @@ Cada petição tem um **status de acompanhamento**, visível no painel inicial:
 | Status | Significado |
 |---|---|
 | **Nova** | Cadastrada, ainda sem revisão. |
-| **Em revisão** | Há uma revisão em andamento. |
-| **Aguardando ajustes** | A revisão terminou e apontou itens — a bola está com o advogado. |
-| **Aprovada pelo revisor** | Alguém clicou em **"Aprovar petição"**: pronta para protocolo. |
+| **Em revisão** | A IA está processando **ou** o advogado está triando os pontos de atenção. |
+| **Aguardando ajustes** | O advogado concluiu a triagem e vai **enviar uma nova versão** corrigida (ou a revisão falhou e precisa de novo envio). |
+| **Aguardando aprovação** | O advogado marcou a versão como **final** — a bola está com o **revisor (administrador)**. |
+| **Aprovada pelo revisor** | Um **administrador** clicou em :btn-success[Aprovar petição]: pronta para protocolo. A petição fica **travada** para novas revisões. |
 | **Processo iniciado** | A petição já foi protocolada (marcação manual). |
 | **Arquivada** | Fora do fluxo (marcação manual). |
 
 Como o status evolui:
 
-- **Automaticamente**: ao enviar uma revisão a petição vira **Em revisão**; quando a revisão conclui (ou falha), vira **Aguardando ajustes**.
-- **Manualmente**: sair de "Aguardando ajustes" para **Aprovada pelo revisor** é sempre uma **decisão humana** (botão "Aprovar petição" na tela de resultado, ou troca de status no detalhe da petição). "Processo iniciado" e "Arquivada" também são manuais — e, uma vez nesses dois status, novas revisões **não rebaixam** a petição de volta.
+- **Automaticamente**: ao enviar uma revisão a petição vira **Em revisão** e assim permanece enquanto o advogado tria os pontos. Se a revisão **falhar**, vira **Aguardando ajustes** (precisa de novo envio).
+- **Pelo advogado**: depois de triar **todos** os pontos de atenção (cada um marcado como revisado ou não pertinente), a tela de resultado oferece dois caminhos: :btn-outline-primary[Revisada — enviar nova versão] (a petição vira **Aguardando ajustes** e você já é levado ao envio da nova versão) ou :btn-primary[Versão final — enviar para aprovação] (vira **Aguardando aprovação**).
+- **Pelo administrador**: com a petição **Aguardando aprovação**, o admin decide entre :btn-success[Aprovar petição] (vira **Aprovada pelo revisor**) e :btn-outline-danger[Devolver para ajustes] (volta para **Aguardando ajustes**). "Processo iniciado" e "Arquivada" são marcações manuais.
+
+> [!ALERTA] **Petição aprovada fica travada.** Depois de **Aprovada pelo revisor** (e também em "Processo iniciado" e "Arquivada"), a petição **não aceita novas revisões** — o botão some das telas e o envio é recusado. Somente um **administrador** pode destravá-la com :btn-outline-secondary[Reabrir petição], que a devolve para **Aguardando ajustes**.
 
 > [!INFO] **O Id Wrike é a chave de tudo.** Cada petição tem um **identificador do documento** (o "Id Wrike", até 96 caracteres). É ele que liga as revisões sucessivas à mesma petição — inclusive as feitas pelo Claude via MCP — e que carrega o histórico de pontos descartados. Use sempre o mesmo identificador para o mesmo documento.
 
@@ -45,13 +49,15 @@ Como o status evolui:
 
 Visão geral das petições do escritório.
 
+> [!INFO] **Painel de notificações (barra superior).** Em todas as telas, o **painel de notificações** — os chips no lado esquerdo da barra superior, ao lado do nome do escritório — inclui o chip **Revisor**, com as filas ativas das petições: um número **amarelo** para as **Em revisão** (novas + em revisão), um **vermelho** para as **Aguardando ajustes** (ação do advogado) e, para administradores, um **azul** para as **Aguardando aprovação**. Passe o mouse para ver o detalhe; o clique leva a este painel. Detalhes no manual do **Dashboard Principal**.
+
 ### Cartões de estatística
 
-**Total de petições**, **Em revisão** (novas + em revisão — requerem atenção agora), **Aguardando ajustes**, **Aprovadas pelo revisor** e **Revisões executadas**.
+**Total de petições**, **Aguardando ajustes**, **Em revisão** (novas + em revisão), **Aguardando aprovação** (a fila do revisor/admin) e **Aprovadas pelo revisor**.
 
 ### Tabela "Petições em Acompanhamento"
 
-Mostra **todas** as petições do escritório, priorizadas por status (aguardando ajustes primeiro, depois em revisão, depois aprovadas), com busca em tempo real e filtros por status.
+Mostra **todas** as petições do escritório, priorizadas por status (aguardando ajustes primeiro, depois aguardando aprovação, em revisão e aprovadas), com busca em tempo real e filtros por status.
 
 Sob o título de cada petição aparecem: a **quantidade de revisões** já realizadas, o número de **apontamentos da última revisão** e **há quanto tempo a petição está no status atual** (fica destacado em âmbar quando está aguardando ajustes há 7 dias ou mais).
 
@@ -61,13 +67,13 @@ Sob o título de cada petição aparecem: a **quantidade de revisões** já real
 | **Id Wrike** | Identificador do documento no escritório. | Sistema |
 | **Status** | Badge colorido com o status do ciclo (tabela acima). | Sistema |
 | **Última Revisão** | Data da última revisão e o usuário responsável. | Sistema |
-| **Ações** | Botões "Última Revisão", "Abrir Petição" (histórico completo) e "Nova Revisão". | — |
+| **Ações** | Botões :btn-outline-primary[Última Revisão], :btn-outline-secondary[Abrir Petição] (histórico completo) e :btn-primary[Nova Revisão]. Em petições **aprovadas, protocoladas ou arquivadas**, o :btn-primary[Nova Revisão] não aparece (petição travada). | — |
 
 ### Visão kanban
 
-Além da lista, a tela oferece uma **visão kanban**: use o seletor **Lista / Kanban** na barra de filtros. Cada coluna corresponde a um status da petição (Nova, Em revisão, Aguardando ajustes, Aprovada pelo revisor, Processo iniciado), e a coluna **Arquivada** fica recolhida à direita — clique no cabeçalho para expandi-la.
+Além da lista, a tela oferece uma **visão kanban**: use o seletor **Lista / Kanban** na barra de filtros. Cada coluna corresponde a um status da petição (Nova, Em revisão, Aguardando ajustes, Aguardando aprovação, Aprovada pelo revisor, Processo iniciado), e a coluna **Arquivada** fica recolhida à direita — clique no cabeçalho para expandi-la.
 
-- **Arraste um card** para outra coluna para mudar o status da petição — o efeito é o mesmo da troca manual de status na tela da petição, inclusive no registro de auditoria.
+- **Arraste um card** para outra coluna para mudar o status da petição — o efeito é o mesmo da troca manual de status na tela da petição, inclusive no registro de auditoria. Mudanças reservadas ao administrador (aprovar, ou tirar uma petição de "Aguardando aprovação"/"Aprovada pelo revisor") são recusadas para os demais usuários — o card volta para a coluna original.
 - A **busca** filtra os cards normalmente; a preferência de visão fica salva no navegador.
 - Se a mudança de status falhar (por exemplo, sem conexão), o card volta para a coluna original e um aviso é exibido.
 - Cada card também mostra a quantidade de revisões, os apontamentos da última revisão e há quantos dias a petição está naquele status.
@@ -84,6 +90,8 @@ Formulário em três passos:
    - **Documentos auxiliares** — anexos de apoio (PDF, DOC/DOCX, XLS/XLSX, TXT e imagens).
    - **Planilha de benefícios (.xlsx)** — ativa a conferência "Benefícios da Planilha x Documento" (ver adiante).
    - **Segunda versão do documento** — ativa a **Análise Comparativa** (original × revisado).
+
+> [!INFO] **Reaproveitar arquivos da revisão anterior.** Ao selecionar uma petição que já tem revisão, aparecem caixas de seleção para **usar os documentos auxiliares** e/ou **a planilha de benefícios do envio anterior** — sem precisar anexar tudo de novo. Os arquivos são copiados para a nova revisão; se você enviar uma planilha nova junto, ela tem prioridade sobre a reutilizada, e auxiliares novos são **somados** aos reaproveitados.
 
 Ao enviar, a revisão é processada e você é levado à tela de resultado.
 
@@ -117,9 +125,23 @@ O coração da revisão. Cada ponto traz:
 | **Referência do Manual** | A seção do manual do escritório que fundamenta o apontamento. |
 | **Padrão Novo** | Sinaliza quando o caso não está previsto no manual (candidato a Treinamento). |
 
-### Marcar um ponto como "não pertinente"
+### Triagem dos pontos (revisado / não pertinente)
 
-Discorda de um apontamento? Marque-o como **não pertinente**. O sistema memoriza esse descarte **para aquele documento** (pelo Id Wrike): nas próximas revisões, o mesmo ponto **não será cobrado de novo**. O descarte é reversível (botão de desfazer) e fica registrado na auditoria.
+Cada ponto de atenção tem dois botões no canto do card, e **toda marcação é salva no sistema** — o progresso vale em qualquer navegador e fica visível para a equipe:
+
+- **✓ Marcar como revisado** — você conferiu o ponto (e vai corrigi-lo, se for o caso). A barra de **Progresso de revisão** avança.
+- **✕ Não pertinente** — você discorda do apontamento. O sistema memoriza esse descarte **para aquele documento** (pelo Id Wrike): nas próximas revisões, o mesmo ponto **não será cobrado de novo**. O descarte é reversível (botão de desfazer) e fica registrado na auditoria.
+
+Ao interagir com esses botões a petição passa a **Em revisão** (se ainda não estava).
+
+### Concluir a triagem
+
+Quando **todos** os pontos estiverem triados (revisados + não pertinentes), surge uma **barra flutuante** no rodapé da tela — "Todos os pontos foram triados. Como deseja concluir esta versão?" — com a decisão sobre esta versão:
+
+- :btn-outline-primary[Revisada — enviar nova versão] — os pontos exigem correções: a petição vira **Aguardando ajustes** e você é levado direto ao formulário de **Nova Revisão**, já com a petição selecionada, para enviar a versão corrigida quando estiver pronta.
+- :btn-primary[Versão final — enviar para aprovação] — a versão está boa: a petição vira **Aguardando aprovação** e entra na fila do revisor (administrador).
+
+O sistema **confere no servidor** que a triagem está completa antes de aceitar a conclusão — se faltar algum ponto, ele avisa quantos faltam. Uma revisão **sem pontos de atenção** já nasce com a triagem completa.
 
 ### Documentos Obrigatórios em Falta
 
@@ -135,7 +157,7 @@ Quando você envia a segunda versão, a IA compara original × revisado e lista 
 
 ### Benefícios da Planilha x Documento (só com a planilha .xlsx)
 
-Conferência **automática, sem IA**: o sistema lê as colunas **"Número do Benefício"** e **"TESES"** da planilha e verifica se cada benefício **é citado no texto** da petição (tolerante a pontuação: "123.456.789-0", com espaços etc.). Resultado por linha: **Citado / Não citado**, com totais.
+Conferência **automática, sem IA**: o sistema lê as colunas **"Número do Benefício"** e **"TESES"** de **todas as abas** da planilha (comum ter uma aba por vigência — 2021, 2022, ...; abas sem essas colunas, como anotações, são ignoradas) e verifica se cada benefício **é citado no texto** da petição (tolerante a pontuação: "123.456.789-0", com espaços etc.). Resultado por linha: **Citado / Não citado**, com totais — e, quando a planilha tem várias abas, uma coluna **Aba** indica a origem de cada linha.
 
 | Detalhe | Origem |
 |---|---|
@@ -147,13 +169,19 @@ Conferência **automática, sem IA**: o sistema lê as colunas **"Número do Ben
 
 ### Ações da tela
 
-**Aprovar petição** (marca "Aprovada pelo revisor"), **Nova Revisão**, **Visualizar Documento** enviado, **Visualizar Manual** de referência e **Copiar JSON** (dados brutos). A tela também mostra o modelo de IA usado, tokens e **custo estimado** da revisão.
+- **Todos os usuários**: :btn-primary[Nova Revisão], **Visualizar Documento** enviado (em DOCX, o botão :btn-outline-primary[Ver Documento] de cada ponto abre o conteúdo com o trecho da localização destacado), **Visualizar Manual** de referência e **Copiar JSON** (dados brutos). A tela também mostra o modelo de IA usado, tokens e **custo estimado** da revisão.
+- **Somente administradores**, quando a petição está **Aguardando aprovação**: :btn-success[Aprovar petição] (marca "Aprovada pelo revisor" e trava a petição) e :btn-outline-danger[Devolver para ajustes] (recusa a versão final — volta para "Aguardando ajustes").
+- **Somente administradores**, quando a petição está **Aprovada pelo revisor**: :btn-outline-secondary[Reabrir petição] (destrava e volta para "Aguardando ajustes").
 
 ---
 
 ## Tela 4 — Detalhe da Petição
 
-Histórico completo de uma petição: todas as revisões (número, data, status, documento e responsável) e um resumo (concluídas, em processamento, com falha, comparativas). Aqui você pode **editar o título e o Id Wrike** (o histórico de descartes acompanha a mudança) e **trocar o status** manualmente — inclusive marcar "Processo iniciado" ou "Arquivada".
+Histórico completo de uma petição: todas as revisões (número, data, status, documento e responsável) e um resumo (concluídas, em processamento, com falha, comparativas).
+
+> [!INFO] **Revisões substituídas.** Quando uma nova revisão é enviada, as anteriores passam a exibir o status **Substituída** — elas continuam no histórico para consulta, mas ficam **somente leitura**: a tela da revisão antiga mostra um aviso com atalho para a revisão atual, e a triagem (marcar revisado / não pertinente / concluir) só funciona na revisão mais recente. Aqui você pode **editar o título e o Id Wrike** (o histórico de descartes acompanha a mudança) e **trocar o status** manualmente — inclusive marcar "Processo iniciado" ou "Arquivada".
+
+As mudanças de status reservadas ao administrador valem aqui também: para quem não é admin, o seletor de status **não oferece** "Aprovada pelo revisor" e fica **bloqueado** quando a petição está "Aguardando aprovação" ou aprovada. Em petição **aprovada**, o botão :btn-primary[Nova Revisão] some e o administrador vê :btn-outline-secondary[Reabrir petição] no lugar.
 
 O painel **Última Revisão** traz também o **Panorama da revisão**: os totais do Resumo Executivo (apontamentos totais, críticos, moderados e formais) e a prioridade de correção — sem precisar abrir o resultado completo.
 
@@ -219,7 +247,8 @@ As estatísticas dos advogados via MCP seguem a mesma regra da tela: **apenas ad
 | Área | Quem acessa |
 |---|---|
 | Início, Revisar Petição, Resultado, Detalhe da Petição | Qualquer usuário com o módulo **Revisor de Petições** liberado |
-| Aprovar petição / trocar status / descartar pontos | Qualquer usuário do escritório com o módulo |
+| Triar pontos (revisado / não pertinente) e concluir a triagem | Qualquer usuário do escritório com o módulo |
+| :btn-success[Aprovar petição], :btn-outline-danger[Devolver para ajustes] e :btn-outline-secondary[Reabrir petição] | **Somente administradores** |
 | Estatísticas dos Advogados, Configurações, Treinamento, Auditoria | **Somente administradores** |
 
 ---
@@ -230,6 +259,7 @@ As estatísticas dos advogados via MCP seguem a mesma regra da tela: **apenas ad
 |---|---|
 | **Id Wrike** | Identificador do documento no escritório — a chave que liga as revisões de uma mesma petição. |
 | **Ponto de atenção (achado)** | Item apontado pela IA revisora, com gravidade e sugestão de correção. |
+| **Triagem** | Conferência humana dos pontos de atenção: cada um é marcado como **revisado** ou **não pertinente**; concluída, define o próximo passo da petição. |
 | **CRÍTICO / MODERADO / FORMAL** | Gravidades dos achados, da mais séria à de padronização. |
 | **Revisão focada** | A partir da 2ª revisão do mesmo documento: verifica só a correção dos pontos anteriores. |
 | **Análise Comparativa** | Revisão de duas versões (original × revisada) do mesmo documento. |

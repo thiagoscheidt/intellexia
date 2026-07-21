@@ -54,6 +54,8 @@ class DataJudAPI:
         'TJSE': 'api_publica_tjse',
         'TJSP': 'api_publica_tjsp',
         'TJTO': 'api_publica_tjto',
+        # Justiça do Trabalho (TRT1..TRT24)
+        **{f'TRT{n}': f'api_publica_trt{n}' for n in range(1, 25)},
     }
     
     def __init__(self, api_key: Optional[str] = None):

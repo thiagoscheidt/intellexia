@@ -1,8 +1,9 @@
 """
 Assistente do Manual — chat "pergunte ao manual".
 
-Responde dúvidas sobre os painéis Dashboard, Painel FAP e Painel de Contestações
-usando EXCLUSIVAMENTE o conteúdo dos manuais em ``docs/MANUAL_*.md``. Os manuais
+Responde dúvidas sobre os painéis Dashboard, Painel FAP, Painel de Contestações
+e Revisor de Petições usando EXCLUSIVAMENTE o conteúdo dos manuais em
+``docs/MANUAL_*.md``. Os manuais
 são curtos e cabem inteiros no prompt, então não há RAG/busca vetorial: o modelo
 recebe o manual completo a cada pergunta.
 """
@@ -23,14 +24,15 @@ _MANUAL_FILES = (
     ("Dashboard Principal", "MANUAL_DASHBOARD.md"),
     ("Painel FAP", "MANUAL_PAINEL_FAP.md"),
     ("Painel de Contestações", "MANUAL_PAINEL_CONTESTACOES.md"),
+    ("Revisor de Petições", "MANUAL_REVISOR_PETICOES.md"),
 )
 
 MAX_QUESTION_CHARS = 1000
 MAX_HISTORY_MESSAGES = 6
 
 _SYSTEM_INSTRUCTIONS = """Você é o assistente de ajuda do sistema IntellexIA. \
-Seu papel é tirar dúvidas dos usuários sobre três painéis: Dashboard Principal, \
-Painel FAP e Painel de Contestações.
+Seu papel é tirar dúvidas dos usuários sobre quatro painéis: Dashboard Principal, \
+Painel FAP, Painel de Contestações e Revisor de Petições.
 
 Regras:
 - Responda SOMENTE com base no conteúdo dos manuais fornecidos abaixo.

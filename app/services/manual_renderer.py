@@ -17,6 +17,11 @@ Converte os arquivos ``docs/MANUAL_*.md`` em HTML pronto para a página
 - **Endereços do sistema**: ``:url_mcp:`` e ``:url_app:`` viram a URL real desta
   instalação (produção e dev têm domínios diferentes — nunca escreva a URL fixa
   no markdown).
+- **Botões de ação**: ``:btn-<estilo>[Texto]`` vira uma réplica visual do botão
+  da tela, com as mesmas cores do Bootstrap usado no app. Estilos aceitos:
+  ``success``, ``primary``, ``danger``, ``secondary``, ``warning`` e as
+  variantes ``outline-*`` — ex.: ``:btn-success[Aprovar petição]``,
+  ``:btn-outline-danger[Devolver para ajustes]``.
 
 Os manuais são a **fonte única**: esta função é chamada em runtime pela rota e
 o resultado é mantido em cache, invalidado quando qualquer ``.md`` muda ou quando
@@ -40,6 +45,7 @@ _MANUALS = (
     ("dashboard", "Dashboard Principal", "MANUAL_DASHBOARD.md"),
     ("painel-fap", "Painel FAP", "MANUAL_PAINEL_FAP.md"),
     ("contestacoes", "Painel de Contestações", "MANUAL_PAINEL_CONTESTACOES.md"),
+    ("revisor-peticoes", "Revisor de Petições", "MANUAL_REVISOR_PETICOES.md"),
     ("conectar-ia", "Conectar sua IA (MCP)", "MANUAL_MCP.md"),
 )
 
@@ -75,6 +81,27 @@ _CLAUDE_SVG = (
     )
     + "</svg>"
 )
+
+# Estilos aceitos pelo marcador de botão ``:btn-<estilo>[Texto]`` (cores do
+# Bootstrap usadas nas telas — manter em sincronia com o CSS em manuais.html).
+_BUTTON_STYLES = {
+    "success", "primary", "danger", "secondary", "warning",
+    "outline-success", "outline-primary", "outline-danger", "outline-secondary",
+}
+
+_BUTTON_RE = re.compile(r":btn-([a-z-]+)\[([^\]]+)\]")
+
+
+def _replace_buttons(html: str) -> str:
+    """Troca ``:btn-<estilo>[Texto]`` por uma réplica visual do botão da tela."""
+    def _repl(match: re.Match) -> str:
+        style, label = match.group(1), match.group(2)
+        if style not in _BUTTON_STYLES:
+            return match.group(0)
+        return f'<span class="manual-btn mbtn-{style}">{label}</span>'
+
+    return _BUTTON_RE.sub(_repl, html)
+
 
 # Cache: {"key": (mtimes,), "modules": [...]}
 _cache: dict = {"key": None, "modules": None}
@@ -153,13 +180,14 @@ def _process(html: str, module_id: str) -> tuple[str, list[dict]]:
         wrapper["class"] = "table-wrap"
         table.wrap(wrapper)
 
-    # Marcadores finais: ícone do Claude e endereços desta instalação.
+    # Marcadores finais: ícone do Claude, endereços desta instalação e botões.
     html_out = (
         str(soup)
         .replace(":claude:", _CLAUDE_SVG)
         .replace(":url_mcp:", mcp_public_url())
         .replace(":url_app:", app_public_url())
     )
+    html_out = _replace_buttons(html_out)
     return html_out, toc
 
 

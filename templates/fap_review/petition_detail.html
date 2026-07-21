@@ -440,13 +440,27 @@
     {% endcall %}
 
     <div class="d-flex flex-wrap gap-2 mb-4">
+        {% if petition.workflow_status not in ['ready_for_filing', 'filed', 'archived'] %}
         <a href="{{ url_for('fap_review.revision', petition_id=petition.id) }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i> Nova Revisão
         </a>
+        {% elif session.get('user_role') == 'admin' and petition.workflow_status == 'ready_for_filing' %}
+        <button type="button" class="btn btn-outline-secondary" id="reopenPetitionButton"
+            data-update-url="{{ url_for('fap_review.petition_update_status', petition_id=petition.id) }}">
+            <i class="bi bi-unlock me-1"></i> Reabrir petição
+        </button>
+        {% endif %}
         <a href="{{ url_for('fap_review.index') }}" class="btn btn-outline-secondary">
             <i class="bi bi-arrow-left me-1"></i> Voltar ao Painel
         </a>
     </div>
+    {% if petition.workflow_status in ['ready_for_filing', 'filed', 'archived'] %}
+    <div class="alert alert-success py-2 px-3 mb-4 small">
+        <i class="bi bi-lock me-1"></i> Petição {{ petition_status_labels.get(petition.workflow_status,
+        petition.workflow_status)|lower if petition_status_labels is defined else petition.workflow_status }} —
+        não aceita novas revisões{% if session.get('user_role') != 'admin' %} (um administrador pode reabri-la){% endif %}.
+    </div>
+    {% endif %}
 
     <div class="card petition-summary-card mb-4">
         <div class="card-body">
@@ -471,10 +485,16 @@
                     <label for="petitionWorkflowStatus" class="form-label small fw-semibold text-muted mb-2">Status da
                         petição</label>
                     <div class="petition-status-row justify-content-lg-end">
-                        <select id="petitionWorkflowStatus" class="form-select" style="max-width: 280px;">
+                        {% set is_admin_user = session.get('user_role') == 'admin' %}
+                        <select id="petitionWorkflowStatus" class="form-select" style="max-width: 280px;"
+                            {% if not is_admin_user and petition.workflow_status in ['awaiting_approval', 'ready_for_filing'] %}disabled
+                            title="Somente administradores alteram o status nesta etapa"{% endif %}>
                             {% for status_key, status_label in petition_status_labels.items() %}
+                            {% if is_admin_user or status_key != 'ready_for_filing'
+                            or petition.workflow_status == 'ready_for_filing' %}
                             <option value="{{ status_key }}" {% if petition.workflow_status==status_key %}selected{%
                                 endif %}>{{ status_label }}</option>
+                            {% endif %}
                             {% endfor %}
                         </select>
                         <span id="petitionStatusBadge"
@@ -681,7 +701,14 @@
                                     execution.revision_number or loop.revindex }}</span>
                             </td>
                             <td>
-                                {% if execution.status == 'completed' %}
+                                {% if execution.status == 'completed' and petition.latest_revision_id
+                                and execution.id != petition.latest_revision_id %}
+                                <span
+                                    class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle"
+                                    title="Concluída, mas já existe revisão mais recente desta petição">
+                                    <i class="bi bi-layers me-1"></i> Substituída
+                                </span>
+                                {% elif execution.status == 'completed' %}
                                 <span
                                     class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle">
                                     <i class="bi bi-check-circle me-1"></i> Concluída
@@ -770,6 +797,31 @@
 
 {% block extra_js %}
 <script>
+    // Reabrir petição aprovada (admin): volta para "Aguardando ajustes"
+    document.addEventListener('DOMContentLoaded', function () {
+        const reopenButton = document.getElementById('reopenPetitionButton');
+        if (!reopenButton) return;
+
+        reopenButton.addEventListener('click', async function () {
+            this.disabled = true;
+            try {
+                const response = await fetch(this.dataset.updateUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ workflow_status: 'awaiting_adjustments' })
+                });
+                const payload = await response.json().catch(() => ({}));
+                if (!response.ok) {
+                    throw new Error(payload.error || 'Não foi possível reabrir a petição.');
+                }
+                window.location.reload();
+            } catch (error) {
+                alert(error.message || 'Não foi possível reabrir a petição.');
+                this.disabled = false;
+            }
+        });
+    });
+
     document.addEventListener('DOMContentLoaded', function () {
         const statusSelect = document.getElementById('petitionWorkflowStatus');
         const petitionForm = document.getElementById('petitionDetailsForm');

@@ -115,6 +115,31 @@
   :root[data-theme="dark"] .tag.ia { background: #221b38; color: #b69bef; border-color: #392c5e; }
   @media (prefers-color-scheme: dark) { .tag.ia { background: #221b38; color: #b69bef; border-color: #392c5e; } }
 
+  /* Réplica visual dos botões de ação das telas (marcador :btn-<estilo>[Texto]).
+     Cores dos botões Bootstrap usados no app. */
+  .manual-btn { display: inline-block; font-size: 12.5px; font-weight: 600; line-height: 1;
+    padding: 5px 10px; border-radius: 7px; border: 1px solid transparent; white-space: nowrap;
+    vertical-align: baseline; }
+  .manual-btn.mbtn-success { background: #198754; color: #fff; }
+  .manual-btn.mbtn-primary { background: #0d6efd; color: #fff; }
+  .manual-btn.mbtn-danger { background: #dc3545; color: #fff; }
+  .manual-btn.mbtn-secondary { background: #6c757d; color: #fff; }
+  .manual-btn.mbtn-warning { background: #ffc107; color: #212529; }
+  .manual-btn.mbtn-outline-success { background: transparent; color: #198754; border-color: #198754; }
+  .manual-btn.mbtn-outline-primary { background: transparent; color: #0d6efd; border-color: #0d6efd; }
+  .manual-btn.mbtn-outline-danger { background: transparent; color: #dc3545; border-color: #dc3545; }
+  .manual-btn.mbtn-outline-secondary { background: transparent; color: #6c757d; border-color: #6c757d; }
+  :root[data-theme="dark"] .manual-btn.mbtn-outline-primary { color: #6ea8fe; border-color: #6ea8fe; }
+  :root[data-theme="dark"] .manual-btn.mbtn-outline-danger { color: #ea868f; border-color: #ea868f; }
+  :root[data-theme="dark"] .manual-btn.mbtn-outline-secondary { color: #adb5bd; border-color: #adb5bd; }
+  :root[data-theme="dark"] .manual-btn.mbtn-outline-success { color: #75b798; border-color: #75b798; }
+  @media (prefers-color-scheme: dark) {
+    .manual-btn.mbtn-outline-primary { color: #6ea8fe; border-color: #6ea8fe; }
+    .manual-btn.mbtn-outline-danger { color: #ea868f; border-color: #ea868f; }
+    .manual-btn.mbtn-outline-secondary { color: #adb5bd; border-color: #adb5bd; }
+    .manual-btn.mbtn-outline-success { color: #75b798; border-color: #75b798; }
+  }
+
   .callout { border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; background: var(--surface);
     box-shadow: var(--shadow); max-width: 74ch; margin: 16px 0; }
   .callout > :first-child { margin-top: 0; }

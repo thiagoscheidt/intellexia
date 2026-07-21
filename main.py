@@ -133,6 +133,21 @@ def basename_filter(value):
     return os.path.basename(value)
 
 
+@app.template_filter('sem_estilos')
+def sem_estilos_filter(value):
+    """Remove blocos <style>/<script> antes de um |striptags.
+
+    O teor de alguns tribunais (ex.: TJSC) vem em HTML completo; striptags
+    sozinho preserva o conteúdo interno dos blocos de estilo como texto.
+    A limpeza completa (tags + entidades) vive em document_utils.strip_html_text,
+    compartilhada com o MCP.
+    """
+    import re
+    if not value:
+        return ''
+    return re.sub(r'(?is)<(style|script)[^>]*>.*?</\1>', ' ', str(value))
+
+
 # Filtros de timezone (America/Sao_Paulo)
 from app.utils.timezone import format_datetime_sp, format_date_sp
 

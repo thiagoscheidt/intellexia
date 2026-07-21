@@ -14,8 +14,95 @@
           <i class="bi bi-building me-2"></i>{{ session.get('law_firm_name', 'Empresa') }}
         </span>
       </li>
+      <!--begin::Contadores por módulo (pendências)-->
+      {% set show_communications_chip = can_view_module('communications') %}
+      {% set show_fap_review_chip = can_view_module('fap_review') and fap_review_pending_counts %}
+      {% if show_communications_chip or show_fap_review_chip %}
+      <li class="nav-item d-flex align-items-center">
+        <div class="module-counters">
+          {% if show_communications_chip %}
+          <a class="module-counter-chip" href="{{ url_for('communications.list_communications') }}"
+            title="Monitoramento de Processos{% if communications_unread_count %} — {{ communications_unread_count }} comunicação(ões) não lida(s){% endif %}">
+            <i class="bi bi-broadcast"></i>
+            <span class="mc-label">Monitoramento</span>
+            {% if communications_unread_count and communications_unread_count > 0 %}
+            <span class="badge rounded-pill text-bg-warning">{{ communications_unread_count if
+              communications_unread_count < 100 else '99+' }}</span>
+            {% endif %}
+          </a>
+          {% endif %}
+          {% if show_fap_review_chip %}
+          <a class="module-counter-chip" href="{{ url_for('fap_review.index') }}"
+            title="Revisor de Petições{% if fap_review_pending_counts.badge %} — {{ fap_review_pending_counts.in_review }} em revisão · {{ fap_review_pending_counts.awaiting_adjustments }} aguardando ajustes{% if fap_review_pending_counts.is_admin %} · {{ fap_review_pending_counts.awaiting_approval }} aguardando aprovação{% endif %}{% endif %}">
+            <i class="bi bi-file-earmark-check"></i>
+            <span class="mc-label">Revisor</span>
+            {% if fap_review_pending_counts.in_review %}
+            <span class="badge rounded-pill text-bg-warning"
+              title="{{ fap_review_pending_counts.in_review }} em revisão">{{
+              fap_review_pending_counts.in_review if fap_review_pending_counts.in_review < 100 else '99+' }}</span>
+            {% endif %}
+            {% if fap_review_pending_counts.awaiting_adjustments %}
+            <span class="badge rounded-pill text-bg-danger"
+              title="{{ fap_review_pending_counts.awaiting_adjustments }} aguardando ajustes">{{
+              fap_review_pending_counts.awaiting_adjustments if fap_review_pending_counts.awaiting_adjustments < 100
+              else '99+' }}</span>
+            {% endif %}
+            {% if fap_review_pending_counts.is_admin and fap_review_pending_counts.awaiting_approval %}
+            <span class="badge rounded-pill text-bg-info"
+              title="{{ fap_review_pending_counts.awaiting_approval }} aguardando aprovação">{{
+              fap_review_pending_counts.awaiting_approval if fap_review_pending_counts.awaiting_approval < 100 else
+              '99+' }}</span>
+            {% endif %}
+          </a>
+          {% endif %}
+        </div>
+      </li>
+      {% endif %}
+      <!--end::Contadores por módulo-->
     </ul>
     <!--end::Start Navbar Links-->
+    <style>
+      /* Chips de pendência por módulo (lado esquerdo da header) */
+      .module-counters {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: 10px;
+        padding: 3px 6px;
+        border: 1px solid var(--bs-border-color);
+        border-radius: 999px;
+        background: var(--bs-secondary-bg);
+      }
+
+      .module-counter-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 10px;
+        border-radius: 999px;
+        font-size: .82rem;
+        font-weight: 600;
+        color: var(--bs-body-color);
+        text-decoration: none;
+        line-height: 1;
+        transition: background-color .15s ease;
+      }
+
+      .module-counter-chip:hover {
+        background: var(--bs-tertiary-bg);
+        color: var(--bs-emphasis-color);
+      }
+
+      .module-counter-chip .badge {
+        font-size: .7rem;
+      }
+
+      @media (max-width: 991.98px) {
+        .module-counter-chip .mc-label {
+          display: none;
+        }
+      }
+    </style>
     <!--begin::End Navbar Links-->
     <ul class="navbar-nav ms-auto">
       <!--begin::Claude MCP Connector-->

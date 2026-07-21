@@ -17,6 +17,8 @@ from collections import Counter, defaultdict
 from datetime import datetime
 from pathlib import Path
 
+from sqlalchemy import func
+
 from app.models import (
     db, FapReviewAuditLog, FapReviewExecution, FapReviewPetition,
     FapReviewPromptVersion, FapReviewReferenceVersion,
@@ -29,10 +31,21 @@ PETITION_WORKFLOW_STATUSES = {
     'new': 'Nova',
     'in_review': 'Em revisão',
     'awaiting_adjustments': 'Aguardando ajustes',
+    'awaiting_approval': 'Aguardando aprovação',
     'ready_for_filing': 'Aprovada pelo revisor',
     'filed': 'Processo iniciado',
     'archived': 'Arquivada',
 }
+
+# Desfecho da triagem escolhido pelo usuário → status resultante.
+TRIAGE_OUTCOME_STATUSES = {
+    'new_version': 'awaiting_adjustments',   # "Revisada — enviar nova versão"
+    'final_version': 'awaiting_approval',    # "Versão final — enviar para aprovação"
+}
+
+# Petição aprovada/protocolada/arquivada não aceita novo ciclo de revisão
+# (admin destrava com "Reabrir petição" → awaiting_adjustments).
+NEW_REVISION_BLOCKED_STATUSES = {'ready_for_filing', 'filed', 'archived'}
 
 MAX_IDENTIFIER_LENGTH = 96
 
@@ -79,14 +92,93 @@ def collect_active_versions(law_firm_id: int) -> dict:
 
 
 def derive_petition_workflow_status(execution_status: str) -> str:
-    """Traduz o status da revisão para o status agregado da petição."""
-    if execution_status in {'pending', 'processing'}:
+    """Traduz o status da revisão para o status agregado da petição.
+
+    Revisão concluída fica 'in_review' (usuário ainda vai triar os achados);
+    'awaiting_adjustments' é decisão humana ao concluir a triagem — exceto em
+    falha, que exige novo envio.
+    """
+    if execution_status in {'pending', 'processing', 'completed'}:
         return 'in_review'
-    if execution_status == 'completed':
-        return 'awaiting_adjustments'
     if execution_status == 'failed':
         return 'awaiting_adjustments'
     return 'new'
+
+
+def status_transition_requires_admin(old_status: str, new_status: str) -> bool:
+    """Transições reservadas ao admin: aprovar, devolver para ajustes e reabrir.
+
+    Regra simétrica de tela × endpoint: entrar em 'ready_for_filing' ou sair de
+    'awaiting_approval'/'ready_for_filing' exige usuário admin.
+    """
+    if new_status == 'ready_for_filing':
+        return True
+    return old_status in {'awaiting_approval', 'ready_for_filing'}
+
+
+def is_triage_complete(total_findings: int, checked_indices: set[int],
+                       ignored_indices: set[int]) -> bool:
+    """Triagem completa: todo ponto (1..N) está checado como revisado ou descartado."""
+    if total_findings <= 0:
+        return True
+    triaged = {i for i in (checked_indices | ignored_indices) if 1 <= i <= total_findings}
+    return len(triaged) >= total_findings
+
+
+def count_pending_review_queues(law_firm_id: int) -> dict:
+    """Filas ativas do Revisor para o painel de notificações — um count agrupado, com índice.
+
+    'in_review' agrega novas + em revisão (mesmo agrupamento do card do painel);
+    'awaiting_adjustments' é ação do advogado (enviar nova versão);
+    'awaiting_approval' é ação do revisor (admin).
+    """
+    counts = dict(
+        db.session.query(FapReviewPetition.workflow_status, func.count(FapReviewPetition.id))
+        .filter(
+            FapReviewPetition.law_firm_id == law_firm_id,
+            FapReviewPetition.workflow_status.in_(
+                ['new', 'in_review', 'awaiting_adjustments', 'awaiting_approval']),
+        )
+        .group_by(FapReviewPetition.workflow_status)
+        .all()
+    )
+    return {
+        'in_review': counts.get('new', 0) + counts.get('in_review', 0),
+        'awaiting_adjustments': counts.get('awaiting_adjustments', 0),
+        'awaiting_approval': counts.get('awaiting_approval', 0),
+    }
+
+
+def mark_petition_in_user_review(petition: FapReviewPetition | None) -> bool:
+    """Marca a petição como 'Em revisão' quando o usuário começa a triar os achados.
+
+    Disparado pelos botões "Não pertinente" e "Marcar como revisado" da tela de
+    resultado. Só promove a partir de estados pré-triagem; nunca rebaixa petição
+    aprovada, protocolada ou arquivada. Não faz commit — responsabilidade do chamador.
+    """
+    if not petition or petition.workflow_status not in {'new', 'awaiting_adjustments'}:
+        return False
+
+    petition.workflow_status = 'in_review'
+    petition.status_changed_at = datetime.now()
+    petition.updated_at = datetime.now()
+    return True
+
+
+def is_execution_superseded(execution: FapReviewExecution) -> bool:
+    """Revisão concluída que deixou de ser a corrente da petição (chegou versão mais nova).
+
+    Derivado de ``petition.latest_revision_id`` — o ``status`` da execução não é
+    mutado, pois alimenta histórico, score de advogados e revisão focada.
+    """
+    petition = execution.petition
+    return bool(
+        execution.execution_type == 'revision'
+        and execution.status == 'completed'
+        and petition
+        and petition.latest_revision_id
+        and petition.latest_revision_id != execution.id
+    )
 
 
 def sync_petition_after_revision(execution: FapReviewExecution) -> None:

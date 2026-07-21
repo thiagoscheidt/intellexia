@@ -1041,7 +1041,8 @@ def list_processes():
     if view_mode == 'kanban':
         processes_list = ordered_query.all()
     else:
-        processes = ordered_query.paginate(page=page, per_page=15)
+        # error_out=False: página fora do alcance mostra lista vazia em vez de 404
+        processes = ordered_query.paginate(page=page, per_page=15, error_out=False)
         processes_list = processes.items
     
     # Estatísticas (a lista principal e os cards contam só os confirmados)
@@ -1665,6 +1666,109 @@ def new_process():
         defendants=defendants,
         document_types=document_types,
     )
+
+
+# Justiça Estadual (J=8): código TR do número CNJ → sigla do TJ no DataJud
+_DATAJUD_TJ_POR_CODIGO_UF = {
+    '01': 'TJAC', '02': 'TJAL', '03': 'TJAP', '04': 'TJAM', '05': 'TJBA',
+    '06': 'TJCE', '07': 'TJDFT', '08': 'TJES', '09': 'TJGO', '10': 'TJMA',
+    '11': 'TJMT', '12': 'TJMS', '13': 'TJMG', '14': 'TJPA', '15': 'TJPB',
+    '16': 'TJPR', '17': 'TJPE', '18': 'TJPI', '19': 'TJRJ', '20': 'TJRN',
+    '21': 'TJRS', '22': 'TJRO', '23': 'TJRR', '24': 'TJSC', '25': 'TJSE',
+    '26': 'TJSP', '27': 'TJTO',
+}
+
+
+def _datajud_sigla(process):
+    """Sigla do índice DataJud: usa o tribunal do processo ou deriva do número CNJ.
+
+    No número CNJ (NNNNNNN-DD.AAAA.J.TR.OOOO), J identifica o segmento e TR o
+    tribunal dentro dele (Resolução CNJ 65/2008).
+    """
+    from app.services.data_jud_api import DataJudAPI
+
+    sigla = (process.tribunal or '').strip().upper()
+    if sigla in DataJudAPI.TRIBUNAIS:
+        return sigla
+
+    digits = re.sub(r'\D', '', process.process_number or '')
+    if len(digits) != 20:
+        return None
+    segmento, tr = digits[13], digits[14:16]
+    if segmento == '4':
+        return f'TRF{int(tr)}'
+    if segmento == '5':
+        return f'TRT{int(tr)}'
+    if segmento == '8':
+        return _DATAJUD_TJ_POR_CODIGO_UF.get(tr)
+    return {'1': 'STF', '3': 'STJ', '7': 'STM'}.get(segmento)
+
+
+@process_panel_bp.route('/<int:process_id>/datajud-movimentos')
+@require_law_firm
+def datajud_movimentos(process_id):
+    """Movimentação processual ao vivo na API pública do DataJud (CNJ)."""
+    from app.services.data_jud_api import DataJudAPI
+
+    law_firm_id = get_current_law_firm_id()
+    process = JudicialProcess.query.filter_by(
+        id=process_id, law_firm_id=law_firm_id
+    ).first()
+    if not process:
+        return jsonify({"success": False, "message": "Processo não encontrado"}), 404
+
+    digits = re.sub(r'\D', '', process.process_number or '')
+    if len(digits) != 20:
+        return jsonify({"success": False,
+                        "message": "Processo sem número CNJ completo — não é possível consultar o DataJud."}), 400
+
+    sigla = _datajud_sigla(process)
+    if not sigla or sigla not in DataJudAPI.TRIBUNAIS:
+        return jsonify({"success": False,
+                        "message": f"Tribunal '{process.tribunal or '?'}' não disponível na API pública do DataJud."}), 400
+
+    api = DataJudAPI()
+    resultado = api.buscar_por_numero_processo(digits, sigla, size=5)
+    if resultado.get('error'):
+        return jsonify({"success": False,
+                        "message": f"DataJud indisponível agora: {resultado.get('message')}"}), 502
+
+    instancias = []
+    for processo in api.extrair_processos(resultado):
+        movimentos = []
+        for mov in (processo.get('movimentos') or []):
+            complementos = [
+                f"{c.get('descricao')}: {c.get('nome')}" if c.get('descricao') else c.get('nome')
+                for c in (mov.get('complementosTabelados') or []) if isinstance(c, dict)
+            ]
+            movimentos.append({
+                'data_hora': mov.get('dataHora'),
+                'codigo': mov.get('codigo'),
+                'nome': mov.get('nome'),
+                'complementos': [c for c in complementos if c],
+            })
+        movimentos.sort(key=lambda m: m.get('data_hora') or '', reverse=True)
+        instancias.append({
+            'grau': processo.get('grau'),
+            'classe': (processo.get('classe') or {}).get('nome'),
+            'orgao_julgador': (processo.get('orgaoJulgador') or {}).get('nome'),
+            'sistema': (processo.get('sistema') or {}).get('nome'),
+            'data_ajuizamento': processo.get('dataAjuizamento'),
+            'ultima_atualizacao': processo.get('dataHoraUltimaAtualizacao'),
+            'total_movimentos': len(movimentos),
+            'movimentos': movimentos[:200],
+        })
+    # Instância mais alta primeiro (G2 antes de G1)
+    instancias.sort(key=lambda i: str(i.get('grau') or ''), reverse=True)
+
+    return jsonify({
+        "success": True,
+        "tribunal": sigla,
+        "numero_processo": process.process_number,
+        "total_instancias": len(instancias),
+        "instancias": instancias,
+        "fonte": "API pública do DataJud (CNJ) — dados podem ter defasagem em relação ao sistema do tribunal.",
+    })
 
 
 @process_panel_bp.route('/<int:process_id>')
@@ -3567,7 +3671,7 @@ def update_status(process_id):
 @process_panel_bp.route('/<int:process_id>/descoberta', methods=['POST'])
 @require_law_firm
 def update_discovery_status(process_id):
-    """Triagem de processo descoberto pelo Monitoramento de Comunicações.
+    """Triagem de processo descoberto pelo Monitoramento de Processos.
 
     action=confirm → entra na lista principal do painel;
     action=ignore  → sai das listas padrão (fica na aba Ignorados).

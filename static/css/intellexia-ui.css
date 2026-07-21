@@ -1,0 +1,9 @@
+/* Ajustes globais de UI do IntellexIA (carregado após o adminlte.css). */
+
+/* O AdminLTE adiciona um clearfix ::after (display:block) em .card-header/.card-footer.
+   Num header transformado em flex (d-flex), esse pseudo-elemento vira um 3º item e
+   impede o justify-content-between de levar as ações até a borda direita. */
+.card-header.d-flex::after,
+.card-footer.d-flex::after {
+  display: none;
+}

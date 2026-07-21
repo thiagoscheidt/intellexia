@@ -7,6 +7,7 @@ Expõe ferramentas de:
   - Base de conhecimento (RAG)          [módulo knowledge_base]
   - Painel FAP e contestações           [módulo fap_panel]
   - Painel de processos judiciais       [módulo process_panel]
+  - Monitoramento de Processos (DJEN)   [módulo communications]
   - Revisor de petições iniciais (stub) [módulo fap_review]
 
 A identidade (user_id, law_firm_id, permissões de módulo) vem do access token
@@ -76,6 +77,13 @@ from mcp_server.tools.exports import (
 from mcp_server.tools.process_panel import (
     list_processes_handler,
     get_process_detail_handler,
+)
+from mcp_server.tools.communications import (
+    explain_communication_handler,
+    get_communication_detail_handler,
+    list_communications_handler,
+    monitoring_summary_handler,
+    process_communications_handler,
 )
 from mcp_server.tools.petition_reviewer import (
     compare_petition_versions_handler,
@@ -850,6 +858,137 @@ def detalhar_processo(processo_id: int) -> dict:
     claims = require_module("process_panel")
     with app.app_context():
         return get_process_detail_handler(processo_id, claims["law_firm_id"])
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# MONITORAMENTO DE PROCESSOS (comunicações do DJEN)
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+@mcp.tool()
+def listar_comunicacoes(
+    tribunal: str | None = None,
+    tipo: str | None = None,
+    fonte: str | None = None,
+    advogado_id: int | None = None,
+    numero_processo: str | None = None,
+    somente_nao_lidas: bool = False,
+    data_de: str | None = None,
+    data_ate: str | None = None,
+    limite: int = 50,
+    deslocamento: int = 0,
+) -> dict:
+    """Lista comunicações processuais do Monitoramento de Processos (radar DJEN).
+
+    Cada item traz data, tribunal, tipo, fonte, processo, órgão, advogado do
+    escritório, se está lida, se já tem explicação da IA e uma prévia do teor.
+
+    Args:
+        tribunal: Sigla do tribunal (ex.: TRF4, TRT3) — opcional.
+        tipo: Tipo de comunicação (ex.: Intimação) — opcional.
+        fonte: Fonte da informação (hoje: comunica_pje) — opcional.
+        advogado_id: Restringe às comunicações capturadas pela OAB desse advogado.
+        numero_processo: Número CNJ (aceita máscara ou só dígitos) — opcional.
+        somente_nao_lidas: True para ver apenas o que aguarda leitura.
+        data_de: Data inicial de disponibilização (YYYY-MM-DD) — opcional.
+        data_ate: Data final de disponibilização (YYYY-MM-DD) — opcional.
+        limite: Número máximo de registros (padrão 50).
+        deslocamento: Pula os N primeiros (paginação) — repasse o
+            'proximo_deslocamento' da resposta anterior.
+
+    Returns:
+        Envelope paginado com 'total_encontrado', 'tem_mais' e 'itens'.
+    """
+    claims = require_module("communications")
+    with app.app_context():
+        return list_communications_handler(
+            claims["law_firm_id"], tribunal, tipo, fonte, advogado_id,
+            numero_processo, somente_nao_lidas, data_de, data_ate,
+            limite, deslocamento,
+        )
+
+
+@mcp.tool()
+def detalhar_comunicacao(comunicacao_id: int) -> dict:
+    """Detalhe completo de uma comunicação processual, com o inteiro teor.
+
+    Inclui teor limpo (sem HTML), destinatários e polos, advogados intimados,
+    link do documento original no PJe e — quando já gerada — a explicação da IA
+    em 'explicacao_ia' (sem custo adicional). Consultar aqui NÃO marca como lida.
+
+    Args:
+        comunicacao_id: ID interno da comunicação (obtido em listar_comunicacoes).
+    """
+    claims = require_module("communications")
+    with app.app_context():
+        return get_communication_detail_handler(comunicacao_id, claims["law_firm_id"])
+
+
+@mcp.tool()
+def explicar_comunicacao(comunicacao_id: int) -> dict:
+    """Explica uma comunicação em linguagem clara: prazo, ação exigida e urgência.
+
+    Retorna resumo, ação requerida (exige_acao / acao_facultativa / apenas_ciencia),
+    prazo com data-limite estimada, datas-chave, papel do escritório no processo,
+    urgência e glossário de termos. A explicação é gerada por IA **uma única vez**
+    por comunicação e fica em cache — chamadas repetidas são instantâneas e sem
+    custo. É apoio à triagem: prazos devem ser conferidos no processo oficial.
+
+    Args:
+        comunicacao_id: ID interno da comunicação (obtido em listar_comunicacoes).
+    """
+    claims = require_module("communications")
+    with app.app_context():
+        return explain_communication_handler(
+            comunicacao_id, claims["law_firm_id"], user_id=claims.get("user_id")
+        )
+
+
+@mcp.tool()
+def comunicacoes_do_processo(
+    numero_processo: str,
+    buscar_na_fonte: bool = False,
+    limite: int = 50,
+    deslocamento: int = 0,
+) -> dict:
+    """Linha do tempo de comunicações de um processo, pelo número CNJ.
+
+    Busca na base do escritório (ordem cronológica) e informa se o processo está
+    no Painel de Processos. Com buscar_na_fonte=True, consulta também a API
+    pública do DJEN ao vivo — útil para processos fora do radar; esses resultados
+    não são gravados na base.
+
+    Args:
+        numero_processo: Número CNJ, com ou sem máscara (busca local aceita
+            parcial; a busca ao vivo exige os 20 dígitos completos).
+        buscar_na_fonte: True para consultar também o DJEN ao vivo (mais lento;
+            sujeito ao rate limit da API pública).
+        limite: Número máximo de registros da base local (padrão 50).
+        deslocamento: Paginação da base local — repasse o 'proximo_deslocamento'.
+    """
+    claims = require_module("communications")
+    with app.app_context():
+        return process_communications_handler(
+            claims["law_firm_id"], numero_processo, buscar_na_fonte,
+            limite, deslocamento,
+        )
+
+
+@mcp.tool()
+def resumo_monitoramento(dias: int = 7) -> dict:
+    """Visão executiva do Monitoramento de Processos numa chamada só.
+
+    Total de comunicações, quantas aguardam leitura, distribuição do período por
+    tribunal/tipo/fonte, advogados monitorados e os que estão fora do radar
+    (OAB/UF incompleta). Use antes de listar: para contagens, esta tool responde
+    sem paginar.
+
+    Args:
+        dias: Janela do recorte por período (padrão 7, máx. 365).
+    """
+    claims = require_module("communications")
+    with app.app_context():
+        return monitoring_summary_handler(claims["law_firm_id"], dias)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

@@ -2686,7 +2686,7 @@ class FapReviewPromptVersion(db.Model):
         nullable=False,
         comment='revisor, training, revisor_identity, revisor_rules, revisor_output_format, training_identity, training_rules, training_update_policy'
     )
-    content = db.Column(db.Text, nullable=False)
+    content = db.Column(db.Text(16777215), nullable=False)  # MEDIUMTEXT — prompts longos
     change_note = db.Column(db.String(255), comment='Descrição curta do que mudou nesta versão')
     is_active = db.Column(db.Boolean, default=False, nullable=False)
     created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
@@ -2846,6 +2846,7 @@ class FapReviewExecution(db.Model):
     )
     auxiliary_documents_count = db.Column(db.Integer, default=0)
     auxiliary_documents_json = db.Column(db.Text, comment='JSON array com informações dos documentos auxiliares')
+    benefits_spreadsheet_json = db.Column(db.Text, comment='JSON com nome e caminho da planilha de benefícios usada')
 
     # Metadados
     prompt_version_id = db.Column(db.Integer, db.ForeignKey('fap_review_prompt_versions.id'))
@@ -2910,6 +2911,33 @@ class FapReviewIgnoredFinding(db.Model):
 
     def __repr__(self):
         return f'<FapReviewIgnoredFinding law_firm_id={self.law_firm_id} execution_id={self.source_execution_id}>'
+
+
+class FapReviewFindingCheck(db.Model):
+    """Pontos de atenção marcados como revisados pelo usuário (triagem por execução)."""
+    __tablename__ = 'fap_review_finding_checks'
+    __table_args__ = (
+        db.UniqueConstraint(
+            'execution_id',
+            'finding_index',
+            name='uq_fap_review_finding_checks_scope',
+        ),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    execution_id = db.Column(db.Integer, db.ForeignKey('fap_review_executions.id'), nullable=False, index=True)
+    finding_index = db.Column(db.Integer, nullable=False)
+    created_by_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+
+    law_firm = db.relationship('LawFirm')
+    execution = db.relationship('FapReviewExecution')
+    created_by = db.relationship('User')
+
+    def __repr__(self):
+        return f'<FapReviewFindingCheck execution_id={self.execution_id} finding_index={self.finding_index}>'
 
 
 class FapReviewAuditLog(db.Model):

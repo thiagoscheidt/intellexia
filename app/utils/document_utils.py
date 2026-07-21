@@ -65,3 +65,45 @@ def is_docx_file(file_path):
     """
     extension = get_file_extension(file_path)
     return extension in ['docx', 'doc']
+
+
+def render_docx_preview_html(file_path):
+    """
+    Converte um DOCX em HTML semântico para visualização no navegador.
+
+    Usa mammoth, que gera apenas tags próprias (títulos, parágrafos, negrito,
+    tabelas) escapando o texto do documento — seguro para renderizar com |safe.
+
+    Args:
+        file_path: Caminho absoluto para o arquivo DOCX
+
+    Returns:
+        str: HTML do conteúdo do documento
+
+    Raises:
+        ValueError: se o arquivo não puder ser convertido
+    """
+    import mammoth
+
+    try:
+        with open(file_path, 'rb') as docx_file:
+            return mammoth.convert_to_html(docx_file).value
+    except Exception as e:
+        raise ValueError(f"Erro ao converter DOCX para HTML: {str(e)}")
+
+
+def strip_html_text(value):
+    """Texto puro a partir de HTML: remove blocos <style>/<script>, tags e
+    entidades, normalizando espaços.
+
+    O teor de alguns tribunais (ex.: TJSC) vem em HTML completo; um striptags
+    simples preserva o conteúdo interno dos blocos de estilo como texto.
+    Usado pelas telas (filtro Jinja ``sem_estilos`` + striptags) e pelo MCP.
+    """
+    import re
+    from markupsafe import Markup
+
+    if not value:
+        return ''
+    text = re.sub(r'(?is)<(style|script)[^>]*>.*?</\1>', ' ', str(value))
+    return Markup(text).striptags()

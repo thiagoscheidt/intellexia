@@ -144,11 +144,11 @@ intellexia/
 | `admin_users` | — | Gerenciamento de usuários (admin-only) |
 | `access_audit` | `/admin/access-audit` | Atividade de usuários (admin-only): último login, telas acessadas, online agora. Visitas de tela agregadas por dia em `user_page_visits`, gravadas pelo middleware no mesmo commit de `last_activity` |
 | `docs` | `/docs` | Manual de uso dos painéis (renderizado dos markdowns) + assistente "pergunte ao manual" |
-| `communications` | `/comunicacoes` | Monitoramento de Comunicações (Comunica PJe/DJEN): radar por OAB dos advogados, inteiro teor, controle de lidas, descoberta automática de processos |
+| `communications` | `/comunicacoes` | **Monitoramento de Processos**: comunicações processuais por fonte de informação (`ProcessCommunication.source` — hoje só `comunica_pje`; novas fontes = nova constante `SOURCE_*` + rótulo em `SOURCE_LABELS`). Radar por OAB, inteiro teor, controle de lidas, descoberta automática de processos. O nome de exibição é "Monitoramento de Processos"; endpoint/URL/módulo permanecem `communications` |
 
 ### Documentação do usuário (Manual + Assistente "pergunte ao manual")
 
-O manual de uso dos painéis tem **fonte única em Markdown**: `docs/MANUAL_DASHBOARD.md`, `docs/MANUAL_PAINEL_FAP.md`, `docs/MANUAL_PAINEL_CONTESTACOES.md`. **Edite apenas esses `.md`** — a página `/docs/manuais` é renderizada em runtime a partir deles (cache por mtime). Não há HTML a gerar/manter manualmente; não existe mais `docs/manual_paineis.html`.
+O manual de uso dos painéis tem **fonte única em Markdown**: `docs/MANUAL_DASHBOARD.md`, `docs/MANUAL_PAINEL_FAP.md`, `docs/MANUAL_PAINEL_CONTESTACOES.md`, `docs/MANUAL_REVISOR_PETICOES.md`. **Edite apenas esses `.md`** (novo manual = novo `.md` + registrar em `_MANUALS` no `manual_renderer.py` e em `_MANUAL_FILES` no `manual_assistant_service.py`) — a página `/docs/manuais` é renderizada em runtime a partir deles (cache por mtime). Não há HTML a gerar/manter manualmente; não existe mais `docs/manual_paineis.html`.
 
 - **Pipeline de render**: `app/services/manual_renderer.py` (markdown-it-py + BeautifulSoup) → template `templates/docs/manuais.html`. Rota em `app/blueprints/docs.py`.
 - **Convenções de realce no markdown** (interpretadas pelo renderer):
@@ -156,6 +156,7 @@ O manual de uso dos painéis tem **fonte única em Markdown**: `docs/MANUAL_DASH
   - Pílulas de origem: numa célula de tabela, escrever só o rótulo `FAP Web` / `IA` / `Sistema` / `Relatório` / `Cálculo` (ou lista separada por vírgula) vira pílula colorida.
   - Índice lateral: gerado automaticamente dos títulos `##`.
   - Ícone do Claude: `:claude:` no texto ou no título (no título, o ícone também vai para o índice).
+  - Botões de ação: `:btn-<estilo>[Texto]` vira réplica visual do botão da tela com as cores do Bootstrap do app (`success`, `primary`, `danger`, `secondary`, `warning` e variantes `outline-*`) — ex.: `:btn-success[Aprovar petição]`. Ao citar um botão de ação num manual, use o marcador com o estilo que o botão tem em tela.
   - Endereços: `:url_mcp:` e `:url_app:` viram a URL real da instalação em runtime. **Nunca escreva o domínio fixo** em manual, template ou doc de usuário — dev e produção têm domínios diferentes; use `app/utils/urls.py` (`mcp_public_url()` / `app_public_url()`, expostos aos templates via context processor).
 
 ### Domínio da instalação
@@ -191,6 +192,20 @@ SMTP configurado **só via `.env`** (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMT
 - **Config por escritório**: tabela genérica `notification_settings`, uma linha por `(law_firm_id, notification_type)`. Tela admin-only em `/settings/notifications`, um card por tipo. Novo tipo de notificação = novo `notification_type` + função `send_<tipo>` registrada em `notification_service.SENDERS` — sem schema novo.
 - **Disparo**: `scripts/send_notifications.py` roda de hora em hora no cron e envia o que está no horário (`is_due`). Sem novidades no período não envia e-mail (só avança `last_sent_at`); falha de envio **não** avança a janela, para a próxima execução tentar de novo.
 - **Resumo FAP**: reusa `fap_digest_service`, o mesmo código do widget do dashboard — nunca duplique essas queries. Templates de e-mail em `templates/emails/` usam tabelas + CSS inline (cliente de e-mail não roda Bootstrap); links absolutos via `APP_PUBLIC_URL` + `test_request_context`.
+
+### Integração Comunica PJe (DJEN)
+
+API pública do CNJ consumida por `app/services/comunica_pje_client.py` (todo acesso isolado nesse arquivo). **Documentação oficial**: https://comunicaapi.pje.jus.br/swagger/index.html — cópia local do spec em `docs/comunica_pje_djen_openapi.yaml` (OpenAPI 1.0.4).
+
+Regras oficiais que o client implementa — não as contorne:
+
+- **Rate limit por IP** com headers `x-ratelimit-limit` / `x-ratelimit-remaining` nas respostas 200. O client pausa preventivamente (60s) quando a janela esgota e mantém intervalo mínimo de 1s entre todas as requisições (`COMUNICA_PJE_MIN_INTERVAL`).
+- **HTTP 429**: orientação oficial é aguardar **1 minuto** antes de retomar (`COMUNICA_PJE_429_WAIT`); usar múltiplos IPs para contornar o limite é abuso e pode gerar bloqueio do CNJ.
+- **`itensPorPagina`**: só aceita **5 ou 100**.
+- Toda consulta precisa de ao menos um filtro (`siglaTribunal`, `texto`, `nomeParte`, `nomeAdvogado`, `numeroOab`, `numeroProcesso`) ou `itensPorPagina=5`; consultas por OAB/texto/parte/processo são **limitadas a 10.000 resultados**.
+- Endpoints públicos além de `GET /comunicacao`: `GET /comunicacao/{hash}/certidao` (certidão), `GET /comunicacao/tribunal` (tribunais + data do último envio) e `GET /caderno/{sigla}/{data}/{meio}` (caderno diário compactado por tribunal, disponível a partir das 03:00). Login/POST/DELETE são exclusivos dos Tribunais.
+
+**Sincronização por caderno (modo alternativo)**: `sync_law_firm_from_cadernos` baixa o caderno diário de cada tribunal (zip de JSONs, mesmo schema de `/comunicacao`) e filtra localmente pelas OABs do escritório — 1 download por tribunal em vez de 1 consulta por advogado; não sofre o limite de 10.000 resultados. Tribunais padrão vêm do histórico do escritório (`firm_tribunal_siglas`). Usa o mesmo upsert por hash, então rodar junto com a sincronização por OAB não duplica. CLI: `scripts/sync_process_communications.py --caderno [--data YYYY-MM-DD] [--tribunais TRF4,TRF3]`. Escala: caderno do TRF4 ≈ 20 MB / 32 mil comunicações, varredura local ≈ 4s.
 
 ### Timezone
 
@@ -331,8 +346,8 @@ FapReview.revision [POST]
 | `fap_review_service`                   | Regras do Revisor (status da petição, auditoria, fingerprint de achado, estatísticas por advogado) — fonte única da tela e do MCP; `record_text_review` registra a revisão vinda do MCP |
 | `notification_service`                 | Agendamento e envio das notificações (hoje: Resumo FAP)   |
 | `access_audit_service`                 | Auditoria de acesso: registro de visitas de tela e estatísticas de atividade/online — fonte única do dashboard admin |
-| `comunica_pje_client`                  | Cliente HTTP da API pública do Comunica PJe/DJEN (não documentada pelo CNJ — todo acesso isolado aqui; backoff p/ 429) |
-| `communication_monitor_service`        | Monitoramento de Comunicações: sincronização por OAB (dedup por hash da API), descoberta de processos (`origin='comunica_auto'` + triagem), queries da tela e digest — fonte única |
+| `comunica_pje_client`                  | Cliente HTTP da API pública do Comunica PJe/DJEN — todo acesso isolado aqui; pacing global + regras de rate limit (ver seção "Integração Comunica PJe") |
+| `communication_monitor_service`        | Monitoramento de Processos: sincronização por OAB e por caderno (dedup por hash da API), descoberta de processos (`origin='comunica_auto'` + triagem), explicação IA com cache (`explain_communication`), queries da tela e das tools MCP — fonte única |
 | `JudicialSentenceAnalysisService`      | Análise de sentenças judiciais                            |
 | `DataJudApi`                           | Integração com API DataJud do CNJ                         |
 | `SgtTpuService`                        | Integração com SGT-TPU (tabelas processuais unificadas)   |
@@ -413,6 +428,7 @@ SUMMARY_MAX_CHARS=50000
 ## Convenções Frontend
 
 - **Base de layout**: `templates/layout/base.html`. Todos os templates herdam dele.
+- **Painel de notificações (header)**: os contadores de pendência por módulo ficam **agrupados no lado esquerdo** da header (`templates/partials/header.html`, container `.module-counters`), um chip por módulo com nome + badges coloridos por fila (cores dos status em tela; badge some quando zerado). É o padrão para qualquer novo contador de módulo — **não criar ícones soltos no lado direito**. Receita: (1) função de contagem na camada de serviço (um `COUNT` barato, filtrado por `law_firm_id`); (2) `app_context_processor` no blueprint do módulo injetando os números (sensível a papel quando aplicável — ex.: fila de aprovação do Revisor só para admin); (3) chip no header gated por `can_view_module('<módulo>')`. Exemplos: `communications` (não lidas) e `fap_review` (filas aguardando ajustes/aprovação).
 - **Componentes compartilhados**: reutilizar o que existe em `templates/partials/` antes de criar novo.
 - **`page_hero`**: se a tela já usa esse padrão, mantê-lo. Preservar breadcrumbs, mensagens flash e estados de carregamento/erro.
 - **Responsividade**: garantir funcionamento em desktop e mobile sem quebrar o layout existente.

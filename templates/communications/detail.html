@@ -4,29 +4,35 @@
 
 {% block title %}Comunicação {{ comm.numero_processo_mascara or comm.id }} - IntellexIA{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/communications.css') }}">
+{% endblock %}
+
 {% block content %}
 {% call page_hero(title=comm.tipo_comunicacao or 'Comunicação', subtitle=(comm.numero_processo_mascara or comm.numero_processo or 'Processo não informado'), icon='bi bi-broadcast') %}
-<nav aria-label="breadcrumb"><ol class="breadcrumb mb-0 bg-transparent small"><li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li><li class="breadcrumb-item"><a href="{{ url_for('communications.list_communications') }}">Comunicações</a></li><li class="breadcrumb-item active" aria-current="page">Detalhe</li></ol></nav>
+<nav aria-label="breadcrumb"><ol class="breadcrumb mb-0 bg-transparent small"><li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a></li><li class="breadcrumb-item"><a href="{{ url_for('communications.list_communications') }}">Monitoramento de Processos</a></li><li class="breadcrumb-item active" aria-current="page">Detalhe</li></ol></nav>
 {% endcall %}
 
 <div class="app-content">
   <div class="container-fluid">
     <div class="row">
       <div class="col-lg-4">
-        <div class="card card-info card-outline mb-3">
-          <div class="card-header"><h3 class="card-title"><i class="bi bi-info-circle"></i> Dados da comunicação</h3></div>
+        <div class="card pm-card mb-3">
+          <div class="card-header"><h3 class="card-title"><i class="bi bi-info-circle me-1"></i> Dados da comunicação</h3></div>
           <div class="card-body p-0">
             <table class="table table-sm mb-0">
               <tbody>
-                <tr><th class="ps-3" style="width: 45%;">Data de disponibilização</th>
+                <tr><th class="ps-3 pm-th" style="width: 45%;">Data de disponibilização</th>
                     <td>{{ comm.data_disponibilizacao.strftime('%d/%m/%Y') if comm.data_disponibilizacao else '—' }}</td></tr>
-                <tr><th class="ps-3">Tribunal</th><td><span class="badge bg-dark">{{ comm.sigla_tribunal or '—' }}</span></td></tr>
-                <tr><th class="ps-3">Tipo</th><td>{{ comm.tipo_comunicacao or '—' }}</td></tr>
-                <tr><th class="ps-3">Tipo de documento</th><td>{{ comm.tipo_documento or '—' }}</td></tr>
-                <tr><th class="ps-3">Órgão</th><td>{{ comm.nome_orgao or '—' }}</td></tr>
-                <tr><th class="ps-3">Classe</th><td>{{ comm.nome_classe or '—' }}{% if comm.codigo_classe %} <small class="text-muted">({{ comm.codigo_classe }})</small>{% endif %}</td></tr>
-                <tr><th class="ps-3">Meio</th><td>{{ comm.meio or '—' }}</td></tr>
-                <tr><th class="ps-3">Processo</th>
+                <tr><th class="ps-3 pm-th">Tribunal</th><td><span class="badge pm-chip pm-chip--mono">{{ comm.sigla_tribunal or '—' }}</span></td></tr>
+                <tr><th class="ps-3 pm-th">Tipo</th><td>{{ comm.tipo_comunicacao or '—' }}</td></tr>
+                <tr><th class="ps-3 pm-th">Tipo de documento</th><td>{{ comm.tipo_documento or '—' }}</td></tr>
+                <tr><th class="ps-3 pm-th">Órgão</th><td>{{ comm.nome_orgao or '—' }}</td></tr>
+                <tr><th class="ps-3 pm-th">Classe</th><td>{{ comm.nome_classe or '—' }}{% if comm.codigo_classe %} <small class="text-muted">({{ comm.codigo_classe }})</small>{% endif %}</td></tr>
+                <tr><th class="ps-3 pm-th">Meio</th><td>{{ comm.meio or '—' }}</td></tr>
+                <tr><th class="ps-3 pm-th">Fonte</th>
+                    <td><span class="badge pm-chip">{{ comm.SOURCE_LABELS.get(comm.source, comm.source or '—') }}</span></td></tr>
+                <tr><th class="ps-3 pm-th">Processo</th>
                     <td>
                       {% if comm.judicial_process_id %}
                       <a href="{{ url_for('process_panel.detail', process_id=comm.judicial_process_id) }}">
@@ -35,9 +41,15 @@
                       {% else %}
                       {{ comm.numero_processo_mascara or comm.numero_processo or '—' }}
                       {% endif %}
+                      {% if comm.numero_processo %}
+                      <a href="{{ url_for('communications.process_communications', numero=comm.numero_processo_mascara or comm.numero_processo) }}"
+                         class="text-body-secondary ms-1" title="Todas as comunicações deste processo">
+                        <i class="bi bi-collection"></i>
+                      </a>
+                      {% endif %}
                     </td></tr>
-                <tr><th class="ps-3">Capturada pela OAB de</th><td>{{ comm.matched_lawyer.name if comm.matched_lawyer else '—' }}</td></tr>
-                <tr><th class="ps-3">Lida em</th>
+                <tr><th class="ps-3 pm-th">Capturada pela OAB de</th><td>{{ comm.matched_lawyer.name if comm.matched_lawyer else '—' }}</td></tr>
+                <tr><th class="ps-3 pm-th">Lida em</th>
                     <td>{{ comm.read_at|datetime_sp if comm.read_at else '—' }}
                         {% if comm.read_by_user %}<small class="text-muted">por {{ comm.read_by_user.name }}</small>{% endif %}</td></tr>
               </tbody>
@@ -53,12 +65,12 @@
         </div>
 
         {% if comm.destinatarios_json %}
-        <div class="card card-outline mb-3">
-          <div class="card-header"><h3 class="card-title"><i class="bi bi-people"></i> Destinatários</h3></div>
-          <div class="card-body p-2">
+        <div class="card pm-card mb-3">
+          <div class="card-header"><h3 class="card-title"><i class="bi bi-people me-1"></i> Destinatários</h3></div>
+          <div class="card-body p-3">
             {% for d in comm.destinatarios_json %}
             <div class="mb-1">
-              <span class="badge {{ 'bg-success' if d.polo == 'A' else 'bg-secondary' }}">{{ 'Ativo' if d.polo == 'A' else ('Passivo' if d.polo == 'P' else d.polo or '—') }}</span>
+              <span class="badge {{ 'bg-success-subtle text-success-emphasis' if d.polo == 'A' else 'bg-secondary-subtle text-secondary-emphasis' }}">{{ 'Ativo' if d.polo == 'A' else ('Passivo' if d.polo == 'P' else d.polo or '—') }}</span>
               {{ d.nome }}
             </div>
             {% endfor %}
@@ -67,13 +79,13 @@
         {% endif %}
 
         {% if comm.advogados_json %}
-        <div class="card card-outline mb-3">
-          <div class="card-header"><h3 class="card-title"><i class="bi bi-person-badge"></i> Advogados intimados</h3></div>
-          <div class="card-body p-2">
+        <div class="card pm-card mb-3">
+          <div class="card-header"><h3 class="card-title"><i class="bi bi-person-badge me-1"></i> Advogados intimados</h3></div>
+          <div class="card-body p-3">
             {% for adv in comm.advogados_json %}
             <div class="mb-1">
-              <i class="bi bi-person-badge text-info"></i> {{ adv.nome }}
-              <span class="badge bg-dark">OAB {{ adv.numero_oab }}/{{ adv.uf_oab }}</span>
+              {{ adv.nome }}
+              <span class="badge pm-chip pm-chip--mono">OAB {{ adv.numero_oab }}/{{ adv.uf_oab }}</span>
             </div>
             {% endfor %}
           </div>
@@ -82,14 +94,31 @@
       </div>
 
       <div class="col-lg-8">
-        <div class="card card-info card-outline">
-          <div class="card-header"><h3 class="card-title"><i class="bi bi-file-text"></i> Inteiro teor</h3></div>
+        {% if comm.texto %}
+        <div class="card pm-card mb-3">
+          <div class="card-header d-flex align-items-center justify-content-between">
+            <h3 class="card-title"><i class="bi bi-stars me-1"></i> Explicação da IA</h3>
+          </div>
+          <div class="card-body">
+            <div id="explainContainer"></div>
+            <button type="button" id="explainBtn" class="btn btn-primary btn-sm {{ 'd-none' if comm.analysis_json }}"
+                    data-explain-url="{{ url_for('communications.explain_communication', communication_id=comm.id) }}">
+              <i class="bi bi-stars me-1"></i>Explicar com IA
+            </button>
+          </div>
+        </div>
+        {% endif %}
+        <div class="card pm-card">
+          <div class="card-header"><h3 class="card-title"><i class="bi bi-file-text me-1"></i> Inteiro teor</h3></div>
           <div class="card-body">
             {% if comm.texto %}
-            <div style="white-space: pre-wrap; font-family: var(--bs-font-serif, Georgia, serif); line-height: 1.7;">{{ comm.texto }}</div>
+            <div class="pm-teor">{{ comm.texto|sem_estilos|striptags }}</div>
             {% else %}
-            <div class="alert alert-info mb-0">A API não retornou o texto desta comunicação.
-              {% if comm.link %}Use o botão "Abrir documento original".{% endif %}</div>
+            <div class="text-center py-5">
+              <i class="bi bi-file-earmark-text d-block mb-2 text-body-tertiary" style="font-size: 2rem;"></i>
+              <p class="mb-1 fw-semibold">A fonte não enviou o texto desta comunicação</p>
+              {% if comm.link %}<p class="text-body-secondary mb-0">Use <strong>Abrir documento original no PJe</strong> ao lado para ver o conteúdo.</p>{% endif %}
+            </div>
             {% endif %}
           </div>
         </div>
@@ -97,4 +126,24 @@
     </div>
   </div>
 </div>
+
+{% if comm.texto %}
+<script src="{{ url_for('static', filename='js/communication-explainer.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    var btn = document.getElementById('explainBtn');
+    var container = document.getElementById('explainContainer');
+    if (!btn || !container) return;
+
+    btn.addEventListener('click', function () {
+      CommExplainer.explain(btn.getAttribute('data-explain-url'), container, btn);
+    });
+
+    {% if comm.analysis_json %}
+    // Já existe análise em cache — renderiza direto, sem custo de IA.
+    CommExplainer.render(container, {{ comm.analysis_json|tojson }});
+    {% endif %}
+  });
+</script>
+{% endif %}
 {% endblock %}

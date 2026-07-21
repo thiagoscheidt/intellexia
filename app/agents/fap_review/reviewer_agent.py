@@ -31,12 +31,20 @@ from app.services.agent_execution_history_service import AgentExecutionHistorySe
 from app.services.token_usage_service import TokenUsageService
 
 
+class ReviewOutputParseError(Exception):
+    """Resposta do modelo não pôde ser convertida no schema esperado da revisão."""
+
+
 class FindingItem(BaseModel):
     """Um achado identificado na petição"""
     category: str = Field(..., description="Categoria do achado: CAT-1 a CAT-6, CRITICAL, MODERATE, FORMAL")
     severity: str = Field(..., description="Gravidade: CRÍTICO, MODERADO, FORMAL")
     description: str = Field(..., description="Descrição do achado")
     location: Optional[str] = Field(None, description="Localização na petição")
+    location_excerpt: Optional[str] = Field(
+        None,
+        description="Trecho literal curto (10 a 30 palavras) copiado do documento onde o problema está",
+    )
     correction: Optional[str] = Field(None, description="Sugestão de correção")
     manual_reference: Optional[str] = Field(None, description="Seção do manual relacionada")
     is_new_pattern: bool = Field(False, description="Indica se é um padrão novo não coberto pelo manual")
@@ -129,6 +137,29 @@ class FapPetitionReviewerAgent:
     _SECTION_TITLE_MAX_CHARS = int(os.environ.get('FAP_REVIEW_SECTION_TITLE_MAX_CHARS', '160'))
     _NO_ACTIVE_PRIOR_ATTENTION_MARKER = '__NO_ACTIVE_PRIOR_ATTENTION_POINTS__'
 
+    _OUTPUT_SCHEMA_SINGLE = """{
+  "theses": [
+    {"thesis": "nome da tese identificada", "benefit_number": "número do benefício ou null", "classification": "enquadramento identificado ou null"}
+  ],
+  "findings": [
+    {"category": "categoria do achado (ex.: CAT-1 a CAT-6, CRITICAL, MODERATE, FORMAL)", "severity": "CRÍTICO | MODERADO | FORMAL", "description": "descrição do achado", "location": "localização na petição ou null", "location_excerpt": "trecho LITERAL curto (10 a 30 palavras) COPIADO EXATAMENTE do texto do documento onde o problema está — sem parafrasear; null se não houver trecho específico", "correction": "sugestão de correção ou null", "manual_reference": "seção do manual relacionada ou null", "is_new_pattern": false}
+  ],
+  "missing_documents": [
+    {"document_type": "tipo de documento obrigatório ausente", "thesis": "tese relacionada ou null", "manual_reference": "referência do manual ou null"}
+  ],
+  "executive_summary": {"total_findings": 0, "critical_findings": 0, "moderate_findings": 0, "formal_findings": 0, "main_legal_risks": ["risco jurídico"], "correction_priority": "prioridade de correção"}
+}"""
+
+    _OUTPUT_SCHEMA_COMPARATIVE = """{
+  "comparative_changes": [
+    {"original_excerpt": "trecho original", "corrected_excerpt": "trecho corrigido", "correction_reason": "motivo da correção", "pattern_in_manual": false, "is_new_pattern": false, "manual_section": "seção do manual ou null"}
+  ],
+  "findings": [
+    {"category": "categoria do achado (ex.: CAT-1 a CAT-6, CRITICAL, MODERATE, FORMAL)", "severity": "CRÍTICO | MODERADO | FORMAL", "description": "descrição do achado", "location": "localização na petição ou null", "location_excerpt": "trecho LITERAL curto (10 a 30 palavras) COPIADO EXATAMENTE do texto do documento onde o problema está — sem parafrasear; null se não houver trecho específico", "correction": "sugestão de correção ou null", "manual_reference": "seção do manual relacionada ou null", "is_new_pattern": false}
+  ],
+  "executive_summary": {"total_findings": 0, "critical_findings": 0, "moderate_findings": 0, "formal_findings": 0, "main_legal_risks": ["risco jurídico"], "correction_priority": "prioridade de correção"}
+}"""
+
     def __init__(self, 
                  openai_api_key: Optional[str] = None,
                     model: str = 'gpt-4o-mini',
@@ -182,6 +213,7 @@ class FapPetitionReviewerAgent:
         reviewer_rules: str = "",
         reviewer_output_format: str = "",
         focused_review: bool = False,
+        comparative: bool = False,
     ) -> str:
         """
         Constrói o prompt do sistema carregando dinamicamente da configuração
@@ -194,6 +226,7 @@ class FapPetitionReviewerAgent:
         Returns:
             Prompt completo do sistema
         """
+        output_schema = self._OUTPUT_SCHEMA_COMPARATIVE if comparative else self._OUTPUT_SCHEMA_SINGLE
         base_system = f"""Você é um revisor especializado em petições iniciais de Ação Revisional do FAP.
 
 IDENTIDADE:
@@ -204,6 +237,11 @@ REGRAS INVIOLÁVEIS:
 
 FORMATO DE SAÍDA:
 {reviewer_output_format or 'Estruture a resposta em seções claras'}
+
+CONTRATO TÉCNICO DE SAÍDA (OBRIGATÓRIO, prevalece sobre qualquer outra instrução de formato):
+Responda EXCLUSIVAMENTE com um único JSON válido, sem nenhum texto fora do JSON e sem cercas de código.
+Use EXATAMENTE os nomes de campos abaixo (em inglês); os valores devem ser escritos em português. Campos opcionais podem ser null.
+{output_schema}
 
 INSTRUÇÕES OPERACIONAIS:
 Ao revisar a petição, valide estritamente com base no MANUAL DE REFERÊNCIA.
@@ -361,22 +399,36 @@ INSTRUÇÕES DO PROJETO:
             )
 
             result_dict = self._extract_json_dict_from_response(response_text)
-            
+
+            parse_errors: list[str] = []
+            theses = self._parse_theses(result_dict.get('theses', []), parse_errors)
+            findings = self._parse_findings(result_dict.get('findings', []), parse_errors)
+            missing_documents = self._parse_missing_documents(result_dict.get('missing_documents', []), parse_errors)
+            self._ensure_output_parsed(
+                result_dict,
+                parsed_items=len(theses) + len(findings) + len(missing_documents),
+                list_keys=('theses', 'findings', 'missing_documents'),
+                parse_errors=parse_errors,
+            )
+
             # Criar resultado com dados salvaguardados
             result = PetitionReviewResult(
                 analysis_type="single_version",
                 focused_review=bool(prior_attention_points),
                 tokens_used=total_tokens or None,
                 cost_usd=float(total_cost) if total_cost else None,
-                theses=self._parse_theses(result_dict.get('theses', [])),
-                findings=self._parse_findings(result_dict.get('findings', [])),
-                missing_documents=self._parse_missing_documents(result_dict.get('missing_documents', [])),
-                executive_summary=self._parse_executive_summary(result_dict.get('executive_summary', {})),
+                theses=theses,
+                findings=findings,
+                missing_documents=missing_documents,
+                executive_summary=self._build_executive_summary(
+                    result_dict.get('executive_summary', {}), findings),
                 new_patterns=[],
             )
-            
+
             return result
-            
+
+        except ReviewOutputParseError:
+            raise
         except Exception as e:
             # Fallback em caso de erro
             return PetitionReviewResult(
@@ -423,8 +475,9 @@ INSTRUÇÕES DO PROJETO:
             reviewer_rules,
             reviewer_output_format,
             focused_review=bool(prior_attention_points),
+            comparative=True,
         )
-        
+
         try:
             user_message = self._build_comparative_user_message(
                 auxiliary_documents=auxiliary_documents,
@@ -532,20 +585,33 @@ INSTRUÇÕES DO PROJETO:
             )
 
             result_dict = self._extract_json_dict_from_response(response_text)
-            
+
+            parse_errors: list[str] = []
+            comparative_changes = self._parse_comparative_changes(result_dict.get('comparative_changes', []), parse_errors)
+            findings = self._parse_findings(result_dict.get('findings', []), parse_errors)
+            self._ensure_output_parsed(
+                result_dict,
+                parsed_items=len(comparative_changes) + len(findings),
+                list_keys=('comparative_changes', 'findings'),
+                parse_errors=parse_errors,
+            )
+
             result = PetitionReviewResult(
                 analysis_type="comparative",
                 focused_review=bool(prior_attention_points),
                 tokens_used=total_tokens or None,
                 cost_usd=float(total_cost) if total_cost else None,
-                comparative_changes=self._parse_comparative_changes(result_dict.get('comparative_changes', [])),
-                findings=self._parse_findings(result_dict.get('findings', [])),
+                comparative_changes=comparative_changes,
+                findings=findings,
                 new_patterns=[],
-                executive_summary=self._parse_executive_summary(result_dict.get('executive_summary', {})),
+                executive_summary=self._build_executive_summary(
+                    result_dict.get('executive_summary', {}), findings),
             )
-            
+
             return result
-            
+
+        except ReviewOutputParseError:
+            raise
         except Exception as e:
             return PetitionReviewResult(
                 analysis_type="comparative",
@@ -561,29 +627,33 @@ INSTRUÇÕES DO PROJETO:
 
     # Métodos auxiliares para parsing
     
-    def _parse_theses(self, data: list) -> list[IdentifiedThesis]:
-        """Parse lista de teses"""
+    def _parse_model_items(self, data: list, model_cls: type[BaseModel], label: str,
+                           parse_errors: list[str] | None = None) -> list:
+        """Valida itens um a um; item inválido é logado e coletado, sem derrubar os demais."""
         result = []
-        try:
-            for item in data:
-                if isinstance(item, dict):
-                    result.append(IdentifiedThesis(**item))
-        except Exception:
-            pass
+        for item in data if isinstance(data, list) else []:
+            if not isinstance(item, dict):
+                continue
+            try:
+                result.append(model_cls(**item))
+            except Exception as exc:
+                message = f"{label} descartado por schema inválido (chaves: {sorted(item.keys())}): {exc}"
+                print(f"[FapReviewer] {message}")
+                if parse_errors is not None:
+                    parse_errors.append(message)
         return result
 
-    def _parse_findings(self, data: list) -> list[FindingItem]:
+    def _parse_theses(self, data: list, parse_errors: list[str] | None = None) -> list[IdentifiedThesis]:
+        """Parse lista de teses"""
+        return self._parse_model_items(data, IdentifiedThesis, "thesis", parse_errors)
+
+    def _parse_findings(self, data: list, parse_errors: list[str] | None = None) -> list[FindingItem]:
         """Parse lista de achados"""
-        result = []
-        try:
-            for item in data:
-                if isinstance(item, dict):
-                    if self._should_ignore_finding(item):
-                        continue
-                    result.append(FindingItem(**item))
-        except Exception:
-            pass
-        return result
+        items = [
+            item for item in (data if isinstance(data, list) else [])
+            if not (isinstance(item, dict) and self._should_ignore_finding(item))
+        ]
+        return self._parse_model_items(items, FindingItem, "finding", parse_errors)
 
     def _normalize_review_text(self, value: Any) -> str:
         """Normaliza texto para heurísticas simples de saneamento do output do modelo."""
@@ -637,38 +707,39 @@ INSTRUÇÕES DO PROJETO:
 
         return True
 
-    def _parse_missing_documents(self, data: list) -> list[MissingDocument]:
+    def _parse_missing_documents(self, data: list, parse_errors: list[str] | None = None) -> list[MissingDocument]:
         """Parse lista de documentos em falta"""
-        result = []
-        try:
-            for item in data:
-                if isinstance(item, dict):
-                    result.append(MissingDocument(**item))
-        except Exception:
-            pass
-        return result
+        return self._parse_model_items(data, MissingDocument, "missing_document", parse_errors)
 
-    def _parse_new_patterns(self, data: list) -> list[NewPattern]:
+    def _parse_new_patterns(self, data: list, parse_errors: list[str] | None = None) -> list[NewPattern]:
         """Parse lista de padrões novos"""
-        result = []
-        try:
-            for item in data:
-                if isinstance(item, dict):
-                    result.append(NewPattern(**item))
-        except Exception:
-            pass
-        return result
+        return self._parse_model_items(data, NewPattern, "new_pattern", parse_errors)
 
-    def _parse_comparative_changes(self, data: list) -> list[ComparativeAnalysisChange]:
+    def _parse_comparative_changes(self, data: list, parse_errors: list[str] | None = None) -> list[ComparativeAnalysisChange]:
         """Parse lista de alterações comparativas"""
-        result = []
-        try:
-            for item in data:
-                if isinstance(item, dict):
-                    result.append(ComparativeAnalysisChange(**item))
-        except Exception:
-            pass
-        return result
+        return self._parse_model_items(data, ComparativeAnalysisChange, "comparative_change", parse_errors)
+
+    def _ensure_output_parsed(self, result_dict: dict, *, parsed_items: int,
+                              list_keys: tuple[str, ...], parse_errors: list[str]) -> None:
+        """Falha alto quando a resposta do modelo não pôde ser aproveitada.
+
+        Sem isso, uma resposta fora do schema vira revisão "concluída" com zero
+        achados — indistinguível de uma petição sem problemas.
+        """
+        if not result_dict:
+            raise ReviewOutputParseError(
+                "A resposta do modelo não contém JSON válido para a revisão."
+            )
+        raw_items = sum(
+            len(value) for key in list_keys
+            if isinstance((value := result_dict.get(key)), list)
+        )
+        if raw_items and not parsed_items:
+            details = "; ".join(parse_errors[:3]) or "sem detalhes"
+            raise ReviewOutputParseError(
+                f"A resposta do modelo retornou {raw_items} itens, mas nenhum segue o "
+                f"schema esperado da revisão. Erros: {details}"
+            )
 
     def _parse_executive_summary(self, data: dict) -> ExecutiveSummary:
         """Parse resumo executivo"""
@@ -682,6 +753,23 @@ INSTRUÇÕES DO PROJETO:
                 formal_findings=0,
                 correction_priority="N/A"
             )
+
+    def _build_executive_summary(self, data: dict, findings: list[FindingItem]) -> ExecutiveSummary:
+        """Resumo executivo com totais recontados dos achados efetivamente mantidos.
+
+        O modelo conta os próprios achados, mas o saneamento (ex.: falso positivo
+        de razão social) pode descartar itens — sem a recontagem, a tela mostraria
+        "1 crítico" com lista sem nenhum.
+        """
+        summary = self._parse_executive_summary(data)
+        severities = [str(f.severity or "").strip().upper() for f in findings]
+        summary.total_findings = len(findings)
+        summary.critical_findings = sum(1 for s in severities if s == "CRÍTICO")
+        summary.moderate_findings = sum(1 for s in severities if s == "MODERADO")
+        summary.formal_findings = sum(
+            1 for s in severities if s not in ("CRÍTICO", "MODERADO")
+        )
+        return summary
 
     def _build_response_payload(self, response: Any) -> dict[str, Any]:
         """

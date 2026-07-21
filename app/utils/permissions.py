@@ -7,7 +7,7 @@ MODULE_PERMISSIONS = {
     'disputes_center': 'Painel de Contestacoes',
     'fap_review': 'Revisor de Peticoes',
     'process_panel': 'Painel de Processos',
-    'communications': 'Monitoramento de Comunicacoes',
+    'communications': 'Monitoramento de Processos',
     'cases': 'Casos',
     'knowledge_base': 'Base de Conhecimento',
     'tools': 'Ferramentas',

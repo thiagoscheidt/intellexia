@@ -40,7 +40,7 @@
     /* ── Stat cards ─────────────────────────────────────── */
     .stat-cards {
         display: grid;
-        grid-template-columns: repeat(4, 1fr);
+        grid-template-columns: repeat(5, 1fr);
         gap: 1rem;
     }
 
@@ -398,6 +398,17 @@
     .filter-pill.pill-warning.active {
         background: #ffc107;
         border-color: #ffc107;
+        color: #000;
+    }
+
+    .filter-pill.pill-info {
+        border-color: #087990;
+        color: #087990;
+    }
+
+    .filter-pill.pill-info.active {
+        background: #0dcaf0;
+        border-color: #0dcaf0;
         color: #000;
     }
 
@@ -783,6 +794,12 @@
                 <div class="sc-value">{{ in_review_petitions }}</div>
                 <div class="sc-sub-text">Processando</div>
             </div>
+            <div class="stat-card" style="--sc-color: #0dcaf0; --sc-soft: rgba(13,202,240,.10);">
+                <div class="sc-icon"><i class="bi bi-person-check"></i></div>
+                <div class="sc-label">Aguardando aprovação</div>
+                <div class="sc-value" style="color: #0dcaf0;">{{ awaiting_approval_petitions }}</div>
+                <div class="sc-sub-text">Fila do revisor (admin)</div>
+            </div>
             <div class="stat-card" style="--sc-color: #198754; --sc-soft: rgba(25,135,84,.10);">
                 <div class="sc-icon"><i class="bi bi-check-circle"></i></div>
                 <div class="sc-label">Aprovadas pelo revisor</div>
@@ -829,13 +846,18 @@
                     <i class="bi bi-hourglass-split"></i> Em revisão ({{ in_review_petitions }})
                 </button>
                 {% endif %}
+                {% if awaiting_approval_petitions %}
+                <button class="filter-pill pill-info" data-filter="awaiting_approval">
+                    <i class="bi bi-person-check"></i> Aguardando aprovação ({{ awaiting_approval_petitions }})
+                </button>
+                {% endif %}
                 {% if ready_petitions %}
                 <button class="filter-pill pill-success" data-filter="ready_for_filing">
                     <i class="bi bi-check-circle"></i> Prontas ({{ ready_petitions }})
                 </button>
                 {% endif %}
                 {% set others_count = (petition_rows|length) - awaiting_adjustments_petitions - in_review_petitions -
-                ready_petitions %}
+                awaiting_approval_petitions - ready_petitions %}
                 {% if others_count > 0 %}
                 <button class="filter-pill" data-filter="others">Outras ({{ others_count }})</button>
                 {% endif %}
@@ -873,6 +895,10 @@
                 {% elif petition.workflow_status in ['in_review', 'new'] %}
                 {% set row_bg = 'rgba(255,193,7,.04)' %}
                 {% set row_border_color = '#ffc107' %}
+                {% set row_border_width = '4px' %}
+                {% elif petition.workflow_status == 'awaiting_approval' %}
+                {% set row_bg = 'rgba(13,202,240,.05)' %}
+                {% set row_border_color = '#0dcaf0' %}
                 {% set row_border_width = '4px' %}
                 {% elif petition.workflow_status == 'ready_for_filing' %}
                 {% set row_bg = 'transparent' %}
@@ -959,10 +985,12 @@
                             class="btn btn-sm btn-outline-secondary">
                             <i class="bi bi-folder2-open me-1"></i> Abrir Petição
                         </a>
+                        {% if petition.workflow_status not in ['ready_for_filing', 'filed', 'archived'] %}
                         <a href="{{ url_for('fap_review.revision', petition_id=petition.id) }}"
                             class="btn btn-sm btn-primary">
                             <i class="bi bi-plus-circle me-1"></i> Nova Revisão
                         </a>
+                        {% endif %}
                     </div>
                 </div>
                 {% endfor %}
@@ -989,6 +1017,7 @@
                         ('new', 'Nova', '#6c757d'),
                         ('in_review', 'Em revisão', '#ffc107'),
                         ('awaiting_adjustments', 'Aguardando ajustes', '#dc3545'),
+                        ('awaiting_approval', 'Aguardando aprovação', '#0dcaf0'),
                         ('ready_for_filing', 'Aprovada pelo revisor', '#198754'),
                         ('filed', 'Processo iniciado', '#0d6efd'),
                         ('archived', 'Arquivada', '#343a40'),
@@ -1047,8 +1076,10 @@
                                             class="btn btn-sm btn-outline-primary" title="Última Revisão"
                                             target="_blank" rel="noopener noreferrer"><i class="bi bi-box-arrow-up-right"></i></a>
                                         {% endif %}
+                                        {% if petition.workflow_status not in ['ready_for_filing', 'filed', 'archived'] %}
                                         <a href="{{ url_for('fap_review.revision', petition_id=petition.id) }}"
                                             class="btn btn-sm btn-primary" title="Nova Revisão"><i class="bi bi-plus-circle"></i></a>
+                                        {% endif %}
                                     </span>
                                 </div>
                             </div>
@@ -1097,6 +1128,8 @@
                     matchesFilter = status === 'awaiting_adjustments';
                 } else if (activeFilter === 'in_review') {
                     matchesFilter = status === 'in_review' || status === 'new';
+                } else if (activeFilter === 'awaiting_approval') {
+                    matchesFilter = status === 'awaiting_approval';
                 } else if (activeFilter === 'ready_for_filing') {
                     matchesFilter = status === 'ready_for_filing';
                 } else if (activeFilter === 'others') {

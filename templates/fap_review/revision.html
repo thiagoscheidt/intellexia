@@ -269,6 +269,56 @@
         line-height: 1.45;
     }
 
+    .prev-revision-item {
+        padding: .7rem .95rem;
+        border-bottom: 1px solid rgba(15, 23, 42, .06);
+        font-size: .8rem;
+    }
+
+    .prev-revision-item:last-child {
+        border-bottom: 0;
+    }
+
+    .prev-revision-meta {
+        color: var(--bs-secondary-color);
+        font-size: .74rem;
+    }
+
+    .prev-revision-badges .badge {
+        font-size: .68rem;
+    }
+
+    .reuse-file-card {
+        border: 1px dashed rgba(15, 23, 42, .18);
+        background: var(--bs-body-bg);
+        border-radius: .8rem;
+        padding: .8rem .95rem;
+        width: 100%;
+        text-align: left;
+        transition: all .18s ease;
+        cursor: pointer;
+    }
+
+    .reuse-file-card:hover {
+        border-color: var(--bs-success);
+    }
+
+    .reuse-file-card.active {
+        border: 1px solid var(--bs-success);
+        background: var(--bs-success-bg-subtle);
+        box-shadow: 0 8px 18px rgba(25, 135, 84, .10);
+    }
+
+    .reuse-file-card .reuse-card-check {
+        font-size: 1.15rem;
+        color: rgba(15, 23, 42, .2);
+        transition: color .18s ease;
+    }
+
+    .reuse-file-card.active .reuse-card-check {
+        color: var(--bs-success);
+    }
+
     .petition-choice-panel {
         border: 1px solid rgba(15, 23, 42, .08);
         border-radius: .95rem;
@@ -678,6 +728,20 @@
                                             name="benefits_spreadsheet" accept=".xlsx">
                                     </div>
                                     <div id="benefitsSpreadsheetList"></div>
+                                    <div class="reuse-file-card mt-2" id="reuseBenefitsBlock" style="display:none;"
+                                        role="button" tabindex="0" data-reuse-target="reusePreviousBenefits">
+                                        <div class="d-flex align-items-center gap-3">
+                                            <i class="bi bi-arrow-counterclockwise fs-5 text-success"></i>
+                                            <div class="flex-grow-1">
+                                                <div class="petition-mode-title">Usar a planilha da revisão anterior
+                                                </div>
+                                                <div class="petition-mode-subtitle" id="reuseBenefitsName"></div>
+                                            </div>
+                                            <i class="bi bi-check-circle-fill reuse-card-check"></i>
+                                        </div>
+                                        <input class="d-none" type="checkbox" value="1" id="reusePreviousBenefits"
+                                            name="reuse_previous_benefits">
+                                    </div>
                                     <div class="form-text">
                                         Se enviada, o sistema confere depois da revisão se os números de benefício com
                                         tese
@@ -701,6 +765,20 @@
                                             accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,.png,.jpg,.jpeg">
                                     </div>
                                     <div id="auxiliaryDocumentsList"></div>
+                                    <div class="reuse-file-card mt-2" id="reuseAuxiliaryBlock" style="display:none;"
+                                        role="button" tabindex="0" data-reuse-target="reusePreviousAuxiliary">
+                                        <div class="d-flex align-items-center gap-3">
+                                            <i class="bi bi-arrow-counterclockwise fs-5 text-success"></i>
+                                            <div class="flex-grow-1">
+                                                <div class="petition-mode-title">Usar os documentos da revisão anterior
+                                                </div>
+                                                <div class="petition-mode-subtitle" id="reuseAuxiliaryNames"></div>
+                                            </div>
+                                            <i class="bi bi-check-circle-fill reuse-card-check"></i>
+                                        </div>
+                                        <input class="d-none" type="checkbox" value="1" id="reusePreviousAuxiliary"
+                                            name="reuse_previous_auxiliary">
+                                    </div>
                                 </div>
 
                                 <div class="summary-box mb-3" id="reviewSummaryBox">
@@ -800,6 +878,16 @@
                                 <i class="bi bi-sliders me-1"></i> Configurações
                             </a>
                         </div>
+                    </div>
+                </div>
+
+                <div class="card info-card" id="previousRevisionsCard" style="display:none;">
+                    <div class="card-header d-flex align-items-center gap-2">
+                        <i class="bi bi-clock-history text-primary"></i>
+                        Revisões Anteriores
+                    </div>
+                    <div class="card-body p-0">
+                        <div id="previousRevisionsList"></div>
                     </div>
                 </div>
 
@@ -1061,9 +1149,126 @@
         setupDropzone('auxiliaryDocumentsDropzone', 'auxiliaryDocuments', 'auxiliaryDocumentsList', true);
         setupDropzone('benefitsSpreadsheetDropzone', 'benefitsSpreadsheet', 'benefitsSpreadsheetList', false);
 
+        // Reuso de arquivos da revisão anterior: cards selecionáveis exibidos
+        // quando a petição selecionada tem auxiliares/planilha na última revisão.
+        document.querySelectorAll('.reuse-file-card').forEach(function (card) {
+            function toggleCard() {
+                const checkbox = document.getElementById(card.dataset.reuseTarget);
+                checkbox.checked = !checkbox.checked;
+                card.classList.toggle('active', checkbox.checked);
+            }
+            card.addEventListener('click', toggleCard);
+            card.addEventListener('keydown', function (event) {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    toggleCard();
+                }
+            });
+        });
+
+        // Coluna lateral: resumo das revisões anteriores da petição selecionada
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text == null ? '' : String(text);
+            return div.innerHTML;
+        }
+
+        function updatePreviousRevisions(petitionId) {
+            const card = document.getElementById('previousRevisionsCard');
+            const list = document.getElementById('previousRevisionsList');
+            card.style.display = 'none';
+            list.innerHTML = '';
+
+            if (!petitionId) return;
+
+            fetch(`/fap-review/petitions/${petitionId}/revisions-summary`)
+                .then(function (response) { return response.ok ? response.json() : null; })
+                .then(function (data) {
+                    if (!data || petitionSelect.value !== String(petitionId)) return;
+                    const revisions = data.revisions || [];
+                    if (!revisions.length) return;
+
+                    list.innerHTML = revisions.map(function (rev) {
+                        let statusBadge = '';
+                        if (rev.superseded) {
+                            statusBadge = '<span class="badge rounded-pill bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle">Substituída</span>';
+                        } else if (rev.status === 'completed') {
+                            statusBadge = '<span class="badge rounded-pill bg-success-subtle text-success-emphasis border border-success-subtle">Concluída</span>';
+                        } else if (rev.status === 'failed') {
+                            statusBadge = '<span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle">Erro</span>';
+                        } else {
+                            statusBadge = '<span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle">Processando</span>';
+                        }
+
+                        let badges = '';
+                        if (rev.findings) {
+                            badges += `<span class="badge rounded-pill bg-light text-dark border">${rev.findings.total} achado(s)</span> `;
+                            if (rev.findings.critical) badges += `<span class="badge rounded-pill bg-danger-subtle text-danger-emphasis border border-danger-subtle">${rev.findings.critical} crítico(s)</span> `;
+                            if (rev.findings.moderate) badges += `<span class="badge rounded-pill bg-warning-subtle text-warning-emphasis border border-warning-subtle">${rev.findings.moderate} moderado(s)</span> `;
+                            if (rev.findings.formal) badges += `<span class="badge rounded-pill bg-info-subtle text-info-emphasis border border-info-subtle">${rev.findings.formal} formal(is)</span> `;
+                        }
+                        if (rev.benefits) {
+                            const ok = rev.benefits.found >= rev.benefits.total;
+                            badges += `<span class="badge rounded-pill ${ok ? 'bg-success-subtle text-success-emphasis border border-success-subtle' : 'bg-danger-subtle text-danger-emphasis border border-danger-subtle'}"><i class="bi bi-file-earmark-spreadsheet me-1"></i>Benefícios ${rev.benefits.found}/${rev.benefits.total}</span>`;
+                        }
+
+                        return `
+                            <div class="prev-revision-item">
+                                <div class="d-flex align-items-center justify-content-between gap-2">
+                                    <span class="fw-semibold">R${rev.revision_number ?? '?'} ${statusBadge}</span>
+                                    <a href="${rev.url}" target="_blank" rel="noopener noreferrer"
+                                        class="btn btn-sm btn-outline-primary py-0 px-1" title="Abrir resultado">
+                                        <i class="bi bi-box-arrow-up-right"></i>
+                                    </a>
+                                </div>
+                                <div class="prev-revision-meta mt-1">
+                                    <i class="bi bi-person me-1"></i>${escapeHtml(rev.user_name || '-')} · ${escapeHtml(rev.created_at || '')}
+                                </div>
+                                ${badges ? `<div class="prev-revision-badges d-flex flex-wrap gap-1 mt-2">${badges}</div>` : ''}
+                            </div>`;
+                    }).join('');
+                    card.style.display = '';
+                })
+                .catch(function () { /* histórico indisponível */ });
+        }
+
+        function updateReusableFiles(petitionId) {
+            const auxBlock = document.getElementById('reuseAuxiliaryBlock');
+            const benefitsBlock = document.getElementById('reuseBenefitsBlock');
+            const auxCheck = document.getElementById('reusePreviousAuxiliary');
+            const benefitsCheck = document.getElementById('reusePreviousBenefits');
+
+            auxBlock.style.display = 'none';
+            benefitsBlock.style.display = 'none';
+            auxBlock.classList.remove('active');
+            benefitsBlock.classList.remove('active');
+            auxCheck.checked = false;
+            benefitsCheck.checked = false;
+
+            if (!petitionId) return;
+
+            fetch(`/fap-review/petitions/${petitionId}/reusable-files`)
+                .then(function (response) { return response.ok ? response.json() : null; })
+                .then(function (data) {
+                    if (!data || petitionSelect.value !== String(petitionId)) return;
+                    if (Array.isArray(data.auxiliary_documents) && data.auxiliary_documents.length) {
+                        document.getElementById('reuseAuxiliaryNames').textContent =
+                            data.auxiliary_documents.join(', ');
+                        auxBlock.style.display = '';
+                    }
+                    if (data.benefits_spreadsheet) {
+                        document.getElementById('reuseBenefitsName').textContent = data.benefits_spreadsheet;
+                        benefitsBlock.style.display = '';
+                    }
+                })
+                .catch(function () { /* sem reuso disponível */ });
+        }
+
         function syncPetitionFields() {
             const selectedOption = petitionSelect.options[petitionSelect.selectedIndex];
             const petitionId = petitionSelect.value;
+            updateReusableFiles(petitionId);
+            updatePreviousRevisions(petitionId);
 
             petitionCards.forEach(function (card) {
                 card.classList.toggle('active', card.dataset.petitionId === petitionId);

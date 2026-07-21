@@ -293,13 +293,16 @@
         <li class="nav-item">
           <a href="{{ url_for('communications.list_communications') }}"
             class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('communications.') else '' }}">
-            <i class="nav-icon bi bi-broadcast"></i>
-            <p>
-              Comunicações
+            <span class="position-relative d-inline-block">
+              <i class="nav-icon bi bi-broadcast"></i>
               {% if communications_unread_count and communications_unread_count > 0 %}
-              <span class="badge bg-warning float-end me-3">{{ communications_unread_count }}</span>
+              <span class="position-absolute badge rounded-pill text-bg-warning"
+                    style="font-size: .58rem; top: -4px; right: -2px; padding: .2em .4em;">
+                {{ communications_unread_count if communications_unread_count < 100 else '99+' }}
+              </span>
               {% endif %}
-            </p>
+            </span>
+            <p title="Monitoramento de Processos">Monitoramento</p>
           </a>
         </li>
         {% endif %}

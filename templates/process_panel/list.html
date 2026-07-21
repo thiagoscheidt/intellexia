@@ -119,7 +119,7 @@
               {% endif %}
               {% endwith %}
 
-              <!-- Abas de triagem (Monitoramento de Comunicações) -->
+              <!-- Abas de triagem (Monitoramento de Processos) -->
               <ul class="nav nav-tabs mb-3">
                 <li class="nav-item">
                   <a class="nav-link {{ 'active' if not discovery_view }}"
@@ -147,7 +147,7 @@
               {% if discovery_view == 'descobertos' %}
               <div class="alert alert-info">
                 <i class="bi bi-broadcast"></i>
-                Processos criados automaticamente pelo <strong>Monitoramento de Comunicações</strong> (DJEN).
+                Processos criados automaticamente pelo <strong>Monitoramento de Processos</strong> (DJEN).
                 Confirme os que interessam ao escritório ou ignore os demais.
               </div>
               {% endif %}
@@ -358,13 +358,13 @@
                   {% if processes.has_prev %}
                   <li class="page-item">
                     <a class="page-link"
-                      href="{{ url_for('process_panel.list_processes', page=1, q=search_query, status=status_filter, legal_thesis_id=legal_thesis_filter) }}">
+                      href="{{ url_for('process_panel.list_processes', page=1, q=search_query, status=status_filter, legal_thesis_id=legal_thesis_filter, discovery=discovery_view) }}">
                       <i class="bi bi-chevron-bar-left"></i>
                     </a>
                   </li>
                   <li class="page-item">
                     <a class="page-link"
-                      href="{{ url_for('process_panel.list_processes', page=processes.prev_num, q=search_query, status=status_filter, legal_thesis_id=legal_thesis_filter) }}">
+                      href="{{ url_for('process_panel.list_processes', page=processes.prev_num, q=search_query, status=status_filter, legal_thesis_id=legal_thesis_filter, discovery=discovery_view) }}">
                       Anterior
                     </a>
                   </li>
@@ -379,7 +379,7 @@
                   {% else %}
                   <li class="page-item">
                     <a class="page-link"
-                      href="{{ url_for('process_panel.list_processes', page=page_num, q=search_query, status=status_filter, legal_thesis_id=legal_thesis_filter) }}">
+                      href="{{ url_for('process_panel.list_processes', page=page_num, q=search_query, status=status_filter, legal_thesis_id=legal_thesis_filter, discovery=discovery_view) }}">
                       {{ page_num }}
                     </a>
                   </li>
@@ -394,13 +394,13 @@
                   {% if processes.has_next %}
                   <li class="page-item">
                     <a class="page-link"
-                      href="{{ url_for('process_panel.list_processes', page=processes.next_num, q=search_query, status=status_filter, legal_thesis_id=legal_thesis_filter) }}">
+                      href="{{ url_for('process_panel.list_processes', page=processes.next_num, q=search_query, status=status_filter, legal_thesis_id=legal_thesis_filter, discovery=discovery_view) }}">
                       Próx ima
                     </a>
                   </li>
                   <li class="page-item">
                     <a class="page-link"
-                      href="{{ url_for('process_panel.list_processes', page=processes.pages, q=search_query, status=status_filter, legal_thesis_id=legal_thesis_filter) }}">
+                      href="{{ url_for('process_panel.list_processes', page=processes.pages, q=search_query, status=status_filter, legal_thesis_id=legal_thesis_filter, discovery=discovery_view) }}">
                       <i class="bi bi-chevron-bar-right"></i>
                     </a>
                   </li>

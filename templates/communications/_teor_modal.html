@@ -1,0 +1,70 @@
+{# Modal de leitura do inteiro teor + "Explicar com IA".
+
+   Uso: incluir uma vez na página e dar às linhas botões com as classes
+   .pm-teor-toggle (abre o modal) ou .pm-explain-action (abre já explicando),
+   ambos com data-teor-id, data-processo, data-detail-url e data-explain-url.
+   Requer static/js/communication-explainer.js (incluído aqui). #}
+<!-- Modal: inteiro teor -->
+<div class="modal fade" id="modalTeor" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-file-text me-1"></i> Inteiro teor — <span id="modalTeorProcesso"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+      </div>
+      <div class="modal-body">
+        <div id="modalTeorExplain" class="mb-3"></div>
+        <div class="pm-teor" id="modalTeorBody"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" id="modalTeorExplainBtn" class="btn btn-primary btn-sm me-auto">
+          <i class="bi bi-stars me-1"></i>Explicar com IA
+        </button>
+        <a href="#" id="modalTeorDetailLink" target="_blank" rel="noopener" class="btn btn-outline-primary btn-sm">
+          <i class="bi bi-eye me-1"></i>Abrir detalhe completo
+        </a>
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Fechar</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="{{ url_for('static', filename='js/communication-explainer.js') }}"></script>
+<script>
+  // Bootstrap carrega no fim do base.html — aguardar DOMContentLoaded.
+  document.addEventListener('DOMContentLoaded', function () {
+    var modalEl = document.getElementById('modalTeor');
+    var modal = new bootstrap.Modal(modalEl);
+    var explainBtn = document.getElementById('modalTeorExplainBtn');
+    var explainContainer = document.getElementById('modalTeorExplain');
+    var currentExplainUrl = null;
+
+    function openTeorModal(btn, autoExplain) {
+      var full = document.getElementById(btn.getAttribute('data-teor-id'));
+      if (!full) return;
+      document.getElementById('modalTeorProcesso').textContent = btn.getAttribute('data-processo');
+      document.getElementById('modalTeorBody').textContent = full.textContent.trim();
+      document.getElementById('modalTeorDetailLink').setAttribute('href', btn.getAttribute('data-detail-url'));
+      currentExplainUrl = btn.getAttribute('data-explain-url');
+      explainContainer.innerHTML = '';
+      explainBtn.classList.remove('d-none');
+      modal.show();
+      if (autoExplain && currentExplainUrl) {
+        CommExplainer.explain(currentExplainUrl, explainContainer, explainBtn);
+      }
+    }
+
+    document.querySelectorAll('.pm-teor-toggle').forEach(function (btn) {
+      btn.addEventListener('click', function () { openTeorModal(btn, false); });
+    });
+
+    // Botão de ação "Explicar com IA": abre o modal já disparando a explicação.
+    document.querySelectorAll('.pm-explain-action').forEach(function (btn) {
+      btn.addEventListener('click', function () { openTeorModal(btn, true); });
+    });
+
+    explainBtn.addEventListener('click', function () {
+      if (currentExplainUrl) CommExplainer.explain(currentExplainUrl, explainContainer, explainBtn);
+    });
+  });
+</script>
