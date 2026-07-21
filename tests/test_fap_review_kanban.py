@@ -19,6 +19,12 @@ MARKERS = [
     'data-view="list"',
     'data-view="kanban"',
     "localStorage.getItem('fapReviewPetitionView')",
+    'class="kanban-col',
+    'data-status="new"',
+    'data-status="archived"',
+    'kanban-col-archived',
+    'class="kanban-card"',
+    'data-status-url=',
 ]
 
 

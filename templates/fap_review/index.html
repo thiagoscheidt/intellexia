@@ -399,6 +399,188 @@
         color: #198754;
     }
 
+    /* ── Kanban ──────────────────────────────────────────── */
+    .kanban-board {
+        display: flex;
+        gap: .75rem;
+        align-items: flex-start;
+        padding: 1rem;
+        overflow-x: auto;
+    }
+
+    .kanban-col {
+        flex: 0 0 250px;
+        max-width: 250px;
+        background: var(--bs-secondary-bg);
+        border: 1px solid var(--fr-border);
+        border-top: 3px solid var(--col-color);
+        border-radius: .6rem;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .kanban-col-header {
+        display: flex;
+        align-items: center;
+        gap: .45rem;
+        padding: .55rem .7rem;
+        font-size: .8rem;
+        font-weight: 700;
+        color: var(--fr-slate-700);
+    }
+
+    .kanban-col-dot {
+        width: .55rem;
+        height: .55rem;
+        border-radius: 50%;
+        background: var(--col-color);
+        flex-shrink: 0;
+    }
+
+    .kanban-col-title {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    .kanban-col-count {
+        background: rgba(21, 37, 53, .08);
+        border-radius: 999px;
+        padding: 0 .5rem;
+        font-size: .72rem;
+    }
+
+    .kanban-col-body {
+        display: flex;
+        flex-direction: column;
+        gap: .5rem;
+        padding: .5rem;
+        overflow-y: auto;
+        max-height: 62vh;
+        min-height: 3rem;
+    }
+
+    .kanban-col-empty {
+        border: 1px dashed var(--fr-border);
+        border-radius: .5rem;
+        padding: .8rem;
+        text-align: center;
+        font-size: .75rem;
+        color: var(--fr-slate-500);
+    }
+
+    .kanban-col-body:has(.kanban-card) .kanban-col-empty {
+        display: none;
+    }
+
+    .kanban-card {
+        background: var(--bs-body-bg);
+        border: 1px solid var(--fr-border);
+        border-left: 3px solid var(--col-color);
+        border-radius: .5rem;
+        padding: .6rem .7rem;
+        cursor: grab;
+        box-shadow: 0 1px 3px rgba(21, 37, 53, .06);
+    }
+
+    .kanban-card.dragging {
+        opacity: .45;
+        cursor: grabbing;
+    }
+
+    .kanban-card-title {
+        display: block;
+        font-size: .82rem;
+        font-weight: 600;
+        color: var(--fr-slate-900);
+        text-decoration: none;
+        margin-bottom: .35rem;
+    }
+
+    .kanban-card-title:hover {
+        text-decoration: underline;
+    }
+
+    .kanban-card-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: .4rem;
+        align-items: center;
+        font-size: .72rem;
+        color: var(--fr-slate-500);
+        margin-bottom: .45rem;
+    }
+
+    .kanban-chip {
+        background: rgba(21, 37, 53, .06);
+        border-radius: .35rem;
+        padding: 0 .35rem;
+        font-weight: 600;
+        max-width: 9rem;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .kanban-card-footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: .4rem;
+    }
+
+    .kanban-card-noreviewer {
+        font-size: .72rem;
+        color: var(--fr-slate-500);
+        font-style: italic;
+    }
+
+    .kanban-card-actions {
+        display: inline-flex;
+        gap: .25rem;
+    }
+
+    .kanban-card-actions .btn {
+        padding: .1rem .4rem;
+        font-size: .72rem;
+    }
+
+    /* Coluna Arquivada recolhida: só o cabeçalho, na vertical */
+    .kanban-col-archived .kanban-col-header {
+        cursor: pointer;
+    }
+
+    .kanban-col-archived.collapsed {
+        flex-basis: 3rem;
+        max-width: 3rem;
+    }
+
+    .kanban-col-archived.collapsed .kanban-col-body {
+        display: none;
+    }
+
+    .kanban-col-archived.collapsed .kanban-col-header {
+        writing-mode: vertical-rl;
+        padding: .7rem .4rem;
+    }
+
+    .kanban-col-archived.collapsed .kanban-col-chevron {
+        transform: rotate(-90deg);
+    }
+
+    @media (max-width: 767.98px) {
+        .kanban-col {
+            flex-basis: 78vw;
+            max-width: 78vw;
+        }
+
+        .kanban-col-archived.collapsed {
+            flex-basis: 3rem;
+            max-width: 3rem;
+        }
+    }
+
     /* ── Toggle lista/kanban ─────────────────────────────── */
     .view-toggle {
         display: inline-flex;
@@ -761,8 +943,72 @@
             </div>
             </div>
 
-            <!-- Visão kanban (populada na Task 2) -->
-            <div class="kanban-board" id="kanbanBoard" style="display:none;"></div>
+            <!-- Visão kanban -->
+            <div class="kanban-board-wrap" id="kanbanBoardWrap" style="display:none;">
+                <div id="kanbanError" class="alert alert-danger py-2 px-3 mx-3 mt-3 mb-0" style="display:none;"></div>
+                <div class="kanban-board" id="kanbanBoard">
+                    {% set kanban_columns = [
+                        ('new', 'Nova', '#6c757d'),
+                        ('in_review', 'Em revisão', '#ffc107'),
+                        ('awaiting_adjustments', 'Aguardando ajustes', '#dc3545'),
+                        ('ready_for_filing', 'Aprovada pelo revisor', '#198754'),
+                        ('filed', 'Processo iniciado', '#0d6efd'),
+                        ('archived', 'Arquivada', '#343a40'),
+                    ] %}
+                    {% for status_key, status_label, status_color in kanban_columns %}
+                    {% set col_rows = petition_rows | selectattr('petition.workflow_status', 'equalto', status_key) | list %}
+                    <div class="kanban-col{% if status_key == 'archived' %} kanban-col-archived collapsed{% endif %}"
+                        data-status="{{ status_key }}" style="--col-color: {{ status_color }};">
+                        <div class="kanban-col-header">
+                            <span class="kanban-col-dot"></span>
+                            <span class="kanban-col-title">{{ status_label }}</span>
+                            <span class="kanban-col-count">{{ col_rows|length }}</span>
+                            {% if status_key == 'archived' %}
+                            <i class="bi bi-chevron-down kanban-col-chevron"></i>
+                            {% endif %}
+                        </div>
+                        <div class="kanban-col-body">
+                            <div class="kanban-col-empty">Sem petições</div>
+                            {% for row in col_rows %}
+                            {% set petition = row.petition %}
+                            {% set latest_revision = row.latest_revision %}
+                            {% set latest_reviewer_name = row.latest_reviewer_name %}
+                            <div class="kanban-card" draggable="true"
+                                data-petition-id="{{ petition.id }}"
+                                data-status-url="{{ url_for('fap_review.petition_update_status', petition_id=petition.id) }}"
+                                data-search="{{ (petition.title ~ ' ' ~ (petition.office_document_identifier or '') ~ ' ' ~ (latest_reviewer_name or ''))|lower }}">
+                                <a class="kanban-card-title"
+                                    href="{{ url_for('fap_review.petition_detail', petition_id=petition.id) }}">{{ petition.title }}</a>
+                                <div class="kanban-card-meta">
+                                    {% if petition.office_document_identifier %}
+                                    <span class="kanban-chip" title="Id Wrike">{{ petition.office_document_identifier }}</span>
+                                    {% endif %}
+                                    {% if latest_revision %}<span>R{{ latest_revision.revision_number or '?' }}</span>{% endif %}
+                                    <span>{{ (petition.last_reviewed_at or petition.updated_at or petition.created_at).strftime('%d/%m/%Y') }}</span>
+                                </div>
+                                <div class="kanban-card-footer">
+                                    {% if latest_reviewer_name %}
+                                    <span class="pr-reviewer-avatar" title="{{ latest_reviewer_name }}">{{ latest_reviewer_name[:1]|upper }}</span>
+                                    {% else %}
+                                    <span class="kanban-card-noreviewer">Sem revisão</span>
+                                    {% endif %}
+                                    <span class="kanban-card-actions">
+                                        {% if latest_revision %}
+                                        <a href="{{ url_for('fap_review.revision_result', execution_id=latest_revision.id) }}"
+                                            class="btn btn-sm btn-outline-primary" title="Última Revisão"
+                                            target="_blank" rel="noopener noreferrer"><i class="bi bi-box-arrow-up-right"></i></a>
+                                        {% endif %}
+                                        <a href="{{ url_for('fap_review.revision', petition_id=petition.id) }}"
+                                            class="btn btn-sm btn-primary" title="Nova Revisão"><i class="bi bi-plus-circle"></i></a>
+                                    </span>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
 
             {% else %}
             <div class="text-center py-5">
@@ -823,6 +1069,11 @@
             if (emptyState) {
                 emptyState.style.display = visible === 0 ? '' : 'none';
             }
+
+            document.querySelectorAll('.kanban-card').forEach(function (card) {
+                const matches = !term || (card.dataset.search || '').includes(term);
+                card.style.display = matches ? '' : 'none';
+            });
         }
 
         filterPills.forEach(function (pill) {
@@ -842,7 +1093,7 @@
         const VIEW_STORAGE_KEY = 'fapReviewPetitionView';
         const viewButtons = document.querySelectorAll('.view-toggle-btn');
         const listView = document.getElementById('petitionListView');
-        const kanbanBoard = document.getElementById('kanbanBoard');
+        const kanbanBoard = document.getElementById('kanbanBoardWrap');
 
         function setView(view) {
             if (!listView || !kanbanBoard) return;
@@ -865,6 +1116,13 @@
         let savedView = 'list';
         try { savedView = localStorage.getItem('fapReviewPetitionView') || 'list'; } catch (e) { /* modo privado */ }
         if (savedView === 'kanban') setView('kanban');
+
+        // ── Coluna Arquivada recolhida ────────────────────────
+        document.querySelectorAll('.kanban-col-archived .kanban-col-header').forEach(function (header) {
+            header.addEventListener('click', function () {
+                header.closest('.kanban-col').classList.toggle('collapsed');
+            });
+        });
     });
 </script>
 {% endblock %}
