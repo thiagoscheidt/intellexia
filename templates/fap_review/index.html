@@ -409,8 +409,8 @@
     }
 
     .kanban-col {
-        flex: 0 0 250px;
-        max-width: 250px;
+        flex: 1 1 250px;
+        min-width: 210px;
         background: var(--bs-secondary-bg);
         border: 1px solid var(--fr-border);
         border-top: 3px solid var(--col-color);
@@ -557,8 +557,9 @@
     }
 
     .kanban-col-archived.collapsed {
-        flex-basis: 3rem;
+        flex: 0 0 3rem;
         max-width: 3rem;
+        min-width: 0;
     }
 
     .kanban-col-archived.collapsed .kanban-col-body {
@@ -576,13 +577,15 @@
 
     @media (max-width: 767.98px) {
         .kanban-col {
-            flex-basis: 78vw;
+            flex: 0 0 78vw;
             max-width: 78vw;
+            min-width: 0;
         }
 
         .kanban-col-archived.collapsed {
-            flex-basis: 3rem;
+            flex: 0 0 3rem;
             max-width: 3rem;
+            min-width: 0;
         }
     }
 
