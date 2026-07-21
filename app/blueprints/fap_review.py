@@ -1235,11 +1235,19 @@ def petition_detail(petition_id: int):
         FapReviewAuditLog.id.desc(),
     ).limit(50).all()
 
+    latest_executive_summary = None
+    latest = petition.latest_revision
+    if latest and latest.status == 'completed':
+        summary = _load_execution_result_payload(latest).get('executive_summary')
+        if isinstance(summary, dict):
+            latest_executive_summary = summary
+
     return render_template(
         'fap_review/petition_detail.html',
         petition=petition,
         revisions=revisions,
         revision_summary=revision_summary,
+        latest_executive_summary=latest_executive_summary,
         audit_entries=audit_entries,
         status_badge=_build_petition_status_badge(petition.workflow_status),
         petition_status_labels=PETITION_WORKFLOW_STATUSES,

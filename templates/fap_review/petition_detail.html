@@ -349,6 +349,40 @@
         flex-shrink: 0;
     }
 
+    /* ── Panorama da última revisão ──────────────────────── */
+    .petition-summary-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(7rem, 1fr));
+        gap: .6rem;
+    }
+
+    .petition-summary-stat {
+        border: 1px solid rgba(21, 37, 53, .08);
+        border-left: 4px solid var(--stat-color);
+        border-radius: .5rem;
+        padding: .45rem .65rem;
+        display: flex;
+        flex-direction: column;
+        gap: .1rem;
+        background: rgba(248, 250, 252, .6);
+    }
+
+    .petition-summary-stat-value {
+        font-size: 1.15rem;
+        font-weight: 800;
+        color: #233245;
+    }
+
+    .petition-summary-stat-label {
+        font-size: .72rem;
+        font-weight: 700;
+        color: #7a8797;
+    }
+
+    .petition-summary-stat-label .bi {
+        color: var(--stat-color);
+    }
+
     /* ── Timeline de alterações ──────────────────────────── */
     .petition-timeline {
         padding: .5rem 0;
@@ -574,6 +608,33 @@
                             petition.latest_revision.created_at).strftime('%d/%m/%Y %H:%M') }}</div>
                     </div>
                 </div>
+
+                {% if latest_executive_summary %}
+                <div class="petition-panel-subtitle mt-3 mb-2">Panorama da revisão</div>
+                <div class="petition-summary-stats">
+                    <div class="petition-summary-stat" style="--stat-color: #6c757d;">
+                        <span class="petition-summary-stat-value">{{ latest_executive_summary.total_findings or 0 }}</span>
+                        <span class="petition-summary-stat-label"><i class="bi bi-collection"></i> Total</span>
+                    </div>
+                    <div class="petition-summary-stat" style="--stat-color: #dc3545;">
+                        <span class="petition-summary-stat-value">{{ latest_executive_summary.critical_findings or 0 }}</span>
+                        <span class="petition-summary-stat-label"><i class="bi bi-exclamation-triangle-fill"></i> Críticos</span>
+                    </div>
+                    <div class="petition-summary-stat" style="--stat-color: #ffc107;">
+                        <span class="petition-summary-stat-value">{{ latest_executive_summary.moderate_findings or 0 }}</span>
+                        <span class="petition-summary-stat-label"><i class="bi bi-exclamation-circle-fill"></i> Moderados</span>
+                    </div>
+                    <div class="petition-summary-stat" style="--stat-color: #0dcaf0;">
+                        <span class="petition-summary-stat-value">{{ latest_executive_summary.formal_findings or 0 }}</span>
+                        <span class="petition-summary-stat-label"><i class="bi bi-info-circle-fill"></i> Formais</span>
+                    </div>
+                </div>
+                {% if latest_executive_summary.correction_priority %}
+                <div class="small text-muted mt-2"><strong>Prioridade de correção:</strong>
+                    <span class="badge rounded-pill bg-warning text-dark ms-1">{{ latest_executive_summary.correction_priority }}</span>
+                </div>
+                {% endif %}
+                {% endif %}
                 {% else %}
                 <div class="text-center text-muted py-4">
                     <i class="bi bi-hourglass-split" style="font-size: 2rem;"></i>

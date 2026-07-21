@@ -155,6 +155,8 @@ Conferência **automática, sem IA**: o sistema lê as colunas **"Número do Ben
 
 Histórico completo de uma petição: todas as revisões (número, data, status, documento e responsável) e um resumo (concluídas, em processamento, com falha, comparativas). Aqui você pode **editar o título e o Id Wrike** (o histórico de descartes acompanha a mudança) e **trocar o status** manualmente — inclusive marcar "Processo iniciado" ou "Arquivada".
 
+O painel **Última Revisão** traz também o **Panorama da revisão**: os totais do Resumo Executivo (apontamentos totais, críticos, moderados e formais) e a prioridade de correção — sem precisar abrir o resultado completo.
+
 A seção **Histórico de Alterações** mostra a linha do tempo da petição: cada mudança de status (inclusive as feitas arrastando o card no kanban), revisões executadas e edições cadastrais, com usuário e data de cada evento.
 
 ---
