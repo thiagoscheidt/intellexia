@@ -23,6 +23,7 @@ from pathlib import Path
 from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session, url_for, send_file
 from werkzeug.utils import secure_filename
 from sqlalchemy import and_, func, case
+from sqlalchemy.orm import joinedload
 
 from app.models import (
     db, User, LawFirm,
@@ -828,13 +829,29 @@ def index():
         else_=3
     )
 
-    petitions = FapReviewPetition.query.filter_by(
+    petitions = FapReviewPetition.query.options(
+        joinedload(FapReviewPetition.latest_revision).joinedload(FapReviewExecution.user),
+    ).filter_by(
         law_firm_id=law_firm_id,
     ).order_by(
         _priority_order,
         FapReviewPetition.updated_at.desc(),
         FapReviewPetition.id.desc(),
-    ).limit(20).all()
+    ).all()
+
+    now = datetime.now()
+
+    def _status_age_days(petition) -> int:
+        reference = petition.status_changed_at or petition.updated_at or petition.created_at
+        return max(0, (now - reference).days) if reference else 0
+
+    def _latest_findings_count(petition):
+        execution = petition.latest_revision
+        if not execution or execution.status != 'completed':
+            return None
+        payload = _load_execution_result_payload(execution)
+        findings = payload.get('findings')
+        return len(findings) if isinstance(findings, list) else None
 
     petition_rows = [
         {
@@ -842,6 +859,8 @@ def index():
             'latest_revision': petition.latest_revision,
             'latest_reviewer_name': petition.latest_revision.user.name if petition.latest_revision and petition.latest_revision.user else None,
             'status_badge': _build_petition_status_badge(petition.workflow_status),
+            'status_age_days': _status_age_days(petition),
+            'findings_count': _latest_findings_count(petition),
         }
         for petition in petitions
     ]

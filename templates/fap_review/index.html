@@ -234,6 +234,11 @@
         padding: 0 .75rem;
     }
 
+    .pr-status-age.is-stale {
+        color: #b45309;
+        font-weight: 700;
+    }
+
     .pr-column-label {
         font-size: .64rem;
         font-weight: 800;
@@ -794,8 +799,8 @@
                 <div>
                     <h5 class="card-title mb-0"><i class="bi bi-collection me-2"></i> Petições em Acompanhamento</h5>
                     <div class="petition-board-summary">
-                        <span class="petition-board-summary-chip"><i class="bi bi-clock-history"></i> Últimas 20
-                            petições atualizadas</span>
+                        <span class="petition-board-summary-chip"><i class="bi bi-clock-history"></i> Petições
+                            priorizadas por status</span>
                         <span class="petition-board-summary-chip"><i class="bi bi-person-check"></i> Com histórico da
                             última revisão</span>
                         <span class="petition-board-summary-chip"><i class="bi bi-funnel"></i> Filtro e busca em tempo
@@ -908,8 +913,15 @@
                         <div class="pr-title-meta">
                             {% set rev_count = petition.revision_count or 0 %}
                             <span title="Revisões realizadas nesta petição"><i class="bi bi-arrow-repeat"></i>
-                                {{ rev_count }} {{ 'revisão' if rev_count == 1 else 'revisões' }}</span> ·
-                            Atualizada em {{ (petition.last_reviewed_at or petition.updated_at or
+                                {{ rev_count }} {{ 'revisão' if rev_count == 1 else 'revisões' }}</span>
+                            {% if row.findings_count is not none %}
+                            · <span title="Apontamentos da última revisão"><i class="bi bi-exclamation-triangle"></i>
+                                {{ row.findings_count }} {{ 'apontamento' if row.findings_count == 1 else 'apontamentos' }}</span>
+                            {% endif %}
+                            · <span class="pr-status-age{% if petition.workflow_status == 'awaiting_adjustments' and row.status_age_days >= 7 %} is-stale{% endif %}"
+                                title="Tempo desde a última mudança de status"><i class="bi bi-hourglass"></i>
+                                {{ 'hoje' if row.status_age_days == 0 else ('há ' ~ row.status_age_days ~ (' dia' if row.status_age_days == 1 else ' dias')) }} neste status</span>
+                            · Atualizada em {{ (petition.last_reviewed_at or petition.updated_at or
                             petition.created_at).strftime('%d/%m/%Y') }}
                         </div>
                     </div>
@@ -1015,6 +1027,12 @@
                                     {% endif %}
                                     {% set rev_count = petition.revision_count or 0 %}
                                     <span title="Revisões realizadas nesta petição"><i class="bi bi-arrow-repeat"></i> {{ rev_count }}</span>
+                                    {% if row.findings_count is not none %}
+                                    <span title="Apontamentos da última revisão"><i class="bi bi-exclamation-triangle"></i> {{ row.findings_count }}</span>
+                                    {% endif %}
+                                    <span class="pr-status-age{% if petition.workflow_status == 'awaiting_adjustments' and row.status_age_days >= 7 %} is-stale{% endif %}"
+                                        title="Tempo desde a última mudança de status"><i class="bi bi-hourglass"></i>
+                                        {{ 'hoje' if row.status_age_days == 0 else (row.status_age_days ~ 'd') }}</span>
                                     <span>{{ (petition.last_reviewed_at or petition.updated_at or petition.created_at).strftime('%d/%m/%Y') }}</span>
                                 </div>
                                 <div class="kanban-card-footer">
