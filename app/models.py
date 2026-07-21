@@ -1154,7 +1154,7 @@ class JudicialProcess(db.Model):
     # Status
     status = db.Column(db.String(50), default='ativo')  # ativo, suspenso, encerrado, aguardando
 
-    # Origem do cadastro: 'manual' ou 'comunica_auto' (descoberto pelo Monitoramento de Comunicações)
+    # Origem do cadastro: 'manual' ou 'comunica_auto' (descoberto pelo Monitoramento de Processos)
     origin = db.Column(db.String(20), default='manual', nullable=False)
     # Triagem de processos descobertos: confirmed | pending_review | ignored
     discovery_status = db.Column(db.String(20), default='confirmed', nullable=False, index=True)
@@ -2791,6 +2791,8 @@ class FapReviewPetition(db.Model):
     latest_revision_id = db.Column(db.Integer, db.ForeignKey('fap_review_executions.id'))
     revision_count = db.Column(db.Integer, default=0, nullable=False)
     last_reviewed_at = db.Column(db.DateTime)
+    status_changed_at = db.Column(db.DateTime, default=datetime.now,
+                                  comment='Momento da última mudança de workflow_status')
 
     created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
     updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
@@ -3296,13 +3298,22 @@ class UserPageVisit(db.Model):
 
 
 class ProcessCommunication(db.Model):
-    """Tabela process_communications - Comunicações processuais do Comunica PJe (DJEN).
+    """Tabela process_communications - Comunicações do Monitoramento de Processos.
 
-    Dado bruto e imutável vindo da API pública do CNJ. Deduplicação pelo ``hash``
-    da API (unique por escritório): mesmo hash → UPDATE, não INSERT. O payload
-    completo fica em ``raw_json`` para resiliência a mudanças de schema do CNJ.
+    Dado bruto e imutável vindo de uma fonte externa. Hoje a única fonte é o
+    Comunica PJe/DJEN; ``source`` identifica a origem e permite plugar novas
+    fontes no futuro (basta nova constante SOURCE_* + rótulo em SOURCE_LABELS).
+    Deduplicação pelo ``hash`` da fonte (unique por escritório): mesmo hash →
+    UPDATE, não INSERT. O payload completo fica em ``raw_json`` para
+    resiliência a mudanças de schema da fonte.
     """
     __tablename__ = 'process_communications'
+
+    # Fontes de informação conhecidas — novas fontes: adicionar constante e rótulo
+    SOURCE_COMUNICA_PJE = 'comunica_pje'
+    SOURCE_LABELS = {
+        SOURCE_COMUNICA_PJE: 'DJEN (Comunica PJe)',
+    }
     __table_args__ = (
         db.UniqueConstraint('law_firm_id', 'hash', name='uq_process_communications_firm_hash'),
         db.Index('ix_process_communications_firm_data', 'law_firm_id', 'data_disponibilizacao'),
@@ -3315,6 +3326,13 @@ class ProcessCommunication(db.Model):
     matched_lawyer_id = db.Column(db.Integer, db.ForeignKey('lawyers.id'), index=True)  # qual OAB trouxe
 
     # Identificação na API
+    # Fonte da informação (ver SOURCE_LABELS) — extensível a novas origens
+    source = db.Column(db.String(30), nullable=False, default=SOURCE_COMUNICA_PJE, index=True)
+
+    # Cache da explicação da IA (CommunicationExplainerAgent) — o teor é imutável,
+    # então a análise é gerada uma única vez: {'generated_at', 'model', 'data': {...}}
+    analysis_json = db.Column(db.JSON)
+
     comunica_id = db.Column(db.BigInteger)         # campo "id" da API
     hash = db.Column(db.String(64), nullable=False)
 

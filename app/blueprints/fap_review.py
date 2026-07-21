@@ -1009,7 +1009,9 @@ def revision():
             db.session.flush()
             petition.latest_revision_id = execution.id
             petition.revision_count = max(petition.revision_count or 0, next_revision_number)
-            petition.workflow_status = 'in_review'
+            if petition.workflow_status != 'in_review':
+                petition.workflow_status = 'in_review'
+                petition.status_changed_at = datetime.now()
             petition.updated_at = datetime.now()
             db.session.commit()
 
@@ -1311,6 +1313,7 @@ def petition_update_status(petition_id: int):
 
     try:
         petition.workflow_status = new_status
+        petition.status_changed_at = datetime.now()
         petition.updated_at = datetime.now()
         db.session.commit()
     except Exception as error:

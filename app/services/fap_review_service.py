@@ -77,7 +77,10 @@ def sync_petition_after_revision(execution: FapReviewExecution) -> None:
     petition.last_reviewed_at = execution.completed_at or execution.updated_at or execution.created_at
 
     if petition.workflow_status not in {'filed', 'archived'}:
-        petition.workflow_status = derive_petition_workflow_status(execution.status)
+        new_status = derive_petition_workflow_status(execution.status)
+        if new_status != petition.workflow_status:
+            petition.workflow_status = new_status
+            petition.status_changed_at = datetime.now()
 
     petition.updated_at = datetime.now()
 
