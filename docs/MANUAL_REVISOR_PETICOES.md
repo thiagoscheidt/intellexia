@@ -51,7 +51,9 @@ Visão geral das petições do escritório.
 
 ### Tabela "Petições em Acompanhamento"
 
-Mostra as 20 petições mais prioritárias (aguardando ajustes primeiro, depois em revisão, depois aprovadas), com busca em tempo real e filtros por status.
+Mostra **todas** as petições do escritório, priorizadas por status (aguardando ajustes primeiro, depois em revisão, depois aprovadas), com busca em tempo real e filtros por status.
+
+Sob o título de cada petição aparecem: a **quantidade de revisões** já realizadas, o número de **apontamentos da última revisão** e **há quanto tempo a petição está no status atual** (fica destacado em âmbar quando está aguardando ajustes há 7 dias ou mais).
 
 | Coluna | O que mostra | De onde vem |
 |---|---|---|
@@ -68,6 +70,7 @@ Além da lista, a tela oferece uma **visão kanban**: use o seletor **Lista / Ka
 - **Arraste um card** para outra coluna para mudar o status da petição — o efeito é o mesmo da troca manual de status na tela da petição, inclusive no registro de auditoria.
 - A **busca** filtra os cards normalmente; a preferência de visão fica salva no navegador.
 - Se a mudança de status falhar (por exemplo, sem conexão), o card volta para a coluna original e um aviso é exibido.
+- Cada card também mostra a quantidade de revisões, os apontamentos da última revisão e há quantos dias a petição está naquele status.
 
 ---
 
@@ -151,6 +154,8 @@ Conferência **automática, sem IA**: o sistema lê as colunas **"Número do Ben
 ## Tela 4 — Detalhe da Petição
 
 Histórico completo de uma petição: todas as revisões (número, data, status, documento e responsável) e um resumo (concluídas, em processamento, com falha, comparativas). Aqui você pode **editar o título e o Id Wrike** (o histórico de descartes acompanha a mudança) e **trocar o status** manualmente — inclusive marcar "Processo iniciado" ou "Arquivada".
+
+A seção **Histórico de Alterações** mostra a linha do tempo da petição: cada mudança de status (inclusive as feitas arrastando o card no kanban), revisões executadas e edições cadastrais, com usuário e data de cada evento.
 
 ---
 
