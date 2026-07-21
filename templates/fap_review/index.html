@@ -185,7 +185,9 @@
 
     .petition-row {
         display: grid;
-        grid-template-columns: 190px minmax(0, 1fr) 170px 170px auto;
+        /* Track de Ações fixo: cada linha é um grid próprio — com 'auto' a largura
+           variaria por linha (nº de botões) e desalinharia as colunas do cabeçalho. */
+        grid-template-columns: 190px minmax(0, 1fr) 170px 170px 380px;
         align-items: center;
         padding: 1rem 1rem;
         border: 1px solid rgba(21, 37, 53, .07);
@@ -691,9 +693,11 @@
 
     .petition-list-header {
         display: grid;
-        grid-template-columns: 190px minmax(0, 1fr) 170px 170px auto;
+        grid-template-columns: 190px minmax(0, 1fr) 170px 170px 380px;
         gap: 0;
-        padding: .4rem 1.85rem .1rem;
+        /* Mesmo recuo lateral do conteúdo das linhas:
+           padding do .petition-list (.85rem) + padding da linha (1rem) + borda (1px) */
+        padding: .4rem calc(1.85rem + 1px) .1rem calc(1.85rem + 4px);
         background: transparent;
         border-bottom: none;
     }
