@@ -518,6 +518,9 @@
     }
 
     .kanban-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: .3rem;
         background: rgba(21, 37, 53, .06);
         border-radius: .35rem;
         padding: 0 .35rem;
@@ -526,6 +529,12 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+    }
+
+    .kanban-chip-logo {
+        height: .8rem;
+        width: auto;
+        flex-shrink: 0;
     }
 
     .kanban-card-footer {
@@ -992,7 +1001,11 @@
                                     href="{{ url_for('fap_review.petition_detail', petition_id=petition.id) }}">{{ petition.title }}</a>
                                 <div class="kanban-card-meta">
                                     {% if petition.office_document_identifier %}
-                                    <span class="kanban-chip" title="Id Wrike">{{ petition.office_document_identifier }}</span>
+                                    <span class="kanban-chip" title="Id Wrike">
+                                        <img src="{{ url_for('static', filename='assets/wrike-logo-light.svg') }}"
+                                            alt="Wrike" class="kanban-chip-logo">
+                                        {{ petition.office_document_identifier }}
+                                    </span>
                                     {% endif %}
                                     {% if latest_revision %}<span>R{{ latest_revision.revision_number or '?' }}</span>{% endif %}
                                     <span>{{ (petition.last_reviewed_at or petition.updated_at or petition.created_at).strftime('%d/%m/%Y') }}</span>
