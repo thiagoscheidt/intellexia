@@ -25,6 +25,9 @@ MARKERS = [
     'kanban-col-archived',
     'class="kanban-card"',
     'data-status-url=',
+    'data-petition-id=',
+    'function moveCard',
+    'STATUS_BADGES',
 ]
 
 

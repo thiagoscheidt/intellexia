@@ -489,6 +489,11 @@
         cursor: grabbing;
     }
 
+    .kanban-col.drag-over {
+        border-color: var(--col-color);
+        box-shadow: 0 0 0 2px var(--col-color);
+    }
+
     .kanban-card-title {
         display: block;
         font-size: .82rem;
@@ -862,6 +867,7 @@
 
                 <div class="petition-row"
                     style="background: {{ row_bg }}; border-left: {{ row_border_width }} solid {{ row_border_color }};"
+                    data-petition-id="{{ petition.id }}"
                     data-status="{{ petition.workflow_status }}"
                     data-search="{{ (petition.title ~ ' ' ~ (petition.office_document_identifier or '') ~ ' ' ~ (latest_reviewer_name or ''))|lower }}">
 
@@ -1121,6 +1127,133 @@
         document.querySelectorAll('.kanban-col-archived .kanban-col-header').forEach(function (header) {
             header.addEventListener('click', function () {
                 header.closest('.kanban-col').classList.toggle('collapsed');
+            });
+        });
+
+        // ── Drag-and-drop do kanban ───────────────────────────
+        // Espelho de _build_petition_status_badge + cores das linhas da lista.
+        const STATUS_BADGES = {
+            new: { label: 'Nova', cls: 'secondary', icon: 'bi bi-plus-circle', border: '#ffc107', bg: 'rgba(255,193,7,.04)', width: '4px' },
+            in_review: { label: 'Em revisão', cls: 'warning', icon: 'bi bi-hourglass-split', border: '#ffc107', bg: 'rgba(255,193,7,.04)', width: '4px' },
+            awaiting_adjustments: { label: 'Aguardando ajustes', cls: 'danger', icon: 'bi bi-pencil-square', border: '#dc3545', bg: 'rgba(220,53,69,.04)', width: '4px' },
+            ready_for_filing: { label: 'Aprovada pelo revisor', cls: 'success', icon: 'bi bi-check-circle', border: '#198754', bg: 'transparent', width: '4px' },
+            filed: { label: 'Processo iniciado', cls: 'primary', icon: 'bi bi-send-check', border: '#0d6efd', bg: 'transparent', width: '4px' },
+            archived: { label: 'Arquivada', cls: 'dark', icon: 'bi bi-archive', border: '#6c757d', bg: 'rgba(108,117,125,.02)', width: '2px' },
+        };
+
+        const kanbanError = document.getElementById('kanbanError');
+        let draggedCard = null;
+
+        function showKanbanError(message) {
+            if (!kanbanError) return;
+            kanbanError.textContent = message;
+            kanbanError.style.display = '';
+            setTimeout(function () { kanbanError.style.display = 'none'; }, 6000);
+        }
+
+        function updateColumnCounts() {
+            document.querySelectorAll('.kanban-col').forEach(function (col) {
+                const count = col.querySelectorAll('.kanban-card').length;
+                const badge = col.querySelector('.kanban-col-count');
+                if (badge) badge.textContent = count;
+            });
+        }
+
+        function updatePillCounts() {
+            // Recalcula os contadores das pílulas a partir das linhas da lista.
+            const statuses = Array.from(document.querySelectorAll('.petition-row'))
+                .map(function (r) { return r.dataset.status || ''; });
+            const counts = {
+                all: statuses.length,
+                awaiting_adjustments: statuses.filter(function (s) { return s === 'awaiting_adjustments'; }).length,
+                in_review: statuses.filter(function (s) { return s === 'in_review' || s === 'new'; }).length,
+                ready_for_filing: statuses.filter(function (s) { return s === 'ready_for_filing'; }).length,
+                others: statuses.filter(function (s) { return s === 'filed' || s === 'archived'; }).length,
+            };
+            filterPills.forEach(function (pill) {
+                const key = pill.dataset.filter;
+                if (!(key in counts)) return;
+                pill.innerHTML = pill.innerHTML.replace(/\(\d+\)/, '(' + counts[key] + ')');
+            });
+        }
+
+        function syncListRow(petitionId, newStatus) {
+            const row = document.querySelector('.petition-row[data-petition-id="' + petitionId + '"]');
+            const info = STATUS_BADGES[newStatus];
+            if (!row || !info) return;
+            row.dataset.status = newStatus;
+            row.style.borderLeft = info.width + ' solid ' + info.border;
+            row.style.background = info.bg;
+            const badge = row.querySelector('.pr-status .badge');
+            if (badge) {
+                badge.className = 'badge rounded-pill bg-' + info.cls + '-subtle text-' + info.cls +
+                    '-emphasis border border-' + info.cls + '-subtle';
+                badge.innerHTML = '<i class="' + info.icon + ' me-1"></i> ' + info.label;
+            }
+        }
+
+        async function moveCard(card, targetCol) {
+            const sourceBody = card.parentElement;
+            const sourceCol = sourceBody.closest('.kanban-col');
+            if (sourceCol === targetCol) return;
+
+            const oldStatus = sourceCol.dataset.status;
+            const newStatus = targetCol.dataset.status;
+            const nextSibling = card.nextElementSibling;
+
+            // Otimista: move já; desfaz se a API falhar.
+            targetCol.querySelector('.kanban-col-body').appendChild(card);
+            updateColumnCounts();
+            syncListRow(card.dataset.petitionId, newStatus);
+            updatePillCounts();
+
+            try {
+                const resp = await fetch(card.dataset.statusUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ workflow_status: newStatus }),
+                });
+                if (!resp.ok) {
+                    const payload = await resp.json().catch(function () { return {}; });
+                    throw new Error(payload.error || 'Não foi possível atualizar o status da petição.');
+                }
+            } catch (err) {
+                sourceBody.insertBefore(card, nextSibling);
+                updateColumnCounts();
+                syncListRow(card.dataset.petitionId, oldStatus);
+                updatePillCounts();
+                showKanbanError(err.message || 'Falha de rede ao atualizar o status.');
+            }
+        }
+
+        document.querySelectorAll('.kanban-card').forEach(function (card) {
+            card.addEventListener('dragstart', function (e) {
+                draggedCard = card;
+                card.classList.add('dragging');
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            card.addEventListener('dragend', function () {
+                card.classList.remove('dragging');
+                draggedCard = null;
+                document.querySelectorAll('.kanban-col.drag-over').forEach(function (c) {
+                    c.classList.remove('drag-over');
+                });
+            });
+        });
+
+        document.querySelectorAll('.kanban-col').forEach(function (col) {
+            col.addEventListener('dragover', function (e) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = 'move';
+                col.classList.add('drag-over');
+            });
+            col.addEventListener('dragleave', function (e) {
+                if (!col.contains(e.relatedTarget)) col.classList.remove('drag-over');
+            });
+            col.addEventListener('drop', function (e) {
+                e.preventDefault();
+                col.classList.remove('drag-over');
+                if (draggedCard) moveCard(draggedCard, col);
             });
         });
     });
