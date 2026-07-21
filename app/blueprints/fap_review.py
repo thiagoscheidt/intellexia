@@ -168,6 +168,12 @@ def _create_upload_directory(law_firm_id: int, subdir: str = "") -> Path:
     return base_dir
 
 
+# Marcador inserido no texto extraído onde o DOCX tem imagem embutida (prints de
+# telas do FAP, CATs, extratos). Sem ele, a IA apontava "documento em falta" para
+# provas presentes no documento como imagem.
+IMAGE_MARKER = '[IMAGEM ANEXADA NO DOCUMENTO]'
+
+
 def _extract_text_from_document(filepath: str) -> str:
     """Extrai texto de um documento (PDF, DOCX ou TXT)."""
     filepath = Path(filepath)
@@ -201,13 +207,27 @@ def _extract_text_from_document(filepath: str) -> str:
         elif extension == '.docx':
             if DocxDocument:
                 try:
+                    # Conta imagens/objetos embutidos em qualquer XML de parágrafo
+                    # (w:drawing = DrawingML moderno; w:pict = VML legado;
+                    #  w:object = OLE incorporado) — o formato da imagem é indiferente.
+                    def _embedded_image_count(xml: str) -> int:
+                        return xml.count('<w:drawing') + xml.count('<w:pict') + xml.count('<w:object')
+
                     doc = DocxDocument(filepath)
                     for para in doc.paragraphs:
                         text += para.text + "\n"
+                        # Imagens embutidas (prints de telas do FAP, CATs etc.)
+                        # viram marcador para a IA saber que a prova está presente
+                        image_count = _embedded_image_count(para._p.xml)
+                        if image_count:
+                            text += (IMAGE_MARKER + "\n") * image_count
                     for table in doc.tables:
                         for row in table.rows:
                             for cell in row.cells:
-                                text += cell.text + " | "
+                                cell_text = cell.text
+                                if any(_embedded_image_count(p._p.xml) for p in cell.paragraphs):
+                                    cell_text = (cell_text + ' ' + IMAGE_MARKER).strip()
+                                text += cell_text + " | "
                             text += "\n"
                 except Exception as e:
                     raise ValueError(f"Erro ao ler DOCX: {e}")

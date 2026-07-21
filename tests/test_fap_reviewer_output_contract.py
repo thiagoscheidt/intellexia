@@ -55,6 +55,7 @@ def test_system_prompt_contains_schema_contract():
     for field in ('"thesis"', '"category"', '"severity"', '"description"',
                   '"location_excerpt"', '"missing_documents"', '"executive_summary"', '"total_findings"'):
         check(f"prompt contém {field}", field in prompt)
+    check("prompt instrui sobre imagens embutidas", '[IMAGEM ANEXADA NO DOCUMENTO]' in prompt)
 
     comparative_prompt = agent._build_system_prompt("", "", "", focused_review=False, comparative=True)
     for field in ('"comparative_changes"', '"original_excerpt"', '"corrected_excerpt"'):

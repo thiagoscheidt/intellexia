@@ -269,6 +269,120 @@
         line-height: 1.45;
     }
 
+    /* Overlay de processamento da revisão */
+    .processing-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 2000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        background: color-mix(in srgb, var(--bs-body-bg) 72%, transparent);
+        backdrop-filter: blur(6px);
+    }
+
+    .processing-overlay.visible {
+        display: flex;
+    }
+
+    .processing-card {
+        width: min(460px, calc(100vw - 2rem));
+        background: var(--bs-body-bg);
+        border: 1px solid rgba(15, 23, 42, .10);
+        border-radius: 1.1rem;
+        box-shadow: 0 24px 60px rgba(15, 23, 42, .25);
+        padding: 2rem 2rem 1.6rem;
+        text-align: center;
+        animation: processing-card-in .3s ease-out;
+    }
+
+    @keyframes processing-card-in {
+        from { opacity: 0; transform: translateY(14px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Documento com linha de "scanner" percorrendo */
+    .processing-doc {
+        position: relative;
+        width: 84px;
+        height: 104px;
+        margin: 0 auto 1.2rem;
+        border: 2px solid var(--bs-primary);
+        border-radius: .6rem;
+        overflow: hidden;
+        background: var(--bs-primary-bg-subtle);
+    }
+
+    .processing-doc::before {
+        content: '';
+        position: absolute;
+        inset: 14px 12px auto;
+        height: 5px;
+        border-radius: 3px;
+        background: color-mix(in srgb, var(--bs-primary) 35%, transparent);
+        box-shadow: 0 14px 0 color-mix(in srgb, var(--bs-primary) 25%, transparent),
+            0 28px 0 color-mix(in srgb, var(--bs-primary) 30%, transparent),
+            0 42px 0 color-mix(in srgb, var(--bs-primary) 20%, transparent),
+            0 56px 0 color-mix(in srgb, var(--bs-primary) 28%, transparent);
+    }
+
+    .processing-doc .scan-line {
+        position: absolute;
+        left: 0;
+        right: 0;
+        height: 26px;
+        background: linear-gradient(180deg,
+                transparent 0%,
+                color-mix(in srgb, var(--bs-primary) 22%, transparent) 55%,
+                var(--bs-primary) 100%);
+        animation: scan-sweep 2.1s ease-in-out infinite;
+    }
+
+    @keyframes scan-sweep {
+        0% { top: -26px; }
+        55% { top: 104px; }
+        100% { top: -26px; }
+    }
+
+    .processing-title {
+        font-weight: 700;
+        font-size: 1.02rem;
+        margin-bottom: .25rem;
+    }
+
+    .processing-step {
+        min-height: 2.4em;
+        font-size: .88rem;
+        color: var(--bs-secondary-color);
+        transition: opacity .35s ease;
+    }
+
+    .processing-step.fading {
+        opacity: 0;
+    }
+
+    .processing-progress {
+        height: 6px;
+        border-radius: 999px;
+        background: var(--bs-secondary-bg);
+        overflow: hidden;
+        margin-top: 1.1rem;
+    }
+
+    .processing-progress .bar {
+        height: 100%;
+        width: 0%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, var(--bs-primary), #0dcaf0);
+        transition: width .8s ease;
+    }
+
+    .processing-hint {
+        margin-top: .8rem;
+        font-size: .74rem;
+        color: var(--bs-secondary-color);
+    }
+
     .prev-revision-item {
         padding: .7rem .95rem;
         border-bottom: 1px solid rgba(15, 23, 42, .06);
@@ -970,6 +1084,24 @@
         </div>
     </div>
 </div>
+
+<!-- Overlay de processamento: trava a tela e narra as etapas da revisão -->
+<div class="processing-overlay" id="processingOverlay" role="alert" aria-live="polite" aria-busy="true">
+    <div class="processing-card">
+        <div class="processing-doc">
+            <div class="scan-line"></div>
+        </div>
+        <div class="processing-title">Revisando sua petição</div>
+        <div class="processing-step" id="processingStep">Enviando documentos...</div>
+        <div class="processing-progress">
+            <div class="bar" id="processingBar"></div>
+        </div>
+        <div class="processing-hint">
+            <i class="bi bi-cpu me-1"></i>O agente revisor está lendo o documento contra o manual do
+            escritório — isso costuma levar um ou dois minutos. Não feche esta página.
+        </div>
+    </div>
+</div>
 {% endblock %}
 
 {% block extra_js %}
@@ -1337,6 +1469,63 @@
 
         setStep(1);
 
+        // Overlay de processamento: narra as etapas reais do pipeline enquanto o
+        // agente trabalha, com progresso simulado que desacelera perto do fim.
+        const processingSteps = [
+            'Enviando documentos...',
+            'Extraindo o texto da petição (e detectando imagens anexadas)...',
+            'Carregando o manual de revisão do escritório...',
+            'Identificando as teses da petição...',
+            'Analisando os pontos de atenção contra o manual...',
+            'Verificando a consistência do nome da empresa...',
+            'Conferindo documentos obrigatórios por tese...',
+            'Cruzando a planilha de benefícios com o documento...',
+            'Montando o resumo executivo...',
+            'Quase lá — organizando o resultado...'
+        ];
+        let processingTimers = [];
+
+        function startProcessingOverlay() {
+            const overlay = document.getElementById('processingOverlay');
+            const step = document.getElementById('processingStep');
+            const bar = document.getElementById('processingBar');
+            overlay.classList.add('visible');
+            document.body.style.overflow = 'hidden';
+
+            let index = 0;
+            step.textContent = processingSteps[0];
+            processingTimers.push(setInterval(function () {
+                if (index >= processingSteps.length - 1) return;
+                step.classList.add('fading');
+                setTimeout(function () {
+                    index += 1;
+                    step.textContent = processingSteps[Math.min(index, processingSteps.length - 1)];
+                    step.classList.remove('fading');
+                }, 350);
+            }, 9000));
+
+            // Progresso simulado: avança rápido no início e desacelera, sem chegar a 100%
+            let progress = 0;
+            bar.style.width = '0%';
+            processingTimers.push(setInterval(function () {
+                progress += Math.max(0.35, (92 - progress) * 0.045);
+                bar.style.width = Math.min(progress, 92) + '%';
+            }, 800));
+        }
+
+        function stopProcessingOverlay(completed) {
+            const overlay = document.getElementById('processingOverlay');
+            processingTimers.forEach(clearInterval);
+            processingTimers = [];
+            if (completed) {
+                document.getElementById('processingBar').style.width = '100%';
+                document.getElementById('processingStep').textContent = 'Revisão concluída! Abrindo o resultado...';
+            } else {
+                overlay.classList.remove('visible');
+                document.body.style.overflow = '';
+            }
+        }
+
         document.getElementById('petitionForm').addEventListener('submit', async function (e) {
             e.preventDefault();
 
@@ -1363,6 +1552,7 @@
             const btn = document.getElementById('submitBtn');
             btn.disabled = true;
             btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Processando...';
+            startProcessingOverlay();
 
             try {
                 const formData = new FormData(this);
@@ -1372,19 +1562,26 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error('Falha na comunicação com o servidor');
+                    let payload = {};
+                    try { payload = await response.json(); } catch { payload = {}; }
+                    throw new Error(payload.error || 'Falha na comunicação com o servidor');
                 }
 
                 const data = await response.json();
 
                 if (data.success) {
-                    window.location.href = `/fap-review/revision/${data.execution_id}`;
+                    stopProcessingOverlay(true);
+                    window.setTimeout(function () {
+                        window.location.href = `/fap-review/revision/${data.execution_id}`;
+                    }, 600);
                 } else {
+                    stopProcessingOverlay(false);
                     alert('Erro: ' + (data.error || 'Erro desconhecido'));
                     btn.disabled = false;
                     btn.innerHTML = '<i class="bi bi-play-circle me-2"></i> Iniciar Revisão';
                 }
             } catch (error) {
+                stopProcessingOverlay(false);
                 alert('Erro ao enviar: ' + error.message);
                 btn.disabled = false;
                 btn.innerHTML = '<i class="bi bi-play-circle me-2"></i> Iniciar Revisão';

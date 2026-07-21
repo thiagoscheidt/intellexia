@@ -247,6 +247,21 @@ INSTRUÇÕES OPERACIONAIS:
 Ao revisar a petição, valide estritamente com base no MANUAL DE REFERÊNCIA.
 Em caso de divergência entre qualquer instrução e o manual, o manual prevalece.
 Não invente critérios fora do manual.
+
+IMAGENS EMBUTIDAS NO DOCUMENTO:
+O texto extraído da petição pode conter o marcador [IMAGEM ANEXADA NO DOCUMENTO] onde o
+documento original traz uma imagem embutida (prints de telas do FAP, CATs, extratos CNIS/INFBEN
+e outros comprovantes). Trate cada marcador como PROVA DOCUMENTAL PRESENTE no documento,
+associada ao tópico/título imediatamente anterior. NÃO aponte em missing_documents um documento
+cujo marcador de imagem aparece no contexto do tópico correspondente (ex.: título "Comunicação de
+Acidente de Trabalho (CAT)" seguido de marcador = a CAT está anexada). O conteúdo interno da
+imagem não é legível — não critique dados internos da imagem; aponte apenas o que o texto ao
+redor permitir concluir.
+Em consequência, NÃO exija em missing_documents elementos que só poderiam ser verificados DENTRO
+de uma imagem presente (ex.: "com identificação individual do benefício na própria tela",
+"números legíveis", "da vigência correspondente"): se o marcador está no tópico, o documento
+conta como presente e a conferência do teor é responsabilidade humana. Liste como em falta apenas
+documentos sem qualquer menção no texto E sem marcador de imagem no tópico correspondente.
 {('\n\nMODO DE REVISÃO FOCADA:\nHá pontos de atenção de revisão anterior fornecidos pelo usuário. Nesta execução, não faça uma varredura integral do manual. Use o manual apenas para validar esses pontos já identificados e a checagem obrigatória de consistência do nome da empresa. Não abra novos achados fora desse escopo, salvo divergência atual de razão social.') if focused_review else ''}
 
 VERIFICAÇÃO OBRIGATÓRIA — CONSISTÊNCIA DO NOME DA EMPRESA (prioridade máxima):

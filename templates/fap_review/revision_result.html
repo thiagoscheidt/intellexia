@@ -320,6 +320,18 @@
         line-height: 1.5;
     }
 
+    .finding-excerpt {
+        margin-top: .45rem;
+        padding: .45rem .65rem;
+        font-size: .78rem;
+        font-style: italic;
+        line-height: 1.45;
+        color: var(--bs-secondary-color);
+        background: color-mix(in srgb, var(--bs-info) 6%, transparent);
+        border-left: 3px solid var(--bs-info);
+        border-radius: .375rem;
+    }
+
     /* ── Code / debug ────────────────────────────────────────────── */
     .code-block-lite {
         background: var(--bs-secondary-bg);
@@ -1332,7 +1344,7 @@
                                         data-location-excerpt="{{ finding.location_excerpt or '' }}"
                                         title="Visualizar no documento">
                                         <i class="bi bi-eye me-1"></i>
-                                        {% if main_document_is_docx %}Ver Documento{% else %}Ver Página{% endif %}
+                                        {% if main_document_is_docx %}Ver no Documento{% else %}Ver Página{% endif %}
                                     </button>
                                     {% endif %}
                                     {% if not execution_superseded %}
@@ -1360,9 +1372,7 @@
                                         </div>
                                         <p class="finding-meta-value">{{ finding.location }}</p>
                                         {% if finding.location_excerpt %}
-                                        <p class="finding-meta-value fst-italic text-muted mb-0"
-                                            style="font-size: .78rem;">
-                                            <i class="bi bi-quote"></i>{{ finding.location_excerpt }}</p>
+                                        <div class="finding-excerpt">&ldquo;{{ finding.location_excerpt }}&rdquo;</div>
                                         {% endif %}
                                     </div>
                                     {% endif %}

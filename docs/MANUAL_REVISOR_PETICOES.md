@@ -147,6 +147,8 @@ O sistema **confere no servidor** que a triagem está completa antes de aceitar 
 
 Lista os documentos que, segundo o manual, deveriam acompanhar as teses da petição e não foram localizados — com a tese relacionada e a referência do manual.
 
+> [!IA] **Como a checagem funciona.** A IA cruza as teses identificadas com as exigências documentais do manual e verifica se cada documento está **demonstrado no texto da petição** — inclusive **imagens embutidas** (prints de telas do FAP, CATs, extratos), que são detectadas e contam como prova presente no tópico onde aparecem. A IA não abre os arquivos auxiliares enviados no formulário (só vê os nomes) e **não lê o conteúdo interno das imagens** — ela confere presença, não teor.
+
 ### Resumo Executivo
 
 Totais por gravidade, **Principais Riscos Jurídicos** e **Prioridade de Correção** (ALTA / MÉDIA / BAIXA).
@@ -169,7 +171,7 @@ Conferência **automática, sem IA**: o sistema lê as colunas **"Número do Ben
 
 ### Ações da tela
 
-- **Todos os usuários**: :btn-primary[Nova Revisão], **Visualizar Documento** enviado (em DOCX, o botão :btn-outline-primary[Ver Documento] de cada ponto abre o conteúdo com o trecho da localização destacado), **Visualizar Manual** de referência e **Copiar JSON** (dados brutos). A tela também mostra o modelo de IA usado, tokens e **custo estimado** da revisão.
+- **Todos os usuários**: :btn-primary[Nova Revisão], **Visualizar Documento** enviado (em DOCX, o botão :btn-outline-primary[Ver no Documento] de cada ponto abre o conteúdo com o trecho exato do achado destacado), **Visualizar Manual** de referência e **Copiar JSON** (dados brutos). A tela também mostra o modelo de IA usado, tokens e **custo estimado** da revisão.
 - **Somente administradores**, quando a petição está **Aguardando aprovação**: :btn-success[Aprovar petição] (marca "Aprovada pelo revisor" e trava a petição) e :btn-outline-danger[Devolver para ajustes] (recusa a versão final — volta para "Aguardando ajustes").
 - **Somente administradores**, quando a petição está **Aprovada pelo revisor**: :btn-outline-secondary[Reabrir petição] (destrava e volta para "Aguardando ajustes").
 
