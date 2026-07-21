@@ -44,8 +44,12 @@ def _restore(model, type_field: str, type_value: str, content: str,
     query = model.query.filter_by(law_firm_id=law_firm_id, **{type_field: type_value})
     active = query.filter_by(is_active=True).first()
 
+    if active and (active.content or '').strip() == content.strip():
+        return f'já idêntica ao seed (ativa v{active.version_number}) — nada a fazer'
+
     if active and (active.content or '').strip() and not force:
-        return f'mantida (ativa v{active.version_number} já tem conteúdo)'
+        return (f'mantida (ativa v{active.version_number} tem conteúdo próprio; '
+                'use --force para criar nova versão a partir do seed)')
 
     max_version = max((v.version_number for v in query.all()), default=0)
     query.filter_by(is_active=True).update({'is_active': False})
@@ -54,6 +58,7 @@ def _restore(model, type_field: str, type_value: str, content: str,
         **{type_field: type_value},
         version_number=max_version + 1,
         content=content,
+        change_note='Atualizada a partir do seed do repositório',
         is_active=True,
     ))
     return f'restaurada como v{max_version + 1} ({len(content)} chars, ativa)'
