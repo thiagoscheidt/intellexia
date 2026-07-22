@@ -15,7 +15,6 @@ import mimetypes
 import os
 import re
 import time
-from decimal import Decimal
 from pathlib import Path
 from typing import Optional
 
@@ -117,6 +116,7 @@ class FapAuxiliaryDocumentExtractorAgent:
             print_prefix="[FapAuxExtractor]",
             model_name=self.model_name,
             model_provider="openai",
+            law_firm_id=law_firm_id,
             latency_ms=latency_ms,
             metadata_payload={
                 "file_name": file_name,
