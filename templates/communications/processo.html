@@ -70,9 +70,36 @@
                   {{ comm.data_disponibilizacao.strftime('%d/%m/%Y') if comm.data_disponibilizacao else '—' }}
                 </td>
                 <td>
-                  <span class="badge {{ 'bg-danger-subtle text-danger-emphasis' if comm.tipo_comunicacao == 'Intimação' else 'bg-secondary-subtle text-secondary-emphasis' }}">
-                    {{ comm.tipo_comunicacao or 'Comunicação' }}
-                  </span>
+                  <div class="d-flex flex-column gap-1 align-items-start">
+                    <span class="badge {{ 'bg-danger-subtle text-danger-emphasis' if comm.tipo_comunicacao == 'Intimação' else 'bg-secondary-subtle text-secondary-emphasis' }}">
+                      {{ comm.tipo_comunicacao or 'Comunicação' }}
+                    </span>
+                    {% set analysis = comm.analysis_json.get('data') if comm.analysis_json else None %}
+                    {% if analysis %}
+                    {% if analysis.get('acao_requerida') == 'exige_acao' %}
+                    <span class="badge bg-danger text-white"
+                      title="Análise da IA: há providência a tomar{{ ' — ' + analysis.get('acao_descricao') if analysis.get('acao_descricao') }}">
+                      <i class="bi bi-exclamation-triangle-fill me-1"></i>Exige ação
+                    </span>
+                    {% endif %}
+                    {% if analysis.get('urgencia') == 'alta' %}
+                    <span class="badge bg-danger-subtle text-danger-emphasis border border-danger-subtle"
+                      title="{{ analysis.get('urgencia_justificativa') or 'Urgência avaliada pela IA' }}">
+                      <i class="bi bi-lightning-charge-fill me-1"></i>Urgência alta
+                    </span>
+                    {% elif analysis.get('urgencia') == 'media' %}
+                    <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle"
+                      title="{{ analysis.get('urgencia_justificativa') or 'Urgência avaliada pela IA' }}">
+                      <i class="bi bi-lightning-charge me-1"></i>Urgência média
+                    </span>
+                    {% elif analysis.get('urgencia') == 'baixa' %}
+                    <span class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle"
+                      title="{{ analysis.get('urgencia_justificativa') or 'Urgência avaliada pela IA' }}">
+                      Urgência baixa
+                    </span>
+                    {% endif %}
+                    {% endif %}
+                  </div>
                 </td>
                 <td><span class="badge pm-chip">{{ comm.SOURCE_LABELS.get(comm.source, comm.source or '—') }}</span></td>
                 <td>
