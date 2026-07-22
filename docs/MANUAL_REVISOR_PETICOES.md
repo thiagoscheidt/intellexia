@@ -147,7 +147,7 @@ O sistema **confere no servidor** que a triagem está completa antes de aceitar 
 
 Lista os documentos que, segundo o manual, deveriam acompanhar as teses da petição e não foram localizados — com a tese relacionada e a referência do manual.
 
-> [!IA] **Como a checagem funciona.** A IA cruza as teses identificadas com as exigências documentais do manual e verifica se cada documento está **demonstrado no texto da petição** — inclusive **imagens embutidas** (prints de telas do FAP, CATs, extratos), que são detectadas e contam como prova presente no tópico onde aparecem. A IA não abre os arquivos auxiliares enviados no formulário (só vê os nomes) e **não lê o conteúdo interno das imagens** — ela confere presença, não teor.
+> [!IA] **Como a checagem funciona.** A IA cruza as teses identificadas com as exigências documentais do manual e verifica se cada documento está **demonstrado no texto da petição** — inclusive **imagens embutidas** (prints de telas do FAP, CATs, extratos), que são detectadas e contam como prova presente no tópico onde aparecem. Nesta checagem a IA **não lê o conteúdo interno das imagens** — ela confere presença, não teor. Já o conteúdo dos **arquivos auxiliares** enviados no formulário é lido em etapa própria (veja **Cruzamento dos documentos auxiliares** abaixo).
 
 ### Resumo Executivo
 
@@ -171,8 +171,7 @@ Conferência **automática, sem IA**: o sistema lê as colunas **"Número do Ben
 
 ### Cruzamento dos documentos auxiliares :claude:
 
-> [!IA]
-> Ao enviar documentos auxiliares (CAT, CNIS, INFBEN, prints do FAP Web, laudos), a IA lê cada arquivo, identifica a quais benefícios ele se refere e extrai os dados relevantes às teses da planilha de benefícios. Esses dados são cruzados com a petição: divergências (datas, CNPJ, razão social, espécie do benefício) viram apontamentos na revisão, sempre citando o arquivo de origem.
+> [!IA] **Leitura e cruzamento automáticos.** Ao enviar documentos auxiliares (CAT, CNIS, INFBEN, prints do FAP Web, laudos), a IA lê cada arquivo, identifica a quais benefícios ele se refere e extrai os dados relevantes às teses da planilha de benefícios. Esses dados são cruzados com a petição: divergências (datas, CNPJ, razão social, espécie do benefício) viram apontamentos na revisão, sempre citando o arquivo de origem.
 
 Como funciona:
 
@@ -181,7 +180,7 @@ Como funciona:
 | Identificação dos benefícios e teses | Relatório |
 | Leitura e extração dos documentos auxiliares | IA |
 | Cruzamento contra a petição | IA |
-| Card "Documentos Auxiliares × Benefícios" | Sistema |
+| Card "Documentos Auxiliares x Benefícios" | Sistema |
 
 - Com a **planilha de benefícios** enviada, a extração é guiada pelas teses de cada benefício (ex.: tese de acidente de trajeto faz a IA buscar data e local do acidente na CAT).
 - Sem planilha, os números de benefício são localizados na própria petição.
