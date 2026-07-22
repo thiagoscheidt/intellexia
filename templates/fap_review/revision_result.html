@@ -1268,6 +1268,16 @@
                             <div class="findings-progress-bar">
                                 <div class="bar-fill" id="findingsProgressBar" style="width: 0%;"></div>
                             </div>
+                            <div class="d-flex gap-3 mt-2 small flex-wrap">
+                                <span style="color: #198754;" title="Pontos marcados como revisados">
+                                    <i class="bi bi-check2"></i>
+                                    <span id="findingsCheckedCount">0</span> marcados como revisados
+                                </span>
+                                <span style="color: #b02a37;" title="Pontos marcados como não pertinentes">
+                                    <i class="bi bi-x-circle"></i>
+                                    <span id="findingsDismissedCount">0</span> não pertinentes
+                                </span>
+                            </div>
                         </div>
 
                         {% if petition and execution.status == 'completed' and not execution_superseded
@@ -1914,6 +1924,10 @@
             const txt = document.getElementById('findingsProgressText');
             if (bar) bar.style.width = pct + '%';
             if (txt) txt.textContent = triaged + ' de ' + TOTAL + ' triados';
+            const checkedTxt = document.getElementById('findingsCheckedCount');
+            const dismissedTxt = document.getElementById('findingsDismissedCount');
+            if (checkedTxt) checkedTxt.textContent = done;
+            if (dismissedTxt) dismissedTxt.textContent = triaged - done;
             const triageActions = document.getElementById('triageCompleteActions');
             if (triageActions) {
                 triageActions.style.display = triaged >= TOTAL ? 'block' : 'none';
