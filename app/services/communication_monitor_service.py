@@ -218,6 +218,10 @@ def sync_lawyer(law_firm_id, lawyer, client=None, dry_run=False):
     else:
         data_inicio = today - timedelta(days=FIRST_SYNC_DAYS)
 
+    logger.info('Sincronizando %s (OAB %s/%s) — período %s a %s...',
+                lawyer.name, only_digits(lawyer.oab_number), lawyer.oab_uf,
+                data_inicio.isoformat(), today.isoformat())
+
     try:
         for item in client.iter_comunicacoes(
             numero_oab=lawyer.oab_number,

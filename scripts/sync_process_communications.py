@@ -31,6 +31,7 @@ Cron sugerido (diário, cedo):
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -95,6 +96,15 @@ def main() -> int:
     parser.add_argument('--tribunais', type=str, default=None,
                         help='siglas separadas por vírgula (padrão: tribunais do histórico) — só com --caderno')
     args = parser.parse_args()
+
+    # Execução manual (terminal): mostra em tempo real o que o serviço e o
+    # client estão fazendo (processos descobertos, pausas de rate limit,
+    # retries). No cron (sem TTY) nada muda — o log continua só com o resumo.
+    if sys.stdout.isatty():
+        logging.basicConfig(
+            level=logging.INFO,
+            format='[%(asctime)s] %(levelname)s %(name)s: %(message)s',
+            datefmt='%Y-%m-%d %H:%M:%S')
 
     from main import app
     from app.services import communication_monitor_service as monitor
