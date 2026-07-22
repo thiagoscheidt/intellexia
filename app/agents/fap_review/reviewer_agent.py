@@ -897,24 +897,45 @@ INSTRUÇÕES DO PROJETO:
 
         return True
 
+    _AUX_CROSS_CHECK_INSTRUCTIONS = """CRUZAMENTO OBRIGATÓRIO COM OS DOCUMENTOS AUXILIARES:
+Os dados acima foram extraídos automaticamente dos documentos auxiliares enviados, com o trecho literal de origem.
+1. Compare cada dado (razão social, CNPJ, números de benefício, NIT, espécie, datas, vigências, valores) com o que a petição afirma.
+2. Divergência entre documento auxiliar e petição = finding, com severidade adequada, localização na petição e citação do documento-fonte na descrição (ex.: 'segundo CAT_fulano.pdf, ...').
+3. Se o dado conferir, não gere finding sobre ele.
+4. Se um documento auxiliar comprovar a presença de um documento que você apontaria como faltante, NÃO o liste em missing_documents — cite-o como atendido.
+5. Trate os dados extraídos como afirmações dos documentos auxiliares, não como verdade absoluta: em caso de conflito, aponte a divergência para conferência humana em vez de presumir qual lado está errado."""
+
     def _format_auxiliary_documents(self, auxiliary_documents: list[dict] | None) -> str:
-        """Monta resumo enxuto dos documentos auxiliares para manter contexto sem poluir prompt."""
+        """Monta o bloco dos documentos auxiliares: nomes + dados extraídos + instrução de cruzamento."""
         if not auxiliary_documents:
             return ""
 
-        docs = auxiliary_documents[:self._AUX_PREVIEW_LIMIT]
-        names = []
-        for doc in docs:
+        names: list[str] = []
+        blocks: list[str] = []
+        for doc in auxiliary_documents:
             if isinstance(doc, dict):
-                names.append(str(doc.get("name") or "arquivo_sem_nome"))
+                name = str(doc.get("name") or "arquivo_sem_nome")
+                names.append(name)
+                content_summary = str(doc.get("content_summary") or "").strip()
+                if content_summary:
+                    blocks.append(f"--- {name} ---\n{content_summary}")
             else:
                 names.append(str(doc))
 
+        preview_names = names[:self._AUX_PREVIEW_LIMIT]
         suffix = ""
-        if len(auxiliary_documents) > len(docs):
-            suffix = f" (+{len(auxiliary_documents) - len(docs)} arquivos)"
+        if len(names) > len(preview_names):
+            suffix = f" (+{len(names) - len(preview_names)} arquivos)"
+        header = (f"DOCUMENTOS AUXILIARES ({len(auxiliary_documents)} arquivos){suffix}: "
+                  + ", ".join(preview_names))
 
-        return f"DOCUMENTOS AUXILIARES ({len(auxiliary_documents)} arquivos){suffix}: " + ", ".join(names)
+        if not blocks:
+            return header
+
+        return (header
+                + "\n\nDADOS EXTRAÍDOS DOS DOCUMENTOS AUXILIARES:\n"
+                + "\n\n".join(blocks)
+                + "\n\n" + self._AUX_CROSS_CHECK_INSTRUCTIONS)
 
     def _build_single_user_message(
         self,
