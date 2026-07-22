@@ -2913,6 +2913,40 @@ class FapReviewIgnoredFinding(db.Model):
         return f'<FapReviewIgnoredFinding law_firm_id={self.law_firm_id} execution_id={self.source_execution_id}>'
 
 
+class FapReviewAuxExtraction(db.Model):
+    """Cache das extrações de documentos auxiliares do Revisor FAP, por hash do arquivo.
+
+    A mesma CAT/CNIS reutilizada em revisões seguintes não paga nova chamada de IA.
+    A extração depende da lista de benefícios-âncora (planilha), então o fingerprint
+    das âncoras integra a chave — planilha diferente => extração nova.
+    """
+    __tablename__ = 'fap_review_aux_extractions'
+    __table_args__ = (
+        db.UniqueConstraint(
+            'law_firm_id',
+            'file_sha256',
+            'extractor_model',
+            'anchors_fingerprint',
+            name='uq_fap_review_aux_extractions_scope',
+        ),
+        db.Index('ix_fap_review_aux_extractions_lookup', 'law_firm_id', 'file_sha256'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    file_sha256 = db.Column(db.String(64), nullable=False)
+    file_name = db.Column(db.String(255))
+    extractor_model = db.Column(db.String(100), nullable=False)
+    anchors_fingerprint = db.Column(db.String(64), nullable=False, default='')
+    extraction_json = db.Column(db.Text, nullable=False, comment='JSON com a extração estruturada do documento')
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+
+    law_firm = db.relationship('LawFirm')
+
+    def __repr__(self):
+        return f'<FapReviewAuxExtraction file={self.file_name} sha={self.file_sha256[:8]}>'
+
+
 class FapReviewFindingCheck(db.Model):
     """Pontos de atenção marcados como revisados pelo usuário (triagem por execução)."""
     __tablename__ = 'fap_review_finding_checks'
