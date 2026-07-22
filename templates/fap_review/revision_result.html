@@ -1261,7 +1261,7 @@
                                     </button>
                                     {% endif %}
                                     <span class="small fw-semibold" id="findingsProgressText" style="color: #198754;">
-                                        0 de {{ result_data.findings|length }} revisados
+                                        0 de {{ result_data.findings|length }} triados
                                     </span>
                                 </span>
                             </div>
@@ -1906,15 +1906,14 @@
 
         function updateProgress(state) {
             const done = Object.values(state).filter(function (v) { return v === 'checked'; }).length;
-            const pct = TOTAL ? Math.round(done / TOTAL * 100) : 0;
+            // Progresso da triagem: revisados + não pertinentes contam juntos
+            const triaged = done + Array.from(persistedDismissed)
+                .filter(function (idx) { return state[idx] !== 'checked'; }).length;
+            const pct = TOTAL ? Math.round(triaged / TOTAL * 100) : 0;
             const bar = document.getElementById('findingsProgressBar');
             const txt = document.getElementById('findingsProgressText');
             if (bar) bar.style.width = pct + '%';
-            if (txt) txt.textContent = done + ' de ' + TOTAL + ' revisados';
-
-            // Todos os pontos triados (revisados + não pertinentes) → oferece a conclusão
-            const triaged = done + Array.from(persistedDismissed)
-                .filter(function (idx) { return state[idx] !== 'checked'; }).length;
+            if (txt) txt.textContent = triaged + ' de ' + TOTAL + ' triados';
             const triageActions = document.getElementById('triageCompleteActions');
             if (triageActions) {
                 triageActions.style.display = triaged >= TOTAL ? 'block' : 'none';
@@ -1929,7 +1928,9 @@
                 const idx = card.dataset.findingIndex;
                 const checkBtn = card.querySelector('.finding-check-btn');
                 const dismissBtn = card.querySelector('.finding-dismiss-btn');
-                const navPill = document.getElementById('nav-pill-' + idx);
+                // A barra fixa de navegação é um clone com os mesmos ids —
+                // atualiza todas as instâncias da bolinha (original + clone)
+                const navPills = document.querySelectorAll('[id="nav-pill-' + idx + '"]');
                 const val = persistedDismissed.has(String(idx)) ? 'dismissed' : state[idx];
 
                 // Reset (botões podem não existir em revisão substituída — somente leitura)
@@ -1944,7 +1945,7 @@
                     dismissBtn.title = 'Não pertinente';
                     dismissBtn.innerHTML = '<i class="bi bi-x"></i>';
                 }
-                if (navPill) { navPill.style.opacity = ''; navPill.textContent = idx; }
+                navPills.forEach(function (pill) { pill.style.opacity = ''; pill.textContent = idx; });
 
                 if (val === 'checked') {
                     card.classList.add('is-checked');
@@ -1953,7 +1954,7 @@
                         checkBtn.title = 'Desmarcar';
                         checkBtn.innerHTML = '<i class="bi bi-check-lg"></i>';
                     }
-                    if (navPill) { navPill.style.opacity = '.4'; navPill.innerHTML = '✓'; }
+                    navPills.forEach(function (pill) { pill.style.opacity = '.4'; pill.innerHTML = '✓'; });
                 } else if (val === 'dismissed') {
                     card.classList.add('is-dismissed');
                     if (dismissBtn) {
@@ -1961,7 +1962,7 @@
                         dismissBtn.title = 'Desfazer';
                         dismissBtn.innerHTML = '<i class="bi bi-x-lg"></i>';
                     }
-                    if (navPill) { navPill.style.opacity = '.3'; navPill.innerHTML = '–'; }
+                    navPills.forEach(function (pill) { pill.style.opacity = '.3'; pill.innerHTML = '–'; });
                 }
             });
             updateProgress(state);

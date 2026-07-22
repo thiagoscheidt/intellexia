@@ -5,14 +5,19 @@ do digest por e-mail e de futuras tools MCP.
 Fluxo de sincronização (cron diário):
 
     para cada escritório → para cada advogado com OAB + UF:
-        buscar comunicações desde (last_synced_date - margem)
-        hash já existe → UPDATE dos campos mutáveis
-        hash novo:
-            resolver JudicialProcess pelo número CNJ
-            não existe → criar flagado (origin='comunica_auto',
-                         discovery_status='pending_review') e importar o
-                         histórico completo do processo
+        FASE DE REDE (sem transação de banco aberta):
+            buscar comunicações desde (last_synced_date - margem)
+            identificar processos ainda não cadastrados e baixar o
+            histórico completo de cada um
+        FASE DE ESCRITA (uma transação curta, sem chamadas HTTP):
+            criar processos flagados (origin='comunica_auto',
+            discovery_status='pending_review')
+            upsert das comunicações por hash (existe → UPDATE; novo → INSERT)
         sucesso → marca d'água avança; falha → mantém e registra last_error
+
+    A separação rede/escrita é obrigatória: transação aberta durante a
+    paginação da API segura locks (inclusive na linha do admin em `users`,
+    via FK de judicial_processes) e já congelou a aplicação em produção.
 """
 import logging
 from datetime import date, datetime, timedelta
@@ -85,25 +90,29 @@ def _get_or_create_sync_state(law_firm_id, lawyer_id):
 
 # --------------------------------------------------------------- persistência
 
-def _resolve_process(law_firm_id, parsed, client, stats):
-    """JudicialProcess do número CNJ da comunicação; cria flagado se não existir.
+def _existing_process_ids(law_firm_id, wanted):
+    """Dígitos CNJ → id dos JudicialProcess já cadastrados (uma consulta só).
 
-    Retorna o id do processo (ou None quando o número é inválido/ausente).
+    ``wanted``: dict dígitos → parsed. Casa tanto o número só com dígitos
+    quanto a máscara CNJ (formatos coexistem em ``process_number``).
     """
-    digits = parsed.get('numero_processo')
-    if not digits or len(digits) != 20:
-        return None
-
-    mascara = parsed.get('numero_processo_mascara') or format_cnj(digits)
-    process = JudicialProcess.query.filter(
+    if not wanted:
+        return {}
+    forms = set()
+    for digits, parsed in wanted.items():
+        forms.add(digits)
+        forms.add(parsed.get('numero_processo_mascara') or format_cnj(digits))
+    rows = JudicialProcess.query.filter(
         JudicialProcess.law_firm_id == law_firm_id,
-        or_(
-            JudicialProcess.process_number == digits,
-            JudicialProcess.process_number == mascara,
-        ),
-    ).first()
-    if process:
-        return process.id
+        JudicialProcess.process_number.in_(forms),
+    ).all()
+    return {only_digits(p.process_number): p.id for p in rows}
+
+
+def _create_discovered_process(law_firm_id, parsed, stats):
+    """Cria o JudicialProcess flagado para triagem. Retorna o id (ou None)."""
+    digits = parsed.get('numero_processo')
+    mascara = parsed.get('numero_processo_mascara') or format_cnj(digits)
 
     user_id = _system_user_id(law_firm_id)
     if user_id is None:
@@ -126,31 +135,75 @@ def _resolve_process(law_firm_id, parsed, client, stats):
     db.session.flush()
     stats['processes_created'] += 1
     logger.info('Processo descoberto via DJEN: %s (id=%s)', mascara, process.id)
-
-    # Importa o histórico completo de comunicações do processo recém-descoberto.
-    try:
-        history = client.get_comunicacoes_processo(digits)
-    except ComunicaPjeError as exc:
-        logger.warning('Histórico de %s indisponível agora: %s', mascara, exc)
-        history = []
-    for item in history:
-        parsed_hist = client.parse_comunicacao(item)
-        if not parsed_hist.get('hash'):
-            continue
-        _upsert_communication(law_firm_id, parsed_hist, item, stats,
-                              matched_lawyer_id=None, known_process_id=process.id)
-
     return process.id
 
 
+def _ingest_batch(law_firm_id, entries, client, stats,
+                  source=ProcessCommunication.SOURCE_COMUNICA_PJE):
+    """Persiste um lote de comunicações em duas fases: rede e escrita.
+
+    ``entries``: lista de (parsed, raw_item, matched_lawyer_id).
+
+    Fase de rede (sem transação aberta): identifica os processos ainda não
+    cadastrados e baixa o histórico completo de cada um. Fase de escrita:
+    processos + comunicações de uma vez, sem nenhuma chamada HTTP no meio.
+    NUNCA intercale rede e escrita — o INSERT de JudicialProcess segura lock
+    compartilhado na linha do admin em ``users`` (FK) até o commit, e o
+    middleware atualiza essa mesma linha a cada request: segurar o lock
+    durante a paginação da API já congelou a aplicação inteira em produção.
+
+    O commit (ou rollback, no dry-run) é responsabilidade do chamador.
+    """
+    wanted = {}
+    for parsed, _raw, _lawyer_id in entries:
+        digits = parsed.get('numero_processo')
+        if digits and len(digits) == 20 and digits not in wanted:
+            wanted[digits] = parsed
+
+    process_ids = _existing_process_ids(law_firm_id, wanted)
+
+    # --- fase de rede: históricos dos processos novos, sem transação aberta
+    db.session.rollback()
+    histories = {}
+    for digits, parsed in wanted.items():
+        if digits in process_ids or client is None:
+            continue
+        try:
+            histories[digits] = client.get_comunicacoes_processo(digits)
+        except ComunicaPjeError as exc:
+            logger.warning('Histórico de %s indisponível agora: %s',
+                           parsed.get('numero_processo_mascara') or digits, exc)
+            histories[digits] = []
+
+    # --- fase de escrita: uma transação curta, nenhuma chamada HTTP
+    for digits, parsed in wanted.items():
+        if digits in process_ids:
+            continue
+        process_id = _create_discovered_process(law_firm_id, parsed, stats)
+        if process_id is None:
+            continue
+        process_ids[digits] = process_id
+        for item in histories.get(digits) or []:
+            parsed_hist = client.parse_comunicacao(item)
+            _upsert_communication(law_firm_id, parsed_hist, item, stats,
+                                  known_process_id=process_id, source=source)
+
+    for parsed, raw_item, lawyer_id in entries:
+        _upsert_communication(law_firm_id, parsed, raw_item, stats,
+                              matched_lawyer_id=lawyer_id,
+                              known_process_id=process_ids.get(parsed.get('numero_processo')),
+                              source=source)
+
+
 def _upsert_communication(law_firm_id, parsed, raw_item, stats,
-                          matched_lawyer_id=None, known_process_id=None, client=None,
+                          matched_lawyer_id=None, known_process_id=None,
                           source=ProcessCommunication.SOURCE_COMUNICA_PJE):
     """Dedup por (law_firm_id, hash): existe → UPDATE; novo → INSERT.
 
     ``source`` identifica a fonte da informação (hoje só Comunica PJe; novas
     fontes passam a sua constante SOURCE_*). Retorna a ProcessCommunication
-    persistida (ou None sem hash).
+    persistida (ou None sem hash). A resolução/descoberta de processo acontece
+    antes, em ``_ingest_batch`` — aqui não há nenhuma chamada de rede.
     """
     comm_hash = parsed.get('hash')
     if not comm_hash:
@@ -170,22 +223,9 @@ def _upsert_communication(law_firm_id, parsed, raw_item, stats,
         stats['updated'] += 1
         return existing
 
-    process_id = known_process_id
-    if process_id is None and client is not None:
-        process_id = _resolve_process(law_firm_id, parsed, client, stats)
-        # A importação do histórico do processo recém-descoberto pode já ter
-        # inserido esta mesma comunicação — re-checa antes de inserir de novo.
-        existing = ProcessCommunication.query.filter_by(
-            law_firm_id=law_firm_id, hash=comm_hash
-        ).first()
-        if existing:
-            if matched_lawyer_id and not existing.matched_lawyer_id:
-                existing.matched_lawyer_id = matched_lawyer_id
-            return existing
-
     comm = ProcessCommunication(
         law_firm_id=law_firm_id,
-        judicial_process_id=process_id,
+        judicial_process_id=known_process_id,
         matched_lawyer_id=matched_lawyer_id,
         source=source,
         raw_json=raw_item,
@@ -217,28 +257,34 @@ def sync_lawyer(law_firm_id, lawyer, client=None, dry_run=False):
         data_inicio = state.last_synced_date - timedelta(days=SYNC_OVERLAP_DAYS)
     else:
         data_inicio = today - timedelta(days=FIRST_SYNC_DAYS)
+    # Persiste a linha de estado (se nova) e fecha a transação: a fase de rede
+    # abaixo não pode rodar com transação/lock em aberto.
+    db.session.commit()
 
     logger.info('Sincronizando %s (OAB %s/%s) — período %s a %s...',
                 lawyer.name, only_digits(lawyer.oab_number), lawyer.oab_uf,
                 data_inicio.isoformat(), today.isoformat())
 
     try:
+        # Fase de rede: baixa todo o período antes de tocar no banco.
+        entries = []
         for item in client.iter_comunicacoes(
             numero_oab=lawyer.oab_number,
             uf_oab=lawyer.oab_uf,
             data_inicio=data_inicio,
             data_fim=today,
         ):
-            parsed = client.parse_comunicacao(item)
-            _upsert_communication(law_firm_id, parsed, item, stats,
-                                  matched_lawyer_id=lawyer.id, client=client)
+            entries.append((client.parse_comunicacao(item), item, lawyer.id))
+
+        _ingest_batch(law_firm_id, entries, client, stats)
 
         if dry_run:
             db.session.rollback()
             stats['status'] = 'dry_run'
             return stats
 
-        # Sucesso: avança a marca d'água.
+        # Sucesso: comunicações + marca d'água na mesma transação curta.
+        state = _get_or_create_sync_state(law_firm_id, lawyer.id)
         state.last_synced_date = today
         state.last_run_at = datetime.now()
         state.last_error = None
@@ -330,6 +376,9 @@ def sync_law_firm_from_cadernos(law_firm_id, data=None, siglas=None,
                 summary['results'].append(stats)
                 continue
 
+            # Varredura local do zip: só coleta os itens do escritório;
+            # a persistência acontece de uma vez em _ingest_batch.
+            entries = []
             for item in client.iter_caderno_comunicacoes(meta):
                 stats['scanned'] += 1
                 matched_lawyer_id = None
@@ -343,9 +392,9 @@ def sync_law_firm_from_cadernos(law_firm_id, data=None, siglas=None,
                 if matched_lawyer_id is None:
                     continue
                 stats['matched'] += 1
-                parsed = client.parse_comunicacao(item)
-                _upsert_communication(law_firm_id, parsed, item, stats,
-                                      matched_lawyer_id=matched_lawyer_id, client=client)
+                entries.append((client.parse_comunicacao(item), item, matched_lawyer_id))
+
+            _ingest_batch(law_firm_id, entries, client, stats)
 
             if dry_run:
                 db.session.rollback()
