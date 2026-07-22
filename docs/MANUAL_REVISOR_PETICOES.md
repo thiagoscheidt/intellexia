@@ -206,7 +206,7 @@ Tudo aqui é **por escritório** e **versionado**. No editor você escolhe entre
 - **Agente Revisor** — modelo de IA e temperatura (padrão 0.0 — determinístico) usados nas revisões; pode ser desativado.
 - **Agente de Treinamento** — modelo e temperatura (padrão 0.7) do fluxo de Treinamento.
 - **Políticas de Atualização** — se o Treinamento pode atualizar o manual e os casos automaticamente, e se exige aprovação antes de publicar.
-- **Prompts** — a "personalidade" do revisor: **Identidade**, **Regras invioláveis** e os textos do Treinamento. O **Formato de saída** é protegido (somente leitura), para as telas não quebrarem.
+- **Prompts** — a "personalidade" do revisor: **Identidade**, **Regras invioláveis** e os textos do Treinamento. O **Formato de saída** é definido pelo próprio sistema (contrato técnico embutido no agente) — o campo nas Configurações é apenas informativo e não influencia a revisão.
 - **Referências** — o **Manual de revisão do FAP** (a régua das revisões), os **Casos de referência** e as **Instruções do projeto** (somente leitura). O botão **Importar de arquivo** carrega o conteúdo de um `.md`, `.txt` ou `.docx` para o editor — você revisa e salva como nova versão.
 
 Recursos do histórico de versões:

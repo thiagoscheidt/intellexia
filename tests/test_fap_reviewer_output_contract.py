@@ -57,6 +57,14 @@ def test_system_prompt_contains_schema_contract():
         check(f"prompt contém {field}", field in prompt)
     check("prompt instrui sobre imagens embutidas", '[IMAGEM ANEXADA NO DOCUMENTO]' in prompt)
 
+    # Regressão de produção: um revisor_output_format configurado com schema antigo
+    # competia com o contrato e fazia o modelo omitir campos novos.
+    legacy_format = 'FORMATO ANTIGO: {"findings": [{"category": "...", "severity": "..."}]} Não incluir texto fora do JSON.'
+    prompt_with_legacy = agent._build_system_prompt("", "", legacy_format, focused_review=False)
+    check("formato configurado NÃO é injetado", 'FORMATO ANTIGO' not in prompt_with_legacy)
+    check("contrato mantém location_excerpt mesmo com formato configurado",
+          '"location_excerpt"' in prompt_with_legacy)
+
     comparative_prompt = agent._build_system_prompt("", "", "", focused_review=False, comparative=True)
     for field in ('"comparative_changes"', '"original_excerpt"', '"corrected_excerpt"'):
         check(f"prompt comparativo contém {field}", field in comparative_prompt)

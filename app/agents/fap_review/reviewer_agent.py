@@ -227,6 +227,9 @@ class FapPetitionReviewerAgent:
             Prompt completo do sistema
         """
         output_schema = self._OUTPUT_SCHEMA_COMPARATIVE if comparative else self._OUTPUT_SCHEMA_SINGLE
+        # reviewer_output_format (prompt configurável) NÃO é injetado: o schema de
+        # saída é contrato do código. Uma versão configurada desatualizada competia
+        # com o contrato e fazia o modelo omitir campos novos (ex.: location_excerpt).
         base_system = f"""Você é um revisor especializado em petições iniciais de Ação Revisional do FAP.
 
 IDENTIDADE:
@@ -234,9 +237,6 @@ IDENTIDADE:
 
 REGRAS INVIOLÁVEIS:
 {reviewer_rules or 'Aplique todas as regras do manual'}
-
-FORMATO DE SAÍDA:
-{reviewer_output_format or 'Estruture a resposta em seções claras'}
 
 CONTRATO TÉCNICO DE SAÍDA (OBRIGATÓRIO, prevalece sobre qualquer outra instrução de formato):
 Responda EXCLUSIVAMENTE com um único JSON válido, sem nenhum texto fora do JSON e sem cercas de código.
