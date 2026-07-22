@@ -42,6 +42,7 @@ from app.agents.fap_review import (
 )
 from app.services.openrouter_models_service import fetch_openrouter_text_models_for_info
 from app.services import fap_review_service as _svc
+from app.services import fap_review_aux_service as _aux_svc
 from app.utils.document_utils import render_docx_preview_html
 from app.utils.timezone import now_sp
 
@@ -654,6 +655,53 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_file_p
                 compared_extension = Path(compared_file_path).suffix.lower()
                 compared_text = _extract_text_from_document(compared_file_path) if compared_extension in {'.docx', '.txt'} else None
 
+            # ===== Extração dirigida dos documentos auxiliares (opcional) =====
+            aux_review_payload = None
+            auxiliary_agent_docs = None
+            try:
+                aux_docs = json.loads(execution.auxiliary_documents_json or '[]')
+            except (TypeError, json.JSONDecodeError):
+                aux_docs = []
+            if aux_docs:
+                spreadsheet_rows = None
+                if benefits_spreadsheet and benefits_spreadsheet.get('path'):
+                    try:
+                        spreadsheet_rows = _parse_benefits_spreadsheet(str(benefits_spreadsheet['path']))
+                    except Exception as spreadsheet_error:
+                        current_app.logger.warning(
+                            'FAP aux: planilha ilegível para âncoras (execução %s): %s',
+                            execution_id, spreadsheet_error)
+                anchor_text = (
+                    compared_text
+                    if compared_file_path and execution.comparative_analysis
+                    else petition_text
+                )
+                try:
+                    aux_review_payload, auxiliary_agent_docs = loop.run_until_complete(
+                        _aux_svc.run_auxiliary_extractions(
+                            law_firm_id=law_firm_id,
+                            documents=aux_docs,
+                            spreadsheet_rows=spreadsheet_rows,
+                            petition_text=anchor_text,
+                            extract_text_fn=_extract_text_from_document,
+                            openai_api_key=openai_api_key,
+                        )
+                    )
+                except Exception as aux_error:
+                    # Falha na extração NUNCA derruba a revisão.
+                    current_app.logger.warning(
+                        'FAP aux: extração dos auxiliares falhou (execução %s): %s',
+                        execution_id, aux_error)
+                    aux_review_payload = {
+                        'anchor_source': 'none',
+                        'total_documents': len(aux_docs),
+                        'matched_documents': 0,
+                        'documents': [],
+                        'skipped_documents': [],
+                        'error': str(aux_error),
+                    }
+                    auxiliary_agent_docs = None
+
             if compared_file_path and execution.comparative_analysis:
                 # Análise comparativa
                 result = loop.run_until_complete(
@@ -663,6 +711,7 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_file_p
                         original_petition_text=petition_text,
                         revised_petition_text=compared_text,
                         prior_attention_points=prior_attention_points,
+                        auxiliary_documents=auxiliary_agent_docs,
                         reviewer_identity=reviewer_identity_prompt.content if reviewer_identity_prompt else "",
                         reviewer_rules=reviewer_rules_prompt.content if reviewer_rules_prompt else "",
                         reviewer_output_format=reviewer_output_format_prompt.content if reviewer_output_format_prompt else "",
@@ -678,6 +727,7 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_file_p
                         petition_file_path=petition_file_path,
                         petition_text=petition_text,
                         prior_attention_points=prior_attention_points,
+                        auxiliary_documents=auxiliary_agent_docs,
                         reviewer_identity=reviewer_identity_prompt.content if reviewer_identity_prompt else "",
                         reviewer_rules=reviewer_rules_prompt.content if reviewer_rules_prompt else "",
                         reviewer_output_format=reviewer_output_format_prompt.content if reviewer_output_format_prompt else "",
@@ -688,6 +738,9 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_file_p
                 )
 
             result_payload = result.model_dump(mode='json')
+
+            if aux_review_payload is not None:
+                result_payload['auxiliary_documents_review'] = aux_review_payload
 
             if benefits_spreadsheet and benefits_spreadsheet.get('path'):
                 target_document_path = compared_file_path if compared_file_path and execution.comparative_analysis else petition_file_path
