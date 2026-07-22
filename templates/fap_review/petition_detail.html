@@ -462,6 +462,18 @@
             <i class="bi bi-unlock me-1"></i> Reabrir petição
         </button>
         {% endif %}
+        {% if petition.workflow_status != 'archived'
+        and (is_admin_user or petition.workflow_status not in ['awaiting_approval', 'ready_for_filing']) %}
+        <button type="button" class="btn btn-outline-dark" id="archivePetitionButton"
+            data-update-url="{{ url_for('fap_review.petition_update_status', petition_id=petition.id) }}">
+            <i class="bi bi-archive me-1"></i> Arquivar
+        </button>
+        {% elif petition.workflow_status == 'archived' %}
+        <button type="button" class="btn btn-outline-dark" id="unarchivePetitionButton"
+            data-update-url="{{ url_for('fap_review.petition_update_status', petition_id=petition.id) }}">
+            <i class="bi bi-archive me-1"></i> Desarquivar
+        </button>
+        {% endif %}
         <a href="{{ url_for('fap_review.index') }}" class="btn btn-outline-secondary">
             <i class="bi bi-arrow-left me-1"></i> Voltar ao Painel
         </a>
@@ -849,6 +861,11 @@
             'Não foi possível devolver a petição.');
         bindStatusButton('reopenPetitionButton', 'awaiting_adjustments', null,
             'Não foi possível reabrir a petição.');
+        bindStatusButton('archivePetitionButton', 'archived',
+            'Arquivar esta petição? Ela sai da listagem do painel (fica acessível pelo filtro "Arquivadas").',
+            'Não foi possível arquivar a petição.');
+        bindStatusButton('unarchivePetitionButton', 'new', null,
+            'Não foi possível desarquivar a petição.');
     });
 
     document.addEventListener('DOMContentLoaded', function () {

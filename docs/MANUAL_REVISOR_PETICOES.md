@@ -31,7 +31,7 @@ Cada petição tem um **status de acompanhamento**, visível no painel inicial:
 | **Aguardando aprovação** | O advogado marcou a versão como **final** — a bola está com o **revisor (administrador)**. |
 | **Aprovada pelo revisor** | Um **administrador** clicou em :btn-success[Aprovar petição]: pronta para protocolo. A petição fica **travada** para novas revisões. |
 | **Processo iniciado** | A petição já foi protocolada (marcação manual). |
-| **Arquivada** | Fora do fluxo (marcação manual). |
+| **Arquivada** | Fora do fluxo — some da listagem padrão do painel (fica no filtro **Arquivadas** e na coluna recolhida do kanban). Arquive pelo botão :btn-outline-secondary[Arquivar] no detalhe da petição; :btn-outline-secondary[Desarquivar] a devolve ao fluxo. |
 
 Como o status evolui:
 

@@ -833,8 +833,9 @@
 
             <!-- Filtros por status -->
             <div class="petition-toolbar px-3 py-2 d-flex flex-wrap gap-2 align-items-center">
+                {% set archived_count = petition_rows | selectattr('petition.workflow_status', 'equalto', 'archived') | list | length %}
                 <button class="filter-pill active" data-filter="all">
-                    Todos ({{ petition_rows|length }})
+                    Todos ({{ petition_rows|length - archived_count }})
                 </button>
                 {% if awaiting_adjustments_petitions %}
                 <button class="filter-pill pill-danger" data-filter="awaiting_adjustments">
@@ -857,9 +858,14 @@
                 </button>
                 {% endif %}
                 {% set others_count = (petition_rows|length) - awaiting_adjustments_petitions - in_review_petitions -
-                awaiting_approval_petitions - ready_petitions %}
+                awaiting_approval_petitions - ready_petitions - archived_count %}
                 {% if others_count > 0 %}
                 <button class="filter-pill" data-filter="others">Outras ({{ others_count }})</button>
+                {% endif %}
+                {% if archived_count > 0 %}
+                <button class="filter-pill" data-filter="archived">
+                    <i class="bi bi-archive"></i> Arquivadas ({{ archived_count }})
+                </button>
                 {% endif %}
                 <div class="view-toggle ms-auto" id="viewToggle" role="group" aria-label="Modo de exibição">
                     <button type="button" class="view-toggle-btn active" data-view="list" title="Visão em lista">
@@ -1013,7 +1019,8 @@
             <!-- Rodapé -->
             <div class="px-3 py-2"
                 style="border-top: 1px solid rgba(15,23,42,.06); background: var(--bs-secondary-bg);">
-                <small class="text-muted" id="petitionCount">Exibindo {{ petition_rows|length }} petições</small>
+                <small class="text-muted" id="petitionCount">Exibindo {{ petition_rows|length - archived_count }}
+                    petições</small>
             </div>
             </div>
 
@@ -1140,7 +1147,10 @@
                 const status = row.dataset.status || '';
                 let matchesFilter = true;
 
-                if (activeFilter === 'awaiting_adjustments') {
+                if (activeFilter === 'all') {
+                    // Arquivadas não aparecem na listagem padrão — só no filtro próprio
+                    matchesFilter = status !== 'archived';
+                } else if (activeFilter === 'awaiting_adjustments') {
                     matchesFilter = status === 'awaiting_adjustments';
                 } else if (activeFilter === 'in_review') {
                     matchesFilter = status === 'in_review' || status === 'new';
@@ -1149,7 +1159,9 @@
                 } else if (activeFilter === 'ready_for_filing') {
                     matchesFilter = status === 'ready_for_filing';
                 } else if (activeFilter === 'others') {
-                    matchesFilter = status === 'filed' || status === 'archived';
+                    matchesFilter = status === 'filed';
+                } else if (activeFilter === 'archived') {
+                    matchesFilter = status === 'archived';
                 }
 
                 const show = matchesSearch && matchesFilter;
@@ -1160,6 +1172,8 @@
             if (countDisplay) {
                 if (activeFilter !== 'all' || term) {
                     countDisplay.textContent = 'Exibindo ' + visible + ' de ' + totalCount + ' petições';
+                } else if (activeFilter === 'all') {
+                    countDisplay.textContent = 'Exibindo ' + visible + ' petições';
                 } else {
                     countDisplay.textContent = 'Exibindo ' + totalCount + ' petições';
                 }
@@ -1186,6 +1200,9 @@
         if (searchInput) {
             searchInput.addEventListener('input', applyFilters);
         }
+
+        // Aplica o filtro padrão já no carregamento (arquivadas ficam ocultas)
+        applyFilters();
 
         // ── Toggle lista/kanban ───────────────────────────────
         const VIEW_STORAGE_KEY = 'fapReviewPetitionView';
