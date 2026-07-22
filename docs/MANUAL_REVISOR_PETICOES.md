@@ -169,6 +169,25 @@ Conferência **automática, sem IA**: o sistema lê as colunas **"Número do Ben
 
 > Só entram na conferência da planilha as linhas com a coluna **TESES** preenchida.
 
+### Cruzamento dos documentos auxiliares :claude:
+
+> [!IA]
+> Ao enviar documentos auxiliares (CAT, CNIS, INFBEN, prints do FAP Web, laudos), a IA lê cada arquivo, identifica a quais benefícios ele se refere e extrai os dados relevantes às teses da planilha de benefícios. Esses dados são cruzados com a petição: divergências (datas, CNPJ, razão social, espécie do benefício) viram apontamentos na revisão, sempre citando o arquivo de origem.
+
+Como funciona:
+
+| Etapa | Origem |
+| --- | --- |
+| Identificação dos benefícios e teses | Relatório |
+| Leitura e extração dos documentos auxiliares | IA |
+| Cruzamento contra a petição | IA |
+| Card "Documentos Auxiliares × Benefícios" | Sistema |
+
+- Com a **planilha de benefícios** enviada, a extração é guiada pelas teses de cada benefício (ex.: tese de acidente de trajeto faz a IA buscar data e local do acidente na CAT).
+- Sem planilha, os números de benefício são localizados na própria petição.
+- Arquivos reenviados em revisões seguintes não são reprocessados (aparecem com o selo "Reaproveitado").
+- Documentos que a IA não conseguir vincular a nenhum benefício aparecem como "Sem vínculo identificado" — confira-os manualmente.
+
 ### Ações da tela
 
 - **Todos os usuários**: :btn-primary[Nova Revisão], **Visualizar Documento** enviado (em DOCX, o botão :btn-outline-primary[Ver no Documento] de cada ponto abre o conteúdo com o trecho exato do achado destacado), **Visualizar Manual** de referência e **Copiar JSON** (dados brutos). A tela também mostra o modelo de IA usado, tokens e **custo estimado** da revisão.
