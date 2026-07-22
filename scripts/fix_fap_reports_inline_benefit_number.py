@@ -27,7 +27,9 @@ O reprocessamento usa o mesmo `service.process_single_report` da fase 2 do
 rodar aquele script com --force_reimport para corrigir dados truncados.
 
 Uso:
-  uv run python scripts/fix_fap_reports_inline_benefit_number.py               # dry-run
+  uv run python scripts/fix_fap_reports_inline_benefit_number.py --from-db     # dry-run via banco (rápido)
+  uv run python scripts/fix_fap_reports_inline_benefit_number.py --from-db --apply
+  uv run python scripts/fix_fap_reports_inline_benefit_number.py               # dry-run varrendo PDFs (exaustivo)
   uv run python scripts/fix_fap_reports_inline_benefit_number.py --apply
   uv run python scripts/fix_fap_reports_inline_benefit_number.py --ano-vigencia 2022
   uv run python scripts/fix_fap_reports_inline_benefit_number.py --report-ids 12,34
@@ -76,6 +78,12 @@ def parse_args():
         '--scan-workers', type=int, default=4,
         help='Processos paralelos para varrer os PDFs (padrão: 4; a varredura não usa o banco)',
     )
+    parser.add_argument(
+        '--from-db', action='store_true',
+        help='Detecta pelos dados do banco (justificativa/parecer terminando em "(") em vez de varrer PDFs. '
+             'Muito mais rápido; cobre o padrão "(Número do benefício NNN)". A varredura de PDFs continua '
+             'sendo a checagem exaustiva.',
+    )
     return parser.parse_args()
 
 
@@ -113,6 +121,98 @@ def find_inline_mentions(service: FapContestationJudgmentReportService, file_pat
     return affected
 
 
+def detect_from_pdfs(args, reports: list) -> tuple[dict[int, list[str]], dict[int, 'Benefit']]:
+    """Varre os PDFs e retorna (report_id -> NBs afetados, benefit_id -> Benefit)."""
+    affected_by_report: dict[int, list[str]] = {}
+    missing_files: list[int] = []
+    report_by_id = {r.id: r for r in reports}
+
+    scan_payloads: list[tuple[int, str]] = []
+    for report in reports:
+        if not report.file_path or not Path(report.file_path).exists():
+            missing_files.append(report.id)
+            continue
+        scan_payloads.append((report.id, report.file_path))
+
+    scan_workers = max(1, args.scan_workers)
+    print(f'Varrendo {len(scan_payloads)} PDF(s) com {scan_workers} processo(s)...')
+    done = 0
+    with ProcessPoolExecutor(max_workers=scan_workers) as pool:
+        for report_id, nbs, error in pool.map(_scan_worker, scan_payloads):
+            done += 1
+            if done % 20 == 0:
+                print(f'  ... {done}/{len(scan_payloads)} PDFs varridos')
+            if error:
+                print(f'[red]Relatório #{report_id}: erro ao ler PDF ({error})[/red]')
+                continue
+            if nbs:
+                report = report_by_id[report_id]
+                affected_by_report[report_id] = nbs
+                print(
+                    f'[yellow]Relatório #{report_id}[/yellow] ({report.original_filename}, '
+                    f'escritório {report.law_firm_id}): menção inline nos blocos dos NBs {", ".join(nbs)}'
+                )
+
+    if missing_files:
+        print(f'[red]Arquivo não encontrado para os relatórios: {missing_files} — ignorados.[/red]')
+
+    affected_benefits: dict[int, Benefit] = {}
+    for report_id, nbs in affected_by_report.items():
+        report = report_by_id[report_id]
+        for nb in nbs:
+            candidates = (
+                Benefit.query
+                .filter_by(law_firm_id=report.law_firm_id, benefit_number=nb)
+                .all()
+            )
+            if not candidates:
+                print(f'  NB {nb} (relatório #{report_id}): nenhum benefício no banco.')
+            for benefit in candidates:
+                affected_benefits[benefit.id] = benefit
+
+    return affected_by_report, affected_benefits
+
+
+def detect_from_db(args) -> dict[int, 'Benefit']:
+    """Busca a assinatura da truncagem direto no banco: texto terminando em "(".
+
+    A truncagem corta a justificativa imediatamente antes de
+    "Número do benefício ...", que nos relatórios da DATAPREV aparece entre
+    parênteses — o texto gravado termina em "(". Cobre também as colunas de
+    parecer e a tabela de decisões (ocorrências).
+    """
+    signature_cols = [
+        Benefit.justification,
+        Benefit.opinion,
+        Benefit.first_instance_justification,
+        Benefit.first_instance_opinion,
+        Benefit.second_instance_justification,
+        Benefit.second_instance_opinion,
+    ]
+    benefit_query = Benefit.query.filter(db.or_(*[col.like('%(') for col in signature_cols]))
+    if args.law_firm_id:
+        benefit_query = benefit_query.filter(Benefit.law_firm_id == args.law_firm_id)
+
+    affected_benefits: dict[int, Benefit] = {b.id: b for b in benefit_query.all()}
+
+    decision_query = BenefitContestationDecision.query.filter(db.or_(
+        BenefitContestationDecision.justification.like('%('),
+        BenefitContestationDecision.opinion.like('%('),
+    ))
+    if args.law_firm_id:
+        decision_query = decision_query.filter(
+            BenefitContestationDecision.law_firm_id == args.law_firm_id
+        )
+    for decision in decision_query.all():
+        if decision.benefit_id not in affected_benefits:
+            benefit = db.session.get(Benefit, decision.benefit_id)
+            if benefit is not None:
+                affected_benefits[benefit.id] = benefit
+
+    print(f'Detecção via banco: {len(affected_benefits)} benefício(s) com assinatura de truncagem.')
+    return affected_benefits
+
+
 def main() -> int:
     args = parse_args()
     service = FapContestationJudgmentReportService(flask_app=app)
@@ -122,78 +222,34 @@ def main() -> int:
         report_ids = [int(x) for x in args.report_ids.split(',') if x.strip()]
 
     with app.app_context():
-        query = FapContestationJudgmentReport.query.filter(
-            FapContestationJudgmentReport.status.in_(['completed', 'error'])
-        )
-        if report_ids:
-            query = FapContestationJudgmentReport.query.filter(
-                FapContestationJudgmentReport.id.in_(report_ids)
-            )
-        if args.law_firm_id:
-            query = query.filter(FapContestationJudgmentReport.law_firm_id == args.law_firm_id)
-        if args.ano_vigencia:
-            report_ids_for_years = db.session.query(FapWebContestacao.report_id).filter(
-                FapWebContestacao.ano_vigencia.in_(args.ano_vigencia),
-                FapWebContestacao.report_id.isnot(None),
-            )
-            query = query.filter(FapContestationJudgmentReport.id.in_(report_ids_for_years))
-
-        reports = query.order_by(FapContestationJudgmentReport.uploaded_at.asc()).all()
-        print(f'Analisando {len(reports)} relatório(s)...')
-
-        # report -> NBs afetados
         affected_by_report: dict[int, list[str]] = {}
-        missing_files: list[int] = []
-        report_by_id_all = {r.id: r for r in reports}
 
-        scan_payloads: list[tuple[int, str]] = []
-        for report in reports:
-            if not report.file_path or not Path(report.file_path).exists():
-                missing_files.append(report.id)
-                continue
-            scan_payloads.append((report.id, report.file_path))
-
-        scan_workers = max(1, args.scan_workers)
-        print(f'Varrendo {len(scan_payloads)} PDF(s) com {scan_workers} processo(s)...')
-        done = 0
-        with ProcessPoolExecutor(max_workers=scan_workers) as pool:
-            for report_id, nbs, error in pool.map(_scan_worker, scan_payloads):
-                done += 1
-                if done % 20 == 0:
-                    print(f'  ... {done}/{len(scan_payloads)} PDFs varridos')
-                if error:
-                    print(f'[red]Relatório #{report_id}: erro ao ler PDF ({error})[/red]')
-                    continue
-                if nbs:
-                    report = report_by_id_all[report_id]
-                    affected_by_report[report_id] = nbs
-                    print(
-                        f'[yellow]Relatório #{report_id}[/yellow] ({report.original_filename}, '
-                        f'escritório {report.law_firm_id}): menção inline nos blocos dos NBs {", ".join(nbs)}'
-                    )
-
-        if missing_files:
-            print(f'[red]Arquivo não encontrado para os relatórios: {missing_files} — ignorados.[/red]')
-
-        if not affected_by_report:
-            print('[green]Nenhum relatório afetado encontrado.[/green]')
-            return 0
-
-        # Benefícios afetados por escritório
-        report_by_id = {r.id: r for r in reports}
-        affected_benefits: dict[int, Benefit] = {}
-        for report_id, nbs in affected_by_report.items():
-            report = report_by_id[report_id]
-            for nb in nbs:
-                candidates = (
-                    Benefit.query
-                    .filter_by(law_firm_id=report.law_firm_id, benefit_number=nb)
-                    .all()
+        if args.from_db:
+            affected_benefits = detect_from_db(args)
+        else:
+            query = FapContestationJudgmentReport.query.filter(
+                FapContestationJudgmentReport.status.in_(['completed', 'error'])
+            )
+            if report_ids:
+                query = FapContestationJudgmentReport.query.filter(
+                    FapContestationJudgmentReport.id.in_(report_ids)
                 )
-                if not candidates:
-                    print(f'  NB {nb} (relatório #{report_id}): nenhum benefício no banco.')
-                for benefit in candidates:
-                    affected_benefits[benefit.id] = benefit
+            if args.law_firm_id:
+                query = query.filter(FapContestationJudgmentReport.law_firm_id == args.law_firm_id)
+            if args.ano_vigencia:
+                report_ids_for_years = db.session.query(FapWebContestacao.report_id).filter(
+                    FapWebContestacao.ano_vigencia.in_(args.ano_vigencia),
+                    FapWebContestacao.report_id.isnot(None),
+                )
+                query = query.filter(FapContestationJudgmentReport.id.in_(report_ids_for_years))
+
+            reports = query.order_by(FapContestationJudgmentReport.uploaded_at.asc()).all()
+            print(f'Analisando {len(reports)} relatório(s)...')
+            affected_by_report, affected_benefits = detect_from_pdfs(args, reports)
+
+        if not affected_benefits:
+            print('[green]Nenhum benefício afetado encontrado.[/green]')
+            return 0
 
         print(f'\n{len(affected_benefits)} benefício(s) afetado(s):')
         for benefit in affected_benefits.values():
@@ -210,7 +266,13 @@ def main() -> int:
         reprocess_ids: set[int] = set(affected_by_report.keys())
         for benefit in affected_benefits.values():
             history_rows = BenefitFapSourceHistory.query.filter_by(benefit_id=benefit.id).all()
-            reprocess_ids.update(row.report_id for row in history_rows if row.report_id)
+            benefit_report_ids = {row.report_id for row in history_rows if row.report_id}
+            if not benefit_report_ids and not affected_by_report:
+                print(
+                    f'[red]Benefit #{benefit.id} NB {benefit.benefit_number}: sem histórico de '
+                    f'relatório — não há como reprocessar; será apenas listado.[/red]'
+                )
+            reprocess_ids.update(benefit_report_ids)
 
         # Só reprocessa relatórios com arquivo presente; sem o arquivo não apagamos nada dele.
         reprocess_reports = (
