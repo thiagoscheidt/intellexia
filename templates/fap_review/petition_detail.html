@@ -1,4 +1,5 @@
 {% extends "layout/base.html" %}
+{% from 'fap_review/_wrike_link.html' import wrike_link %}
 
 {% from "partials/page_hero.html" import page_hero %}
 
@@ -508,6 +509,7 @@
                             class="wrike-inline-mark">
                         <span>Id Wrike</span>
                         <strong id="petitionIdentifierHeading">{{ petition.office_document_identifier }}</strong>
+                        {{ wrike_link(petition.office_document_identifier) }}
                     </div>
                 </div>
 

@@ -1,4 +1,5 @@
 {% extends "layout/base.html" %}
+{% from 'fap_review/_wrike_link.html' import wrike_link %}
 
 {% from "partials/page_hero.html" import page_hero %}
 
@@ -924,7 +925,9 @@
                                             <span>Id Wrike</span>
                                         </div>
                                         <div class="execution-meta-value">{{ petition.office_document_identifier if
-                                            petition else execution.law_firm_document_identifier or '-' }}</div>
+                                            petition else execution.law_firm_document_identifier or '-' }}
+                                            {{ wrike_link(petition.office_document_identifier if petition else execution.law_firm_document_identifier) }}
+                                        </div>
                                     </div>
 
                                     <div class="execution-side-item">

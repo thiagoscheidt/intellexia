@@ -1,4 +1,5 @@
 {% extends "layout/base.html" %}
+{% from 'fap_review/_wrike_link.html' import wrike_link %}
 
 {% from "partials/page_hero.html" import page_hero %}
 
@@ -935,6 +936,7 @@
                             <div class="wrike-id-body">
                                 <span class="wrike-id-label">Wrike ID</span>
                                 <span class="wrike-id-value">{{ petition.office_document_identifier or '—' }}</span>
+                            {{ wrike_link(petition.office_document_identifier) }}
                             </div>
                         </div>
                     </div>

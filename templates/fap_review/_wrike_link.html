@@ -1,0 +1,17 @@
+{# Ícone de link para o Wrike ao lado do Id exibido.
+   - Identificador numérico → https://www.wrike.com/open.htm?id=<id>
+   - Identificador já em URL → usa como está
+   - Texto livre → sem ícone #}
+{% macro wrike_link(identifier) -%}
+{%- if identifier -%}
+{%- set ident = identifier | string | trim -%}
+{%- if ident.startswith('http://') or ident.startswith('https://') -%}
+<a href="{{ ident }}" target="_blank" rel="noopener noreferrer" class="text-decoration-none"
+    title="Abrir no Wrike" onclick="event.stopPropagation();"><i class="bi bi-box-arrow-up-right"></i></a>
+{%- elif ident.isdigit() -%}
+<a href="https://www.wrike.com/open.htm?id={{ ident }}" target="_blank" rel="noopener noreferrer"
+    class="text-decoration-none" title="Abrir no Wrike" onclick="event.stopPropagation();"><i
+        class="bi bi-box-arrow-up-right"></i></a>
+{%- endif -%}
+{%- endif -%}
+{%- endmacro %}
