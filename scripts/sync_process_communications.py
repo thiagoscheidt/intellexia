@@ -12,10 +12,21 @@ Regras (ver app/services/communication_monitor_service.py):
   - o DJEN publica uma vez por dia (dias úteis) — rodar mais de 1x/dia não
     traz dado novo.
 
+Modos de execução:
+  - Diário (padrão): incremental pela marca d'água de cada advogado — pega as
+    comunicações do dia e reprocessa uma margem de segurança. É o modo do cron.
+  - FULL (--full): ignora a marca d'água e busca o histórico completo de todos
+    os advogados desde o início do DJEN (2023; customizável com --desde).
+    Percorre o período em janelas de 90 dias com commit por janela — pode ser
+    interrompido e rodado de novo (dedup por hash), inclusive para repopular a
+    base do zero.
+
 Execução manual:
   uv run python scripts/sync_process_communications.py
   uv run python scripts/sync_process_communications.py --dry-run
   uv run python scripts/sync_process_communications.py --law-firm-id 1
+  uv run python scripts/sync_process_communications.py --full
+  uv run python scripts/sync_process_communications.py --full --desde 2024-01-01
 
 Modo caderno (alternativo): baixa o caderno diário compactado de cada tribunal
 e filtra localmente pelas OABs do escritório — 1 download por tribunal em vez
@@ -89,6 +100,12 @@ def main() -> int:
                         help='consulta a API e mostra o que seria salvo, sem persistir')
     parser.add_argument('--law-firm-id', type=int, default=None,
                         help='restringe a um escritório')
+    parser.add_argument('--full', action='store_true',
+                        help='histórico completo (ignora a marca d\'água); '
+                             'padrão: incremental diário')
+    parser.add_argument('--desde', type=str, default=None,
+                        help='data inicial do modo FULL (YYYY-MM-DD; '
+                             'padrão: 2023-01-01, início do DJEN)')
     parser.add_argument('--caderno', action='store_true',
                         help='sincroniza via cadernos diários (1 download por tribunal)')
     parser.add_argument('--data', type=str, default=None,
@@ -109,11 +126,32 @@ def main() -> int:
     from main import app
     from app.services import communication_monitor_service as monitor
 
+    if args.caderno and args.full:
+        _log('❌ --full não se aplica ao modo --caderno (cadernos são diários).')
+        return 1
+    if args.desde and not args.full:
+        _log('❌ --desde só faz sentido com --full.')
+        return 1
+
+    full_from = None
+    if args.full:
+        from datetime import date as date_cls
+        if args.desde:
+            try:
+                full_from = date_cls.fromisoformat(args.desde)
+            except ValueError:
+                _log(f'❌ Data inválida: {args.desde} (use YYYY-MM-DD)')
+                return 1
+        else:
+            full_from = monitor.FULL_SYNC_START
+
     with app.app_context():
         if args.caderno:
             return _run_caderno(monitor, args)
-        _log('🔎 Iniciando sincronização de comunicações (Comunica PJe/DJEN)...')
-        summaries = monitor.sync_all(law_firm_id=args.law_firm_id, dry_run=args.dry_run)
+        modo = f'FULL desde {full_from.isoformat()}' if full_from else 'incremental diário'
+        _log(f'🔎 Iniciando sincronização de comunicações (Comunica PJe/DJEN) — modo {modo}...')
+        summaries = monitor.sync_all(law_firm_id=args.law_firm_id,
+                                     dry_run=args.dry_run, full_from=full_from)
 
         if not summaries:
             _log('Nenhum escritório para sincronizar.')

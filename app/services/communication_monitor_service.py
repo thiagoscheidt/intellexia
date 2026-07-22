@@ -44,6 +44,13 @@ SYNC_OVERLAP_DAYS = 2
 # Primeira sincronização de um advogado: quantos dias para trás buscar.
 FIRST_SYNC_DAYS = 30
 
+# Sincronização FULL: início padrão do histórico (o DJEN opera desde 2023).
+FULL_SYNC_START = date(2023, 1, 1)
+
+# Janela de busca por lote (dias): mantém cada consulta bem abaixo do limite
+# de 10.000 resultados da API e limita a memória por lote na sincronização FULL.
+SYNC_WINDOW_DAYS = 90
+
 DIGEST_LIMIT = 20
 
 
@@ -244,8 +251,15 @@ def _upsert_communication(law_firm_id, parsed, raw_item, stats,
 
 # ------------------------------------------------------------------ sincronia
 
-def sync_lawyer(law_firm_id, lawyer, client=None, dry_run=False):
-    """Sincroniza as comunicações de um advogado. Retorna dict de estatísticas."""
+def sync_lawyer(law_firm_id, lawyer, client=None, dry_run=False, full_from=None):
+    """Sincroniza as comunicações de um advogado. Retorna dict de estatísticas.
+
+    ``full_from``: modo FULL — ignora a marca d'água e busca desde essa data
+    (backfill do histórico). Sem ele, incremental pela marca d'água (diário).
+    O período é percorrido em janelas de SYNC_WINDOW_DAYS, cada uma com sua
+    própria fase de rede + transação curta de escrita; o progresso é commitado
+    por janela (o dedup por hash torna reprocessamentos idempotentes).
+    """
     client = client or ComunicaPjeClient()
     stats = {'lawyer_id': lawyer.id, 'lawyer_name': lawyer.name,
              'created': 0, 'updated': 0, 'processes_created': 0,
@@ -253,7 +267,9 @@ def sync_lawyer(law_firm_id, lawyer, client=None, dry_run=False):
 
     state = _get_or_create_sync_state(law_firm_id, lawyer.id)
     today = date.today()
-    if state.last_synced_date:
+    if full_from is not None:
+        data_inicio = full_from
+    elif state.last_synced_date:
         data_inicio = state.last_synced_date - timedelta(days=SYNC_OVERLAP_DAYS)
     else:
         data_inicio = today - timedelta(days=FIRST_SYNC_DAYS)
@@ -261,29 +277,46 @@ def sync_lawyer(law_firm_id, lawyer, client=None, dry_run=False):
     # abaixo não pode rodar com transação/lock em aberto.
     db.session.commit()
 
-    logger.info('Sincronizando %s (OAB %s/%s) — período %s a %s...',
+    logger.info('Sincronizando %s (OAB %s/%s) — período %s a %s%s...',
                 lawyer.name, only_digits(lawyer.oab_number), lawyer.oab_uf,
-                data_inicio.isoformat(), today.isoformat())
+                data_inicio.isoformat(), today.isoformat(),
+                ' [FULL]' if full_from else '')
 
     try:
-        # Fase de rede: baixa todo o período antes de tocar no banco.
-        entries = []
-        for item in client.iter_comunicacoes(
-            numero_oab=lawyer.oab_number,
-            uf_oab=lawyer.oab_uf,
-            data_inicio=data_inicio,
-            data_fim=today,
-        ):
-            entries.append((client.parse_comunicacao(item), item, lawyer.id))
+        window_start = data_inicio
+        while window_start <= today:
+            window_end = min(window_start + timedelta(days=SYNC_WINDOW_DAYS - 1), today)
 
-        _ingest_batch(law_firm_id, entries, client, stats)
+            # Fase de rede: baixa toda a janela antes de tocar no banco.
+            entries = []
+            for item in client.iter_comunicacoes(
+                numero_oab=lawyer.oab_number,
+                uf_oab=lawyer.oab_uf,
+                data_inicio=window_start,
+                data_fim=window_end,
+            ):
+                entries.append((client.parse_comunicacao(item), item, lawyer.id))
+
+            _ingest_batch(law_firm_id, entries, client, stats)
+
+            # Progresso preservado por janela (dry-run desfaz cada janela).
+            if dry_run:
+                db.session.rollback()
+            else:
+                db.session.commit()
+            if window_end < today:
+                logger.info('%s: janela %s a %s concluída — %d nova(s), '
+                            '%d processo(s) descoberto(s) até aqui.',
+                            lawyer.name, window_start.isoformat(),
+                            window_end.isoformat(), stats['created'],
+                            stats['processes_created'])
+            window_start = window_end + timedelta(days=1)
 
         if dry_run:
-            db.session.rollback()
             stats['status'] = 'dry_run'
             return stats
 
-        # Sucesso: comunicações + marca d'água na mesma transação curta.
+        # Sucesso: avança a marca d'água.
         state = _get_or_create_sync_state(law_firm_id, lawyer.id)
         state.last_synced_date = today
         state.last_run_at = datetime.now()
@@ -304,7 +337,7 @@ def sync_lawyer(law_firm_id, lawyer, client=None, dry_run=False):
     return stats
 
 
-def sync_law_firm(law_firm_id, client=None, dry_run=False):
+def sync_law_firm(law_firm_id, client=None, dry_run=False, full_from=None):
     """Sincroniza todos os advogados monitoráveis de um escritório."""
     client = client or ComunicaPjeClient()
     ready, skipped = monitored_lawyers(law_firm_id)
@@ -312,7 +345,8 @@ def sync_law_firm(law_firm_id, client=None, dry_run=False):
     for lawyer in skipped:
         logger.info('Advogado %s pulado (OAB/UF incompleta).', lawyer.name)
     for lawyer in ready:
-        results.append(sync_lawyer(law_firm_id, lawyer, client=client, dry_run=dry_run))
+        results.append(sync_lawyer(law_firm_id, lawyer, client=client,
+                                   dry_run=dry_run, full_from=full_from))
     return {
         'law_firm_id': law_firm_id,
         'lawyers_synced': len(ready),
@@ -411,7 +445,7 @@ def sync_law_firm_from_cadernos(law_firm_id, data=None, siglas=None,
     return summary
 
 
-def sync_all(law_firm_id=None, dry_run=False):
+def sync_all(law_firm_id=None, dry_run=False, full_from=None):
     """Sincroniza todos os escritórios (ou um específico). Usado pelo cron."""
     client = ComunicaPjeClient()
     query = LawFirm.query.order_by(LawFirm.id)
@@ -420,7 +454,8 @@ def sync_all(law_firm_id=None, dry_run=False):
     summaries = []
     for firm in query.all():
         try:
-            summaries.append(sync_law_firm(firm.id, client=client, dry_run=dry_run))
+            summaries.append(sync_law_firm(firm.id, client=client,
+                                           dry_run=dry_run, full_from=full_from))
         except Exception:
             db.session.rollback()
             logger.exception('Erro inesperado sincronizando escritório %s', firm.id)
