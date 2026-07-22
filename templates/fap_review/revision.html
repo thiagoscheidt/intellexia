@@ -1519,7 +1519,8 @@
             processingTimers = [];
             if (completed) {
                 document.getElementById('processingBar').style.width = '100%';
-                document.getElementById('processingStep').textContent = 'Revisão concluída! Abrindo o resultado...';
+                document.getElementById('processingStep').textContent =
+                    'Revisão concluída! Abrindo o resultado...';
             } else {
                 overlay.classList.remove('visible');
                 document.body.style.overflow = '';
@@ -1570,10 +1571,9 @@
                 const data = await response.json();
 
                 if (data.success) {
-                    stopProcessingOverlay(true);
-                    window.setTimeout(function () {
-                        window.location.href = `/fap-review/revision/${data.execution_id}`;
-                    }, 600);
+                    // A revisão roda em background: mantém a animação e consulta o
+                    // status até concluir — sem recarregar a tela.
+                    pollRevisionStatus(data.execution_id, btn);
                 } else {
                     stopProcessingOverlay(false);
                     alert('Erro: ' + (data.error || 'Erro desconhecido'));
@@ -1587,6 +1587,40 @@
                 btn.innerHTML = '<i class="bi bi-play-circle me-2"></i> Iniciar Revisão';
             }
         });
+
+        function pollRevisionStatus(executionId, btn) {
+            const startedAt = Date.now();
+            const MAX_WAIT_MS = 15 * 60 * 1000;
+
+            async function checkStatus() {
+                if (Date.now() - startedAt > MAX_WAIT_MS) {
+                    window.location.href = `/fap-review/revision/${executionId}`;
+                    return;
+                }
+                try {
+                    const response = await fetch(`/fap-review/revision/${executionId}/status`);
+                    const data = response.ok ? await response.json() : null;
+
+                    if (data && data.status === 'completed') {
+                        stopProcessingOverlay(true);
+                        window.setTimeout(function () {
+                            window.location.href = `/fap-review/revision/${executionId}`;
+                        }, 700);
+                        return;
+                    }
+                    if (data && data.status === 'failed') {
+                        stopProcessingOverlay(false);
+                        alert('A revisão falhou: ' + (data.error_message || 'erro desconhecido'));
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="bi bi-play-circle me-2"></i> Iniciar Revisão';
+                        return;
+                    }
+                } catch (error) { /* oscilação de rede: tenta de novo */ }
+                window.setTimeout(checkStatus, 4000);
+            }
+
+            window.setTimeout(checkStatus, 4000);
+        }
     });
 </script>
 {% endblock %}

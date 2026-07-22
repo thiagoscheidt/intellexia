@@ -12,6 +12,7 @@ import difflib
 import os
 import json
 import shutil
+import threading
 import asyncio
 import hashlib
 import re
@@ -22,7 +23,7 @@ from io import BytesIO
 from decimal import Decimal
 from pathlib import Path
 
-from flask import Blueprint, current_app, flash, jsonify, redirect, render_template, request, session, url_for, send_file
+from flask import Blueprint, current_app, flash, has_request_context, jsonify, redirect, render_template, request, session, url_for, send_file
 from werkzeug.utils import secure_filename
 from sqlalchemy import and_, func, case, or_
 from sqlalchemy.orm import joinedload
@@ -153,9 +154,16 @@ def _get_fap_setting(law_firm_id: int) -> FapReviewSetting:
 
 def _log_audit(law_firm_id: int, action: str, entity_type: str,
                entity_id: int = None, description: str = "",
-               old_value: str = "", new_value: str = ""):
-    """Registra ação de auditoria com o usuário da sessão (regra no serviço)."""
-    _svc.log_audit(law_firm_id, session.get('user_id'), action, entity_type,
+               old_value: str = "", new_value: str = "",
+               user_id: int | None = None):
+    """Registra ação de auditoria com o usuário da sessão (regra no serviço).
+
+    ``user_id`` explícito permite auditar fora de requisição (ex.: revisão
+    rodando em thread de background, onde não há sessão Flask).
+    """
+    if user_id is None and has_request_context():
+        user_id = session.get('user_id')
+    _svc.log_audit(law_firm_id, user_id, action, entity_type,
                    entity_id, description, old_value, new_value)
 
 
@@ -733,7 +741,7 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_file_p
             
             # Log de auditoria
             _log_audit(law_firm_id, 'revision_completed', 'execution', execution_id,
-                      'Revisão concluída com sucesso')
+                      'Revisão concluída com sucesso', user_id=execution.user_id)
             
             return {'success': True, 'execution_id': execution_id}
         
@@ -754,7 +762,7 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_file_p
                 db.session.commit()
                 
                 _log_audit(law_firm_id, 'revision_failed', 'execution', execution_id,
-                          f'Erro: {str(e)[:200]}')
+                          f'Erro: {str(e)[:200]}', user_id=execution.user_id)
         except Exception as inner_e:
             current_app.logger.error(f"Erro ao registrar falha: {inner_e}")
         
@@ -1201,42 +1209,59 @@ def revision():
             _log_audit(law_firm_id, 'revision_started', 'execution', execution.id,
                       f'Revisão iniciada: {main_file.filename}')
             
-            # ===== INVOCAR AGENTE REVISOR =====
-            try:
-                petition_file_path = str(filepath)
+            # ===== INVOCAR AGENTE REVISOR (em segundo plano) =====
+            # A chamada à LLM leva 1-2 min; processar na requisição estoura os
+            # timeouts de proxy (Cloudflare ~100s). O POST retorna imediatamente
+            # e a tela de resultado acompanha o status (auto-refresh).
+            petition_file_path = str(filepath)
 
-                if not Path(petition_file_path).exists():
-                    raise ValueError("Arquivo principal não encontrado para análise")
+            if not Path(petition_file_path).exists():
+                raise ValueError("Arquivo principal não encontrado para análise")
 
-                compared_file_path = None
-                if comparative_analysis and compared_document:
-                    compared_file_path = compared_document
-                    if not Path(compared_file_path).exists():
-                        raise ValueError("Arquivo comparado não encontrado para análise")
-                
-                # Executar agente revisor
-                _execute_reviewer_agent(
-                    execution.id,
-                    law_firm_id,
-                    petition_file_path,
-                    compared_file_path,
-                    benefits_spreadsheet=benefits_spreadsheet,
-                )
-            
-            except Exception as agent_error:
-                current_app.logger.error(f"Erro na execução do agente: {agent_error}")
-                # A função _execute_reviewer_agent já atualiza o status para 'failed'
-                # Mas vamos garantir que foi marcado como falha
-                execution = FapReviewExecution.query.get(execution.id)
-                if execution and execution.status == 'processing':
-                    execution.status = 'failed'
-                    execution.error_message = str(agent_error)
-                    db.session.commit()
-            
+            compared_file_path = None
+            if comparative_analysis and compared_document:
+                compared_file_path = compared_document
+                if not Path(compared_file_path).exists():
+                    raise ValueError("Arquivo comparado não encontrado para análise")
+
+            app_obj = current_app._get_current_object()
+            execution_id_value = execution.id
+            petition_id_value = petition.id
+
+            def _run_review_in_background():
+                with app_obj.app_context():
+                    try:
+                        _execute_reviewer_agent(
+                            execution_id_value,
+                            law_firm_id,
+                            petition_file_path,
+                            compared_file_path,
+                            benefits_spreadsheet=benefits_spreadsheet,
+                        )
+                    except Exception as agent_error:
+                        app_obj.logger.error(f"Erro na execução do agente: {agent_error}")
+                        # _execute_reviewer_agent já marca 'failed'; garante o estado
+                        try:
+                            background_execution = FapReviewExecution.query.get(execution_id_value)
+                            if background_execution and background_execution.status == 'processing':
+                                background_execution.status = 'failed'
+                                background_execution.error_message = str(agent_error)
+                                db.session.commit()
+                        except Exception:
+                            db.session.rollback()
+                    finally:
+                        db.session.remove()
+
+            threading.Thread(
+                target=_run_review_in_background,
+                daemon=True,
+                name=f'fap-review-{execution_id_value}',
+            ).start()
+
             return jsonify({
                 'success': True,
-                'petition_id': petition.id,
-                'execution_id': execution.id,
+                'petition_id': petition_id_value,
+                'execution_id': execution_id_value,
                 'message': 'Revisão iniciada com sucesso'
             })
         
@@ -1280,6 +1305,18 @@ def revision_result(execution_id: int):
         id=execution_id,
         law_firm_id=law_firm_id
     ).first_or_404()
+
+    # Watchdog: a revisão roda em thread; se o processo web for reiniciado no
+    # meio, a execução ficaria presa em "processando" para sempre.
+    if (execution.status == 'processing' and execution.created_at
+            and (datetime.now() - execution.created_at).total_seconds() > 15 * 60):
+        execution.status = 'failed'
+        execution.error_message = ('Processamento interrompido (tempo excedido — provável reinício '
+                                   'do servidor). Envie a revisão novamente.')
+        execution.completed_at = datetime.now()
+        _sync_petition_after_revision(execution)
+        db.session.commit()
+
     petition = execution.petition
     document_identifier = (
         petition.office_document_identifier
@@ -1999,6 +2036,21 @@ def revision_finding_feedback(execution_id: int, finding_index: int):
     })
 
 
+@fap_review_bp.route('/revision/<int:execution_id>/status', methods=['GET'])
+@require_law_firm
+def revision_status(execution_id: int):
+    """Status da execução para o acompanhamento no formulário (revisão em background)."""
+    law_firm_id = get_current_law_firm_id()
+    execution = FapReviewExecution.query.filter_by(
+        id=execution_id,
+        law_firm_id=law_firm_id,
+    ).first_or_404()
+    return jsonify({
+        'status': execution.status,
+        'error_message': execution.error_message,
+    })
+
+
 @fap_review_bp.route('/revision/<int:execution_id>/document/main', methods=['GET'])
 @require_law_firm
 def revision_main_document(execution_id: int):
@@ -2022,7 +2074,9 @@ def revision_main_document(execution_id: int):
 
     return send_file(
         path,
-        as_attachment=False,
+        # ?baixar=1 força download; sem o parâmetro, o navegador renderiza inline
+        # o que souber (PDF) e baixa o restante (DOCX)
+        as_attachment=bool(request.args.get('baixar')),
         download_name=execution.main_document_filename or path.name,
     )
 

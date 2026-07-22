@@ -463,6 +463,18 @@
             <i class="bi bi-unlock me-1"></i> Reabrir petição
         </button>
         {% endif %}
+        {% if petition.latest_revision_id and petition.latest_revision and petition.latest_revision.main_document_path %}
+        <a href="{{ url_for('fap_review.revision_main_document_preview', execution_id=petition.latest_revision_id) }}"
+            class="btn btn-outline-success" target="_blank" rel="noopener noreferrer"
+            title="Visualizar o documento da última versão ({{ petition.latest_revision.main_document_filename }})">
+            <i class="bi bi-eye me-1"></i> Ver documento
+        </a>
+        <a href="{{ url_for('fap_review.revision_main_document', execution_id=petition.latest_revision_id, baixar=1) }}"
+            class="btn btn-outline-success"
+            title="Baixar o documento da última versão ({{ petition.latest_revision.main_document_filename }})">
+            <i class="bi bi-download me-1"></i> Baixar
+        </a>
+        {% endif %}
         {% if petition.workflow_status != 'archived'
         and (is_admin_user or petition.workflow_status not in ['awaiting_approval', 'ready_for_filing']) %}
         <button type="button" class="btn btn-outline-dark" id="archivePetitionButton"

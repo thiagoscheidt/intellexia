@@ -187,8 +187,9 @@
     .petition-row {
         display: grid;
         /* Track de Ações fixo: cada linha é um grid próprio — com 'auto' a largura
-           variaria por linha (nº de botões) e desalinharia as colunas do cabeçalho. */
-        grid-template-columns: 190px minmax(0, 1fr) 170px 170px 380px;
+           variaria por linha (nº de botões) e desalinharia as colunas do cabeçalho.
+           Largura comporta os ícones + um rótulo expandido no hover. */
+        grid-template-columns: 190px minmax(0, 1fr) 170px 170px 320px;
         align-items: center;
         padding: 1rem 1rem;
         border: 1px solid rgba(21, 37, 53, .07);
@@ -284,6 +285,39 @@
         gap: .4rem;
         justify-content: flex-end;
         white-space: nowrap;
+    }
+
+    /* Botões de ação compactos: só ícone; o rótulo desliza para fora no hover */
+    .pr-actions .action-icon-btn {
+        display: inline-flex;
+        align-items: center;
+        overflow: hidden;
+        white-space: nowrap;
+    }
+
+    .pr-actions .action-btn-label {
+        display: inline-block;
+        max-width: 0;
+        opacity: 0;
+        overflow: hidden;
+        transition: max-width .25s ease, opacity .18s ease, margin-left .25s ease;
+    }
+
+    .pr-actions .action-icon-btn:hover .action-btn-label,
+    .pr-actions .action-icon-btn:focus-visible .action-btn-label {
+        max-width: 150px;
+        opacity: 1;
+        margin-left: .4rem;
+    }
+
+    @media (max-width: 900px) {
+
+        /* Touch não tem hover: rótulos sempre visíveis no mobile */
+        .pr-actions .action-btn-label {
+            max-width: none;
+            opacity: 1;
+            margin-left: .4rem;
+        }
     }
 
     @media (max-width: 900px) {
@@ -936,8 +970,8 @@
                             <div class="wrike-id-body">
                                 <span class="wrike-id-label">Wrike ID</span>
                                 <span class="wrike-id-value">{{ petition.office_document_identifier or '—' }}</span>
-                            {{ wrike_link(petition.office_document_identifier) }}
                             </div>
+                            {{ wrike_link(petition.office_document_identifier) }}
                         </div>
                     </div>
 
@@ -985,26 +1019,46 @@
                     <div class="pr-actions">
                         {% if latest_revision %}
                         <a href="{{ url_for('fap_review.revision_result', execution_id=latest_revision.id) }}"
-                            class="btn btn-sm btn-outline-primary" target="_blank" rel="noopener noreferrer">
-                            <i class="bi bi-box-arrow-up-right me-1"></i> Última Revisão
+                            class="btn btn-sm btn-outline-primary action-icon-btn" target="_blank"
+                            rel="noopener noreferrer" title="Última Revisão">
+                            <i class="bi bi-box-arrow-up-right"></i>
+                            <span class="action-btn-label">Última Revisão</span>
+                        </a>
+                        {% if latest_revision.main_document_path %}
+                        <a href="{{ url_for('fap_review.revision_main_document_preview', execution_id=latest_revision.id) }}"
+                            class="btn btn-sm btn-outline-success action-icon-btn" target="_blank"
+                            rel="noopener noreferrer" title="Visualizar o documento da última versão">
+                            <i class="bi bi-eye"></i>
+                            <span class="action-btn-label">Ver documento</span>
+                        </a>
+                        <a href="{{ url_for('fap_review.revision_main_document', execution_id=latest_revision.id, baixar=1) }}"
+                            class="btn btn-sm btn-outline-success action-icon-btn"
+                            title="Baixar o documento da última versão">
+                            <i class="bi bi-download"></i>
+                            <span class="action-btn-label">Baixar</span>
                         </a>
                         {% endif %}
+                        {% endif %}
                         <a href="{{ url_for('fap_review.petition_detail', petition_id=petition.id) }}"
-                            class="btn btn-sm btn-outline-secondary">
-                            <i class="bi bi-folder2-open me-1"></i> Abrir Petição
+                            class="btn btn-sm btn-outline-secondary action-icon-btn" title="Abrir Petição">
+                            <i class="bi bi-folder2-open"></i>
+                            <span class="action-btn-label">Abrir Petição</span>
                         </a>
                         {% if petition.workflow_status == 'awaiting_approval' %}
                         {% if session.get('user_role') == 'admin' %}
-                        <button type="button" class="btn btn-sm btn-success approve-petition-btn"
+                        <button type="button" class="btn btn-sm btn-success approve-petition-btn action-icon-btn"
+                            title="Aprovar petição"
                             data-update-url="{{ url_for('fap_review.petition_update_status', petition_id=petition.id) }}"
                             data-petition-title="{{ petition.title }}">
-                            <i class="bi bi-check2-circle me-1"></i> Aprovar petição
+                            <i class="bi bi-check2-circle"></i>
+                            <span class="action-btn-label">Aprovar petição</span>
                         </button>
                         {% endif %}
                         {% elif petition.workflow_status not in ['ready_for_filing', 'filed', 'archived'] %}
                         <a href="{{ url_for('fap_review.revision', petition_id=petition.id) }}"
-                            class="btn btn-sm btn-primary">
-                            <i class="bi bi-plus-circle me-1"></i> Nova Revisão
+                            class="btn btn-sm btn-primary action-icon-btn" title="Nova Revisão">
+                            <i class="bi bi-plus-circle"></i>
+                            <span class="action-btn-label">Nova Revisão</span>
                         </a>
                         {% endif %}
                     </div>
