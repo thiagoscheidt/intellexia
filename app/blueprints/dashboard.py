@@ -30,6 +30,18 @@ def get_current_law_firm_id():
     return session.get('law_firm_id')
 
 
+def require_admin_user(f):
+    """Telas de custo/telemetria de IA são exclusivas de administradores."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if session.get('user_role') != 'admin':
+            if request.is_json:
+                return jsonify({"error": "Acesso restrito a administradores"}), 403
+            return redirect(url_for('dashboard.dashboard'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
 # As listas de contestações recentes (D.O.U. / Cadastradas / Atualizadas) vivem em
 # app/services/fap_digest_service.py, compartilhadas com o e-mail de Resumo FAP.
 def _build_deferimento_distribution(law_firm_id):
@@ -320,6 +332,7 @@ def dashboard():
 
 @dashboard_bp.route('/dashboard/tokens')
 @require_law_firm
+@require_admin_user
 def dashboard_tokens():
     """Dashboard de monitoramento de uso de tokens dos agentes."""
     try:
@@ -394,6 +407,7 @@ def dashboard_tokens():
 
 @dashboard_bp.route('/execution-history/<int:execution_id>')
 @require_law_firm
+@require_admin_user
 def view_execution_history(execution_id: int):
     """Visualiza histórico completo de execução de um agente."""
     try:
@@ -427,6 +441,7 @@ def view_execution_history(execution_id: int):
 
 @dashboard_bp.route('/api/token-usage/<int:token_usage_id>/execution-history', methods=['GET'])
 @require_law_firm
+@require_admin_user
 def get_execution_history_for_token_usage(token_usage_id: int):
     """API para recuperar históricos de execução relacionados a um token usage."""
     try:

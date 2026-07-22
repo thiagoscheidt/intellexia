@@ -185,6 +185,8 @@ Sessão Flask (cookie) com `user_id` + `law_firm_id`. `app/middlewares.py::check
 
 Decorator `@require_law_firm` garante que há escritório na sessão.
 
+**Permissões por módulo** (`app/utils/permissions.py`): `settings` e `admin_users` são **admin-only duros** (`ADMIN_ONLY_MODULES` — removidos na normalização mesmo se concedidos a não-admin); os cadastros (`clients`, `lawyers`, `courts`) ficam **fora dos defaults** de não-admin, mas podem ser concedidos por usuário na tela de Administração de Usuários. `settings.profile*` (perfil do próprio usuário) é isento de módulo — qualquer usuário logado acessa. Telas admin-only dentro de módulos liberados (ex.: Dashboard de Tokens, Configurações/Treinamento do Revisor) usam `@require_admin_user` + ocultação do link por `session.user_role`.
+
 ### Notificações por e-mail
 
 SMTP configurado **só via `.env`** (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME`, `SMTP_USE_TLS`) — senha nunca vai para o banco. Sem configuração, `email_service.send_email()` apenas loga e retorna `False` (degradação graciosa).

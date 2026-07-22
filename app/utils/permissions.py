@@ -20,11 +20,20 @@ MODULE_PERMISSIONS = {
 
 ALL_MODULE_PERMISSION_KEYS = tuple(MODULE_PERMISSIONS.keys())
 
+# Módulos exclusivos de admin: removidos na normalização mesmo se constarem na
+# lista concedida a um usuário não-admin (à prova de erro de configuração).
+ADMIN_ONLY_MODULES = {'settings', 'admin_users'}
+
+# Cadastros saem dos defaults de não-admin, mas podem ser concedidos
+# individualmente pela tela de Administração de Usuários.
+_RESTRICTED_BY_DEFAULT = ADMIN_ONLY_MODULES | {'clients', 'lawyers', 'courts'}
+_NON_ADMIN_DEFAULTS = [k for k in ALL_MODULE_PERMISSION_KEYS if k not in _RESTRICTED_BY_DEFAULT]
+
 ROLE_DEFAULT_MODULE_PERMISSIONS = {
     'admin': list(ALL_MODULE_PERMISSION_KEYS),
-    'lawyer': [k for k in ALL_MODULE_PERMISSION_KEYS if k != 'admin_users'],
-    'assistant': [k for k in ALL_MODULE_PERMISSION_KEYS if k != 'admin_users'],
-    'user': [k for k in ALL_MODULE_PERMISSION_KEYS if k != 'admin_users'],
+    'lawyer': list(_NON_ADMIN_DEFAULTS),
+    'assistant': list(_NON_ADMIN_DEFAULTS),
+    'user': list(_NON_ADMIN_DEFAULTS),
 }
 
 ENDPOINT_MODULE_MAP = {
@@ -65,6 +74,11 @@ PRIORITY_ENDPOINT_PREFIX_MAP = {
 }
 
 PUBLIC_ENDPOINT_PREFIXES = ('auth.', 'static')
+
+# Endpoints que não pertencem a módulo algum (qualquer usuário logado acessa):
+# o perfil do próprio usuário vive no blueprint settings, mas não é
+# "Configurações" do escritório.
+MODULE_EXEMPT_ENDPOINT_PREFIXES = ('settings.profile',)
 
 LANDING_ENDPOINT_BY_MODULE = {
     'dashboard': 'dashboard.dashboard',
@@ -109,7 +123,7 @@ def normalize_module_permissions(raw_permissions: Iterable[str] | None, role: st
     cleaned = []
     for permission in raw_permissions:
         key = str(permission or '').strip()
-        if key and key in allowed and key not in cleaned:
+        if key and key in allowed and key not in cleaned and key not in ADMIN_ONLY_MODULES:
             cleaned.append(key)
     return cleaned
 
@@ -151,6 +165,10 @@ def get_module_from_endpoint(endpoint: str | None) -> str | None:
 
     for public_prefix in PUBLIC_ENDPOINT_PREFIXES:
         if endpoint == public_prefix or endpoint.startswith(public_prefix):
+            return None
+
+    for exempt_prefix in MODULE_EXEMPT_ENDPOINT_PREFIXES:
+        if endpoint.startswith(exempt_prefix):
             return None
 
     if endpoint in EXACT_ENDPOINT_MODULE_MAP:

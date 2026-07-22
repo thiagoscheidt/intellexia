@@ -41,6 +41,7 @@
                 <p style="margin-left: 15px;">Dashboard Principal</p>
               </a>
             </li>
+            {% if session.get('user_role') == 'admin' %}
             <li class="nav-item">
               <a href="{{ url_for('dashboard.dashboard_tokens') }}"
                 class="nav-link {{ 'active' if request.endpoint == 'dashboard.dashboard_tokens' else '' }}"
@@ -49,6 +50,7 @@
                 <p style="margin-left: 15px;">Dashboard de Tokens</p>
               </a>
             </li>
+            {% endif %}
           </ul>
         </li>
         {% endif %}
