@@ -106,7 +106,8 @@ def run():
     print("[5] Desfechos e bloqueio de nova revisão")
     check("new_version → awaiting_adjustments", TRIAGE_OUTCOME_STATUSES.get('new_version') == 'awaiting_adjustments')
     check("final_version → awaiting_approval", TRIAGE_OUTCOME_STATUSES.get('final_version') == 'awaiting_approval')
-    check("bloqueio pós-aprovação", NEW_REVISION_BLOCKED_STATUSES == {'ready_for_filing', 'filed', 'archived'})
+    check("bloqueio de nova revisão (aguardando aprovação incluída)",
+          NEW_REVISION_BLOCKED_STATUSES == {'awaiting_approval', 'ready_for_filing', 'filed', 'archived'})
 
 
 if __name__ == '__main__':

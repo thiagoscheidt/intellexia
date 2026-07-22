@@ -43,9 +43,9 @@ TRIAGE_OUTCOME_STATUSES = {
     'final_version': 'awaiting_approval',    # "Versão final — enviar para aprovação"
 }
 
-# Petição aprovada/protocolada/arquivada não aceita novo ciclo de revisão
-# (admin destrava com "Reabrir petição" → awaiting_adjustments).
-NEW_REVISION_BLOCKED_STATUSES = {'ready_for_filing', 'filed', 'archived'}
+# Petição aguardando aprovação/aprovada/protocolada/arquivada não aceita novo
+# ciclo de revisão (admin destrava com "Devolver para ajustes"/"Reabrir petição").
+NEW_REVISION_BLOCKED_STATUSES = {'awaiting_approval', 'ready_for_filing', 'filed', 'archived'}
 
 MAX_IDENTIFIER_LENGTH = 96
 

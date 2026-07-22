@@ -1043,9 +1043,13 @@ def revision():
 
             if petition and petition.workflow_status in _svc.NEW_REVISION_BLOCKED_STATUSES:
                 status_label = PETITION_WORKFLOW_STATUSES.get(petition.workflow_status, petition.workflow_status)
+                unlock_hint = (
+                    'Um administrador deve aprová-la ou devolvê-la para ajustes.'
+                    if petition.workflow_status == 'awaiting_approval'
+                    else 'Um administrador pode reabri-la para ajustes.'
+                )
                 return jsonify({
-                    'error': f'Esta petição está "{status_label}" e não aceita nova revisão. '
-                             'Um administrador pode reabri-la para ajustes.'
+                    'error': f'Esta petição está "{status_label}" e não aceita nova revisão. {unlock_hint}'
                 }), 403
 
 

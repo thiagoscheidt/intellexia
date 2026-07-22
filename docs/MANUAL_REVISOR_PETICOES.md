@@ -39,7 +39,7 @@ Como o status evolui:
 - **Pelo advogado**: depois de triar **todos** os pontos de atenção (cada um marcado como revisado ou não pertinente), a tela de resultado oferece dois caminhos: :btn-outline-primary[Revisada — enviar nova versão] (a petição vira **Aguardando ajustes** e você já é levado ao envio da nova versão) ou :btn-primary[Versão final — enviar para aprovação] (vira **Aguardando aprovação**).
 - **Pelo administrador**: com a petição **Aguardando aprovação**, o admin decide entre :btn-success[Aprovar petição] (vira **Aprovada pelo revisor**) e :btn-outline-danger[Devolver para ajustes] (volta para **Aguardando ajustes**). "Processo iniciado" e "Arquivada" são marcações manuais.
 
-> [!ALERTA] **Petição aprovada fica travada.** Depois de **Aprovada pelo revisor** (e também em "Processo iniciado" e "Arquivada"), a petição **não aceita novas revisões** — o botão some das telas e o envio é recusado. Somente um **administrador** pode destravá-la com :btn-outline-secondary[Reabrir petição], que a devolve para **Aguardando ajustes**.
+> [!ALERTA] **Petição em aprovação ou aprovada fica travada.** A partir de **Aguardando aprovação** (e também em "Aprovada pelo revisor", "Processo iniciado" e "Arquivada"), a petição **não aceita novas revisões** — o botão some das telas e o envio é recusado. O destravamento é sempre de **administrador**: em "Aguardando aprovação", com :btn-success[Aprovar petição] ou :btn-outline-danger[Devolver para ajustes]; depois de aprovada, com :btn-outline-secondary[Reabrir petição] (volta para **Aguardando ajustes**).
 
 > [!INFO] **O Id Wrike é a chave de tudo.** Cada petição tem um **identificador do documento** (o "Id Wrike", até 96 caracteres). É ele que liga as revisões sucessivas à mesma petição — inclusive as feitas pelo Claude via MCP — e que carrega o histórico de pontos descartados. Use sempre o mesmo identificador para o mesmo documento.
 
@@ -67,7 +67,7 @@ Sob o título de cada petição aparecem: a **quantidade de revisões** já real
 | **Id Wrike** | Identificador do documento no escritório. | Sistema |
 | **Status** | Badge colorido com o status do ciclo (tabela acima). | Sistema |
 | **Última Revisão** | Data da última revisão e o usuário responsável. | Sistema |
-| **Ações** | Botões :btn-outline-primary[Última Revisão], :btn-outline-secondary[Abrir Petição] (histórico completo) e :btn-primary[Nova Revisão]. Em petições **aprovadas, protocoladas ou arquivadas**, o :btn-primary[Nova Revisão] não aparece (petição travada). | — |
+| **Ações** | Botões :btn-outline-primary[Última Revisão], :btn-outline-secondary[Abrir Petição] (histórico completo) e :btn-primary[Nova Revisão]. Em petições **Aguardando aprovação**, o :btn-primary[Nova Revisão] dá lugar ao :btn-success[Aprovar petição] (visível só para administradores — na lista, no kanban e no detalhe da petição); em **aprovadas, protocoladas ou arquivadas**, nenhum dos dois aparece (petição travada). | — |
 
 ### Visão kanban
 

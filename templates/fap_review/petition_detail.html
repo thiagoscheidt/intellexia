@@ -439,12 +439,24 @@
     </nav>
     {% endcall %}
 
+    {% set is_admin_user = session.get('user_role') == 'admin' %}
     <div class="d-flex flex-wrap gap-2 mb-4">
-        {% if petition.workflow_status not in ['ready_for_filing', 'filed', 'archived'] %}
+        {% if petition.workflow_status == 'awaiting_approval' %}
+        {% if is_admin_user %}
+        <button type="button" class="btn btn-success" id="approvePetitionButton"
+            data-update-url="{{ url_for('fap_review.petition_update_status', petition_id=petition.id) }}">
+            <i class="bi bi-check2-circle me-1"></i> Aprovar petição
+        </button>
+        <button type="button" class="btn btn-outline-danger" id="returnPetitionButton"
+            data-update-url="{{ url_for('fap_review.petition_update_status', petition_id=petition.id) }}">
+            <i class="bi bi-arrow-counterclockwise me-1"></i> Devolver para ajustes
+        </button>
+        {% endif %}
+        {% elif petition.workflow_status not in ['ready_for_filing', 'filed', 'archived'] %}
         <a href="{{ url_for('fap_review.revision', petition_id=petition.id) }}" class="btn btn-primary">
             <i class="bi bi-plus-circle me-1"></i> Nova Revisão
         </a>
-        {% elif session.get('user_role') == 'admin' and petition.workflow_status == 'ready_for_filing' %}
+        {% elif is_admin_user and petition.workflow_status == 'ready_for_filing' %}
         <button type="button" class="btn btn-outline-secondary" id="reopenPetitionButton"
             data-update-url="{{ url_for('fap_review.petition_update_status', petition_id=petition.id) }}">
             <i class="bi bi-unlock me-1"></i> Reabrir petição
@@ -454,11 +466,17 @@
             <i class="bi bi-arrow-left me-1"></i> Voltar ao Painel
         </a>
     </div>
-    {% if petition.workflow_status in ['ready_for_filing', 'filed', 'archived'] %}
+    {% if petition.workflow_status == 'awaiting_approval' %}
+    <div class="alert alert-info py-2 px-3 mb-4 small">
+        <i class="bi bi-person-check me-1"></i> Versão final aguardando aprovação do revisor — não aceita novas
+        revisões até um administrador {% if is_admin_user %}aprovar ou devolver para ajustes{% else %}aprovar ou
+        devolver a petição para ajustes{% endif %}.
+    </div>
+    {% elif petition.workflow_status in ['ready_for_filing', 'filed', 'archived'] %}
     <div class="alert alert-success py-2 px-3 mb-4 small">
         <i class="bi bi-lock me-1"></i> Petição {{ petition_status_labels.get(petition.workflow_status,
         petition.workflow_status)|lower if petition_status_labels is defined else petition.workflow_status }} —
-        não aceita novas revisões{% if session.get('user_role') != 'admin' %} (um administrador pode reabri-la){% endif %}.
+        não aceita novas revisões{% if not is_admin_user %} (um administrador pode reabri-la){% endif %}.
     </div>
     {% endif %}
 
@@ -797,29 +815,40 @@
 
 {% block extra_js %}
 <script>
-    // Reabrir petição aprovada (admin): volta para "Aguardando ajustes"
+    // Ações de admin sobre o status (aprovar / devolver / reabrir)
     document.addEventListener('DOMContentLoaded', function () {
-        const reopenButton = document.getElementById('reopenPetitionButton');
-        if (!reopenButton) return;
+        function bindStatusButton(buttonId, workflowStatus, confirmMessage, errorMessage) {
+            const button = document.getElementById(buttonId);
+            if (!button) return;
 
-        reopenButton.addEventListener('click', async function () {
-            this.disabled = true;
-            try {
-                const response = await fetch(this.dataset.updateUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ workflow_status: 'awaiting_adjustments' })
-                });
-                const payload = await response.json().catch(() => ({}));
-                if (!response.ok) {
-                    throw new Error(payload.error || 'Não foi possível reabrir a petição.');
+            button.addEventListener('click', async function () {
+                if (confirmMessage && !confirm(confirmMessage)) return;
+                this.disabled = true;
+                try {
+                    const response = await fetch(this.dataset.updateUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ workflow_status: workflowStatus })
+                    });
+                    const payload = await response.json().catch(() => ({}));
+                    if (!response.ok) {
+                        throw new Error(payload.error || errorMessage);
+                    }
+                    window.location.reload();
+                } catch (error) {
+                    alert(error.message || errorMessage);
+                    this.disabled = false;
                 }
-                window.location.reload();
-            } catch (error) {
-                alert(error.message || 'Não foi possível reabrir a petição.');
-                this.disabled = false;
-            }
-        });
+            });
+        }
+
+        bindStatusButton('approvePetitionButton', 'ready_for_filing',
+            'Aprovar esta petição? Ela ficará pronta para protocolo e travada para novas revisões.',
+            'Não foi possível aprovar a petição.');
+        bindStatusButton('returnPetitionButton', 'awaiting_adjustments', null,
+            'Não foi possível devolver a petição.');
+        bindStatusButton('reopenPetitionButton', 'awaiting_adjustments', null,
+            'Não foi possível reabrir a petição.');
     });
 
     document.addEventListener('DOMContentLoaded', function () {

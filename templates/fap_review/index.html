@@ -985,7 +985,15 @@
                             class="btn btn-sm btn-outline-secondary">
                             <i class="bi bi-folder2-open me-1"></i> Abrir Petição
                         </a>
-                        {% if petition.workflow_status not in ['ready_for_filing', 'filed', 'archived'] %}
+                        {% if petition.workflow_status == 'awaiting_approval' %}
+                        {% if session.get('user_role') == 'admin' %}
+                        <button type="button" class="btn btn-sm btn-success approve-petition-btn"
+                            data-update-url="{{ url_for('fap_review.petition_update_status', petition_id=petition.id) }}"
+                            data-petition-title="{{ petition.title }}">
+                            <i class="bi bi-check2-circle me-1"></i> Aprovar petição
+                        </button>
+                        {% endif %}
+                        {% elif petition.workflow_status not in ['ready_for_filing', 'filed', 'archived'] %}
                         <a href="{{ url_for('fap_review.revision', petition_id=petition.id) }}"
                             class="btn btn-sm btn-primary">
                             <i class="bi bi-plus-circle me-1"></i> Nova Revisão
@@ -1076,7 +1084,15 @@
                                             class="btn btn-sm btn-outline-primary" title="Última Revisão"
                                             target="_blank" rel="noopener noreferrer"><i class="bi bi-box-arrow-up-right"></i></a>
                                         {% endif %}
-                                        {% if petition.workflow_status not in ['ready_for_filing', 'filed', 'archived'] %}
+                                        {% if petition.workflow_status == 'awaiting_approval' %}
+                                        {% if session.get('user_role') == 'admin' %}
+                                        <button type="button" class="btn btn-sm btn-success approve-petition-btn"
+                                            title="Aprovar petição"
+                                            data-update-url="{{ url_for('fap_review.petition_update_status', petition_id=petition.id) }}"
+                                            data-petition-title="{{ petition.title }}"><i
+                                                class="bi bi-check2-circle"></i></button>
+                                        {% endif %}
+                                        {% elif petition.workflow_status not in ['ready_for_filing', 'filed', 'archived'] %}
                                         <a href="{{ url_for('fap_review.revision', petition_id=petition.id) }}"
                                             class="btn btn-sm btn-primary" title="Nova Revisão"><i class="bi bi-plus-circle"></i></a>
                                         {% endif %}
@@ -1332,6 +1348,33 @@
                 if (draggedCard) moveCard(draggedCard, col);
             });
         });
+    });
+
+    // Aprovar petição direto da listagem/kanban (admin; status "Aguardando aprovação")
+    document.addEventListener('click', async function (event) {
+        const button = event.target.closest('.approve-petition-btn');
+        if (!button) return;
+
+        const title = button.dataset.petitionTitle || 'esta petição';
+        if (!confirm(`Aprovar "${title}"? Ela ficará pronta para protocolo e travada para novas revisões.`)) {
+            return;
+        }
+        button.disabled = true;
+        try {
+            const response = await fetch(button.dataset.updateUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ workflow_status: 'ready_for_filing' })
+            });
+            const payload = await response.json().catch(function () { return {}; });
+            if (!response.ok) {
+                throw new Error(payload.error || 'Não foi possível aprovar a petição.');
+            }
+            window.location.reload();
+        } catch (error) {
+            alert(error.message || 'Não foi possível aprovar a petição.');
+            button.disabled = false;
+        }
     });
 </script>
 {% endblock %}
