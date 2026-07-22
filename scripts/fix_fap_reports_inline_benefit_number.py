@@ -84,6 +84,11 @@ def parse_args():
              'Muito mais rápido; cobre o padrão "(Número do benefício NNN)". A varredura de PDFs continua '
              'sendo a checagem exaustiva.',
     )
+    parser.add_argument(
+        '--benefit-ids', type=str,
+        help='Só com --from-db: restringe aos IDs de benefício informados (separados por vírgula). '
+             'Útil para teste piloto antes da rodada completa.',
+    )
     return parser.parse_args()
 
 
@@ -192,6 +197,10 @@ def detect_from_db(args) -> dict[int, 'Benefit']:
     benefit_query = Benefit.query.filter(db.or_(*[col.like('%(') for col in signature_cols]))
     if args.law_firm_id:
         benefit_query = benefit_query.filter(Benefit.law_firm_id == args.law_firm_id)
+    benefit_ids = None
+    if args.benefit_ids:
+        benefit_ids = [int(x) for x in args.benefit_ids.split(',') if x.strip()]
+        benefit_query = benefit_query.filter(Benefit.id.in_(benefit_ids))
 
     affected_benefits: dict[int, Benefit] = {b.id: b for b in benefit_query.all()}
 
@@ -202,6 +211,10 @@ def detect_from_db(args) -> dict[int, 'Benefit']:
     if args.law_firm_id:
         decision_query = decision_query.filter(
             BenefitContestationDecision.law_firm_id == args.law_firm_id
+        )
+    if benefit_ids:
+        decision_query = decision_query.filter(
+            BenefitContestationDecision.benefit_id.in_(benefit_ids)
         )
     for decision in decision_query.all():
         if decision.benefit_id not in affected_benefits:
