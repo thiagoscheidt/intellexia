@@ -27,10 +27,13 @@ except ImportError:  # openpyxl é dependência do projeto; guarda defensiva
     load_workbook = None
 
 _TEXT_EXTENSIONS = {'.pdf', '.docx', '.txt'}
-_SPREADSHEET_EXTENSIONS = {'.xls', '.xlsx'}
+_SPREADSHEET_EXTENSIONS = {'.xlsx'}
 _IMAGE_EXTENSIONS = {'.png', '.jpg', '.jpeg'}
 _MAX_DOCS = int(os.environ.get('FAP_REVIEW_AUX_MAX_DOCS', '10'))
 _MAX_TEXT_CHARS = int(os.environ.get('FAP_REVIEW_AUX_MAX_TEXT_CHARS', '40000'))
+
+# Bump ao mudar o prompt do extrator — invalida o cache de extrações antigas.
+_EXTRACTOR_PROMPT_VERSION = '1'
 
 
 def _normalize_number(value) -> str:
@@ -89,7 +92,8 @@ def anchors_fingerprint(anchors: list[dict]) -> str:
         f"{a.get('benefit_number_normalized', '')}:{'|'.join(sorted(a.get('theses') or []))}"
         for a in anchors
     )
-    return hashlib.sha256(';'.join(parts).encode('utf-8')).hexdigest()
+    base = f"v{_EXTRACTOR_PROMPT_VERSION};" + ';'.join(parts)
+    return hashlib.sha256(base.encode('utf-8')).hexdigest()
 
 
 def compute_file_sha256(file_path: str) -> str:
@@ -159,6 +163,7 @@ def _spreadsheet_to_text(file_path: str) -> str:
 
 
 async def run_auxiliary_extractions(*, law_firm_id: int,
+                                    user_id: int | None = None,
                                     documents: list[dict],
                                     spreadsheet_rows: list[dict] | None,
                                     petition_text: str | None,
@@ -194,6 +199,8 @@ async def run_auxiliary_extractions(*, law_firm_id: int,
 
             extension = Path(path).suffix.lower()
             document_text = None
+            if extension == '.xls':
+                raise ValueError('Formato .xls não suportado — converta a planilha para .xlsx')
             if extension in _SPREADSHEET_EXTENSIONS:
                 document_text = _spreadsheet_to_text(path)
             elif extension in _TEXT_EXTENSIONS:
@@ -202,7 +209,11 @@ async def run_auxiliary_extractions(*, law_firm_id: int,
                 except Exception as text_error:
                     current_app.logger.warning('FAP aux: extração de texto falhou (%s): %s', name, text_error)
                     document_text = None
-            if document_text:
+            truncated = False
+            if document_text and len(document_text) > _MAX_TEXT_CHARS:
+                truncated = True
+                current_app.logger.info(
+                    'FAP aux: texto de %s truncado em %s caracteres', name, _MAX_TEXT_CHARS)
                 document_text = document_text[:_MAX_TEXT_CHARS]
             if not document_text and extension not in (_IMAGE_EXTENSIONS | {'.pdf'}):
                 raise ValueError('Não foi possível extrair texto do arquivo')
@@ -213,16 +224,25 @@ async def run_auxiliary_extractions(*, law_firm_id: int,
                 document_text=document_text,
                 benefit_anchors=anchors,
                 law_firm_id=law_firm_id,
+                user_id=user_id,
             )
             extraction_dict = extraction.model_dump(mode='json')
             store_extraction(law_firm_id, sha, name, agent.model_name, fingerprint, extraction_dict)
-            results.append({'file_name': name, 'from_cache': False, 'extraction': extraction_dict, 'error': None})
+            results.append({
+                'file_name': name,
+                'from_cache': False,
+                'extraction': extraction_dict,
+                'error': None,
+                'truncated': truncated,
+            })
         except Exception as exc:
             db.session.rollback()
             current_app.logger.warning('FAP aux: extração falhou (%s): %s', name, exc)
             results.append({'file_name': name, 'from_cache': False, 'extraction': None, 'error': str(exc)})
 
     payload = build_review_payload(results, anchors, anchor_source, skipped)
+    payload['tokens_used'] = agent.total_tokens_used
+    payload['cost_usd'] = float(agent.total_cost_usd)
     agent_documents = build_agent_documents(results)
     return payload, agent_documents
 
@@ -273,6 +293,7 @@ def build_review_payload(results: list[dict], anchors: list[dict],
             'general_summary': str(extraction.get('general_summary') or ''),
             'potential_divergences': [str(d) for d in extraction.get('potential_divergences') or []],
             'from_cache': bool(item.get('from_cache')),
+            'truncated': bool(item.get('truncated')),
             'error': item.get('error'),
         })
 

@@ -672,7 +672,7 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_file_p
                             'FAP aux: planilha ilegível para âncoras (execução %s): %s',
                             execution_id, spreadsheet_error)
                 anchor_text = (
-                    compared_text
+                    (compared_text or petition_text)
                     if compared_file_path and execution.comparative_analysis
                     else petition_text
                 )
@@ -680,6 +680,7 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_file_p
                     aux_review_payload, auxiliary_agent_docs = loop.run_until_complete(
                         _aux_svc.run_auxiliary_extractions(
                             law_firm_id=law_firm_id,
+                            user_id=execution.user_id,
                             documents=aux_docs,
                             spreadsheet_rows=spreadsheet_rows,
                             petition_text=anchor_text,
@@ -787,6 +788,12 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_file_p
                 execution.tokens_used = result.tokens_used
             if hasattr(result, 'cost_usd'):
                 execution.cost_usd = Decimal(str(result.cost_usd))
+
+            # Soma tokens/custo das extrações auxiliares ao total da execução
+            if aux_review_payload and aux_review_payload.get('tokens_used'):
+                execution.tokens_used = (execution.tokens_used or 0) + int(aux_review_payload['tokens_used'])
+            if aux_review_payload and aux_review_payload.get('cost_usd'):
+                execution.cost_usd = (execution.cost_usd or Decimal('0')) + Decimal(str(aux_review_payload['cost_usd']))
 
             _sync_petition_after_revision(execution)
             

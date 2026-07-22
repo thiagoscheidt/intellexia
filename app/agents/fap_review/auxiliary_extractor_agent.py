@@ -15,6 +15,7 @@ import mimetypes
 import os
 import re
 import time
+from decimal import Decimal
 from pathlib import Path
 from typing import Optional
 
@@ -77,13 +78,16 @@ class FapAuxiliaryDocumentExtractorAgent:
         self.llm = ChatOpenAI(api_key=self.api_key, model=self.model_name, temperature=temperature)
         self.token_usage_service = TokenUsageService()
         self.file_agent = FileAgent()
+        self.total_tokens_used = 0
+        self.total_cost_usd = Decimal('0')
 
     async def extract(self, *,
                       file_path: str,
                       file_name: str,
                       document_text: str | None = None,
                       benefit_anchors: list[dict] | None = None,
-                      law_firm_id: int | None = None) -> AuxDocumentExtraction:
+                      law_firm_id: int | None = None,
+                      user_id: int | None = None) -> AuxDocumentExtraction:
         """Extrai dados do documento. Levanta exceção só em falha de chamada/parse."""
         system_prompt = self._build_system_prompt()
         user_message = self._build_user_message(
@@ -109,6 +113,12 @@ class FapAuxiliaryDocumentExtractorAgent:
         response = await self.llm.ainvoke(messages)
         latency_ms = int((time.time() - start_time) * 1000)
 
+        token_entries = self.token_usage_service.extract_entries(
+            {"messages": [response]}, model_name=self.model_name)
+        self.total_tokens_used += sum(entry.total_tokens for entry in token_entries)
+        self.total_cost_usd += sum(
+            (entry.estimated_cost_usd for entry in token_entries), Decimal('0'))
+
         self.token_usage_service.capture_and_store(
             {"messages": [response]},
             agent_name="FapAuxiliaryDocumentExtractorAgent",
@@ -117,6 +127,7 @@ class FapAuxiliaryDocumentExtractorAgent:
             model_name=self.model_name,
             model_provider="openai",
             law_firm_id=law_firm_id,
+            user_id=user_id,
             latency_ms=latency_ms,
             metadata_payload={
                 "file_name": file_name,
