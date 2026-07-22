@@ -959,10 +959,71 @@ class FapContestationJudgmentReportService:
         cleaned = re.sub(r'\n{2,}', '\n', cleaned)
         return cleaned.strip()
 
+    # Byte nulo não ocorre em texto extraído de PDF — usado para "desarmar"
+    # menções inline a "Número do Benefício" antes dos splits por regex.
+    _INLINE_MENTION_MASK = '\x00'
+
+    @classmethod
+    def _mask_inline_benefit_number_mentions(cls, text: str) -> str:
+        """Desarma menções a "Número do Benefício" que não são cabeçalho de bloco.
+
+        Cabeçalho real: "Número do Benefício <nº com 8+ dígitos>" com
+        "Espécie do Benefício" logo em seguida. Menções inline — ex.:
+        "NIT 12546101880 (Número do benefício 1896815291)" dentro da
+        justificativa da 2ª instância — não podem servir de fronteira de
+        split, senão o bloco é cortado no meio e o restante vira um bloco
+        espúrio com o mesmo NB. Insere um \\x00 dentro do marcador inline
+        para os regex de divisão/terminação de seção o ignorarem; o \\x00 é
+        removido de cada bloco após o split.
+        """
+        markers = cls._classify_benefit_number_markers(text)
+        if not markers:
+            return text
+
+        # Segurança para layouts sem "Espécie do Benefício" no cabeçalho:
+        # se nenhuma ocorrência validar como cabeçalho, mantém o comportamento antigo.
+        if not any(is_header for _, is_header in markers):
+            return text
+
+        pieces: list[str] = []
+        cursor = 0
+        for match, is_header in markers:
+            if is_header:
+                continue
+            pieces.append(text[cursor:match.start() + 1])
+            pieces.append(cls._INLINE_MENTION_MASK)
+            pieces.append(text[match.start() + 1:match.end()])
+            cursor = match.end()
+        pieces.append(text[cursor:])
+        return ''.join(pieces)
+
     @staticmethod
-    def split_blocks(text: str) -> list[str]:
+    def _classify_benefit_number_markers(text: str) -> list[tuple[re.Match, bool]]:
+        """Classifica cada "Número do Benefício" do texto como cabeçalho de bloco ou não.
+
+        Cabeçalho de bloco tem um número de benefício (8+ dígitos) logo após e
+        "Espécie do Benefício" na sequência. Retorna [(match, is_header), ...].
+        """
+        markers: list[tuple[re.Match, bool]] = []
+        for match in re.finditer(r'N[uú]mero\s+do\s+Benef[ií]cio', text, flags=re.IGNORECASE):
+            window = text[match.end():match.end() + 300]
+            is_header = bool(
+                re.match(r'\s*[:\-]?\s*\d{8,}', window)
+                and re.search(r'Esp[ée]cie\s+do\s+Benef[ií]cio', window, flags=re.IGNORECASE)
+            )
+            markers.append((match, is_header))
+        return markers
+
+    @classmethod
+    def _unmask_inline_benefit_number_mentions(cls, text: str) -> str:
+        return text.replace(cls._INLINE_MENTION_MASK, '')
+
+    @classmethod
+    def split_blocks(cls, text: str) -> list[str]:
         """Divide o documento em blocos de benefícios."""
-        return re.split(r'\bN[uú]mero do Benef[ií]cio\b', text, flags=re.IGNORECASE)
+        masked = cls._mask_inline_benefit_number_mentions(text)
+        parts = re.split(r'\bN[uú]mero do Benef[ií]cio\b', masked, flags=re.IGNORECASE)
+        return [cls._unmask_inline_benefit_number_mentions(part) for part in parts]
 
     @staticmethod
     def _split_all_blocks(text: str) -> list[tuple[str, str]]:
@@ -979,6 +1040,10 @@ class FapContestationJudgmentReportService:
         Retorna lista de tuplas (tipo, conteúdo) onde tipo é 'benefit', 'cat' ou 'payroll_mass'.
         """
         blocks: list[tuple[str, str]] = []
+
+        # Menções inline a "Número do Benefício" (dentro de justificativas/pareceres)
+        # não podem virar fronteira de bloco nem terminador de seção.
+        text = FapContestationJudgmentReportService._mask_inline_benefit_number_mentions(text)
 
         # --- Passo 1: seção CAT ---
         # Busca pelo cabeçalho da seção CAT. Valida que é de fato o cabeçalho
@@ -1138,7 +1203,8 @@ class FapContestationJudgmentReportService:
             if benefit_content.strip():
                 blocks.append(('benefit', benefit_content))
 
-        return blocks
+        unmask = FapContestationJudgmentReportService._unmask_inline_benefit_number_mentions
+        return [(kind, unmask(content)) for kind, content in blocks]
 
     @staticmethod
     def extract_between(text: str, start: str, end: str | None = None) -> str | None:
