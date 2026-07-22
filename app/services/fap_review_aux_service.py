@@ -218,6 +218,7 @@ async def run_auxiliary_extractions(*, law_firm_id: int,
             store_extraction(law_firm_id, sha, name, agent.model_name, fingerprint, extraction_dict)
             results.append({'file_name': name, 'from_cache': False, 'extraction': extraction_dict, 'error': None})
         except Exception as exc:
+            db.session.rollback()
             current_app.logger.warning('FAP aux: extração falhou (%s): %s', name, exc)
             results.append({'file_name': name, 'from_cache': False, 'extraction': None, 'error': str(exc)})
 
