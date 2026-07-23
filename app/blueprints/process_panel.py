@@ -2879,31 +2879,38 @@ def edit(process_id):
                 flash('Tribunal inválido.', 'danger')
                 return redirect(url_for('process_panel.edit', process_id=process.id))
 
-        # Permitir substituição de identificador temporário pelo número real
-        if process.process_number and process.process_number.startswith('TEMP-'):
-            new_number = request.form.get('process_number', '').strip().upper()
-            if new_number and not new_number.startswith('TEMP-'):
-                existing = JudicialProcess.query.filter(
-                    JudicialProcess.id != process.id,
-                    JudicialProcess.law_firm_id == law_firm_id,
-                    JudicialProcess.process_number == new_number
-                ).first()
-                if existing and existing.origin != 'comunica_auto':
-                    flash(f'Processo {new_number} já existe.', 'danger')
-                    return redirect(url_for('process_panel.edit', process_id=process.id))
-                if existing:
-                    # Duplicata descoberta pelo Monitoramento → unifica neste processo
-                    moved_comms = _absorb_discovered_process(process, existing)
-                    flash(f'O processo {new_number} já estava na fila de Descobertos do '
-                          f'Monitoramento e foi unificado a este cadastro'
-                          f'{f" ({moved_comms} publicação(ões) migradas)" if moved_comms else ""}.',
-                          'info')
-                process.process_number = new_number
-                # Número mudou → snapshot DataJud antigo não vale mais
-                datajud_snapshot_service.delete_snapshot(process.id, law_firm_id)
+        # Alteração do número: TEMP → real ou correção de um número já informado.
+        # Mesmas salvaguardas nos dois casos (duplicata, absorção de descoberto,
+        # invalidação do cache DataJud).
+        new_number = request.form.get('process_number', '').strip().upper()
+        current_number = (process.process_number or '').strip().upper()
+        number_changed = False
+        if new_number and not new_number.startswith('TEMP-') and new_number != current_number:
+            existing = JudicialProcess.query.filter(
+                JudicialProcess.id != process.id,
+                JudicialProcess.law_firm_id == law_firm_id,
+                JudicialProcess.process_number == new_number
+            ).first()
+            if existing and existing.origin != 'comunica_auto':
+                flash(f'Processo {new_number} já existe.', 'danger')
+                return redirect(url_for('process_panel.edit', process_id=process.id))
+            if existing:
+                # Duplicata descoberta pelo Monitoramento → unifica neste processo
+                moved_comms = _absorb_discovered_process(process, existing)
+                flash(f'O processo {new_number} já estava na fila de Descobertos do '
+                      f'Monitoramento e foi unificado a este cadastro'
+                      f'{f" ({moved_comms} publicação(ões) migradas)" if moved_comms else ""}.',
+                      'info')
+            number_changed = True
+            process.process_number = new_number
+            # Número mudou → snapshot DataJud antigo não vale mais
+            datajud_snapshot_service.delete_snapshot(process.id, law_firm_id)
 
         # Atualizar campos
         process.title = request.form.get('title', '').strip() or process.title
+        # Título que era só o número antigo acompanha a correção do número
+        if number_changed and (process.title or '').strip().upper() == current_number:
+            process.title = new_number
         process.description = request.form.get('description', '').strip()
         process.judge_name = request.form.get('judge_name', '').strip()
         process.court_id = court_id or None

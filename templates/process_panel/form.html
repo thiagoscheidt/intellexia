@@ -66,11 +66,14 @@ subtitle=hero_subtitle|default(''), icon='bi bi-file-earmark-plus') %}
                                         <input type="text" class="form-control" id="process_number"
                                             name="process_number" placeholder="NNNNNNN-DD.AAAA.J.TR.OOOO"
                                             value="{{ '' if is_temp else (process.process_number if process else '') }}"
-                                            {% if action=='editar' and not is_temp %}readonly{% endif %} maxlength="25"
-                                            inputmode="numeric" {% if not is_temp %}required{% endif %}>
+                                            maxlength="25" inputmode="numeric"
+                                            {% if not is_temp %}required{% endif %}>
                                         <small class="text-muted d-block mt-1">
                                             {% if is_temp %}
                                             Este processo ainda não tem número real. Informe agora ou deixe em branco.
+                                            {% elif action == 'editar' %}
+                                            Corrigir o número invalida o cache do DataJud (será reconsultado com o
+                                            número novo) e mantém publicações, prazos e documentos já vinculados.
                                             {% else %}
                                             Formato CNJ: 7 dígitos - 2 verificadores . 4 ano . 1 segmento . 2 tribunal .
                                             4 origem
