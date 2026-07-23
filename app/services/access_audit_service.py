@@ -11,6 +11,7 @@ import logging
 from datetime import datetime, timedelta
 
 from flask import request
+from sqlalchemy.exc import IntegrityError
 
 from app.models import db, User, UserPageVisit
 from app.utils.permissions import MODULE_PERMISSIONS, get_module_from_endpoint
@@ -43,6 +44,12 @@ def _is_page_navigation() -> bool:
     return True
 
 
+def _find_visit(user_id: int, endpoint: str, visit_date) -> 'UserPageVisit | None':
+    return UserPageVisit.query.filter_by(
+        user_id=user_id, endpoint=endpoint, visit_date=visit_date
+    ).first()
+
+
 def record_page_visit(user: User) -> None:
     """Registra a visita de tela da request atual para o usuário.
 
@@ -56,22 +63,35 @@ def record_page_visit(user: User) -> None:
         endpoint = request.endpoint
         today = now_sp().date()
 
-        visit = UserPageVisit.query.filter_by(
-            user_id=user.id, endpoint=endpoint, visit_date=today
-        ).first()
+        visit = _find_visit(user.id, endpoint, today)
 
         if visit:
             visit.hits += 1
             visit.last_seen_at = datetime.now()
-        else:
-            db.session.add(UserPageVisit(
-                law_firm_id=user.law_firm_id,
-                user_id=user.id,
-                endpoint=endpoint,
-                visit_date=today,
-                hits=1,
-                last_seen_at=datetime.now(),
-            ))
+            return
+
+        # SAVEPOINT força o INSERT a executar aqui (e não no commit do
+        # middleware, onde o erro escaparia deste try/except).
+        try:
+            with db.session.begin_nested():
+                db.session.add(UserPageVisit(
+                    law_firm_id=user.law_firm_id,
+                    user_id=user.id,
+                    endpoint=endpoint,
+                    visit_date=today,
+                    hits=1,
+                    last_seen_at=datetime.now(),
+                ))
+        except IntegrityError:
+            # Outra request simultânea inseriu a linha primeiro (sob
+            # REPEATABLE READ o SELECT acima pode não enxergá-la). O UPDATE
+            # direto lê a versão corrente e apenas incrementa.
+            UserPageVisit.query.filter_by(
+                user_id=user.id, endpoint=endpoint, visit_date=today
+            ).update({
+                'hits': UserPageVisit.hits + 1,
+                'last_seen_at': datetime.now(),
+            }, synchronize_session=False)
     except Exception:
         logger.exception('Falha ao registrar visita de tela (ignorada)')
 

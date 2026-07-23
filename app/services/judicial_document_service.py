@@ -759,7 +759,9 @@ class JudicialDocumentService:
                 benefit_number=benefit_number,
             ).first()
             if benefit:
-                benefit.request_type = request_type
+                # 'nao_solicitado': o NB aparece na petição só como contexto (ex.:
+                # benefício anterior de um par de restabelecimento) — sem pedido.
+                benefit.request_type = None if request_type == 'nao_solicitado' else request_type
                 if source_section:
                     target_thesis_id = legal_thesis_id
                     linked_thesis_ids = {
@@ -889,7 +891,18 @@ class JudicialDocumentService:
                     f'{classified_count} benefício(s).'
                 )
 
-        cited = extractor_agent.extract_cited_benefits()
+        impugned_numbers = [
+            str(item.get('benefit_number') or '').strip()
+            for item in extracted_benefits if isinstance(item, dict)
+        ]
+        insured_names = [
+            str(item.get('insured_name') or '').strip()
+            for item in extracted_benefits if isinstance(item, dict)
+        ]
+        cited = extractor_agent.extract_cited_benefits(
+            exclude_numbers=impugned_numbers,
+            known_insured_names=[n for n in insured_names if n],
+        )
         if cited:
             cited_count = self._upsert_cited_benefits(process, cited)
             print(

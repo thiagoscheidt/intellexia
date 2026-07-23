@@ -2234,7 +2234,6 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                       <th>Segurado</th>
                                       <th>Tipo</th>
                                       <th>Vigência FAP</th>
-                                      <th>Tipo de Pedido</th>
                                       <th>Decisão da União</th>
                                       <th>Decisões Judiciais</th>
                                       <th class="text-end">Ações</th>
@@ -2250,27 +2249,6 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                       <td>{{ benefit.insured_name or '-' }}</td>
                                       <td>{{ benefit.benefit_type or '-' }}</td>
                                       <td>{{ benefit.fap_vigencia_year or '-' }}</td>
-                                      <td>
-                                        {% set rt = (benefit.request_type or '')|lower %}
-                                        {% if rt == 'exclusao' %}
-                                        <span
-                                          class="badge bg-danger-subtle text-danger-emphasis border border-danger-subtle">
-                                          <i class="bi bi-dash-circle me-1"></i>Exclusão
-                                        </span>
-                                        {% elif rt == 'inclusao' %}
-                                        <span
-                                          class="badge bg-success-subtle text-success-emphasis border border-success-subtle">
-                                          <i class="bi bi-plus-circle me-1"></i>Inclusão
-                                        </span>
-                                        {% elif rt == 'revisao' %}
-                                        <span
-                                          class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">
-                                          <i class="bi bi-arrow-repeat me-1"></i>Revisão
-                                        </span>
-                                        {% else %}
-                                        <span class="badge bg-light text-muted border">-</span>
-                                        {% endif %}
-                                      </td>
                                       <td>
                                         {% set contestation_key = thesis_group.id if thesis_group.id != 'unassigned'
                                         else none %}

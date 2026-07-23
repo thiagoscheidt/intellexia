@@ -62,12 +62,30 @@ class BenefitsRequestsExtractionResult(BaseModel):
         return self.model_dump_json(by_alias=True)
 
 
+class CitedBenefitCandidateVerdict(BaseModel):
+    """Veredito por candidato na triagem de benefícios citados (texto corrido)."""
+    benefit_number: str = Field(description="Número do benefício candidato, exatamente como listado")
+    classification: str = Field(
+        description="'contexto_segurado' (histórico dos segurados da ação, narrado pelo autor), "
+                    "'jurisprudencia' (mencionado só em trecho transcrito de outro processo) ou "
+                    "'nao_beneficio' (o número não é um NB — fragmento de NIT, CNPJ, processo etc.)")
+    benefit_type: str = Field(default="", description="Tipo do benefício (B31, B42, B91...) se o texto informar")
+    insured_name: str = Field(default="", description="Nome do segurado, somente se o trecho ligar o nome a ESTE NB")
+    nit_number: str = Field(default="", description="NIT, se o texto informar")
+
+
+class CitedBenefitsTriageResult(BaseModel):
+    """Triagem completa: um veredito para CADA candidato listado no prompt."""
+    candidates: List[CitedBenefitCandidateVerdict] = Field(default_factory=list)
+
+
 class BenefitRequestTypeItem(BaseModel):
     """Classificação do tipo de pedido para um benefício."""
     benefit_number: str = Field(default="", description="Número do benefício (NB)")
     request_type: str = Field(
         default="",
-        description="Tipo de pedido: 'exclusao', 'inclusao' ou 'revisao'",
+        description="Tipo de pedido: 'exclusao', 'inclusao', 'revisao' ou "
+                    "'nao_solicitado' (NB não está entre os pedidos da petição)",
     )
     source_section: str = Field(
         default="",
@@ -1513,11 +1531,19 @@ class AgentDocumentExtractor:
             "A seção da tabela já vem no cabeçalho do bloco, por exemplo: [Página X | Seção: pedidos].\n"
             "Use essa seção como contexto para identificar a tese jurídica, mas não a trate como dado de uma linha específica.\n\n"
             "Mapeamento de tese:\n"
-            "- legal_thesis_id: escolha APENAS um id da lista de teses cadastradas, de acordo com a seção da tabela.\n"
+            "- legal_thesis_id: escolha o id da tese mais adequada à seção da tabela.\n"
+            "- legal_thesis_ids: se o título da seção corresponder a MAIS DE UMA tese cadastrada "
+            "(nomes semelhantes, ou seção que combina dois conceitos — ex.: 'doença não relacionada' "
+            "e 'acidente não relacionado', ou 'apuração do índice de custo' e 'custo de benefício'), "
+            "liste TODAS as teses aplicáveis.\n"
             "- priorize o nome da seção do bloco para mapear a tese jurídica.\n"
             "- Se não houver confiança suficiente para mapear, retorne null.\n\n"
             "Se não houver benefícios ou tabelas, retorne lista vazia em 'benefits'.\n"
             "Se algum campo não estiver disponível na tabela, deixe em branco (\"\").\n\n"
+            "IMPORTANTE - NÃO CONSOLIDE: gere um item para CADA LINHA de CADA tabela, mesmo que o\n"
+            "mesmo número de benefício apareça em tabelas/seções diferentes (a mesclagem é feita\n"
+            "depois). Cada item deve receber o legal_thesis_id da seção da SUA tabela — um NB que\n"
+            "aparece nas seções de duas teses gera dois itens, um por tese.\n\n"
             f"TABELAS DA PETIÇÃO:\n\n{relevant_text}"
         )
 
@@ -1614,49 +1640,172 @@ class AgentDocumentExtractor:
         """Exposta publicamente para uso em outros serviços."""
         return self._extract_pedidos_section_text()
 
-    def extract_cited_benefits(self) -> list[dict]:
+    def extract_cited_benefits(
+        self,
+        exclude_numbers: Optional[list[str]] = None,
+        known_insured_names: Optional[list[str]] = None,
+    ) -> list[dict]:
         """
         Extrai os benefícios citados no processo mas que não fazem parte da ação.
 
-        São as linhas descartadas por _filter_out_pedidos_section: benefícios presentes
-        em seções fora de 'pedidos' que não foram solicitados na petição inicial.
+        Duas fontes complementares:
+        1. Tabelas descartadas por _filter_out_pedidos_section (benefícios em tabelas
+           fora das seções de pedidos).
+        2. Texto corrido: benefícios do histórico do segurado citados apenas na
+           narrativa (ex.: "espécie B31, nº 5490144218") — comum quando as telas
+           CONBAS/INFBEN são imagens sem tabela extraível.
+
+        `exclude_numbers`: NBs objeto da ação — nunca retornados como citados.
+        `known_insured_names`: segurados da ação (dos benefícios impugnados) — âncora
+        para separar contexto de jurisprudência: benefício de outra pessoa é citação.
 
         Usa structured output direto (sem agent loop) por ser uma extração simples.
         """
-        tables = self._get_document_data_tables()
-        _filtered, cited_tables = self._filter_out_pedidos_section(tables)
-
-        if not cited_tables:
-            return []
-
-        table_text = self._tables_to_prompt_text(cited_tables)
-        if not table_text.strip():
-            return []
+        excluded = {re.sub(r"\D", "", str(n or "")) for n in (exclude_numbers or []) if n}
+        excluded.discard("")
 
         model_name = os.getenv("QUERY_MODEL") or DEFAULT_MODEL_MINI
         llm = ChatOpenAI(model=model_name, temperature=0).with_structured_output(BenefitsRequestsExtractionResult)
-
         system_prompt = (
-            "Você extrai dados de benefícios previdenciários/acidentários de tabelas. "
+            "Você extrai dados de benefícios previdenciários/acidentários de documentos jurídicos. "
             "Retorne apenas os campos disponíveis; deixe em branco o que não encontrar."
         )
-        user_prompt = (
-            "Extraia os benefícios das tabelas abaixo. "
-            "Mapeie as colunas pelo significado (NIT, SEGURADO, TIPO, BENEFÍCIO/NB, VIGÊNCIA FAP).\n\n"
-            "Para fap_vigencia_year, converta intervalos para CSV (ex: 2018-2020 → 2018,2019,2020).\n"
-            "Ignore a coluna legal_thesis_id — retorne null para todos.\n\n"
-            f"{table_text}"
-        )
 
-        try:
-            result: BenefitsRequestsExtractionResult = llm.invoke([
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": user_prompt},
-            ])
-            return [b.model_dump() for b in result.benefits if b.benefit_number.strip()]
-        except Exception as e:
-            print(f"[extract_cited_benefits] Erro: {e}")
-            return []
+        collected: dict[str, dict] = {}
+
+        def _collect(items: list[dict]) -> None:
+            for item in items:
+                digits = re.sub(r"\D", "", str(item.get("benefit_number") or ""))
+                if not digits or digits in excluded or digits in collected:
+                    continue
+                collected[digits] = item
+
+        # 1) Tabelas fora das seções de pedidos
+        tables = self._get_document_data_tables()
+        _filtered, cited_tables = self._filter_out_pedidos_section(tables)
+        table_text = self._tables_to_prompt_text(cited_tables) if cited_tables else ""
+        if table_text.strip():
+            user_prompt = (
+                "Extraia os benefícios das tabelas abaixo. "
+                "Mapeie as colunas pelo significado (NIT, SEGURADO, TIPO, BENEFÍCIO/NB, VIGÊNCIA FAP).\n\n"
+                "Para fap_vigencia_year, converta intervalos para CSV (ex: 2018-2020 → 2018,2019,2020).\n"
+                "Ignore a coluna legal_thesis_id — retorne null para todos.\n\n"
+                f"{table_text}"
+            )
+            try:
+                result: BenefitsRequestsExtractionResult = llm.invoke([
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ])
+                _collect([b.model_dump() for b in result.benefits if b.benefit_number.strip()])
+            except Exception as e:
+                print(f"[extract_cited_benefits] Erro (tabelas): {e}")
+
+        # 2) Texto corrido: janelas de contexto ao redor de cada menção de NB
+        # candidato (10 dígitos) — prompt pequeno e decisão focada por candidato.
+        # NB citado em narrativa vem como 10 dígitos contíguos ("nº 5490144218");
+        # padrões com pontos/espaços são fragmentos de NIT/CNPJ/telas DATAPREV.
+        window_map: dict[str, list[str]] = {}
+        for chunk in self._get_document_data_chunks():
+            text = str(chunk.get("text") or "")
+            page = chunk.get("page")
+            for match in re.finditer(r"(?<![\d.\-])\d{10}(?![\d.\-])", text):
+                digits = match.group()
+                if digits in excluded or digits in collected:
+                    continue
+                windows = window_map.setdefault(digits, [])
+                if len(windows) >= 3:
+                    continue
+                start = max(0, match.start() - 450)
+                end = min(len(text), match.end() + 450)
+                windows.append(f"[Página {page}] …{text[start:end].strip()}…")
+
+        # Descarta candidatos cujo entorno nunca menciona vocabulário de benefício
+        # (fragmentos de NIT/CNPJ/nº de processo capturados pelo regex).
+        candidate_numbers = {
+            number for number, windows in window_map.items()
+            if any(re.search(r'benef|\bNB\b|esp[eé]cie', w, re.IGNORECASE) for w in windows)
+        }
+
+        # Veto determinístico: NB cujas menções estão TODAS dentro de trechos com
+        # impressão digital de citação (jurisprudência/peça transcrita) não é
+        # benefício citado do processo — nem vai ao modelo.
+        quote_markers = re.compile(r'\(GN\)|in verbis|verbis:|NIT do Empregado', re.IGNORECASE)
+        candidate_numbers = {
+            number for number in candidate_numbers
+            if not all(quote_markers.search(w) for w in window_map[number])
+        }
+
+        # Atalho determinístico: janela que menciona segurado conhecido da ação
+        # é contexto do segurado — não precisa de veredito do modelo.
+        normalized_names = [
+            n.strip().upper() for n in (known_insured_names or []) if str(n or '').strip()
+        ]
+
+        def _mentions_known_insured(windows: list[str]) -> bool:
+            joined = ' '.join(windows).upper()
+            return any(name in joined for name in normalized_names)
+
+        auto_context = {
+            number for number in candidate_numbers
+            if _mentions_known_insured(window_map[number])
+        }
+
+        if candidate_numbers:
+            names_note = ', '.join(normalized_names) or '(não informados)'
+            blocks = []
+            for number in sorted(candidate_numbers):
+                joined = "\n".join(window_map[number])
+                blocks.append(f"### CANDIDATO NB {number}\n{joined}")
+            user_prompt = (
+                "Abaixo, para cada NÚMERO DE BENEFÍCIO CANDIDATO, estão os trechos da petição "
+                "inicial onde ele é mencionado.\n\n"
+                f"SEGURADOS DA AÇÃO (âncora): {names_note}\n\n"
+                "Retorne um veredito para CADA candidato (todos, sem exceção):\n"
+                "  - 'contexto_segurado': benefício do histórico de UM DOS SEGURADOS DA AÇÃO "
+                "listados acima (ex.: B31/B42 anteriores ou posteriores ao benefício impugnado), "
+                "narrado pelo autor da petição em texto próprio;\n"
+                "  - 'jurisprudencia': benefício de OUTRA pessoa ou empresa (CNPJ diferente da "
+                "Autora), ou mencionado dentro de trecho transcrito de outro processo (ementa, "
+                "acórdão, sentença, contestação da União citada como precedente; sinais: "
+                "'in verbis', '(GN)', itens 'E)', 'F)', '2.3.6.', número de processo alheio). "
+                "Benefício cujo trecho o vincula a segurado que NÃO está na lista de segurados "
+                "da ação é SEMPRE 'jurisprudencia';\n"
+                "  - 'nao_beneficio': o número não é um NB (fragmento de NIT, CNPJ, CEP, "
+                "número de processo, protocolo etc.).\n\n"
+                "Preencha benefit_type/insured_name/nit_number apenas com o que os trechos do "
+                "próprio candidato informarem — nunca copie dados de outro candidato.\n\n"
+                f"{chr(10).join(blocks)}"
+            )
+            try:
+                text_llm = self.chat_model.with_structured_output(CitedBenefitsTriageResult)
+                result = text_llm.invoke([
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt},
+                ])
+                text_items = []
+                seen_verdicts: set[str] = set()
+                for verdict in result.candidates:
+                    digits = re.sub(r"\D", "", verdict.benefit_number or "")
+                    # Cinto de segurança: só NBs que estavam na lista de candidatos;
+                    # atalho de segurado conhecido força 'contexto_segurado'.
+                    if digits not in candidate_numbers:
+                        continue
+                    seen_verdicts.add(digits)
+                    # Atalho do segurado conhecido vence 'jurisprudencia', mas não
+                    # 'nao_beneficio' (fragmentos de NIT/CNPJ perto do nome do segurado).
+                    if verdict.classification == 'contexto_segurado' or (
+                            digits in auto_context and verdict.classification != 'nao_beneficio'):
+                        text_items.append(verdict.model_dump())
+                # Candidatos do atalho que o modelo omitiu entram sem enriquecimento.
+                for number in sorted(auto_context - seen_verdicts):
+                    text_items.append({'benefit_number': number})
+                _collect(text_items)
+            except Exception as e:
+                print(f"[extract_cited_benefits] Erro (texto): {e}")
+                _collect([{'benefit_number': number} for number in sorted(auto_context)])
+
+        return list(collected.values())
 
     def classify_benefit_request_types(self, benefits: List[dict]) -> dict:
         """
@@ -1866,12 +2015,21 @@ class AgentDocumentExtractor:
             "TIPOS DE PEDIDO POSSÍVEIS:\n"
             "- 'exclusao': o autor pede para EXCLUIR o benefício do cálculo do FAP\n"
             "- 'inclusao': o autor pede para INCLUIR o benefício no cálculo do FAP\n"
-            "- 'revisao': revisão/recálculo sem indicar exclusão ou inclusão clara\n\n"
+            "- 'revisao': revisão/recálculo sem indicar exclusão ou inclusão clara\n"
+            "- 'nao_solicitado': o NB NÃO aparece na seção de pedidos (nem individualmente, nem "
+            "coberto por um grupo descrito nos pedidos). Ex.: em tese de restabelecimento, o "
+            "benefício ANTERIOR do par é mencionado como contexto, mas só o benefício "
+            "restabelecido tem pedido de exclusão.\n\n"
             "INSTRUÇÕES:\n"
-            "- Analise o texto da seção de pedidos para identificar o que o autor pede para cada NB.\n"
+            "- A seção de pedidos é a AUTORIDADE: atribua 'exclusao'/'inclusao'/'revisao' apenas "
+            "a NB que estiver explicitamente listado nos pedidos (tabelas dos pedidos incluídas) "
+            "ou claramente coberto por um pedido em grupo.\n"
+            "- NB que aparece só nas seções de mérito como contexto/histórico e NÃO consta dos "
+            "pedidos → 'nao_solicitado'. Não herde o pedido dos benefícios vizinhos da mesma tabela.\n"
             "- Considere a seção informada em cada benefício como contexto lateral para desambiguar o cenário jurídico.\n"
             "- Retorne também source_section com a seção principal usada no raciocínio, priorizando seção de mérito/preliminar e evitando 'PEDIDOS' quando houver alternativa.\n"
-            "- Retorne um item para CADA linha da lista (NB + Tese ID), mesmo que o tipo seja incerto (use 'revisao' como padrão).\n"
+            "- Retorne um item para CADA linha da lista (NB + Tese ID), mesmo que o tipo seja incerto "
+            "(se está nos pedidos mas o tipo é dúbio, use 'revisao'; se não está nos pedidos, 'nao_solicitado').\n"
             "- O campo 'benefit_number' deve corresponder exatamente ao NB fornecido.\n\n"
             "BENEFÍCIOS A CLASSIFICAR:\n"
             f"{benefits_list_text}\n\n"
@@ -1933,6 +2091,11 @@ class AgentDocumentExtractor:
                     composite_key = f"{nb_key}|{int(model_thesis_id) if model_thesis_id is not None else 0}"
                     model_by_nb[composite_key] = model_item
 
+            # NBs enumerados na seção de pedidos (estilo enumerativo): quando os
+            # pedidos listam NBs explicitamente, quem não está na lista não tem
+            # pedido — regra determinística, independe do veredito do modelo.
+            pedidos_nb_digits = set(re.findall(r"(?<![\d.\-])\d{10}(?![\d.\-])", pedidos_context or ""))
+
             normalized_items: list[BenefitRequestTypeItem] = []
             for target in targets:
                 benefit_number = str(target.get("benefit_number", "") or "").strip()
@@ -1943,8 +2106,12 @@ class AgentDocumentExtractor:
                     model_item = model_by_nb.get(fallback_nb_key, {})
 
                 request_type = str(model_item.get("request_type", "") or "").strip().lower()
-                if request_type not in {"exclusao", "inclusao", "revisao"}:
+                if request_type not in {"exclusao", "inclusao", "revisao", "nao_solicitado"}:
                     request_type = "revisao"
+
+                nb_digits = re.sub(r"\D", "", benefit_number)
+                if pedidos_nb_digits and nb_digits and nb_digits not in pedidos_nb_digits:
+                    request_type = "nao_solicitado"
 
                 normalized_items.append(
                     BenefitRequestTypeItem(
