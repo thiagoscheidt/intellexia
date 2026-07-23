@@ -1,4 +1,6 @@
-from flask import Blueprint, render_template, request, session, jsonify, redirect, url_for, flash, send_file, abort
+import threading
+
+from flask import Blueprint, render_template, request, session, jsonify, redirect, url_for, flash, send_file, abort, current_app
 from meilisearch_python_sdk import Client as MeilisearchClient
 from app.models import (
     db, JudicialProcess,
@@ -3417,6 +3419,165 @@ def generated_document_new(process_id):
     )
 
 
+def _run_generated_document_generation(app_obj, law_firm_id, process_id, doc_id,
+                                       version_id, instructions, model_name):
+    """Gera o documento em segundo plano (mesmo padrão do Revisor FAP).
+
+    A chamada à LLM leva minutos; processar na requisição estoura timeouts de
+    proxy. Recarrega tudo do banco dentro do próprio contexto — nenhum objeto
+    ORM atravessa a fronteira da thread.
+    """
+    with app_obj.test_request_context():
+        version = None
+        try:
+            process = JudicialProcess.query.filter_by(
+                id=process_id, law_firm_id=law_firm_id).first()
+            generated_doc = JudicialProcessGeneratedDocument.query.filter_by(
+                id=doc_id, process_id=process_id, law_firm_id=law_firm_id).first()
+            version = JudicialProcessGeneratedDocumentVersion.query.get(version_id)
+            if not process or not generated_doc or not version:
+                raise ValueError('Registro de geração não encontrado.')
+
+            # Reconstrói as seleções a partir do que foi persistido
+            sel_benefit_ids = {s.benefit_id for s in generated_doc.selections}
+            sel_thesis_ids = {s.legal_thesis_id for s in generated_doc.selections if s.legal_thesis_id}
+            benefits_by_id = {
+                b.id: b for b in JudicialProcessBenefit.query.filter(
+                    JudicialProcessBenefit.id.in_(sel_benefit_ids)
+                ).options(selectinload(JudicialProcessBenefit.attachments)).all()
+            } if sel_benefit_ids else {}
+
+            contestations_by_key = {}
+            theses_by_id = {}
+            benefit_thesis_source_section_map = {}
+            if sel_thesis_ids:
+                for row in JudicialProcessBenefitThesisContestation.query.filter(
+                    JudicialProcessBenefitThesisContestation.process_benefit_id.in_(sel_benefit_ids),
+                    JudicialProcessBenefitThesisContestation.legal_thesis_id.in_(sel_thesis_ids),
+                ).all():
+                    contestations_by_key[(row.process_benefit_id, row.legal_thesis_id)] = row
+                theses_by_id = {
+                    t.id: t for t in JudicialLegalThesis.query.filter(
+                        JudicialLegalThesis.id.in_(sel_thesis_ids)).all()
+                }
+                for row in db.session.execute(
+                    judicial_process_benefit_legal_theses.select().where(and_(
+                        judicial_process_benefit_legal_theses.c.benefit_id.in_(sel_benefit_ids),
+                        judicial_process_benefit_legal_theses.c.legal_thesis_id.in_(sel_thesis_ids),
+                        judicial_process_benefit_legal_theses.c.source_section.isnot(None),
+                        judicial_process_benefit_legal_theses.c.source_section != '',
+                    ))
+                ).fetchall():
+                    section_value = str(getattr(row, 'source_section', '') or '').strip()
+                    if section_value:
+                        benefit_thesis_source_section_map[(row.benefit_id, row.legal_thesis_id)] = section_value
+
+            agent_selections = []
+            for sel in generated_doc.selections:
+                benefit = benefits_by_id.get(sel.benefit_id)
+                if not benefit:
+                    continue
+                contestation = contestations_by_key.get((sel.benefit_id, sel.legal_thesis_id))
+                thesis = (
+                    contestation.legal_thesis
+                    if contestation and contestation.legal_thesis
+                    else theses_by_id.get(sel.legal_thesis_id) if sel.legal_thesis_id else None
+                )
+                source_section = ''
+                if sel.legal_thesis_id:
+                    source_section = str(benefit_thesis_source_section_map.get(
+                        (sel.benefit_id, sel.legal_thesis_id), '') or '').strip()
+                benefit_attachments = [
+                    {
+                        'id': att.id,
+                        'arquivo': att.original_filename or '',
+                        'titulo': (att.description or att.original_filename or '').strip(),
+                        'url': url_for(
+                            'process_panel.download_process_attachment',
+                            process_id=process.id,
+                            attachment_id=att.id,
+                            _external=False,
+                        ),
+                    }
+                    for att in (benefit.attachments or [])
+                    if att.is_active and (att.description or '').strip()
+                ]
+                agent_selections.append({
+                    'benefit': benefit,
+                    'thesis': thesis,
+                    'contestation': contestation,
+                    'source_section': source_section,
+                    'attachments': benefit_attachments,
+                })
+
+            contestation_file_path = None
+            contestation_summary_payload = None
+            if generated_doc.document_type == 'impugnacao_contestacao':
+                contestation_file_path = _resolve_latest_contestation_pdf_path(process)
+                contestation_summary_payload = _resolve_latest_contestation_summary_payload(
+                    process, law_firm_id)
+
+            agent = AgentGeneratedDocument(model_name=model_name)
+            result_dict, full_text = agent.dispatch(
+                generated_doc.document_type,
+                process,
+                agent_selections,
+                instructions,
+                contestation_file_path=contestation_file_path,
+                contestation_summary_payload=contestation_summary_payload,
+                law_firm_id=law_firm_id,
+            )
+
+            # Enriquecimento jurisprudencial (apenas para impugnação)
+            if generated_doc.document_type == 'impugnacao_contestacao':
+                try:
+                    trf_region = getattr(process, 'trf_region', None) or ''
+                    full_text = ImpugnacaoEnrichmentAgent(
+                        model_name=ai_model_settings_service.get_model(
+                            law_firm_id, 'impugnacao_enrichment')).enrich(
+                        document_text=full_text,
+                        selections=agent_selections,
+                        law_firm_id=law_firm_id,
+                        trf_region=trf_region,
+                    )
+                except Exception as enrich_err:
+                    print(f'[EnrichmentAgent] Falha silenciosa: {enrich_err}')
+
+            internal_notes = None
+            if isinstance(result_dict, dict):
+                internal_notes = (result_dict.get('internal_review_notes') or '').strip() or None
+
+            version.content = full_text
+            version.internal_notes = internal_notes
+            version.generation_status = 'completed'
+            db.session.commit()
+        except Exception as e:
+            app_obj.logger.error(f'[GeneratedDocument] Falha na geração em background: {e}')
+            try:
+                db.session.rollback()
+                if version is None:
+                    version = JudicialProcessGeneratedDocumentVersion.query.get(version_id)
+                if version and version.generation_status == 'processing':
+                    version.generation_status = 'failed'
+                    version.error_message = str(e)
+                    db.session.commit()
+            except Exception:
+                db.session.rollback()
+        finally:
+            db.session.remove()
+
+
+def _spawn_generated_document_generation(law_firm_id, process_id, doc_id, version_id,
+                                         instructions, model_name):
+    threading.Thread(
+        target=_run_generated_document_generation,
+        args=(current_app._get_current_object(), law_firm_id, process_id,
+              doc_id, version_id, instructions, model_name),
+        daemon=True,
+        name=f'generated-doc-{doc_id}-v{version_id}',
+    ).start()
+
+
 @process_panel_bp.route('/<int:process_id>/documentos-gerados/gerar', methods=['POST'])
 @require_law_firm
 def generated_document_create(process_id):
@@ -3458,83 +3619,6 @@ def generated_document_create(process_id):
         ).options(selectinload(JudicialProcessBenefit.attachments)).all()
     }
 
-    # Load thesis contestations
-    thesis_id_set = {t_id for _, t_id in parsed if t_id}
-    contestations_by_key = {}
-    if thesis_id_set:
-        rows = JudicialProcessBenefitThesisContestation.query.filter(
-            JudicialProcessBenefitThesisContestation.process_benefit_id.in_(benefit_id_set),
-            JudicialProcessBenefitThesisContestation.legal_thesis_id.in_(thesis_id_set),
-        ).all()
-        for row in rows:
-            contestations_by_key[(row.process_benefit_id, row.legal_thesis_id)] = row
-
-    # Load theses by ID as fallback for benefits without contestation records
-    theses_by_id = {}
-    if thesis_id_set:
-        theses_by_id = {
-            t.id: t for t in JudicialLegalThesis.query.filter(
-                JudicialLegalThesis.id.in_(thesis_id_set)
-            ).all()
-        }
-
-    benefit_thesis_source_section_map: dict[tuple[int, int], str] = {}
-    if parsed:
-        section_rows = db.session.execute(
-            judicial_process_benefit_legal_theses.select().where(
-                and_(
-                    judicial_process_benefit_legal_theses.c.benefit_id.in_(benefit_id_set),
-                    judicial_process_benefit_legal_theses.c.legal_thesis_id.in_(thesis_id_set) if thesis_id_set else False,
-                    judicial_process_benefit_legal_theses.c.source_section.isnot(None),
-                    judicial_process_benefit_legal_theses.c.source_section != '',
-                )
-            )
-        ).fetchall() if thesis_id_set else []
-
-        for row in section_rows:
-            section_value = str(getattr(row, 'source_section', '') or '').strip()
-            if not section_value:
-                continue
-            benefit_thesis_source_section_map[(row.benefit_id, row.legal_thesis_id)] = section_value
-
-    # Build agent input: list of dicts with benefit + contestation data
-    agent_selections = []
-    for b_id, t_id in parsed:
-        benefit = benefits_by_id.get(b_id)
-        if not benefit:
-            continue
-        contestation = contestations_by_key.get((b_id, t_id)) if t_id else None
-        thesis = (
-            contestation.legal_thesis
-            if contestation and contestation.legal_thesis
-            else theses_by_id.get(t_id) if t_id else None
-        )
-        source_section = ''
-        if t_id:
-            source_section = str(benefit_thesis_source_section_map.get((b_id, t_id), '') or '').strip()
-        benefit_attachments = [
-            {
-                'id': att.id,
-                'arquivo': att.original_filename or '',
-                'titulo': (att.description or att.original_filename or '').strip(),
-                'url': url_for(
-                    'process_panel.download_process_attachment',
-                    process_id=process.id,
-                    attachment_id=att.id,
-                    _external=False,
-                ),
-            }
-            for att in (benefit.attachments or [])
-            if att.is_active and (att.description or '').strip()
-        ]
-        agent_selections.append({
-            'benefit': benefit,
-            'thesis': thesis,
-            'contestation': contestation,
-            'source_section': source_section,
-            'attachments': benefit_attachments,
-        })
-
     title = DOCUMENT_TYPE_LABELS.get(document_type, document_type)
 
     generated_doc = JudicialProcessGeneratedDocument(
@@ -3570,58 +3654,14 @@ def generated_document_create(process_id):
     generated_doc.current_version_id = version.id
     db.session.commit()
 
-    try:
-        contestation_file_path = None
-        contestation_summary_payload = None
-        if document_type == 'impugnacao_contestacao':
-            contestation_file_path = _resolve_latest_contestation_pdf_path(process)
-            contestation_summary_payload = _resolve_latest_contestation_summary_payload(
-                process,
-                law_firm_id,
-            )
+    # Geração em segundo plano (padrão do Revisor FAP): a LLM leva minutos e
+    # estouraria o timeout do proxy; a tela de detalhe acompanha o status.
+    _spawn_generated_document_generation(
+        law_firm_id, process.id, generated_doc.id, version.id,
+        instructions, model_name,
+    )
 
-        agent = AgentGeneratedDocument(model_name=model_name)
-        result_dict, full_text = agent.dispatch(
-            document_type,
-            process,
-            agent_selections,
-            instructions,
-            contestation_file_path=contestation_file_path,
-            contestation_summary_payload=contestation_summary_payload,
-            law_firm_id=law_firm_id,
-        )
-
-        # Enriquecimento jurisprudencial (apenas para impugnação)
-        if document_type == 'impugnacao_contestacao':
-            try:
-                trf_region = getattr(process, 'trf_region', None) or ''
-                full_text = ImpugnacaoEnrichmentAgent(
-                    model_name=ai_model_settings_service.get_model(
-                        law_firm_id, 'impugnacao_enrichment')).enrich(
-                    document_text=full_text,
-                    selections=agent_selections,
-                    law_firm_id=law_firm_id,
-                    trf_region=trf_region,
-                )
-            except Exception as enrich_err:
-                print(f'[EnrichmentAgent] Falha silenciosa: {enrich_err}')
-
-        internal_notes = None
-        if isinstance(result_dict, dict):
-            internal_notes = (result_dict.get('internal_review_notes') or '').strip() or None
-
-        version.content = full_text
-        version.internal_notes = internal_notes
-        version.generation_status = 'completed'
-        db.session.commit()
-
-        flash('Documento gerado com sucesso!', 'success')
-    except Exception as e:
-        version.generation_status = 'failed'
-        version.error_message = str(e)
-        db.session.commit()
-        flash(f'Erro ao gerar o documento: {str(e)}', 'danger')
-
+    flash('Geração iniciada — esta página acompanha o andamento.', 'info')
     return redirect(url_for(
         'process_panel.generated_document_detail',
         process_id=process.id,
@@ -3645,6 +3685,22 @@ def generated_document_detail(process_id, doc_id):
         generated_doc=generated_doc,
         document_type_labels=DOCUMENT_TYPE_LABELS,
     )
+
+
+@process_panel_bp.route('/<int:process_id>/documentos-gerados/<int:doc_id>/status', methods=['GET'])
+@require_law_firm
+def generated_document_status(process_id, doc_id):
+    """Status da versão corrente — consumido pelo polling da tela de detalhe."""
+    law_firm_id = get_current_law_firm_id()
+    generated_doc = JudicialProcessGeneratedDocument.query.filter_by(
+        id=doc_id, process_id=process_id, law_firm_id=law_firm_id
+    ).first_or_404()
+    version = (JudicialProcessGeneratedDocumentVersion.query.get(generated_doc.current_version_id)
+               if generated_doc.current_version_id else None)
+    return jsonify({
+        'status': version.generation_status if version else 'unknown',
+        'version_id': version.id if version else None,
+    })
 
 
 @process_panel_bp.route('/<int:process_id>/documentos-gerados/<int:doc_id>/salvar', methods=['POST'])
@@ -3736,114 +3792,13 @@ def generated_document_regenerate(process_id, doc_id):
     generated_doc.current_version_id = version.id
     db.session.commit()
 
-    try:
-        # Rebuild agent_selections from persisted selections
-        sel_benefit_ids = {s.benefit_id for s in generated_doc.selections}
-        sel_thesis_ids = {s.legal_thesis_id for s in generated_doc.selections if s.legal_thesis_id}
-        benefits_by_id = {
-            b.id: b for b in JudicialProcessBenefit.query.filter(
-                JudicialProcessBenefit.id.in_(sel_benefit_ids)
-            ).options(selectinload(JudicialProcessBenefit.attachments)).all()
-        }
-        contestations_by_key = {}
-        if sel_thesis_ids:
-            for row in JudicialProcessBenefitThesisContestation.query.filter(
-                JudicialProcessBenefitThesisContestation.process_benefit_id.in_(sel_benefit_ids),
-                JudicialProcessBenefitThesisContestation.legal_thesis_id.in_(sel_thesis_ids),
-            ).all():
-                contestations_by_key[(row.process_benefit_id, row.legal_thesis_id)] = row
+    # Regeração em segundo plano — mesmo worker do fluxo de criação.
+    _spawn_generated_document_generation(
+        law_firm_id, process.id, generated_doc.id, version.id,
+        instructions, model_name,
+    )
 
-        theses_by_id = {}
-        if sel_thesis_ids:
-            theses_by_id = {
-                t.id: t for t in JudicialLegalThesis.query.filter(
-                    JudicialLegalThesis.id.in_(sel_thesis_ids)
-                ).all()
-            }
-
-        agent_selections = []
-        for sel in generated_doc.selections:
-            benefit = benefits_by_id.get(sel.benefit_id)
-            if not benefit:
-                continue
-            contestation = contestations_by_key.get((sel.benefit_id, sel.legal_thesis_id))
-            thesis = (
-                contestation.legal_thesis
-                if contestation and contestation.legal_thesis
-                else theses_by_id.get(sel.legal_thesis_id) if sel.legal_thesis_id else None
-            )
-            benefit_attachments = [
-                {
-                    'id': att.id,
-                    'arquivo': att.original_filename or '',
-                    'titulo': (att.description or att.original_filename or '').strip(),
-                    'url': url_for(
-                        'process_panel.download_process_attachment',
-                        process_id=process.id,
-                        attachment_id=att.id,
-                        _external=False,
-                    ),
-                }
-                for att in (benefit.attachments or [])
-                if att.is_active and (att.description or '').strip()
-            ]
-            agent_selections.append({
-                'benefit': benefit,
-                'thesis': thesis,
-                'contestation': contestation,
-                'attachments': benefit_attachments,
-            })
-
-        contestation_file_path = None
-        contestation_summary_payload = None
-        if generated_doc.document_type == 'impugnacao_contestacao':
-            contestation_file_path = _resolve_latest_contestation_pdf_path(process)
-            contestation_summary_payload = _resolve_latest_contestation_summary_payload(
-                process,
-                law_firm_id,
-            )
-
-        agent = AgentGeneratedDocument(model_name=model_name)
-        result_dict, full_text = agent.dispatch(
-            generated_doc.document_type,
-            process,
-            agent_selections,
-            instructions,
-            contestation_file_path=contestation_file_path,
-            contestation_summary_payload=contestation_summary_payload,
-            law_firm_id=law_firm_id,
-        )
-
-        # Enriquecimento jurisprudencial (apenas para impugnação)
-        if generated_doc.document_type == 'impugnacao_contestacao':
-            try:
-                trf_region = getattr(process, 'trf_region', None) or ''
-                full_text = ImpugnacaoEnrichmentAgent(
-                    model_name=ai_model_settings_service.get_model(
-                        law_firm_id, 'impugnacao_enrichment')).enrich(
-                    document_text=full_text,
-                    selections=agent_selections,
-                    law_firm_id=law_firm_id,
-                    trf_region=trf_region,
-                )
-            except Exception as enrich_err:
-                print(f'[EnrichmentAgent] Falha silenciosa: {enrich_err}')
-
-        internal_notes = None
-        if isinstance(result_dict, dict):
-            internal_notes = (result_dict.get('internal_review_notes') or '').strip() or None
-
-        version.content = full_text
-        version.internal_notes = internal_notes
-        version.generation_status = 'completed'
-        db.session.commit()
-        flash('Documento regerado com sucesso!', 'success')
-    except Exception as e:
-        version.generation_status = 'failed'
-        version.error_message = str(e)
-        db.session.commit()
-        flash(f'Erro ao regerar o documento: {str(e)}', 'danger')
-
+    flash('Regeração iniciada — esta página acompanha o andamento.', 'info')
     return redirect(url_for(
         'process_panel.generated_document_detail',
         process_id=process_id, doc_id=doc_id,

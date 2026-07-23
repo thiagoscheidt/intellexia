@@ -408,11 +408,36 @@ breadcrumbs=[
           <div class="fw-semibold">Aguardando geração…</div>
         </div>
         {% elif cv.generation_status == 'processing' %}
-        <div class="status-panel">
-          <div class="spinner-border text-primary mb-3" style="width:2.5rem;height:2.5rem;"></div>
+        <div class="status-panel" id="generationProcessingPanel"
+          data-status-url="{{ url_for('process_panel.generated_document_status', process_id=process.id, doc_id=generated_doc.id) }}">
+          <div class="position-relative d-inline-block mb-3">
+            <div class="spinner-border text-primary" style="width:3rem;height:3rem;border-width:.2rem;"></div>
+            <i class="bi bi-stars position-absolute top-50 start-50 translate-middle"
+              style="color:#6f42c1;"></i>
+          </div>
           <div class="fw-semibold">Gerando documento com IA…</div>
-          <div class="small text-muted mt-1">Isso pode levar alguns instantes.</div>
+          <div class="small text-muted mt-1">
+            A geração roda em segundo plano e pode levar alguns minutos.
+            Esta página atualiza sozinha quando concluir — você pode navegar e voltar depois.
+          </div>
         </div>
+        <script>
+          (function () {
+            var panel = document.getElementById('generationProcessingPanel');
+            if (!panel) return;
+            var poll = setInterval(function () {
+              fetch(panel.dataset.statusUrl, { headers: { 'Accept': 'application/json' } })
+                .then(function (resp) { return resp.ok ? resp.json() : null; })
+                .then(function (data) {
+                  if (data && data.status && data.status !== 'processing') {
+                    clearInterval(poll);
+                    window.location.reload();
+                  }
+                })
+                .catch(function () { /* transitório — tenta de novo no próximo ciclo */ });
+            }, 4000);
+          })();
+        </script>
         {% elif cv.generation_status == 'failed' %}
         <div class="status-panel">
           <i class="bi bi-exclamation-triangle-fill text-danger fs-2 d-block mb-2"></i>
