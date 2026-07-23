@@ -373,6 +373,28 @@ def _load_execution_benefits_spreadsheet(execution) -> dict | None:
     return data if isinstance(data, dict) and data.get('path') else None
 
 
+def _list_execution_files(execution) -> dict:
+    """Arquivos enviados de uma execução (auxiliares, planilha, comparado) para links de download."""
+    aux_files: list[dict] = []
+    try:
+        raw_docs = json.loads(execution.auxiliary_documents_json or '[]')
+    except (TypeError, json.JSONDecodeError):
+        raw_docs = []
+    for index, doc in enumerate(raw_docs):
+        if isinstance(doc, dict) and doc.get('path'):
+            aux_files.append({
+                'index': index,
+                'name': str(doc.get('name') or Path(str(doc['path'])).name),
+            })
+
+    spreadsheet = _load_execution_benefits_spreadsheet(execution)
+    return {
+        'aux': aux_files,
+        'spreadsheet_name': str(spreadsheet.get('name') or Path(str(spreadsheet['path'])).name) if spreadsheet else '',
+        'has_compared': bool(str(execution.compared_document_path or '').strip()),
+    }
+
+
 def _copy_reused_revision_files(previous_execution, upload_dir, timestamp: str,
                                 reuse_auxiliary: bool, reuse_benefits: bool) -> tuple[list[dict], dict | None]:
     """Copia auxiliares/planilha da revisão anterior para a nova execução.
@@ -1442,6 +1464,14 @@ def revision_result(execution_id: int):
 
     execution_superseded = _svc.is_execution_superseded(execution)
 
+    execution_files = _list_execution_files(execution)
+    # Primeira ocorrência vence em caso de nomes duplicados (reversed => menor índice prevalece)
+    aux_links_by_name = {
+        aux['name']: url_for('fap_review.revision_auxiliary_document',
+                             execution_id=execution.id, doc_index=aux['index'])
+        for aux in reversed(execution_files['aux'])
+    }
+
     return render_template('fap_review/revision_result.html',
                           execution=execution,
                           petition=petition,
@@ -1453,6 +1483,8 @@ def revision_result(execution_id: int):
                           checked_finding_indices=checked_finding_indices,
                           triage_complete=triage_complete,
                           execution_superseded=execution_superseded,
+                          execution_files=execution_files,
+                          aux_links_by_name=aux_links_by_name,
                           manual_content=manual_content,
                           manual_reference=manual_reference)
 
@@ -1517,10 +1549,13 @@ def petition_detail(petition_id: int):
         if isinstance(summary, dict):
             latest_executive_summary = summary
 
+    revision_files = {revision.id: _list_execution_files(revision) for revision in revisions}
+
     return render_template(
         'fap_review/petition_detail.html',
         petition=petition,
         revisions=revisions,
+        revision_files=revision_files,
         revision_summary=revision_summary,
         latest_executive_summary=latest_executive_summary,
         audit_entries=audit_entries,
@@ -2174,6 +2209,99 @@ def revision_main_document_preview(execution_id: int):
         highlight_text=(request.args.get('destaque') or '').strip(),
         highlight_excerpt=(request.args.get('trecho') or '').strip(),
         download_url=url_for('fap_review.revision_main_document', execution_id=execution_id),
+    )
+
+
+def _send_execution_file(execution_id: int, file_path: str, download_name: str, missing_message: str):
+    """Entrega um arquivo salvo de uma execução, com fallback amigável quando sumiu do disco."""
+    normalized = str(file_path or '').strip()
+    path = Path(normalized) if normalized else None
+    if not path or not path.exists() or not path.is_file():
+        flash(missing_message, 'error')
+        return redirect(url_for('fap_review.revision_result', execution_id=execution_id))
+
+    return send_file(
+        path,
+        # ?baixar=1 força download; sem o parâmetro, o navegador renderiza inline o que souber
+        as_attachment=bool(request.args.get('baixar')),
+        download_name=download_name or path.name,
+    )
+
+
+@fap_review_bp.route('/revision/<int:execution_id>/document/aux/<int:doc_index>', methods=['GET'])
+@require_law_firm
+def revision_auxiliary_document(execution_id: int, doc_index: int):
+    """Abre/baixa um documento auxiliar salvo da execução de revisão."""
+    law_firm_id = get_current_law_firm_id()
+
+    execution = FapReviewExecution.query.filter_by(
+        id=execution_id,
+        law_firm_id=law_firm_id
+    ).first_or_404()
+
+    try:
+        aux_docs = json.loads(execution.auxiliary_documents_json or '[]')
+    except (TypeError, json.JSONDecodeError):
+        aux_docs = []
+
+    doc = aux_docs[doc_index] if 0 <= doc_index < len(aux_docs) and isinstance(aux_docs[doc_index], dict) else {}
+    if not doc.get('path'):
+        flash('Documento auxiliar não encontrado nesta execução.', 'warning')
+        return redirect(url_for('fap_review.revision_result', execution_id=execution_id))
+
+    return _send_execution_file(
+        execution_id,
+        str(doc['path']),
+        str(doc.get('name') or ''),
+        'Arquivo auxiliar não foi encontrado no armazenamento.',
+    )
+
+
+@fap_review_bp.route('/revision/<int:execution_id>/document/spreadsheet', methods=['GET'])
+@require_law_firm
+def revision_benefits_spreadsheet_file(execution_id: int):
+    """Abre/baixa a planilha de benefícios usada na execução de revisão."""
+    law_firm_id = get_current_law_firm_id()
+
+    execution = FapReviewExecution.query.filter_by(
+        id=execution_id,
+        law_firm_id=law_firm_id
+    ).first_or_404()
+
+    spreadsheet = _load_execution_benefits_spreadsheet(execution)
+    if not spreadsheet:
+        flash('Planilha de benefícios não disponível para esta execução.', 'warning')
+        return redirect(url_for('fap_review.revision_result', execution_id=execution_id))
+
+    return _send_execution_file(
+        execution_id,
+        str(spreadsheet['path']),
+        str(spreadsheet.get('name') or ''),
+        'Planilha de benefícios não foi encontrada no armazenamento.',
+    )
+
+
+@fap_review_bp.route('/revision/<int:execution_id>/document/compared', methods=['GET'])
+@require_law_firm
+def revision_compared_document(execution_id: int):
+    """Abre/baixa a segunda versão (documento comparado) da execução de revisão."""
+    law_firm_id = get_current_law_firm_id()
+
+    execution = FapReviewExecution.query.filter_by(
+        id=execution_id,
+        law_firm_id=law_firm_id
+    ).first_or_404()
+
+    compared_path = str(execution.compared_document_path or '').strip()
+    if not compared_path:
+        flash('Documento comparado não disponível para esta execução.', 'warning')
+        return redirect(url_for('fap_review.revision_result', execution_id=execution_id))
+
+    return _send_execution_file(
+        execution_id,
+        compared_path,
+        Path(compared_path).name,
+        'Documento comparado não foi encontrado no armazenamento.',
     )
 
 

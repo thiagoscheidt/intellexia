@@ -777,6 +777,30 @@
                                 <div class="revision-doc-name">{{ execution.main_document_filename or '-' }}</div>
                                 <div class="revision-doc-meta">{{ 'Comparativa' if execution.comparative_analysis else
                                     'Versão única' }}</div>
+                                {% set files = revision_files.get(execution.id) if revision_files else None %}
+                                <div class="small mt-1">
+                                    <a href="{{ url_for('fap_review.revision_main_document', execution_id=execution.id, baixar=1) }}"
+                                        class="me-2 text-decoration-none" title="Baixar documento principal">
+                                        <i class="bi bi-download me-1"></i>principal</a>
+                                    {% if files and files.has_compared %}
+                                    <a href="{{ url_for('fap_review.revision_compared_document', execution_id=execution.id, baixar=1) }}"
+                                        class="me-2 text-decoration-none" title="Baixar documento comparado">
+                                        <i class="bi bi-file-earmark-diff me-1"></i>comparado</a>
+                                    {% endif %}
+                                    {% if files and files.spreadsheet_name %}
+                                    <a href="{{ url_for('fap_review.revision_benefits_spreadsheet_file', execution_id=execution.id, baixar=1) }}"
+                                        class="me-2 text-decoration-none"
+                                        title="Baixar planilha de benefícios ({{ files.spreadsheet_name }})">
+                                        <i class="bi bi-file-earmark-spreadsheet me-1"></i>planilha</a>
+                                    {% endif %}
+                                    {% if files %}
+                                    {% for aux in files.aux %}
+                                    <a href="{{ url_for('fap_review.revision_auxiliary_document', execution_id=execution.id, doc_index=aux.index, baixar=1) }}"
+                                        class="me-2 text-decoration-none" title="Baixar {{ aux.name }}">
+                                        <i class="bi bi-paperclip me-1"></i>{{ aux.name | truncate(28, True) }}</a>
+                                    {% endfor %}
+                                    {% endif %}
+                                </div>
                             </td>
                             <td>{{ execution.user.name if execution.user else '-' }}</td>
                             <td>{{ execution.created_at.strftime('%d/%m/%Y %H:%M') }}</td>

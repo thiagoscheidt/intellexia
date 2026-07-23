@@ -948,6 +948,43 @@
                                             documento(s) auxiliar(es) · {{ prior_revision_count or 0 }} revisão(ões)
                                             anterior(es)</div>
                                     </div>
+
+                                    {% if execution_files and (execution_files.aux or execution_files.spreadsheet_name
+                                    or execution_files.has_compared) %}
+                                    <div class="execution-side-item">
+                                        <div class="execution-meta-label">Arquivos enviados</div>
+                                        <div class="execution-meta-value d-flex flex-column gap-1">
+                                            {% if execution_files.has_compared %}
+                                            <span class="text-truncate">
+                                                <i class="bi bi-file-earmark-diff me-1 text-muted"></i>
+                                                <a href="{{ url_for('fap_review.revision_compared_document', execution_id=execution.id) }}"
+                                                    target="_blank">Documento comparado</a>
+                                                <a href="{{ url_for('fap_review.revision_compared_document', execution_id=execution.id, baixar=1) }}"
+                                                    class="ms-1 text-muted" title="Baixar"><i
+                                                        class="bi bi-download"></i></a>
+                                            </span>
+                                            {% endif %}
+                                            {% if execution_files.spreadsheet_name %}
+                                            <span class="text-truncate">
+                                                <i class="bi bi-file-earmark-spreadsheet me-1 text-muted"></i>
+                                                <a href="{{ url_for('fap_review.revision_benefits_spreadsheet_file', execution_id=execution.id, baixar=1) }}"
+                                                    title="Baixar planilha de benefícios">{{
+                                                    execution_files.spreadsheet_name }}</a>
+                                            </span>
+                                            {% endif %}
+                                            {% for aux in execution_files.aux %}
+                                            <span class="text-truncate">
+                                                <i class="bi bi-paperclip me-1 text-muted"></i>
+                                                <a href="{{ url_for('fap_review.revision_auxiliary_document', execution_id=execution.id, doc_index=aux.index) }}"
+                                                    target="_blank" title="{{ aux.name }}">{{ aux.name }}</a>
+                                                <a href="{{ url_for('fap_review.revision_auxiliary_document', execution_id=execution.id, doc_index=aux.index, baixar=1) }}"
+                                                    class="ms-1 text-muted" title="Baixar"><i
+                                                        class="bi bi-download"></i></a>
+                                            </span>
+                                            {% endfor %}
+                                        </div>
+                                    </div>
+                                    {% endif %}
                                 </div>
                             </div>
                         </div>
@@ -1254,7 +1291,16 @@
                                     {% for doc in aux_review.documents %}
                                     <tr{% if doc.status == 'error' %} style="background: rgba(220, 53, 69, 0.10);"{% endif %}>
                                         <td class="ps-3">
-                                            <div class="fw-semibold">{{ doc.file_name }}</div>
+                                            {% set aux_link = aux_links_by_name.get(doc.file_name) if aux_links_by_name else None %}
+                                            <div class="fw-semibold">
+                                                {% if aux_link %}
+                                                <a href="{{ aux_link }}" target="_blank">{{ doc.file_name }}</a>
+                                                <a href="{{ aux_link }}?baixar=1" class="ms-1 text-muted"
+                                                    title="Baixar"><i class="bi bi-download"></i></a>
+                                                {% else %}
+                                                {{ doc.file_name }}
+                                                {% endif %}
+                                            </div>
                                             {% if doc.from_cache %}
                                             <span class="badge rounded-pill bg-light text-dark border mt-1">
                                                 <i class="bi bi-lightning-charge me-1"></i>Reaproveitado

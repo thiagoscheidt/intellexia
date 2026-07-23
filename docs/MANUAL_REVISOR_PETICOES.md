@@ -186,6 +186,7 @@ Como funciona:
 - Sem planilha, os números de benefício são localizados na própria petição.
 - Arquivos reenviados em revisões seguintes não são reprocessados (aparecem com o selo "Reaproveitado").
 - Documentos que a IA não conseguir vincular a nenhum benefício aparecem como "Sem vínculo identificado" — confira-os manualmente.
+- Os arquivos enviados ficam disponíveis para **abrir/baixar**: pelo nome no próprio card, no painel lateral **Arquivos enviados** da tela de resultado (incluindo planilha e documento comparado) e na lista de revisões do histórico da petição.
 
 ### Ações da tela
 
