@@ -1,0 +1,236 @@
+{% extends "layout/base.html" %}
+{% from "partials/page_hero.html" import page_hero %}
+{% from "partials/model_picker_modal.html" import model_picker_modal %}
+
+{% block title %}Configurações de IA — Painel de Processos{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/model-picker-modal.css') }}">
+<style>
+  .ai-agent-row {
+    border: 1px solid var(--bs-border-color-translucent);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+  }
+
+  .ai-agent-row+.ai-agent-row {
+    margin-top: .75rem;
+  }
+
+  .model-selector-card {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+    border: 1px solid var(--bs-border-color);
+    border-radius: 8px;
+    padding: .5rem .75rem;
+    background: var(--bs-body-bg);
+  }
+
+  .model-selector-name {
+    font-weight: 600;
+    font-size: .9rem;
+  }
+
+  .model-selector-id {
+    font-size: .75rem;
+    color: var(--bs-secondary-color);
+    font-family: var(--bs-font-monospace);
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+{% call page_hero(title='Configurações de IA', subtitle='Modelos usados pelos agentes do Painel de Processos',
+  icon='bi bi-cpu') %}
+<nav aria-label="breadcrumb">
+  <ol class="breadcrumb mb-4 bg-transparent small">
+    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house-fill"></i>
+        Home</a></li>
+    <li class="breadcrumb-item"><a href="{{ url_for('process_panel.list_processes') }}">Processos</a></li>
+    <li class="breadcrumb-item active">Configurações de IA</li>
+  </ol>
+</nav>
+{% endcall %}
+
+<div class="app-content">
+  <div class="container-fluid">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+    {% for category, message in messages %}
+    <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+      <i class="bi bi-info-circle me-1"></i>{{ message }}
+      <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+    </div>
+    {% endfor %}
+    {% endwith %}
+
+    {% if models_error %}
+    <div class="alert alert-warning py-2">
+      <i class="bi bi-exclamation-triangle me-1"></i>{{ models_error }}
+    </div>
+    {% endif %}
+
+    <form method="post" action="{{ url_for('process_panel.ai_settings_save') }}">
+      <div class="row">
+        <div class="col-lg-9 col-xl-8">
+          <div class="card card-primary card-outline shadow-sm mb-4">
+            <div class="card-header">
+              <h3 class="card-title"><i class="bi bi-journal-bookmark me-2"></i>Base de conhecimento —
+                Peças-Modelo (Impugnação)</h3>
+              <div class="card-tools">
+                <a href="{{ url_for('impugnacao_references.list_references') }}" class="btn btn-sm btn-primary">
+                  <i class="bi bi-journal-bookmark me-1"></i>Gerenciar peças-modelo
+                </a>
+              </div>
+            </div>
+            <div class="card-body">
+              <p class="small text-muted mb-3">
+                O gerador de impugnação e o subagente de enriquecimento consultam estas peças aprovadas do
+                escritório (argumentos, jurisprudências e estrutura por tese). Quanto melhor a base, melhor o
+                documento gerado — teses sem peça-modelo são apontadas na própria geração.
+              </p>
+              <div class="d-flex flex-wrap gap-2">
+                <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">
+                  {{ impugnacao_refs.active }} ativa{{ 's' if impugnacao_refs.active != 1 }}</span>
+                <span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle">
+                  {{ impugnacao_refs.merito }} de mérito (modo A)</span>
+                <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle">
+                  {{ impugnacao_refs.defesa }} de defesa (modo B)</span>
+                {% if impugnacao_refs.archived %}
+                <span class="badge bg-secondary-subtle text-secondary-emphasis border">
+                  {{ impugnacao_refs.archived }} arquivada{{ 's' if impugnacao_refs.archived != 1 }}</span>
+                {% endif %}
+              </div>
+              {% if not impugnacao_refs.active %}
+              <div class="alert alert-warning py-2 small mt-3 mb-0">
+                <i class="bi bi-exclamation-triangle me-1"></i>Nenhuma peça-modelo ativa — as impugnações serão
+                geradas sem referências do escritório.
+              </div>
+              {% endif %}
+            </div>
+          </div>
+
+          {% for group in groups %}
+          <div class="card card-primary card-outline shadow-sm mb-4">
+            <div class="card-header">
+              <h3 class="card-title">
+                <i class="bi {{ 'bi-file-earmark-text' if loop.first else 'bi-stars' }} me-2"></i>{{ group.group }}
+              </h3>
+            </div>
+            <div class="card-body">
+              {% for agent in group.agents %}
+              <div class="ai-agent-row">
+                <div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-2">
+                  <div>
+                    <div class="fw-semibold">{{ agent.label }}</div>
+                    <div class="small text-muted">{{ agent.description }}</div>
+                  </div>
+                </div>
+                <input type="hidden" class="js-agent-model" id="model__{{ agent.key }}"
+                  name="model__{{ agent.key }}" value="{{ agent.configured or '' }}"
+                  data-key="{{ agent.key }}" data-default="{{ agent.default }}">
+                <div class="model-selector-card">
+                  <div>
+                    <div class="model-selector-name" id="modelName-{{ agent.key }}"></div>
+                    <div class="model-selector-id" id="modelId-{{ agent.key }}"></div>
+                  </div>
+                  <div class="d-flex gap-1 flex-shrink-0">
+                    <button type="button" class="btn btn-sm btn-outline-primary"
+                      data-bs-toggle="modal" data-bs-target="#pickerModal-{{ agent.key }}">
+                      <i class="bi bi-cpu me-1"></i>Alterar
+                    </button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary js-model-reset"
+                      data-key="{{ agent.key }}" title="Voltar ao padrão do sistema ({{ agent.default }})">
+                      Usar padrão
+                    </button>
+                  </div>
+                </div>
+              </div>
+              {% endfor %}
+            </div>
+          </div>
+          {% endfor %}
+
+          <div class="d-flex justify-content-end gap-2 mb-4">
+            <a href="{{ url_for('process_panel.list_processes') }}" class="btn btn-outline-secondary">Cancelar</a>
+            <button type="submit" class="btn btn-primary">
+              <i class="bi bi-check-lg me-1"></i>Salvar configurações
+            </button>
+          </div>
+        </div>
+        <div class="col-lg-3 col-xl-4">
+          <div class="card card-light shadow-sm">
+            <div class="card-body small text-muted">
+              <p class="mb-2"><i class="bi bi-info-circle me-1"></i>Sem configuração, cada agente usa o
+                <strong>padrão do sistema</strong> (definido no ambiente da instalação). A escolha aqui vale só
+                para este escritório.</p>
+              <p class="mb-0"><i class="bi bi-coin me-1"></i>Modelos maiores melhoram a qualidade e aumentam o
+                custo por documento — o consumo aparece no Dashboard de Tokens.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% for group in groups %}{% for agent in group.agents %}
+{{ model_picker_modal(modal_id='pickerModal-' ~ agent.key, title='Selecionar modelo — ' ~ agent.label) }}
+{% endfor %}{% endfor %}
+
+<script type="application/json" id="availableModelsData">{{ available_models | tojson }}</script>
+{% endblock %}
+
+{% block extra_js %}
+<script src="{{ url_for('static', filename='js/model-picker-modal.js') }}"></script>
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    const availableModels = JSON.parse(
+      document.getElementById('availableModelsData').textContent || '[]');
+    const updaters = {};
+
+    document.querySelectorAll('.js-agent-model').forEach(function (input) {
+      const key = input.dataset.key;
+      const nameEl = document.getElementById('modelName-' + key);
+      const idEl = document.getElementById('modelId-' + key);
+
+      function update() {
+        const val = input.value || '';
+        if (!val) {
+          nameEl.textContent = 'Padrão do sistema';
+          idEl.textContent = input.dataset.default;
+          return;
+        }
+        const model = availableModels.find(function (m) { return m.id === val; });
+        nameEl.textContent = model ? model.name : val;
+        idEl.textContent = val;
+      }
+
+      updaters[key] = update;
+      update();
+
+      if (window.ModelPickerModal) {
+        new window.ModelPickerModal({
+          modalId: 'pickerModal-' + key,
+          models: availableModels,
+          defaultModelId: input.value || '',
+          getSelectedModelId: function () { return input.value || ''; },
+          onSelect: function (modelId) {
+            input.value = modelId;
+            update();
+          },
+        });
+      }
+    });
+
+    document.querySelectorAll('.js-model-reset').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        const input = document.getElementById('model__' + btn.dataset.key);
+        input.value = '';
+        if (updaters[btn.dataset.key]) updaters[btn.dataset.key]();
+      });
+    });
+  });
+</script>
+{% endblock %}

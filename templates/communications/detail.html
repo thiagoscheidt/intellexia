@@ -26,7 +26,11 @@
                     <td>{{ comm.data_disponibilizacao.strftime('%d/%m/%Y') if comm.data_disponibilizacao else '—' }}</td></tr>
                 <tr><th class="ps-3 pm-th">Tribunal</th><td><span class="badge pm-chip pm-chip--mono">{{ comm.sigla_tribunal or '—' }}</span></td></tr>
                 <tr><th class="ps-3 pm-th">Tipo</th><td>{{ comm.tipo_comunicacao or '—' }}</td></tr>
-                <tr><th class="ps-3 pm-th">Tipo de documento</th><td>{{ comm.tipo_documento or '—' }}</td></tr>
+                <tr><th class="ps-3 pm-th">Tipo de documento</th>
+                    <td>{% if comm.tipo_documento %}<span
+                        class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle"><i
+                          class="bi bi-file-earmark-text me-1"></i>{{ comm.tipo_documento }}</span>{% else %}—{% endif
+                      %}</td></tr>
                 <tr><th class="ps-3 pm-th">Órgão</th><td>{{ comm.nome_orgao or '—' }}</td></tr>
                 <tr><th class="ps-3 pm-th">Classe</th><td>{{ comm.nome_classe or '—' }}{% if comm.codigo_classe %} <small class="text-muted">({{ comm.codigo_classe }})</small>{% endif %}</td></tr>
                 <tr><th class="ps-3 pm-th">Meio</th><td>{{ comm.meio or '—' }}</td></tr>
@@ -98,6 +102,12 @@
         <div class="card pm-card mb-3">
           <div class="card-header d-flex align-items-center justify-content-between">
             <h3 class="card-title"><i class="bi bi-stars me-1"></i> Explicação da IA</h3>
+            <button type="button" id="explainAgainBtn" data-keep-visible="1"
+              class="btn btn-sm btn-outline-secondary {{ 'd-none' if not comm.analysis_json }}"
+              title="Descartar a análise em cache e gerar uma nova (consome IA)"
+              data-explain-url="{{ url_for('communications.explain_communication', communication_id=comm.id) }}?force=1">
+              <i class="bi bi-arrow-clockwise me-1"></i>Gerar novamente
+            </button>
           </div>
           <div class="card-body">
             <div id="explainContainer"></div>
@@ -136,8 +146,19 @@
     if (!btn || !container) return;
 
     btn.addEventListener('click', function () {
-      CommExplainer.explain(btn.getAttribute('data-explain-url'), container, btn);
+      CommExplainer.explain(btn.getAttribute('data-explain-url'), container, btn)
+        .then(function () {
+          var again = document.getElementById('explainAgainBtn');
+          if (again) again.classList.remove('d-none');
+        });
     });
+
+    var againBtn = document.getElementById('explainAgainBtn');
+    if (againBtn) {
+      againBtn.addEventListener('click', function () {
+        CommExplainer.explain(againBtn.getAttribute('data-explain-url'), container, againBtn);
+      });
+    }
 
     {% if comm.analysis_json %}
     // Já existe análise em cache — renderiza direto, sem custo de IA.

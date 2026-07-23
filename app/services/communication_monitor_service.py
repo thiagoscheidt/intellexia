@@ -251,6 +251,37 @@ def _upsert_communication(law_firm_id, parsed, raw_item, stats,
 
 # ------------------------------------------------------------------ sincronia
 
+def sync_process(law_firm_id, process, client=None):
+    """Sincroniza sob demanda as comunicações de UM processo (botão da tela).
+
+    Consulta o histórico por numeroProcesso no Comunica PJe e aplica o mesmo
+    upsert por hash da sincronização geral — rodar junto com o cron não
+    duplica. Retorna (stats, erro): stats tem 'created'/'updated'; erro é
+    None em sucesso.
+    """
+    digits = only_digits(process.process_number or '')
+    if len(digits) != 20:
+        return None, 'Processo sem número CNJ completo — não é possível consultar o DJEN.'
+
+    client = client or ComunicaPjeClient()
+    stats = {'created': 0, 'updated': 0, 'skipped_no_hash': 0}
+
+    # fase de rede (sem transação aberta) — mesma disciplina de _ingest_batch
+    db.session.rollback()
+    try:
+        items = client.get_comunicacoes_processo(digits)
+    except ComunicaPjeError as exc:
+        return None, str(exc)
+
+    # fase de escrita: transação curta, nenhuma chamada HTTP
+    for item in items:
+        parsed = client.parse_comunicacao(item)
+        _upsert_communication(law_firm_id, parsed, item, stats,
+                              known_process_id=process.id)
+    db.session.commit()
+    return stats, None
+
+
 def sync_lawyer(law_firm_id, lawyer, client=None, dry_run=False, full_from=None):
     """Sincroniza as comunicações de um advogado. Retorna dict de estatísticas.
 

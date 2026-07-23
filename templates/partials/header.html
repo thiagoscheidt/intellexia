@@ -17,9 +17,26 @@
       <!--begin::Contadores por módulo (pendências)-->
       {% set show_communications_chip = can_view_module('communications') %}
       {% set show_fap_review_chip = can_view_module('fap_review') and fap_review_pending_counts %}
-      {% if show_communications_chip or show_fap_review_chip %}
+      {% set show_deadlines_chip = can_view_module('process_panel') and process_deadline_counts
+         and (process_deadline_counts.overdue or process_deadline_counts.soon) %}
+      {% if show_communications_chip or show_fap_review_chip or show_deadlines_chip %}
       <li class="nav-item d-flex align-items-center">
         <div class="module-counters">
+          {% if show_deadlines_chip %}
+          <a class="module-counter-chip" href="{{ url_for('process_panel.list_processes') }}"
+            title="Cumprimento de Prazos — {{ process_deadline_counts.overdue }} vencido(s) · {{ process_deadline_counts.soon }} nos próximos 7 dias">
+            <i class="bi bi-alarm"></i>
+            <span class="mc-label">Prazos</span>
+            {% if process_deadline_counts.overdue %}
+            <span class="badge rounded-pill text-bg-danger">{{ process_deadline_counts.overdue if
+              process_deadline_counts.overdue < 100 else '99+' }}</span>
+            {% endif %}
+            {% if process_deadline_counts.soon %}
+            <span class="badge rounded-pill text-bg-warning">{{ process_deadline_counts.soon if
+              process_deadline_counts.soon < 100 else '99+' }}</span>
+            {% endif %}
+          </a>
+          {% endif %}
           {% if show_communications_chip %}
           <a class="module-counter-chip" href="{{ url_for('communications.list_communications') }}"
             title="Monitoramento de Processos{% if communications_unread_count %} — {{ communications_unread_count }} comunicação(ões) não lida(s){% endif %}">

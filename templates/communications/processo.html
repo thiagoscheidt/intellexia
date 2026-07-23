@@ -57,7 +57,7 @@
                 <th style="width: 130px;">Data</th>
                 <th style="width: 130px;">Tipo</th>
                 <th style="width: 120px;">Fonte</th>
-                <th style="width: 220px;">Órgão</th>
+                <th style="width: 220px;">Documento / Órgão</th>
                 <th>Teor</th>
                 <th style="width: 130px;" class="text-end">Ações</th>
               </tr>
@@ -103,8 +103,13 @@
                 </td>
                 <td><span class="badge pm-chip">{{ comm.SOURCE_LABELS.get(comm.source, comm.source or '—') }}</span></td>
                 <td>
-                  <small>{{ comm.nome_orgao or '—' }}</small>
-                  {% if comm.tipo_documento %}<br><small class="text-muted">{{ comm.tipo_documento }}</small>{% endif %}
+                  {% if comm.tipo_documento %}
+                  <span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle"
+                    title="Tipo de documento informado pelo tribunal"><i class="bi bi-file-earmark-text me-1"></i>{{
+                    comm.tipo_documento }}</span>
+                  <br>
+                  {% endif %}
+                  <small class="text-muted">{{ comm.nome_orgao or '—' }}</small>
                 </td>
                 <td>
                   {% if comm.texto %}

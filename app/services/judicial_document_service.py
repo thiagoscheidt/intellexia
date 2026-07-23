@@ -13,6 +13,7 @@ from rich import print
 from app.agents.document_processing.agent_document_extractor import AgentDocumentExtractor
 from app.agents.processes.judicial_contestation_analysis_agent import JudicialContestationAnalysisAgent
 from app.agents.processes.judicial_document_summary_agent import JudicialDocumentSummaryAgent
+from app.services import ai_model_settings_service
 from sqlalchemy import and_
 
 from app.models import (
@@ -952,7 +953,9 @@ class JudicialDocumentService:
                 }
             )
 
-        analysis_agent = JudicialContestationAnalysisAgent()
+        analysis_agent = JudicialContestationAnalysisAgent(
+            model_name=ai_model_settings_service.get_model(
+                process.law_firm_id, 'judicial_contestation_analysis'))
         analysis_payload = analysis_agent.analyze_contestation(
             file_path=str(file_path),
             benefits=benefits_payload,
@@ -1160,6 +1163,8 @@ class JudicialDocumentService:
             law_firm_id=process.law_firm_id,
             document_data=document_data,
             document_faiss_vector=document_faiss_vector,
+            model_name=ai_model_settings_service.get_model(
+                process.law_firm_id, 'judicial_document_extractor'),
         )
 
         extraction_payload = extractor_agent.extract_document_data()
@@ -1311,7 +1316,9 @@ class JudicialDocumentService:
                 if context_event_identifier:
                     document_event_identifier = context_event_identifier
 
-            summary_agent = JudicialDocumentSummaryAgent()
+            summary_agent = JudicialDocumentSummaryAgent(
+                model_name=ai_model_settings_service.get_model(
+                    process.law_firm_id, 'judicial_document_summary'))
             summary_result = summary_agent.summarize_document(
                 file_path=str(document.file_path),
                 document_type_name=doc_type_name,

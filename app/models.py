@@ -1143,6 +1143,7 @@ class JudicialProcess(db.Model):
     court_id = db.Column(db.Integer, db.ForeignKey('courts.id'), index=True)
     plaintiff_client_id = db.Column(db.Integer, db.ForeignKey('clients.id'), index=True)
     defendant_id = db.Column(db.Integer, db.ForeignKey('judicial_defendants.id'), index=True)
+    responsible_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)  # Advogado responsável
     
     # Identificação do processo (CNJ format: NNNNNNN-DD.AAAA.J.TR.OOOO)
     process_number = db.Column(db.String(25), nullable=True, index=True)
@@ -1185,7 +1186,8 @@ class JudicialProcess(db.Model):
     
     # Relacionamentos
     law_firm = db.relationship('LawFirm')
-    user = db.relationship('User')
+    user = db.relationship('User', foreign_keys=[user_id])
+    responsible_user = db.relationship('User', foreign_keys=[responsible_user_id])
     case = db.relationship('Case', backref='judicial_processes')
     court = db.relationship('Court')
     plaintiff_client = db.relationship('Client', back_populates='judicial_processes_as_plaintiff')
@@ -1215,7 +1217,9 @@ class JudicialProcess(db.Model):
     def tribunal_name(self):
         if self.court and self.court.orgao_julgador:
             return self.court.orgao_julgador
-        return self.tribunal
+        # Saneia lixo de importações antigas ("None"/"null" como string)
+        value = (self.tribunal or '').strip()
+        return value if value and value.lower() not in ('none', 'null') else None
     
     def __repr__(self):
         return f'<JudicialProcess {self.process_number}>'
@@ -1350,10 +1354,12 @@ class JudicialDocument(db.Model):
 
     id = db.Column(db.Integer, primary_key=True)
     process_id = db.Column(db.Integer, db.ForeignKey('judicial_processes.id'), nullable=False, index=True)
-    event_id = db.Column(db.Integer, db.ForeignKey('judicial_events.id'), nullable=False, index=True)
+    # event_id/type são opcionais: documento enviado sem tipo definido tem o
+    # tipo detectado pela IA no processamento (resolve_type_and_phase).
+    event_id = db.Column(db.Integer, db.ForeignKey('judicial_events.id'), nullable=True, index=True)
     knowledge_base_id = db.Column(db.Integer, db.ForeignKey('knowledge_base.id'), index=True)
 
-    type = db.Column(db.String(100), nullable=False)
+    type = db.Column(db.String(100), nullable=True)
     file_name = db.Column(db.String(255), nullable=False)
     file_path = db.Column(db.String(500), nullable=False)
     file_hash = db.Column(db.String(64), index=True)
@@ -3441,6 +3447,124 @@ class ProcessCommunication(db.Model):
 
     def __repr__(self):
         return f'<ProcessCommunication {self.hash} - {self.numero_processo}>'
+
+
+class ProcessDeadline(db.Model):
+    """Tabela process_deadlines - Prazos e audiências do Painel de Processos.
+
+    Unifica prazos processuais e audiências (``kind``). Pode nascer manual ou
+    derivado de uma intimação do Monitoramento de Processos (``origin`` +
+    ``communication_id``). Fonte única de leitura: process_deadline_service.
+    """
+    __tablename__ = 'process_deadlines'
+    __table_args__ = (
+        db.Index('ix_process_deadlines_firm_status_due', 'law_firm_id', 'status', 'due_date'),
+    )
+
+    KIND_PRAZO = 'prazo'
+    KIND_AUDIENCIA = 'audiencia'
+    STATUS_PENDING = 'pending'
+    STATUS_DONE = 'done'
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    process_id = db.Column(db.Integer, db.ForeignKey('judicial_processes.id'), nullable=False, index=True)
+
+    kind = db.Column(db.String(20), nullable=False, default=KIND_PRAZO)
+    title = db.Column(db.String(255), nullable=False)
+    due_date = db.Column(db.Date, nullable=False, index=True)
+    due_time = db.Column(db.Time)            # audiências
+    location = db.Column(db.String(255))     # audiências
+
+    origin = db.Column(db.String(20), nullable=False, default='manual')  # manual | communication
+    communication_id = db.Column(db.Integer, db.ForeignKey('process_communications.id'), index=True)
+    responsible_user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
+
+    status = db.Column(db.String(20), nullable=False, default=STATUS_PENDING)
+    done_at = db.Column(db.DateTime)
+    done_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    notes = db.Column(db.Text)
+
+    created_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    process = db.relationship('JudicialProcess', backref=db.backref('deadlines', lazy='dynamic'))
+    communication = db.relationship('ProcessCommunication')
+    responsible_user = db.relationship('User', foreign_keys=[responsible_user_id])
+    done_by_user = db.relationship('User', foreign_keys=[done_by_user_id])
+    created_by_user = db.relationship('User', foreign_keys=[created_by_user_id])
+
+    def __repr__(self):
+        return f'<ProcessDeadline {self.id} {self.kind} {self.due_date}>'
+
+
+class ProcessDatajudSnapshot(db.Model):
+    """Tabela process_datajud_snapshots - Cache da movimentação DataJud por processo.
+
+    Uma linha por processo (upsert). ``payload_json`` guarda o JSON já
+    normalizado (instancias/movimentos) que a aba DataJud renderiza — a tela
+    nunca reprocessa o formato cru da API. Atualização: sob demanda (botão
+    Atualizar / primeira visita) ou pelo cron scripts/sync_datajud_snapshots.py.
+    Fonte única de leitura/escrita: datajud_snapshot_service.
+    """
+    __tablename__ = 'process_datajud_snapshots'
+    __table_args__ = (
+        db.UniqueConstraint('law_firm_id', 'process_id', name='uq_process_datajud_snapshots_firm_process'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    process_id = db.Column(db.Integer, db.ForeignKey('judicial_processes.id'), nullable=False, index=True)
+
+    payload_json = db.Column(db.JSON)
+    fetched_at = db.Column(db.DateTime, index=True)
+    last_movement_at = db.Column(db.DateTime, index=True)
+    fetch_status = db.Column(db.String(20), nullable=False, default='ok')  # ok | error
+    last_error = db.Column(db.Text)
+
+    # "Ciente" do radar: movimentações até este instante já foram vistas/tratadas;
+    # um movimento mais novo que o ciente volta a aparecer no radar.
+    movement_ack_at = db.Column(db.DateTime)
+    movement_ack_user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    process = db.relationship('JudicialProcess', backref=db.backref('datajud_snapshot', uselist=False))
+
+    def __repr__(self):
+        return f'<ProcessDatajudSnapshot process={self.process_id} fetched={self.fetched_at}>'
+
+
+class AiModelSetting(db.Model):
+    """Tabela ai_model_settings - Modelo de IA por agente e por escritório.
+
+    Uma linha por (law_firm_id, agent_key) configurado; sem linha, o agente
+    usa o padrão do sistema (env/config) — comportamento idêntico ao anterior.
+    Registry de agentes configuráveis e resolução do modelo efetivo:
+    app/services/ai_model_settings_service.py — agente novo entra no registry,
+    sem schema novo.
+    """
+    __tablename__ = 'ai_model_settings'
+    __table_args__ = (
+        db.UniqueConstraint('law_firm_id', 'agent_key', name='uq_ai_model_settings_firm_agent'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    agent_key = db.Column(db.String(100), nullable=False, index=True)
+    model_name = db.Column(db.String(150), nullable=False)
+
+    updated_by_user_id = db.Column(db.Integer, db.ForeignKey('users.id'))
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    law_firm = db.relationship('LawFirm')
+    updated_by_user = db.relationship('User')
+
+    def __repr__(self):
+        return f'<AiModelSetting {self.agent_key}={self.model_name} firm={self.law_firm_id}>'
 
 
 class CommunicationSyncState(db.Model):

@@ -17,6 +17,17 @@ window.CommExplainer = (function () {
     apenas_ciencia: { label: 'Apenas ciência', cls: 'bg-secondary-subtle text-secondary-emphasis' }
   };
 
+  var TIPO_ATO = {
+    sentenca: { label: 'Sentença', cls: 'bg-primary-subtle text-primary-emphasis' },
+    acordao: { label: 'Acórdão', cls: 'bg-primary-subtle text-primary-emphasis' },
+    decisao_interlocutoria: { label: 'Decisão interlocutória', cls: 'bg-info-subtle text-info-emphasis' },
+    despacho: { label: 'Despacho', cls: 'bg-secondary-subtle text-secondary-emphasis' },
+    ato_ordinatorio: { label: 'Ato ordinatório', cls: 'bg-secondary-subtle text-secondary-emphasis' },
+    edital: { label: 'Edital', cls: 'bg-warning-subtle text-warning-emphasis' },
+    audiencia: { label: 'Audiência', cls: 'bg-warning-subtle text-warning-emphasis' },
+    outro: { label: 'Outro ato', cls: 'bg-secondary-subtle text-secondary-emphasis' }
+  };
+
   function el(tag, className, text) {
     var node = document.createElement(tag);
     if (className) node.className = className;
@@ -36,9 +47,17 @@ window.CommExplainer = (function () {
     var card = el('div', 'pm-explain');
 
     var badges = el('div', 'mb-2');
+    if (data.tipo_ato) badges.appendChild(badge(TIPO_ATO, data.tipo_ato));
     badges.appendChild(badge(ACAO, data.acao_requerida));
     badges.appendChild(badge(URGENCIA, data.urgencia));
     card.appendChild(badges);
+
+    if (data.tipo_ato_detalhe) {
+      var ato = el('p', 'mb-2 small');
+      ato.appendChild(el('strong', null, 'Ato comunicado: '));
+      ato.appendChild(document.createTextNode(data.tipo_ato_detalhe));
+      card.appendChild(ato);
+    }
 
     if (data.resumo) card.appendChild(el('p', 'mb-2', data.resumo));
 
@@ -113,7 +132,7 @@ window.CommExplainer = (function () {
       .then(function (payload) {
         if (!payload.success) throw new Error(payload.message || 'Falha ao gerar a explicação.');
         render(container, payload);
-        if (btn) btn.classList.add('d-none');
+        if (btn && !btn.hasAttribute('data-keep-visible')) btn.classList.add('d-none');
       })
       .catch(function (err) {
         var alerta = el('div', 'alert alert-warning small mb-0', err.message || 'Falha ao gerar a explicação.');

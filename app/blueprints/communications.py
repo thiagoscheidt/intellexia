@@ -169,7 +169,8 @@ def explain_communication(communication_id):
     """Explicação da comunicação via IA (com cache — só paga o modelo uma vez)."""
     try:
         result = monitor.explain_communication(
-            get_current_law_firm_id(), communication_id, user_id=session.get('user_id')
+            get_current_law_firm_id(), communication_id, user_id=session.get('user_id'),
+            force=request.args.get('force') == '1',
         )
         return jsonify({"success": True, **result})
     except ValueError as e:

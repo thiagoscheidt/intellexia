@@ -144,6 +144,21 @@ subtitle=hero_subtitle|default(''), icon='bi bi-file-earmark-plus') %}
                                         </div>
                                     </div>
 
+                                    <!-- Advogado responsável -->
+                                    <div class="mb-3">
+                                        <label for="responsible_user_id" class="form-label">Advogado
+                                            responsável</label>
+                                        <select class="form-select" id="responsible_user_id"
+                                            name="responsible_user_id">
+                                            <option value="">— sem responsável —</option>
+                                            {% for u in firm_users|default([]) %}
+                                            <option value="{{ u.id }}"
+                                                {{ 'selected' if process and process.responsible_user_id == u.id }}>
+                                                {{ u.name }}</option>
+                                            {% endfor %}
+                                        </select>
+                                    </div>
+
                                     <!-- Associar a um Caso -->
                                     <div class="mb-3">
                                         <label for="case_id" class="form-label">Associar a um Caso (Opcional)</label>

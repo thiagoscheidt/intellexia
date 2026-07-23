@@ -275,9 +275,11 @@ bi-file-earmark-plus') %}
                                             required>
                                     </div>
                                     <small class="text-muted d-block mt-2">
-                                        Para cada arquivo, selecione o tipo conforme a configuração em
+                                        Para cada arquivo, selecione o tipo (configurável em
                                         <a href="{{ url_for('process_panel.manage_document_types') }}"
-                                            target="_blank">Tipos de Documento</a>.
+                                            target="_blank">Tipos de Documento</a>) — ou deixe em
+                                        <strong>Detectar automaticamente</strong> e a IA identifica no
+                                        processamento.
                                     </small>
                                 </div>
 
@@ -357,8 +359,8 @@ bi-file-earmark-plus') %}
 
                 <div class="alert alert-info mt-3 mb-0">
                     <i class="bi bi-info-circle me-2"></i>
-                    Depois do cadastro rápido, use <strong>Editar Processo</strong> para completar tribunal, juiz,
-                    seção, unidade de origem e demais informações.
+                    Após o envio, o sistema tentará identificar automaticamente tribunal, juiz, seção,
+                    unidade de origem e demais informações a partir dos documentos enviados.
                 </div>
             </div>
         </div>
@@ -433,12 +435,11 @@ bi-file-earmark-plus') %}
         const select = document.createElement('select');
         select.className = 'form-select form-select-sm';
         select.name = 'document_type_ids';
-        select.required = true;
         select.dataset.index = String(rowIndex);
 
         const emptyOption = document.createElement('option');
         emptyOption.value = '';
-        emptyOption.textContent = 'Selecione o tipo de documento';
+        emptyOption.textContent = '✦ Detectar automaticamente com IA';
         select.appendChild(emptyOption);
 
         docTypeOptions.forEach((item) => {
@@ -564,12 +565,6 @@ bi-file-earmark-plus') %}
             return false;
         }
 
-        const missingType = fileItems.some((item) => !item.documentTypeId);
-        if (missingType) {
-            alert('Selecione o tipo de documento para todos os arquivos.');
-            return false;
-        }
-
         return true;
     }
 
@@ -598,7 +593,7 @@ bi-file-earmark-plus') %}
             const left = document.createElement('span');
             left.textContent = item.file.name;
             const right = document.createElement('strong');
-            right.textContent = typeLabel ? typeLabel.label : 'Tipo não selecionado';
+            right.textContent = typeLabel ? typeLabel.label : '✦ Detecção automática (IA)';
 
             line.appendChild(left);
             line.appendChild(right);

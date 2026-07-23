@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional, List
 
 from dotenv import load_dotenv
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 from langchain.agents import create_agent
 from langchain.agents.structured_output import ToolStrategy
 from langchain_openai import ChatOpenAI
@@ -20,18 +20,31 @@ from app.services.token_usage_service import TokenUsageService
 load_dotenv()
 
 
+class UnionArgumentsByThesis(BaseModel):
+    """Argumentos da União para uma tese/tema (documentos de contestação).
+
+    Modelo fechado (extra='forbid'): o modo estrito de saída estruturada exige
+    additionalProperties=false em todos os objetos do schema — um dict aberto
+    é rejeitado pelo provedor (invalid_json_schema).
+    """
+    model_config = ConfigDict(extra='forbid')
+
+    thesis: str = Field(description='Nome da tese/tema')
+    status: str = Field(
+        description="'procedente', 'improcedente', 'parcial' ou 'nao identificado'")
+    arguments: List[str] = Field(
+        default_factory=list, description='Fundamentos objetivos da União')
+
+
 class JudicialDocumentSummarySchema(BaseModel):
     summary: str = Field(description="Resumo geral do documento")
     summary_short: str = Field(default="", description="Resumo executivo: 2-4 frases objetivas com panorama, risco principal e próximo passo")
     summary_long: str = Field(default="", description="Resumo completo: 4-7 parágrafos detalhados, com contexto fático, fundamentos, pedidos, provas e impactos processuais")
     key_points: List[str] = Field(default_factory=list, description="Pontos-chave do documento")
     requests: List[str] = Field(default_factory=list, description="Pedidos identificados no documento")
-    union_arguments_by_thesis: List[dict] = Field(
+    union_arguments_by_thesis: List['UnionArgumentsByThesis'] = Field(
         default_factory=list,
-        description=(
-            "Argumentos da União por tese para documentos de contestação. "
-            "Cada item: {thesis: str, status: str, arguments: list[str]}."
-        ),
+        description='Argumentos da União por tese para documentos de contestação.',
     )
     document_type: str = Field(default="", description="Tipo do documento judicial")
     file_type: str = Field(default="", description="Tipo de arquivo (PDF, DOCX, etc.)")

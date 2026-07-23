@@ -44,6 +44,11 @@ class CommunicationExplanation(BaseModel):
     """Explicação estruturada de uma comunicação processual."""
 
     resumo: str = Field(description='2-3 frases claras: o que aconteceu e o que significa para o cliente')
+    tipo_ato: str | None = Field(default=None, description=(
+        "Tipo do ato comunicado, deduzido do teor: 'sentenca', 'decisao_interlocutoria', "
+        "'despacho', 'acordao', 'ato_ordinatorio', 'edital', 'audiencia' ou 'outro'"))
+    tipo_ato_detalhe: str | None = Field(default=None, description=(
+        'Descrição curta do ato (ex.: "Sentença integrativa em embargos de declaração")'))
     acao_requerida: str = Field(description="'exige_acao', 'acao_facultativa' ou 'apenas_ciencia'")
     acao_descricao: str | None = Field(default=None, description='Qual providência tomar (ou considerar), se houver')
     prazo: CommunicationDeadline
@@ -63,6 +68,13 @@ class CommunicationExplainerAgent:
         'apoiar a triagem diária.\n\n'
         'Regras:\n'
         '- Escreva em português claro e direto, para leitura rápida.\n'
+        '- tipo_ato: classifique o ato comunicado pelo TEOR (o campo "Tipo" da comunicação quase '
+        'sempre é "Intimação" e não diz qual ato foi publicado): decisão que resolve o mérito ou '
+        'encerra a fase → "sentenca"; decisão no curso do processo → "decisao_interlocutoria"; '
+        'mero impulso processual → "despacho" ou "ato_ordinatorio"; decisão colegiada de tribunal '
+        '→ "acordao"; designação ou realização de audiência → "audiencia"; edital → "edital"; '
+        'não identificável → "outro". Em tipo_ato_detalhe, uma linha curta e específica '
+        '(ex.: "Sentença integrativa em embargos de declaração").\n'
         '- Prazos: extraia exatamente o que o teor diz; calcule a data-limite apenas quando as '
         'datas necessárias estiverem no texto. Nunca invente prazo — se não houver, existe=false.\n'
         '- acao_requerida: "exige_acao" só quando o teor determina providência com consequência; '

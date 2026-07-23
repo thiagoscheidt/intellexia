@@ -9,11 +9,16 @@ from app.models import (
     JudicialProcessGeneratedDocument, JudicialProcessGeneratedDocumentVersion,
     JudicialProcessGeneratedDocumentSelection,
     judicial_process_benefit_legal_theses,
+    ProcessCommunication, ProcessDeadline, ProcessDatajudSnapshot,
+    ImpugnacaoReferenceModel,
 )
 from app.agents.legal_drafting.agent_generated_document import AgentGeneratedDocument, DOCUMENT_TYPE_LABELS
 from app.agents.legal_drafting.document_docx_export_agent import OfficeDocxExportAgent
 from app.agents.legal_drafting.impugnacao_enrichment_agent import ImpugnacaoEnrichmentAgent
-from datetime import datetime
+from app.services import process_deadline_service
+from app.services import datajud_snapshot_service
+from app.services import ai_model_settings_service
+from datetime import datetime, date, timedelta, time as dt_time
 from functools import wraps
 from sqlalchemy import or_, and_
 from sqlalchemy.orm import selectinload
@@ -27,6 +32,18 @@ import uuid
 import unicodedata
 
 process_panel_bp = Blueprint('process_panel', __name__, url_prefix='/process-panel')
+
+
+@process_panel_bp.app_context_processor
+def inject_process_deadline_counts():
+    """Chip de prazos no header (dois COUNTs baratos com índice firm+status+due)."""
+    law_firm_id = session.get('law_firm_id')
+    if not law_firm_id:
+        return {'process_deadline_counts': None}
+    try:
+        return {'process_deadline_counts': process_deadline_service.firm_counts(law_firm_id)}
+    except Exception:
+        return {'process_deadline_counts': None}
 
 
 PHASE_ORDER = {
@@ -366,6 +383,21 @@ def _ensure_judicial_config_defaults(law_firm_id):
 def get_current_law_firm_id():
     """Obtém o ID do escritório do usuário atual"""
     return session.get('law_firm_id')
+
+
+def require_admin_user(f):
+    """Decorator para telas admin-only dentro do módulo (ex.: Configurações de IA)."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        user_id = session.get('user_id')
+        if not user_id:
+            return redirect(url_for('auth.login'))
+        user = User.query.get(user_id)
+        if not user or user.role != 'admin':
+            flash('Acesso negado: privilégio de administrador necessário.', 'danger')
+            return redirect(url_for('process_panel.list_processes'))
+        return f(*args, **kwargs)
+    return decorated_function
 
 
 def require_law_firm(f):
@@ -1006,17 +1038,22 @@ def list_processes():
     # Filtro por busca
     if search_query:
         query = query.outerjoin(Court, JudicialProcess.court_id == Court.id)
-        query = query.filter(
-            or_(
-                JudicialProcess.process_number.ilike(f'%{search_query}%'),
-                JudicialProcess.title.ilike(f'%{search_query}%'),
-                JudicialProcess.tribunal.ilike(f'%{search_query}%'),
-                Court.orgao_julgador.ilike(f'%{search_query}%'),
-                Court.tribunal.ilike(f'%{search_query}%'),
-                Court.secao_judiciaria.ilike(f'%{search_query}%'),
-                Court.subsecao_judiciaria.ilike(f'%{search_query}%')
-            )
-        )
+        search_conditions = [
+            JudicialProcess.process_number.ilike(f'%{search_query}%'),
+            JudicialProcess.title.ilike(f'%{search_query}%'),
+            JudicialProcess.tribunal.ilike(f'%{search_query}%'),
+            Court.orgao_julgador.ilike(f'%{search_query}%'),
+            Court.tribunal.ilike(f'%{search_query}%'),
+            Court.secao_judiciaria.ilike(f'%{search_query}%'),
+            Court.subsecao_judiciaria.ilike(f'%{search_query}%'),
+        ]
+        # Número de processo acha com ou sem pontuação: compara dígitos com dígitos
+        search_digits = re.sub(r'\D', '', search_query)
+        if len(search_digits) >= 4:
+            normalized_number = db.func.replace(db.func.replace(db.func.replace(
+                JudicialProcess.process_number, '-', ''), '.', ''), ' ', '')
+            search_conditions.append(normalized_number.like(f'%{search_digits}%'))
+        query = query.filter(or_(*search_conditions))
     
     # Filtro por status
     if status_filter:
@@ -1055,6 +1092,113 @@ def list_processes():
         'descobertos': JudicialProcess.query.filter_by(
             law_firm_id=law_firm_id, discovery_status='pending_review').count(),
     }
+
+    # ── Mesa de trabalho: prazos do escritório + radar agregado ──────────────
+    firm_deadline_rows, firm_deadlines_total = process_deadline_service.list_pending_for_firm(
+        law_firm_id, limit=8)
+    firm_deadlines = [
+        {'obj': d, **process_deadline_service.classify_deadline(d)}
+        for d in firm_deadline_rows
+    ]
+
+    radar_items = []
+    cutoff_comms = date.today() - timedelta(days=30)
+    recent_comms = (ProcessCommunication.query
+                    .filter(ProcessCommunication.law_firm_id == law_firm_id,
+                            ProcessCommunication.judicial_process_id.isnot(None),
+                            ProcessCommunication.data_disponibilizacao >= cutoff_comms)
+                    .order_by(ProcessCommunication.data_disponibilizacao.desc())
+                    .limit(60).all())
+
+    linked_deadline_comm_ids = {
+        row.communication_id
+        for row in ProcessDeadline.query.filter(
+            ProcessDeadline.law_firm_id == law_firm_id,
+            ProcessDeadline.communication_id.isnot(None)).all()
+    }
+
+    # Providências da IA: varre TODAS as publicações analisadas (sem janela de data —
+    # providência pendente não expira com a idade da publicação; mesma regra do radar
+    # do processo). Volume limitado: só publicações com análise gerada.
+    analyzed_comms = (ProcessCommunication.query
+                      .filter(ProcessCommunication.law_firm_id == law_firm_id,
+                              ProcessCommunication.judicial_process_id.isnot(None),
+                              ProcessCommunication.analysis_json.isnot(None))
+                      .order_by(ProcessCommunication.data_disponibilizacao.desc())
+                      .limit(200).all())
+
+    ai_comm_ids = set()
+    for comm in analyzed_comms:
+        analysis = (comm.analysis_json or {}).get('data') if comm.analysis_json else None
+        if not analysis or analysis.get('acao_requerida') != 'exige_acao':
+            continue
+        if comm.id in linked_deadline_comm_ids:
+            continue
+        due_raw = ((analysis.get('prazo') or {}).get('data_limite_estimada') or '').strip()
+        try:
+            due_date = datetime.strptime(due_raw, '%Y-%m-%d').date() if due_raw else None
+        except ValueError:
+            due_date = None
+        if due_date and due_date < date.today():
+            continue
+        ai_comm_ids.add(comm.id)
+        radar_items.append({
+            'kind': 'ia',
+            'due': due_date,
+            'label': (analysis.get('acao_descricao') or analysis.get('resumo')
+                      or 'Providência apontada pela IA').strip(),
+            'process_id': comm.judicial_process_id,
+            'process_number': comm.numero_processo_mascara or comm.numero_processo or '',
+            'when': datetime.combine(comm.data_disponibilizacao, dt_time.min)
+            if comm.data_disponibilizacao else datetime.now(),
+            'url': url_for('communications.communication_detail', communication_id=comm.id),
+        })
+
+    for comm in recent_comms:
+        if comm.is_read or comm.id in ai_comm_ids:
+            continue
+        radar_items.append({
+            'kind': 'publicacao',
+            'tipo': comm.tipo_comunicacao or 'Comunicação',
+            'label': comm.tipo_documento or comm.nome_orgao or 'Publicação',
+            'process_id': comm.judicial_process_id,
+            'process_number': comm.numero_processo_mascara or comm.numero_processo or '',
+            'when': datetime.combine(comm.data_disponibilizacao, dt_time.min)
+            if comm.data_disponibilizacao else datetime.now(),
+            'url': url_for('communications.communication_detail', communication_id=comm.id),
+        })
+
+    week_ago = datetime.now() - timedelta(days=7)
+    recent_snapshots = (ProcessDatajudSnapshot.query
+                        .filter(ProcessDatajudSnapshot.law_firm_id == law_firm_id,
+                                ProcessDatajudSnapshot.last_movement_at >= week_ago)
+                        .all())
+    for snap in recent_snapshots:
+        if snap.movement_ack_at and snap.last_movement_at <= snap.movement_ack_at:
+            continue
+        latest_name, _latest_iso = datajud_snapshot_service.latest_movement(snap)
+        if not latest_name:
+            continue
+        radar_items.append({
+            'kind': 'decisao' if datajud_snapshot_service.is_decision_movement(latest_name)
+            else 'movimentacao',
+            'label': latest_name,
+            'process_id': snap.process_id,
+            'process_number': snap.process.process_number if snap.process else '',
+            'when': snap.last_movement_at,
+            'url': url_for('process_panel.detail', process_id=snap.process_id),
+        })
+
+    radar_items.sort(key=lambda item: item['when'], reverse=True)
+    radar_total = len(radar_items)
+    radar_items = radar_items[:8]
+
+    # Últimas publicações do Monitoramento (globais — com ou sem processo vinculado)
+    latest_pubs = (ProcessCommunication.query
+                   .filter_by(law_firm_id=law_firm_id)
+                   .order_by(ProcessCommunication.data_disponibilizacao.desc(),
+                             ProcessCommunication.id.desc())
+                   .limit(10).all())
 
     process_phases = {}
     process_legal_theses = {}
@@ -1151,6 +1295,41 @@ def list_processes():
         is_active=True,
     ).order_by(JudicialLegalThesis.name.asc()).all()
 
+    # Pendências por processo (página atual): prazo mais próximo + publicações não lidas
+    process_pending = {}
+    if process_ids:
+        page_deadlines = (ProcessDeadline.query
+                          .filter(ProcessDeadline.law_firm_id == law_firm_id,
+                                  ProcessDeadline.process_id.in_(process_ids),
+                                  ProcessDeadline.status == ProcessDeadline.STATUS_PENDING)
+                          .order_by(ProcessDeadline.due_date.asc()).all())
+        for row in page_deadlines:
+            info = process_pending.setdefault(row.process_id, {'deadline': None, 'unread': 0})
+            if info['deadline'] is None:
+                info['deadline'] = {'obj': row, **process_deadline_service.classify_deadline(row)}
+
+        unread_by_process = (db.session.query(
+            ProcessCommunication.judicial_process_id,
+            db.func.count(ProcessCommunication.id))
+            .filter(ProcessCommunication.law_firm_id == law_firm_id,
+                    ProcessCommunication.judicial_process_id.in_(process_ids),
+                    ProcessCommunication.read_at.is_(None))
+            .group_by(ProcessCommunication.judicial_process_id).all())
+        for pid, unread_count in unread_by_process:
+            info = process_pending.setdefault(pid, {'deadline': None, 'unread': 0})
+            info['unread'] = unread_count
+
+        # Documentos ainda na fila da IA (pending/processing) — destaque na listagem
+        ai_docs_by_process = (db.session.query(
+            JudicialDocument.process_id,
+            db.func.count(JudicialDocument.id))
+            .filter(JudicialDocument.process_id.in_(process_ids),
+                    JudicialDocument.status.in_(('pending', 'processing')))
+            .group_by(JudicialDocument.process_id).all())
+        for pid, ai_count in ai_docs_by_process:
+            info = process_pending.setdefault(pid, {'deadline': None, 'unread': 0})
+            info['ai_processing'] = ai_count
+
     return render_template(
         'process_panel/list.html',
         processes=processes,
@@ -1165,6 +1344,12 @@ def list_processes():
         judicial_phases_labels=JUDICIAL_PHASES,
         current_view=view_mode,
         discovery_view=discovery_view,
+        firm_deadlines=firm_deadlines,
+        firm_deadlines_total=firm_deadlines_total,
+        radar_items=radar_items,
+        radar_total=radar_total,
+        latest_pubs=latest_pubs,
+        process_pending=process_pending,
     )
 
 
@@ -1382,28 +1567,35 @@ def new_process():
             file for file in request.files.getlist('documents')
             if file and file.filename and file.filename.strip()
         ]
-        document_type_ids = request.form.getlist('document_type_ids', type=int)
+        # Tipo é opcional: vazio = detecção automática pela IA no processamento
+        # (a extração preenche document.type via resolve_type_and_phase).
+        document_type_ids = [
+            int(raw) if str(raw or '').strip().isdigit() else None
+            for raw in request.form.getlist('document_type_ids')
+        ]
 
         if not uploaded_files:
             flash('Envie ao menos um documento para a base de conhecimento.', 'danger')
             return redirect(url_for('process_panel.new_process'))
 
-        if len(document_type_ids) != len(uploaded_files) or any(not item for item in document_type_ids):
-            flash('Selecione o tipo de documento para cada arquivo enviado.', 'danger')
+        if len(document_type_ids) != len(uploaded_files):
+            flash('Não foi possível associar os tipos aos arquivos enviados. Tente novamente.', 'danger')
             return redirect(url_for('process_panel.new_process'))
 
-        selected_type_ids = sorted(set(document_type_ids))
-        document_types = JudicialDocumentType.query.options(
-            selectinload(JudicialDocumentType.phase)
-        ).filter(
-            JudicialDocumentType.law_firm_id == law_firm_id,
-            JudicialDocumentType.is_active.is_(True),
-            JudicialDocumentType.id.in_(selected_type_ids)
-        ).all()
+        selected_type_ids = sorted({tid for tid in document_type_ids if tid})
+        document_types = []
+        if selected_type_ids:
+            document_types = JudicialDocumentType.query.options(
+                selectinload(JudicialDocumentType.phase)
+            ).filter(
+                JudicialDocumentType.law_firm_id == law_firm_id,
+                JudicialDocumentType.is_active.is_(True),
+                JudicialDocumentType.id.in_(selected_type_ids)
+            ).all()
 
-        if len(document_types) != len(selected_type_ids):
-            flash('Um ou mais tipos de documento são inválidos ou inativos.', 'danger')
-            return redirect(url_for('process_panel.new_process'))
+            if len(document_types) != len(selected_type_ids):
+                flash('Um ou mais tipos de documento são inválidos ou inativos.', 'danger')
+                return redirect(url_for('process_panel.new_process'))
 
         document_types_by_id = {doc_type.id: doc_type for doc_type in document_types}
 
@@ -1464,9 +1656,10 @@ def new_process():
 
             for index, file in enumerate(uploaded_files):
                 document_type_id = document_type_ids[index]
-                document_type = document_types_by_id.get(document_type_id)
-                if not document_type or not document_type.phase:
-                    continue
+                document_type = document_types_by_id.get(document_type_id) if document_type_id else None
+                if document_type and not document_type.phase:
+                    # Tipo sem fase configurada → trata como detecção automática
+                    document_type = None
 
                 file_hash = _compute_file_hash(file)
 
@@ -1490,44 +1683,46 @@ def new_process():
                 ).first()
 
                 if duplicate:
-                    event_date = datetime.now()
-                    event = JudicialEvent(
-                        process_id=new_proc.id,
-                        type=document_type.key,
-                        phase=document_type.phase.key,
-                        description=(
-                            f'Documento {document_type.name} vinculado no cadastro inicial do processo '
-                            'a partir de arquivo já existente na base de conhecimento.'
-                        ),
-                        event_date=event_date,
-                    )
-                    db.session.add(event)
-                    db.session.flush()
+                    event = None
+                    if document_type:
+                        event_date = datetime.now()
+                        event = JudicialEvent(
+                            process_id=new_proc.id,
+                            type=document_type.key,
+                            phase=document_type.phase.key,
+                            description=(
+                                f'Documento {document_type.name} vinculado no cadastro inicial do processo '
+                                'a partir de arquivo já existente na base de conhecimento.'
+                            ),
+                            event_date=event_date,
+                        )
+                        db.session.add(event)
+                        db.session.flush()
 
-                    _register_phase_history(
-                        process=new_proc,
-                        phase=document_type.phase,
-                        occurred_at=event_date,
-                        entered_by_user_id=user_id,
-                        source_event_id=event.id,
-                        notes=(
-                            'Fase registrada automaticamente no cadastro inicial '
-                            f'via documento vinculado: {document_type.name}.'
-                        ),
-                        location_text='Cadastro inicial',
-                        metadata_payload={
-                            'origin': 'new_process_initial_linked_existing_kb',
-                            'document_type_key': document_type.key,
-                            'knowledge_base_id': duplicate.id,
-                        },
-                    )
+                        _register_phase_history(
+                            process=new_proc,
+                            phase=document_type.phase,
+                            occurred_at=event_date,
+                            entered_by_user_id=user_id,
+                            source_event_id=event.id,
+                            notes=(
+                                'Fase registrada automaticamente no cadastro inicial '
+                                f'via documento vinculado: {document_type.name}.'
+                            ),
+                            location_text='Cadastro inicial',
+                            metadata_payload={
+                                'origin': 'new_process_initial_linked_existing_kb',
+                                'document_type_key': document_type.key,
+                                'knowledge_base_id': duplicate.id,
+                            },
+                        )
 
                     db.session.add(
                         JudicialDocument(
                             process_id=new_proc.id,
-                            event_id=event.id,
+                            event_id=event.id if event else None,
                             knowledge_base_id=duplicate.id,
-                            type=document_type.key,
+                            type=document_type.key if document_type else None,
                             file_name=duplicate.original_filename or file.filename,
                             file_path=duplicate.file_path,
                             file_hash=file_hash,
@@ -1558,50 +1753,52 @@ def new_process():
                     file_type=file_type,
                     file_hash=file_hash,
                     description='',
-                    category=document_type.phase.name or '',
-                    tags=document_type.name or '',
+                    category=document_type.phase.name if document_type and document_type.phase else '',
+                    tags=document_type.name if document_type else '',
                     lawsuit_number=process_number,
                     processing_status='pending'
                 )
                 db.session.add(kb_entry)
                 db.session.flush()
 
-                event_date = datetime.now()
-                event = JudicialEvent(
-                    process_id=new_proc.id,
-                    type=document_type.key,
-                    phase=document_type.phase.key,
-                    description=(
-                        f'Documento {document_type.name} adicionado no cadastro inicial do processo.'
-                    ),
-                    event_date=event_date,
-                )
-                db.session.add(event)
-                db.session.flush()
+                event = None
+                if document_type:
+                    event_date = datetime.now()
+                    event = JudicialEvent(
+                        process_id=new_proc.id,
+                        type=document_type.key,
+                        phase=document_type.phase.key,
+                        description=(
+                            f'Documento {document_type.name} adicionado no cadastro inicial do processo.'
+                        ),
+                        event_date=event_date,
+                    )
+                    db.session.add(event)
+                    db.session.flush()
 
-                _register_phase_history(
-                    process=new_proc,
-                    phase=document_type.phase,
-                    occurred_at=event_date,
-                    entered_by_user_id=user_id,
-                    source_event_id=event.id,
-                    notes=(
-                        'Fase registrada automaticamente no cadastro inicial '
-                        f'via documento: {document_type.name}.'
-                    ),
-                    location_text='Cadastro inicial',
-                    metadata_payload={
-                        'origin': 'new_process_initial_upload',
-                        'document_type_key': document_type.key,
-                    },
-                )
+                    _register_phase_history(
+                        process=new_proc,
+                        phase=document_type.phase,
+                        occurred_at=event_date,
+                        entered_by_user_id=user_id,
+                        source_event_id=event.id,
+                        notes=(
+                            'Fase registrada automaticamente no cadastro inicial '
+                            f'via documento: {document_type.name}.'
+                        ),
+                        location_text='Cadastro inicial',
+                        metadata_payload={
+                            'origin': 'new_process_initial_upload',
+                            'document_type_key': document_type.key,
+                        },
+                    )
 
                 db.session.add(
                     JudicialDocument(
                         process_id=new_proc.id,
-                        event_id=event.id,
+                        event_id=event.id if event else None,
                         knowledge_base_id=kb_entry.id,
-                        type=document_type.key,
+                        type=document_type.key if document_type else None,
                         file_name=filename,
                         file_path=file_path,
                         file_hash=file_hash,
@@ -1669,47 +1866,45 @@ def new_process():
 
 
 # Justiça Estadual (J=8): código TR do número CNJ → sigla do TJ no DataJud
-_DATAJUD_TJ_POR_CODIGO_UF = {
-    '01': 'TJAC', '02': 'TJAL', '03': 'TJAP', '04': 'TJAM', '05': 'TJBA',
-    '06': 'TJCE', '07': 'TJDFT', '08': 'TJES', '09': 'TJGO', '10': 'TJMA',
-    '11': 'TJMT', '12': 'TJMS', '13': 'TJMG', '14': 'TJPA', '15': 'TJPB',
-    '16': 'TJPR', '17': 'TJPE', '18': 'TJPI', '19': 'TJRJ', '20': 'TJRN',
-    '21': 'TJRS', '22': 'TJRO', '23': 'TJRR', '24': 'TJSC', '25': 'TJSE',
-    '26': 'TJSP', '27': 'TJTO',
-}
+def _absorb_discovered_process(target, discovered):
+    """Funde um processo descoberto pelo Monitoramento no processo alvo.
 
-
-def _datajud_sigla(process):
-    """Sigla do índice DataJud: usa o tribunal do processo ou deriva do número CNJ.
-
-    No número CNJ (NNNNNNN-DD.AAAA.J.TR.OOOO), J identifica o segmento e TR o
-    tribunal dentro dele (Resolução CNJ 65/2008).
+    Usado quando o número real informado na edição já existe como processo
+    descoberto (origin='comunica_auto'): tudo que pertence à duplicata é
+    repontado para o alvo (publicações, prazos, eventos, documentos etc.),
+    metadados que o alvo não tem são herdados e a linha descoberta é removida
+    (saindo também da fila de Descobertos). Retorna o nº de publicações migradas.
+    O commit é responsabilidade do chamador.
     """
-    from app.services.data_jud_api import DataJudAPI
+    moved_comms = ProcessCommunication.query.filter_by(
+        judicial_process_id=discovered.id).update(
+        {'judicial_process_id': target.id}, synchronize_session=False)
 
-    sigla = (process.tribunal or '').strip().upper()
-    if sigla in DataJudAPI.TRIBUNAIS:
-        return sigla
+    for model in (JudicialEvent, JudicialProcessNote, JudicialProcessPhaseHistory,
+                  JudicialDocument, JudicialProcessAttachment, JudicialProcessBenefit,
+                  JudicialProcessCitedBenefit, JudicialProcessBenefitThesisContestation,
+                  JudicialProcessGeneratedDocument, ProcessDeadline):
+        model.query.filter_by(process_id=discovered.id).update(
+            {'process_id': target.id}, synchronize_session=False)
 
-    digits = re.sub(r'\D', '', process.process_number or '')
-    if len(digits) != 20:
-        return None
-    segmento, tr = digits[13], digits[14:16]
-    if segmento == '4':
-        return f'TRF{int(tr)}'
-    if segmento == '5':
-        return f'TRT{int(tr)}'
-    if segmento == '8':
-        return _DATAJUD_TJ_POR_CODIGO_UF.get(tr)
-    return {'1': 'STF', '3': 'STJ', '7': 'STM'}.get(segmento)
+    # Snapshot DataJud da duplicata morre com ela; o alvo consulta de novo com o número real
+    ProcessDatajudSnapshot.query.filter_by(process_id=discovered.id).delete(
+        synchronize_session=False)
+
+    for attr in ('title', 'tribunal', 'section', 'judge_name', 'origin_unit',
+                 'process_class', 'valor_causa_texto', 'assuntos', 'filing_date',
+                 'court_id'):
+        if not getattr(target, attr, None) and getattr(discovered, attr, None):
+            setattr(target, attr, getattr(discovered, attr))
+
+    db.session.delete(discovered)
+    return moved_comms
 
 
 @process_panel_bp.route('/<int:process_id>/datajud-movimentos')
 @require_law_firm
 def datajud_movimentos(process_id):
-    """Movimentação processual ao vivo na API pública do DataJud (CNJ)."""
-    from app.services.data_jud_api import DataJudAPI
-
+    """Movimentação DataJud com cache por processo (snapshot + refresh sob demanda)."""
     law_firm_id = get_current_law_firm_id()
     process = JudicialProcess.query.filter_by(
         id=process_id, law_firm_id=law_firm_id
@@ -1717,58 +1912,32 @@ def datajud_movimentos(process_id):
     if not process:
         return jsonify({"success": False, "message": "Processo não encontrado"}), 404
 
-    digits = re.sub(r'\D', '', process.process_number or '')
-    if len(digits) != 20:
-        return jsonify({"success": False,
-                        "message": "Processo sem número CNJ completo — não é possível consultar o DataJud."}), 400
-
-    sigla = _datajud_sigla(process)
-    if not sigla or sigla not in DataJudAPI.TRIBUNAIS:
-        return jsonify({"success": False,
-                        "message": f"Tribunal '{process.tribunal or '?'}' não disponível na API pública do DataJud."}), 400
-
-    api = DataJudAPI()
-    resultado = api.buscar_por_numero_processo(digits, sigla, size=5)
-    if resultado.get('error'):
-        return jsonify({"success": False,
-                        "message": f"DataJud indisponível agora: {resultado.get('message')}"}), 502
-
-    instancias = []
-    for processo in api.extrair_processos(resultado):
-        movimentos = []
-        for mov in (processo.get('movimentos') or []):
-            complementos = [
-                f"{c.get('descricao')}: {c.get('nome')}" if c.get('descricao') else c.get('nome')
-                for c in (mov.get('complementosTabelados') or []) if isinstance(c, dict)
-            ]
-            movimentos.append({
-                'data_hora': mov.get('dataHora'),
-                'codigo': mov.get('codigo'),
-                'nome': mov.get('nome'),
-                'complementos': [c for c in complementos if c],
-            })
-        movimentos.sort(key=lambda m: m.get('data_hora') or '', reverse=True)
-        instancias.append({
-            'grau': processo.get('grau'),
-            'classe': (processo.get('classe') or {}).get('nome'),
-            'orgao_julgador': (processo.get('orgaoJulgador') or {}).get('nome'),
-            'sistema': (processo.get('sistema') or {}).get('nome'),
-            'data_ajuizamento': processo.get('dataAjuizamento'),
-            'ultima_atualizacao': processo.get('dataHoraUltimaAtualizacao'),
-            'total_movimentos': len(movimentos),
-            'movimentos': movimentos[:200],
+    def _snapshot_response(snapshot, stale_error=None):
+        return jsonify({
+            "success": True,
+            "fetched_at": snapshot.fetched_at.isoformat() if snapshot.fetched_at else None,
+            "stale_error": stale_error,
+            **snapshot.payload_json,
         })
-    # Instância mais alta primeiro (G2 antes de G1)
-    instancias.sort(key=lambda i: str(i.get('grau') or ''), reverse=True)
 
-    return jsonify({
-        "success": True,
-        "tribunal": sigla,
-        "numero_processo": process.process_number,
-        "total_instancias": len(instancias),
-        "instancias": instancias,
-        "fonte": "API pública do DataJud (CNJ) — dados podem ter defasagem em relação ao sistema do tribunal.",
-    })
+    force_refresh = request.args.get('refresh') == '1'
+    snapshot = datajud_snapshot_service.get_snapshot(process.id, law_firm_id)
+
+    if snapshot and snapshot.payload_json and not force_refresh:
+        return _snapshot_response(snapshot)
+
+    ok, motivo = datajud_snapshot_service.can_query(process)
+    if not ok:
+        return jsonify({"success": False, "message": motivo}), 400
+
+    snapshot, error = datajud_snapshot_service.refresh_snapshot(process)
+    if error:
+        if snapshot and snapshot.payload_json:
+            return _snapshot_response(
+                snapshot, stale_error=f'Não foi possível atualizar agora: {error}')
+        return jsonify({"success": False,
+                        "message": f"DataJud indisponível agora: {error}"}), 502
+    return _snapshot_response(snapshot)
 
 
 @process_panel_bp.route('/<int:process_id>')
@@ -1949,6 +2118,7 @@ def detail(process_id):
             'processing_status': (judicial_doc.status or '').strip().lower(),
             'judicial_document_id': judicial_doc.id,
             'phase_order': phase_order_by_key.get(phase_key, 9999),
+            'doc_type_key': doc_type_key,
         })
 
     documents_list.sort(
@@ -1973,9 +2143,160 @@ def detail(process_id):
         .all()
     )
 
+    phase_checklist = []
+    if current_phase_key:
+        expected_types = JudicialDocumentType.query.join(JudicialPhase).filter(
+            JudicialDocumentType.law_firm_id == law_firm_id,
+            JudicialDocumentType.is_active.is_(True),
+            JudicialPhase.key == current_phase_key,
+        ).order_by(JudicialDocumentType.display_order.asc(), JudicialDocumentType.name.asc()).all()
+        present_keys = {d['doc_type_key'] for d in documents_list if d.get('doc_type_key')}
+        phase_checklist = [
+            {'name': dt.name, 'done': dt.key in present_keys}
+            for dt in expected_types
+        ]
+
+    tramitando_ha = None
+    if process.filing_date:
+        delta_days = (date.today() - process.filing_date).days
+        if delta_days >= 365:
+            years, rem = divmod(delta_days, 365)
+            months = rem // 30
+            tramitando_ha = f"{years} ano{'s' if years > 1 else ''}" + (
+                f" e {months} mes{'es' if months > 1 else ''}" if months else '')
+        elif delta_days >= 30:
+            months = delta_days // 30
+            tramitando_ha = f"{months} mes{'es' if months > 1 else ''}"
+        else:
+            tramitando_ha = f'{delta_days} dias'
+
+    fap_impact_count = sum(
+        1 for b in process_benefits
+        if (b.contestation_efeito_fap or '').strip().lower() not in ('', 'não', 'nao', 'sem efeito')
+    )
+    fap_vigencias = sorted({b.fap_vigencia_year for b in process_benefits if b.fap_vigencia_year})
+
+    deadline_rows = process_deadline_service.list_for_process(process.id, law_firm_id)
+    deadlines = [
+        {'obj': d, **process_deadline_service.classify_deadline(d)}
+        for d in deadline_rows
+    ]
+
+    firm_users = User.query.filter_by(law_firm_id=law_firm_id, is_active=True) \
+        .order_by(User.name.asc()).all()
+
+    comm_deadline_suggestions = {
+        comm.id: process_deadline_service.suggest_deadline_from_disponibilizacao(
+            comm.data_disponibilizacao).isoformat()
+        for comm in (process.communications or [])
+        if comm.data_disponibilizacao
+    }
+
+    # Resumo da aba DJEN: comunicação mais recente (relationship já ordena por data desc)
+    djen_last = None
+    all_comms = list(process.communications or [])
+    if all_comms:
+        last_comm = all_comms[0]
+        djen_last = {
+            'comm': last_comm,
+            'days': (date.today() - last_comm.data_disponibilizacao).days
+            if last_comm.data_disponibilizacao else None,
+        }
+
+    # Radar: providências com data-limite estimada pela IA (análises das publicações).
+    # Publicações que já viraram prazo gerenciado não repetem no radar.
+    deadline_comm_ids = {d.communication_id for d in deadline_rows if d.communication_id}
+    radar_ai_actions = []
+    for comm in all_comms:
+        analysis = (comm.analysis_json or {}).get('data') if comm.analysis_json else None
+        if not analysis or analysis.get('acao_requerida') != 'exige_acao':
+            continue
+        if comm.id in deadline_comm_ids:
+            continue
+        due_raw = ((analysis.get('prazo') or {}).get('data_limite_estimada') or '').strip()
+        try:
+            due_date = datetime.strptime(due_raw, '%Y-%m-%d').date() if due_raw else None
+        except ValueError:
+            due_date = None
+        if due_date and due_date < date.today():
+            continue  # data-limite estimada já passou — o teor oficial é que manda
+        radar_ai_actions.append({
+            'comm': comm,
+            'due': due_date,
+            'due_iso': due_raw,
+            'descricao': (analysis.get('acao_descricao') or analysis.get('resumo') or '').strip(),
+        })
+    radar_ai_actions.sort(key=lambda item: (item['due'] is None, item['due'] or date.max))
+    radar_ai_actions = radar_ai_actions[:2]
+
+    # Radar: movimentação DataJud recente (lida do snapshot — nunca consulta a API).
+    # Some após o "ciente" do usuário; reaparece se houver movimento mais novo.
+    datajud_recent = None
+    dj_snapshot = datajud_snapshot_service.get_snapshot(process.id, law_firm_id)
+    if (dj_snapshot and dj_snapshot.last_movement_at and dj_snapshot.payload_json
+            and (datetime.now() - dj_snapshot.last_movement_at).days <= 7
+            and (not dj_snapshot.movement_ack_at
+                 or dj_snapshot.last_movement_at > dj_snapshot.movement_ack_at)):
+        latest_name, _latest_iso = datajud_snapshot_service.latest_movement(dj_snapshot)
+        if latest_name:
+            datajud_recent = {
+                'nome': latest_name,
+                'when': dj_snapshot.last_movement_at,
+                'is_decision': datajud_snapshot_service.is_decision_movement(latest_name),
+            }
+
+    # Linha do tempo unificada (aba Atividade): fases + documentos + DJEN + gerados
+    activity = []
+    for entry in phase_history:
+        if entry.occurred_at:
+            activity.append({
+                'when': entry.occurred_at, 'icon': 'bi-signpost-2', 'kind': 'Fase',
+                'label': entry.phase.name if entry.phase else '-',
+                'detail': entry.entered_by_user.name if entry.entered_by_user else 'Sistema',
+                'url': None,
+            })
+    for doc in documents_list:
+        if doc.get('uploaded_at'):
+            activity.append({
+                'when': doc['uploaded_at'], 'icon': 'bi-file-earmark', 'kind': 'Documento',
+                'label': doc['filename'], 'detail': doc.get('doc_type_label') or '',
+                'url': url_for('knowledge_base.view', file_id=doc['knowledge_base_id'])
+                if doc.get('knowledge_base_id') else None,
+            })
+    for comm in (process.communications or []):
+        if comm.data_disponibilizacao:
+            activity.append({
+                'when': datetime.combine(comm.data_disponibilizacao, dt_time.min),
+                'icon': 'bi-broadcast', 'kind': 'DJEN',
+                'label': comm.tipo_comunicacao or 'Comunicação',
+                'detail': ' · '.join(filter(None, [comm.tipo_documento, comm.nome_orgao])),
+                'url': url_for('communications.communication_detail', communication_id=comm.id),
+            })
+    for gdoc in generated_documents:
+        if gdoc.created_at:
+            activity.append({
+                'when': gdoc.created_at, 'icon': 'bi-stars', 'kind': 'IA',
+                'label': gdoc.title, 'detail': 'Documento gerado',
+                'url': url_for('process_panel.generated_document_detail',
+                               process_id=process.id, doc_id=gdoc.id),
+            })
+    activity.sort(key=lambda item: item['when'], reverse=True)
+    activity = activity[:50]
+
     # Dados para a dashboard
     data = {
         'process': process,
+        'deadlines': deadlines,
+        'firm_users': firm_users,
+        'comm_deadline_suggestions': comm_deadline_suggestions,
+        'tramitando_ha': tramitando_ha,
+        'fap_impact_count': fap_impact_count,
+        'fap_vigencias': fap_vigencias,
+        'phase_checklist': phase_checklist,
+        'activity': activity,
+        'datajud_recent': datajud_recent,
+        'djen_last': djen_last,
+        'radar_ai_actions': radar_ai_actions,
         'current_phase_key': current_phase_key,
         'current_phase_label': current_phase_label,
         'notes': notes,
@@ -2565,10 +2886,19 @@ def edit(process_id):
                     JudicialProcess.law_firm_id == law_firm_id,
                     JudicialProcess.process_number == new_number
                 ).first()
-                if existing:
+                if existing and existing.origin != 'comunica_auto':
                     flash(f'Processo {new_number} já existe.', 'danger')
                     return redirect(url_for('process_panel.edit', process_id=process.id))
+                if existing:
+                    # Duplicata descoberta pelo Monitoramento → unifica neste processo
+                    moved_comms = _absorb_discovered_process(process, existing)
+                    flash(f'O processo {new_number} já estava na fila de Descobertos do '
+                          f'Monitoramento e foi unificado a este cadastro'
+                          f'{f" ({moved_comms} publicação(ões) migradas)" if moved_comms else ""}.',
+                          'info')
                 process.process_number = new_number
+                # Número mudou → snapshot DataJud antigo não vale mais
+                datajud_snapshot_service.delete_snapshot(process.id, law_firm_id)
 
         # Atualizar campos
         process.title = request.form.get('title', '').strip() or process.title
@@ -2626,6 +2956,12 @@ def edit(process_id):
                         metadata_payload={'origin': 'edit_form'},
                     )
 
+            responsible_user_id = request.form.get('responsible_user_id', type=int) or None
+            if responsible_user_id and not User.query.filter_by(
+                    id=responsible_user_id, law_firm_id=law_firm_id).first():
+                responsible_user_id = None
+            process.responsible_user_id = responsible_user_id
+
             process.updated_at = datetime.now()
             db.session.commit()
             flash('Processo atualizado com sucesso!', 'success')
@@ -2640,6 +2976,8 @@ def edit(process_id):
     defendants = JudicialDefendant.query.filter_by(
         law_firm_id=law_firm_id
     ).order_by(JudicialDefendant.name.asc()).all()
+    firm_users = User.query.filter_by(law_firm_id=law_firm_id, is_active=True) \
+        .order_by(User.name.asc()).all()
 
     return render_template(
         'process_panel/form.html',
@@ -2652,6 +2990,7 @@ def edit(process_id):
         phase_options=phase_options,
         current_phase_key=current_phase_key,
         phase_labels=JUDICIAL_PHASES,
+        firm_users=firm_users,
     )
 
 
@@ -3096,7 +3435,8 @@ def generated_document_create(process_id):
     # selections[] values are "benefit_id:thesis_id" or "benefit_id:" for no thesis
     raw_selections = request.form.getlist('selections[]')
     instructions = request.form.get('instructions', '').strip() or None
-    model_name = request.form.get('model_name') or None
+    model_name = (request.form.get('model_name')
+                  or ai_model_settings_service.get_model(law_firm_id, 'generated_document'))
 
     # Parse and validate selections
     parsed = []  # list of (benefit_id, thesis_id_or_None)
@@ -3255,7 +3595,9 @@ def generated_document_create(process_id):
         if document_type == 'impugnacao_contestacao':
             try:
                 trf_region = getattr(process, 'trf_region', None) or ''
-                full_text = ImpugnacaoEnrichmentAgent().enrich(
+                full_text = ImpugnacaoEnrichmentAgent(
+                    model_name=ai_model_settings_service.get_model(
+                        law_firm_id, 'impugnacao_enrichment')).enrich(
                     document_text=full_text,
                     selections=agent_selections,
                     law_firm_id=law_firm_id,
@@ -3370,7 +3712,8 @@ def generated_document_regenerate(process_id, doc_id):
     ).first_or_404()
 
     instructions = request.form.get('instructions', '').strip() or None
-    model_name = request.form.get('model_name') or None
+    model_name = (request.form.get('model_name')
+                  or ai_model_settings_service.get_model(law_firm_id, 'generated_document'))
 
     last_version = (
         JudicialProcessGeneratedDocumentVersion.query
@@ -3475,7 +3818,9 @@ def generated_document_regenerate(process_id, doc_id):
         if generated_doc.document_type == 'impugnacao_contestacao':
             try:
                 trf_region = getattr(process, 'trf_region', None) or ''
-                full_text = ImpugnacaoEnrichmentAgent().enrich(
+                full_text = ImpugnacaoEnrichmentAgent(
+                    model_name=ai_model_settings_service.get_model(
+                        law_firm_id, 'impugnacao_enrichment')).enrich(
                     document_text=full_text,
                     selections=agent_selections,
                     law_firm_id=law_firm_id,
@@ -3710,3 +4055,173 @@ def update_discovery_status(process_id):
     if next_view == 'lista':
         return redirect(url_for('process_panel.list_processes'))
     return redirect(url_for('process_panel.list_processes', discovery=next_view))
+
+
+@process_panel_bp.route('/<int:process_id>/djen-sync', methods=['POST'])
+@require_law_firm
+def djen_sync(process_id):
+    """Atualiza sob demanda as comunicações DJEN deste processo (Comunica PJe)."""
+    from app.services import communication_monitor_service
+
+    law_firm_id = get_current_law_firm_id()
+    process = JudicialProcess.query.filter_by(
+        id=process_id, law_firm_id=law_firm_id).first_or_404()
+
+    stats, error = communication_monitor_service.sync_process(law_firm_id, process)
+
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        if error:
+            return jsonify({'success': False,
+                            'message': f'Não foi possível atualizar o DJEN agora: {error}'})
+        created = stats['created']
+        message = (f'{created} nova(s) comunicação(ões) do DJEN para este processo.'
+                   if created else 'Nenhuma comunicação nova no DJEN para este processo.')
+        return jsonify({'success': True, 'created': created,
+                        'updated': stats['updated'], 'message': message})
+
+    if error:
+        flash(f'Não foi possível atualizar o DJEN agora: {error}', 'warning')
+    elif stats['created']:
+        flash(f"{stats['created']} nova(s) comunicação(ões) do DJEN para este processo.", 'success')
+    else:
+        flash('Nenhuma comunicação nova no DJEN para este processo.', 'info')
+    return redirect(url_for('process_panel.detail', process_id=process.id,
+                            _anchor='communications-pane'))
+
+
+@process_panel_bp.route('/config/ia')
+@require_law_firm
+@require_admin_user
+def ai_settings():
+    """Configurações de IA do módulo (admin-only): modelo por agente."""
+    from app.services.openrouter_models_service import fetch_openrouter_text_models_for_info
+
+    law_firm_id = get_current_law_firm_id()
+    groups = ai_model_settings_service.list_for_screen(law_firm_id)
+    available_models, models_error = fetch_openrouter_text_models_for_info()
+
+    refs_base = ImpugnacaoReferenceModel.query.filter_by(law_firm_id=law_firm_id)
+    impugnacao_refs = {
+        'active': refs_base.filter_by(status='active').count(),
+        'archived': refs_base.filter_by(status='archived').count(),
+        'merito': refs_base.filter_by(status='active', generation_mode='A').count(),
+        'defesa': refs_base.filter_by(status='active', generation_mode='B').count(),
+    }
+
+    return render_template(
+        'process_panel/ai_settings.html',
+        groups=groups,
+        available_models=available_models,
+        models_error=models_error,
+        impugnacao_refs=impugnacao_refs,
+    )
+
+
+@process_panel_bp.route('/config/ia', methods=['POST'])
+@require_law_firm
+@require_admin_user
+def ai_settings_save():
+    """Salva os modelos por agente (campo vazio = volta ao padrão do sistema)."""
+    law_firm_id = get_current_law_firm_id()
+    selections = {
+        entry['key']: request.form.get(f"model__{entry['key']}", '')
+        for entry in ai_model_settings_service.AGENT_REGISTRY
+    }
+    ai_model_settings_service.save_all(law_firm_id, selections, user_id=session.get('user_id'))
+    flash('Configurações de IA salvas.', 'success')
+    return redirect(url_for('process_panel.ai_settings'))
+
+
+@process_panel_bp.route('/<int:process_id>/datajud-ack', methods=['POST'])
+@require_law_firm
+def datajud_ack(process_id):
+    """Marca a movimentação atual do DataJud como ciente (sai do radar)."""
+    law_firm_id = get_current_law_firm_id()
+    JudicialProcess.query.filter_by(id=process_id, law_firm_id=law_firm_id).first_or_404()
+    if datajud_snapshot_service.acknowledge_movement(
+            process_id, law_firm_id, user_id=session.get('user_id')):
+        flash('Movimentação marcada como ciente — volta ao radar se houver novidade.', 'success')
+    else:
+        flash('Nenhuma movimentação para marcar.', 'warning')
+    return redirect(url_for('process_panel.detail', process_id=process_id))
+
+
+@process_panel_bp.route('/<int:process_id>/deadlines', methods=['POST'])
+@require_law_firm
+def create_deadline(process_id):
+    """Cria prazo/audiência do processo (manual ou derivado de intimação DJEN)."""
+    law_firm_id = get_current_law_firm_id()
+    process = JudicialProcess.query.filter_by(id=process_id, law_firm_id=law_firm_id).first_or_404()
+
+    title = (request.form.get('title') or '').strip()
+    due_date_raw = (request.form.get('due_date') or '').strip()
+    if not title or not due_date_raw:
+        flash('Informe título e data-limite do prazo.', 'danger')
+        return redirect(url_for('process_panel.detail', process_id=process.id))
+    try:
+        due_date = datetime.strptime(due_date_raw, '%Y-%m-%d').date()
+    except ValueError:
+        flash('Data-limite inválida.', 'danger')
+        return redirect(url_for('process_panel.detail', process_id=process.id))
+
+    due_time = None
+    due_time_raw = (request.form.get('due_time') or '').strip()
+    if due_time_raw:
+        try:
+            due_time = datetime.strptime(due_time_raw, '%H:%M').time()
+        except ValueError:
+            due_time = None
+
+    responsible_user_id = request.form.get('responsible_user_id', type=int) or None
+    if responsible_user_id:
+        responsible = User.query.filter_by(id=responsible_user_id, law_firm_id=law_firm_id).first()
+        if not responsible:
+            responsible_user_id = None
+
+    communication_id = request.form.get('communication_id', type=int) or None
+    origin = 'communication' if communication_id else 'manual'
+
+    process_deadline_service.create_deadline(
+        law_firm_id, process.id,
+        kind=(request.form.get('kind') or 'prazo').strip(),
+        title=title,
+        due_date=due_date,
+        due_time=due_time,
+        location=request.form.get('location'),
+        origin=origin,
+        communication_id=communication_id,
+        responsible_user_id=responsible_user_id,
+        notes=request.form.get('notes'),
+        created_by_user_id=session.get('user_id'),
+    )
+    flash('Prazo registrado.', 'success')
+    return redirect(url_for('process_panel.detail', process_id=process.id))
+
+
+@process_panel_bp.route('/<int:process_id>/deadlines/<int:deadline_id>/status', methods=['POST'])
+@require_law_firm
+def set_deadline_done(process_id, deadline_id):
+    """Conclui ou reabre um prazo."""
+    law_firm_id = get_current_law_firm_id()
+    done = request.form.get('done') == '1'
+    deadline = process_deadline_service.set_deadline_status(
+        deadline_id, law_firm_id, done=done, user_id=session.get('user_id'))
+    if not deadline or deadline.process_id != process_id:
+        flash('Prazo não encontrado.', 'danger')
+    else:
+        flash('Prazo concluído.' if done else 'Prazo reaberto.', 'success')
+    if request.form.get('next') == 'lista':
+        return redirect(url_for('process_panel.list_processes'))
+    return redirect(url_for('process_panel.detail', process_id=process_id))
+
+
+@process_panel_bp.route('/<int:process_id>/deadlines/<int:deadline_id>/delete', methods=['POST'])
+@require_law_firm
+def delete_deadline_route(process_id, deadline_id):
+    """Exclui um prazo do processo."""
+    law_firm_id = get_current_law_firm_id()
+    if process_deadline_service.delete_deadline(deadline_id, law_firm_id):
+        flash('Prazo excluído.', 'success')
+    else:
+        flash('Prazo não encontrado.', 'danger')
+    return redirect(url_for('process_panel.detail', process_id=process_id))

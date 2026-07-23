@@ -243,18 +243,20 @@
         </li>
         {% endif %}
 
-        {% if can_view_module('process_panel') %}
+        {% if can_view_module('process_panel') or can_view_module('communications') %}
         <li
-          class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint.startswith('process_panel.') or request.endpoint.startswith('impugnacao_references.')) else '' }}">
+          class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint.startswith('process_panel.') or request.endpoint.startswith('impugnacao_references.') or request.endpoint.startswith('communications.')) else '' }}">
           <a href="#"
-            class="nav-link {{ 'active' if request.endpoint and (request.endpoint.startswith('process_panel.') or request.endpoint.startswith('impugnacao_references.')) else '' }}">
+            class="nav-link {{ 'active' if request.endpoint and (request.endpoint.startswith('process_panel.') or request.endpoint.startswith('impugnacao_references.') or request.endpoint.startswith('communications.')) else '' }}">
             <i class="nav-icon bi bi-diagram-3-fill"></i>
-            <p>
+            <p style="line-height: 1.15;">
               Painel de Processos
+              <small class="d-block" style="font-size: 0.72em; opacity: 0.65;">(Cumprimento de Prazos)</small>
               <i class="nav-arrow bi bi-chevron-right"></i>
             </p>
           </a>
           <ul class="nav nav-treeview" style="background-color: rgba(0,0,0,0.1);">
+            {% if can_view_module('process_panel') %}
             <li class="nav-item">
               <a href="{{ url_for('process_panel.list_processes') }}"
                 class="nav-link {{ 'active' if request.endpoint == 'process_panel.list_processes' else '' }}"
@@ -271,6 +273,26 @@
                 <p style="margin-left: 15px;">Novo Processo</p>
               </a>
             </li>
+            {% endif %}
+            {% if can_view_module('communications') %}
+            <li class="nav-item">
+              <a href="{{ url_for('communications.list_communications') }}"
+                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('communications.') else '' }}"
+                style="font-size: 0.9em;">
+                <span class="position-relative d-inline-block" style="margin-right: 8px;">
+                  <i class="nav-icon bi bi-broadcast" style="color: #6c757d;"></i>
+                  {% if communications_unread_count and communications_unread_count > 0 %}
+                  <span class="position-absolute badge rounded-pill text-bg-warning"
+                        style="font-size: .58rem; top: -4px; right: -2px; padding: .2em .4em;">
+                    {{ communications_unread_count if communications_unread_count < 100 else '99+' }}
+                  </span>
+                  {% endif %}
+                </span>
+                <p style="margin-left: 15px;" title="Monitoramento de Processos">Monitoramento</p>
+              </a>
+            </li>
+            {% endif %}
+            {% if can_view_module('process_panel') %}
             <li class="nav-item">
               <a href="{{ url_for('process_panel.list_all_benefits') }}"
                 class="nav-link {{ 'active' if request.endpoint == 'process_panel.list_all_benefits' else '' }}"
@@ -279,33 +301,18 @@
                 <p style="margin-left: 15px;">Benefícios dos Processos</p>
               </a>
             </li>
+            {% if session.get('user_role') == 'admin' %}
             <li class="nav-item">
-              <a href="{{ url_for('impugnacao_references.list_references') }}"
-                class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('impugnacao_references.') else '' }}"
+              <a href="{{ url_for('process_panel.ai_settings') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'process_panel.ai_settings' else '' }}"
                 style="font-size: 0.9em;">
-                <i class="nav-icon bi bi-journal-bookmark" style="margin-right: 8px; color: #6c757d;"></i>
-                <p style="margin-left: 15px;">Peças-Modelo (Impugnação)</p>
+                <i class="nav-icon bi bi-cpu" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Configurações de IA</p>
               </a>
             </li>
+            {% endif %}
+            {% endif %}
           </ul>
-        </li>
-        {% endif %}
-
-        {% if can_view_module('communications') %}
-        <li class="nav-item">
-          <a href="{{ url_for('communications.list_communications') }}"
-            class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('communications.') else '' }}">
-            <span class="position-relative d-inline-block">
-              <i class="nav-icon bi bi-broadcast"></i>
-              {% if communications_unread_count and communications_unread_count > 0 %}
-              <span class="position-absolute badge rounded-pill text-bg-warning"
-                    style="font-size: .58rem; top: -4px; right: -2px; padding: .2em .4em;">
-                {{ communications_unread_count if communications_unread_count < 100 else '99+' }}
-              </span>
-              {% endif %}
-            </span>
-            <p title="Monitoramento de Processos">Monitoramento</p>
-          </a>
         </li>
         {% endif %}
 

@@ -2,6 +2,222 @@
 
 {% block title %}Painel de Processos - IntellexIA{% endblock %}
 
+{% block extra_css %}
+<style>
+  /* Mesa de trabalho — mesmo chrome "fio de identidade" da tela do processo */
+  .process-panel-list-page .pp-card {
+    border: 1px solid var(--bs-border-color-translucent);
+    border-radius: 10px;
+    box-shadow: none;
+    overflow: hidden;
+  }
+
+  .process-panel-list-page .pp-card::before {
+    content: "";
+    display: block;
+    height: 3px;
+    background: linear-gradient(90deg, #2f4a6b 0%, #4a3d78 60%, #6f42c1 100%);
+  }
+
+  .process-panel-list-page .pp-card>.card-header {
+    background: transparent;
+  }
+
+  .process-panel-list-page .pp-card .card-title .bi {
+    color: #4a3d78;
+  }
+
+  .mesa-scroll {
+    max-height: 250px;
+    overflow-y: auto;
+  }
+
+  .mesa-item {
+    font-size: .83rem;
+    padding: .5rem .9rem;
+    border-bottom: 1px solid var(--bs-border-color-translucent);
+  }
+
+  .mesa-item:last-child {
+    border-bottom: 0;
+  }
+
+  .mesa-line {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    min-width: 0;
+  }
+
+  .mesa-sub {
+    display: flex;
+    justify-content: space-between;
+    gap: .5rem;
+    font-size: .72rem;
+    color: var(--bs-secondary-color);
+    margin-top: .15rem;
+  }
+
+  .mesa-proc {
+    font-family: var(--bs-font-monospace);
+    font-size: .72rem;
+    white-space: nowrap;
+  }
+
+  /* Últimas publicações — tiles em coluna única */
+  .pub-tile {
+    position: relative;
+    padding: .5rem .9rem .45rem;
+    border-bottom: 1px solid var(--bs-border-color-translucent);
+    transition: background-color .12s ease;
+  }
+
+  .pub-tile:last-child {
+    border-bottom: 0;
+  }
+
+  .pub-tile:hover {
+    background: var(--bs-tertiary-bg);
+  }
+
+  .pub-meta {
+    display: flex;
+    align-items: center;
+    gap: .35rem;
+    font-size: .72rem;
+    color: var(--bs-secondary-color);
+  }
+
+  .pub-nova {
+    margin-left: auto;
+    font-size: .68rem;
+    font-weight: 700;
+    color: var(--bs-warning-text-emphasis);
+  }
+
+  .pub-doc {
+    font-weight: 600;
+    font-size: .85rem;
+    margin: .15rem 0 .2rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .pub-doc .bi {
+    color: #4a3d78;
+  }
+
+  .pub-foot {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: .75rem;
+    font-size: .73rem;
+    color: var(--bs-secondary-color);
+  }
+
+  .pub-foot .pub-orgao {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  .pub-foot .mesa-proc {
+    position: relative;
+    z-index: 2;
+  }
+
+  /* Tabela da listagem — mesma linguagem da tela do processo */
+  .process-panel-list-page .table>thead th {
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--bs-secondary-color);
+  }
+
+  .process-panel-list-page .table-light {
+    --bs-table-bg: transparent;
+  }
+
+  .process-panel-list-page .table>tbody>tr>td {
+    padding-top: .6rem;
+    padding-bottom: .6rem;
+  }
+
+  .process-panel-list-page tr[data-href] {
+    cursor: pointer;
+  }
+
+  .proc-num {
+    font-family: var(--bs-font-monospace);
+    font-weight: 600;
+    font-size: .8rem;
+  }
+
+  .process-panel-list-page .pp-action {
+    background: transparent;
+    border: 1px solid var(--bs-border-color);
+    color: var(--bs-secondary-color);
+    transition: color .12s ease, background-color .12s ease, border-color .12s ease;
+  }
+
+  .process-panel-list-page .pp-action:hover,
+  .process-panel-list-page .pp-action:focus {
+    background: rgba(74, 61, 120, .08);
+    border-color: rgba(74, 61, 120, .35);
+    color: #4a3d78;
+  }
+
+  .process-panel-list-page .pp-action.pp-action-danger:hover,
+  .process-panel-list-page .pp-action.pp-action-danger:focus {
+    background: var(--bs-danger-bg-subtle);
+    border-color: rgba(220, 53, 69, .4);
+    color: var(--bs-danger-text-emphasis);
+  }
+
+  .mesa-stats {
+    display: flex;
+    gap: 1.2rem;
+    align-items: baseline;
+    flex-wrap: wrap;
+    padding: .5rem .25rem;
+    font-size: .8rem;
+    color: var(--bs-secondary-color);
+  }
+
+  .mesa-stats b {
+    font-size: 1rem;
+    color: var(--bs-emphasis-color);
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Documentos aguardando processamento da IA (mesmo roxo do detalhe do processo) */
+  .ai-processing-badge {
+    display: inline-flex;
+    align-items: center;
+    border: 1px solid rgba(111, 66, 193, 0.25);
+    background: rgba(111, 66, 193, 0.12);
+    color: #6f42c1;
+  }
+
+  .ai-processing-pulse {
+    width: .5rem;
+    height: .5rem;
+    margin-right: .35rem;
+    border-radius: 50%;
+    background: #6f42c1;
+    animation: ai-processing-pulse 1.4s ease-in-out infinite;
+  }
+
+  @keyframes ai-processing-pulse {
+    0%, 100% { opacity: .35; transform: scale(.85); }
+    50% { opacity: 1; transform: scale(1); }
+  }
+</style>
+{% endblock %}
+
 {% block content %}
 
 <div class="process-panel-list-page">
@@ -18,7 +234,9 @@
                 <i class="bi bi-diagram-3 page-hero-icon__glyph"></i>
               </div>
               <div>
-                <h1 class="h4 mb-1" style="font-weight: 700; letter-spacing: .2px;">Painel de Processos</h1>
+                <h1 class="h4 mb-1" style="font-weight: 700; letter-spacing: .2px;">Painel de Processos
+                  <small class="text-muted fw-normal" style="font-size: .62em;">(Cumprimento de Prazos)</small>
+                </h1>
                 <small class="text-muted">Centralize todos os dados dos processos judiciais em um único painel</small>
               </div>
             </div>
@@ -41,56 +259,178 @@
     <div class="container-fluid">
       <div class="row">
         <div class="col-12">
-          <!-- Estatísticas -->
-          <div class="row mb-4">
-            <div class="col-lg-3 col-md-6">
-              <div class="info-box shadow-sm">
-                <span class="info-box-icon bg-primary bg-opacity-10">
-                  <i class="bi bi-folder2-open text-primary"></i>
-                </span>
-                <div class="info-box-content">
-                  <span class="info-box-text">Total de Processos</span>
-                  <span class="info-box-number">{{ stats.total }}</span>
+          <!-- Mesa de trabalho: prazos + radar + últimas publicações (faixa única) -->
+          <div class="row g-3 mb-2">
+            <div class="col-lg-4">
+              <div class="card pp-card h-100">
+                <div class="card-header py-2">
+                  <h3 class="card-title"><i class="bi bi-alarm me-2"></i>Prazos a vencer</h3>
+                  <div class="card-tools">
+                    <span class="small text-muted">{{ firm_deadlines_total }}</span>
+                  </div>
+                </div>
+                <div class="card-body p-0 mesa-scroll">
+                  {% if firm_deadlines %}
+                  {% for item in firm_deadlines %}
+                  {% set d = item.obj %}
+                  <div class="mesa-item">
+                    <div class="mesa-line">
+                      {% if item.state == 'overdue' %}
+                      <span class="badge bg-danger-subtle text-danger-emphasis border border-danger-subtle">vencido
+                        há {{ -item.days_left }}d</span>
+                      {% elif item.state == 'today' %}
+                      <span class="badge bg-danger-subtle text-danger-emphasis border border-danger-subtle">hoje</span>
+                      {% elif item.state == 'soon' %}
+                      <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">{{
+                        item.days_left }}d</span>
+                      {% else %}
+                      <span class="badge bg-secondary-subtle text-secondary-emphasis border">{{
+                        d.due_date.strftime('%d/%m') }}</span>
+                      {% endif %}
+                      <span class="text-truncate" title="{{ d.title }}">
+                        {% if d.kind == 'audiencia' %}<i class="bi bi-easel2 me-1 text-secondary"></i>{% endif %}
+                        {{ d.title }}
+                      </span>
+                      <form method="post" class="d-inline ms-auto"
+                        action="{{ url_for('process_panel.set_deadline_done', process_id=d.process_id, deadline_id=d.id) }}">
+                        <input type="hidden" name="done" value="1">
+                        <input type="hidden" name="next" value="lista">
+                        <button type="submit"
+                          class="btn btn-sm bg-success-subtle text-success-emphasis border-0 py-0 px-1"
+                          title="Marcar como cumprido"><i class="bi bi-check-lg"></i></button>
+                      </form>
+                    </div>
+                    <div class="mesa-sub">
+                      <a class="mesa-proc text-decoration-none"
+                        href="{{ url_for('process_panel.detail', process_id=d.process_id) }}">{{
+                        (d.process.process_number if d.process else '') | truncate(20, true, '…') }}</a>
+                      <span>{{ d.responsible_user.name.split(' ')[0] if d.responsible_user else '—' }}{% if
+                        d.due_time %} · {{ d.due_time.strftime('%H:%M') }}{% endif %}</span>
+                    </div>
+                  </div>
+                  {% endfor %}
+                  {% if firm_deadlines_total > firm_deadlines|length %}
+                  <div class="mesa-item small text-muted">
+                    + {{ firm_deadlines_total - firm_deadlines|length }} prazo(s) futuro(s)
+                  </div>
+                  {% endif %}
+                  {% else %}
+                  <div class="mesa-item small text-muted py-3">
+                    <i class="bi bi-check2-circle me-1"></i>Nenhum prazo pendente no escritório.
+                  </div>
+                  {% endif %}
                 </div>
               </div>
             </div>
-            <div class="col-lg-3 col-md-6">
-              <div class="info-box shadow-sm">
-                <span class="info-box-icon bg-success bg-opacity-10">
-                  <i class="bi bi-check-circle text-success"></i>
-                </span>
-                <div class="info-box-content">
-                  <span class="info-box-text">Ativos</span>
-                  <span class="info-box-number">{{ stats.ativo }}</span>
+            <div class="col-lg-4">
+              <div class="card pp-card h-100">
+                <div class="card-header py-2">
+                  <h3 class="card-title"><i class="bi bi-bullseye me-2"></i>Radar</h3>
+                  <div class="card-tools"><span class="small text-muted">precisa de atenção</span></div>
+                </div>
+                <div class="card-body p-0 mesa-scroll">
+                  {% if radar_items %}
+                  {% for item in radar_items %}
+                  <div class="mesa-item">
+                    <div class="mesa-line">
+                      {% if item.kind == 'ia' %}
+                      <span class="badge bg-danger text-white"><i
+                          class="bi bi-exclamation-triangle-fill me-1"></i>{{ 'até ' ~ item.due.strftime('%d/%m') if
+                        item.due else 'Exige ação' }}</span>
+                      {% elif item.kind == 'publicacao' %}
+                      <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">{{
+                        item.tipo }}</span>
+                      {% elif item.kind == 'decisao' %}
+                      <span
+                        class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle">Decisão</span>
+                      {% else %}
+                      <span class="badge bg-secondary-subtle text-secondary-emphasis border">DataJud</span>
+                      {% endif %}
+                      <a href="{{ item.url }}" class="text-decoration-none text-body text-truncate"
+                        title="{{ item.label }}">{{ item.label | truncate(48, true) }}</a>
+                    </div>
+                    <div class="mesa-sub">
+                      <a class="mesa-proc text-decoration-none"
+                        href="{{ url_for('process_panel.detail', process_id=item.process_id) }}">{{
+                        item.process_number | truncate(20, true, '…') }}</a>
+                      <span>{{ item.when.strftime('%d/%m') }}</span>
+                    </div>
+                  </div>
+                  {% endfor %}
+                  {% if radar_total > radar_items|length %}
+                  <div class="mesa-item small text-muted">+ {{ radar_total - radar_items|length }} itens</div>
+                  {% endif %}
+                  {% else %}
+                  <div class="mesa-item small text-muted py-3">
+                    <i class="bi bi-check2-circle me-1"></i>Sem novidades pendentes de atenção.
+                  </div>
+                  {% endif %}
                 </div>
               </div>
             </div>
-            <div class="col-lg-3 col-md-6">
-              <div class="info-box shadow-sm">
-                <span class="info-box-icon bg-warning bg-opacity-10">
-                  <i class="bi bi-pause-circle text-warning"></i>
-                </span>
-                <div class="info-box-content">
-                  <span class="info-box-text">Suspensos</span>
-                  <span class="info-box-number">{{ stats.suspenso }}</span>
+            <div class="col-lg-4">
+              <div class="card pp-card h-100">
+                <div class="card-header py-2">
+                  <h3 class="card-title"><i class="bi bi-broadcast me-2"></i>Últimas publicações</h3>
+                  <div class="card-tools">
+                    <a href="{{ url_for('communications.list_communications') }}"
+                      class="btn btn-sm btn-outline-secondary py-0">
+                      Ver mais <i class="bi bi-arrow-right-short"></i>
+                    </a>
+                  </div>
                 </div>
+                <div class="card-body p-0 mesa-scroll">
+              {% if latest_pubs %}
+              <div class="pub-grid">
+                {% for comm in latest_pubs %}
+                <div class="pub-tile">
+                  <div class="pub-meta">
+                    <span>{{ comm.data_disponibilizacao.strftime('%d/%m') if comm.data_disponibilizacao else '—'
+                      }}</span>
+                    <span>·</span>
+                    <span>{{ comm.tipo_comunicacao or 'Comunicação' }}</span>
+                    {% if not comm.is_read %}<span class="pub-nova">● nova</span>{% endif %}
+                  </div>
+                  <div class="pub-doc" title="{{ comm.tipo_documento or comm.tipo_comunicacao or '' }}">
+                    <i class="bi bi-file-earmark-text me-1"></i>{{ comm.tipo_documento or comm.tipo_comunicacao or
+                    'Comunicação' }}
+                  </div>
+                  <div class="pub-foot">
+                    <span class="pub-orgao" title="{{ comm.nome_orgao or '' }}">{{ comm.nome_orgao or '—' }}</span>
+                    {% if comm.judicial_process_id %}
+                    <a class="mesa-proc text-decoration-none"
+                      href="{{ url_for('process_panel.detail', process_id=comm.judicial_process_id) }}">{{
+                      (comm.numero_processo_mascara or comm.numero_processo or '') | truncate(16, true, '…') }}</a>
+                    {% else %}
+                    <span class="mesa-proc">{{ (comm.numero_processo_mascara or comm.numero_processo or '—') |
+                      truncate(16, true, '…') }}</span>
+                    {% endif %}
+                  </div>
+                  <a href="{{ url_for('communications.communication_detail', communication_id=comm.id) }}"
+                    class="stretched-link" aria-label="Abrir publicação"></a>
+                </div>
+                {% endfor %}
               </div>
-            </div>
-            <div class="col-lg-3 col-md-6">
-              <div class="info-box shadow-sm">
-                <span class="info-box-icon bg-danger bg-opacity-10">
-                  <i class="bi bi-x-circle text-danger"></i>
-                </span>
-                <div class="info-box-content">
-                  <span class="info-box-text">Encerrados</span>
-                  <span class="info-box-number">{{ stats.encerrado }}</span>
+              {% else %}
+              <div class="mesa-item small text-muted py-3">
+                <i class="bi bi-broadcast me-1"></i>Nenhuma publicação captada ainda — as publicações chegam pela
+                sincronização diária do Monitoramento de Processos.
+              </div>
+              {% endif %}
                 </div>
               </div>
             </div>
           </div>
 
+          <div class="mesa-stats mb-3">
+            <span><b>{{ stats.total }}</b> processos</span>
+            <span><b class="text-success">{{ stats.ativo }}</b> ativos</span>
+            <span><b class="text-warning">{{ stats.suspenso }}</b> suspensos</span>
+            <span><b class="text-muted">{{ stats.encerrado }}</b> encerrados</span>
+          </div>
+
           <!-- Card Principal -->
-          <div class="card card-primary card-outline shadow-sm">
+          <div class="card pp-card">
             <div class="card-header">
               <h3 class="card-title mb-0"><i class="bi bi-list-ul"></i> Lista de Processos</h3>
               <div class="card-tools">
@@ -102,6 +442,12 @@
                   class="btn btn-outline-secondary btn-sm me-1">
                   <i class="bi bi-kanban"></i> Fases Judiciais
                 </a>
+                {% if session.get('user_role') == 'admin' %}
+                <a href="{{ url_for('process_panel.ai_settings') }}"
+                  class="btn btn-outline-secondary btn-sm me-1">
+                  <i class="bi bi-cpu"></i> Configurações de IA
+                </a>
+                {% endif %}
                 <a href="{{ url_for('process_panel.new_process') }}" class="btn btn-primary btn-sm">
                   <i class="bi bi-plus-circle"></i> Novo Processo
                 </a>
@@ -152,152 +498,175 @@
               </div>
               {% endif %}
 
-              <!-- Filtros -->
-              <div class="border rounded-4 p-3 p-md-4 mb-4 bg-light-subtle">
-                <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-                  <h5 class="mb-0"><i class="bi bi-funnel me-2"></i>Filtros</h5>
-                  <small class="text-muted">Refine a busca por status e tese jurídica</small>
+              <!-- Filtros (linha compacta) -->
+              <form method="get" class="row g-2 align-items-center mb-3">
+                <input type="hidden" name="view" value="{{ current_view or 'table' }}">
+                {% if discovery_view %}<input type="hidden" name="discovery" value="{{ discovery_view }}">{% endif %}
+                <div class="col-lg-5 col-md-6">
+                  <input type="text" id="search_query" name="q" class="form-control form-control-sm"
+                    placeholder="Buscar por número (com ou sem pontuação), título ou tribunal..."
+                    value="{{ search_query }}" aria-label="Buscar">
                 </div>
-                <form method="get" class="row g-3 align-items-end">
-                  <input type="hidden" name="view" value="{{ current_view or 'table' }}">
-                  {% if discovery_view %}<input type="hidden" name="discovery" value="{{ discovery_view }}">{% endif %}
-                  <div class="col-lg-5">
-                    <label for="search_query" class="form-label mb-1">
-                      <i class="bi bi-search"></i> Buscar
-                    </label>
-                    <input type="text" id="search_query" name="q" class="form-control"
-                      placeholder="Número, título ou tribunal..." value="{{ search_query }}">
-                  </div>
-                  <div class="col-lg-2 col-md-4">
-                    <label for="status_filter" class="form-label mb-1">
-                      <i class="bi bi-flag"></i> Status
-                    </label>
-                    <select name="status" id="status_filter" class="form-select">
-                      <option value="">Todos</option>
-                      <option value="ativo" {% if status_filter=='ativo' %}selected{% endif %}>Ativo</option>
-                      <option value="suspenso" {% if status_filter=='suspenso' %}selected{% endif %}>Suspenso</option>
-                      <option value="encerrado" {% if status_filter=='encerrado' %}selected{% endif %}>Encerrado
-                      </option>
-                      <option value="aguardando" {% if status_filter=='aguardando' %}selected{% endif %}>Aguardando
-                      </option>
-                    </select>
-                  </div>
-                  <div class="col-lg-3 col-md-4">
-                    <label for="legal_thesis_filter" class="form-label mb-1">
-                      <i class="bi bi-bookmark-star"></i> Tese Jurídica
-                    </label>
-                    <select name="legal_thesis_id" id="legal_thesis_filter" class="form-select">
-                      <option value="">Todas</option>
-                      {% for thesis in legal_theses %}
-                      <option value="{{ thesis.id }}" {% if legal_thesis_filter==thesis.id %}selected{% endif %}>
-                        {{ thesis.name }}
-                      </option>
-                      {% endfor %}
-                    </select>
-                  </div>
-                  <div class="col-lg-2 col-md-4 d-flex gap-2">
-                    <button type="submit" class="btn btn-primary flex-grow-1">
-                      <i class="bi bi-search"></i>
-                    </button>
-                    <a href="{{ url_for('process_panel.list_processes', view=current_view or 'table') }}"
-                      class="btn btn-outline-secondary" title="Limpar filtros">
-                      <i class="bi bi-x-circle"></i>
-                    </a>
-                  </div>
-                </form>
-              </div>
+                <div class="col-lg-2 col-md-3">
+                  <select name="status" id="status_filter" class="form-select form-select-sm"
+                    aria-label="Filtrar por status">
+                    <option value="">Status: todos</option>
+                    <option value="ativo" {% if status_filter=='ativo' %}selected{% endif %}>Ativo</option>
+                    <option value="suspenso" {% if status_filter=='suspenso' %}selected{% endif %}>Suspenso</option>
+                    <option value="encerrado" {% if status_filter=='encerrado' %}selected{% endif %}>Encerrado
+                    </option>
+                    <option value="aguardando" {% if status_filter=='aguardando' %}selected{% endif %}>Aguardando
+                    </option>
+                  </select>
+                </div>
+                <div class="col-lg-3 col-md-3">
+                  <select name="legal_thesis_id" id="legal_thesis_filter" class="form-select form-select-sm"
+                    aria-label="Filtrar por tese jurídica">
+                    <option value="">Tese: todas</option>
+                    {% for thesis in legal_theses %}
+                    <option value="{{ thesis.id }}" {% if legal_thesis_filter==thesis.id %}selected{% endif %}>
+                      {{ thesis.name }}
+                    </option>
+                    {% endfor %}
+                  </select>
+                </div>
+                <div class="col-lg-2 d-flex gap-2">
+                  <button type="submit" class="btn btn-primary btn-sm flex-grow-1">
+                    <i class="bi bi-search me-1"></i>Filtrar
+                  </button>
+                  {% if search_query or status_filter or legal_thesis_filter %}
+                  <a href="{{ url_for('process_panel.list_processes', view=current_view or 'table', discovery=discovery_view or none) }}"
+                    class="btn btn-outline-secondary btn-sm" title="Limpar filtros">
+                    <i class="bi bi-x-circle"></i>
+                  </a>
+                  {% endif %}
+                </div>
+              </form>
 
               <!-- Tabela de Processos -->
               {% if processes.items %}
               <div class="table-responsive">
-                <table class="table table-hover table-striped align-middle">
-                  <thead class="table-light">
+                <table class="table table-hover align-middle mb-0">
+                  <thead>
                     <tr>
-                      <th><i class="bi bi-hash"></i> Número</th>
-                      <th><i class="bi bi-card-text"></i> Título</th>
-                      <th><i class="bi bi-building"></i> Tribunal</th>
-                      <th><i class="bi bi-bookmark-star"></i> Teses Jurídicas</th>
-                      <th><i class="bi bi-flag"></i> Status</th>
-                      <th><i class="bi bi-signpost"></i> Fase</th>
-                      <th><i class="bi bi-calendar"></i> Criado em</th>
+                      <th>Processo</th>
+                      <th>Tribunal</th>
+                      <th>Teses Jurídicas</th>
+                      <th>Status</th>
+                      <th>Fase</th>
+                      <th>Pendências</th>
                       <th class="text-end">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
                     {% for process in processes.items %}
-                    <tr>
+                    <tr data-href="{{ url_for('process_panel.detail', process_id=process.id) }}">
                       <td>
                         {% if process.process_number and not process.process_number.startswith('TEMP-') %}
-                        <code class="text-primary fw-bold">{{ process.process_number }}</code>
+                        <span class="proc-num">{{ process.process_number }}</span>
                         {% elif process.process_number %}
-                        <span class="badge bg-warning text-dark"
+                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle"
                           title="Número provisório — edite o processo para informar o número real"><i
                             class="bi bi-clock me-1"></i>{{ process.process_number }}</span>
                         {% else %}
-                        <span class="text-muted fst-italic">Não informado</span>
+                        <span class="text-muted fst-italic">Sem número</span>
                         {% endif %}
-                      </td>
-                      <td>
-                        <div>
-                          <strong>{{ process.title or process.process_number or 'Sem título' }}</strong>
-                          {% if process.description %}
-                          <br><small class="text-muted">{{ process.description[:60] }}...</small>
-                          {% endif %}
+                        <div class="small text-muted text-truncate" style="max-width: 320px;"
+                          title="{{ process.plaintiff_client.name if process.plaintiff_client }}{% if process.defendant %} × {{ process.defendant.name }}{% endif %}">
                           {% if process.plaintiff_client or process.defendant %}
-                          <br>
-                          <small class="text-muted">
-                            {% if process.plaintiff_client %}<span class="me-2">Ativo: {{ process.plaintiff_client.name
-                              }}</span>{% endif %}
-                            {% if process.defendant %}<span>Passivo: {{ process.defendant.name }}</span>{% endif %}
-                          </small>
+                          {{ process.plaintiff_client.name if process.plaintiff_client else '—' }}
+                          <span class="opacity-50">×</span>
+                          {{ process.defendant.name if process.defendant else '—' }}
+                          {% else %}
+                          {{ process.title or 'Sem título' }}
                           {% endif %}
                         </div>
                       </td>
                       <td>
                         {% if process.tribunal_name %}
-                        <span class="badge bg-light text-dark">{{ process.tribunal_name }}</span>
+                        <span class="badge bg-secondary-subtle text-secondary-emphasis border">{{
+                          process.tribunal_name }}</span>
                         {% else %}
-                        <span class="text-muted">-</span>
+                        <span class="text-muted">—</span>
                         {% endif %}
                       </td>
                       <td>
                         {% set theses = process_legal_theses.get(process.id, []) %}
                         {% if theses %}
                         <div class="d-flex flex-wrap gap-1">
-                          {% for thesis_name in theses %}
+                          {% for thesis_name in theses[:2] %}
                           <span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle">
-                            {{ thesis_name }}
+                            {{ thesis_name | truncate(28, true) }}
                           </span>
                           {% endfor %}
+                          {% if theses|length > 2 %}
+                          <span class="badge bg-secondary-subtle text-secondary-emphasis border"
+                            title="{{ theses[2:] | join(' · ') }}">+{{ theses|length - 2 }}</span>
+                          {% endif %}
                         </div>
                         {% else %}
-                        <span class="text-muted">-</span>
+                        <span class="text-muted">—</span>
                         {% endif %}
                       </td>
                       <td>
                         {% if process.status == 'ativo' %}
-                        <span class="badge bg-success"><i class="bi bi-check-circle"></i> Ativo</span>
+                        <span
+                          class="badge bg-success-subtle text-success-emphasis border border-success-subtle">Ativo</span>
                         {% elif process.status == 'suspenso' %}
-                        <span class="badge bg-warning"><i class="bi bi-pause-circle"></i> Suspenso</span>
+                        <span
+                          class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">Suspenso</span>
                         {% elif process.status == 'encerrado' %}
-                        <span class="badge bg-danger"><i class="bi bi-x-circle"></i> Encerrado</span>
+                        <span
+                          class="badge bg-danger-subtle text-danger-emphasis border border-danger-subtle">Encerrado</span>
                         {% else %}
-                        <span class="badge bg-secondary">{{ process.status }}</span>
+                        <span class="badge bg-secondary-subtle text-secondary-emphasis border">{{ process.status
+                          }}</span>
                         {% endif %}
                       </td>
                       <td>
                         {% set phase_key = process_phases.get(process.id) %}
                         {% if phase_key %}
-                        <span class="badge bg-light text-dark">
+                        <span class="badge bg-secondary-subtle text-secondary-emphasis border">
                           {{ judicial_phases_labels.get(phase_key, phase_key|replace('_', ' ')|title) }}
                         </span>
                         {% else %}
-                        <span class="text-muted">-</span>
+                        <span class="text-muted">—</span>
                         {% endif %}
                       </td>
                       <td>
-                        <small class="text-muted"><i class="bi bi-calendar-event"></i> {{
-                          process.created_at.strftime('%d/%m/%Y') }}</small>
+                        {% set pending = process_pending.get(process.id) %}
+                        {% if pending %}
+                        <div class="d-flex flex-wrap gap-1">
+                          {% if pending.deadline %}
+                          {% set pd = pending.deadline %}
+                          {% if pd.state in ('overdue', 'today') %}
+                          <span class="badge bg-danger-subtle text-danger-emphasis border border-danger-subtle"
+                            title="{{ pd.obj.title }}"><i class="bi bi-alarm me-1"></i>{{ 'hoje' if pd.state ==
+                            'today' else 'vencido' }}</span>
+                          {% elif pd.state == 'soon' %}
+                          <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle"
+                            title="{{ pd.obj.title }}"><i class="bi bi-alarm me-1"></i>{{ pd.days_left }}d</span>
+                          {% else %}
+                          <span class="badge bg-secondary-subtle text-secondary-emphasis border"
+                            title="{{ pd.obj.title }}"><i class="bi bi-alarm me-1"></i>{{
+                            pd.obj.due_date.strftime('%d/%m') }}</span>
+                          {% endif %}
+                          {% endif %}
+                          {% if pending.unread %}
+                          <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle"
+                            title="{{ pending.unread }} publicação(ões) não lida(s)"><i
+                              class="bi bi-broadcast me-1"></i>{{ pending.unread }}</span>
+                          {% endif %}
+                          {% if pending.ai_processing %}
+                          <span class="badge ai-processing-badge"
+                            title="{{ pending.ai_processing }} documento(s) aguardando processamento da IA">
+                            <span class="ai-processing-pulse" aria-hidden="true"></span>
+                            <i class="bi bi-stars me-1"></i>IA {{ pending.ai_processing }}</span>
+                          {% endif %}
+                        </div>
+                        {% else %}
+                        <span class="text-muted">—</span>
+                        {% endif %}
                       </td>
                       <td class="text-end">
                         {% if discovery_view == 'descobertos' %}
@@ -327,16 +696,16 @@
                           </button>
                         </form>
                         {% endif %}
-                        <div class="btn-group btn-group-sm" role="group">
+                        <div class="d-inline-flex gap-1">
                           <a href="{{ url_for('process_panel.detail', process_id=process.id) }}"
-                            class="btn btn-outline-primary" title="Ver detalhes">
+                            class="btn btn-sm pp-action" title="Ver detalhes">
                             <i class="bi bi-eye"></i>
                           </a>
                           <a href="{{ url_for('process_panel.edit', process_id=process.id) }}"
-                            class="btn btn-outline-secondary" title="Editar">
+                            class="btn btn-sm pp-action" title="Editar">
                             <i class="bi bi-pencil"></i>
                           </a>
-                          <button type="button" class="btn btn-outline-danger" title="Deletar"
+                          <button type="button" class="btn btn-sm pp-action pp-action-danger" title="Deletar"
                             onclick="if(confirm('Tem certeza que deseja deletar este processo?')) { document.getElementById('delete-form-{{ process.id }}').submit(); }">
                             <i class="bi bi-trash"></i>
                           </button>
@@ -436,4 +805,18 @@
 
 </div>
 
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  document.addEventListener('DOMContentLoaded', function () {
+    // Linha inteira navega ao processo (botões/links internos continuam com prioridade)
+    document.querySelectorAll('tr[data-href]').forEach(function (row) {
+      row.addEventListener('click', function (event) {
+        if (event.target.closest('a, button, form, input, select')) return;
+        window.location = row.dataset.href;
+      });
+    });
+  });
+</script>
 {% endblock %}

@@ -184,6 +184,11 @@
                     <span class="badge {{ 'bg-danger-subtle text-danger-emphasis' if comm.tipo_comunicacao == 'Intimação' else 'bg-secondary-subtle text-secondary-emphasis' }}">
                       {{ comm.tipo_comunicacao or 'Comunicação' }}
                     </span>
+                    {% if comm.tipo_documento %}
+                    <span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle"
+                      title="Tipo de documento informado pelo tribunal"><i
+                        class="bi bi-file-earmark-text me-1"></i>{{ comm.tipo_documento }}</span>
+                    {% endif %}
                     {% set analysis = comm.analysis_json.get('data') if comm.analysis_json else None %}
                     {% if analysis %}
                     {% if analysis.get('acao_requerida') == 'exige_acao' %}

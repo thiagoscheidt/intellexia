@@ -98,6 +98,16 @@ class DocumentProcessorService:
         if len(title) > 120 and title.count(",") >= 3:
             return False
 
+        # Títulos reais longos vêm em caixa alta; linha longa predominantemente
+        # minúscula é parágrafo corrido (ex.: item numerado de acórdão citado,
+        # "30. Alega-se também haver violação..."). Títulos curtos em caixa
+        # baixa ("3. Dispositivo") continuam válidos.
+        letters = [c for c in title if c.isalpha()]
+        if len(title) > 40 and letters:
+            upper_ratio = sum(1 for c in letters if c.isupper()) / len(letters)
+            if upper_ratio < 0.6:
+                return False
+
         return True
 
     @staticmethod
@@ -530,100 +540,170 @@ class DocumentProcessorService:
         result = converter.convert(str(file_path))
         return result.document.export_to_markdown()
 
+    # Caminho rápido: média mínima de caracteres/página para confiar na camada
+    # de texto do PDF (abaixo disso, provável escaneado → Docling).
+    FAST_PATH_MIN_AVG_CHARS = 100
+
+    def _extract_pages_with_pdfplumber(self, file_path: str | Path) -> list[tuple[int, str]]:
+        """[(página, texto)] via camada de texto do PDF; [] em caso de falha."""
+        page_texts: list[tuple[int, str]] = []
+        try:
+            with pdfplumber.open(str(file_path)) as pdf:
+                for page_no, page in enumerate(pdf.pages, start=1):
+                    page_texts.append((page_no, page.extract_text() or ""))
+        except Exception as exc:
+            print(f"[DocumentProcessorService][pdfplumber] Falha na extração de texto: {exc}")
+            return []
+        return page_texts
+
+    def _build_pages_with_sections(
+        self, page_texts: list[tuple[int, str]]
+    ) -> tuple[list[PageContent], list[dict]]:
+        """Aplica a detecção de seções numeradas e monta pages + chunks_with_pages."""
+        pages: list[PageContent] = []
+        chunks_with_pages: list[dict] = []
+        current_section: str | None = None
+
+        for page_no, page_text in page_texts:
+            # Página de sumário não define seção corrente (as entradas longas
+            # quebram linha antes do pontilhado e escapariam do filtro).
+            if re.search(r'^\s*SUM[ÁA]RIO\s*$', page_text, re.IGNORECASE | re.MULTILINE):
+                pages.append(PageContent(page=page_no, text=page_text, section=current_section))
+                if page_text.strip():
+                    chunks_with_pages.append(
+                        {"text": page_text, "page": page_no, "section": current_section})
+                continue
+
+            # Verifica se esta página contém uma ou mais seções numeradas.
+            detected_sections = self._detect_sections(page_text)
+            if detected_sections:
+                current_section_number = self._extract_section_number(current_section)
+                filtered_sections: list[str] = []
+                for candidate_section in detected_sections:
+                    candidate_number = self._extract_section_number(candidate_section)
+
+                    # Ignora regressões numéricas espúrias no meio da página,
+                    # comuns em citações transcritas (ex.: seção 8 citando "4. ...").
+                    if (
+                        current_section_number is not None
+                        and candidate_number is not None
+                        and candidate_number < current_section_number
+                        and not self._is_section_heading_near_page_start(page_text, candidate_section)
+                    ):
+                        continue
+
+                    # Ignora saltos numéricos implausíveis para frente — itens
+                    # numerados de acórdãos citados avançam muito além da
+                    # numeração real das seções (ex.: seção 5 → "30. Alega-se...").
+                    if (
+                        current_section_number is not None
+                        and candidate_number is not None
+                        and candidate_number > current_section_number + 10
+                    ):
+                        continue
+
+                    filtered_sections.append(candidate_section)
+                    current_section_number = candidate_number if candidate_number is not None else current_section_number
+
+                if filtered_sections:
+                    current_section = filtered_sections[-1]
+                    page_section = ", ".join(filtered_sections)
+                    print(f"[DocumentProcessorService] Seções detectadas na pág {page_no}: {page_section}")
+                else:
+                    page_section = current_section
+            else:
+                page_section = current_section
+
+            pages.append(PageContent(page=page_no, text=page_text, section=page_section))
+            if page_text.strip():
+                chunks_with_pages.append({"text": page_text, "page": page_no, "section": page_section})
+
+        return pages, chunks_with_pages
+
     def process_document(self, file_path: str | Path) -> DocumentProcessResult:
         """
         Extrai o conteúdo completo do arquivo com informações de página.
 
         Estratégia:
-        1. Tenta extrair página a página via Docling (mais preciso para PDFs).
-        2. Se não conseguir mapear páginas, faz fallback para MarkItDown página a página.
+        1. Caminho rápido: PDFs com camada de texto são extraídos com pdfplumber
+           (segundos). O Docling (modelos de layout por página, minutos em CPU)
+           fica só para o fallback.
+        2. Fallback Docling: texto esparso/vazio (provável escaneado) ou arquivo
+           não-PDF.
         3. Monta `chunks_with_pages` prontos para ingestão no formato
-           [{"text": "...", "page": N}, ...].
+           [{"text": "...", "page": N}, ...]. As tabelas sempre vêm do
+           pdfplumber, em qualquer caminho.
         """
         file_path = Path(file_path)
         chunks_with_pages: list[dict] = []
         pages: list[PageContent] = []
         tables: list[dict] = []
+        full_text = ""
+        total_pages = 0
 
-        try:
-            pipeline_options = PdfPipelineOptions(
-                do_ocr=False,
-                generate_page_images=False,
-                do_table_structure=False,
-                enable_parallel_processing=True,
-            )
-            converter = DocumentConverter(
-                format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
-            )
-            result = converter.convert(str(file_path))
-            doc = result.document
+        # 1) Caminho rápido — camada de texto do PDF
+        if file_path.suffix.lower() == ".pdf":
+            page_texts = self._extract_pages_with_pdfplumber(file_path)
+            if page_texts:
+                total_chars = sum(len(text.strip()) for _, text in page_texts)
+                if total_chars >= self.FAST_PATH_MIN_AVG_CHARS * len(page_texts):
+                    total_pages = len(page_texts)
+                    print(f"[DocumentProcessorService][texto] {total_pages} páginas via camada de texto (sem Docling)")
+                    pages, chunks_with_pages = self._build_pages_with_sections(page_texts)
+                    full_text = "\n\n".join(text for _, text in page_texts if text.strip())
+                else:
+                    print("[DocumentProcessorService][texto] Camada de texto esparsa — "
+                          "caindo para o Docling (provável PDF escaneado)")
 
-            total_pages = len(doc.pages) if hasattr(doc, "pages") and doc.pages else 0
-            print(f"[DocumentProcessorService][docling] {total_pages} páginas detectadas")
+        # 2) Fallback — Docling
+        if not chunks_with_pages:
+            try:
+                pipeline_options = PdfPipelineOptions(
+                    do_ocr=False,
+                    generate_page_images=False,
+                    do_table_structure=False,
+                    enable_parallel_processing=True,
+                )
+                converter = DocumentConverter(
+                    format_options={InputFormat.PDF: PdfFormatOption(pipeline_options=pipeline_options)}
+                )
+                result = converter.convert(str(file_path))
+                doc = result.document
 
-            if total_pages > 0:
-                current_section: str | None = None
-                for page_no in sorted(doc.pages.keys()):
-                    page_items: list[str] = []
+                total_pages = len(doc.pages) if hasattr(doc, "pages") and doc.pages else 0
+                print(f"[DocumentProcessorService][docling] {total_pages} páginas detectadas")
 
+                if total_pages > 0:
+                    # Agrupa os itens por página em UMA passada (o par de loops
+                    # aninhados anterior era O(páginas × itens) — minutos em
+                    # documentos grandes só de Python).
+                    items_by_page: dict[int, list[str]] = {}
                     for entry in doc.iterate_items():
                         item = entry[0] if isinstance(entry, tuple) else entry
-
                         if not hasattr(item, "text") or not item.text:
                             continue
-
                         item_page = self._extract_item_page(item)
+                        if item_page is not None:
+                            items_by_page.setdefault(item_page, []).append(item.text)
 
-                        if item_page == page_no:
-                            page_items.append(item.text)
+                    page_texts = [
+                        (page_no, "\n".join(items_by_page.get(page_no, [])))
+                        for page_no in sorted(doc.pages.keys())
+                    ]
+                    pages, chunks_with_pages = self._build_pages_with_sections(page_texts)
 
-                    page_text = "\n".join(page_items)
+                full_text = doc.export_to_markdown()
 
-                    # Verifica se esta página contém uma ou mais seções numeradas.
-                    detected_sections = self._detect_sections(page_text)
-                    if detected_sections:
-                        current_section_number = self._extract_section_number(current_section)
-                        filtered_sections: list[str] = []
-                        for candidate_section in detected_sections:
-                            candidate_number = self._extract_section_number(candidate_section)
+            except Exception as exc:
+                print(f"[DocumentProcessorService][docling] Falha: {exc}. Tentando MarkItDown.")
 
-                            # Ignora regressões numéricas espúrias no meio da página,
-                            # comuns em citações transcritas (ex.: seção 8 citando "4. ...").
-                            if (
-                                current_section_number is not None
-                                and candidate_number is not None
-                                and candidate_number < current_section_number
-                                and not self._is_section_heading_near_page_start(page_text, candidate_section)
-                            ):
-                                continue
-
-                            filtered_sections.append(candidate_section)
-                            current_section_number = candidate_number if candidate_number is not None else current_section_number
-
-                        if filtered_sections:
-                            current_section = filtered_sections[-1]
-                            page_section = ", ".join(filtered_sections)
-                            print(f"[DocumentProcessorService] Seções detectadas na pág {page_no}: {page_section}")
-                        else:
-                            page_section = current_section
-                    else:
-                        page_section = current_section
-
-                    pages.append(PageContent(page=page_no, text=page_text, section=page_section))
-                    if page_text.strip():
-                        chunks_with_pages.append({"text": page_text, "page": page_no, "section": page_section})
-
-            full_text = doc.export_to_markdown()
+        # Tabelas: sempre via pdfplumber, independentemente do caminho do texto
+        if file_path.suffix.lower() == ".pdf":
             tables = self._extract_tables_from_pdf(file_path, pages)
             print(f"[DocumentProcessorService][pdfplumber] Tabelas detectadas: {len(tables)}")
 
-        except Exception as exc:
-            print(f"[DocumentProcessorService][docling] Falha: {exc}. Tentando MarkItDown.")
-            full_text = ""
-            total_pages = 0
-
         if not chunks_with_pages:
-            print("[DocumentProcessorService] Nenhum chunk extraído pelo Docling.")
+            print("[DocumentProcessorService] Nenhum chunk extraído do documento.")
 
         return DocumentProcessResult(
             file_path=str(file_path),

@@ -2,6 +2,7 @@
 {% block extra_css %}
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
   crossorigin="anonymous" />
+<link rel="stylesheet" href="{{ url_for('static', filename='css/communications.css') }}">
 <style>
   .benefit-doc-excerpt h1,
   .benefit-doc-excerpt h2,
@@ -45,6 +46,342 @@
 
   .benefit-doc-excerpt strong {
     color: var(--bs-emphasis-color);
+  }
+
+  /* Capa do processo — sangra até as bordas do conteúdo (só nesta tela) */
+  .process-panel-detail-page .cover-bleed {
+    margin-left: calc(-1 * (.5rem + var(--bs-gutter-x, 1.5rem) * .5));
+    margin-right: calc(-1 * (.5rem + var(--bs-gutter-x, 1.5rem) * .5));
+  }
+
+  .process-cover {
+    background: linear-gradient(120deg, #243b55 0%, #2f4a6b 55%, #4a3d78 100%);
+    color: #fff;
+    border-radius: 0;
+    padding: 1.25rem 1.25rem 1rem;
+    box-shadow: 0 2px 10px rgba(20, 30, 55, .25);
+  }
+
+  .process-cover .cover-breadcrumb .breadcrumb-item a {
+    color: rgba(255, 255, 255, .75);
+    text-decoration: none;
+  }
+
+  .process-cover .cover-breadcrumb .breadcrumb-item.active {
+    color: #fff;
+  }
+
+  .process-cover .cover-breadcrumb .breadcrumb-item+.breadcrumb-item::before {
+    color: rgba(255, 255, 255, .45);
+  }
+
+  .process-cover .cover-eyebrow {
+    font-size: .7rem;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, .7);
+  }
+
+  .process-cover .cover-number {
+    font-size: 1.35rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .process-cover .cover-meta {
+    color: rgba(255, 255, 255, .82);
+    font-size: .9rem;
+  }
+
+  .process-cover .cover-meta .sep {
+    color: rgba(255, 255, 255, .4);
+    margin: 0 .35rem;
+  }
+
+  .btn-cover-ghost {
+    background: rgba(255, 255, 255, .14);
+    color: #fff;
+    border: 0;
+  }
+
+  .btn-cover-ghost:hover,
+  .btn-cover-ghost:focus {
+    background: rgba(255, 255, 255, .26);
+    color: #fff;
+  }
+
+  .cover-steps {
+    border-top: 1px solid rgba(255, 255, 255, .18);
+    overflow-x: auto;
+  }
+
+  .p-steps {
+    display: flex;
+    min-width: 520px;
+  }
+
+  .p-step-more {
+    flex: .6;
+    min-width: 64px;
+  }
+
+  .p-step-more .p-dot {
+    border-style: dashed;
+  }
+
+  .p-step-more .p-name {
+    color: rgba(255, 255, 255, .55);
+    font-style: italic;
+  }
+
+  .p-step {
+    flex: 1;
+    text-align: center;
+    position: relative;
+    padding-top: .25rem;
+    min-width: 90px;
+  }
+
+  .p-step::before {
+    content: "";
+    position: absolute;
+    top: 12px;
+    left: -50%;
+    width: 100%;
+    height: 2px;
+    background: rgba(255, 255, 255, .28);
+  }
+
+  .p-step:first-child::before {
+    display: none;
+  }
+
+  .p-step .p-dot {
+    display: block;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    margin: 0 auto 4px;
+    position: relative;
+    z-index: 1;
+    background: transparent;
+    border: 2px solid rgba(255, 255, 255, .45);
+  }
+
+  .p-step.done .p-dot {
+    background: #fff;
+    border-color: #fff;
+  }
+
+  .p-step.done::before {
+    background: #fff;
+  }
+
+  .p-step.now .p-dot {
+    background: #243b55;
+    border-color: #fff;
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, .22);
+  }
+
+  .p-step.now::before {
+    background: #fff;
+  }
+
+  .p-step .p-name {
+    font-size: .72rem;
+    color: rgba(255, 255, 255, .75);
+  }
+
+  .p-step.now .p-name {
+    color: #fff;
+    font-weight: 700;
+  }
+
+  .p-step .p-date {
+    font-size: .66rem;
+    color: rgba(255, 255, 255, .55);
+  }
+
+  /* Widgets: radar e benefícios */
+  .radar-item {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    font-size: .875rem;
+  }
+
+  .radar-item .ms-date {
+    margin-left: auto;
+    color: var(--bs-secondary-color);
+    font-size: .75rem;
+    white-space: nowrap;
+  }
+
+  .benefit-mix {
+    display: flex;
+    height: 8px;
+    border-radius: 4px;
+    overflow: hidden;
+    background: var(--bs-secondary-bg);
+  }
+
+  .tabbar-scroll {
+    overflow-x: auto;
+  }
+
+  /* Chrome dos cards — fio de identidade (só nesta tela) */
+  .process-panel-detail-page .pp-card {
+    border: 1px solid var(--bs-border-color-translucent);
+    border-radius: 10px;
+    box-shadow: none;
+    overflow: hidden;
+  }
+
+  .process-panel-detail-page .pp-card::before {
+    content: "";
+    display: block;
+    height: 3px;
+    background: linear-gradient(90deg, #2f4a6b 0%, #4a3d78 60%, #6f42c1 100%);
+  }
+
+  .process-panel-detail-page .pp-card>.card-header {
+    background: transparent;
+  }
+
+  .process-panel-detail-page .pp-card .card-title .bi {
+    color: #4a3d78;
+  }
+
+  /* Abas sublinhadas com o fio */
+  .process-panel-detail-page .pp-card .card-header.tabbar-scroll {
+    border-bottom: 0;
+  }
+
+  .process-panel-detail-page .pp-card .nav-tabs {
+    border-bottom: 1px solid var(--bs-border-color-translucent);
+    gap: .35rem;
+    padding: 0 .75rem;
+  }
+
+  .process-panel-detail-page .pp-card .nav-tabs .nav-link {
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: transparent;
+    color: var(--bs-secondary-color);
+    padding: .55rem .45rem .6rem;
+    margin-bottom: -1px;
+  }
+
+  .process-panel-detail-page .pp-card .nav-tabs .nav-link:hover {
+    color: var(--bs-emphasis-color);
+    border-bottom-color: var(--bs-border-color);
+  }
+
+  .process-panel-detail-page .pp-card .nav-tabs .nav-link.active {
+    color: var(--bs-emphasis-color);
+    font-weight: 600;
+    border-bottom: 2px solid #4a3d78;
+    border-image: linear-gradient(90deg, #2f4a6b, #6f42c1) 1;
+  }
+
+  /* Aba DataJud: cards de instância, filtro de relevância e rajadas agrupadas */
+  .process-panel-detail-page .dj-card {
+    border: 1px solid var(--bs-border-color-translucent);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+
+  .process-panel-detail-page .dj-card .card-header {
+    background: transparent;
+  }
+
+  .process-panel-detail-page .dj-tramite td {
+    color: var(--bs-tertiary-color);
+  }
+
+  .process-panel-detail-page .dj-hide-tramite tr.dj-tramite {
+    display: none;
+  }
+
+  /* O movimento mais recente de cada instância aparece mesmo com o filtro ligado */
+  .process-panel-detail-page .dj-hide-tramite tr.dj-tramite.dj-keep {
+    display: table-row;
+  }
+
+  /* Aba DJEN: filtro "somente não lidas" — a comunicação mais recente sempre aparece */
+  .process-panel-detail-page .djen-hide-read tr.comm-read {
+    display: none;
+  }
+
+  .process-panel-detail-page .djen-hide-read tr.comm-read.comm-keep {
+    display: table-row;
+  }
+
+  .process-panel-detail-page .dj-date-repeat>span {
+    visibility: hidden;
+  }
+
+  /* Tabelas: sem zebra, cabeçalho tipográfico */
+  .process-panel-detail-page .table-light {
+    --bs-table-bg: transparent;
+  }
+
+  .process-panel-detail-page .table-striped>tbody>tr:nth-of-type(odd)>* {
+    --bs-table-bg-type: transparent;
+  }
+
+  .process-panel-detail-page .table>thead th {
+    font-size: .7rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .05em;
+    color: var(--bs-secondary-color);
+  }
+
+  .process-panel-detail-page .table>tbody>tr>td {
+    padding-top: .6rem;
+    padding-bottom: .6rem;
+  }
+
+  /* Botões de ação das tabelas — neutros, acendem na cor da capa no hover */
+  .process-panel-detail-page .pp-action {
+    background: transparent;
+    border: 1px solid var(--bs-border-color);
+    color: var(--bs-secondary-color);
+    transition: color .12s ease, background-color .12s ease, border-color .12s ease;
+  }
+
+  .process-panel-detail-page .pp-action:hover,
+  .process-panel-detail-page .pp-action:focus {
+    background: rgba(74, 61, 120, .08);
+    border-color: rgba(74, 61, 120, .35);
+    color: #4a3d78;
+  }
+
+  .process-panel-detail-page .pp-action.pp-action-danger:hover,
+  .process-panel-detail-page .pp-action.pp-action-danger:focus {
+    background: var(--bs-danger-bg-subtle);
+    border-color: rgba(220, 53, 69, .4);
+    color: var(--bs-danger-text-emphasis);
+  }
+
+  .process-panel-detail-page .pp-action.pp-action-success:hover,
+  .process-panel-detail-page .pp-action.pp-action-success:focus {
+    background: var(--bs-success-bg-subtle);
+    border-color: rgba(25, 135, 84, .4);
+    color: var(--bs-success-text-emphasis);
+  }
+
+  .process-panel-detail-page .pp-action.pp-action-ai {
+    color: #6f42c1;
+    border-color: rgba(111, 66, 193, .35);
+  }
+
+  .process-panel-detail-page .pp-action.pp-action-ai:hover,
+  .process-panel-detail-page .pp-action.pp-action-ai:focus {
+    background: rgba(111, 66, 193, .1);
+    color: #5a34a6;
   }
 
   .ai-alert {
@@ -149,35 +486,52 @@
     animation: aiGlow 1.5s ease-in-out infinite;
   }
 
+  /* Modal de resumo — mesma linguagem "fio de identidade" da tela */
+  .summary-modal .modal-content {
+    border: 1px solid var(--bs-border-color-translucent);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .summary-modal .modal-content::before {
+    content: "";
+    display: block;
+    height: 3px;
+    background: linear-gradient(90deg, #2f4a6b 0%, #4a3d78 60%, #6f42c1 100%);
+  }
+
   .summary-modal .modal-header {
-    background: linear-gradient(135deg, rgba(111, 66, 193, 0.16), rgba(13, 110, 253, 0.08));
+    background: transparent;
   }
 
   .summary-modal .summary-chip {
     display: inline-flex;
     align-items: center;
     gap: .35rem;
-    padding: .2rem .65rem;
+    padding: .15rem .6rem;
     border-radius: 999px;
-    border: 1px solid rgba(111, 66, 193, 0.2);
-    background: rgba(111, 66, 193, 0.08);
-    color: #5a34a6;
-    font-size: .75rem;
+    border: 1px solid var(--bs-border-color);
+    background: transparent;
+    color: var(--bs-secondary-color);
+    font-size: .72rem;
     white-space: nowrap;
   }
 
+  .summary-modal .summary-chip:first-child {
+    border-color: rgba(111, 66, 193, 0.3);
+    color: #6f42c1;
+  }
+
+  /* Título interno repetido (o cabeçalho do acordeão já nomeia a seção) */
   .summary-modal .summary-section-title {
-    font-size: .8rem;
-    letter-spacing: .02em;
-    text-transform: uppercase;
-    color: var(--bs-secondary-color);
+    display: none;
   }
 
   .summary-modal .summary-card {
-    border: 1px solid var(--bs-border-color);
-    border-radius: .75rem;
-    padding: 1rem;
-    background: var(--bs-body-bg);
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    background: transparent;
   }
 
   .summary-modal .summary-keypoints li {
@@ -189,36 +543,36 @@
     margin-bottom: .55rem;
   }
 
+  .summary-modal .summary-requests .fw-semibold {
+    font-weight: 500;
+  }
+
   .summary-modal .summary-accordion .accordion-item {
-    border: 1px solid var(--bs-border-color);
-    border-radius: .75rem;
+    border: 1px solid var(--bs-border-color-translucent);
+    border-radius: 10px;
     overflow: hidden;
-    margin-bottom: .75rem;
+    margin-bottom: .6rem;
   }
 
   .summary-modal .summary-accordion .accordion-button {
     font-weight: 600;
+    font-size: .9rem;
+    box-shadow: none;
+    background: transparent;
+  }
+
+  .summary-modal .summary-accordion .accordion-button:focus {
     box-shadow: none;
   }
 
   .summary-modal .summary-accordion .accordion-button:not(.collapsed) {
     color: var(--bs-emphasis-color);
+    background: transparent;
+    border-bottom: 1px solid var(--bs-border-color-translucent);
   }
 
-  .summary-modal .summary-acc-exec .accordion-button {
-    background: linear-gradient(135deg, rgba(13, 110, 253, 0.14), rgba(13, 202, 240, 0.12));
-  }
-
-  .summary-modal .summary-acc-full .accordion-button {
-    background: linear-gradient(135deg, rgba(111, 66, 193, 0.16), rgba(214, 51, 132, 0.12));
-  }
-
-  .summary-modal .summary-acc-requests .accordion-button {
-    background: linear-gradient(135deg, rgba(25, 135, 84, 0.14), rgba(255, 193, 7, 0.12));
-  }
-
-  .summary-modal .summary-acc-keypoints .accordion-button {
-    background: linear-gradient(135deg, rgba(220, 53, 69, 0.12), rgba(253, 126, 20, 0.14));
+  .summary-modal .summary-accordion .accordion-button .bi {
+    color: #4a3d78;
   }
 
   @keyframes aiPulse {
@@ -239,8 +593,6 @@
   }
 </style>
 {% endblock %}
-
-{% from "partials/page_hero.html" import page_hero %}
 
 {% set process_number_display = (process.process_number if (process.process_number and not
 process.process_number.startswith('TEMP-')) else 'Não informado') %}
@@ -334,18 +686,139 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
   {% endif %}
   {% endfor %}
 
-  {% call page_hero(title=process_number_display, subtitle=hero_subtitle|default(''), icon='bi bi-diagram-3') %}
-  <nav aria-label="breadcrumb">
-    <ol class="breadcrumb mb-4 bg-transparent small">
-      <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house-fill"></i>
-          Home</a>
-      </li>
-      <li class="breadcrumb-item"><a href="{{ url_for('process_panel.list_processes') }}"><i
-            class="bi bi-diagram-3-fill"></i> Processos</a></li>
-      <li class="breadcrumb-item active">{{ process_number_display }}</li>
-    </ol>
-  </nav>
-  {% endcall %}
+  <div class="cover-bleed mb-4">
+      <div class="process-cover">
+        <nav aria-label="breadcrumb">
+          <ol class="breadcrumb cover-breadcrumb bg-transparent small mb-2">
+            <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house-fill"></i>
+                Home</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('process_panel.list_processes') }}">Processos</a></li>
+            <li class="breadcrumb-item active">{{ process_number_display }}</li>
+          </ol>
+        </nav>
+
+        <div class="cover-eyebrow">
+          Processo Judicial · {{ process.tribunal_name or 'Tribunal não identificado' }}{% if process.section
+          %} · {{ process.section }}{% endif %}
+        </div>
+
+        <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mt-1">
+          <div>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+              {% if process.process_number and not process.process_number.startswith('TEMP-') %}
+              <span class="cover-number">{{ process.process_number }}</span>
+              {% elif process.process_number %}
+              <span class="cover-number">{{ process.process_number }}</span>
+              <span class="badge bg-warning text-dark"
+                title="Número provisório — edite o processo para informar o número real"><i
+                  class="bi bi-clock me-1"></i>provisório</span>
+              {% else %}
+              <span class="cover-number fst-italic" style="opacity:.75;">Número não informado</span>
+              {% endif %}
+              {% if process.status == 'ativo' %}
+              <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Ativo</span>
+              {% elif process.status == 'suspenso' %}
+              <span class="badge bg-warning text-dark"><i class="bi bi-pause-circle me-1"></i>Suspenso</span>
+              {% elif process.status == 'encerrado' %}
+              <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Encerrado</span>
+              {% else %}
+              <span class="badge bg-secondary">{{ process.status }}</span>
+              {% endif %}
+            </div>
+            <div class="cover-meta mt-1">
+              {{ process.plaintiff_client.name if process.plaintiff_client else 'Polo ativo não informado' }}
+              <span class="sep">×</span>
+              {{ process.defendant.name if process.defendant else 'Polo passivo não informado' }}
+              {% if process.judge_name %}<span class="sep">·</span>{{ process.judge_name }}{% endif %}
+              {% if process.responsible_user %}<span class="sep">·</span><span
+                title="Advogado responsável"><i class="bi bi-person-badge me-1"></i>{{ process.responsible_user.name
+                }}</span>{% endif %}
+              {% if process.valor_causa_texto %}<span class="sep">·</span><span class="js-valor-causa"
+                data-raw="{{ process.valor_causa_texto }}">{{ process.valor_causa_texto }}</span>{% endif %}
+              {% if process.filing_date %}<span class="sep">·</span><span>Ajuizado em
+                {{ process.filing_date.strftime('%d/%m/%Y') }}{% if tramitando_ha %} · há {{ tramitando_ha }}{% endif
+                %}</span>{% endif %}
+            </div>
+          </div>
+          <div class="d-flex gap-2">
+            <a href="{{ url_for('process_panel.generated_document_new', process_id=process.id) }}"
+              class="btn btn-sm btn-cover-ghost">
+              <i class="bi bi-stars me-1"></i>Gerar Documento
+            </a>
+            <a href="{{ url_for('process_panel.edit', process_id=process.id) }}" class="btn btn-sm btn-light"
+              target="_blank" rel="noopener noreferrer">
+              <i class="bi bi-pencil me-1"></i>Editar Processo
+            </a>
+          </div>
+        </div>
+
+        {% if phase_options %}
+        {% set phase_dates = {} %}
+        {% for entry in phase_history %}
+        {% if entry.phase and entry.phase.key and entry.phase.key not in phase_dates %}
+        {% set _ = phase_dates.update({entry.phase.key: entry.occurred_at}) %}
+        {% endif %}
+        {% endfor %}
+        {% set cover_phase = namespace(idx=-1) %}
+        {% for opt in phase_options %}
+        {% if opt.key == current_phase_key %}{% set cover_phase.idx = loop.index0 %}{% endif %}
+        {% endfor %}
+        {% if cover_phase.idx == -1 and phase_history and phase_history[0].phase %}
+        {% for opt in phase_options %}
+        {% if opt.key == phase_history[0].phase.key %}{% set cover_phase.idx = loop.index0 %}{% endif %}
+        {% endfor %}
+        {% endif %}
+        {% set total_phases = phase_options|length %}
+        {% set win = namespace(start=0, end=total_phases) %}
+        {% if total_phases > 8 %}
+        {% if cover_phase.idx >= 0 %}
+        {% set win.start = [cover_phase.idx - 2, 0]|max %}
+        {% set win.end = [win.start + 6, total_phases]|min %}
+        {% set win.start = [win.end - 6, 0]|max %}
+        {% else %}
+        {% set win.end = 6 %}
+        {% endif %}
+        {% endif %}
+        <div class="cover-steps mt-3 pt-3">
+          <div class="p-steps">
+            {% if win.start > 0 %}
+            <div class="p-step done p-step-more"
+              title="{{ phase_options[:win.start] | map(attribute='name') | join(' · ') }}">
+              <span class="p-dot"></span>
+              <div class="p-name">+{{ win.start }} fases</div>
+            </div>
+            {% endif %}
+            {% for opt in phase_options[win.start:win.end] %}
+            {% set abs_idx = win.start + loop.index0 %}
+            {% set step_state = 'now' if abs_idx == cover_phase.idx
+            else ('done' if (abs_idx < cover_phase.idx or (cover_phase.idx == -1 and opt.key in phase_dates))
+            else '') %}
+            <div class="p-step {{ step_state }}">
+              <span class="p-dot"></span>
+              <div class="p-name">{{ opt.name }}</div>
+              {% if opt.key in phase_dates and phase_dates[opt.key] %}
+              <div class="p-date">{{ phase_dates[opt.key].strftime('%d/%m/%y') }}</div>
+              {% elif step_state == 'now' %}
+              <div class="p-date">fase atual</div>
+              {% endif %}
+            </div>
+            {% endfor %}
+            {% if win.end < total_phases %}
+            <div class="p-step p-step-more"
+              title="{{ phase_options[win.end:] | map(attribute='name') | join(' · ') }}">
+              <span class="p-dot"></span>
+              <div class="p-name">+{{ total_phases - win.end }} fases</div>
+            </div>
+            {% endif %}
+          </div>
+        </div>
+        {% elif current_phase_label %}
+        <div class="cover-steps mt-3 pt-3">
+          <span class="badge bg-light text-dark">Fase atual: {{ current_phase_label }}</span>
+        </div>
+        {% endif %}
+      </div>
+  </div>
 
   <style>
     .phase-timeline {
@@ -413,324 +886,310 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
       {% endif %}
       <div class="row">
         <div class="col-12">
-          <!-- Estatísticas -->
-          <div class="row mb-4">
-            <div class="col-lg-3 col-6">
-              <div class="info-box shadow-sm">
-                <span class="info-box-icon bg-primary bg-opacity-10">
-                  <i class="bi bi-files text-primary" style="font-size: 2rem;"></i>
-                </span>
-                <div class="info-box-content">
-                  <span class="info-box-text">Documentos</span>
-                  <span class="info-box-number">{{ stats.documents_count }}</span>
+          <!-- Radar + Benefícios -->
+          {% set unread_comms = (process.communications or []) | rejectattr('is_read') | list %}
+          {% set processing_docs = documents_list | selectattr('processing_status', 'in', ['pending', 'processing']) | list %}
+          <div class="row g-3 mb-4">
+            <div class="col-lg-5">
+              <div class="card pp-card h-100">
+                <div class="card-header">
+                  <h3 class="card-title"><i class="bi bi-bullseye me-2"></i>Radar</h3>
+                  <div class="card-tools"><span class="small text-muted">precisa de atenção</span></div>
+                </div>
+                <div class="card-body py-3">
+                  <div class="d-flex flex-column gap-2">
+                    {% for action in radar_ai_actions %}
+                    <div class="radar-item">
+                      <span class="badge bg-danger text-white"><i class="bi bi-exclamation-triangle-fill me-1"></i>{{
+                        'até ' ~ action.due.strftime('%d/%m') if action.due else 'Exige ação' }}</span>
+                      <span class="text-truncate" title="{{ action.descricao }}">
+                        {{ action.descricao | truncate(90, true) if action.descricao else 'Providência apontada pela
+                        análise da IA' }}
+                      </span>
+                      <span class="ms-date">
+                        <button type="button" class="btn btn-sm pp-action py-0 px-1 js-deadline-from-comm"
+                          title="Registrar este prazo"
+                          data-comm-id="{{ action.comm.id }}"
+                          data-suggested-due="{{ action.due_iso }}"
+                          data-suggested-source="ia"
+                          data-comm-title="{{ action.descricao | truncate(80, true, '') if action.descricao else 'Providência — publicação DJEN' }}">
+                          <i class="bi bi-alarm"></i>
+                        </button>
+                      </span>
+                    </div>
+                    {% endfor %}
+                    {% for comm in unread_comms[:3] %}
+                    <div class="radar-item">
+                      <span class="badge {{ 'bg-danger-subtle text-danger-emphasis border border-danger-subtle' if comm.tipo_comunicacao == 'Intimação' else 'bg-info-subtle text-info-emphasis border border-info-subtle' }}">
+                        {{ comm.tipo_comunicacao or 'Comunicação' }}</span>
+                      <a href="{{ url_for('communications.communication_detail', communication_id=comm.id) }}"
+                        class="text-decoration-none text-body text-truncate"
+                        title="{{ comm.nome_orgao or 'órgão não informado' }}{{ ' · ' + comm.tipo_documento if comm.tipo_documento }}">
+                        DJEN · {{ comm.tipo_documento or comm.nome_orgao or 'órgão não informado' }} —
+                        <strong>não lida</strong>
+                      </a>
+                      <span class="ms-date">{{ comm.data_disponibilizacao.strftime('%d/%m/%Y') if
+                        comm.data_disponibilizacao else '—' }}</span>
+                    </div>
+                    {% endfor %}
+                    {% if unread_comms|length > 3 %}
+                    <div class="radar-item">
+                      <span class="small text-muted">+ {{ unread_comms|length - 3 }} outras publicações não lidas na
+                        aba Monitoramento.</span>
+                    </div>
+                    {% endif %}
+                    {% if datajud_recent %}
+                    <div class="radar-item">
+                      {% if datajud_recent.is_decision %}
+                      <span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle">Decisão</span>
+                      {% else %}
+                      <span class="badge bg-secondary-subtle text-secondary-emphasis border">DataJud</span>
+                      {% endif %}
+                      <a href="#" class="text-decoration-none text-body js-goto-tab" data-tab="datajud-tab">
+                        Movimentação nova: {{ datajud_recent.nome }}
+                      </a>
+                      <span class="ms-date">
+                        {{ datajud_recent.when.strftime('%d/%m/%Y') }}
+                        <form method="post" class="d-inline"
+                          action="{{ url_for('process_panel.datajud_ack', process_id=process.id) }}">
+                          <button type="submit"
+                            class="btn btn-sm pp-action pp-action-success py-0 px-1"
+                            title="Marcar como ciente — sai do radar e volta se houver movimentação nova">
+                            <i class="bi bi-check-lg"></i>
+                          </button>
+                        </form>
+                      </span>
+                    </div>
+                    {% endif %}
+                    {% if processing_docs %}
+                    <div class="radar-item">
+                      <span class="ai-status-inline" style="margin-left:0;"><i class="bi bi-stars"
+                          style="font-size:.65rem;"></i>IA</span>
+                      <a href="#" class="text-decoration-none text-body js-goto-tab" data-tab="documents-tab">
+                        {{ processing_docs|length }} documento{{ 's' if processing_docs|length != 1 }} em análise
+                      </a>
+                      <span class="ms-date">agora</span>
+                    </div>
+                    {% endif %}
+                    {% if phase_history %}
+                    {% set last_ph = phase_history[0] %}
+                    <div class="radar-item">
+                      <span class="badge bg-secondary-subtle text-secondary-emphasis border">Fase</span>
+                      <a href="#" class="text-decoration-none text-body js-goto-tab" data-tab="phase-history-tab">
+                        {{ last_ph.phase.name if last_ph.phase else '-' }} registrada por
+                        {{ last_ph.entered_by_user.name if last_ph.entered_by_user else 'Sistema' }}
+                      </a>
+                      <span class="ms-date">{{ last_ph.occurred_at.strftime('%d/%m/%Y') if last_ph.occurred_at else '—'
+                        }}</span>
+                    </div>
+                    {% endif %}
+                    {% if not unread_comms and not processing_docs and not phase_history
+                    and not datajud_recent and not radar_ai_actions %}
+                    <div class="text-muted small py-2">
+                      <i class="bi bi-check2-circle me-1"></i>Sem pendências: nenhuma comunicação não lida, análise em
+                      andamento ou fase registrada.
+                    </div>
+                    {% endif %}
+                  </div>
                 </div>
               </div>
             </div>
-            <div class="col-lg-3 col-6">
-              <div class="info-box shadow-sm">
-                <span class="info-box-icon bg-success bg-opacity-10">
-                  <i class="bi bi-clipboard2-pulse text-success" style="font-size: 2rem;"></i>
-                </span>
-                <div class="info-box-content">
-                  <span class="info-box-text">Benefícios</span>
-                  <span class="info-box-number">{{ stats.benefits_count }}</span>
+            <div class="col-lg-4">
+              <div class="card pp-card h-100">
+                <div class="card-header">
+                  <h3 class="card-title"><i class="bi bi-alarm me-2"></i>Prazos</h3>
+                  <div class="card-tools">
+                    <button type="button" class="btn btn-sm btn-primary py-0" data-bs-toggle="modal"
+                      data-bs-target="#newDeadlineModal"><i class="bi bi-plus-lg me-1"></i>Novo</button>
+                  </div>
+                </div>
+                <div class="card-body py-3">
+                  {% set pending_deadlines = deadlines | selectattr('state', 'ne', 'done') | list %}
+                  {% set done_deadlines = deadlines | selectattr('state', 'eq', 'done') | list %}
+                  {% if pending_deadlines %}
+                  <div class="d-flex flex-column gap-2">
+                    {% for item in pending_deadlines %}
+                    {% set d = item.obj %}
+                    <div class="radar-item">
+                      {% if item.state == 'overdue' %}
+                      <span class="badge bg-danger-subtle text-danger-emphasis border border-danger-subtle">
+                        vencido há {{ -item.days_left }}d</span>
+                      {% elif item.state == 'today' %}
+                      <span class="badge bg-danger-subtle text-danger-emphasis border border-danger-subtle">hoje</span>
+                      {% elif item.state == 'soon' %}
+                      <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">
+                        {{ item.days_left }}d</span>
+                      {% else %}
+                      <span class="badge bg-secondary-subtle text-secondary-emphasis border">
+                        {{ d.due_date.strftime('%d/%m') }}</span>
+                      {% endif %}
+                      <span class="text-truncate"
+                        title="{{ d.title }}{% if d.responsible_user %} — {{ d.responsible_user.name }}{% endif %}">
+                        {% if d.kind == 'audiencia' %}<i class="bi bi-easel2 me-1 text-secondary"></i>{% endif %}
+                        {{ d.title }}
+                        {% if d.due_time %}<small class="text-muted">{{ d.due_time.strftime('%H:%M') }}</small>{% endif %}
+                      </span>
+                      <span class="ms-date">
+                        <form method="post" class="d-inline"
+                          action="{{ url_for('process_panel.set_deadline_done', process_id=process.id, deadline_id=d.id) }}">
+                          <input type="hidden" name="done" value="1">
+                          <button type="submit"
+                            class="btn btn-sm pp-action pp-action-success py-0 px-1"
+                            title="Marcar como cumprido"><i class="bi bi-check-lg"></i></button>
+                        </form>
+                        <form method="post" class="d-inline"
+                          action="{{ url_for('process_panel.delete_deadline_route', process_id=process.id, deadline_id=d.id) }}"
+                          onsubmit="return confirm('Excluir este prazo?');">
+                          <button type="submit"
+                            class="btn btn-sm pp-action pp-action-danger py-0 px-1"
+                            title="Excluir"><i class="bi bi-trash"></i></button>
+                        </form>
+                      </span>
+                    </div>
+                    {% endfor %}
+                  </div>
+                  {% else %}
+                  <div class="text-muted small py-2"><i class="bi bi-check2-circle me-1"></i>Nenhum prazo pendente.</div>
+                  {% endif %}
+                  {% if done_deadlines %}
+                  <div class="small text-muted mt-2 pt-2 border-top">
+                    {{ done_deadlines|length }} cumprido{{ 's' if done_deadlines|length != 1 }}
+                    {% set last_done = done_deadlines[0].obj %}
+                    — último: {{ last_done.title }} ({{ last_done.due_date.strftime('%d/%m') }})
+                    <form method="post" class="d-inline"
+                      action="{{ url_for('process_panel.set_deadline_done', process_id=process.id, deadline_id=last_done.id) }}">
+                      <input type="hidden" name="done" value="0">
+                      <button type="submit" class="btn btn-link btn-sm p-0 align-baseline" title="Reabrir o último cumprido">
+                        reabrir</button>
+                    </form>
+                  </div>
+                  {% endif %}
                 </div>
               </div>
             </div>
-            <div class="col-lg-3 col-6">
-              <div class="info-box shadow-sm">
-                <span class="info-box-icon bg-info bg-opacity-10">
-                  <i class="bi bi-journal-text text-info" style="font-size: 2rem;"></i>
-                </span>
-                <div class="info-box-content">
-                  <span class="info-box-text">Anotações</span>
-                  <span class="info-box-number">{{ notes|length }}</span>
+            <div class="col-lg-3">
+              <div class="card pp-card h-100">
+                <div class="card-header">
+                  <h3 class="card-title"><i class="bi bi-clipboard2-pulse me-2"></i>Benefícios</h3>
+                  <div class="card-tools">
+                    <a href="#benefits" class="small text-decoration-none">ver detalhes <i
+                        class="bi bi-arrow-down-short"></i></a>
+                  </div>
                 </div>
-              </div>
-            </div>
-            <div class="col-lg-3 col-6">
-              <div class="info-box shadow-sm">
-                <span class="info-box-icon bg-warning bg-opacity-10">
-                  <i class="bi bi-clock-history text-warning" style="font-size: 2rem;"></i>
-                </span>
-                <div class="info-box-content">
-                  <span class="info-box-text">Histórico de Fases</span>
-                  <span class="info-box-number">{{ phase_history|length }}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <div class="row mb-4">
-            <div class="col-lg-3 col-6">
-              <div class="info-box shadow-sm">
-                <span class="info-box-icon bg-info bg-opacity-10">
-                  <i class="bi bi-clipboard2-pulse text-info" style="font-size: 2rem;"></i>
-                </span>
-                <div class="info-box-content">
-                  <span class="info-box-text">Total de Benefícios</span>
-                  <span class="info-box-number">{{ benefit_stats.total }}</span>
-                </div>
-              </div>
-            </div>
-            <div class="col-lg-3 col-6">
-              <div class="info-box shadow-sm">
-                <span class="info-box-icon bg-success bg-opacity-10">
-                  <i class="bi bi-check-circle text-success" style="font-size: 2rem;"></i>
-                </span>
-                <div class="info-box-content">
-                  <span class="info-box-text">Benefícios Procedentes</span>
-                  <span class="info-box-number">{{ benefit_stats.procedente }}</span>
-                </div>
-              </div>
-            </div>
-            <div class="col-lg-3 col-6">
-              <div class="info-box shadow-sm">
-                <span class="info-box-icon bg-danger bg-opacity-10">
-                  <i class="bi bi-x-circle text-danger" style="font-size: 2rem;"></i>
-                </span>
-                <div class="info-box-content">
-                  <span class="info-box-text">Benefícios Improcedentes</span>
-                  <span class="info-box-number">{{ benefit_stats.improcedente }}</span>
-                </div>
-              </div>
-            </div>
-            <div class="col-lg-3 col-6">
-              <div class="info-box shadow-sm">
-                <span class="info-box-icon bg-secondary bg-opacity-10">
-                  <i class="bi bi-hourglass-split text-secondary" style="font-size: 2rem;"></i>
-                </span>
-                <div class="info-box-content">
-                  <span class="info-box-text">Não Analisados</span>
-                  <span class="info-box-number">{{ benefit_stats.nao_analisado }}</span>
+                <div class="card-body py-3">
+                  <div class="d-flex align-items-baseline gap-2">
+                    <span class="fs-3 fw-semibold">{{ benefit_stats.total }}</span>
+                    <span class="text-muted small">no processo</span>
+                  </div>
+                  {% if benefit_stats.total %}
+                  <div class="benefit-mix my-2">
+                    <span
+                      style="background:var(--bs-success); width: {{ (benefit_stats.procedente * 100 / benefit_stats.total)|round(1) }}%;"></span>
+                    <span
+                      style="background:var(--bs-danger); width: {{ (benefit_stats.improcedente * 100 / benefit_stats.total)|round(1) }}%;"></span>
+                  </div>
+                  <div class="small">
+                    <span class="text-success fw-semibold">{{ benefit_stats.procedente }} procedente{{ 's' if
+                      benefit_stats.procedente != 1 }}</span> ·
+                    <span class="text-danger fw-semibold">{{ benefit_stats.improcedente }} improcedente{{ 's' if
+                      benefit_stats.improcedente != 1 }}</span> ·
+                    <span class="text-muted">{{ benefit_stats.nao_analisado }} não analisado{{ 's' if
+                      benefit_stats.nao_analisado != 1 }}</span>
+                  </div>
+                  {% if fap_impact_count %}
+                  <div class="small text-muted mt-1">
+                    <i class="bi bi-graph-up-arrow me-1"></i>{{ fap_impact_count }} com efeito no FAP{% if
+                    fap_vigencias %} · vigências {{ fap_vigencias | join(', ') }}{% endif %}
+                  </div>
+                  {% endif %}
+                  {% else %}
+                  <div class="text-muted small py-2">Nenhum benefício vinculado ainda.</div>
+                  {% endif %}
                 </div>
               </div>
             </div>
           </div>
 
           <div class="row">
-            <!-- Informações Principais -->
-            <div class="col-md-4 mb-4">
-              <div class="card card-primary card-outline shadow-sm">
-                <div class="card-header">
-                  <h3 class="card-title"><i class="bi bi-info-circle me-2 text-primary"></i>Informações</h3>
-                  <div class="card-tools">
-                    <a href="{{ url_for('process_panel.edit', process_id=process.id) }}" class="btn btn-sm btn-primary"
-                      target="_blank" rel="noopener noreferrer">
-                      <i class="bi bi-pencil me-1"></i>Editar Processo
-                    </a>
-                  </div>
-                </div>
-                <div class="card-body">
-                  <div class="d-flex align-items-center justify-content-between p-3 rounded border bg-light mb-3">
-                    <div>
-                      <small class="text-muted d-block">Número do Processo</small>
-                      {% if process.process_number and not process.process_number.startswith('TEMP-') %}
-                      <strong class="fs-6">{{ process.process_number }}</strong>
-                      {% elif process.process_number %}
-                      <span class="badge bg-warning text-dark"
-                        title="Número provisório — edite o processo para informar o número real"><i
-                          class="bi bi-clock me-1"></i>{{ process.process_number }}</span>
-                      {% else %}
-                      <span class="text-muted fst-italic">Não informado</span>
-                      {% endif %}
-                    </div>
-                    <div>
-                      {% if process.status == 'ativo' %}
-                      <span class="badge bg-success"><i class="bi bi-check-circle me-1"></i>Ativo</span>
-                      {% elif process.status == 'suspenso' %}
-                      <span class="badge bg-warning text-dark"><i class="bi bi-pause-circle me-1"></i>Suspenso</span>
-                      {% elif process.status == 'encerrado' %}
-                      <span class="badge bg-danger"><i class="bi bi-x-circle me-1"></i>Encerrado</span>
-                      {% else %}
-                      <span class="badge bg-secondary">{{ process.status }}</span>
-                      {% endif %}
-                    </div>
-                  </div>
-
-                  <div class="vstack gap-3">
-                    {% if current_phase_label %}
-                    <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-signpost-2 me-2 text-warning"></i>Fase Atual</small>
-                      <span class="badge bg-light text-dark">{{ current_phase_label }}</span>
-                    </div>
-                    {% endif %}
-
-                    {% if process.tribunal_name %}
-                    <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-building me-2 text-secondary"></i>Tribunal</small>
-                      <strong class="text-end ms-3">{{ process.tribunal_name }}</strong>
-                    </div>
-                    {% endif %}
-
-                    {% if process.section %}
-                    <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-diagram-2 me-2 text-secondary"></i>Seção</small>
-                      <strong class="text-end ms-3">{{ process.section }}</strong>
-                    </div>
-                    {% endif %}
-
-                    {% if process.judge_name %}
-                    <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-person-badge me-2 text-primary"></i>Juiz</small>
-                      <strong class="text-end ms-3">{{ process.judge_name }}</strong>
-                    </div>
-                    {% endif %}
-
-                    {% if process.origin_unit %}
-                    <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-geo-alt me-2 text-danger"></i>Unidade de Origem</small>
-                      <strong class="text-end ms-3">{{ process.origin_unit }}</strong>
-                    </div>
-                    {% endif %}
-
-                    {% if process.process_class %}
-                    <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-tag me-2 text-info"></i>Classe</small>
-                      <strong class="text-end ms-3">{{ process.process_class }}</strong>
-                    </div>
-                    {% endif %}
-
-                    {% if process.valor_causa_texto %}
-                    <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-cash-coin me-2 text-success"></i>Valor da Causa</small>
-                      <strong class="text-end ms-3" id="display-valor-causa"
-                        data-raw="{{ process.valor_causa_texto }}">{{ process.valor_causa_texto }}</strong>
-                    </div>
-                    {% endif %}
-
-                    {% if process.assuntos %}
-                    <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-tags me-2 text-info"></i>Assuntos</small>
-                      <div class="text-end ms-3">
-                        {% for assunto in process.assuntos %}
-                        <span class="badge bg-secondary me-1 mb-1">{{ assunto }}</span>
-                        {% endfor %}
-                      </div>
-                    </div>
-                    {% endif %}
-
-                    {% if process.segredo_justica is not none %}
-                    <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-shield-lock me-2 text-warning"></i>Segredo de
-                        Justiça</small>
-                      <span class="badge {{ 'bg-danger' if process.segredo_justica else 'bg-success' }}">
-                        {{ 'Sim' if process.segredo_justica else 'Não' }}
-                      </span>
-                    </div>
-                    {% endif %}
-
-                    {% if process.justica_gratuita is not none %}
-                    <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-hand-thumbs-up me-2 text-success"></i>Justiça
-                        Gratuita</small>
-                      <span class="badge {{ 'bg-success' if process.justica_gratuita else 'bg-secondary' }}">
-                        {{ 'Sim' if process.justica_gratuita else 'Não' }}
-                      </span>
-                    </div>
-                    {% endif %}
-
-                    {% if process.liminar_tutela is not none %}
-                    <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-exclamation-circle me-2 text-warning"></i>Liminar /
-                        Tutela
-                        Antecipada</small>
-                      <span class="badge {{ 'bg-warning text-dark' if process.liminar_tutela else 'bg-secondary' }}">
-                        {{ 'Sim' if process.liminar_tutela else 'Não' }}
-                      </span>
-                    </div>
-                    {% endif %}
-
-                    <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-person-check me-2 text-success"></i>Polo Ativo</small>
-                      <strong class="text-end ms-3">{{ process.plaintiff_client.name if process.plaintiff_client else
-                        'Não
-                        informado'
-                        }}</strong>
-                    </div>
-
-                    <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
-                      <small class="text-muted"><i class="bi bi-person-x me-2 text-danger"></i>Polo Passivo</small>
-                      <strong class="text-end ms-3">{{ process.defendant.name if process.defendant else 'Não informado'
-                        }}</strong>
-                    </div>
-
-                    <div class="d-flex justify-content-between align-items-start">
-                      <small class="text-muted"><i class="bi bi-calendar-event me-2 text-primary"></i>Criado em</small>
-                      <strong class="text-end ms-3">{{ process.created_at.strftime('%d/%m/%Y às %H:%M') }}</strong>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <!-- Descrição -->
-              {% if process.description %}
-              <div class="card card-light shadow-sm mt-3">
-                <div class="card-header">
-                  <h3 class="card-title"><i class="bi bi-card-text me-2 text-secondary"></i>Descrição</h3>
-                </div>
-                <div class="card-body">
-                  <p class="mb-0">{{ process.description }}</p>
-                </div>
-              </div>
-              {% endif %}
-            </div>
-
             <!-- Tabs com conteúdo relacionado -->
-            <div class="col-md-8">
-              <div class="card card-primary card-outline card-tabs shadow-sm">
-                <div class="card-header p-0 pt-1">
-                  <ul class="nav nav-tabs" role="tablist">
+            <div class="col-12 mb-4">
+              <div class="card pp-card card-tabs">
+                <div class="card-header p-0 pt-1 tabbar-scroll">
+                  <ul class="nav nav-tabs flex-nowrap" role="tablist">
                     <li class="nav-item" role="presentation">
                       <a class="nav-link active" id="documents-tab" data-bs-toggle="tab" href="#documents" role="tab">
-                        <i class="bi bi-files me-2 text-primary"></i>Documentos
-                        <span class="badge bg-info ms-1">{{ stats.documents_count }}</span>
+                        <i class="bi bi-files me-1"></i>Documentos
+                        <span class="badge bg-secondary-subtle text-secondary-emphasis ms-1">{{ stats.documents_count
+                          }}</span>
                       </a>
                     </li>
                     <li class="nav-item" role="presentation">
                       <a class="nav-link" id="attachments-tab" data-bs-toggle="tab" href="#attachments" role="tab">
-                        <i class="bi bi-paperclip me-2"></i>Anexos
-                        <span class="badge bg-secondary ms-1">{{ attachments_list|length }}</span>
+                        <i class="bi bi-paperclip me-1"></i>Anexos
+                        <span class="badge bg-secondary-subtle text-secondary-emphasis ms-1">{{ attachments_list|length
+                          }}</span>
+                      </a>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                      <a class="nav-link" id="generated-docs-tab" data-bs-toggle="tab" href="#generated-docs"
+                        role="tab" title="Documentos gerados pela IA">
+                        <i class="bi bi-stars me-1 ai-accent"></i>Gerados
+                        {% if stats.generated_documents_count %}
+                        <span class="badge bg-secondary-subtle text-secondary-emphasis ms-1">{{
+                          stats.generated_documents_count }}</span>
+                        {% endif %}
+                      </a>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                      <a class="nav-link" id="process-data-tab" data-bs-toggle="tab" href="#process-data" role="tab"
+                        title="Dados completos do processo">
+                        <i class="bi bi-info-circle me-1"></i>Dados
+                      </a>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                      <a class="nav-link" id="activity-tab" data-bs-toggle="tab" href="#activity-pane" role="tab"
+                        title="Linha do tempo do processo">
+                        <i class="bi bi-list-ul me-1"></i>Atividade
                       </a>
                     </li>
                     {% if case %}
                     <li class="nav-item" role="presentation">
                       <a class="nav-link" id="case-tab" data-bs-toggle="tab" href="#case" role="tab">
-                        <i class="bi bi-briefcase me-2 text-warning"></i>Caso
+                        <i class="bi bi-briefcase me-1"></i>Caso
                       </a>
                     </li>
                     {% endif %}
                     <li class="nav-item" role="presentation">
                       <a class="nav-link" id="notes-tab" data-bs-toggle="tab" href="#notes" role="tab">
-                        <i class="bi bi-journal-text me-2 text-secondary"></i>Notas
+                        <i class="bi bi-journal-text me-1"></i>Notas
                       </a>
                     </li>
                     <li class="nav-item" role="presentation">
-                      <a class="nav-link" id="phase-history-tab" data-bs-toggle="tab" href="#phase-history" role="tab">
-                        <i class="bi bi-clock-history me-2 text-secondary"></i>Histórico de Fases
-                        <span class="badge bg-secondary ms-1">{{ phase_history|length }}</span>
+                      <a class="nav-link" id="phase-history-tab" data-bs-toggle="tab" href="#phase-history" role="tab"
+                        title="Histórico de Fases">
+                        <i class="bi bi-clock-history me-1"></i>Fases
+                        <span class="badge bg-secondary-subtle text-secondary-emphasis ms-1">{{ phase_history|length
+                          }}</span>
                       </a>
                     </li>
                     <li class="nav-item" role="presentation">
-                      <a class="nav-link" id="generated-docs-tab" data-bs-toggle="tab" href="#generated-docs"
-                        role="tab">
-                        <i class="bi bi-stars me-2 text-primary"></i>Documentos Gerados
-                        {% if stats.generated_documents_count %}
-                        <span class="badge bg-primary ms-1">{{ stats.generated_documents_count }}</span>
+                      <a class="nav-link" id="communications-tab" data-bs-toggle="tab" href="#communications-pane" role="tab"
+                        title="Publicações do DJEN captadas pelo Monitoramento de Processos">
+                        <i class="bi bi-broadcast me-1"></i>Monitoramento
+                        {% if unread_comms %}
+                        <span class="badge bg-danger-subtle text-danger-emphasis ms-1"
+                          title="{{ unread_comms|length }} não lida{{ 's' if unread_comms|length != 1 }}">{{
+                          unread_comms|length }}</span>
+                        {% elif process.communications %}
+                        <span class="badge bg-secondary-subtle text-secondary-emphasis ms-1">{{
+                          process.communications|length }}</span>
                         {% endif %}
                       </a>
                     </li>
                     <li class="nav-item" role="presentation">
-                      <a class="nav-link" id="communications-tab" data-bs-toggle="tab" href="#communications-pane" role="tab">
-                        <i class="bi bi-broadcast me-2 text-info"></i>Comunicações DJEN
-                        {% if process.communications %}
-                        <span class="badge bg-info ms-1">{{ process.communications|length }}</span>
-                        {% endif %}
-                      </a>
-                    </li>
-                    <li class="nav-item" role="presentation">
-                      <a class="nav-link" id="datajud-tab" data-bs-toggle="tab" href="#datajud-pane" role="tab">
-                        <i class="bi bi-clock-history me-2 text-primary"></i>Movimentação (DataJud)
+                      <a class="nav-link" id="datajud-tab" data-bs-toggle="tab" href="#datajud-pane" role="tab"
+                        title="Movimentação oficial do processo — API pública DataJud (CNJ)">
+                        <i class="bi bi-activity me-1"></i>Movimentações
                       </a>
                     </li>
                   </ul>
@@ -740,6 +1199,18 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                   <div class="tab-content">
                     <!-- Tab: Documentos -->
                     <div class="tab-pane fade show active" id="documents" role="tabpanel">
+                      {% set missing_phase_docs = phase_checklist | rejectattr('done') | list %}
+                      {% if missing_phase_docs %}
+                      <div class="mb-3 d-flex align-items-center flex-wrap gap-2">
+                        <span class="small text-muted fw-semibold text-uppercase" style="letter-spacing:.05em;">
+                          Falta juntar na fase {{ current_phase_label }}:
+                        </span>
+                        {% for item in missing_phase_docs %}
+                        <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle">
+                          <i class="bi bi-exclamation-circle me-1"></i>{{ item.name }}</span>
+                        {% endfor %}
+                      </div>
+                      {% endif %}
                       <div class="d-flex justify-content-end mb-3">
                         <a href="{{ url_for('process_panel.new_process_document', process_id=process.id) }}"
                           class="btn btn-primary btn-sm" target="_blank" rel="noopener noreferrer">
@@ -751,10 +1222,10 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                         <table class="table table-hover table-striped align-middle">
                           <thead class="table-light">
                             <tr>
-                              <th><i class="bi bi-file-earmark"></i> Documento</th>
-                              <th><i class="bi bi-signpost"></i> Fase</th>
-                              <th><i class="bi bi-file-earmark-text"></i> Tipo de Documento</th>
-                              <th><i class="bi bi-calendar"></i> Enviado em</th>
+                              <th>Documento</th>
+                              <th>Fase</th>
+                              <th>Tipo de Documento</th>
+                              <th>Enviado em</th>
                               <th class="text-end">Ações</th>
                             </tr>
                           </thead>
@@ -820,28 +1291,25 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                 {% if doc.knowledge_base_id %}
                                 <div class="d-flex gap-1 justify-content-end align-items-center">
                                   <a href="{{ url_for('knowledge_base.view', file_id=doc.knowledge_base_id) }}"
-                                    class="btn btn-sm"
-                                    style="background:transparent;border:1.5px solid #94a3b8;color:#475569;"
+                                    class="btn btn-sm pp-action"
                                     title="Visualizar documento" target="_blank" rel="noopener noreferrer">
                                     <i class="bi bi-eye"></i>
                                   </a>
                                   <a href="{{ url_for('knowledge_base.download', file_id=doc.knowledge_base_id) }}"
-                                    class="btn btn-sm"
-                                    style="background:transparent;border:1.5px solid #94a3b8;color:#475569;"
+                                    class="btn btn-sm pp-action"
                                     title="Baixar documento" target="_blank" rel="noopener noreferrer">
                                     <i class="bi bi-download"></i>
                                   </a>
                                   {% if doc.judicial_document_id %}
-                                  <button type="button" class="btn btn-sm" title="Ver resumo da IA"
-                                    style="background:transparent;border:1.5px solid #a78bfa;color:#7c3aed;"
+                                  <button type="button" class="btn btn-sm pp-action pp-action-ai" title="Ver resumo da IA"
                                     data-bs-toggle="modal" data-bs-target="#documentSummaryModal"
                                     data-summary-url="{{ url_for('process_panel.get_process_document_summary', process_id=process.id, doc_id=doc.judicial_document_id) }}"
                                     data-doc-name="{{ doc.filename }}">
                                     <i class="bi bi-card-text"></i>
                                   </button>
                                   <span class="vr mx-1 opacity-25"></span>
-                                  <button type="button" class="btn btn-sm" title="Remover do processo"
-                                    style="background:transparent;border:1.5px solid #fca5a5;color:#dc2626;"
+                                  <button type="button" class="btn btn-sm pp-action pp-action-danger"
+                                    title="Remover do processo"
                                     data-delete-url="{{ url_for('process_panel.delete_process_document', process_id=process.id, doc_id=doc.judicial_document_id) }}"
                                     onclick="confirmDeleteDocument(this.dataset.deleteUrl)">
                                     <i class="bi bi-trash"></i>
@@ -872,6 +1340,33 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                         </a>
                       </div>
                       {% endif %}
+
+                      {% if kb_documents %}
+                      <div class="mt-4 pt-3 border-top">
+                        <div class="small text-muted fw-semibold text-uppercase mb-2" style="letter-spacing:.05em;">
+                          <i class="bi bi-collection me-1"></i>Na Base de Conhecimento com este número de processo
+                        </div>
+                        <div class="d-flex flex-column gap-2">
+                          {% for kb in kb_documents %}
+                          <div class="radar-item">
+                            <i class="bi bi-file-earmark-text text-secondary"></i>
+                            <a href="{{ url_for('knowledge_base.view', file_id=kb.id) }}" target="_blank"
+                              rel="noopener noreferrer" class="text-decoration-none text-body">{{ kb.original_filename
+                              }}</a>
+                            {% if kb.category %}<span
+                              class="badge bg-secondary-subtle text-secondary-emphasis border">{{ kb.category
+                              }}</span>{% endif %}
+                            <span class="ms-date">
+                              <a href="{{ url_for('knowledge_base.download', file_id=kb.id) }}"
+                                class="btn btn-sm pp-action py-0 px-1"
+                                title="Baixar">
+                                <i class="bi bi-download"></i></a>
+                            </span>
+                          </div>
+                          {% endfor %}
+                        </div>
+                      </div>
+                      {% endif %}
                     </div>
 
                     <!-- Tab: Anexos -->
@@ -888,11 +1383,11 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                         <table class="table table-hover table-striped align-middle mb-0">
                           <thead class="table-light">
                             <tr>
-                              <th><i class="bi bi-file-earmark me-1"></i>Arquivo</th>
-                              <th><i class="bi bi-link-45deg me-1"></i>Benefícios vinculados</th>
-                              <th><i class="bi bi-hdd-stack me-1"></i>Tamanho</th>
-                              <th><i class="bi bi-person me-1"></i>Enviado por</th>
-                              <th><i class="bi bi-calendar me-1"></i>Enviado em</th>
+                              <th>Arquivo</th>
+                              <th>Benefícios vinculados</th>
+                              <th>Tamanho</th>
+                              <th>Enviado por</th>
+                              <th>Enviado em</th>
                               <th class="text-end">Ações</th>
                             </tr>
                           </thead>
@@ -940,7 +1435,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                   {% set ext = attachment.original_filename.rsplit('.', 1)[-1].lower() if '.' in attachment.original_filename else '' %}
                                   {% if ext in ('png', 'jpg', 'jpeg', 'gif', 'webp', 'bmp', 'pdf') %}
                                   <button type="button"
-                                    class="btn btn-sm bg-info-subtle text-info-emphasis"
+                                    class="btn btn-sm pp-action"
                                     title="Visualizar anexo"
                                     onclick="openAttachmentPreview(
                                       '{{ url_for('process_panel.view_process_attachment', process_id=process.id, attachment_id=attachment.id) }}',
@@ -952,11 +1447,11 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                   </button>
                                   {% endif %}
                                   <a href="{{ url_for('process_panel.download_process_attachment', process_id=process.id, attachment_id=attachment.id) }}"
-                                    class="btn btn-sm bg-primary-subtle text-primary-emphasis" title="Baixar anexo">
+                                    class="btn btn-sm pp-action" title="Baixar anexo">
                                     <i class="bi bi-download"></i>
                                   </a>
                                   <span class="vr mx-1 opacity-25"></span>
-                                  <button type="button" class="btn btn-sm bg-danger-subtle text-danger-emphasis"
+                                  <button type="button" class="btn btn-sm pp-action pp-action-danger"
                                     title="Remover anexo"
                                     data-delete-url="{{ url_for('process_panel.delete_process_attachment', process_id=process.id, attachment_id=attachment.id) }}"
                                     onclick="confirmDeleteAttachment(this.dataset.deleteUrl)">
@@ -978,6 +1473,209 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                         <p class="text-muted mt-3 mb-1 fw-medium">Nenhum arquivo anexado</p>
                         <p class="text-muted small mb-0">Clique em <strong>Adicionar Anexo</strong> para enviar arquivos
                           de apoio ao processo.</p>
+                      </div>
+                      {% endif %}
+                    </div>
+
+                    <!-- Tab: Dados do Processo -->
+                    <div class="tab-pane fade" id="process-data" role="tabpanel">
+                      <div class="row g-4">
+                        <div class="col-md-6">
+                          <div class="vstack gap-3">
+                            <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+                              <small class="text-muted"><i class="bi bi-hash me-2 text-secondary"></i>Número do
+                                Processo</small>
+                              {% if process.process_number and not process.process_number.startswith('TEMP-') %}
+                              <strong class="text-end ms-3">{{ process.process_number }}</strong>
+                              {% elif process.process_number %}
+                              <span class="badge bg-warning text-dark"
+                                title="Número provisório — edite o processo para informar o número real"><i
+                                  class="bi bi-clock me-1"></i>{{ process.process_number }}</span>
+                              {% else %}
+                              <span class="text-muted fst-italic">Não informado</span>
+                              {% endif %}
+                            </div>
+
+                            {% if current_phase_label %}
+                            <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+                              <small class="text-muted"><i class="bi bi-signpost-2 me-2 text-secondary"></i>Fase
+                                Atual</small>
+                              <span class="badge bg-light text-dark">{{ current_phase_label }}</span>
+                            </div>
+                            {% endif %}
+
+                            {% if process.tribunal_name %}
+                            <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+                              <small class="text-muted"><i
+                                  class="bi bi-building me-2 text-secondary"></i>Tribunal</small>
+                              <strong class="text-end ms-3">{{ process.tribunal_name }}</strong>
+                            </div>
+                            {% endif %}
+
+                            {% if process.section %}
+                            <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+                              <small class="text-muted"><i class="bi bi-diagram-2 me-2 text-secondary"></i>Seção</small>
+                              <strong class="text-end ms-3">{{ process.section }}</strong>
+                            </div>
+                            {% endif %}
+
+                            {% if process.judge_name %}
+                            <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+                              <small class="text-muted"><i
+                                  class="bi bi-person-badge me-2 text-secondary"></i>Juiz</small>
+                              <strong class="text-end ms-3">{{ process.judge_name }}</strong>
+                            </div>
+                            {% endif %}
+
+                            {% if process.origin_unit %}
+                            <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+                              <small class="text-muted"><i class="bi bi-geo-alt me-2 text-secondary"></i>Unidade de
+                                Origem</small>
+                              <strong class="text-end ms-3">{{ process.origin_unit }}</strong>
+                            </div>
+                            {% endif %}
+
+                            {% if process.process_class %}
+                            <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+                              <small class="text-muted"><i class="bi bi-tag me-2 text-secondary"></i>Classe</small>
+                              <strong class="text-end ms-3">{{ process.process_class }}</strong>
+                            </div>
+                            {% endif %}
+
+                            {% if process.valor_causa_texto %}
+                            <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+                              <small class="text-muted"><i class="bi bi-cash-coin me-2 text-secondary"></i>Valor da
+                                Causa</small>
+                              <strong class="text-end ms-3 js-valor-causa"
+                                data-raw="{{ process.valor_causa_texto }}">{{ process.valor_causa_texto }}</strong>
+                            </div>
+                            {% endif %}
+
+                            {% if process.assuntos %}
+                            <div class="d-flex justify-content-between align-items-start">
+                              <small class="text-muted"><i class="bi bi-tags me-2 text-secondary"></i>Assuntos</small>
+                              <div class="text-end ms-3">
+                                {% for assunto in process.assuntos %}
+                                <span
+                                  class="badge bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle me-1 mb-1">{{
+                                  assunto }}</span>
+                                {% endfor %}
+                              </div>
+                            </div>
+                            {% endif %}
+                          </div>
+                        </div>
+
+                        <div class="col-md-6">
+                          <div class="vstack gap-3">
+                            {% if process.segredo_justica is not none %}
+                            <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+                              <small class="text-muted"><i class="bi bi-shield-lock me-2 text-secondary"></i>Segredo de
+                                Justiça</small>
+                              <span
+                                class="badge {{ 'bg-danger-subtle text-danger-emphasis border border-danger-subtle' if process.segredo_justica else 'bg-success-subtle text-success-emphasis border border-success-subtle' }}">
+                                {{ 'Sim' if process.segredo_justica else 'Não' }}
+                              </span>
+                            </div>
+                            {% endif %}
+
+                            {% if process.justica_gratuita is not none %}
+                            <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+                              <small class="text-muted"><i class="bi bi-hand-thumbs-up me-2 text-secondary"></i>Justiça
+                                Gratuita</small>
+                              <span
+                                class="badge {{ 'bg-success-subtle text-success-emphasis border border-success-subtle' if process.justica_gratuita else 'bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle' }}">
+                                {{ 'Sim' if process.justica_gratuita else 'Não' }}
+                              </span>
+                            </div>
+                            {% endif %}
+
+                            {% if process.liminar_tutela is not none %}
+                            <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+                              <small class="text-muted"><i class="bi bi-exclamation-circle me-2 text-secondary"></i>Liminar
+                                / Tutela Antecipada</small>
+                              <span
+                                class="badge {{ 'bg-warning-subtle text-warning-emphasis border border-warning-subtle' if process.liminar_tutela else 'bg-secondary-subtle text-secondary-emphasis border border-secondary-subtle' }}">
+                                {{ 'Sim' if process.liminar_tutela else 'Não' }}
+                              </span>
+                            </div>
+                            {% endif %}
+
+                            <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+                              <small class="text-muted"><i class="bi bi-person-check me-2 text-secondary"></i>Polo
+                                Ativo</small>
+                              <strong class="text-end ms-3">{{ process.plaintiff_client.name if
+                                process.plaintiff_client else 'Não informado' }}</strong>
+                            </div>
+
+                            <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+                              <small class="text-muted"><i class="bi bi-person-x me-2 text-secondary"></i>Polo
+                                Passivo</small>
+                              <strong class="text-end ms-3">{{ process.defendant.name if process.defendant else 'Não
+                                informado' }}</strong>
+                            </div>
+
+                            {% if process.last_update %}
+                            <div class="d-flex justify-content-between align-items-start border-bottom pb-2">
+                              <small class="text-muted"><i
+                                  class="bi bi-arrow-clockwise me-2 text-secondary"></i>Dados atualizados em</small>
+                              <strong class="text-end ms-3">{{ process.last_update.strftime('%d/%m/%Y às %H:%M')
+                                }}</strong>
+                            </div>
+                            {% endif %}
+
+                            <div class="d-flex justify-content-between align-items-start">
+                              <small class="text-muted"><i class="bi bi-calendar-event me-2 text-secondary"></i>Criado
+                                em</small>
+                              <strong class="text-end ms-3">{{ process.created_at.strftime('%d/%m/%Y às %H:%M')
+                                }}</strong>
+                            </div>
+                          </div>
+                        </div>
+
+                        {% if process.description %}
+                        <div class="col-12">
+                          <small class="text-muted d-block mb-1"><i
+                              class="bi bi-card-text me-2 text-secondary"></i>Descrição</small>
+                          <p class="mb-0">{{ process.description }}</p>
+                        </div>
+                        {% endif %}
+                      </div>
+                    </div>
+
+                    <!-- Tab: Atividade (linha do tempo unificada) -->
+                    <div class="tab-pane fade" id="activity-pane" role="tabpanel">
+                      {% if activity %}
+                      <div class="phase-timeline">
+                        {% for item in activity %}
+                        <div class="phase-timeline-item">
+                          <span class="phase-timeline-dot"><span class="visually-hidden">Evento</span></span>
+                          <div class="phase-timeline-card">
+                            <div class="d-flex flex-wrap justify-content-between align-items-start gap-2">
+                              <div>
+                                <span class="badge bg-secondary-subtle text-secondary-emphasis border">
+                                  <i class="bi {{ item.icon }} me-1"></i>{{ item.kind }}</span>
+                                {% if item.url %}
+                                <a href="{{ item.url }}" class="ms-1 text-decoration-none">{{ item.label }}</a>
+                                {% else %}
+                                <span class="ms-1">{{ item.label }}</span>
+                                {% endif %}
+                                {% if item.detail %}<small class="text-muted d-block mt-1">{{ item.detail }}</small>{%
+                                endif %}
+                              </div>
+                              <small class="text-muted">{{ item.when.strftime('%d/%m/%Y') }}</small>
+                            </div>
+                          </div>
+                        </div>
+                        {% endfor %}
+                      </div>
+                      {% if activity|length == 50 %}
+                      <p class="text-muted small mt-2 mb-0">Mostrando os 50 eventos mais recentes.</p>
+                      {% endif %}
+                      {% else %}
+                      <div class="text-center py-4">
+                        <i class="bi bi-list-ul text-muted" style="font-size: 2.5rem;"></i>
+                        <p class="text-muted mt-3 mb-0">Nenhuma atividade registrada ainda.</p>
                       </div>
                       {% endif %}
                     </div>
@@ -1123,42 +1821,6 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                             </div>
                           </div>
 
-                          <div class="table-responsive">
-                            <table class="table table-hover table-striped align-middle">
-                              <thead class="table-light">
-                                <tr>
-                                  <th>Fase</th>
-                                  <th>Ocorrência</th>
-                                  <th>Local</th>
-                                  <th>Registrado por</th>
-                                  <th>Observações</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {% for entry in phase_history %}
-                                <tr>
-                                  <td>
-                                    <span class="badge bg-light text-dark">{{ entry.phase.name if entry.phase else '-'
-                                      }}</span>
-                                  </td>
-                                  <td>
-                                    <small class="text-muted">
-                                      {{ entry.occurred_at.strftime('%d/%m/%Y às %H:%M') if entry.occurred_at else '-'
-                                      }}
-                                    </small>
-                                  </td>
-                                  <td>{{ entry.location_text or '-' }}</td>
-                                  <td>
-                                    {{ entry.entered_by_user.name if entry.entered_by_user else 'Sistema' }}
-                                  </td>
-                                  <td>
-                                    <span class="text-muted small">{{ entry.notes or '-' }}</span>
-                                  </td>
-                                </tr>
-                                {% endfor %}
-                              </tbody>
-                            </table>
-                          </div>
                           {% else %}
                           <div class="text-center py-4">
                             <i class="bi bi-clock-history text-muted" style="font-size: 2.5rem;"></i>
@@ -1227,12 +1889,12 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                 gdoc.created_at else '—' }}</td>
                               <td class="text-end">
                                 <a href="{{ url_for('process_panel.generated_document_detail', process_id=process.id, doc_id=gdoc.id) }}"
-                                  class="btn btn-sm bg-primary-subtle text-primary-emphasis border-0">
+                                  class="btn btn-sm pp-action">
                                   <i class="bi bi-eye"></i>
                                 </a>
                                 {% if cv and cv.generation_status == 'completed' %}
                                 <a href="{{ url_for('process_panel.generated_document_download', process_id=process.id, doc_id=gdoc.id) }}"
-                                  class="btn btn-sm bg-success-subtle text-success-emphasis border-0 js-generated-doc-download"
+                                  class="btn btn-sm pp-action pp-action-success js-generated-doc-download"
                                   data-download-label="Baixar DOCX">
                                   <i class="bi bi-download"></i>
                                 </a>
@@ -1260,46 +1922,128 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                     <!-- Tab: Comunicações DJEN (Monitoramento de Processos) -->
                     <div class="tab-pane fade" id="communications-pane" role="tabpanel">
                       {% if process.communications %}
-                      <div class="table-responsive">
+                      <div class="d-flex align-items-center justify-content-between flex-wrap gap-2 mb-3">
+                        <div class="small text-body-secondary">
+                          {% if djen_last %}
+                          <i class="bi bi-broadcast me-1"></i>Última publicação:
+                          <strong>{{ djen_last.comm.tipo_comunicacao or 'Comunicação' }}</strong>
+                          {% if djen_last.days is not none %} —
+                          {{ 'hoje' if djen_last.days <= 0 else ('há 1 dia' if djen_last.days == 1 else 'há ' ~
+                          djen_last.days ~ ' dias') }}{% endif %}
+                          {% if not djen_last.comm.is_read %}<span
+                            class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle ms-1">não
+                            lida</span>{% endif %}
+                          {% endif %}
+                        </div>
+                        <div class="d-flex align-items-center gap-3 flex-wrap">
+                          <button type="button" class="btn btn-sm pp-action js-djen-sync"
+                            data-sync-url="{{ url_for('process_panel.djen_sync', process_id=process.id) }}"
+                            title="Consultar o Comunica PJe agora e trazer novidades deste processo">
+                            <i class="bi bi-arrow-clockwise me-1"></i>Atualizar
+                          </button>
+                          <div class="form-check form-switch small mb-0">
+                            <input class="form-check-input" type="checkbox" id="djenOnlyUnread">
+                            <label class="form-check-label" for="djenOnlyUnread">Somente não lidas</label>
+                          </div>
+                        </div>
+                      </div>
+                      <div class="table-responsive djen-comms">
                         <table class="table table-hover table-striped align-middle mb-0">
                           <thead class="table-light">
                             <tr>
-                              <th style="width: 110px;"><i class="bi bi-calendar"></i> Data</th>
-                              <th style="width: 130px;"><i class="bi bi-megaphone"></i> Tipo</th>
-                              <th><i class="bi bi-building"></i> Órgão</th>
-                              <th style="width: 110px;" class="text-end">Ações</th>
+                              <th style="width: 110px;">Data</th>
+                              <th style="width: 240px;">Tipo</th>
+                              <th>Documento / Órgão</th>
+                              <th style="width: 135px;" class="text-end">Ações</th>
                             </tr>
                           </thead>
                           <tbody>
                             {% for comm in process.communications %}
-                            <tr>
+                            {% set analysis = comm.analysis_json.get('data') if comm.analysis_json else None %}
+                            {% set ai_prazo = (analysis.get('prazo') or {}) if analysis else {} %}
+                            {% set ai_due = ai_prazo.get('data_limite_estimada') %}
+                            <tr class="{{ 'comm-read' if comm.is_read }}{{ ' comm-keep' if loop.first }}">
                               <td>
                                 {{ comm.data_disponibilizacao.strftime('%d/%m/%Y') if comm.data_disponibilizacao else '—' }}
-                                {% if not comm.is_read %}<span class="badge bg-warning text-dark ms-1">nova</span>{% endif %}
+                                {% if not comm.is_read %}<span
+                                  class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle ms-1">nova</span>{%
+                                endif %}
                               </td>
                               <td>
-                                <span class="badge {{ 'bg-danger' if comm.tipo_comunicacao == 'Intimação' else 'bg-info' }}">
-                                  {{ comm.tipo_comunicacao or 'Comunicação' }}
-                                </span>
-                                <span class="badge bg-light text-dark border" title="Fonte: Comunica PJe / DJEN">DJEN</span>
+                                <div class="d-flex flex-wrap gap-1 align-items-center">
+                                  <span class="badge {{ 'bg-danger-subtle text-danger-emphasis border border-danger-subtle' if comm.tipo_comunicacao == 'Intimação' else 'bg-info-subtle text-info-emphasis border border-info-subtle' }}">
+                                    {{ comm.tipo_comunicacao or 'Comunicação' }}
+                                  </span>
+                                  <span class="badge bg-light text-dark border" title="Fonte: Comunica PJe / DJEN">DJEN</span>
+                                  {% if analysis %}
+                                  {% if analysis.get('acao_requerida') == 'exige_acao' %}
+                                  <span class="badge bg-danger text-white"
+                                    title="Análise da IA: há providência a tomar{{ ' — ' + analysis.get('acao_descricao') if analysis.get('acao_descricao') }}">
+                                    <i class="bi bi-exclamation-triangle-fill me-1"></i>Exige ação
+                                  </span>
+                                  {% elif analysis.get('acao_requerida') == 'acao_facultativa' %}
+                                  <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle"
+                                    title="{{ analysis.get('acao_descricao') or 'Análise da IA: manifestação opcional' }}">
+                                    Ação facultativa
+                                  </span>
+                                  {% endif %}
+                                  {% if analysis.get('urgencia') == 'alta' %}
+                                  <span class="badge bg-danger-subtle text-danger-emphasis border border-danger-subtle"
+                                    title="{{ analysis.get('urgencia_justificativa') or 'Urgência avaliada pela IA' }}">
+                                    Urgência alta
+                                  </span>
+                                  {% endif %}
+                                  {% if ai_due %}
+                                  <span class="badge bg-warning-subtle text-warning-emphasis border border-warning-subtle"
+                                    title="Data-limite estimada pela IA{{ ' — ' + ai_prazo.get('descricao') if ai_prazo.get('descricao') }}">
+                                    <i class="bi bi-alarm me-1"></i>até {{ ai_due[8:10] }}/{{ ai_due[5:7] }}
+                                  </span>
+                                  {% endif %}
+                                  {% endif %}
+                                </div>
                               </td>
                               <td>
-                                <small>{{ comm.nome_orgao or '—' }}</small>
                                 {% if comm.tipo_documento %}
-                                <br><small class="text-muted">{{ comm.tipo_documento }}</small>
+                                <span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle"
+                                  title="Tipo de documento informado pelo tribunal"><i
+                                    class="bi bi-file-earmark-text me-1"></i>{{ comm.tipo_documento }}</span>
+                                <br>
                                 {% endif %}
+                                <small class="text-muted">{{ comm.nome_orgao or '—' }}</small>
                               </td>
                               <td class="text-end">
-                                <a href="{{ url_for('communications.communication_detail', communication_id=comm.id) }}"
-                                  class="btn btn-sm btn-outline-info" title="Ver inteiro teor">
-                                  <i class="bi bi-eye"></i>
-                                </a>
-                                {% if comm.link %}
-                                <a href="{{ comm.link }}" target="_blank" rel="noopener"
-                                  class="btn btn-sm btn-outline-secondary" title="Documento original no PJe">
-                                  <i class="bi bi-box-arrow-up-right"></i>
-                                </a>
-                                {% endif %}
+                                <div class="d-flex gap-1 justify-content-end align-items-center flex-nowrap">
+                                  <button type="button"
+                                    class="btn btn-sm pp-action js-deadline-from-comm"
+                                    title="Criar prazo a partir desta comunicação"
+                                    data-comm-id="{{ comm.id }}"
+                                    data-suggested-due="{{ ai_due or comm_deadline_suggestions.get(comm.id, '') }}"
+                                    data-suggested-source="{{ 'ia' if ai_due else 'regra' }}"
+                                    data-comm-title="Intimação DJEN — {{ (comm.tipo_documento or comm.tipo_comunicacao or 'comunicação') | truncate(80, true, '') }}">
+                                    <i class="bi bi-alarm"></i>
+                                  </button>
+                                  <button type="button" class="btn btn-sm pp-action js-view-comm"
+                                    title="Visualizar publicação"
+                                    data-comm-id="{{ comm.id }}"
+                                    data-comm-date="{{ comm.data_disponibilizacao.strftime('%d/%m/%Y') if comm.data_disponibilizacao else '' }}"
+                                    data-comm-tipo="{{ comm.tipo_comunicacao or 'Comunicação' }}"
+                                    data-comm-doc="{{ comm.tipo_documento or '' }}"
+                                    data-comm-orgao="{{ comm.nome_orgao or '' }}"
+                                    data-detail-url="{{ url_for('communications.communication_detail', communication_id=comm.id) }}"
+                                    data-explain-url="{{ url_for('communications.explain_communication', communication_id=comm.id) }}"
+                                    data-has-analysis="{{ '1' if comm.analysis_json else '' }}">
+                                    <i class="bi bi-eye"></i>
+                                  </button>
+                                  {% if comm.link %}
+                                  <a href="{{ comm.link }}" target="_blank" rel="noopener"
+                                    class="btn btn-sm pp-action"
+                                    title="Documento original no PJe">
+                                    <i class="bi bi-box-arrow-up-right"></i>
+                                  </a>
+                                  {% endif %}
+                                </div>
+                                <div class="d-none" id="pub-teor-{{ comm.id }}">{{ comm.texto|sem_estilos|striptags if
+                                  comm.texto else '' }}</div>
                               </td>
                             </tr>
                             {% endfor %}
@@ -1309,9 +2053,13 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                       {% else %}
                       <div class="text-center py-5">
                         <i class="bi bi-broadcast text-muted" style="font-size:2.5rem;"></i>
-                        <p class="text-muted mt-3 mb-0">Nenhuma comunicação do DJEN vinculada a este processo.</p>
-                        <p class="text-muted small mb-0">As comunicações chegam pela sincronização diária do
-                          Monitoramento de Processos.</p>
+                        <p class="text-muted mt-3 mb-1">Nenhuma comunicação do DJEN vinculada a este processo.</p>
+                        <p class="text-muted small mb-3">As comunicações chegam pela sincronização diária do
+                          Monitoramento de Processos — ou consulte agora:</p>
+                        <button type="button" class="btn btn-primary btn-sm js-djen-sync"
+                          data-sync-url="{{ url_for('process_panel.djen_sync', process_id=process.id) }}">
+                          <i class="bi bi-arrow-clockwise me-1"></i>Consultar o DJEN agora
+                        </button>
                       </div>
                       {% endif %}
                     </div>
@@ -1335,12 +2083,12 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
 
           <div class="row mb-4" id="benefits">
             <div class="col-12">
-              <div class="card card-primary card-outline shadow-sm">
+              <div class="card pp-card">
                 <div class="card-header">
-                  <h3 class="card-title mb-0"><i class="bi bi-clipboard2-pulse me-2 text-primary"></i>Benefícios do
+                  <h3 class="card-title mb-0"><i class="bi bi-clipboard2-pulse me-2"></i>Benefícios do
                     Processo</h3>
                   <div class="card-tools">
-                    <span class="badge bg-info">{{ stats.benefits_count }}</span>
+                    <span class="badge bg-secondary-subtle text-secondary-emphasis">{{ stats.benefits_count }}</span>
                   </div>
                 </div>
                 <div class="card-body">
@@ -1356,23 +2104,23 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                       <button class="nav-link active" id="benefits-grouped-tab" data-bs-toggle="tab"
                         data-bs-target="#benefits-grouped-pane" type="button" role="tab"
                         aria-controls="benefits-grouped-pane" aria-selected="true">
-                        <i class="bi bi-collection me-1 text-primary"></i>Agrupamento Detalhado
+                        <i class="bi bi-collection me-1"></i>Agrupamento Detalhado
                       </button>
                     </li>
                     <li class="nav-item" role="presentation">
                       <button class="nav-link" id="benefits-summary-tab" data-bs-toggle="tab"
                         data-bs-target="#benefits-summary-pane" type="button" role="tab"
                         aria-controls="benefits-summary-pane" aria-selected="false">
-                        <i class="bi bi-table me-1 text-secondary"></i>Demonstrativo
+                        <i class="bi bi-table me-1"></i>Demonstrativo
                       </button>
                     </li>
                     <li class="nav-item" role="presentation">
                       <button class="nav-link" id="benefits-cited-tab" data-bs-toggle="tab"
                         data-bs-target="#benefits-cited-pane" type="button" role="tab"
                         aria-controls="benefits-cited-pane" aria-selected="false">
-                        <i class="bi bi-clipboard2 me-1 text-info"></i>Benefícios Citados
-                        {% if cited_benefits %}<span class="badge bg-secondary ms-1">{{ cited_benefits|length
-                          }}</span>{% endif %}
+                        <i class="bi bi-clipboard2 me-1"></i>Benefícios Citados
+                        {% if cited_benefits %}<span class="badge bg-secondary-subtle text-secondary-emphasis ms-1">{{
+                          cited_benefits|length }}</span>{% endif %}
                       </button>
                     </li>
                   </ul>
@@ -1481,15 +2229,15 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                 <table class="table table-hover table-striped align-middle mb-0">
                                   <thead class="table-light">
                                     <tr>
-                                      <th><i class="bi bi-hash me-1"></i>NB</th>
-                                      <th><i class="bi bi-person-vcard me-1"></i>NIT</th>
-                                      <th><i class="bi bi-person-badge me-1"></i>Segurado</th>
-                                      <th><i class="bi bi-tag me-1"></i>Tipo</th>
-                                      <th><i class="bi bi-calendar-range me-1"></i>Vigência FAP</th>
-                                      <th><i class="bi bi-clipboard-check me-1"></i>Tipo de Pedido</th>
-                                      <th><i class="bi bi-shield-check me-1"></i>Decisão da União</th>
-                                      <th><i class="bi bi-bank2 me-1"></i>Decisões Judiciais</th>
-                                      <th class="text-end"><i class="bi bi-gear me-1"></i>Ações</th>
+                                      <th>NB</th>
+                                      <th>NIT</th>
+                                      <th>Segurado</th>
+                                      <th>Tipo</th>
+                                      <th>Vigência FAP</th>
+                                      <th>Tipo de Pedido</th>
+                                      <th>Decisão da União</th>
+                                      <th>Decisões Judiciais</th>
+                                      <th class="text-end">Ações</th>
                                     </tr>
                                   </thead>
                                   <tbody>
@@ -1562,8 +2310,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                             contestation_resultado_value) %}
                                             {% if contestation_status_raw not in ['nao_localizado', 'nao_analisado'] and
                                             has_contestation_details %}
-                                            <button type="button" class="btn btn-sm py-0 px-2"
-                                              style="background:transparent;border:1.5px solid #94a3b8;color:#475569;"
+                                            <button type="button"
+                                              class="btn btn-sm py-0 px-2 pp-action"
                                               data-bs-toggle="modal" data-bs-target="#contestationDetailsModal"
                                               title="Ver detalhes da decisão da União"
                                               aria-label="Ver detalhes da decisão da União"
@@ -1594,34 +2342,47 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                                         </div>
                                       </td>
                                       <td>
+                                        {% set d1 = (benefit.first_instance_decision or '')|trim %}
+                                        {% set d2 = (benefit.second_instance_decision or '')|trim %}
+                                        {% set d3 = (benefit.third_instance_decision or '')|trim %}
+                                        {% if d1 or d2 or d3 %}
                                         <div class="d-flex flex-column gap-2">
+                                          {% if d1 %}
                                           <div class="d-flex align-items-center gap-2">
                                             <small class="text-muted" style="min-width: 1.6rem;">1ª</small>
-                                            {{ decision_badge(benefit.first_instance_decision) }}
+                                            {{ decision_badge(d1) }}
                                           </div>
+                                          {% endif %}
+                                          {% if d2 %}
                                           <div class="d-flex align-items-center gap-2">
                                             <small class="text-muted" style="min-width: 1.6rem;">2ª</small>
-                                            {{ decision_badge(benefit.second_instance_decision) }}
+                                            {{ decision_badge(d2) }}
                                           </div>
+                                          {% endif %}
+                                          {% if d3 %}
                                           <div class="d-flex align-items-center gap-2">
                                             <small class="text-muted" style="min-width: 1.6rem;">3ª</small>
-                                            {{ decision_badge(benefit.third_instance_decision) }}
+                                            {{ decision_badge(d3) }}
                                           </div>
+                                          {% endif %}
                                         </div>
+                                        {% else %}
+                                        <span class="text-muted small fst-italic">Sem decisão</span>
+                                        {% endif %}
                                       </td>
                                       <td class="text-end">
                                         <div class="d-flex gap-1 justify-content-end align-items-center">
-                                          <button type="button" class="btn btn-sm js-tooltip"
-                                            style="background:transparent;border:1.5px solid #94a3b8;color:#475569;"
+                                          <button type="button"
+                                            class="btn btn-sm pp-action js-tooltip"
                                             data-bs-toggle="modal" data-bs-target="#benefitDocumentsModal"
                                             data-benefit-number="{{ benefit.benefit_number or '' }}"
                                             data-benefit-insured="{{ benefit.insured_name or '' }}"
                                             data-bs-placement="top"
                                             title="Buscar nos documentos da base de conhecimento">
-                                            <i class="fa-solid fa-file-lines"></i>
+                                            <i class="bi bi-file-earmark-text"></i>
                                           </button>
-                                          <button type="button" class="btn btn-sm"
-                                            style="background:transparent;border:1.5px solid #94a3b8;color:#475569;"
+                                          <button type="button"
+                                            class="btn btn-sm pp-action"
                                             data-bs-toggle="modal" data-bs-target="#editBenefitLegalThesesModal"
                                             data-benefit-id="{{ benefit.id }}"
                                             data-benefit-number="{{ benefit.benefit_number or '-' }}"
@@ -1670,12 +2431,13 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
                               <td>{{ cb.benefit_type or '-' }}</td>
                               <td>{{ cb.fap_vigencia_year or '-' }}</td>
                               <td class="text-end">
-                                <button type="button" class="btn btn-sm btn-outline-secondary js-tooltip"
+                                <button type="button"
+                                  class="btn btn-sm pp-action js-tooltip"
                                   data-bs-toggle="modal" data-bs-target="#benefitDocumentsModal"
                                   data-benefit-number="{{ cb.benefit_number or '' }}"
                                   data-benefit-insured="{{ cb.insured_name or '' }}" data-bs-placement="top"
                                   title="Buscar nos documentos da base de conhecimento">
-                                  <i class="fa-solid fa-file-lines"></i>
+                                  <i class="bi bi-file-earmark-text"></i>
                                 </button>
                               </td>
                             </tr>
@@ -1704,6 +2466,109 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
             </div>
           </div>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Visualizar publicação (DJEN) -->
+  <div class="modal fade" id="publicationViewModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h5 class="modal-title"><i class="bi bi-broadcast me-2"></i>Publicação</h5>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+        </div>
+        <div class="modal-body">
+          <div class="d-flex align-items-center gap-2 flex-wrap mb-3">
+            <span class="badge bg-info-subtle text-info-emphasis border border-info-subtle" id="pubViewTipo"></span>
+            <span class="badge bg-primary-subtle text-primary-emphasis border border-primary-subtle d-none"
+              id="pubViewDoc"><i class="bi bi-file-earmark-text me-1"></i><span id="pubViewDocText"></span></span>
+            <span class="small text-muted" id="pubViewMeta"></span>
+          </div>
+          <div class="mb-3">
+            <div class="small fw-semibold mb-2"><i class="bi bi-stars me-1 ai-accent"></i>Explicação da IA</div>
+            <div id="pubViewExplain"></div>
+            <button type="button" id="pubViewExplainBtn" class="btn btn-primary btn-sm">
+              <i class="bi bi-stars me-1"></i>Explicar com IA
+            </button>
+          </div>
+          <div class="small fw-semibold mb-2 border-top pt-3"><i class="bi bi-file-text me-1"></i>Inteiro teor</div>
+          <div id="pubViewTeor" class="small" style="white-space: pre-wrap;"></div>
+          <div id="pubViewEmpty" class="text-muted small d-none">
+            A fonte não enviou o texto desta publicação — use <strong>Ver completa</strong> para os detalhes e o
+            documento original.
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
+          <a href="#" id="pubViewFullLink" class="btn btn-primary">
+            <i class="bi bi-box-arrow-up-right me-1"></i>Ver completa
+          </a>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal: Novo prazo -->
+  <div class="modal fade" id="newDeadlineModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog">
+      <div class="modal-content">
+        <form method="post" action="{{ url_for('process_panel.create_deadline', process_id=process.id) }}">
+          <div class="modal-header">
+            <h5 class="modal-title"><i class="bi bi-alarm me-2"></i>Novo prazo</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+          </div>
+          <div class="modal-body vstack gap-3">
+            <input type="hidden" name="communication_id" id="deadlineCommId" value="">
+            <div>
+              <label class="form-label">Tipo</label>
+              <select class="form-select" name="kind" id="deadlineKind">
+                <option value="prazo" selected>Prazo processual</option>
+                <option value="audiencia">Audiência</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label">Título <span class="text-danger">*</span></label>
+              <input type="text" class="form-control" name="title" id="deadlineTitle" required
+                placeholder="Ex.: Contrarrazões de apelação">
+            </div>
+            <div class="row g-2">
+              <div class="col-7">
+                <label class="form-label">Data-limite <span class="text-danger">*</span></label>
+                <input type="date" class="form-control" name="due_date" id="deadlineDueDate" required>
+                <div class="form-text d-none" id="deadlineSuggestionHint">
+                  Sugerido: disponibilização + 1 dia útil (publicação) + 15 dias úteis. Ajuste se necessário.
+                </div>
+              </div>
+              <div class="col-5 d-none" id="deadlineTimeWrap">
+                <label class="form-label">Hora</label>
+                <input type="time" class="form-control" name="due_time">
+              </div>
+            </div>
+            <div class="d-none" id="deadlineLocationWrap">
+              <label class="form-label">Local</label>
+              <input type="text" class="form-control" name="location"
+                placeholder="Vara / sala / link da videoconferência">
+            </div>
+            <div>
+              <label class="form-label">Responsável</label>
+              <select class="form-select" name="responsible_user_id">
+                <option value="">— sem responsável —</option>
+                {% for u in firm_users %}
+                <option value="{{ u.id }}">{{ u.name }}</option>
+                {% endfor %}
+              </select>
+            </div>
+            <div>
+              <label class="form-label">Observações</label>
+              <textarea class="form-control" name="notes" rows="2"></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancelar</button>
+            <button type="submit" class="btn btn-primary"><i class="bi bi-check-lg me-1"></i>Salvar prazo</button>
+          </div>
+        </form>
       </div>
     </div>
   </div>
@@ -1764,7 +2629,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
           </div>
         </div>
         <div class="modal-footer border-top">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
         </div>
       </div>
     </div>
@@ -1777,7 +2642,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
         <div class="modal-header border-bottom">
           <div>
             <h5 class="modal-title fw-semibold">
-              <i class="fa-solid fa-file-lines me-2 text-primary"></i>Trechos sobre o benefício nos documentos
+              <i class="bi bi-file-earmark-text me-2 text-primary"></i>Trechos sobre o benefício nos documentos
             </h5>
             <small class="text-muted d-block mt-1" id="benefitDocumentsSubtitle"></small>
           </div>
@@ -1807,7 +2672,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
 
         <div class="modal-footer border-top">
           <small class="text-muted me-auto" id="benefitDocumentsCount"></small>
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
         </div>
       </div>
     </div>
@@ -1818,19 +2683,15 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
     <div class="modal-dialog modal-lg modal-dialog-scrollable">
       <div class="modal-content">
         <div class="modal-header border-bottom">
-          <div class="d-flex align-items-start gap-3 flex-wrap">
-            <div class="rounded-circle bg-white shadow-sm d-flex align-items-center justify-content-center"
-              style="width:42px;height:42px;">
-              <i class="bi bi-card-text text-primary"></i>
-            </div>
-            <div>
-              <h5 class="modal-title fw-semibold mb-1">Resumo do documento</h5>
-              <small class="text-muted d-block" id="documentSummarySubtitle"></small>
-              <div class="d-flex align-items-center gap-2 flex-wrap mt-2">
-                <span class="summary-chip" id="documentSummaryStatus"></span>
-                <span class="summary-chip" id="documentSummaryType"></span>
-                <span class="summary-chip" id="documentSummaryFileType"></span>
-              </div>
+          <div>
+            <h5 class="modal-title fw-semibold mb-1">
+              <i class="bi bi-stars me-2 ai-accent"></i>Resumo do documento
+            </h5>
+            <small class="text-muted d-block" id="documentSummarySubtitle"></small>
+            <div class="d-flex align-items-center gap-2 flex-wrap mt-2">
+              <span class="summary-chip" id="documentSummaryStatus"></span>
+              <span class="summary-chip" id="documentSummaryType"></span>
+              <span class="summary-chip" id="documentSummaryFileType"></span>
             </div>
           </div>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
@@ -1934,7 +2795,7 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
         </div>
 
         <div class="modal-footer border-top">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+          <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Fechar</button>
         </div>
       </div>
     </div>
@@ -2187,9 +3048,10 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
 
   {% block extra_js %}
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="{{ url_for('static', filename='js/communication-explainer.js') }}"></script>
   <script>
     document.addEventListener('DOMContentLoaded', function () {
-      document.querySelectorAll('.btn').forEach(function (el) {
+      document.querySelectorAll('.btn, .card-tabs .nav-tabs .nav-link[title]').forEach(function (el) {
         const hasTitle = el.getAttribute('title');
         const ariaLabel = el.getAttribute('aria-label');
         const textLabel = (el.textContent || '').trim();
@@ -2254,9 +3116,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
         bar.style.width = safeWidth + '%';
       });
 
-      // Formata valor da causa na exibição
-      const valorCausaEl = document.getElementById('display-valor-causa');
-      if (valorCausaEl) {
+      // Formata valor da causa na exibição (capa e aba Dados)
+      document.querySelectorAll('.js-valor-causa').forEach(function (valorCausaEl) {
         const raw = valorCausaEl.getAttribute('data-raw') || '';
         const digits = raw.replace(/\D/g, '');
         if (digits) {
@@ -2266,7 +3127,166 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
             maximumFractionDigits: 2,
           });
         }
+      });
+
+      // Modal de prazos: campos condicionais de audiência
+      const deadlineKind = document.getElementById('deadlineKind');
+      if (deadlineKind) {
+        deadlineKind.addEventListener('change', function () {
+          const isHearing = deadlineKind.value === 'audiencia';
+          document.getElementById('deadlineTimeWrap').classList.toggle('d-none', !isHearing);
+          document.getElementById('deadlineLocationWrap').classList.toggle('d-none', !isHearing);
+        });
       }
+
+      // Criar prazo a partir de uma comunicação DJEN (delegado — sobrevive à atualização da aba)
+      document.addEventListener('click', function (event) {
+        const btn = event.target.closest('.js-deadline-from-comm');
+        if (!btn) return;
+        document.getElementById('deadlineCommId').value = btn.dataset.commId || '';
+        document.getElementById('deadlineTitle').value = btn.dataset.commTitle || '';
+        document.getElementById('deadlineDueDate').value = btn.dataset.suggestedDue || '';
+        const hint = document.getElementById('deadlineSuggestionHint');
+        hint.textContent = btn.dataset.suggestedSource === 'ia'
+          ? 'Data-limite estimada pela análise da IA desta publicação. Ajuste se necessário.'
+          : 'Sugerido: disponibilização + 1 dia útil (publicação) + 15 dias úteis. Ajuste se necessário.';
+        hint.classList.toggle('d-none', !btn.dataset.suggestedDue);
+        bootstrap.Modal.getOrCreateInstance(
+          document.getElementById('newDeadlineModal')).show();
+      });
+
+      // Modal fechado: limpar vínculo com comunicação e hint de sugestão
+      const newDeadlineModal = document.getElementById('newDeadlineModal');
+      if (newDeadlineModal) {
+        newDeadlineModal.addEventListener('hidden.bs.modal', function () {
+          document.getElementById('deadlineCommId').value = '';
+          document.getElementById('deadlineSuggestionHint').classList.add('d-none');
+        });
+      }
+
+      // Hash na URL abre a aba correspondente (ex.: redirect do Atualizar DJEN)
+      if (window.location.hash) {
+        var hashTab = document.querySelector(
+          '.card-tabs .nav-tabs .nav-link[href="' + window.location.hash + '"]');
+        if (hashTab && window.bootstrap) {
+          bootstrap.Tab.getOrCreateInstance(hashTab).show();
+        }
+      }
+
+      // Aba Publicações: visualizar teor em modal (delegado — sobrevive à atualização da aba)
+      let pubViewCurrentBtn = null;
+      document.addEventListener('click', function (event) {
+        const viewBtn = event.target.closest('.js-view-comm');
+        if (!viewBtn) return;
+        pubViewCurrentBtn = viewBtn;
+        const teorEl = document.getElementById('pub-teor-' + viewBtn.dataset.commId);
+        const teor = teorEl ? teorEl.textContent.trim() : '';
+        document.getElementById('pubViewTipo').textContent = viewBtn.dataset.commTipo || 'Comunicação';
+        const docBadge = document.getElementById('pubViewDoc');
+        docBadge.classList.toggle('d-none', !viewBtn.dataset.commDoc);
+        document.getElementById('pubViewDocText').textContent = viewBtn.dataset.commDoc || '';
+        document.getElementById('pubViewMeta').textContent =
+          [viewBtn.dataset.commDate, viewBtn.dataset.commOrgao].filter(Boolean).join(' · ');
+        const teorView = document.getElementById('pubViewTeor');
+        teorView.textContent = teor;
+        teorView.classList.toggle('d-none', !teor);
+        document.getElementById('pubViewEmpty').classList.toggle('d-none', !!teor);
+        document.getElementById('pubViewFullLink').href = viewBtn.dataset.detailUrl || '#';
+
+        // Explicação da IA: análise em cache carrega sozinha (sem custo); sem cache, oferece o botão
+        const explainContainer = document.getElementById('pubViewExplain');
+        const explainBtn = document.getElementById('pubViewExplainBtn');
+        explainContainer.innerHTML = '';
+        explainBtn.dataset.explainUrl = viewBtn.dataset.explainUrl || '';
+        if (viewBtn.dataset.hasAnalysis) {
+          explainBtn.classList.add('d-none');
+          CommExplainer.explain(viewBtn.dataset.explainUrl, explainContainer, null);
+        } else {
+          explainBtn.classList.remove('d-none');
+        }
+
+        bootstrap.Modal.getOrCreateInstance(
+          document.getElementById('publicationViewModal')).show();
+      });
+
+      const pubViewExplainBtn = document.getElementById('pubViewExplainBtn');
+      if (pubViewExplainBtn) {
+        pubViewExplainBtn.addEventListener('click', function () {
+          CommExplainer.explain(pubViewExplainBtn.dataset.explainUrl,
+            document.getElementById('pubViewExplain'), pubViewExplainBtn)
+            .then(function () {
+              if (pubViewCurrentBtn) pubViewCurrentBtn.dataset.hasAnalysis = '1';
+            });
+        });
+      }
+
+      // Aba DJEN: filtro "somente não lidas" (delegado — sobrevive à atualização da aba)
+      document.addEventListener('change', function (event) {
+        if (event.target && event.target.id === 'djenOnlyUnread') {
+          const djenWrap = document.querySelector('.djen-comms');
+          if (djenWrap) djenWrap.classList.toggle('djen-hide-read', event.target.checked);
+        }
+      });
+
+      // Aba DJEN: atualizar em background (mesmo comportamento da aba DataJud)
+      document.addEventListener('click', function (event) {
+        const syncBtn = event.target.closest('.js-djen-sync');
+        if (!syncBtn) return;
+        const commPane = document.getElementById('communications-pane');
+        const originalHtml = syncBtn.innerHTML;
+        syncBtn.disabled = true;
+        syncBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Consultando o DJEN...';
+
+        function showNote(cssClass, text) {
+          const note = document.createElement('div');
+          note.className = 'alert py-1 px-2 small mb-3 ' + cssClass;
+          note.textContent = text;
+          commPane.prepend(note);
+          setTimeout(function () { note.remove(); }, 7000);
+        }
+
+        fetch(syncBtn.dataset.syncUrl, {
+          method: 'POST', headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+          .then(function (resp) { return resp.json(); })
+          .then(function (payload) {
+            if (!payload.success) throw new Error(payload.message || 'Falha na consulta ao DJEN.');
+            // Recarrega só o conteúdo da aba (e o contador dela) com o HTML fresco da página
+            return fetch(window.location.pathname, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+              .then(function (resp) { return resp.text(); })
+              .then(function (html) {
+                const doc = new DOMParser().parseFromString(html, 'text/html');
+                const freshPane = doc.getElementById('communications-pane');
+                if (freshPane) commPane.innerHTML = freshPane.innerHTML;
+                const freshTab = doc.getElementById('communications-tab');
+                const tabEl = document.getElementById('communications-tab');
+                if (freshTab && tabEl) tabEl.innerHTML = freshTab.innerHTML;
+                showNote(payload.created ? 'alert-success' : 'alert-secondary', payload.message);
+              });
+          })
+          .catch(function (err) {
+            showNote('alert-warning', err.message || 'Falha na consulta ao DJEN.');
+          })
+          .finally(function () {
+            // Se o botão original ainda existe (não foi trocado junto com a aba), restaura
+            if (document.body.contains(syncBtn)) {
+              syncBtn.disabled = false;
+              syncBtn.innerHTML = originalHtml;
+            }
+          });
+      });
+
+      // Links do radar abrem a aba correspondente
+      document.querySelectorAll('.js-goto-tab').forEach(function (link) {
+        link.addEventListener('click', function (event) {
+          event.preventDefault();
+          const tabEl = document.getElementById(link.dataset.tab);
+          if (tabEl && window.bootstrap) {
+            bootstrap.Tab.getOrCreateInstance(tabEl).show();
+            tabEl.closest('.card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
+        });
+      });
 
       if (editorElement && hiddenInput && form && modalElement) {
         const toolbarOptions = [
@@ -3321,9 +4341,65 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
           d.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
       }
 
+      // Classificação dos movimentos: marcos (com badge) × trâmite interno (esmaecido)
+      var DJ_CATEGORIES = [
+        {
+          label: 'Decisão', badge: 'bg-primary-subtle text-primary-emphasis border border-primary-subtle',
+          words: ['procedencia', 'procedente', 'improcedencia', 'improcedente', 'sentenca', 'acolhimento',
+            'homologacao', 'extincao', 'deferimento', 'indeferimento', 'concessao', 'denegacao',
+            'transito em julgado', 'acordao', 'provimento', 'liminar', 'tutela']
+        },
+        {
+          label: 'Petição', badge: 'bg-info-subtle text-info-emphasis border border-info-subtle',
+          words: ['peticao', 'apelacao', 'contestacao', 'embargos', 'replica', 'recurso', 'agravo',
+            'manifestacao', 'impugnacao', 'contrarrazoes']
+        },
+        {
+          label: 'Andamento', badge: 'bg-secondary-subtle text-secondary-emphasis border',
+          words: ['distribuicao', 'redistribuicao', 'audiencia', 'publicacao', 'citacao', 'intimacao',
+            'disponibilizacao no diario']
+        }
+      ];
+
+      function djNormalize(value) {
+        return String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      }
+
+      function djClassify(mov) {
+        var name = djNormalize(mov.nome);
+        for (var i = 0; i < DJ_CATEGORIES.length; i++) {
+          var hit = DJ_CATEGORIES[i].words.some(function (word) { return name.indexOf(word) !== -1; });
+          if (hit) return DJ_CATEGORIES[i];
+        }
+        return null;
+      }
+
+      // "tipo_de_conclusao: para decisão" → "para decisão"
+      function djComplemento(comp) {
+        var raw = String(comp || '');
+        var idx = raw.indexOf(':');
+        return (idx !== -1 ? raw.slice(idx + 1) : raw.replace(/_/g, ' ')).trim();
+      }
+
+      // Rajadas do tribunal: só a primeira linha visível de cada instante mostra a data
+      function djRefreshDateRepeats() {
+        var content = document.getElementById('datajudContent');
+        content.querySelectorAll('tbody').forEach(function (tb) {
+          var prev = null;
+          tb.querySelectorAll('tr[data-stamp]').forEach(function (tr) {
+            if (tr.offsetParent === null) return; // oculta pelo filtro
+            var dateCell = tr.querySelector('td');
+            var stamp = tr.getAttribute('data-stamp');
+            dateCell.classList.toggle('dj-date-repeat', !!prev && stamp === prev);
+            prev = stamp;
+          });
+        });
+      }
+
       function render(payload) {
         var content = document.getElementById('datajudContent');
         content.innerHTML = '';
+        content.classList.add('dj-hide-tramite');
 
         if (!payload.instancias.length) {
           content.appendChild(el('p', 'text-muted text-center py-5 mb-0',
@@ -3331,10 +4407,74 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
           return;
         }
 
+        // Barra: última movimentação + filtro de relevância
+        var latest = null, latestInst = null;
         payload.instancias.forEach(function (inst) {
-          var card = el('div', 'card mb-3');
+          (inst.movimentos || []).forEach(function (mov) {
+            if (mov.data_hora && (!latest || mov.data_hora > latest.data_hora)) {
+              latest = mov;
+              latestInst = inst;
+            }
+          });
+        });
+
+        var bar = el('div', 'd-flex align-items-center justify-content-between flex-wrap gap-2 mb-3');
+        if (latest) {
+          var days = Math.floor((Date.now() - new Date(latest.data_hora).getTime()) / 86400000);
+          var ago = days <= 0 ? 'hoje' : (days === 1 ? 'há 1 dia' : 'há ' + days + ' dias');
+          var summary = el('div', 'small text-body-secondary');
+          summary.appendChild(el('i', 'bi bi-activity me-1'));
+          summary.appendChild(document.createTextNode('Última movimentação: '));
+          summary.appendChild(el('strong', null, latest.nome));
+          summary.appendChild(document.createTextNode(' — ' + ago +
+            (latestInst && latestInst.grau ? ' (Grau ' + latestInst.grau + ')' : '')));
+          bar.appendChild(summary);
+        } else {
+          bar.appendChild(el('span'));
+        }
+
+        var toggleWrap = el('div', 'form-check form-switch small mb-0');
+        var toggle = document.createElement('input');
+        toggle.type = 'checkbox';
+        toggle.checked = true;
+        toggle.className = 'form-check-input';
+        toggle.id = 'djOnlyRelevant';
+        var toggleLabel = el('label', 'form-check-label', 'Somente movimentos relevantes');
+        toggleLabel.setAttribute('for', 'djOnlyRelevant');
+        toggleWrap.appendChild(toggle);
+        toggleWrap.appendChild(toggleLabel);
+        toggle.addEventListener('change', function () {
+          content.classList.toggle('dj-hide-tramite', toggle.checked);
+          djRefreshDateRepeats();
+        });
+
+        var meta = el('div', 'd-flex align-items-center gap-3 flex-wrap');
+        if (payload.fetched_at) {
+          var ageDays = Math.floor((Date.now() - new Date(payload.fetched_at).getTime()) / 86400000);
+          var stale = ageDays > 7;
+          meta.appendChild(el('span', 'small ' + (stale ? 'text-warning-emphasis' : 'text-body-tertiary'),
+            'Dados de ' + fmtDataHora(payload.fetched_at) +
+            (stale ? ' · há ' + ageDays + ' dias' : '')));
+        }
+        var refreshBtn = el('button', 'btn btn-sm pp-action');
+        refreshBtn.type = 'button';
+        refreshBtn.appendChild(el('i', 'bi bi-arrow-clockwise me-1'));
+        refreshBtn.appendChild(document.createTextNode('Atualizar'));
+        refreshBtn.title = 'Consultar o DataJud agora e atualizar o cache';
+        refreshBtn.addEventListener('click', function () { load(true); });
+        meta.appendChild(refreshBtn);
+        meta.appendChild(toggleWrap);
+        bar.appendChild(meta);
+        content.appendChild(bar);
+
+        if (payload.stale_error) {
+          content.appendChild(el('div', 'alert alert-warning py-1 px-2 small mb-3', payload.stale_error));
+        }
+
+        payload.instancias.forEach(function (inst) {
+          var card = el('div', 'card dj-card mb-3');
           var header = el('div', 'card-header d-flex flex-wrap align-items-center gap-2');
-          header.appendChild(el('span', 'badge bg-primary-subtle text-primary-emphasis',
+          header.appendChild(el('span', 'badge bg-primary-subtle text-primary-emphasis border border-primary-subtle',
             'Grau ' + (inst.grau || '?')));
           header.appendChild(el('strong', 'small', inst.orgao_julgador || 'Órgão não informado'));
           if (inst.classe) header.appendChild(el('span', 'small text-body-secondary', '· ' + inst.classe));
@@ -3347,21 +4487,37 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
           wrap.style.maxHeight = '420px';
           wrap.style.overflowY = 'auto';
           var table = el('table', 'table table-sm table-hover align-middle mb-0');
-          var thead = el('thead', 'table-light');
+          var thead = el('thead');
           var trh = el('tr');
-          var thData = el('th', null, 'Data'); thData.style.width = '150px';
+          var thData = el('th', null, 'Data');
+          thData.style.width = '150px';
           trh.appendChild(thData);
           trh.appendChild(el('th', null, 'Movimento'));
           thead.appendChild(trh);
           table.appendChild(thead);
+
           var tbody = el('tbody');
-          inst.movimentos.forEach(function (mov) {
-            var tr = el('tr');
-            tr.appendChild(el('td', 'small text-nowrap', fmtDataHora(mov.data_hora)));
+          (inst.movimentos || []).forEach(function (mov, idx) {
+            var category = djClassify(mov);
+            // 1ª linha (movimento mais recente) nunca é ocultada pelo filtro
+            var tr = el('tr', category ? null : 'dj-tramite' + (idx === 0 ? ' dj-keep' : ''));
+            tr.setAttribute('data-stamp', mov.data_hora || '');
+            var tdData = el('td', 'small text-nowrap');
+            tdData.appendChild(el('span', null, fmtDataHora(mov.data_hora)));
+            tr.appendChild(tdData);
             var tdMov = el('td', 'small');
-            tdMov.appendChild(document.createTextNode(mov.nome || '—'));
+            if (category) {
+              tdMov.appendChild(el('span', 'badge me-2 ' + category.badge, category.label));
+              tdMov.appendChild(el('strong', null, mov.nome || '—'));
+            } else {
+              tdMov.appendChild(document.createTextNode(mov.nome || '—'));
+            }
             (mov.complementos || []).forEach(function (comp) {
-              tdMov.appendChild(el('div', 'text-body-secondary', comp));
+              var value = djComplemento(comp);
+              if (value) {
+                tdMov.appendChild(el('span',
+                  'badge bg-secondary-subtle text-secondary-emphasis border ms-2', value));
+              }
             });
             tr.appendChild(tdMov);
             tbody.appendChild(tr);
@@ -3374,9 +4530,10 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
         });
 
         content.appendChild(el('p', 'small text-body-tertiary mb-0', payload.fonte));
+        djRefreshDateRepeats();
       }
 
-      function load() {
+      function load(force) {
         var loading = document.getElementById('datajudLoading');
         var error = document.getElementById('datajudError');
         var content = document.getElementById('datajudContent');
@@ -3384,7 +4541,8 @@ process.process_number.startswith('TEMP-')) else 'Não informado') %}
         error.classList.add('d-none');
         content.classList.add('d-none');
 
-        fetch(pane.getAttribute('data-url'), { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+        var url = pane.getAttribute('data-url') + (force ? '?refresh=1' : '');
+        fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
           .then(function (resp) { return resp.json(); })
           .then(function (payload) {
             loading.classList.add('d-none');
