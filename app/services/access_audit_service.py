@@ -109,7 +109,11 @@ def _online_cutoff() -> datetime:
 
 
 def get_overview_stats(law_firm_id: int) -> dict:
-    """Cards do dashboard: online agora, logins hoje, ativos hoje, total."""
+    """Cards do dashboard: online agora, logins hoje, ativos hoje, total.
+
+    Inclui a adoção do login com Google (quantos já usaram e quantos usaram
+    hoje), para acompanhar se o caminho novo pegou.
+    """
     today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
     base = User.query.filter_by(law_firm_id=law_firm_id)
     return {
@@ -117,6 +121,8 @@ def get_overview_stats(law_firm_id: int) -> dict:
         'logins_today': base.filter(User.last_login >= today_start).count(),
         'active_today': base.filter(User.last_activity >= today_start).count(),
         'total_users': base.count(),
+        'google_users': base.filter(User.google_login_count > 0).count(),
+        'google_logins_today': base.filter(User.google_last_login_at >= today_start).count(),
     }
 
 
@@ -157,6 +163,14 @@ def get_users_activity(law_firm_id: int) -> list[dict]:
             'is_online': bool(user.last_activity and user.last_activity >= cutoff),
             'last_screen': screen_label(last_visit.endpoint) if last_visit else None,
             'screens_today': screens_today_by_user.get(user.id, 0),
+            'google_last_login': user.google_last_login_at,
+            'google_login_count': user.google_login_count or 0,
+            # Último acesso veio pelo Google? As duas datas são gravadas no mesmo
+            # instante quando o login é por Google, daí a comparação por >=.
+            'last_login_via_google': bool(
+                user.google_last_login_at and user.last_login
+                and user.google_last_login_at >= user.last_login
+            ),
         })
     return result
 

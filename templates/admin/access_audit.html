@@ -73,8 +73,13 @@
         </div>
 
         <div class="card card-outline card-primary">
-            <div class="card-header">
+            <div class="card-header d-flex flex-wrap gap-2 justify-content-between align-items-center">
                 <h3 class="card-title mb-0"><i class="bi bi-activity"></i> Atividade por usuário</h3>
+                <span class="text-muted small">
+                    <i class="bi bi-google me-1"></i>
+                    {{ stats.google_users }} de {{ stats.total_users }} já entraram com Google
+                    {% if stats.google_logins_today %}· {{ stats.google_logins_today }} hoje{% endif %}
+                </span>
             </div>
             <div class="card-body p-0">
                 {% if users_activity %}
@@ -86,6 +91,7 @@
                                 <th>Papel</th>
                                 <th>Status</th>
                                 <th>Último login</th>
+                                <th>Login com Google</th>
                                 <th>Última atividade</th>
                                 <th>Última tela (hoje)</th>
                                 <th class="text-center">Telas hoje</th>
@@ -109,7 +115,25 @@
                                     <span class="badge text-bg-light border">Offline</span>
                                     {% endif %}
                                 </td>
-                                <td>{{ u.last_login.strftime('%d/%m/%Y %H:%M') if u.last_login else '—' }}</td>
+                                <td>
+                                    {{ u.last_login.strftime('%d/%m/%Y %H:%M') if u.last_login else '—' }}
+                                    {% if u.last_login_via_google %}
+                                    <span class="badge text-bg-light border ms-1" title="O último login foi feito com Google"><i class="bi bi-google"></i></span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if u.google_login_count %}
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="badge bg-success-subtle text-success-emphasis border border-success-subtle">
+                                            <i class="bi bi-google me-1"></i>{{ u.google_login_count }}
+                                            {{ 'login' if u.google_login_count == 1 else 'logins' }}
+                                        </span>
+                                        <small class="text-muted">{{ u.google_last_login.strftime('%d/%m/%Y %H:%M') }}</small>
+                                    </div>
+                                    {% else %}
+                                    <span class="text-muted small">Nunca usou</span>
+                                    {% endif %}
+                                </td>
                                 <td>{{ u.last_activity.strftime('%d/%m/%Y %H:%M') if u.last_activity else '—' }}</td>
                                 <td>
                                     {% if u.last_screen %}

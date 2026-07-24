@@ -1,10 +1,33 @@
 from flask import Blueprint, render_template, request, redirect, url_for, session, jsonify, flash
+from sqlalchemy import func
 from app.models import db, User, LawFirm
+from app.services.google_oauth import google_client, google_login_enabled, google_redirect_uri
 from app.utils.permissions import get_landing_endpoint
 from datetime import datetime
+import logging
 import re
 
+logger = logging.getLogger(__name__)
+
 auth_bp = Blueprint('auth', __name__)
+
+CONTA_INATIVA_MSG = 'Sua conta está inativa. Entre em contato com o suporte.'
+ESCRITORIO_INATIVO_MSG = 'O escritório está inativo. Entre em contato com o suporte.'
+
+# Erros do login com Google chegam de volta como ?erro=<código>: a tela de login
+# não renderiza flash messages, então a mensagem é resolvida aqui e exibida na
+# caixa de alerta que a página já tem.
+LOGIN_ERROR_MESSAGES = {
+    'google_indisponivel': 'O login com Google não está configurado nesta instalação.',
+    'google_falhou': 'Não foi possível concluir o login com Google. Tente novamente.',
+    'google_email_nao_verificado': 'O Google não confirmou a verificação deste e-mail.',
+    'google_nao_autorizado': (
+        'Esta conta Google não está autorizada. '
+        'Fale com o administrador do escritório.'
+    ),
+    'conta_inativa': CONTA_INATIVA_MSG,
+    'escritorio_inativo': ESCRITORIO_INATIVO_MSG,
+}
 
 
 def _safe_next_url(value):
@@ -14,12 +37,46 @@ def _safe_next_url(value):
     return None
 
 
+def _start_user_session(user, remember=False, via_google=False):
+    """Registra o acesso e popula a sessão. Devolve o endpoint de destino.
+
+    Fonte única das chaves de sessão — usada pelo login por senha e pelo login
+    com Google, para que as duas portas nunca divirjam. ``via_google`` alimenta
+    os contadores de adoção mostrados na tela de Atividade de Usuários.
+    """
+    agora = datetime.now()
+    user.last_login = agora
+    user.last_activity = agora
+    if via_google:
+        user.google_last_login_at = agora
+        user.google_login_count = (user.google_login_count or 0) + 1
+    db.session.commit()
+
+    session['user_id'] = user.id
+    session['user_email'] = user.email
+    session['user_name'] = user.name
+    session['user_role'] = user.role
+    session['user_module_permissions'] = user.get_module_permissions()
+    session['law_firm_id'] = user.law_firm_id
+    session['law_firm_name'] = user.law_firm.name
+
+    if remember:
+        session.permanent = True
+
+    return get_landing_endpoint(user.role, user.module_permissions)
+
+
 @auth_bp.route('/login', methods=['GET'])
 def login():
     if 'user_id' in session:
         next_url = _safe_next_url(request.args.get('next'))
         return redirect(next_url or url_for('dashboard.dashboard'))
-    return render_template('login.html')
+    return render_template(
+        'login.html',
+        google_login_enabled=google_login_enabled(),
+        next_url=_safe_next_url(request.args.get('next')),
+        login_error=LOGIN_ERROR_MESSAGES.get(request.args.get('erro')),
+    )
 
 @auth_bp.route('/login', methods=['POST'])
 def login_post():
@@ -36,30 +93,15 @@ def login_post():
         return jsonify({"success": False, "message": "Email ou senha incorretos"})
     
     if not user.is_active:
-        return jsonify({"success": False, "message": "Sua conta está inativa. Entre em contato com o suporte."})
-    
+        return jsonify({"success": False, "message": CONTA_INATIVA_MSG})
+
     if not user.law_firm.is_active:
-        return jsonify({"success": False, "message": "O escritório está inativo. Entre em contato com o suporte."})
-    
+        return jsonify({"success": False, "message": ESCRITORIO_INATIVO_MSG})
+
     if not user.check_password(password):
         return jsonify({"success": False, "message": "Email ou senha incorretos"})
-    
-    user.last_login = datetime.now()
-    user.last_activity = datetime.now()
-    db.session.commit()
-    
-    session['user_id'] = user.id
-    session['user_email'] = user.email
-    session['user_name'] = user.name
-    session['user_role'] = user.role
-    session['user_module_permissions'] = user.get_module_permissions()
-    session['law_firm_id'] = user.law_firm_id
-    session['law_firm_name'] = user.law_firm.name
 
-    landing_endpoint = get_landing_endpoint(user.role, user.module_permissions)
-
-    if remember:
-        session.permanent = True
+    landing_endpoint = _start_user_session(user, remember=bool(remember))
 
     next_url = _safe_next_url(request.args.get('next'))
 
@@ -68,6 +110,89 @@ def login_post():
         "redirect": next_url or url_for(landing_endpoint),
         "user": user.to_dict()
     })
+
+@auth_bp.route('/login/google', methods=['GET'])
+def google_login():
+    """Inicia o fluxo OpenID Connect do Google (Authorization Code)."""
+    client = google_client()
+    if client is None:
+        return redirect(url_for('auth.login', erro='google_indisponivel'))
+
+    # O 'next' não sobrevive ao redirect do Google: guarda na sessão já validado.
+    session['google_next_url'] = _safe_next_url(request.args.get('next'))
+
+    try:
+        return client.authorize_redirect(google_redirect_uri())
+    except Exception:
+        logger.exception('Falha ao iniciar o login com Google')
+        return redirect(url_for('auth.login', erro='google_falhou'))
+
+
+@auth_bp.route('/login/google/callback', methods=['GET'])
+def google_callback():
+    """Retorno do Google: autentica e libera só quem já existe na base.
+
+    O Google prova a posse do e-mail; a autorização continua sendo nossa —
+    usuário inexistente nunca é criado aqui.
+    """
+    client = google_client()
+    if client is None:
+        return redirect(url_for('auth.login', erro='google_indisponivel'))
+
+    next_url = _safe_next_url(session.pop('google_next_url', None))
+
+    try:
+        # Valida assinatura (JWKS do Google), iss, aud, exp e nonce do id_token.
+        token = client.authorize_access_token()
+        claims = token.get('userinfo') or client.userinfo(token=token) or {}
+    except Exception:
+        logger.exception('Falha ao concluir o login com Google')
+        return redirect(url_for('auth.login', erro='google_falhou'))
+
+    email = (claims.get('email') or '').strip().lower()
+    google_sub = (claims.get('sub') or '').strip()
+    email_verificado = str(claims.get('email_verified')).strip().lower() in ('true', '1')
+
+    if not email or not google_sub or not email_verificado:
+        return redirect(url_for('auth.login', erro='google_email_nao_verificado'))
+
+    user = User.query.filter(func.lower(User.email) == email).first()
+    if not user:
+        # Mensagem neutra: não revela se o e-mail existe na base.
+        logger.info('Login com Google recusado: e-mail sem usuário correspondente')
+        return redirect(url_for('auth.login', erro='google_nao_autorizado'))
+
+    if not user.is_active:
+        return redirect(url_for('auth.login', erro='conta_inativa'))
+
+    if not user.law_firm or not user.law_firm.is_active:
+        return redirect(url_for('auth.login', erro='escritorio_inativo'))
+
+    _link_google_account(user, google_sub)
+
+    landing_endpoint = _start_user_session(user, via_google=True)
+    return redirect(next_url or url_for(landing_endpoint))
+
+
+def _link_google_account(user, google_sub):
+    """Vincula (ou revincula) a conta Google ao usuário.
+
+    A revinculação é automática: se o e-mail bate e o Google o confirmou como
+    verificado, um 'sub' novo (conta recriada, migração para o Workspace)
+    substitui o anterior. Um mesmo 'sub' não pode ficar em dois usuários — o
+    vínculo antigo é limpo antes, senão o índice único bloquearia o login.
+    """
+    if user.google_sub == google_sub:
+        return
+
+    User.query.filter(
+        User.google_sub == google_sub, User.id != user.id
+    ).update({'google_sub': None, 'google_linked_at': None}, synchronize_session=False)
+
+    user.google_sub = google_sub
+    user.google_linked_at = datetime.now()
+    db.session.flush()
+
 
 @auth_bp.route('/register', methods=['GET'])
 def register():

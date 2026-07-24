@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11,<3.14"
 dependencies = [
+    "authlib>=1.7.2",
     "bcrypt>=5.0.0",
     "docling>=2.71.0",
     "docxcompose>=1.4.0",

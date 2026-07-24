@@ -1474,6 +1474,7 @@ name = "ia-peticao"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "authlib" },
     { name = "bcrypt" },
     { name = "docling" },
     { name = "docxcompose" },
@@ -1520,6 +1521,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
+    { name = "authlib", specifier = ">=1.7.2" },
     { name = "bcrypt", specifier = ">=5.0.0" },
     { name = "docling", specifier = ">=2.71.0" },
     { name = "docxcompose", specifier = ">=1.4.0" },

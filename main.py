@@ -110,6 +110,11 @@ from app.middlewares import init_app_middlewares
 init_app_middlewares(app)
 
 
+# Login com Google (opcional): só habilita se houver credenciais no .env
+from app.services.google_oauth import init_google_oauth
+init_google_oauth(app)
+
+
 # Registrar filtro Jinja para converter JSON
 @app.template_filter('from_json')
 def from_json_filter(value):

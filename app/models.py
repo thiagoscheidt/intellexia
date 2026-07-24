@@ -94,6 +94,13 @@ class User(db.Model):
     oab_number = db.Column(db.String(50))  # Opcional, só para advogados
     phone = db.Column(db.String(50))
     
+    # Login com Google (opcional): 'sub' é o ID imutável da conta Google
+    google_sub = db.Column(db.String(64), unique=True, nullable=True, index=True)
+    google_linked_at = db.Column(db.DateTime, nullable=True)
+    # Adoção do login com Google (tela de Atividade de Usuários)
+    google_last_login_at = db.Column(db.DateTime, nullable=True)
+    google_login_count = db.Column(db.Integer, nullable=False, default=0, server_default='0')
+
     # Permissões e status
     role = db.Column(db.String(30), nullable=False, default='user')  # admin, lawyer, assistant, user
     module_permissions = db.Column(db.Text, nullable=True)
