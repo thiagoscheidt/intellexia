@@ -22,7 +22,7 @@ Fluxo de sincronização (cron diário):
 import logging
 from datetime import date, datetime, timedelta
 
-from sqlalchemy import or_
+from sqlalchemy import or_, cast, String
 
 from app.models import (
     db,
@@ -52,6 +52,11 @@ FULL_SYNC_START = date(2023, 1, 1)
 SYNC_WINDOW_DAYS = 90
 
 DIGEST_LIMIT = 20
+
+# Teto de explicações IA automáticas por escritório por execução do sync —
+# protege o custo contra rajadas (ex.: primeira rodada após dias parado);
+# o excedente fica para o botão "Explicar com IA" da tela.
+AUTO_EXPLAIN_LIMIT = 100
 
 
 # --------------------------------------------------------------------- helpers
@@ -618,6 +623,41 @@ def explain_communication(law_firm_id, communication_id, user_id=None, force=Fal
     comm.analysis_json = payload
     db.session.commit()
     return {**payload, 'cached': False}
+
+
+def explain_new_communications(law_firm_id, since, limit=AUTO_EXPLAIN_LIMIT):
+    """Gera e salva a explicação IA das comunicações criadas a partir de ``since``.
+
+    Mesmo efeito do botão "Explicar com IA" da tela, em lote, chamado pelo cron
+    DEPOIS do commit do sync — a chamada de IA é rede e nunca entra na transação
+    de escrita. Falha em uma comunicação não interrompe as demais (fica para o
+    botão manual). Retorna {'explained': n, 'failed': n, 'pending': n} —
+    ``pending`` conta as elegíveis que ficaram de fora do teto ``limit``.
+    """
+    query = (ProcessCommunication.query
+             .filter_by(law_firm_id=law_firm_id)
+             .filter(cast(ProcessCommunication.analysis_json, String) == 'null',
+                     ProcessCommunication.texto.isnot(None),
+                     ProcessCommunication.texto != '',
+                     ProcessCommunication.created_at >= since)
+             .order_by(ProcessCommunication.data_disponibilizacao.desc(),
+                       ProcessCommunication.id.desc()))
+    total = query.count()
+    comms = query.limit(limit).all() if limit else query.all()
+    user_id = _system_user_id(law_firm_id)
+
+    stats = {'explained': 0, 'failed': 0, 'pending': max(0, total - len(comms))}
+    for comm in comms:
+        try:
+            explain_communication(law_firm_id, comm.id, user_id=user_id)
+            stats['explained'] += 1
+        except Exception as exc:  # IA nunca derruba o sync
+            db.session.rollback()
+            logger.warning(
+                'Explicação IA falhou para comunicação %s (%s): %s', comm.id,
+                comm.numero_processo_mascara or comm.numero_processo, exc)
+            stats['failed'] += 1
+    return stats
 
 
 def mark_all_read(law_firm_id, user_id, **filters):
