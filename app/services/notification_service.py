@@ -331,7 +331,7 @@ def send_radar_digest(law_firm_id: int, force: bool = False,
         resumo = 'sem novidades'
     hoje = datetime.now(SP_TZ).strftime('%d/%m/%Y')
     prefix = '[TESTE] ' if is_test else ''
-    subject = f'{prefix}Radar — {resumo} ({hoje})'
+    subject = f'{prefix}Radar · Monitoramento de Processos — {resumo} ({hoje})'
 
     if dry_run:
         return {'status': 'dry_run', 'message': f'(dry-run) enviaria para {len(recipients)} destinatário(s).',
