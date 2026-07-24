@@ -32,8 +32,9 @@ tela no futuro):
 
 - **Seleção**: `ProcessCommunication` do escritório com `analysis_json IS NULL`,
   `texto IS NOT NULL` e `created_at >= since`, ordenada por
-  `data_disponibilizacao DESC, id DESC`, limitada a `limit`. `since` em UTC
-  (convenção do banco). Filtrar por "sem análise" torna a função idempotente:
+  `data_disponibilizacao DESC, id DESC`, limitada a `limit`. `since` usa
+  `datetime.now()` — o mesmo relógio do default de `created_at` (TZ global do
+  processo). Filtrar por "sem análise" torna a função idempotente:
   rodar de novo não regera nada (o cache de `explain_communication` também protege).
 - **Execução**: para cada comunicação, chama a já existente
   `explain_communication(law_firm_id, comm.id, user_id=_system_user_id(law_firm_id))`.
