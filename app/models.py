@@ -3422,7 +3422,7 @@ class ProcessCommunication(db.Model):
     numero_processo_mascara = db.Column(db.String(30))
 
     # Conteúdo
-    texto = db.Column(db.Text)                     # inteiro teor
+    texto = db.Column(db.Text(16777215))           # inteiro teor — MEDIUMTEXT: sentenças passam de 64 KB
     link = db.Column(db.Text)                      # documento original no PJe
     destinatarios_json = db.Column(db.JSON)
     advogados_json = db.Column(db.JSON)
