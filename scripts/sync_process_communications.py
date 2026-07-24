@@ -31,6 +31,7 @@ Execução manual:
   uv run python scripts/sync_process_communications.py
   uv run python scripts/sync_process_communications.py --dry-run
   uv run python scripts/sync_process_communications.py --law-firm-id 1
+  uv run python scripts/sync_process_communications.py --oab 51389/SC
   uv run python scripts/sync_process_communications.py --full
   uv run python scripts/sync_process_communications.py --full --desde 2024-01-01
 
@@ -100,7 +101,7 @@ def _run_caderno(monitor, args, run_start) -> int:
     failures = 0
     for firm_id in firm_ids:
         summary = monitor.sync_law_firm_from_cadernos(
-            firm_id, data=data, siglas=siglas, dry_run=args.dry_run)
+            firm_id, data=data, siglas=siglas, dry_run=args.dry_run, oab=args.oab)
         if summary.get('status') in ('no_tribunals', 'no_lawyers'):
             _log(f"⏭️  escritório {firm_id}: {summary['status']} — nada a fazer")
             continue
@@ -124,6 +125,8 @@ def main() -> int:
                         help='consulta a API e mostra o que seria salvo, sem persistir')
     parser.add_argument('--law-firm-id', type=int, default=None,
                         help='restringe a um escritório')
+    parser.add_argument('--oab', type=str, default=None,
+                        help='restringe a um advogado por OAB (ex.: 51389/SC ou 51389)')
     parser.add_argument('--full', action='store_true',
                         help='histórico completo (ignora a marca d\'água); '
                              'padrão: incremental diário')
@@ -177,12 +180,19 @@ def main() -> int:
         if args.caderno:
             return _run_caderno(monitor, args, run_start)
         modo = f'FULL desde {full_from.isoformat()}' if full_from else 'incremental diário'
-        _log(f'🔎 Iniciando sincronização de comunicações (Comunica PJe/DJEN) — modo {modo}...')
+        alvo = f' · só OAB {args.oab}' if args.oab else ''
+        _log(f'🔎 Iniciando sincronização de comunicações (Comunica PJe/DJEN) — modo {modo}{alvo}...')
         summaries = monitor.sync_all(law_firm_id=args.law_firm_id,
-                                     dry_run=args.dry_run, full_from=full_from)
+                                     dry_run=args.dry_run, full_from=full_from,
+                                     oab=args.oab)
 
         if not summaries:
             _log('Nenhum escritório para sincronizar.')
+            return 0
+
+        if args.oab and not any(s['lawyers_synced'] for s in summaries):
+            _log(f"⚠️  Nenhum advogado com OAB {args.oab} encontrado "
+                 f"{'no escritório ' + str(args.law_firm_id) if args.law_firm_id else 'nos escritórios'}.")
             return 0
 
         failures = 0

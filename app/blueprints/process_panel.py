@@ -19,6 +19,7 @@ from app.agents.legal_drafting.document_docx_export_agent import OfficeDocxExpor
 from app.agents.legal_drafting.impugnacao_enrichment_agent import ImpugnacaoEnrichmentAgent
 from app.services import process_deadline_service
 from app.services import datajud_snapshot_service
+from app.services import process_radar_service
 from app.services import ai_model_settings_service
 from datetime import datetime, date, timedelta, time as dt_time
 from functools import wraps
@@ -1103,97 +1104,7 @@ def list_processes():
         for d in firm_deadline_rows
     ]
 
-    radar_items = []
-    cutoff_comms = date.today() - timedelta(days=30)
-    recent_comms = (ProcessCommunication.query
-                    .filter(ProcessCommunication.law_firm_id == law_firm_id,
-                            ProcessCommunication.judicial_process_id.isnot(None),
-                            ProcessCommunication.data_disponibilizacao >= cutoff_comms)
-                    .order_by(ProcessCommunication.data_disponibilizacao.desc())
-                    .limit(60).all())
-
-    linked_deadline_comm_ids = {
-        row.communication_id
-        for row in ProcessDeadline.query.filter(
-            ProcessDeadline.law_firm_id == law_firm_id,
-            ProcessDeadline.communication_id.isnot(None)).all()
-    }
-
-    # Providências da IA: varre TODAS as publicações analisadas (sem janela de data —
-    # providência pendente não expira com a idade da publicação; mesma regra do radar
-    # do processo). Volume limitado: só publicações com análise gerada.
-    analyzed_comms = (ProcessCommunication.query
-                      .filter(ProcessCommunication.law_firm_id == law_firm_id,
-                              ProcessCommunication.judicial_process_id.isnot(None),
-                              ProcessCommunication.analysis_json.isnot(None))
-                      .order_by(ProcessCommunication.data_disponibilizacao.desc())
-                      .limit(200).all())
-
-    ai_comm_ids = set()
-    for comm in analyzed_comms:
-        analysis = (comm.analysis_json or {}).get('data') if comm.analysis_json else None
-        if not analysis or analysis.get('acao_requerida') != 'exige_acao':
-            continue
-        if comm.id in linked_deadline_comm_ids:
-            continue
-        due_raw = ((analysis.get('prazo') or {}).get('data_limite_estimada') or '').strip()
-        try:
-            due_date = datetime.strptime(due_raw, '%Y-%m-%d').date() if due_raw else None
-        except ValueError:
-            due_date = None
-        if due_date and due_date < date.today():
-            continue
-        ai_comm_ids.add(comm.id)
-        radar_items.append({
-            'kind': 'ia',
-            'due': due_date,
-            'label': (analysis.get('acao_descricao') or analysis.get('resumo')
-                      or 'Providência apontada pela IA').strip(),
-            'process_id': comm.judicial_process_id,
-            'process_number': comm.numero_processo_mascara or comm.numero_processo or '',
-            'when': datetime.combine(comm.data_disponibilizacao, dt_time.min)
-            if comm.data_disponibilizacao else datetime.now(),
-            'url': url_for('communications.communication_detail', communication_id=comm.id),
-        })
-
-    for comm in recent_comms:
-        if comm.is_read or comm.id in ai_comm_ids:
-            continue
-        radar_items.append({
-            'kind': 'publicacao',
-            'tipo': comm.tipo_comunicacao or 'Comunicação',
-            'label': comm.tipo_documento or comm.nome_orgao or 'Publicação',
-            'process_id': comm.judicial_process_id,
-            'process_number': comm.numero_processo_mascara or comm.numero_processo or '',
-            'when': datetime.combine(comm.data_disponibilizacao, dt_time.min)
-            if comm.data_disponibilizacao else datetime.now(),
-            'url': url_for('communications.communication_detail', communication_id=comm.id),
-        })
-
-    week_ago = datetime.now() - timedelta(days=7)
-    recent_snapshots = (ProcessDatajudSnapshot.query
-                        .filter(ProcessDatajudSnapshot.law_firm_id == law_firm_id,
-                                ProcessDatajudSnapshot.last_movement_at >= week_ago)
-                        .all())
-    for snap in recent_snapshots:
-        if snap.movement_ack_at and snap.last_movement_at <= snap.movement_ack_at:
-            continue
-        latest_name, _latest_iso = datajud_snapshot_service.latest_movement(snap)
-        if not latest_name:
-            continue
-        radar_items.append({
-            'kind': 'decisao' if datajud_snapshot_service.is_decision_movement(latest_name)
-            else 'movimentacao',
-            'label': latest_name,
-            'process_id': snap.process_id,
-            'process_number': snap.process.process_number if snap.process else '',
-            'when': snap.last_movement_at,
-            'url': url_for('process_panel.detail', process_id=snap.process_id),
-        })
-
-    radar_items.sort(key=lambda item: item['when'], reverse=True)
-    radar_total = len(radar_items)
-    radar_items = radar_items[:8]
+    radar_items, radar_total = process_radar_service.build_radar(law_firm_id, limit=8)
 
     # Últimas publicações do Monitoramento (globais — com ou sem processo vinculado)
     latest_pubs = (ProcessCommunication.query

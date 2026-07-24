@@ -1,8 +1,9 @@
 """
 Notificações por e-mail — agendamento e envio.
 
-Hoje há um tipo: ``fap_digest`` (Resumo FAP). Novos tipos entram como um novo
-``NotificationSetting.notification_type`` + uma função ``send_<tipo>``.
+Tipos hoje: ``fap_digest`` (Resumo FAP), ``communications_digest`` (Comunicações
+DJEN) e ``radar_digest`` (Radar da Mesa de Trabalho). Novos tipos entram como um
+novo ``NotificationSetting.notification_type`` + uma função ``send_<tipo>``.
 
 Regras do Resumo FAP:
 
@@ -19,6 +20,7 @@ from app.models import db, LawFirm, NotificationSetting
 from app.services import email_service
 from app.services.communication_monitor_service import build_communications_digest
 from app.services.fap_digest_service import build_fap_digest
+from app.services.process_radar_service import build_radar_digest
 from app.utils.timezone import SP_TZ
 from app.utils.urls import app_public_url
 
@@ -268,10 +270,90 @@ def send_communications_digest(law_firm_id: int, force: bool = False,
             'totais': totais, 'recipients': recipients}
 
 
+def render_radar_digest(law_firm_id: int, since: datetime, is_test: bool = False) -> tuple[str, dict]:
+    """Renderiza o HTML do Resumo do Radar (Mesa de Trabalho). Retorna (html, digest)."""
+    from flask import current_app, render_template
+
+    digest = build_radar_digest(law_firm_id, since=since)
+    law_firm = LawFirm.query.get(law_firm_id)
+
+    with current_app.test_request_context(base_url=app_public_url()):
+        html = render_template(
+            'emails/radar_digest.html',
+            digest=digest,
+            law_firm=law_firm,
+            periodo_inicio=since,
+            gerado_em=datetime.now(SP_TZ),
+            is_test=is_test,
+        )
+    return html, digest
+
+
+def send_radar_digest(law_firm_id: int, force: bool = False,
+                      override_recipients: list[str] | None = None,
+                      dry_run: bool = False) -> dict:
+    """Envia o Resumo do Radar (Mesa de Trabalho) de um escritório.
+
+    Mesmo contrato dos demais digests: sem item novo no período não envia (só
+    avança a janela); falha de envio não avança a janela. O corpo mostra o estado
+    atual do Radar, mas o gatilho é haver ao menos uma novidade desde o último envio.
+    """
+    setting = get_or_create_setting(law_firm_id, NotificationSetting.TYPE_RADAR_DIGEST)
+    is_test = override_recipients is not None
+
+    recipients = email_service.normalize_recipients(
+        override_recipients if is_test else setting.get_recipients()
+    )
+    if not recipients:
+        return {'status': 'skipped', 'message': 'Nenhum destinatário válido configurado.'}
+
+    now_utc = _utcnow()
+    since = _digest_window_start(setting, now_utc)
+
+    html, digest = render_radar_digest(law_firm_id, since=since, is_test=is_test)
+    totais = digest['totais']
+
+    if not digest['has_novidades'] and not force:
+        setting.last_sent_at = now_utc
+        db.session.commit()
+        return {'status': 'skipped', 'message': 'Sem novidades no período — nenhum e-mail enviado.',
+                'totais': totais}
+
+    novos = totais.get('novos', 0)
+    decisoes = totais.get('decisoes', 0)
+    if novos:
+        resumo = f'{novos} novidade' + ('s' if novos > 1 else '')
+        if decisoes:
+            resumo += f' · {decisoes} decisão' + ('ões' if decisoes > 1 else '')
+    else:
+        resumo = 'sem novidades'
+    hoje = datetime.now(SP_TZ).strftime('%d/%m/%Y')
+    prefix = '[TESTE] ' if is_test else ''
+    subject = f'{prefix}Radar — {resumo} ({hoje})'
+
+    if dry_run:
+        return {'status': 'dry_run', 'message': f'(dry-run) enviaria para {len(recipients)} destinatário(s).',
+                'subject': subject, 'totais': totais, 'recipients': recipients}
+
+    sent = email_service.send_email(recipients, subject, html, inline_images=_logo_bytes())
+    if not sent:
+        return {'status': 'failed',
+                'message': 'Falha no envio (verifique a configuração SMTP e os logs).',
+                'totais': totais}
+
+    if not is_test:
+        setting.last_sent_at = now_utc
+        db.session.commit()
+
+    return {'status': 'sent', 'message': f'Resumo enviado para {len(recipients)} destinatário(s).',
+            'totais': totais, 'recipients': recipients}
+
+
 # Tipo → função de envio. Novos tipos entram aqui.
 SENDERS = {
     NotificationSetting.TYPE_FAP_DIGEST: send_fap_digest,
     NotificationSetting.TYPE_COMMUNICATIONS_DIGEST: send_communications_digest,
+    NotificationSetting.TYPE_RADAR_DIGEST: send_radar_digest,
 }
 
 

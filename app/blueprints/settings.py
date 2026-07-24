@@ -106,6 +106,9 @@ def notifications():
     communications_digest = notification_service.get_or_create_setting(
         session.get('law_firm_id'), NotificationSetting.TYPE_COMMUNICATIONS_DIGEST
     )
+    radar_digest = notification_service.get_or_create_setting(
+        session.get('law_firm_id'), NotificationSetting.TYPE_RADAR_DIGEST
+    )
 
     firm_users = (User.query
                   .filter_by(law_firm_id=session.get('law_firm_id'), is_active=True)
@@ -117,6 +120,7 @@ def notifications():
         'settings/notifications.html',
         fap_digest=fap_digest,
         communications_digest=communications_digest,
+        radar_digest=radar_digest,
         smtp_configured=email_service.is_configured(),
         smtp_config=email_service.get_config(),
         weekday_labels=notification_service.WEEKDAY_LABELS,
@@ -137,6 +141,13 @@ def notifications_fap_digest_post():
 def notifications_communications_digest_post():
     """Salvar a configuração do resumo de Comunicações DJEN (apenas admin)."""
     return _save_digest_setting(NotificationSetting.TYPE_COMMUNICATIONS_DIGEST)
+
+
+@settings_bp.route('/notifications/radar-digest', methods=['POST'])
+@require_law_firm
+def notifications_radar_digest_post():
+    """Salvar a configuração do Resumo do Radar (apenas admin)."""
+    return _save_digest_setting(NotificationSetting.TYPE_RADAR_DIGEST)
 
 
 def _save_digest_setting(notification_type):
@@ -214,6 +225,13 @@ def notifications_fap_digest_send_now():
 def notifications_communications_digest_send_now():
     """Envia o resumo de Comunicações DJEN de teste (mesmas regras do Resumo FAP)."""
     return _send_digest_test(notification_service.send_communications_digest)
+
+
+@settings_bp.route('/notifications/radar-digest/send-now', methods=['POST'])
+@require_law_firm
+def notifications_radar_digest_send_now():
+    """Envia o Resumo do Radar de teste (mesmas regras do Resumo FAP)."""
+    return _send_digest_test(notification_service.send_radar_digest)
 
 
 def _send_digest_test(sender):

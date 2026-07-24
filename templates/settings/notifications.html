@@ -245,6 +245,103 @@
           </form>
         </div>
 
+        <!-- Card: Radar (Mesa de Trabalho) -->
+        <div class="card card-outline mt-4" style="border-top-color:#6f42c1;">
+          <div class="card-header d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <h3 class="card-title mb-0">
+              <i class="bi bi-bullseye me-2" style="color:#6f42c1;"></i>Resumo do Radar
+            </h3>
+            <div class="form-check form-switch mb-0">
+              <input class="form-check-input" type="checkbox" role="switch" id="radar_is_enabled" name="is_enabled"
+                {% if radar_digest.is_enabled %}checked{% endif %}>
+              <label class="form-check-label" for="radar_is_enabled" id="radar_enabledLabel">
+                {{ 'Ativo' if radar_digest.is_enabled else 'Inativo' }}
+              </label>
+            </div>
+          </div>
+
+          <form id="radarDigestForm" method="POST" action="{{ url_for('settings.notifications_radar_digest_post') }}">
+            <div class="card-body">
+              <p class="text-muted mb-4">
+                E-mail periódico com as pendências do <strong>Radar da Mesa de Trabalho</strong>
+                (providências apontadas pela IA, publicações não lidas e movimentações do DataJud
+                dos processos vinculados). <strong>Decisões e sentenças aparecem destacadas.</strong>
+                Sem item novo no período, nenhum e-mail é enviado.
+              </p>
+
+              <h5 class="mb-3"><i class="bi bi-clock me-2"></i>Quando enviar</h5>
+              <div class="row">
+                <div class="col-md-4">
+                  <div class="mb-3">
+                    <label for="radar_frequency" class="form-label">Frequência</label>
+                    <select class="form-select" id="radar_frequency" name="frequency">
+                      <option value="daily" {% if radar_digest.frequency == 'daily' %}selected{% endif %}>Diário</option>
+                      <option value="weekly" {% if radar_digest.frequency == 'weekly' %}selected{% endif %}>Semanal</option>
+                    </select>
+                  </div>
+                </div>
+                <div class="col-md-4" id="radar_weekdayGroup">
+                  <div class="mb-3">
+                    <label for="radar_send_weekday" class="form-label">Dia da semana</label>
+                    <select class="form-select" id="radar_send_weekday" name="send_weekday">
+                      {% for label in weekday_labels %}
+                      <option value="{{ loop.index0 }}" {% if radar_digest.send_weekday == loop.index0 %}selected{% endif %}>{{ label }}</option>
+                      {% endfor %}
+                    </select>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="mb-3">
+                    <label for="radar_send_hour" class="form-label">Horário</label>
+                    <select class="form-select" id="radar_send_hour" name="send_hour">
+                      {% for h in range(24) %}
+                      <option value="{{ h }}" {% if radar_digest.send_hour == h %}selected{% endif %}>{{ '%02d:00'|format(h) }}</option>
+                      {% endfor %}
+                    </select>
+                    <small class="text-muted">Horário de Brasília</small>
+                  </div>
+                </div>
+              </div>
+
+              <hr>
+
+              <h5 class="mb-3"><i class="bi bi-people me-2"></i>Destinatários</h5>
+              <div class="mb-3">
+                <label for="radar_recipients" class="form-label">E-mails</label>
+                <textarea class="form-control" id="radar_recipients" name="recipients" rows="3"
+                  placeholder="fulano@escritorio.com.br">{{ radar_digest.get_recipients()|join(', ') }}</textarea>
+                <small class="text-muted">Separe por vírgula, ponto e vírgula ou quebra de linha.</small>
+              </div>
+
+              {% if radar_digest.last_sent_at %}
+              <div class="alert alert-light border mb-0">
+                <i class="bi bi-info-circle me-1"></i>
+                Último envio: <strong>{{ radar_digest.last_sent_at|datetime_sp }}</strong>.
+                O próximo e-mail marca como novidade o que surgiu a partir dessa data.
+              </div>
+              {% else %}
+              <div class="alert alert-light border mb-0">
+                <i class="bi bi-info-circle me-1"></i>
+                Nenhum envio ainda. O primeiro e-mail considera como novidade as últimas 24 horas (diário) ou 7 dias (semanal).
+              </div>
+              {% endif %}
+            </div>
+
+            <div class="card-footer d-flex flex-wrap gap-2">
+              <button type="submit" class="btn btn-primary" id="radar_submitBtn">
+                <i class="bi bi-save me-2"></i>
+                <span id="radar_btnText">Salvar Alterações</span>
+              </button>
+              <button type="button" class="btn btn-outline-secondary" id="radar_sendNowBtn"
+                {% if not smtp_configured %}disabled{% endif %}
+                title="Envia um e-mail de teste só para você, sem afetar o agendamento">
+                <i class="bi bi-send me-2"></i>
+                <span id="radar_sendNowText">Enviar teste para mim</span>
+              </button>
+            </div>
+          </form>
+        </div>
+
       </div>
 
       <div class="col-lg-3">
@@ -421,6 +518,59 @@
         .finally(() => {
           commSendNowBtn.disabled = false;
           commSendNowText.textContent = 'Enviar teste para mim';
+        });
+    });
+
+    // --- Card: Radar (Mesa de Trabalho) — mesma mecânica do Resumo FAP ---
+    const radarForm = document.getElementById('radarDigestForm');
+    const radarSubmitBtn = document.getElementById('radar_submitBtn');
+    const radarBtnText = document.getElementById('radar_btnText');
+    const radarEnabledCheck = document.getElementById('radar_is_enabled');
+    const radarEnabledLabel = document.getElementById('radar_enabledLabel');
+    const radarFrequency = document.getElementById('radar_frequency');
+    const radarWeekdayGroup = document.getElementById('radar_weekdayGroup');
+
+    function syncRadarWeekdayVisibility() {
+      radarWeekdayGroup.style.display = radarFrequency.value === 'weekly' ? '' : 'none';
+    }
+    radarFrequency.addEventListener('change', syncRadarWeekdayVisibility);
+    syncRadarWeekdayVisibility();
+
+    radarEnabledCheck.addEventListener('change', function () {
+      radarEnabledLabel.textContent = this.checked ? 'Ativo' : 'Inativo';
+    });
+
+    radarForm.addEventListener('submit', function (e) {
+      e.preventDefault();
+      radarSubmitBtn.disabled = true;
+      radarBtnText.textContent = 'Salvando...';
+
+      const formData = new FormData(radarForm);
+      formData.set('is_enabled', radarEnabledCheck.checked ? '1' : '0');
+
+      fetch(radarForm.action, { method: 'POST', body: formData })
+        .then(response => response.json())
+        .then(data => showAlert(data.message, data.success ? 'success' : 'danger'))
+        .catch(() => showAlert('Erro de comunicação com o servidor.', 'danger'))
+        .finally(() => {
+          radarSubmitBtn.disabled = false;
+          radarBtnText.textContent = 'Salvar Alterações';
+        });
+    });
+
+    const radarSendNowBtn = document.getElementById('radar_sendNowBtn');
+    const radarSendNowText = document.getElementById('radar_sendNowText');
+    radarSendNowBtn.addEventListener('click', function () {
+      radarSendNowBtn.disabled = true;
+      radarSendNowText.textContent = 'Enviando...';
+
+      fetch('{{ url_for("settings.notifications_radar_digest_send_now") }}', { method: 'POST' })
+        .then(response => response.json())
+        .then(data => showAlert(data.message, data.success ? 'success' : 'danger'))
+        .catch(() => showAlert('Erro de comunicação com o servidor.', 'danger'))
+        .finally(() => {
+          radarSendNowBtn.disabled = false;
+          radarSendNowText.textContent = 'Enviar teste para mim';
         });
     });
   });

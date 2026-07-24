@@ -34,6 +34,7 @@ from app.models import (
     User,
 )
 from app.services.comunica_pje_client import ComunicaPjeClient, ComunicaPjeError, only_digits
+from app.services import datajud_snapshot_service
 
 logger = logging.getLogger(__name__)
 
@@ -69,12 +70,36 @@ def format_cnj(digits):
     return f'{d[:7]}-{d[7:9]}.{d[9:13]}.{d[13]}.{d[14:16]}.{d[16:]}'
 
 
-def monitored_lawyers(law_firm_id):
-    """Advogados do escritório aptos ao radar (OAB + UF preenchidas)."""
+def _parse_oab_filter(oab):
+    """Normaliza um filtro de OAB (``"51389"`` ou ``"51389/SC"``) em (dígitos, UF).
+
+    Retorna ``(None, None)`` quando não há filtro. A UF é opcional; quando ausente,
+    o número casa em qualquer UF.
+    """
+    if not oab:
+        return None, None
+    raw = str(oab).strip()
+    if '/' in raw:
+        num, _, uf = raw.partition('/')
+        return only_digits(num), (uf.strip().upper() or None)
+    return only_digits(raw), None
+
+
+def monitored_lawyers(law_firm_id, oab=None):
+    """Advogados do escritório aptos ao radar (OAB + UF preenchidas).
+
+    ``oab`` restringe a um advogado específico (``"51389"`` ou ``"51389/SC"``);
+    advogados fora do filtro não entram nem em ``ready`` nem em ``skipped``.
+    """
     lawyers = Lawyer.query.filter_by(law_firm_id=law_firm_id).order_by(Lawyer.name).all()
+    want_digits, want_uf = _parse_oab_filter(oab)
     ready, skipped = [], []
     for lawyer in lawyers:
-        if only_digits(lawyer.oab_number) and (lawyer.oab_uf or '').strip():
+        digits = only_digits(lawyer.oab_number)
+        uf = (lawyer.oab_uf or '').strip()
+        if want_digits and (digits != want_digits or (want_uf and uf.upper() != want_uf)):
+            continue
+        if digits and uf:
             ready.append(lawyer)
         else:
             skipped.append(lawyer)
@@ -373,10 +398,10 @@ def sync_lawyer(law_firm_id, lawyer, client=None, dry_run=False, full_from=None)
     return stats
 
 
-def sync_law_firm(law_firm_id, client=None, dry_run=False, full_from=None):
-    """Sincroniza todos os advogados monitoráveis de um escritório."""
+def sync_law_firm(law_firm_id, client=None, dry_run=False, full_from=None, oab=None):
+    """Sincroniza os advogados monitoráveis de um escritório (``oab`` restringe a um)."""
     client = client or ComunicaPjeClient()
-    ready, skipped = monitored_lawyers(law_firm_id)
+    ready, skipped = monitored_lawyers(law_firm_id, oab=oab)
     results = []
     for lawyer in skipped:
         logger.info('Advogado %s pulado (OAB/UF incompleta).', lawyer.name)
@@ -402,7 +427,7 @@ def firm_tribunal_siglas(law_firm_id):
 
 
 def sync_law_firm_from_cadernos(law_firm_id, data=None, siglas=None,
-                                client=None, dry_run=False):
+                                client=None, dry_run=False, oab=None):
     """Sincroniza via cadernos diários do DJEN: 1 download por tribunal,
     filtrando localmente pelas OABs do escritório.
 
@@ -423,7 +448,7 @@ def sync_law_firm_from_cadernos(law_firm_id, data=None, siglas=None,
                        'explicitamente para sincronizar por caderno.', law_firm_id)
         return summary
 
-    ready, _skipped = monitored_lawyers(law_firm_id)
+    ready, _skipped = monitored_lawyers(law_firm_id, oab=oab)
     oab_index = {}
     for lawyer in ready:
         key = (only_digits(lawyer.oab_number), (lawyer.oab_uf or '').strip().upper())
@@ -481,8 +506,11 @@ def sync_law_firm_from_cadernos(law_firm_id, data=None, siglas=None,
     return summary
 
 
-def sync_all(law_firm_id=None, dry_run=False, full_from=None):
-    """Sincroniza todos os escritórios (ou um específico). Usado pelo cron."""
+def sync_all(law_firm_id=None, dry_run=False, full_from=None, oab=None):
+    """Sincroniza todos os escritórios (ou um específico). Usado pelo cron.
+
+    ``oab`` restringe a sincronização a um advogado específico (``"51389/SC"``).
+    """
     client = ComunicaPjeClient()
     query = LawFirm.query.order_by(LawFirm.id)
     if law_firm_id:
@@ -491,7 +519,7 @@ def sync_all(law_firm_id=None, dry_run=False, full_from=None):
     for firm in query.all():
         try:
             summaries.append(sync_law_firm(firm.id, client=client,
-                                           dry_run=dry_run, full_from=full_from))
+                                           dry_run=dry_run, full_from=full_from, oab=oab))
         except Exception:
             db.session.rollback()
             logger.exception('Erro inesperado sincronizando escritório %s', firm.id)
@@ -726,10 +754,14 @@ def build_communications_digest(law_firm_id, since, limit=DIGEST_LIMIT):
             'orgao': comm.nome_orgao,
             'data': comm.data_disponibilizacao.strftime('%d/%m/%Y') if comm.data_disponibilizacao else '—',
             'link': comm.link,
+            # Destaque de decisão/sentença: mesma lista de palavras do radar/DataJud.
+            'is_decision': datajud_snapshot_service.is_decision_movement(comm.tipo_comunicacao)
+            or datajud_snapshot_service.is_decision_movement(comm.tipo_documento),
         })
 
     processos = list(grupos.values())[:limit]
     total = sum(len(g['comunicacoes']) for g in processos)
+    decisoes = sum(1 for g in processos for c in g['comunicacoes'] if c['is_decision'])
     novos_processos = (JudicialProcess.query
                        .filter_by(law_firm_id=law_firm_id, origin='comunica_auto')
                        .filter(JudicialProcess.created_at >= since).count())
@@ -737,7 +769,7 @@ def build_communications_digest(law_firm_id, since, limit=DIGEST_LIMIT):
     return {
         'processos': processos,
         'totais': {'total': total, 'processos': len(processos),
-                   'novos_processos': novos_processos},
+                   'novos_processos': novos_processos, 'decisoes': decisoes},
         'periodo': {'inicio': since},
         'has_novidades': total > 0 or novos_processos > 0,
     }

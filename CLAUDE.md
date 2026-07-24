@@ -191,7 +191,8 @@ Decorator `@require_law_firm` garante que há escritório na sessão.
 
 SMTP configurado **só via `.env`** (`SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM_EMAIL`, `SMTP_FROM_NAME`, `SMTP_USE_TLS`) — senha nunca vai para o banco. Sem configuração, `email_service.send_email()` apenas loga e retorna `False` (degradação graciosa).
 
-- **Config por escritório**: tabela genérica `notification_settings`, uma linha por `(law_firm_id, notification_type)`. Tela admin-only em `/settings/notifications`, um card por tipo. Novo tipo de notificação = novo `notification_type` + função `send_<tipo>` registrada em `notification_service.SENDERS` — sem schema novo.
+- **Config por escritório**: tabela genérica `notification_settings`, uma linha por `(law_firm_id, notification_type)`. Tela admin-only em `/settings/notifications`, um card por tipo. Novo tipo de notificação = novo `notification_type` + função `send_<tipo>` registrada em `notification_service.SENDERS` — sem schema novo. Tipos atuais: `fap_digest` (Resumo FAP), `communications_digest` (Comunicações DJEN) e `radar_digest` (Radar da Mesa de Trabalho).
+- **Resumo do Radar**: reusa `process_radar_service` (fonte única do widget Radar do Painel de Processos). O e-mail mostra o **estado atual** do Radar (pendências abertas), mas só dispara quando há item novo desde o último envio (`has_novidades = novos > 0`). Decisões/sentenças aparecem destacadas — critério via `datajud_snapshot_service.DECISION_WORDS`, o mesmo do radar da tela. O digest de Comunicações também marca `is_decision`/`decisoes` com essa lista.
 - **Disparo**: `scripts/send_notifications.py` roda de hora em hora no cron e envia o que está no horário (`is_due`). Sem novidades no período não envia e-mail (só avança `last_sent_at`); falha de envio **não** avança a janela, para a próxima execução tentar de novo.
 - **Resumo FAP**: reusa `fap_digest_service`, o mesmo código do widget do dashboard — nunca duplique essas queries. Templates de e-mail em `templates/emails/` usam tabelas + CSS inline (cliente de e-mail não roda Bootstrap); links absolutos via `APP_PUBLIC_URL` + `test_request_context`.
 
@@ -350,6 +351,7 @@ FapReview.revision [POST]
 | `access_audit_service`                 | Auditoria de acesso: registro de visitas de tela e estatísticas de atividade/online — fonte única do dashboard admin |
 | `comunica_pje_client`                  | Cliente HTTP da API pública do Comunica PJe/DJEN — todo acesso isolado aqui; pacing global + regras de rate limit (ver seção "Integração Comunica PJe") |
 | `communication_monitor_service`        | Monitoramento de Processos: sincronização por OAB e por caderno (dedup por hash da API), descoberta de processos (`origin='comunica_auto'` + triagem), explicação IA com cache (`explain_communication`), queries da tela e das tools MCP — fonte única |
+| `process_radar_service`                | Radar da Mesa de Trabalho (providências IA + publicações não lidas + movimentação DataJud) — fonte única do widget do Painel de Processos (`build_radar`) e do e-mail Resumo do Radar (`build_radar_digest`) |
 | `JudicialSentenceAnalysisService`      | Análise de sentenças judiciais                            |
 | `DataJudApi`                           | Integração com API DataJud do CNJ                         |
 | `SgtTpuService`                        | Integração com SGT-TPU (tabelas processuais unificadas)   |

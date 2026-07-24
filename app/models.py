@@ -3303,6 +3303,7 @@ class NotificationSetting(db.Model):
 
     TYPE_FAP_DIGEST = 'fap_digest'
     TYPE_COMMUNICATIONS_DIGEST = 'communications_digest'
+    TYPE_RADAR_DIGEST = 'radar_digest'
 
     FREQUENCY_DAILY = 'daily'
     FREQUENCY_WEEKLY = 'weekly'
