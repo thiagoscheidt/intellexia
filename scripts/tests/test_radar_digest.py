@@ -25,11 +25,16 @@ from app.services import communication_monitor_service as cms
 from app.models import NotificationSetting
 
 
-def _fake_item(kind, label, when, is_decision, communication_id=None, process_id=1):
+def _fake_item(kind, label, when, is_decision, communication_id=None, process_id=1,
+               tipo_documento=None, tipo_comunicacao='Intimação', urgencia=None,
+               descricao=None, exige_acao=False):
     return {
         'kind': kind, 'label': label, 'process_id': process_id,
         'communication_id': communication_id, 'process_number': '0000001-11.2024.5.04.0001',
         'when': when, 'url': '/x', 'is_decision': is_decision,
+        'tipo_documento': tipo_documento, 'tipo_comunicacao': tipo_comunicacao,
+        'orgao': None, 'descricao': descricao, 'urgencia': urgencia,
+        'urgencia_justificativa': None, 'exige_acao': exige_acao,
     }
 
 
@@ -65,13 +70,19 @@ def test_digest_sem_novidades():
 def test_render_e_dry_run():
     now = datetime(2026, 7, 24, 12, 0, 0)
     items = [
-        _fake_item('decisao', 'Sentença', now, True),
-        _fake_item('publicacao', 'Intimação', now, False, communication_id=10),
+        _fake_item('decisao', 'Sentença', now, True, tipo_documento='Sentença',
+                   tipo_comunicacao='DataJud'),
+        _fake_item('ia', 'Contestar', now, False, communication_id=10,
+                   tipo_documento='Despacho', urgencia='alta',
+                   descricao='Apresentar contestação', exige_acao=True),
     ]
     with patch.object(process_radar_service, 'build_radar', return_value=(items, 2)):
         html, digest = notification_service.render_radar_digest(1, since=now - timedelta(days=1))
         assert 'Radar' in html and 'Sentença' in html, 'template não renderizou o conteúdo'
         assert '⚖️' in html, 'bloco de decisões não apareceu'
+        assert 'Despacho' in html, 'tipo de documento não apareceu'
+        assert 'Urgência alta' in html, 'urgência não apareceu'
+        assert 'Exige ação' in html, 'badge de ação não apareceu'
         print('OK  render_radar_digest — HTML renderizado com destaque de decisão')
 
         setting = notification_service.get_or_create_setting(1, NotificationSetting.TYPE_RADAR_DIGEST)

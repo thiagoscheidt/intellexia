@@ -34,12 +34,25 @@ def _is_decision_text(*parts):
     return any(datajud_snapshot_service.is_decision_movement(p) for p in parts if p)
 
 
+def _comm_analysis(comm):
+    """Dados da análise IA da comunicação (``{}`` quando não há)."""
+    if not comm.analysis_json:
+        return {}
+    return (comm.analysis_json or {}).get('data') or {}
+
+
+_URGENCIA_RANK = {'alta': 3, 'media': 2, 'baixa': 1}
+
+
 def build_radar(law_firm_id, limit=8):
     """Itens do Radar ordenados por recência. Retorna ``(items, total)``.
 
-    Cada item: ``kind``, ``label``, ``process_id``, ``communication_id`` (None nos
-    itens do DataJud), ``process_number``, ``when`` (datetime p/ ordenação),
-    ``url``, ``is_decision``; itens de publicação ainda trazem ``tipo``.
+    Cada item: ``kind``, ``label``, ``tipo_comunicacao``, ``tipo_documento``
+    (DESPACHO/DECISÃO/… informado pelo tribunal), ``orgao``, ``descricao``
+    (providência da IA, quando houver), ``urgencia`` (alta/media/baixa) +
+    ``urgencia_justificativa``, ``exige_acao``, ``process_id``,
+    ``communication_id`` (None nos itens do DataJud), ``process_number``,
+    ``when`` (datetime p/ ordenação), ``url``, ``is_decision``.
     """
     radar_items = []
     cutoff_comms = date.today() - timedelta(days=30)
@@ -88,6 +101,14 @@ def build_radar(law_firm_id, limit=8):
             'kind': 'ia',
             'due': due_date,
             'label': label,
+            'tipo': comm.tipo_comunicacao or 'Comunicação',
+            'tipo_comunicacao': comm.tipo_comunicacao or 'Comunicação',
+            'tipo_documento': comm.tipo_documento,
+            'orgao': comm.nome_orgao,
+            'descricao': label,
+            'urgencia': analysis.get('urgencia'),
+            'urgencia_justificativa': analysis.get('urgencia_justificativa'),
+            'exige_acao': True,
             'process_id': comm.judicial_process_id,
             'communication_id': comm.id,
             'process_number': comm.numero_processo_mascara or comm.numero_processo or '',
@@ -100,11 +121,19 @@ def build_radar(law_firm_id, limit=8):
     for comm in recent_comms:
         if comm.is_read or comm.id in ai_comm_ids:
             continue
+        analysis = _comm_analysis(comm)
         label = comm.tipo_documento or comm.nome_orgao or 'Publicação'
         radar_items.append({
             'kind': 'publicacao',
             'tipo': comm.tipo_comunicacao or 'Comunicação',
+            'tipo_comunicacao': comm.tipo_comunicacao or 'Comunicação',
+            'tipo_documento': comm.tipo_documento,
+            'orgao': comm.nome_orgao,
             'label': label,
+            'descricao': analysis.get('acao_descricao') if analysis.get('acao_requerida') == 'exige_acao' else None,
+            'urgencia': analysis.get('urgencia'),
+            'urgencia_justificativa': analysis.get('urgencia_justificativa'),
+            'exige_acao': analysis.get('acao_requerida') == 'exige_acao',
             'process_id': comm.judicial_process_id,
             'communication_id': comm.id,
             'process_number': comm.numero_processo_mascara or comm.numero_processo or '',
@@ -129,6 +158,13 @@ def build_radar(law_firm_id, limit=8):
         radar_items.append({
             'kind': 'decisao' if is_decision else 'movimentacao',
             'label': latest_name,
+            'tipo_comunicacao': 'DataJud',
+            'tipo_documento': latest_name,
+            'orgao': None,
+            'descricao': None,
+            'urgencia': None,
+            'urgencia_justificativa': None,
+            'exige_acao': False,
             'process_id': snap.process_id,
             'communication_id': None,
             'process_number': snap.process.process_number if snap.process else '',
@@ -157,8 +193,10 @@ def build_radar_digest(law_firm_id, since, limit=RADAR_DIGEST_LIMIT):
     for item in items:
         item['is_new'] = bool(item.get('when') and since and item['when'] > since)
 
-    # Decisões no topo; dentro de cada grupo, mais recentes primeiro.
-    items.sort(key=lambda i: (not i.get('is_decision'), i['when'] is None,
+    # Ordem do e-mail: decisões primeiro, depois maior urgência, depois recência.
+    items.sort(key=lambda i: (not i.get('is_decision'),
+                              -_URGENCIA_RANK.get(i.get('urgencia'), 0),
+                              i['when'] is None,
                               -(i['when'].timestamp() if i.get('when') else 0)))
 
     novos = sum(1 for i in items if i['is_new'])

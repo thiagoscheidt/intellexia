@@ -18,8 +18,6 @@
 {%- set ALERTA_TX = '#664d03' -%}
 {%- set ALERTA_BD = '#ffe69c' -%}
 
-{%- set KIND_LABELS = {'ia': 'IA', 'publicacao': 'Publicação', 'decisao': 'Decisão', 'movimentacao': 'Movimentação'} -%}
-
 {%- macro item_url(item) -%}
   {%- if item.communication_id -%}
     {{ url_for('communications.communication_detail', communication_id=item.communication_id, _external=True) }}
@@ -28,16 +26,48 @@
   {%- endif -%}
 {%- endmacro -%}
 
-{%- macro item_row(item, BORDA, TEXTO, SUAVE, ROXO, ALERTA_BD, KIND_LABELS, decision_style) -%}
+{%- macro badge(texto, bg, cor) -%}
+<span style="display:inline-block;background:{{ bg }};color:{{ cor }};font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;margin:0 4px 3px 0;">{{ texto }}</span>
+{%- endmacro -%}
+
+{%- macro item_row(item, BORDA, TEXTO, SUAVE, ALERTA_BD, decision_style) -%}
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%"
        style="margin:0 0 10px 0;border:1px solid {{ ALERTA_BD if decision_style else BORDA }};border-radius:8px;{% if decision_style %}background:#fffdf5;{% endif %}">
   <tr>
     <td style="padding:11px 14px;font-size:13px;">
-      <span style="display:inline-block;background:{% if item.is_decision %}#664d03{% elif item.kind == 'ia' %}{{ ROXO }}{% else %}#0d6efd{% endif %};color:#ffffff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;">{{ KIND_LABELS.get(item.kind, 'Radar') }}</span>
-      {% if item.is_new %}<span style="display:inline-block;background:#198754;color:#ffffff;font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;margin-left:4px;">Novo</span>{% endif %}
-      <span style="color:{{ SUAVE }};font-size:12px;margin-left:6px;">{{ item.when.strftime('%d/%m/%Y') if item.when else '' }}</span>
-      <div style="color:{{ TEXTO }};font-weight:600;margin-top:5px;">{{ item.label }}</div>
-      <div style="margin-top:3px;">
+      <div>
+        {# Tipo da comunicação (Intimação em vermelho, demais em cinza) #}
+        {% if item.tipo_comunicacao == 'Intimação' %}
+          {{ badge(item.tipo_comunicacao, '#f8d7da', '#842029') }}
+        {% elif item.tipo_comunicacao %}
+          {{ badge(item.tipo_comunicacao, '#e2e3e5', '#41464b') }}
+        {% endif %}
+        {# Tipo do documento informado pelo tribunal: DESPACHO / DECISÃO / SENTENÇA #}
+        {% if item.tipo_documento %}
+          {{ badge('📄 ' ~ item.tipo_documento, '#cfe2ff', '#084298') }}
+        {% endif %}
+        {# Urgência avaliada pela IA #}
+        {% if item.urgencia == 'alta' %}
+          {{ badge('⚡ Urgência alta', '#f8d7da', '#842029') }}
+        {% elif item.urgencia == 'media' %}
+          {{ badge('⚡ Urgência média', '#fff3cd', '#664d03') }}
+        {% elif item.urgencia == 'baixa' %}
+          {{ badge('Urgência baixa', '#e2e3e5', '#41464b') }}
+        {% endif %}
+        {# Providência a tomar #}
+        {% if item.exige_acao %}
+          {{ badge('⚠ Exige ação', '#dc3545', '#ffffff') }}
+        {% endif %}
+        {% if item.is_new %}{{ badge('Novo', '#198754', '#ffffff') }}{% endif %}
+        <span style="color:{{ SUAVE }};font-size:12px;">{{ item.when.strftime('%d/%m/%Y') if item.when else '' }}</span>
+      </div>
+      {% if item.descricao %}
+      <div style="color:{{ TEXTO }};font-weight:600;margin-top:5px;">{{ item.descricao }}</div>
+      {% endif %}
+      {% if item.orgao %}
+      <div style="color:{{ SUAVE }};font-size:12px;margin-top:2px;">{{ item.orgao }}</div>
+      {% endif %}
+      <div style="margin-top:5px;">
         <a href="{{ item_url(item) }}" style="color:#0d6efd;text-decoration:none;font-size:12px;font-weight:600;">
           {{ item.process_number or 'Abrir processo' }}
         </a>
@@ -112,14 +142,14 @@
                 ⚖️ Decisões / sentenças
               </div>
               {% for item in decisoes %}
-              {{ item_row(item, BORDA, TEXTO, SUAVE, ROXO, ALERTA_BD, KIND_LABELS, true) }}
+              {{ item_row(item, BORDA, TEXTO, SUAVE, ALERTA_BD, true) }}
               {% endfor %}
             </div>
             {% endif %}
 
             {% if demais %}
             {% for item in demais %}
-            {{ item_row(item, BORDA, TEXTO, SUAVE, ROXO, ALERTA_BD, KIND_LABELS, false) }}
+            {{ item_row(item, BORDA, TEXTO, SUAVE, ALERTA_BD, false) }}
             {% endfor %}
             {% endif %}
 

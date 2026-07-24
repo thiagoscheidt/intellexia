@@ -274,10 +274,12 @@ def render_radar_digest(law_firm_id: int, since: datetime, is_test: bool = False
     """Renderiza o HTML do Resumo do Radar (Mesa de Trabalho). Retorna (html, digest)."""
     from flask import current_app, render_template
 
-    digest = build_radar_digest(law_firm_id, since=since)
     law_firm = LawFirm.query.get(law_firm_id)
 
+    # build_radar_digest usa url_for para montar os links dos itens — precisa do
+    # request context (no cron não há request), por isso é montado aqui dentro.
     with current_app.test_request_context(base_url=app_public_url()):
+        digest = build_radar_digest(law_firm_id, since=since)
         html = render_template(
             'emails/radar_digest.html',
             digest=digest,
