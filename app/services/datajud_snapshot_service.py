@@ -10,6 +10,7 @@ import unicodedata
 from datetime import datetime
 
 from app.models import db, ProcessDatajudSnapshot
+from app.utils.cnj import tribunal_sigla_from_cnj
 
 DECISION_WORDS = (
     'procedencia', 'procedente', 'improcedencia', 'improcedente', 'sentenca',
@@ -19,16 +20,6 @@ DECISION_WORDS = (
 
 FONTE = 'API pública do DataJud (CNJ) — dados podem ter defasagem em relação ao sistema do tribunal.'
 
-_TJ_POR_CODIGO_UF = {
-    '01': 'TJAC', '02': 'TJAL', '03': 'TJAP', '04': 'TJAM', '05': 'TJBA',
-    '06': 'TJCE', '07': 'TJDFT', '08': 'TJES', '09': 'TJGO', '10': 'TJMA',
-    '11': 'TJMT', '12': 'TJMS', '13': 'TJMG', '14': 'TJPA', '15': 'TJPB',
-    '16': 'TJPR', '17': 'TJPE', '18': 'TJPI', '19': 'TJRJ', '20': 'TJRN',
-    '21': 'TJRS', '22': 'TJRO', '23': 'TJRR', '24': 'TJSC', '25': 'TJSE',
-    '26': 'TJSP', '27': 'TJTO',
-}
-
-
 def cnj_digits(process):
     return re.sub(r'\D', '', process.process_number or '')
 
@@ -36,26 +27,15 @@ def cnj_digits(process):
 def resolve_sigla(process):
     """Sigla do índice DataJud: usa o tribunal do processo ou deriva do número CNJ.
 
-    No número CNJ (NNNNNNN-DD.AAAA.J.TR.OOOO), J identifica o segmento e TR o
-    tribunal dentro dele (Resolução CNJ 65/2008).
+    A derivação (segmento J.TR do número, Resolução CNJ 65/2008) fica em
+    app.utils.cnj — fonte única da regra.
     """
     from app.services.data_jud_api import DataJudAPI
 
     sigla = (process.tribunal or '').strip().upper()
     if sigla in DataJudAPI.TRIBUNAIS:
         return sigla
-
-    digits = cnj_digits(process)
-    if len(digits) != 20:
-        return None
-    segmento, tr = digits[13], digits[14:16]
-    if segmento == '4':
-        return f'TRF{int(tr)}'
-    if segmento == '5':
-        return f'TRT{int(tr)}'
-    if segmento == '8':
-        return _TJ_POR_CODIGO_UF.get(tr)
-    return {'1': 'STF', '3': 'STJ', '7': 'STM'}.get(segmento)
+    return tribunal_sigla_from_cnj(process.process_number)
 
 
 def can_query(process):

@@ -26,6 +26,7 @@ from app.agents.document_processing.agent_document_extractor import AgentDocumen
 from app.agents.knowledge_base.knowledge_ingestion_agent import KnowledgeIngestionAgent
 from app.services.document_processor_service import DocumentProcessorService
 from app.services.judicial_document_service import JudicialDocumentService
+from app.utils.cnj import ensure_tribunal_sigla
 
 
 class KnowledgeBaseProcessingService:
@@ -382,6 +383,9 @@ class KnowledgeBaseProcessingService:
 
         if (force_update or process.liminar_tutela is None) and liminar_tutela is not None:
             process.liminar_tutela = bool(liminar_tutela)
+
+        # Tribunal não vem da extração: é derivável do próprio número CNJ
+        ensure_tribunal_sigla(process)
 
     def _link_knowledge_to_process_if_needed(self, item: KnowledgeBase, extraction_payload: dict) -> None:
         existing_link = self._get_linked_judicial_document(item.id)

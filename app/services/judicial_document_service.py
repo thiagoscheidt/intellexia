@@ -33,6 +33,7 @@ from app.models import (
     judicial_process_benefit_legal_theses,
 )
 from app.services.document_processor_service import DocumentProcessorService
+from app.utils.cnj import ensure_tribunal_sigla
 
 
 class JudicialDocumentService:
@@ -573,6 +574,9 @@ class JudicialDocumentService:
 
         if (force_update or process.liminar_tutela is None) and liminar_tutela is not None:
             process.liminar_tutela = bool(liminar_tutela)
+
+        # Tribunal não vem da extração: é derivável do próprio número CNJ
+        ensure_tribunal_sigla(process)
 
     def _load_valid_legal_theses_for_process(
         self,

@@ -1219,7 +1219,11 @@ class JudicialProcess(db.Model):
             return self.court.orgao_julgador
         # Saneia lixo de importações antigas ("None"/"null" como string)
         value = (self.tribunal or '').strip()
-        return value if value and value.lower() not in ('none', 'null') else None
+        if value and value.lower() not in ('none', 'null'):
+            return value
+        # Fallback: a sigla é derivável do próprio número CNJ (segmento J.TR)
+        from app.utils.cnj import tribunal_sigla_from_cnj
+        return tribunal_sigla_from_cnj(self.process_number)
     
     def __repr__(self):
         return f'<JudicialProcess {self.process_number}>'
