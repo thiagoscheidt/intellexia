@@ -21,6 +21,12 @@ Modos de execução:
     interrompido e rodado de novo (dedup por hash), inclusive para repopular a
     base do zero.
 
+Explicação IA: nos modos incremental e --caderno, cada comunicação nova com
+teor ganha automaticamente a explicação da IA (a mesma do botão "Explicar com
+IA" da tela), até 100 por escritório por execução; use --sem-ia para desligar.
+O modo --full nunca explica (carga histórica = custo alto); o backlog fica
+para o botão da tela.
+
 Execução manual:
   uv run python scripts/sync_process_communications.py
   uv run python scripts/sync_process_communications.py --dry-run
@@ -58,7 +64,19 @@ def _log(msg: str) -> None:
     print(f"[{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}] {msg}", flush=True)
 
 
-def _run_caderno(monitor, args) -> int:
+def _explain_new(monitor, firm_id, since) -> None:
+    """Explicação IA das comunicações criadas na rodada (pós-commit do sync)."""
+    stats = monitor.explain_new_communications(firm_id, since=since)
+    if stats['explained'] or stats['failed'] or stats['pending']:
+        msg = (f"🤖 escritório {firm_id} · {stats['explained']} explicada(s), "
+               f"{stats['failed']} falha(s)")
+        if stats['pending']:
+            msg += (f" · {stats['pending']} além do teto ficaram para o botão "
+                    f"\"Explicar com IA\" da tela")
+        _log(msg)
+
+
+def _run_caderno(monitor, args, run_start) -> int:
     """Sincronização via cadernos diários do DJEN."""
     from datetime import date as date_cls
 
@@ -91,6 +109,8 @@ def _run_caderno(monitor, args) -> int:
                  + (f" · {r['error']}" if r['error'] else ''))
             if r['status'] == 'failed':
                 failures += 1
+        if not (args.dry_run or args.sem_ia):
+            _explain_new(monitor, firm_id, run_start)
     return 1 if failures else 0
 
 
@@ -112,6 +132,9 @@ def main() -> int:
                         help='data do caderno (YYYY-MM-DD; padrão: hoje) — só com --caderno')
     parser.add_argument('--tribunais', type=str, default=None,
                         help='siglas separadas por vírgula (padrão: tribunais do histórico) — só com --caderno')
+    parser.add_argument('--sem-ia', dest='sem_ia', action='store_true',
+                        help='não gera a explicação IA das comunicações novas '
+                             '(padrão: gera nos modos incremental e --caderno)')
     args = parser.parse_args()
 
     # Execução manual (terminal): mostra em tempo real o que o serviço e o
@@ -146,8 +169,9 @@ def main() -> int:
             full_from = monitor.FULL_SYNC_START
 
     with app.app_context():
+        run_start = datetime.now()
         if args.caderno:
-            return _run_caderno(monitor, args)
+            return _run_caderno(monitor, args, run_start)
         modo = f'FULL desde {full_from.isoformat()}' if full_from else 'incremental diário'
         _log(f'🔎 Iniciando sincronização de comunicações (Comunica PJe/DJEN) — modo {modo}...')
         summaries = monitor.sync_all(law_firm_id=args.law_firm_id,
@@ -170,6 +194,10 @@ def main() -> int:
                      + (f" · ERRO: {r['error']}" if r['error'] else ''))
                 if r['status'] == 'failed':
                     failures += 1
+
+        if not (args.dry_run or full_from or args.sem_ia):
+            for summary in summaries:
+                _explain_new(monitor, summary['law_firm_id'], run_start)
 
         return 1 if failures else 0
 
