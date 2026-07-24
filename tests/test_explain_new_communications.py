@@ -33,11 +33,19 @@ def _cleanup_firm(firm_id):
 
 
 def _comm(firm_id, hash_, texto='PODER JUDICIÁRIO — teste', analysis=None,
-          created_at=None):
-    comm = ProcessCommunication(
-        law_firm_id=firm_id, hash=hash_, texto=texto, analysis_json=analysis,
-        sigla_tribunal='TRF4', numero_processo='50011815620234036100',
-    )
+          created_at=None, analysis_json_explicit=False):
+    # Espelha _upsert_communication: só passar analysis_json se fornecido
+    kwargs = {
+        'law_firm_id': firm_id, 'hash': hash_, 'texto': texto,
+        'sigla_tribunal': 'TRF4', 'numero_processo': '50011815620234036100',
+    }
+    if analysis is not None:
+        kwargs['analysis_json'] = analysis
+    elif analysis_json_explicit:
+        # Cobertura adicional: JSON null explícito (não SQL NULL)
+        kwargs['analysis_json'] = None
+
+    comm = ProcessCommunication(**kwargs)
     if created_at is not None:
         comm.created_at = created_at
     db.session.add(comm)
@@ -85,18 +93,22 @@ def run():
                                     analysis={'data': {'resumo': 'antigo'}})
             id_antiga = _comm(firm.id, 'antiga-1', created_at=antiga)
             id_boom = _comm(firm.id, 'boom-1')
+            id_json_null = _comm(firm.id, 'nova-json-null', analysis_json_explicit=True)
 
-            # 1) Explica só a nova com teor; falha não interrompe as demais.
+            # 1) Explica novas elegíveis (SQL NULL + JSON null); falha não interrompe.
             stats = monitor.explain_new_communications(firm.id, since=since)
-            assert stats == {'explained': 1, 'failed': 1, 'pending': 0}, stats
-            assert [c[0] for c in calls] == [id_nova], calls
-            assert calls[0][1] == user.id, 'user_id deve ser o admin do escritório'
+            assert stats == {'explained': 2, 'failed': 1, 'pending': 0}, stats
+            assert set([c[0] for c in calls]) == {id_nova, id_json_null}, calls
+            for call_id, call_user_id in calls:
+                assert call_user_id == user.id, 'user_id deve ser o admin do escritório'
             nova = db.session.get(ProcessCommunication, id_nova)
             assert nova.analysis_json['data']['resumo'] == 'fake'
+            json_null = db.session.get(ProcessCommunication, id_json_null)
+            assert json_null.analysis_json['data']['resumo'] == 'fake'
             assert db.session.get(ProcessCommunication, id_antiga).analysis_json is None
             assert db.session.get(ProcessCommunication, id_ja_explicada) \
                 .analysis_json['data']['resumo'] == 'antigo', 'não deve regerar'
-            print('✓ explica só a nova da rodada; falha isolada não interrompe')
+            print('✓ explica novas elegíveis (SQL NULL + JSON null); falha isolada não interrompe')
 
             # 2) Idempotência: segunda chamada não encontra nada novo
             #    ('boom-1' segue elegível e volta a falhar — fica para o botão).

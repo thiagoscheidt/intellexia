@@ -636,7 +636,8 @@ def explain_new_communications(law_firm_id, since, limit=AUTO_EXPLAIN_LIMIT):
     """
     query = (ProcessCommunication.query
              .filter_by(law_firm_id=law_firm_id)
-             .filter(cast(ProcessCommunication.analysis_json, String) == 'null',
+             .filter(or_(ProcessCommunication.analysis_json.is_(None),
+                         cast(ProcessCommunication.analysis_json, String) == 'null'),
                      ProcessCommunication.texto.isnot(None),
                      ProcessCommunication.texto != '',
                      ProcessCommunication.created_at >= since)
@@ -648,14 +649,17 @@ def explain_new_communications(law_firm_id, since, limit=AUTO_EXPLAIN_LIMIT):
 
     stats = {'explained': 0, 'failed': 0, 'pending': max(0, total - len(comms))}
     for comm in comms:
+        # Capturar identificadores antes do rollback para evitar SELECT extra
+        comm_id = comm.id
+        processo_id = comm.numero_processo_mascara or comm.numero_processo
         try:
-            explain_communication(law_firm_id, comm.id, user_id=user_id)
+            explain_communication(law_firm_id, comm_id, user_id=user_id)
             stats['explained'] += 1
         except Exception as exc:  # IA nunca derruba o sync
             db.session.rollback()
             logger.warning(
-                'Explicação IA falhou para comunicação %s (%s): %s', comm.id,
-                comm.numero_processo_mascara or comm.numero_processo, exc)
+                'Explicação IA falhou para comunicação %s (%s): %s', comm_id,
+                processo_id, exc)
             stats['failed'] += 1
     return stats
 
