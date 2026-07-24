@@ -66,7 +66,11 @@ def _log(msg: str) -> None:
 
 def _explain_new(monitor, firm_id, since) -> None:
     """Explicação IA das comunicações criadas na rodada (pós-commit do sync)."""
-    stats = monitor.explain_new_communications(firm_id, since=since)
+    try:
+        stats = monitor.explain_new_communications(firm_id, since=since)
+    except Exception as exc:  # IA nunca derruba o sync
+        _log(f"🤖 escritório {firm_id} · explicação IA falhou: {exc}")
+        return
     if stats['explained'] or stats['failed'] or stats['pending']:
         msg = (f"🤖 escritório {firm_id} · {stats['explained']} explicada(s), "
                f"{stats['failed']} falha(s)")
