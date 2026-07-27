@@ -14,6 +14,14 @@ auth_bp = Blueprint('auth', __name__)
 CONTA_INATIVA_MSG = 'Sua conta está inativa. Entre em contato com o suporte.'
 ESCRITORIO_INATIVO_MSG = 'O escritório está inativo. Entre em contato com o suporte.'
 
+# Autocadastro desligado: contas são criadas pelo admin em Administração de
+# Usuários. Para reabrir, basta voltar esta flag para True (a tela e as rotas
+# continuam no lugar) e restaurar o link "Criar conta" em templates/login.html.
+REGISTRATION_ENABLED = False
+CADASTRO_FECHADO_MSG = (
+    'O cadastro está fechado. Solicite acesso ao administrador do escritório.'
+)
+
 # Erros do login com Google chegam de volta como ?erro=<código>: a tela de login
 # não renderiza flash messages, então a mensagem é resolvida aqui e exibida na
 # caixa de alerta que a página já tem.
@@ -27,6 +35,7 @@ LOGIN_ERROR_MESSAGES = {
     ),
     'conta_inativa': CONTA_INATIVA_MSG,
     'escritorio_inativo': ESCRITORIO_INATIVO_MSG,
+    'cadastro_fechado': CADASTRO_FECHADO_MSG,
 }
 
 
@@ -198,10 +207,15 @@ def _link_google_account(user, google_sub):
 def register():
     if 'user_id' in session:
         return redirect(url_for('dashboard.dashboard'))
+    if not REGISTRATION_ENABLED:
+        return redirect(url_for('auth.login', erro='cadastro_fechado'))
     return render_template('register.html')
 
 @auth_bp.route('/register', methods=['POST'])
 def register_post():
+    if not REGISTRATION_ENABLED:
+        return jsonify({"success": False, "message": CADASTRO_FECHADO_MSG})
+
     full_name = request.form.get('full_name')
     email = request.form.get('email')
     password = request.form.get('password')

@@ -23,6 +23,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel, Field, ValidationError
 
+from app.agents.config import DEFAULT_MODEL_MINI
 from app.agents.core.file_agent import FileAgent
 from app.services.token_usage_service import TokenUsageService
 
@@ -73,7 +74,7 @@ class FapAuxiliaryDocumentExtractorAgent:
                  model: Optional[str] = None,
                  temperature: float = 0.0):
         self.api_key = openai_api_key or os.environ.get('OPENAI_API_KEY')
-        self.model_name = model or os.environ.get('FAP_REVIEW_AUX_EXTRACTOR_MODEL', 'gpt-4o-mini')
+        self.model_name = model or os.environ.get('FAP_REVIEW_AUX_EXTRACTOR_MODEL') or DEFAULT_MODEL_MINI
         self.temperature = temperature
         self.llm = ChatOpenAI(api_key=self.api_key, model=self.model_name, temperature=temperature)
         self.token_usage_service = TokenUsageService()
