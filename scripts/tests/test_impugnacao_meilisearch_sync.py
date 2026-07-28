@@ -54,6 +54,15 @@ check("filtro de tenant", len(hits_outro_tenant) == 0, f"(veio {len(hits_outro_t
 hits_secao = search.search_chunks(REF.law_firm_id, "auxílio-acidente")
 check("busca por título de seção", len(hits_secao) >= 1, f"(veio {len(hits_secao)})")
 
+# trf_region malicioso não pode furar o isolamento de tenant (FINDING 1 do review)
+malicious_trf = "TRF4' OR law_firm_id != -1 OR trf_region='"
+hits_injecao = search.search_chunks(777777, "xyzsync", trf_region=malicious_trf)
+check(
+    "trf_region malicioso não vaza outro tenant",
+    hits_injecao is None or len(hits_injecao) == 0,
+    f"(veio {hits_injecao})",
+)
+
 check("exclusão", search.delete_reference(REF.id))
 time.sleep(0.5)
 hits_after = search.search_chunks(REF.law_firm_id, "xyzsync")

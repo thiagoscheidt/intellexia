@@ -24,15 +24,23 @@ _FILTERABLE = ["law_firm_id", "status", "trf_region", "section_kind",
                "thesis_catalog_id", "reference_id"]
 _SEARCHABLE = ["text", "section", "heading", "reference_title",
                "judge_name", "orgao_julgador", "process_number"]
+_VALID_TRF_REGIONS = {f"TRF{n}" for n in range(1, 7)}
 
 
 def _get_index():
     client = MeilisearchClient(MEILISEARCH_HOST, MEILISEARCH_API_KEY)
     index = client.get_or_create_index(uid=IMPUGNACAO_REFERENCES_MEILI_INDEX, primary_key="id")
-    task = index.update_filterable_attributes(_FILTERABLE)
-    client.wait_for_task(task.task_uid, timeout_in_ms=10000)
-    task = index.update_searchable_attributes(_SEARCHABLE)
-    client.wait_for_task(task.task_uid, timeout_in_ms=10000)
+
+    current_filterable = index.get_filterable_attributes() or []
+    if set(current_filterable) != set(_FILTERABLE):
+        task = index.update_filterable_attributes(_FILTERABLE)
+        client.wait_for_task(task.task_uid, timeout_in_ms=10000)
+
+    current_searchable = index.get_searchable_attributes() or []
+    if list(current_searchable) != list(_SEARCHABLE):
+        task = index.update_searchable_attributes(_SEARCHABLE)
+        client.wait_for_task(task.task_uid, timeout_in_ms=10000)
+
     return client, index
 
 
@@ -124,8 +132,8 @@ def search_chunks(law_firm_id: int, query: str, *, status: str = "active",
         filters = [f"law_firm_id = {int(law_firm_id)}"]
         if status in ("active", "archived"):
             filters.append(f"status = '{status}'")
-        if trf_region:
-            filters.append(f"trf_region = '{trf_region.upper()}'")
+        if trf_region and trf_region.strip().upper() in _VALID_TRF_REGIONS:
+            filters.append(f"trf_region = '{trf_region.strip().upper()}'")
         result = index.search(
             query.strip(),
             filter=" AND ".join(filters),
