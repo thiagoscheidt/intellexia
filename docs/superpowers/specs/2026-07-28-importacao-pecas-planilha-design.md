@@ -18,7 +18,9 @@ traz metadados curados e o link do arquivo no Google Drive.
   apontam para o mesmo arquivo. A unidade de importação é o **arquivo**.
 - Filtrando `MANIFESTAÇÕES APÓS A INICIAL` por "IMPUGNAÇÃO À CONTESTAÇÃO"
   (inclui a variante "… DO INSS"): **366 peças**, sendo **350 com link** e 16
-  sem arquivo. Média 2,6 teses por peça (máx. 22).
+  sem arquivo. Média **7,3 teses por peça** (máx. 23) — 2.667 linhas no total.
+  (O hyperlink aparece só na primeira linha de cada grupo; contar linhas com
+  link dá ~2,6 por peça, que **não** é o número de teses.)
 - O link é hyperlink de célula (`cell.hyperlink.target`), formato
   `https://drive.google.com/file/d/<ID>/view`.
 - **Compartilhamento varia por arquivo**: amostra de 20 → 11 baixam anonimamente,
