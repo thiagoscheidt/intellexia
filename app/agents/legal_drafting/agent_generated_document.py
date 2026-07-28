@@ -25,6 +25,7 @@ from app.services.token_usage_service import TokenUsageService
 from app.services.agent_execution_history_service import AgentExecutionHistoryService
 from app.agents.legal_drafting.impugnacao_thesis_coverage import (
     THESIS_BLOCK_FOOTER_RESERVE_CHARS,
+    THESIS_BLOCK_FOOTER_TEXT,
 )
 
 from app.agents.config import DEFAULT_MODEL_LEGAL_DRAFTING
@@ -1742,16 +1743,7 @@ class AgentGeneratedDocument:
             budget=budgets["REFERENCIAS_COMPLEMENTARES"],
         )
 
-        parts.append(
-            "<INSTRUCAO_DE_USO>"
-            "Priorize EXEMPLO_ESTRUTURA_TESE para estrutura argumentativa. "
-            "Para JURISPRUDENCIA_REGIONAL e JURISPRUDENCIA_COMPLEMENTAR: "
-            "incorpore cada decisao como citacao inline real na tese — "
-            "mencione o tribunal, o numero do processo e o relator exatamente como estao no bloco. "
-            "Formato sugerido: 'Conforme [Tribunal], [tipo] n. [numero], Rel. [Relator]: [trecho da ementa]'. "
-            "Nao apenas mencione que existe jurisprudencia — transcreva a essencia da decisao."
-            "</INSTRUCAO_DE_USO>"
-        )
+        parts.append(THESIS_BLOCK_FOOTER_TEXT)
         parts.append("</TESE>")
 
         return "\n".join(parts)

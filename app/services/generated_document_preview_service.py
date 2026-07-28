@@ -14,6 +14,9 @@ from app.agents.legal_drafting.impugnacao_process_context import (
     LAYER_ORDER,
     chunk_match_layer,
 )
+from app.agents.legal_drafting.impugnacao_thesis_coverage import (
+    search_thesis_references,
+)
 
 # Planos de busca do preview: mesmos kinds da geração, caps generosos para
 # enumerar candidatos (o preview define o conjunto permitido, não os trechos).
@@ -131,6 +134,7 @@ def build_documents_preview(
     # ── Peças-modelo candidatas (só impugnação) ──────────────────────
     referencias = None
     referencias_erro = False
+    cobertura_teses: list[dict] = []
     if is_impugnacao:
         try:
             from app.agents.legal_drafting.impugnacao_process_context import (
@@ -177,15 +181,20 @@ def build_documents_preview(
                     max_chars=_PREVIEW_MAX_CHARS,
                 ))
             for thesis in theses:
-                all_chunks.extend(retriever.fetch_style_references(
+                thesis_chunks, thesis_coverage = search_thesis_references(
+                    retriever,
                     law_firm_id=law_firm_id,
+                    thesis_label=thesis.name,
+                    thesis_key=(thesis.key or None),
                     query_text=f"Tese principal do caso: {thesis.name}",
                     context=context,
-                    thesis_catalog_id=(thesis.key or None),
                     kind_plan=_PREVIEW_THESIS_PLAN,
                     max_chunks=_PREVIEW_MAX_CHUNKS,
                     max_chars=_PREVIEW_MAX_CHARS,
-                ))
+                    min_distinct=2,
+                )
+                all_chunks.extend(thesis_chunks)
+                cobertura_teses.append(thesis_coverage)
 
             # Espelha a busca geral de jurisprudência do enriquecimento — sem
             # ela, peças ricas em jurisprudência ficavam com menos trechos no
@@ -244,10 +253,12 @@ def build_documents_preview(
             print(f"[generated_document_preview] referências indisponíveis: {error}")
             referencias = None
             referencias_erro = True
+            cobertura_teses = []
 
     return {
         "contestacao": contestacao,
         "beneficios": beneficios,
         "referencias": referencias,
         "referencias_erro": referencias_erro,
+        "cobertura_teses": cobertura_teses,
     }
