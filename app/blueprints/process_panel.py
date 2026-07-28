@@ -3638,11 +3638,43 @@ def generated_document_detail(process_id, doc_id):
     generated_doc = JudicialProcessGeneratedDocument.query.filter_by(
         id=doc_id, process_id=process.id, law_firm_id=law_firm_id
     ).first_or_404()
+
+    # Documentos confirmados no wizard e usados na geração (auditoria).
+    # None = versão legada/sem confirmação (seleção automática) — card oculto.
+    used_documents = None
+    version = (JudicialProcessGeneratedDocumentVersion.query.get(generated_doc.current_version_id)
+               if generated_doc.current_version_id else None)
+    confirmed = version.confirmed_documents_json if version else None
+    if isinstance(confirmed, dict):
+        from app.models import ImpugnacaoReferenceModel
+
+        ref_ids = [r for r in (confirmed.get('reference_ids') or []) if isinstance(r, int)]
+        att_ids = [a for a in (confirmed.get('attachment_ids') or []) if isinstance(a, int)]
+        refs_by_id = {
+            ref.id: ref
+            for ref in ImpugnacaoReferenceModel.query
+            .filter(ImpugnacaoReferenceModel.id.in_(ref_ids),
+                    ImpugnacaoReferenceModel.law_firm_id == law_firm_id)
+            .all()
+        } if ref_ids else {}
+        atts_by_id = {
+            att.id: att
+            for att in JudicialProcessAttachment.query
+            .filter(JudicialProcessAttachment.id.in_(att_ids),
+                    JudicialProcessAttachment.law_firm_id == law_firm_id)
+            .all()
+        } if att_ids else {}
+        used_documents = {
+            'references': [{'id': rid, 'ref': refs_by_id.get(rid)} for rid in ref_ids],
+            'attachments': [{'id': aid, 'att': atts_by_id.get(aid)} for aid in att_ids],
+        }
+
     return render_template(
         'process_panel/generated_document_detail.html',
         process=process,
         generated_doc=generated_doc,
         document_type_labels=DOCUMENT_TYPE_LABELS,
+        used_documents=used_documents,
     )
 
 

@@ -567,6 +567,72 @@ breadcrumbs=[
       </script>
       {% endif %}
 
+      {% if used_documents is not none %}
+      <!-- Documentos confirmados no wizard e usados na geração -->
+      <div class="card border-0 shadow-sm mb-3">
+        <div class="card-header bg-transparent border-0 pb-0 pt-3 px-3">
+          <div class="fw-semibold small">
+            <i class="bi bi-paperclip me-1 text-primary"></i> Documentos Utilizados
+          </div>
+        </div>
+        <div class="card-body p-3 pt-2">
+          <div class="text-muted mb-1"
+            style="font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em">
+            Peças-modelo de referência
+            <span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1"
+              style="font-size:.65rem">{{ used_documents.references | length }}</span>
+          </div>
+          {% if used_documents.references %}
+          <ul class="list-unstyled mb-3 d-flex flex-column gap-1">
+            {% for item in used_documents.references %}
+            <li class="d-flex align-items-center gap-2 small min-w-0">
+              <i class="bi bi-collection text-muted flex-shrink-0"></i>
+              {% if item.ref %}
+              <a href="{{ url_for('impugnacao_references.reference_detail', ref_id=item.ref.id) }}" target="_blank"
+                class="text-decoration-none text-truncate" title="{{ item.ref.title }}">{{ item.ref.title }}</a>
+              <a href="{{ url_for('impugnacao_references.view_reference_file', ref_id=item.ref.id) }}"
+                target="_blank" rel="noopener" class="ms-auto flex-shrink-0 text-secondary"
+                title="Visualizar arquivo original">
+                <i class="bi bi-file-earmark-text"></i>
+              </a>
+              {% else %}
+              <span class="text-muted fst-italic">Peça removida da base (#{{ item.id }})</span>
+              {% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <div class="small text-muted fst-italic mb-3">Nenhuma — gerado sem referências de estilo.</div>
+          {% endif %}
+
+          <div class="text-muted mb-1"
+            style="font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.04em">
+            Anexos dos benefícios
+            <span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1"
+              style="font-size:.65rem">{{ used_documents.attachments | length }}</span>
+          </div>
+          {% if used_documents.attachments %}
+          <ul class="list-unstyled mb-0 d-flex flex-column gap-1">
+            {% for item in used_documents.attachments %}
+            <li class="d-flex align-items-center gap-2 small min-w-0">
+              <i class="bi bi-paperclip text-muted flex-shrink-0"></i>
+              {% if item.att %}
+              <span class="text-truncate" title="{{ item.att.original_filename }}">
+                {{ item.att.description or item.att.original_filename }}
+              </span>
+              {% else %}
+              <span class="text-muted fst-italic">Anexo removido (#{{ item.id }})</span>
+              {% endif %}
+            </li>
+            {% endfor %}
+          </ul>
+          {% else %}
+          <div class="small text-muted fst-italic mb-0">Nenhum anexo confirmado.</div>
+          {% endif %}
+        </div>
+      </div>
+      {% endif %}
+
       <!-- Versions card -->
       <div class="card border-0 shadow-sm">
         <div class="card-header bg-transparent border-0 pb-0 pt-3 px-3">
