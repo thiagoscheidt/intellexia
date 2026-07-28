@@ -16,11 +16,21 @@ Rotas:
     POST /referencias-impugnacao/<id>/reativar
     POST /referencias-impugnacao/<id>/excluir
     POST /referencias-impugnacao/<id>/reindexar
+    GET  /referencias-impugnacao/importar
+    POST /referencias-impugnacao/importar
+    GET  /referencias-impugnacao/importar/<job_id>
+    POST /referencias-impugnacao/importar/<job_id>/iniciar
+    POST /referencias-impugnacao/importar/<job_id>/retomar
+    GET  /referencias-impugnacao/importar/<job_id>/status
 
 A ingestão (Docling + agentes + embeddings + Qdrant + Meilisearch) roda em
 thread de segundo plano — mesmo padrão do gerador de documentos do Painel de
 Processos — com status em ImpugnacaoReferenceModel.ingestion_status e polling
 pela rota /status.
+
+A importação em lote a partir de planilha (ImpugnacaoImportJob/Item) roda numa
+fila persistida no banco, também processada em thread de segundo plano
+(`_run_import_job`), reaproveitando `ingest_reference` para cada peça criada.
 """
 
 from __future__ import annotations
@@ -40,9 +50,18 @@ from app.models import (
     db,
     ImpugnacaoReferenceModel,
     ImpugnacaoReferenceChunk,
+    ImpugnacaoImportJob,
+    ImpugnacaoImportItem,
     JudicialLegalThesis,
 )
 from app.services import impugnacao_reference_search
+from app.services.impugnacao_reference_ingestion import ingest_reference
+from app.services.impugnacao_import_service import (
+    parse_spreadsheet,
+    download_drive_file,
+    SpreadsheetFormatError,
+    DriveAccessError,
+)
 
 
 impugnacao_references_bp = Blueprint(
@@ -96,117 +115,13 @@ def _load_thesis_catalog(law_firm_id: int) -> list[dict]:
 def _run_reference_ingestion(app_obj, law_firm_id, ref_id, is_new):
     """Worker de ingestão (thread): Docling → metadados IA → Qdrant → Meili.
 
-    No upload (is_new=True) os metadados são sempre extraídos; na reindexação
-    só há backfill quando os campos de contexto estão vazios.
+    Casca de thread — a lógica completa vive em
+    `app.services.impugnacao_reference_ingestion.ingest_reference`, reutilizada
+    também pelo worker da fila de importação em lote.
     """
     with app_obj.app_context():
-        reference = None
         try:
-            from app.agents.legal_drafting.impugnacao_reference_ingestor import (
-                ImpugnacaoReferenceIngestor,
-            )
-            from app.agents.legal_drafting.impugnacao_reference_metadata_agent import (
-                ImpugnacaoReferenceMetadataAgent,
-            )
-
-            reference = ImpugnacaoReferenceModel.query.filter_by(
-                id=ref_id, law_firm_id=law_firm_id
-            ).first()
-            if reference is None or not reference.file_path:
-                return
-
-            ingestor = ImpugnacaoReferenceIngestor()
-            processed_document = ingestor._process_document(reference.file_path)
-            extracted_text = str(getattr(processed_document, 'full_text', '') or '').strip()
-
-            needs_backfill = not any([
-                reference.process_number, reference.orgao_julgador, reference.judge_name,
-            ])
-            if extracted_text and (is_new or needs_backfill):
-                try:
-                    meta = ImpugnacaoReferenceMetadataAgent().extract(
-                        extracted_text, original_filename=reference.original_filename,
-                    )
-                    if is_new:
-                        reference.title = (meta.title or reference.title)[:250]
-                        reference.case_name = meta.case_name
-                        reference.trf_region = meta.trf_region
-                        reference.generation_mode = meta.generation_mode
-                        reference.quality_score = meta.quality_score
-                    reference.process_number = meta.process_number
-                    reference.orgao_julgador = meta.orgao_julgador
-                    reference.judge_name = meta.judge_name
-                    if not is_new and not reference.trf_region and meta.trf_region:
-                        reference.trf_region = meta.trf_region
-                    db.session.commit()
-                except Exception as error:
-                    db.session.rollback()
-                    print(f'[impugnacao_references.worker] metadados falharam: {error}')
-
-            thesis_catalog = _load_thesis_catalog(law_firm_id)
-
-            # Limpa índice antigo antes de reingerir.
-            ingestor.delete_by_reference_id(ref_id)
-            ImpugnacaoReferenceChunk.query.filter_by(reference_id=ref_id).delete()
-            db.session.commit()
-
-            chunks_meta = ingestor.ingest_file(
-                file_path=reference.file_path,
-                reference_id=reference.id,
-                law_firm_id=law_firm_id,
-                title=reference.title,
-                trf_region=reference.trf_region,
-                generation_mode=reference.generation_mode,
-                quality_score=float(reference.quality_score) if reference.quality_score is not None else None,
-                process_number=reference.process_number,
-                orgao_julgador=reference.orgao_julgador,
-                judge_name=reference.judge_name,
-                thesis_catalog=thesis_catalog,
-                text=extracted_text or None,
-                processed_document=processed_document,
-            )
-
-            reference.qdrant_collection = ingestor.collection
-            reference.chunks_count = len(chunks_meta)
-            reference.thesis_catalog_ids = ingestor.last_document_thesis_catalog_ids or []
-            reference.sections_json = ingestor.last_sections_summary or []
-            for chunk in chunks_meta:
-                db.session.add(ImpugnacaoReferenceChunk(
-                    reference_id=reference.id,
-                    law_firm_id=law_firm_id,
-                    section_kind=chunk.get('section_kind'),
-                    thesis_catalog_id=chunk.get('thesis_catalog_id'),
-                    benefit_type=chunk.get('benefit_type'),
-                    qdrant_point_id=chunk.get('qdrant_point_id'),
-                    chunk_chars=chunk.get('chunk_chars', 0),
-                    order_in_doc=chunk.get('order_in_doc', 0),
-                    preview_text=chunk.get('preview_text'),
-                    full_text=chunk.get('full_text'),
-                    secao_origem=chunk.get('secao_origem'),
-                    tribunal=chunk.get('tribunal'),
-                    processo=chunk.get('processo'),
-                    relator=chunk.get('relator'),
-                    tipo_juris=chunk.get('tipo_juris'),
-                    fundamento_principal=chunk.get('fundamento_principal'),
-                ))
-            reference.ingestion_status = 'completed'
-            reference.ingestion_error = None
-            db.session.commit()
-
-            impugnacao_reference_search.index_reference_chunks(reference, chunks_meta)
-        except Exception as error:
-            app_obj.logger.error(f'[impugnacao_references.worker] falha na ingestão de {ref_id}: {error}')
-            try:
-                db.session.rollback()
-                reference = ImpugnacaoReferenceModel.query.filter_by(
-                    id=ref_id, law_firm_id=law_firm_id
-                ).first()
-                if reference is not None:
-                    reference.ingestion_status = 'failed'
-                    reference.ingestion_error = str(error)[:2000]
-                    db.session.commit()
-            except Exception:
-                db.session.rollback()
+            ingest_reference(law_firm_id, ref_id, is_new=is_new)
         finally:
             db.session.remove()
 
@@ -217,6 +132,171 @@ def _spawn_reference_ingestion(law_firm_id, ref_id, is_new):
         args=(current_app._get_current_object(), law_firm_id, ref_id, is_new),
         daemon=True,
         name=f'impugnacao-ref-ingest-{ref_id}',
+    ).start()
+
+
+# ── Importação em lote a partir de planilha ────────────────────────────
+
+IMPORT_UPLOAD_BASE_DIR = os.path.join('uploads', 'impugnacao_imports')
+
+_IMPORT_ITEM_RESUMABLE_STATUSES = ('pending', 'downloading', 'indexing', 'failed')
+
+
+def _run_import_job(app_obj, law_firm_id, job_id):
+    """Worker da fila de importação (thread): processa os itens selecionados
+    de um `ImpugnacaoImportJob`, um a um, criando/indexando as peças-modelo.
+
+    Uma exceção num item nunca aborta o laço — o item fica `failed` e o
+    worker segue para o próximo. `db.session.remove()` só roda no `finally`
+    do job inteiro (nunca por item), porque `ingest_reference` não gerencia a
+    sessão.
+    """
+    with app_obj.app_context():
+        try:
+            job = ImpugnacaoImportJob.query.filter_by(
+                id=job_id, law_firm_id=law_firm_id
+            ).first()
+            if job is None:
+                return
+
+            job.status = 'running'
+            job.started_at = datetime.now()
+            db.session.commit()
+
+            items = (
+                ImpugnacaoImportItem.query
+                .filter_by(job_id=job.id, law_firm_id=law_firm_id, selected=True)
+                .filter(ImpugnacaoImportItem.status.in_(_IMPORT_ITEM_RESUMABLE_STATUSES))
+                .order_by(ImpugnacaoImportItem.id.asc())
+                .all()
+            )
+
+            dest_dir = os.path.join(UPLOAD_BASE_DIR, str(law_firm_id))
+
+            for item in items:
+                try:
+                    if not item.drive_file_id:
+                        item.status = 'failed'
+                        item.error_message = 'Peça sem link de arquivo na planilha.'
+                        db.session.commit()
+                        continue
+
+                    existing = ImpugnacaoReferenceModel.query.filter_by(
+                        law_firm_id=law_firm_id, source_drive_file_id=item.drive_file_id
+                    ).first()
+                    if existing is not None:
+                        item.status = 'skipped_duplicate'
+                        item.reference_id = existing.id
+                        db.session.commit()
+                        continue
+
+                    item.status = 'downloading'
+                    db.session.commit()
+
+                    try:
+                        file_path, original_filename, sha256 = download_drive_file(
+                            item.drive_file_id, dest_dir
+                        )
+                    except DriveAccessError as error:
+                        item.status = 'failed'
+                        item.error_message = str(error)[:2000]
+                        db.session.commit()
+                        continue
+
+                    existing_by_hash = ImpugnacaoReferenceModel.query.filter_by(
+                        law_firm_id=law_firm_id, file_hash=sha256
+                    ).first()
+                    if existing_by_hash is not None:
+                        try:
+                            os.remove(file_path)
+                        except Exception:
+                            pass
+                        item.status = 'skipped_duplicate'
+                        item.reference_id = existing_by_hash.id
+                        item.file_hash = sha256
+                        db.session.commit()
+                        continue
+
+                    autora = (item.autora or '').strip()
+                    doc_type_label = (item.document_type_label or '').strip()
+                    if autora:
+                        title = f'{autora} — {doc_type_label}' if doc_type_label else autora
+                    else:
+                        title = original_filename
+                    title = title[:250]
+
+                    file_size = os.path.getsize(file_path)
+                    file_ext = original_filename.rsplit('.', 1)[-1].lower() if '.' in original_filename else ''
+
+                    reference = ImpugnacaoReferenceModel(
+                        law_firm_id=law_firm_id,
+                        user_id=job.user_id,
+                        title=title,
+                        case_name=item.autora,
+                        trf_region=item.trf_region,
+                        orgao_julgador=item.orgao_julgador,
+                        original_filename=original_filename,
+                        file_path=file_path,
+                        file_size=file_size,
+                        file_type=file_ext,
+                        status='active',
+                        ingestion_status='processing',
+                        file_hash=sha256,
+                        source_drive_file_id=item.drive_file_id,
+                        source_theses_json=item.theses_json,
+                    )
+                    db.session.add(reference)
+                    db.session.commit()
+                    item.reference_id = reference.id
+
+                    item.status = 'indexing'
+                    db.session.commit()
+
+                    ingest_reference(
+                        law_firm_id, reference.id,
+                        is_new=True, preserve_curated_fields=True,
+                    )
+
+                    db.session.refresh(reference)
+                    if reference.ingestion_status == 'completed':
+                        item.status = 'completed'
+                        item.error_message = None
+                    else:
+                        item.status = 'failed'
+                        item.error_message = reference.ingestion_error
+                    db.session.commit()
+                except Exception as error:
+                    db.session.rollback()
+                    item.status = 'failed'
+                    item.error_message = str(error)[:2000]
+                    db.session.commit()
+
+            job.status = 'completed'
+            job.finished_at = datetime.now()
+            db.session.commit()
+        except Exception as error:
+            db.session.rollback()
+            try:
+                job = ImpugnacaoImportJob.query.filter_by(
+                    id=job_id, law_firm_id=law_firm_id
+                ).first()
+                if job is not None:
+                    job.status = 'failed'
+                    job.error_message = str(error)[:2000]
+                    job.finished_at = datetime.now()
+                    db.session.commit()
+            except Exception:
+                db.session.rollback()
+        finally:
+            db.session.remove()
+
+
+def _spawn_import_job(law_firm_id, job_id):
+    threading.Thread(
+        target=_run_import_job,
+        args=(current_app._get_current_object(), law_firm_id, job_id),
+        daemon=True,
+        name=f'impugnacao-import-job-{job_id}',
     ).start()
 
 
@@ -599,3 +679,204 @@ def reindex_reference(ref_id):
         'info',
     )
     return redirect(url_for('impugnacao_references.reference_detail', ref_id=ref_id))
+
+
+# ── Importação em lote a partir de planilha ────────────────────────────
+
+@impugnacao_references_bp.route('/importar', methods=['GET'])
+@require_law_firm
+def import_new():
+    return render_template('impugnacao_references/import_new.html')
+
+
+@impugnacao_references_bp.route('/importar', methods=['POST'])
+@require_law_firm
+def import_upload():
+    law_firm_id = get_current_law_firm_id()
+    user_id = session.get('user_id')
+
+    upload = request.files.get('file')
+    if not upload or not upload.filename:
+        flash('Envie a planilha de controle (.xlsx).', 'warning')
+        return redirect(url_for('impugnacao_references.import_new'))
+    if not upload.filename.lower().endswith('.xlsx'):
+        flash('Formato não suportado — envie um arquivo .xlsx.', 'warning')
+        return redirect(url_for('impugnacao_references.import_new'))
+
+    upload_dir = os.path.join(IMPORT_UPLOAD_BASE_DIR, str(law_firm_id))
+    os.makedirs(upload_dir, exist_ok=True)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+    safe_name = secure_filename(upload.filename)
+    saved_filename = f'{timestamp}_{safe_name}'
+    file_path = os.path.join(upload_dir, saved_filename)
+    upload.save(file_path)
+
+    try:
+        candidates = parse_spreadsheet(file_path)
+    except SpreadsheetFormatError as error:
+        flash(str(error), 'warning')
+        return redirect(url_for('impugnacao_references.import_new'))
+
+    if not candidates:
+        flash(
+            'Nenhuma peça candidata foi encontrada nessa planilha.',
+            'warning',
+        )
+        return redirect(url_for('impugnacao_references.import_new'))
+
+    job = ImpugnacaoImportJob(
+        law_firm_id=law_firm_id,
+        user_id=user_id,
+        original_filename=upload.filename,
+        file_path=file_path,
+        status='draft',
+        total_items=len(candidates),
+    )
+    db.session.add(job)
+    db.session.flush()
+
+    for candidate in candidates:
+        db.session.add(ImpugnacaoImportItem(
+            job_id=job.id,
+            law_firm_id=law_firm_id,
+            row_number=candidate.get('row_number'),
+            numero=candidate.get('numero'),
+            autora=candidate.get('autora'),
+            tribunal_raw=candidate.get('tribunal_raw'),
+            trf_region=candidate.get('trf_region'),
+            orgao_julgador=candidate.get('orgao_julgador'),
+            document_type_label=candidate.get('document_type_label'),
+            drive_file_id=candidate.get('drive_file_id'),
+            drive_url=candidate.get('drive_url'),
+            theses_json=candidate.get('teses'),
+            protocolado_at=candidate.get('protocolado_at'),
+            selected=bool(candidate.get('drive_file_id')),
+            status='pending',
+        ))
+    db.session.commit()
+
+    flash(
+        f'Planilha lida: {len(candidates)} peça(s) candidata(s). Revise a '
+        'seleção antes de importar.',
+        'success',
+    )
+    return redirect(url_for('impugnacao_references.import_job_detail', job_id=job.id))
+
+
+@impugnacao_references_bp.route('/importar/<int:job_id>')
+@require_law_firm
+def import_job_detail(job_id):
+    law_firm_id = get_current_law_firm_id()
+    job = ImpugnacaoImportJob.query.filter_by(
+        id=job_id, law_firm_id=law_firm_id
+    ).first_or_404()
+    items = (
+        ImpugnacaoImportItem.query
+        .filter_by(job_id=job.id, law_firm_id=law_firm_id)
+        .order_by(ImpugnacaoImportItem.id.asc())
+        .all()
+    )
+    return render_template(
+        'impugnacao_references/import_job.html',
+        job=job,
+        items=items,
+    )
+
+
+@impugnacao_references_bp.route('/importar/<int:job_id>/iniciar', methods=['POST'])
+@require_law_firm
+def import_job_start(job_id):
+    law_firm_id = get_current_law_firm_id()
+    job = ImpugnacaoImportJob.query.filter_by(
+        id=job_id, law_firm_id=law_firm_id
+    ).first_or_404()
+
+    if job.status == 'running':
+        flash('Esta importação já está em andamento.', 'warning')
+        return redirect(url_for('impugnacao_references.import_job_detail', job_id=job.id))
+
+    selected_ids = {int(v) for v in request.form.getlist('selected_items[]') if v.isdigit()}
+
+    items = ImpugnacaoImportItem.query.filter_by(job_id=job.id, law_firm_id=law_firm_id).all()
+    for item in items:
+        if item.id in selected_ids:
+            item.selected = True
+            item.status = 'pending'
+        else:
+            item.selected = False
+            if item.status == 'pending':
+                item.status = 'skipped_by_user'
+    db.session.commit()
+
+    _spawn_import_job(law_firm_id, job.id)
+    flash(
+        'Importação iniciada em segundo plano — a página atualiza sozinha '
+        'com o progresso.',
+        'info',
+    )
+    return redirect(url_for('impugnacao_references.import_job_detail', job_id=job.id))
+
+
+@impugnacao_references_bp.route('/importar/<int:job_id>/retomar', methods=['POST'])
+@require_law_firm
+def import_job_resume(job_id):
+    law_firm_id = get_current_law_firm_id()
+    job = ImpugnacaoImportJob.query.filter_by(
+        id=job_id, law_firm_id=law_firm_id
+    ).first_or_404()
+
+    if job.status == 'running':
+        flash('Esta importação já está em andamento.', 'warning')
+        return redirect(url_for('impugnacao_references.import_job_detail', job_id=job.id))
+
+    _spawn_import_job(law_firm_id, job.id)
+    flash(
+        'Importação retomada em segundo plano — itens pendentes e com falha '
+        'serão reprocessados.',
+        'info',
+    )
+    return redirect(url_for('impugnacao_references.import_job_detail', job_id=job.id))
+
+
+@impugnacao_references_bp.route('/importar/<int:job_id>/status')
+@require_law_firm
+def import_job_status(job_id):
+    law_firm_id = get_current_law_firm_id()
+    job = ImpugnacaoImportJob.query.filter_by(
+        id=job_id, law_firm_id=law_firm_id
+    ).first_or_404()
+    items = (
+        ImpugnacaoImportItem.query
+        .filter_by(job_id=job.id, law_firm_id=law_firm_id)
+        .order_by(ImpugnacaoImportItem.id.asc())
+        .all()
+    )
+
+    counters = {'concluidos': 0, 'duplicados': 0, 'falhas': 0, 'pendentes': 0}
+    for item in items:
+        if item.status == 'completed':
+            counters['concluidos'] += 1
+        elif item.status == 'skipped_duplicate':
+            counters['duplicados'] += 1
+        elif item.status == 'failed':
+            counters['falhas'] += 1
+        elif item.status in ('pending', 'downloading', 'indexing'):
+            counters['pendentes'] += 1
+
+    return jsonify({
+        'status': job.status,
+        'total': len(items),
+        'concluidos': counters['concluidos'],
+        'duplicados': counters['duplicados'],
+        'falhas': counters['falhas'],
+        'pendentes': counters['pendentes'],
+        'itens': [
+            {
+                'id': item.id,
+                'status': item.status,
+                'error_message': item.error_message,
+                'reference_id': item.reference_id,
+            }
+            for item in items
+        ],
+    })

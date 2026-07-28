@@ -1,0 +1,383 @@
+{% extends "layout/base.html" %}
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}{{ job.original_filename or 'Importação' }} - Peças-Modelo{% endblock %}
+
+{% block content %}
+{% set total = items|length %}
+{% set selecionados = items|selectattr('selected')|list|length %}
+{% set concluidos = items|selectattr('status', 'equalto', 'completed')|list|length %}
+{% set duplicados = items|selectattr('status', 'equalto', 'skipped_duplicate')|list|length %}
+{% set falhas = items|selectattr('status', 'equalto', 'failed')|list|length %}
+{% set sem_arquivo = items|rejectattr('drive_file_id')|list|length %}
+{% set has_failed = falhas > 0 %}
+
+{% call page_hero(title='Importação de Planilha', subtitle=job.original_filename or '', icon='bi bi-file-earmark-spreadsheet') %}
+<nav aria-label="breadcrumb">
+    <ol class="breadcrumb mb-0 bg-transparent small">
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.dashboard') }}"><i class="bi bi-house"></i> Home</a>
+        </li>
+        <li class="breadcrumb-item"><a href="{{ url_for('impugnacao_references.list_references') }}">Peças-Modelo</a>
+        </li>
+        <li class="breadcrumb-item"><a href="{{ url_for('impugnacao_references.import_new') }}">Importar de planilha</a>
+        </li>
+        <li class="breadcrumb-item active" aria-current="page">Job #{{ job.id }}</li>
+    </ol>
+</nav>
+{% endcall %}
+
+<div class="app-content">
+    <div class="container-fluid">
+        {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}{% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show">
+            {{ message }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+        {% endfor %}{% endif %}
+        {% endwith %}
+
+        {% if job.status == 'failed' and job.error_message %}
+        <div class="alert alert-danger d-flex align-items-start gap-3 mb-4">
+            <i class="bi bi-exclamation-triangle-fill fs-4"></i>
+            <div>
+                <div class="fw-semibold">A importação foi interrompida</div>
+                <div class="small font-monospace mt-1">{{ job.error_message }}</div>
+            </div>
+        </div>
+        {% endif %}
+
+        <!-- Contadores -->
+        <div class="d-flex flex-wrap gap-3 mb-4" id="countersRow">
+            <div class="d-flex align-items-center gap-2 px-3 py-2 rounded-3 border bg-white shadow-sm">
+                <i class="bi bi-collection text-primary"></i>
+                <div>
+                    <div class="fw-bold lh-1 text-primary">{{ total }}</div>
+                    <div class="small text-muted" style="font-size:.72rem">Candidatos</div>
+                </div>
+            </div>
+            {% if job.status == 'draft' %}
+            <div class="d-flex align-items-center gap-2 px-3 py-2 rounded-3 border bg-white shadow-sm">
+                <i class="bi bi-check2-square text-info"></i>
+                <div>
+                    <div class="fw-bold lh-1 text-info">{{ selecionados }}</div>
+                    <div class="small text-muted" style="font-size:.72rem">Selecionados</div>
+                </div>
+            </div>
+            {% else %}
+            <div class="d-flex align-items-center gap-2 px-3 py-2 rounded-3 border bg-white shadow-sm" id="counterConcluidos">
+                <i class="bi bi-check-circle text-success"></i>
+                <div>
+                    <div class="fw-bold lh-1 text-success" data-counter="concluidos">{{ concluidos }}</div>
+                    <div class="small text-muted" style="font-size:.72rem">Concluídos</div>
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-2 px-3 py-2 rounded-3 border bg-white shadow-sm" id="counterDuplicados">
+                <i class="bi bi-files text-secondary"></i>
+                <div>
+                    <div class="fw-bold lh-1 text-secondary" data-counter="duplicados">{{ duplicados }}</div>
+                    <div class="small text-muted" style="font-size:.72rem">Duplicados</div>
+                </div>
+            </div>
+            <div class="d-flex align-items-center gap-2 px-3 py-2 rounded-3 border bg-white shadow-sm" id="counterFalhas">
+                <i class="bi bi-exclamation-triangle text-danger"></i>
+                <div>
+                    <div class="fw-bold lh-1 text-danger" data-counter="falhas">{{ falhas }}</div>
+                    <div class="small text-muted" style="font-size:.72rem">Falhas</div>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+
+        <div class="card border-0 shadow-sm rounded-3">
+            <div class="card-header border-0 bg-light px-4 py-3 rounded-top-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+                <span class="fw-medium">
+                    {% if job.status == 'draft' %}
+                    <i class="bi bi-list-check me-2"></i>Candidatos encontrados
+                    {% elif job.status == 'running' %}
+                    <span class="spinner-border spinner-border-sm text-primary me-2"></span>Importação em andamento…
+                    {% elif job.status == 'completed' %}
+                    <i class="bi bi-check-circle text-success me-2"></i>Importação concluída
+                    {% else %}
+                    <i class="bi bi-exclamation-triangle text-danger me-2"></i>Importação com falhas
+                    {% endif %}
+                </span>
+                {% if job.status in ('completed', 'failed') and has_failed %}
+                <form method="POST" action="{{ url_for('impugnacao_references.import_job_resume', job_id=job.id) }}">
+                    <button type="submit" class="btn btn-sm btn-outline-primary">
+                        <i class="bi bi-arrow-repeat me-1"></i>Retomar (reprocessar falhas)
+                    </button>
+                </form>
+                {% endif %}
+            </div>
+
+            {% if job.status == 'draft' %}
+            <!-- ── Seleção de candidatos ─────────────────────────────── -->
+            <form method="POST" action="{{ url_for('impugnacao_references.import_job_start', job_id=job.id) }}">
+                <div class="card-body p-0">
+                    {% if sem_arquivo %}
+                    <div class="alert alert-warning border-0 rounded-0 mb-0 small">
+                        <i class="bi bi-exclamation-triangle me-1"></i>
+                        {{ sem_arquivo }} peça(s) sem link de arquivo no Drive — ficam de fora automaticamente.
+                    </div>
+                    {% endif %}
+                    <div class="px-4 py-2 border-bottom bg-light d-flex gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="selectAllBtn">
+                            <i class="bi bi-check2-all me-1"></i>Marcar todos
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="deselectAllBtn">
+                            <i class="bi bi-x-square me-1"></i>Desmarcar todos
+                        </button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th class="ps-4" style="width:40px"></th>
+                                    <th>Nº</th>
+                                    <th>Autora</th>
+                                    <th>Tribunal</th>
+                                    <th>Órgão julgador</th>
+                                    <th class="text-center">Teses</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in items %}
+                                <tr>
+                                    <td class="ps-4">
+                                        {% if item.drive_file_id %}
+                                        <input type="checkbox" class="form-check-input candidate-checkbox"
+                                            name="selected_items[]" value="{{ item.id }}"
+                                            {% if item.selected %}checked{% endif %}>
+                                        {% else %}
+                                        <input type="checkbox" class="form-check-input" disabled>
+                                        {% endif %}
+                                    </td>
+                                    <td class="small">{{ item.numero or '—' }}</td>
+                                    <td class="small">
+                                        {{ item.autora or '—' }}
+                                        {% if not item.drive_file_id %}
+                                        <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle ms-1">sem arquivo no Drive</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if item.trf_region %}
+                                        <span class="badge bg-info text-dark">{{ item.trf_region }}</span>
+                                        {% else %}<span class="text-muted small">{{ item.tribunal_raw or '—' }}</span>{% endif %}
+                                    </td>
+                                    <td class="small">{{ item.orgao_julgador or '—' }}</td>
+                                    <td class="text-center small">{{ (item.theses_json or [])|length }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="card-footer border-0 bg-light px-4 py-3 rounded-bottom-3 d-flex justify-content-end gap-2">
+                    <a href="{{ url_for('impugnacao_references.list_references') }}" class="btn btn-light">
+                        <i class="bi bi-x me-1"></i>Cancelar
+                    </a>
+                    <button type="submit" class="btn btn-primary">
+                        <i class="bi bi-cloud-arrow-down me-2"></i>Importar selecionados
+                    </button>
+                </div>
+            </form>
+
+            {% else %}
+            <!-- ── Progresso / resultado ─────────────────────────────── -->
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-hover align-middle mb-0" id="itemsTable">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-4">Nº</th>
+                                <th>Autora</th>
+                                <th>Tribunal</th>
+                                <th>Órgão julgador</th>
+                                <th class="pe-4">Situação</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in items %}
+                            <tr data-item-id="{{ item.id }}" data-drive-url="{{ item.drive_url or '' }}">
+                                <td class="ps-4 small">{{ item.numero or '—' }}</td>
+                                <td class="small">{{ item.autora or '—' }}</td>
+                                <td>
+                                    {% if item.trf_region %}
+                                    <span class="badge bg-info text-dark">{{ item.trf_region }}</span>
+                                    {% else %}<span class="text-muted small">{{ item.tribunal_raw or '—' }}</span>{% endif %}
+                                </td>
+                                <td class="small">{{ item.orgao_julgador or '—' }}</td>
+                                <td class="pe-4 item-status-cell">
+                                    {% if item.status == 'pending' %}
+                                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">
+                                        <i class="bi bi-clock me-1"></i>Pendente
+                                    </span>
+                                    {% elif item.status == 'downloading' %}
+                                    <span class="badge bg-info-subtle text-info border border-info-subtle">
+                                        <span class="spinner-border spinner-border-sm me-1" style="width:.65rem;height:.65rem;border-width:.12em"></span>Baixando
+                                    </span>
+                                    {% elif item.status == 'indexing' %}
+                                    <span class="badge bg-info-subtle text-info border border-info-subtle">
+                                        <span class="spinner-border spinner-border-sm me-1" style="width:.65rem;height:.65rem;border-width:.12em"></span>Indexando
+                                    </span>
+                                    {% elif item.status == 'completed' %}
+                                    <span class="badge bg-success-subtle text-success border border-success-subtle">
+                                        <i class="bi bi-check-circle me-1"></i>Concluído
+                                    </span>
+                                    {% if item.reference_id %}
+                                    <a href="{{ url_for('impugnacao_references.reference_detail', ref_id=item.reference_id) }}"
+                                        class="small d-block mt-1" target="_blank" rel="noopener">Ver peça criada</a>
+                                    {% endif %}
+                                    {% elif item.status == 'skipped_duplicate' %}
+                                    <span class="badge bg-secondary-subtle text-secondary border border-secondary-subtle">
+                                        <i class="bi bi-files me-1"></i>Duplicado
+                                    </span>
+                                    {% if item.reference_id %}
+                                    <a href="{{ url_for('impugnacao_references.reference_detail', ref_id=item.reference_id) }}"
+                                        class="small d-block mt-1" target="_blank" rel="noopener">Ver peça existente</a>
+                                    {% endif %}
+                                    {% elif item.status == 'skipped_by_user' %}
+                                    <span class="badge bg-light text-muted border">
+                                        <i class="bi bi-dash-circle me-1"></i>Não selecionado
+                                    </span>
+                                    {% elif item.status == 'failed' %}
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle">
+                                        <i class="bi bi-exclamation-triangle me-1"></i>Falha
+                                    </span>
+                                    {% if item.error_message %}
+                                    <div class="small text-danger mt-1">{{ item.error_message }}</div>
+                                    {% endif %}
+                                    {% if item.drive_url %}
+                                    <a href="{{ item.drive_url }}" class="small d-block" target="_blank" rel="noopener">Abrir no Drive</a>
+                                    {% endif %}
+                                    {% else %}
+                                    <span class="text-muted small">—</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% if job.status == 'draft' %}
+<script>
+    (function () {
+        document.getElementById('selectAllBtn').addEventListener('click', function () {
+            document.querySelectorAll('.candidate-checkbox').forEach(function (cb) { cb.checked = true; });
+        });
+        document.getElementById('deselectAllBtn').addEventListener('click', function () {
+            document.querySelectorAll('.candidate-checkbox').forEach(function (cb) { cb.checked = false; });
+        });
+    })();
+</script>
+{% endif %}
+
+{% if job.status == 'running' %}
+<script>
+    (function () {
+        var STATUS_INFO = {
+            pending: { cls: 'bg-secondary-subtle text-secondary border border-secondary-subtle', icon: 'bi-clock', label: 'Pendente' },
+            downloading: { cls: 'bg-info-subtle text-info border border-info-subtle', spinner: true, label: 'Baixando' },
+            indexing: { cls: 'bg-info-subtle text-info border border-info-subtle', spinner: true, label: 'Indexando' },
+            completed: { cls: 'bg-success-subtle text-success border border-success-subtle', icon: 'bi-check-circle', label: 'Concluído' },
+            skipped_duplicate: { cls: 'bg-secondary-subtle text-secondary border border-secondary-subtle', icon: 'bi-files', label: 'Duplicado' },
+            skipped_by_user: { cls: 'bg-light text-muted border', icon: 'bi-dash-circle', label: 'Não selecionado' },
+            failed: { cls: 'bg-danger-subtle text-danger border border-danger-subtle', icon: 'bi-exclamation-triangle', label: 'Falha' }
+        };
+        var referenceUrlTemplate = {{ (url_for('impugnacao_references.reference_detail', ref_id=0))|tojson }};
+
+        function buildBadge(status) {
+            var info = STATUS_INFO[status] || STATUS_INFO.pending;
+            var badge = document.createElement('span');
+            badge.className = 'badge ' + info.cls;
+            if (info.spinner) {
+                var sp = document.createElement('span');
+                sp.className = 'spinner-border spinner-border-sm me-1';
+                sp.style.width = '.65rem';
+                sp.style.height = '.65rem';
+                sp.style.borderWidth = '.12em';
+                badge.appendChild(sp);
+            } else if (info.icon) {
+                var ic = document.createElement('i');
+                ic.className = 'bi ' + info.icon + ' me-1';
+                badge.appendChild(ic);
+            }
+            badge.appendChild(document.createTextNode(info.label));
+            return badge;
+        }
+
+        function updateRow(tr, item) {
+            var cell = tr.querySelector('.item-status-cell');
+            if (!cell) return;
+            while (cell.firstChild) cell.removeChild(cell.firstChild);
+            cell.appendChild(buildBadge(item.status));
+
+            if (item.status === 'completed' && item.reference_id) {
+                var link = document.createElement('a');
+                link.href = referenceUrlTemplate.replace(/\/0$/, '/' + item.reference_id);
+                link.className = 'small d-block mt-1';
+                link.target = '_blank';
+                link.rel = 'noopener';
+                link.textContent = 'Ver peça criada';
+                cell.appendChild(link);
+            } else if (item.status === 'skipped_duplicate' && item.reference_id) {
+                var link2 = document.createElement('a');
+                link2.href = referenceUrlTemplate.replace(/\/0$/, '/' + item.reference_id);
+                link2.className = 'small d-block mt-1';
+                link2.target = '_blank';
+                link2.rel = 'noopener';
+                link2.textContent = 'Ver peça existente';
+                cell.appendChild(link2);
+            } else if (item.status === 'failed') {
+                if (item.error_message) {
+                    var errDiv = document.createElement('div');
+                    errDiv.className = 'small text-danger mt-1';
+                    errDiv.textContent = item.error_message;
+                    cell.appendChild(errDiv);
+                }
+                var driveUrl = tr.getAttribute('data-drive-url');
+                if (driveUrl) {
+                    var a = document.createElement('a');
+                    a.href = driveUrl;
+                    a.className = 'small d-block';
+                    a.target = '_blank';
+                    a.rel = 'noopener';
+                    a.textContent = 'Abrir no Drive';
+                    cell.appendChild(a);
+                }
+            }
+        }
+
+        var statusUrl = {{ url_for('impugnacao_references.import_job_status', job_id=job.id)|tojson }};
+        var poll = setInterval(function () {
+            fetch(statusUrl, { headers: { 'Accept': 'application/json' } })
+                .then(function (resp) { return resp.ok ? resp.json() : null; })
+                .then(function (data) {
+                    if (!data) return;
+                    if (data.status !== 'running') {
+                        clearInterval(poll);
+                        window.location.reload();
+                        return;
+                    }
+                    ['concluidos', 'duplicados', 'falhas'].forEach(function (key) {
+                        var el = document.querySelector('[data-counter="' + key + '"]');
+                        if (el) el.textContent = data[key];
+                    });
+                    (data.itens || []).forEach(function (item) {
+                        var tr = document.querySelector('tr[data-item-id="' + item.id + '"]');
+                        if (tr) updateRow(tr, item);
+                    });
+                })
+                .catch(function () { /* transitório — tenta de novo no próximo ciclo */ });
+        }, 4000);
+    })();
+</script>
+{% endif %}
+{% endblock %}
