@@ -26,6 +26,27 @@ from app.agents.legal_drafting.impugnacao_process_context import (
     chunk_match_layer,
 )
 
+# Rodapé fixo de todo bloco <TESE>...</TESE> (ver
+# agent_generated_document._build_budgeted_thesis_reference_block): o texto
+# de <INSTRUCAO_DE_USO> + a tag de fechamento </TESE> são anexados DEPOIS de
+# preencher as categorias, fora do orçamento por categoria. Fonte única do
+# tamanho desse rodapé, usada tanto para reservar espaço antes de preencher
+# categorias quanto para compute_reference_budgets devolver um per_thesis
+# que já reflete o que sobra para conteúdo de fato (não o rodapé fixo).
+THESIS_BLOCK_FOOTER_TEXT = (
+    "<INSTRUCAO_DE_USO>"
+    "Priorize EXEMPLO_ESTRUTURA_TESE para estrutura argumentativa. "
+    "Para JURISPRUDENCIA_REGIONAL e JURISPRUDENCIA_COMPLEMENTAR: "
+    "incorpore cada decisao como citacao inline real na tese — "
+    "mencione o tribunal, o numero do processo e o relator exatamente como estao no bloco. "
+    "Formato sugerido: 'Conforme [Tribunal], [tipo] n. [numero], Rel. [Relator]: [trecho da ementa]'. "
+    "Nao apenas mencione que existe jurisprudencia — transcreva a essencia da decisao."
+    "</INSTRUCAO_DE_USO>"
+)
+# +2 pelas quebras de linha que "\n".join(parts) insere antes deste bloco e
+# antes do "</TESE>" final.
+THESIS_BLOCK_FOOTER_RESERVE_CHARS = len(THESIS_BLOCK_FOOTER_TEXT) + len("</TESE>") + 2
+
 
 def compute_reference_budgets(
     n_theses: int,
@@ -35,17 +56,29 @@ def compute_reference_budgets(
     max_thesis_chars: int,
     n_sections: int = 4,
     min_thesis_chars: int = 1200,
+    footer_reserve_chars: int = THESIS_BLOCK_FOOTER_RESERVE_CHARS,
 ) -> dict:
     """Cota por tese ANTES de qualquer extra — nenhuma tese fica sem bloco.
 
-    Retorna {'per_thesis': int, 'per_section': int}.
+    Retorna {'per_thesis': int, 'per_section': int}. `per_thesis` já desconta
+    `footer_reserve_chars` (o rodapé fixo de cada bloco de tese, ver
+    THESIS_BLOCK_FOOTER_RESERVE_CHARS) para refletir o que sobra para
+    conteúdo de fato.
     """
     n = max(1, n_theses)
-    sections_reserve = min(n_sections * max_section_chars, int(max_total_chars * 0.4))
-    thesis_pool = max_total_chars - sections_reserve
-    per_thesis = max(min_thesis_chars, min(max_thesis_chars, thesis_pool // n))
-    sections_pool = max(0, max_total_chars - per_thesis * n)
-    per_section = min(max_section_chars, sections_pool // max(1, n_sections))
+    if n * min_thesis_chars > max_total_chars:
+        # O piso multiplicado por n não cabe no orçamento total: cede o piso
+        # (em vez de estourar max_total_chars) e nada sobra para seções.
+        per_thesis = max(0, max_total_chars // n)
+        per_section = 0
+    else:
+        sections_reserve = min(n_sections * max_section_chars, int(max_total_chars * 0.4))
+        thesis_pool = max_total_chars - sections_reserve
+        per_thesis = max(min_thesis_chars, min(max_thesis_chars, thesis_pool // n))
+        sections_pool = max(0, max_total_chars - per_thesis * n)
+        per_section = min(max_section_chars, sections_pool // max(1, n_sections))
+
+    per_thesis = max(0, per_thesis - footer_reserve_chars)
     return {"per_thesis": int(per_thesis), "per_section": int(per_section)}
 
 

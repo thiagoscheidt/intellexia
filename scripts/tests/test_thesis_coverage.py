@@ -11,6 +11,7 @@ from app.agents.legal_drafting.impugnacao_thesis_coverage import (
     compute_reference_budgets,
     search_thesis_references,
 )
+from app.agents.legal_drafting.agent_generated_document import AgentGeneratedDocument
 
 FAILS = []
 
@@ -150,44 +151,91 @@ check(
     and coverage_error["tese_key"] == "apuracao_do_indice_de_custo",
 )
 
+# ── F1/F2 — _build_budgeted_thesis_reference_block: categorias escalam com
+#    max_chars (F1) e o rodapé fixo não estoura o orçamento (F2) ──────────
+_agent = AgentGeneratedDocument()
+
+_MERIT_CHUNK = {
+    "section_kind": "merit_by_thesis",
+    "text": "Fundamento principal da tese, com argumentação extensa sobre o tema. " * 20,
+    "heading": "Estrutura da tese",
+    "trf_region": "TRF4",
+    "quality_score": 0.9,
+}
+
+for _max_chars in (4500, 2200, 1500, 1200):
+    _block = _agent._build_budgeted_thesis_reference_block(
+        thesis_label="Apuração do Índice de Custo",
+        chunks=[_MERIT_CHUNK],
+        trf_region="TRF4",
+        max_chars=_max_chars,
+    )
+    check(
+        f"max_chars={_max_chars}: bloco contém EXEMPLO_ESTRUTURA_TESE",
+        "EXEMPLO_ESTRUTURA_TESE" in _block,
+        f"(len={len(_block)})",
+    )
+    check(
+        f"max_chars={_max_chars}: len(bloco) <= max_chars (rodapé não estoura)",
+        len(_block) <= _max_chars,
+        f"(len={len(_block)}, max={_max_chars})",
+    )
+
+# ── F3 — _assemble_style_references_block: poda por prioridade ───────────
+_header_blocks = ["HEADER1", "HEADER2", "HEADER3", "HEADER4"]
+_section_blocks = [f'<SECAO nome="S{i}">' + ("x" * 500) + "</SECAO>" for i in range(4)]
+_thesis_blocks = [f'<TESE nome="T{i}">' + ("y" * 800) + "</TESE>" for i in range(5)]
+
+# Orçamento maior que header+teses (sem nenhuma seção), mas menor que o
+# agregado completo (header+seções+teses) — força a poda a derrubar seções
+# e comprova que nenhuma tese é sacrificada nesse cenário.
+_header_and_theses_len = len("\n".join(_header_blocks + _thesis_blocks))
+_full_len = len("\n".join(_header_blocks + _section_blocks + _thesis_blocks))
+_prune_budget = _header_and_theses_len + 50
+assert _prune_budget < _full_len, "cenário de teste não força poda"
+
+_pruned_block = AgentGeneratedDocument._assemble_style_references_block(
+    header_blocks=_header_blocks,
+    section_blocks=_section_blocks,
+    thesis_blocks=_thesis_blocks,
+    max_total_chars=_prune_budget,
+)
+check(
+    "poda por prioridade: derruba TODAS as seções",
+    "<SECAO" not in _pruned_block,
+    f"(veio {_pruned_block.count('<SECAO')} seção(ões))",
+)
+check(
+    "poda por prioridade: preserva TODAS as teses",
+    _pruned_block.count("<TESE") == len(_thesis_blocks),
+    f"(veio {_pruned_block.count('<TESE')} de {len(_thesis_blocks)})",
+)
+check(
+    "poda por prioridade: respeita max_total_chars sem precisar de corte bruto",
+    len(_pruned_block) <= _prune_budget,
+    f"(len={len(_pruned_block)}, max={_prune_budget})",
+)
+
 # ── compute_reference_budgets ────────────────────────────────────────────
 MAX_TOTAL = 22000
 MAX_SECTION = 2200
 MAX_THESIS = 4500
 N_SECTIONS = 4
 
-budgets_3 = compute_reference_budgets(
-    3, max_total_chars=MAX_TOTAL, max_section_chars=MAX_SECTION, max_thesis_chars=MAX_THESIS,
-)
-check(
-    "3 teses: per_thesis respeita o teto de 4500",
-    budgets_3["per_thesis"] <= MAX_THESIS,
-    f"(veio {budgets_3})",
-)
-check(
-    "3 teses: orçamento total não estoura max_total_chars",
-    budgets_3["per_thesis"] * 3 + budgets_3["per_section"] * N_SECTIONS <= MAX_TOTAL,
-    f"(veio {budgets_3})",
-)
-
-budgets_12 = compute_reference_budgets(
-    12, max_total_chars=MAX_TOTAL, max_section_chars=MAX_SECTION, max_thesis_chars=MAX_THESIS,
-)
-check(
-    "12 teses: per_thesis cai abaixo do teto 4500",
-    budgets_12["per_thesis"] < budgets_3["per_thesis"],
-    f"(veio {budgets_12} vs {budgets_3})",
-)
-check(
-    "12 teses: per_thesis nunca abaixo do piso 1200",
-    budgets_12["per_thesis"] >= 1200,
-    f"(veio {budgets_12})",
-)
-check(
-    "12 teses: orçamento total não estoura max_total_chars",
-    budgets_12["per_thesis"] * 12 + budgets_12["per_section"] * N_SECTIONS <= MAX_TOTAL,
-    f"(veio {budgets_12})",
-)
+for n in (1, 3, 12, 25):
+    budgets = compute_reference_budgets(
+        n, max_total_chars=MAX_TOTAL, max_section_chars=MAX_SECTION, max_thesis_chars=MAX_THESIS,
+    )
+    check(
+        f"n={n}: per_thesis respeita o teto de 4500",
+        budgets["per_thesis"] <= MAX_THESIS,
+        f"(veio {budgets})",
+    )
+    check(
+        f"n={n}: per_thesis*n + per_section*4 <= max_total_chars",
+        budgets["per_thesis"] * n + budgets["per_section"] * N_SECTIONS <= MAX_TOTAL,
+        f"(veio {budgets})",
+    )
 
 print()
 if FAILS:

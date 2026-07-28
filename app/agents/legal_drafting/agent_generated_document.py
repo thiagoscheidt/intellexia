@@ -23,6 +23,9 @@ from app.agents.core.file_agent import FileAgent
 from app.utils.timezone import now_sp
 from app.services.token_usage_service import TokenUsageService
 from app.services.agent_execution_history_service import AgentExecutionHistoryService
+from app.agents.legal_drafting.impugnacao_thesis_coverage import (
+    THESIS_BLOCK_FOOTER_RESERVE_CHARS,
+)
 
 from app.agents.config import DEFAULT_MODEL_LEGAL_DRAFTING
 
@@ -1238,6 +1241,7 @@ class AgentGeneratedDocument:
         """
         self.last_reference_coverage = []
         if not law_firm_id:
+            self.last_reference_coverage = self._empty_thesis_coverage(selections)
             return ""
         if allowed_reference_ids is not None and not allowed_reference_ids:
             self.last_reference_coverage = self._empty_thesis_coverage(selections)
@@ -1430,22 +1434,72 @@ class AgentGeneratedDocument:
                     if section_block:
                         section_blocks.append(section_block)
 
-            # Ordem final no prompt: header -> seções -> teses.
-            style_blocks.extend(section_blocks)
-            style_blocks.extend(thesis_blocks)
-
-            if len(style_blocks) <= 3:
+            # Ordem final no prompt: header -> seções -> teses. Teses são
+            # conteúdo protegido: se o agregado estourar max_total_chars, a
+            # poda derruba seções primeiro (ver _assemble_style_references_block).
+            if len(style_blocks) + len(section_blocks) + len(thesis_blocks) <= 3:
                 return ""
 
-            block = "\n".join(style_blocks)
-            if len(block) > max_total_chars:
-                block = self._prune_rag_block(block, max_chars=max_total_chars)
-
-            return block
+            return self._assemble_style_references_block(
+                header_blocks=style_blocks,
+                section_blocks=section_blocks,
+                thesis_blocks=thesis_blocks,
+                max_total_chars=max_total_chars,
+            )
         except Exception as error:
             print(f"[AgentGeneratedDocument] Falha ao carregar referências de estilo: {error}")
             self.last_reference_coverage = coverage_list
             return ""
+
+    @staticmethod
+    def _assemble_style_references_block(
+        *,
+        header_blocks: list[str],
+        section_blocks: list[str],
+        thesis_blocks: list[str],
+        max_total_chars: int,
+    ) -> str:
+        """Monta o bloco final priorizando teses sobre seções.
+
+        Teses são conteúdo protegido (é a garantia da task: nenhuma tese sem
+        bloco). Se o agregado estourar `max_total_chars`, a poda remove
+        blocos de SEÇÃO do fim para trás — seções são conteúdo sacrificável.
+        Corte bruto (`text[:max_total_chars]`) só entra em último caso, se
+        ainda estourar sem nenhuma seção sobrando; nesse caso avisa via print
+        quantas teses ficaram total ou parcialmente cortadas (nunca em
+        silêncio).
+        """
+        remaining_sections = list(section_blocks)
+        block = "\n".join(header_blocks + remaining_sections + thesis_blocks)
+        while len(block) > max_total_chars and remaining_sections:
+            remaining_sections.pop()  # derruba a última seção
+            block = "\n".join(header_blocks + remaining_sections + thesis_blocks)
+
+        if len(block) <= max_total_chars:
+            return block
+
+        # Sem seções sobrando e ainda estoura: corte bruto, mas conta e
+        # avisa quantas teses foram afetadas (total ou parcialmente cortadas).
+        prefix = "\n".join(header_blocks + remaining_sections)
+        budget_for_theses = max(0, max_total_chars - len(prefix) - (1 if thesis_blocks else 0))
+
+        affected = 0
+        consumed = 0
+        for thesis_block in thesis_blocks:
+            entry_len = len(thesis_block) + 1  # separador "\n"
+            if consumed + entry_len > budget_for_theses:
+                affected += 1
+            consumed += entry_len
+
+        if affected:
+            print(
+                f"[AgentGeneratedDocument] Bloco de referências excedeu "
+                f"max_total_chars={max_total_chars} mesmo sem blocos de seção — "
+                f"{affected} de {len(thesis_blocks)} tese(s) tiveram o bloco "
+                "cortado/removido pelo corte bruto de segurança."
+            )
+
+        return block[:max_total_chars]
 
     def _build_section_style_reference_block(
         self,
@@ -1519,17 +1573,34 @@ class AgentGeneratedDocument:
         trf_region: Optional[str],
         max_chars: int,
     ) -> str:
-        """Monta bloco de referência por tese com orçamento por seção."""
+        """Monta bloco de referência por tese com orçamento por seção.
+
+        Orçamentos por categoria escalam proporcionalmente a `max_chars`
+        (referência: os valores fixos abaixo valem para `max_chars=4500`,
+        o antigo `max_thesis_chars`) — sem isso, com cotas pequenas (muitas
+        teses) a categoria de maior prioridade (EXEMPLO_ESTRUTURA_TESE) era a
+        primeira a ficar sem espaço, porque o preenchimento é tudo-ou-nada em
+        ordem fixa dentro do orçamento total. Piso de ~250 chars por
+        categoria para nenhuma zerar. O rodapé fixo (`<INSTRUCAO_DE_USO>` +
+        `</TESE>`, ver THESIS_BLOCK_FOOTER_RESERVE_CHARS) é reservado ANTES
+        de preencher categorias, já que é anexado incondicionalmente no
+        final — sem a reserva, o bloco renderizado estourava `max_chars`.
+        """
         if not chunks:
             return ""
 
+        scale = max_chars / 4500 if max_chars > 0 else 0
         budgets = {
-            "EXEMPLO_ESTRUTURA_TESE": 1600,
-            "JURISPRUDENCIA_REGIONAL": 1800,
-            "JURISPRUDENCIA_COMPLEMENTAR": 900,
-            "PADRAO_PEDIDO_DA_TESE": 900,
-            "REFERENCIAS_COMPLEMENTARES": 600,
+            "EXEMPLO_ESTRUTURA_TESE": max(250, int(1600 * scale)),
+            "JURISPRUDENCIA_REGIONAL": max(250, int(1800 * scale)),
+            "JURISPRUDENCIA_COMPLEMENTAR": max(250, int(900 * scale)),
+            "PADRAO_PEDIDO_DA_TESE": max(250, int(900 * scale)),
+            "REFERENCIAS_COMPLEMENTARES": max(250, int(600 * scale)),
         }
+        # Orçamento disponível para categorias, descontado o rodapé fixo que
+        # é anexado depois (F2) — o bloco final (categorias + rodapé) cabe
+        # em max_chars.
+        content_ceiling = max(0, max_chars - THESIS_BLOCK_FOOTER_RESERVE_CHARS)
 
         regional = (trf_region or "").strip().upper()
         categories = {
@@ -1636,7 +1707,7 @@ class AgentGeneratedDocument:
 
             local_parts.append(f"</{tag_name}>")
             section_text = "\n".join(local_parts)
-            if total_chars + len(section_text) <= max_chars:
+            if total_chars + len(section_text) <= content_ceiling:
                 parts.append(section_text)
                 total_chars += len(section_text)
 
@@ -1836,34 +1907,6 @@ class AgentGeneratedDocument:
             lines.append(notes)
 
         return "\n".join(lines)
-
-    def _prune_rag_block(self, block: str, max_chars: int = 20000) -> str:
-        """Poda bloco RAG com prioridade semântica antes de corte cego."""
-        text = str(block or "")
-        if len(text) <= max_chars:
-            return text
-
-        # Primeiro remove seções complementares menos críticas.
-        text = re.sub(
-            r"\n<REFERENCIAS_COMPLEMENTARES>.*?</REFERENCIAS_COMPLEMENTARES>",
-            "",
-            text,
-            flags=re.DOTALL,
-        )
-        if len(text) <= max_chars:
-            return text
-
-        text = re.sub(
-            r"\n<JURISPRUDENCIA_COMPLEMENTAR>.*?</JURISPRUDENCIA_COMPLEMENTAR>",
-            "",
-            text,
-            flags=re.DOTALL,
-        )
-        if len(text) <= max_chars:
-            return text
-
-        # Como último recurso, corte controlado sem inserir aviso extra.
-        return text[:max_chars]
 
     def _clip_text(self, value: str, max_chars: Optional[int] = None) -> str:
         text = " ".join(str(value or "").split())
