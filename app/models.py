@@ -3192,6 +3192,10 @@ class ImpugnacaoReferenceModel(db.Model):
     judge_name = db.Column(db.String(255))           # magistrado, quando identificado
     sections_json = db.Column(db.JSON)               # seções detectadas na ingestão
 
+    file_hash = db.Column(db.String(64), index=True)             # SHA-256 do arquivo, dedup de importação
+    source_drive_file_id = db.Column(db.String(80), index=True)  # origem no Drive
+    source_theses_json = db.Column(db.JSON)                      # teses curadas vindas da planilha
+
     original_filename = db.Column(db.String(255))
     file_path = db.Column(db.String(500))
     file_size = db.Column(db.Integer)
@@ -3259,6 +3263,93 @@ class ImpugnacaoReferenceChunk(db.Model):
 
     def __repr__(self):
         return f'<ImpugnacaoReferenceChunk ref={self.reference_id} kind={self.section_kind}>'
+
+
+class ImpugnacaoImportJob(db.Model):
+    """Job de importação em lote de peças-modelo a partir de planilha (Drive).
+
+    Um por planilha enviada. Os candidatos parseados viram `ImpugnacaoImportItem`.
+    """
+    __tablename__ = 'impugnacao_import_jobs'
+
+    id = db.Column(db.Integer, primary_key=True)
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.id'), index=True)
+
+    original_filename = db.Column(db.String(255))
+    file_path = db.Column(db.String(500))
+
+    status = db.Column(db.String(20), default='draft')  # 'draft' | 'running' | 'completed' | 'failed'
+    total_items = db.Column(db.Integer, default=0)
+    error_message = db.Column(db.Text)
+
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+    started_at = db.Column(db.DateTime)
+    finished_at = db.Column(db.DateTime)
+
+    law_firm = db.relationship('LawFirm')
+    user = db.relationship('User')
+    items = db.relationship(
+        'ImpugnacaoImportItem',
+        back_populates='job',
+        cascade='all, delete-orphan',
+    )
+
+    def __repr__(self):
+        return f'<ImpugnacaoImportJob {self.id} status={self.status}>'
+
+
+class ImpugnacaoImportItem(db.Model):
+    """Peça candidata de um job de importação — uma linha por arquivo agrupado da planilha."""
+    __tablename__ = 'impugnacao_import_items'
+
+    id = db.Column(db.Integer, primary_key=True)
+    job_id = db.Column(
+        db.Integer,
+        db.ForeignKey('impugnacao_import_jobs.id', ondelete='CASCADE'),
+        nullable=False,
+        index=True,
+    )
+    law_firm_id = db.Column(db.Integer, db.ForeignKey('law_firms.id'), nullable=False, index=True)
+
+    row_number = db.Column(db.Integer)
+    numero = db.Column(db.String(30))
+    autora = db.Column(db.String(255))
+
+    tribunal_raw = db.Column(db.String(60))
+    trf_region = db.Column(db.String(10))          # 'TRF1'..'TRF6' normalizado
+    orgao_julgador = db.Column(db.String(255))
+
+    document_type_label = db.Column(db.String(120))
+
+    drive_file_id = db.Column(db.String(80), index=True)
+    drive_url = db.Column(db.String(500))
+
+    theses_json = db.Column(db.JSON)                # teses curadas da planilha
+    protocolado_at = db.Column(db.DateTime)
+
+    selected = db.Column(db.Boolean, default=True)  # marcado para importar na tela
+    status = db.Column(db.String(30), default='pending', index=True)
+    # 'pending'|'downloading'|'indexing'|'completed'|'skipped_duplicate'|'skipped_by_user'|'failed'
+    error_message = db.Column(db.Text)
+    file_hash = db.Column(db.String(64), index=True)
+
+    reference_id = db.Column(
+        db.Integer,
+        db.ForeignKey('impugnacao_reference_models.id'),
+        nullable=True,
+        index=True,
+    )
+
+    created_at = db.Column(db.DateTime, default=datetime.now)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    job = db.relationship('ImpugnacaoImportJob', back_populates='items')
+    reference = db.relationship('ImpugnacaoReferenceModel')
+
+    def __repr__(self):
+        return f'<ImpugnacaoImportItem {self.id} job={self.job_id} status={self.status}>'
 
 
 class McpOAuthClient(db.Model):
