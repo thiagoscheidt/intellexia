@@ -3450,16 +3450,17 @@ def _run_generated_document_generation(app_obj, law_firm_id, process_id, doc_id,
             if generated_doc.document_type == 'impugnacao_contestacao':
                 try:
                     from app.agents.legal_drafting.impugnacao_process_context import (
-                        trf_region_from_process,
+                        build_reference_search_context,
                     )
-                    trf_region = trf_region_from_process(process) or ''
+                    search_context = build_reference_search_context(process)
                     full_text = ImpugnacaoEnrichmentAgent(
                         model_name=ai_model_settings_service.get_model(
                             law_firm_id, 'impugnacao_enrichment')).enrich(
                         document_text=full_text,
                         selections=agent_selections,
                         law_firm_id=law_firm_id,
-                        trf_region=trf_region,
+                        trf_region=search_context.get('trf_region') or '',
+                        context=search_context,
                     )
                 except Exception as enrich_err:
                     print(f'[EnrichmentAgent] Falha silenciosa: {enrich_err}')
