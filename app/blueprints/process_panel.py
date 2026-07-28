@@ -3488,6 +3488,20 @@ def _run_generated_document_generation(app_obj, law_firm_id, process_id, doc_id,
             if isinstance(result_dict, dict):
                 internal_notes = (result_dict.get('internal_review_notes') or '').strip() or None
 
+            # Cobertura por tese: teses sem peça-modelo no acervo viram item
+            # de checklist nas notas internas — "sem peça-modelo" é palavra-
+            # chave de alerta no renderizador de notas da tela de detalhe.
+            coverage = getattr(agent, 'last_reference_coverage', None) or []
+            missing = [c for c in coverage if isinstance(c, dict) and c.get('sem_modelo')]
+            warning_lines = [
+                f'- [ ] Não foi encontrado modelo de referência para a tese "{c.get("tese")}" — '
+                'redigida sem peça-modelo do acervo; revisar fundamentação e citações.'
+                for c in missing
+            ]
+            if warning_lines:
+                warning_block = '\n'.join(warning_lines)
+                internal_notes = f'{warning_block}\n\n{internal_notes}' if internal_notes else warning_block
+
             version.content = full_text
             version.internal_notes = internal_notes
             version.generation_status = 'completed'

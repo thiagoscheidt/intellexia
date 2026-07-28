@@ -680,6 +680,11 @@ class AgentGeneratedDocument:
 
     def __init__(self, model_name: str | None = None):
         self.model_name = model_name or DEFAULT_MODEL_LEGAL_DRAFTING
+        # Cobertura de referências por tese da última geração (uma entrada
+        # por tese; sem_modelo=True quando não achou peça-modelo no acervo).
+        # Populado por _build_style_references_block; lido pelo worker logo
+        # após dispatch() para avisar teses descobertas nas notas internas.
+        self.last_reference_coverage: list[dict] = []
 
     # ── Impugnação à Contestação ──────────────────────────────────────────
 
@@ -1175,6 +1180,42 @@ class AgentGeneratedDocument:
         text = re.sub(r'^\s*\d{1,2}(?:\.\d+)?\s*[\.)-]?\s*', '', text)
         return text.strip()
 
+    @staticmethod
+    def _thesis_label_and_key(sel: dict) -> tuple[str, Optional[str]]:
+        """Extrai (rótulo, chave de catálogo) da tese de uma seleção."""
+        thesis = sel.get('thesis') if isinstance(sel, dict) else None
+        thesis_name = None
+        thesis_key = None
+        if thesis is not None:
+            thesis_name = getattr(thesis, 'title', None) or getattr(thesis, 'name', None)
+            thesis_key = getattr(thesis, 'key', None)
+        thesis_label = (str(thesis_name).strip() if thesis_name else 'Sem tese específica')
+        return thesis_label, (str(thesis_key).strip() if thesis_key else None)
+
+    def _empty_thesis_coverage(self, selections: list[dict]) -> list[dict]:
+        """Cobertura placeholder quando não há peças confirmadas (allowed_reference_ids=[]):
+        uma entrada sem_modelo por tese distinta, para o worker avisar mesmo assim.
+        """
+        seen: dict[str, Optional[str]] = {}
+        for sel in (selections or []):
+            if not isinstance(sel, dict):
+                continue
+            thesis_label, thesis_key = self._thesis_label_and_key(sel)
+            if thesis_label not in seen:
+                seen[thesis_label] = thesis_key
+
+        return [
+            {
+                "tese": label,
+                "tese_key": key,
+                "exemplos": [],
+                "camada": None,
+                "qtd_exemplos": 0,
+                "sem_modelo": True,
+            }
+            for label, key in seen.items()
+        ]
+
     def _build_style_references_block(
         self,
         process,
@@ -1185,13 +1226,24 @@ class AgentGeneratedDocument:
         """Recupera trechos da base de peças-modelo do escritório e formata
         como bloco de inspiração de estilo no user_prompt.
 
+        Cota por tese ANTES de qualquer extra (compute_reference_budgets):
+        blocos por tese são montados primeiro e TODOS, sem `break` — nenhuma
+        tese fica sem bloco por ordem de chegada. Blocos por seção consomem
+        o que sobrar do orçamento total. `self.last_reference_coverage`
+        registra, por tese, se achou peça-modelo (consumido pelo worker para
+        avisar teses descobertas nas notas internas).
+
         Falhas (Qdrant indisponível, sem referências, etc.) não devem
         interromper a geração — retornamos string vazia.
         """
+        self.last_reference_coverage = []
         if not law_firm_id:
             return ""
         if allowed_reference_ids is not None and not allowed_reference_ids:
+            self.last_reference_coverage = self._empty_thesis_coverage(selections)
             return ""
+
+        coverage_list: list[dict] = []
         try:
             from app.agents.legal_drafting.impugnacao_reference_retriever import (
                 ImpugnacaoReferenceRetriever,
@@ -1199,6 +1251,10 @@ class AgentGeneratedDocument:
 
             from app.agents.legal_drafting.impugnacao_process_context import (
                 build_reference_search_context,
+            )
+            from app.agents.legal_drafting.impugnacao_thesis_coverage import (
+                compute_reference_budgets,
+                search_thesis_references,
             )
             search_context = build_reference_search_context(process)
             trf_region = search_context.get('trf_region')
@@ -1226,7 +1282,7 @@ class AgentGeneratedDocument:
                 ),
             ]
 
-            focused_kind_plan = [
+            thesis_kind_plan = [
                 ('merit_by_thesis', 5),
                 ('jurisprudence', 2),
                 ('requests', 1),
@@ -1237,16 +1293,10 @@ class AgentGeneratedDocument:
             for sel in (selections or []):
                 if not isinstance(sel, dict):
                     continue
-                thesis = sel.get('thesis')
-                thesis_name = None
-                thesis_key = None
-                if thesis is not None:
-                    thesis_name = getattr(thesis, 'title', None) or getattr(thesis, 'name', None)
-                    thesis_key = getattr(thesis, 'key', None)
-                thesis_label = (str(thesis_name).strip() if thesis_name else 'Sem tese específica')
+                thesis_label, thesis_key = self._thesis_label_and_key(sel)
                 grouped.setdefault(thesis_label, []).append(sel)
                 if thesis_key and thesis_label not in thesis_key_by_label:
-                    thesis_key_by_label[thesis_label] = str(thesis_key).strip()
+                    thesis_key_by_label[thesis_label] = thesis_key
 
             retriever = ImpugnacaoReferenceRetriever()
 
@@ -1263,44 +1313,26 @@ class AgentGeneratedDocument:
             max_section_chars = 2200
             max_thesis_chars = 4500
 
+            budgets = compute_reference_budgets(
+                len(grouped),
+                max_total_chars=max_total_chars,
+                max_section_chars=max_section_chars,
+                max_thesis_chars=max_thesis_chars,
+            )
+            per_thesis = budgets['per_thesis']
+            per_section = budgets['per_section']
+
             process_summary = self._clip_text(self._build_process_context(process), max_chars=700)
             selections_summary = self._clip_text(
                 self._build_selections_context(selections, include_contestation=True),
                 max_chars=1600,
             )
 
-            # 1) Busca por seção da peça (introdução, preliminares, mérito e pedidos).
-            for section_label, kind_plan, section_focus in section_plans:
-                section_query = (
-                    f"Seção da peça: {section_label} | "
-                    f"Objetivo: {section_focus} | "
-                    f"Contexto do processo: {process_summary} | "
-                    f"Seleções do caso: {selections_summary}"
-                )
-                section_chunks = retriever.fetch_style_references(
-                    law_firm_id=law_firm_id,
-                    query_text=section_query,
-                    trf_region=trf_region,
-                    context=search_context,
-                    kind_plan=kind_plan,
-                    max_chunks=5,
-                    max_chars=max_section_chars,
-                    allowed_reference_ids=allowed_reference_ids,
-                )
-                section_block = self._build_section_style_reference_block(
-                    section_label=section_label,
-                    chunks=section_chunks,
-                    max_chars=max_section_chars,
-                )
-                if not section_block:
-                    continue
-
-                projected_size = len("\n".join(style_blocks)) + len(section_block) + 2
-                if projected_size > max_total_chars and len(style_blocks) > 3:
-                    break
-                style_blocks.append(section_block)
-
-            # 2) Busca equivalente por tese (núcleo do mérito).
+            # 1) Blocos por TESE primeiro — TODOS, sem `break`. A cota por
+            # tese (per_thesis) já reserva espaço para todas antes de gastar
+            # o orçamento global; descartar uma tese aqui voltaria a ser o
+            # bug de cobertura silenciosa que este módulo corrige.
+            thesis_blocks: list[str] = []
             for thesis_label, thesis_rows in grouped.items():
                 thesis_catalog_tag = thesis_key_by_label.get(thesis_label)
                 query_parts = [
@@ -1340,16 +1372,21 @@ class AgentGeneratedDocument:
 
                 query_text = " | ".join(query_parts) or f"Tese: {thesis_label}"
 
-                chunks = retriever.fetch_style_references(
+                chunks, coverage = search_thesis_references(
+                    retriever,
                     law_firm_id=law_firm_id,
+                    thesis_label=thesis_label,
+                    thesis_key=thesis_catalog_tag,
                     query_text=query_text,
-                    trf_region=trf_region,
                     context=search_context,
-                    thesis_catalog_id=thesis_catalog_tag,
-                    kind_plan=focused_kind_plan,
-                    max_chunks=6,
+                    kind_plan=thesis_kind_plan,
+                    max_chunks=8,
+                    max_chars=per_thesis,
                     allowed_reference_ids=allowed_reference_ids,
+                    min_distinct=2,
                 )
+                coverage_list.append(coverage)
+
                 if not chunks:
                     continue
 
@@ -1357,17 +1394,45 @@ class AgentGeneratedDocument:
                     thesis_label=thesis_label,
                     chunks=chunks,
                     trf_region=trf_region,
-                    max_chars=max_thesis_chars,
+                    max_chars=per_thesis,
                 )
-                if not thesis_block:
-                    continue
+                if thesis_block:
+                    thesis_blocks.append(thesis_block)
 
-                # Evita estourar contexto global do bloco de referências.
-                projected_size = len("\n".join(style_blocks)) + len(thesis_block) + 2
-                if projected_size > max_total_chars and len(style_blocks) > 3:
-                    break
+            self.last_reference_coverage = coverage_list
 
-                style_blocks.append(thesis_block)
+            # 2) Blocos por SEÇÃO depois, com o que sobrou do orçamento total
+            # (per_section) — puladas quando o resto é irrisório.
+            section_blocks: list[str] = []
+            if per_section >= 300:
+                for section_label, kind_plan, section_focus in section_plans:
+                    section_query = (
+                        f"Seção da peça: {section_label} | "
+                        f"Objetivo: {section_focus} | "
+                        f"Contexto do processo: {process_summary} | "
+                        f"Seleções do caso: {selections_summary}"
+                    )
+                    section_chunks = retriever.fetch_style_references(
+                        law_firm_id=law_firm_id,
+                        query_text=section_query,
+                        trf_region=trf_region,
+                        context=search_context,
+                        kind_plan=kind_plan,
+                        max_chunks=5,
+                        max_chars=per_section,
+                        allowed_reference_ids=allowed_reference_ids,
+                    )
+                    section_block = self._build_section_style_reference_block(
+                        section_label=section_label,
+                        chunks=section_chunks,
+                        max_chars=per_section,
+                    )
+                    if section_block:
+                        section_blocks.append(section_block)
+
+            # Ordem final no prompt: header -> seções -> teses.
+            style_blocks.extend(section_blocks)
+            style_blocks.extend(thesis_blocks)
 
             if len(style_blocks) <= 3:
                 return ""
@@ -1379,6 +1444,7 @@ class AgentGeneratedDocument:
             return block
         except Exception as error:
             print(f"[AgentGeneratedDocument] Falha ao carregar referências de estilo: {error}")
+            self.last_reference_coverage = coverage_list
             return ""
 
     def _build_section_style_reference_block(

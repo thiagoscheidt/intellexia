@@ -213,6 +213,8 @@ class ImpugnacaoReferenceRetriever:
         collected: list[dict] = []
         total_chars = 0
         seen_ids: set = set()
+        # Escopo: toda a chamada a fetch_style_references (todos os kinds do
+        # plano compartilham este set), não um contador por kind.
         distinct_refs: set = set()
 
         def _needs_more_distinct() -> bool:
@@ -250,7 +252,11 @@ class ImpugnacaoReferenceRetriever:
                     return
                 if taken_for_kind >= top_k and not _needs_more_distinct():
                     return
-                hits = _query(kind, layer, top_k)
+                # Janela de busca amplia por min_distinct_references: com
+                # limit=top_k a camada tende a repetir a mesma peça no topo e
+                # a 2ª peça distinta nunca fica alcançável. Sem o parâmetro
+                # (min_distinct_references=None), soma 0 e o limit não muda.
+                hits = _query(kind, layer, hard_ceiling)
                 # Dentro da camada, mantém a ordem de score do Qdrant;
                 # quality_score desempata.
                 hits = sorted(
