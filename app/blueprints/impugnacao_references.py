@@ -10,6 +10,7 @@ Rotas:
     POST /referencias-impugnacao/novo
     GET  /referencias-impugnacao/<id>
     GET  /referencias-impugnacao/<id>/status
+    GET  /referencias-impugnacao/<id>/arquivo
     POST /referencias-impugnacao/<id>/metadados
     POST /referencias-impugnacao/<id>/arquivar
     POST /referencias-impugnacao/<id>/reativar
@@ -31,7 +32,7 @@ from functools import wraps
 
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
-    flash, session, abort, current_app, jsonify,
+    flash, session, abort, current_app, jsonify, send_file,
 )
 from werkzeug.utils import secure_filename
 
@@ -388,6 +389,27 @@ def reference_detail(ref_id):
         'impugnacao_references/detail.html',
         reference=reference,
         chunks=chunks,
+    )
+
+
+@impugnacao_references_bp.route('/<int:ref_id>/arquivo')
+@require_law_firm
+def view_reference_file(ref_id):
+    """Serve o arquivo original inline (PDF abre no navegador; demais baixam)."""
+    law_firm_id = get_current_law_firm_id()
+    reference = ImpugnacaoReferenceModel.query.filter_by(
+        id=ref_id, law_firm_id=law_firm_id
+    ).first_or_404()
+
+    file_path = str(reference.file_path or '').strip()
+    if not file_path or not os.path.exists(file_path):
+        flash('Arquivo original não encontrado no servidor.', 'warning')
+        return redirect(url_for('impugnacao_references.reference_detail', ref_id=ref_id))
+
+    return send_file(
+        os.path.abspath(file_path),
+        as_attachment=False,
+        download_name=reference.original_filename,
     )
 
 

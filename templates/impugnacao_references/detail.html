@@ -399,6 +399,10 @@ bi-file-earmark-richtext') %}
                     </div>
                     <div class="card-footer border-0 bg-light px-4 py-3 rounded-bottom-3">
                         <div class="d-grid gap-2">
+                            <a href="{{ url_for('impugnacao_references.view_reference_file', ref_id=reference.id) }}"
+                                target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm w-100">
+                                <i class="bi bi-file-earmark-text me-1"></i> Visualizar arquivo original
+                            </a>
                             <form method="POST"
                                 action="{{ url_for('impugnacao_references.reindex_reference', ref_id=reference.id) }}"
                                 onsubmit="return confirm('Reindexar este arquivo? Os trechos antigos serão substituídos.');">

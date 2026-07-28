@@ -204,12 +204,46 @@
                                 <td class="text-muted" style="font-size:.8rem; white-space:nowrap">
                                     {{ ref.created_at|datetime_sp if ref.created_at else '—' }}
                                 </td>
-                                <td class="text-end pe-4" onclick="event.stopPropagation()">
+                                <td class="text-end pe-4" onclick="event.stopPropagation()" style="white-space:nowrap">
                                     <a href="{{ url_for('impugnacao_references.reference_detail', ref_id=ref.id) }}"
-                                        class="btn btn-sm btn-outline-primary rounded-pill px-3"
-                                        title="Ver detalhes">
-                                        <i class="bi bi-eye me-1"></i>Ver
+                                        class="btn btn-sm btn-outline-primary" title="Ver detalhes">
+                                        <i class="bi bi-eye"></i>
                                     </a>
+                                    <a href="{{ url_for('impugnacao_references.view_reference_file', ref_id=ref.id) }}"
+                                        target="_blank" rel="noopener"
+                                        class="btn btn-sm btn-outline-secondary" title="Visualizar arquivo original">
+                                        <i class="bi bi-file-earmark-text"></i>
+                                    </a>
+                                    <form method="POST" class="d-inline"
+                                        action="{{ url_for('impugnacao_references.reindex_reference', ref_id=ref.id) }}"
+                                        onsubmit="return confirm('Reindexar esta peça? Os trechos antigos serão substituídos.');">
+                                        <button class="btn btn-sm btn-outline-secondary" title="Reindexar trechos"
+                                            {% if ref.ingestion_status == 'processing' %}disabled{% endif %}>
+                                            <i class="bi bi-arrow-repeat"></i>
+                                        </button>
+                                    </form>
+                                    {% if ref.status == 'active' %}
+                                    <form method="POST" class="d-inline"
+                                        action="{{ url_for('impugnacao_references.archive_reference', ref_id=ref.id) }}">
+                                        <button class="btn btn-sm btn-outline-warning" title="Arquivar peça">
+                                            <i class="bi bi-archive"></i>
+                                        </button>
+                                    </form>
+                                    {% else %}
+                                    <form method="POST" class="d-inline"
+                                        action="{{ url_for('impugnacao_references.reactivate_reference', ref_id=ref.id) }}">
+                                        <button class="btn btn-sm btn-outline-success" title="Reativar peça">
+                                            <i class="bi bi-arrow-counterclockwise"></i>
+                                        </button>
+                                    </form>
+                                    {% endif %}
+                                    <form method="POST" class="d-inline"
+                                        action="{{ url_for('impugnacao_references.delete_reference', ref_id=ref.id) }}"
+                                        onsubmit="return confirm('Excluir permanentemente esta peça-modelo e todos os seus trechos?');">
+                                        <button class="btn btn-sm btn-outline-danger" title="Excluir permanentemente">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </form>
                                 </td>
                             </tr>
                             {% endfor %}
