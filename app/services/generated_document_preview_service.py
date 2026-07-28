@@ -229,6 +229,17 @@ def build_documents_preview(
                     .all()
                 }
 
+            # Badges legíveis: os chunks carregam a key do catálogo
+            # (ex.: 'apuracao_do_indice_de_custo') — exibir o NOME da tese.
+            thesis_name_by_key = {
+                key: name
+                for key, name in JudicialLegalThesis.query
+                .filter(JudicialLegalThesis.law_firm_id == law_firm_id)
+                .with_entities(JudicialLegalThesis.key, JudicialLegalThesis.name)
+                .all()
+                if key and name
+            }
+
             referencias = []
             for item in aggregated:
                 ref = refs_by_id.get(item["reference_id"])
@@ -236,6 +247,9 @@ def build_documents_preview(
                     continue  # peça de outro tenant/apagada — nunca expor
                 referencias.append({
                     **item,
+                    "teses": [
+                        thesis_name_by_key.get(key, key) for key in item["teses"]
+                    ],
                     "titulo": ref.title,
                     "trf_region": ref.trf_region,
                     "orgao_julgador": ref.orgao_julgador,
