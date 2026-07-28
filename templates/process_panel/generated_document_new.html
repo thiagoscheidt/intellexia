@@ -314,19 +314,7 @@
     overflow-y: auto;
   }
 
-  .review-benefit-row {
-    display: flex;
-    align-items: center;
-    gap: .6rem;
-    font-size: .82rem;
-    background: #fff;
-    border: 1px solid #f0f2f4;
-    border-radius: .45rem;
-    padding: .35rem .65rem;
-    min-width: 0;
-  }
-
-  .review-benefit-row .rb-nb {
+  .rb-nb {
     color: #fff;
     padding: .15em .6em;
     border-radius: 20px;
@@ -336,10 +324,28 @@
     flex-shrink: 0;
   }
 
-  .review-benefit-row .rb-thesis {
+  .rb-thesis {
     font-size: .74rem;
     color: #6c757d;
     max-width: 45%;
+  }
+
+  .summary-references-list {
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+  }
+
+  .summary-reference-row {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    font-size: .82rem;
+    background: #fff;
+    border: 1px solid #f0f2f4;
+    border-radius: .45rem;
+    padding: .35rem .65rem;
+    min-width: 0;
   }
 </style>
 {% endblock %}
@@ -715,6 +721,19 @@ breadcrumbs=[
                 </div>
               </div>
 
+              <!-- Peças-modelo confirmadas (só impugnação) -->
+              <div class="mb-3 d-none" id="summary-references-section">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <span class="review-section-label">
+                    <i class="bi bi-collection me-1"></i>Peças-Modelo de Referência
+                    <span id="summary-references-count"
+                      class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1"
+                      style="font-size:.7rem">0</span>
+                  </span>
+                </div>
+                <div id="summary-references-list" class="summary-references-list"></div>
+              </div>
+
               <!-- Contexto do processo -->
               <div class="mb-3">
                 <div class="d-flex justify-content-between align-items-center mb-2">
@@ -1019,6 +1038,9 @@ breadcrumbs=[
       chk.value = String(ref.reference_id);
       chk.checked = true;
       chk.className = 'mt-1';
+      chk.dataset.titulo = ref.titulo || '(sem título)';
+      chk.dataset.camada = ref.camada || 'geral';
+      chk.dataset.trechos = String(ref.trechos || 0);
       chk.addEventListener('change', updateReferencesUncheckedWarning);
       label.appendChild(chk);
 
@@ -1206,6 +1228,7 @@ breadcrumbs=[
     const selectedType = document.querySelector('input[name="document_type"]:checked');
     const typeLabel = selectedType ? (TYPE_LABELS[selectedType.value] || selectedType.value) : '—';
     document.getElementById('summary-type').textContent = typeLabel;
+    const isImpugnacao = selectedType && selectedType.value === 'impugnacao_contestacao';
 
     const checked = document.querySelectorAll('input[name="selections[]"]:checked');
     const container = document.getElementById('summary-benefits-detail');
@@ -1213,7 +1236,7 @@ breadcrumbs=[
     const countBadge = document.getElementById('summary-count');
 
     countBadge.textContent = checked.length;
-    container.querySelectorAll('.review-benefit-row').forEach(el => el.remove());
+    container.querySelectorAll('.review-benefit-card').forEach(el => el.remove());
 
     // Cartão Benefícios: total + nº de teses distintas
     const thesisSet = new Set();
@@ -1229,16 +1252,65 @@ breadcrumbs=[
           + ' · ' + thesisSet.size + ' tese' + (thesisSet.size === 1 ? '' : 's');
     }
 
+    const documentsConfirmed = document.getElementById('documentsConfirmedInput');
+    const docsOk = documentsConfirmed && documentsConfirmed.value === '1';
+    const refsChecked = document.querySelectorAll('input[name="confirmed_reference_ids[]"]:checked');
+
     const docsLine = document.getElementById('summary-docs-line');
     if (docsLine) {
-      const documentsConfirmed = document.getElementById('documentsConfirmedInput');
-      if (!documentsConfirmed || documentsConfirmed.value !== '1') {
+      if (!docsOk) {
         docsLine.textContent = 'Não confirmados — fluxo padrão';
       } else {
-        const refCount = document.querySelectorAll('input[name="confirmed_reference_ids[]"]:checked').length;
         const attCount = document.querySelectorAll('input[name="confirmed_attachment_ids[]"]:checked').length;
-        docsLine.textContent = refCount + ' peça' + (refCount === 1 ? '' : 's') + '-modelo · '
+        docsLine.textContent = refsChecked.length + ' peça' + (refsChecked.length === 1 ? '' : 's') + '-modelo · '
           + attCount + ' anexo' + (attCount === 1 ? '' : 's');
+      }
+    }
+
+    // ── Peças-modelo confirmadas (resumo, só impugnação) ────────────────
+    const refsSection = document.getElementById('summary-references-section');
+    const refsList = document.getElementById('summary-references-list');
+    const refsCount = document.getElementById('summary-references-count');
+    if (refsSection && refsList) {
+      refsList.textContent = '';
+      if (!isImpugnacao || !docsOk) {
+        refsSection.classList.add('d-none');
+      } else {
+        refsSection.classList.remove('d-none');
+        refsCount.textContent = refsChecked.length;
+        if (refsChecked.length === 0) {
+          const none = document.createElement('div');
+          none.className = 'text-muted small fst-italic ps-1';
+          none.textContent = 'Nenhuma peça confirmada — o documento será gerado sem referências de estilo.';
+          refsList.appendChild(none);
+        } else {
+          refsChecked.forEach(chk => {
+            const camadaInfo = CAMADA_BADGE[chk.dataset.camada] || CAMADA_BADGE.geral;
+            const row = document.createElement('div');
+            row.className = 'summary-reference-row';
+
+            const badge = document.createElement('span');
+            badge.className = 'badge ' + camadaInfo.cls + ' flex-shrink-0';
+            badge.style.fontSize = '.68rem';
+            badge.textContent = camadaInfo.label;
+            row.appendChild(badge);
+
+            const title = document.createElement('span');
+            title.className = 'fw-semibold text-truncate';
+            title.textContent = chk.dataset.titulo || '(sem título)';
+            title.title = chk.dataset.titulo || '';
+            row.appendChild(title);
+
+            const trechos = document.createElement('span');
+            trechos.className = 'text-muted ms-auto flex-shrink-0';
+            trechos.style.fontSize = '.74rem';
+            const n = parseInt(chk.dataset.trechos || '0', 10) || 0;
+            trechos.textContent = n + (n === 1 ? ' trecho' : ' trechos');
+            row.appendChild(trechos);
+
+            refsList.appendChild(row);
+          });
+        }
       }
     }
 
@@ -1248,8 +1320,7 @@ breadcrumbs=[
     }
     emptyMsg.classList.add('d-none');
 
-    // Lista compacta: uma linha por benefício (o detalhe — fundamento da
-    // União, anexos — já foi conferido nos passos 2 e 3).
+    // Cabeçalho compacto por benefício + fundamento da União (impugnação).
     checked.forEach(c => {
       const card = c.closest('.benefit-check-card');
       if (!card) return;
@@ -1261,19 +1332,23 @@ breadcrumbs=[
       const thesis = card.dataset.thesis || '';
       const nbColor = getNbColor(nb);
 
-      const row = document.createElement('div');
-      row.className = 'review-benefit-row';
+      const item = document.createElement('div');
+      item.className = 'review-benefit-card';
+
+      const header = document.createElement('div');
+      header.className = 'd-flex align-items-center gap-2 min-w-0';
 
       const nbSpan = document.createElement('span');
       nbSpan.className = 'rb-nb';
       nbSpan.style.background = nbColor;
       nbSpan.textContent = 'NB ' + nb;
-      row.appendChild(nbSpan);
+      header.appendChild(nbSpan);
 
       const nameSpan = document.createElement('span');
       nameSpan.className = 'fw-semibold text-truncate';
+      nameSpan.style.fontSize = '.85rem';
       nameSpan.textContent = insured || '—';
-      row.appendChild(nameSpan);
+      header.appendChild(nameSpan);
 
       const metaParts = [];
       if (btype) metaParts.push(btype);
@@ -1283,7 +1358,7 @@ breadcrumbs=[
         metaSpan.className = 'text-muted text-truncate d-none d-md-inline';
         metaSpan.style.fontSize = '.76rem';
         metaSpan.textContent = metaParts.join(' · ');
-        row.appendChild(metaSpan);
+        header.appendChild(metaSpan);
       }
 
       if (thesis) {
@@ -1291,10 +1366,30 @@ breadcrumbs=[
         thesisSpan.className = 'rb-thesis text-truncate ms-auto';
         thesisSpan.textContent = thesis;
         thesisSpan.title = thesis;
-        row.appendChild(thesisSpan);
+        header.appendChild(thesisSpan);
       }
 
-      container.appendChild(row);
+      item.appendChild(header);
+
+      // Fundamento da União: volta a aparecer na Revisão (pedido do usuário),
+      // no bloco âmbar compacto — só para impugnação.
+      if (isImpugnacao) {
+        const contFields = card.querySelector('[id^="cont-fields-"]');
+        const value = contFields ? contFields.querySelector('.contestation-value') : null;
+        const fundamento = value ? value.textContent.trim() : '';
+        if (fundamento) {
+          const fundBlock = document.createElement('div');
+          fundBlock.className = 'cont-fundamento';
+          const fundLabel = document.createElement('div');
+          fundLabel.className = 'cont-fundamento-label';
+          fundLabel.textContent = 'Fundamento da União';
+          fundBlock.appendChild(fundLabel);
+          fundBlock.appendChild(document.createTextNode(fundamento));
+          item.appendChild(fundBlock);
+        }
+      }
+
+      container.appendChild(item);
     });
   }
 
