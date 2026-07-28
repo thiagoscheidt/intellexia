@@ -167,6 +167,7 @@ def build_documents_preview(
                     JudicialLegalThesis.query
                     .filter(JudicialLegalThesis.id.in_(thesis_ids),
                             JudicialLegalThesis.law_firm_id == law_firm_id)
+                    .order_by(JudicialLegalThesis.name.asc())
                     .all()
                 )
 
@@ -208,6 +209,45 @@ def build_documents_preview(
                 max_chunks=_PREVIEW_MAX_CHUNKS,
                 max_chars=_PREVIEW_MAX_CHARS,
             ))
+
+            # F4: unifica os badges de tese do card da peça (que vêm de TODOS
+            # os chunks, inclusive das buscas por seção) com `exemplos` da
+            # cobertura (que só vinham da busca daquela tese) — sem isso, uma
+            # peça confirmada podia exibir "Tese X" no card enquanto a linha
+            # da Tese X dizia "Nenhuma peça confirmada", contraditório na
+            # mesma tela. Junta aos exemplos já buscados as peças de
+            # all_chunks cujo thesis_catalog_id bate com a tese, com a mesma
+            # dedup por reference_id (mantendo a melhor camada).
+            for entry in cobertura_teses:
+                tese_key = entry.get("tese_key")
+                if not tese_key:
+                    continue
+                best_layer_by_ref: dict[int, str] = {
+                    ex["reference_id"]: ex["camada"] for ex in (entry.get("exemplos") or [])
+                }
+                for chunk in all_chunks:
+                    if chunk.get("thesis_catalog_id") != tese_key:
+                        continue
+                    ref_id = chunk.get("reference_id")
+                    if ref_id is None:
+                        continue
+                    ref_id = int(ref_id)
+                    layer = chunk_match_layer(chunk, context)
+                    current = best_layer_by_ref.get(ref_id)
+                    if current is None or LAYER_ORDER[layer] < LAYER_ORDER[current]:
+                        best_layer_by_ref[ref_id] = layer
+
+                exemplos = [
+                    {"reference_id": ref_id, "camada": layer}
+                    for ref_id, layer in sorted(
+                        best_layer_by_ref.items(),
+                        key=lambda item: (LAYER_ORDER[item[1]], item[0]),
+                    )
+                ]
+                entry["exemplos"] = exemplos
+                entry["camada"] = exemplos[0]["camada"] if exemplos else None
+                entry["qtd_exemplos"] = len(exemplos)
+                entry["sem_modelo"] = not exemplos
 
             aggregated = aggregate_reference_candidates(all_chunks, context)
 

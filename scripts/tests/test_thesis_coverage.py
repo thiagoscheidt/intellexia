@@ -8,6 +8,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from app.agents.legal_drafting.impugnacao_thesis_coverage import (
+    THESIS_BLOCK_FOOTER_RESERVE_CHARS,
     compute_reference_budgets,
     search_thesis_references,
 )
@@ -151,6 +152,12 @@ check(
     and coverage_error["tese_key"] == "apuracao_do_indice_de_custo",
 )
 
+# ── compute_reference_budgets: constantes reais usadas em produção ───────
+MAX_TOTAL = 22000
+MAX_SECTION = 2200
+MAX_THESIS = 4500
+N_SECTIONS = 4
+
 # ── F1/F2 — _build_budgeted_thesis_reference_block: categorias escalam com
 #    max_chars (F1) e o rodapé fixo não estoura o orçamento (F2) ──────────
 _agent = AgentGeneratedDocument()
@@ -163,6 +170,16 @@ _MERIT_CHUNK = {
     "quality_score": 0.9,
 }
 
+# F1: `max_chars` agora é orçamento de CONTEÚDO (não do bloco inteiro) — o
+# rodapé fixo (THESIS_BLOCK_FOOTER_RESERVE_CHARS) é somado por cima do
+# bloco renderizado, não mais descontado duas vezes. Antes desse fix, com
+# poucos chars por categoria (muitas teses) TODAS as categorias zeravam e
+# sobrava só rodapé no bloco — daí o teste vacuoso: o próprio texto do
+# rodapé contém a substring solta "EXEMPLO_ESTRUTURA_TESE" (na frase
+# "Priorize EXEMPLO_ESTRUTURA_TESE..."), então um bloco só-rodapé passava
+# na asserção antiga. A tag de abertura em linha própria
+# ("\n<EXEMPLO_ESTRUTURA_TESE>") só existe quando a categoria teve
+# conteúdo real de fato preenchido.
 for _max_chars in (4500, 2200, 1500, 1200):
     _block = _agent._build_budgeted_thesis_reference_block(
         thesis_label="Apuração do Índice de Custo",
@@ -171,14 +188,40 @@ for _max_chars in (4500, 2200, 1500, 1200):
         max_chars=_max_chars,
     )
     check(
-        f"max_chars={_max_chars}: bloco contém EXEMPLO_ESTRUTURA_TESE",
-        "EXEMPLO_ESTRUTURA_TESE" in _block,
+        f"max_chars={_max_chars}: bloco contém EXEMPLO_ESTRUTURA_TESE (conteúdo real, não só rodapé)",
+        "\n<EXEMPLO_ESTRUTURA_TESE>" in _block,
         f"(len={len(_block)})",
     )
     check(
-        f"max_chars={_max_chars}: len(bloco) <= max_chars (rodapé não estoura)",
-        len(_block) <= _max_chars,
-        f"(len={len(_block)}, max={_max_chars})",
+        f"max_chars={_max_chars}: len(bloco) <= max_chars + rodapé + margem pequena",
+        len(_block) <= _max_chars + THESIS_BLOCK_FOOTER_RESERVE_CHARS + 50,
+        f"(len={len(_block)}, max={_max_chars}, teto={_max_chars + THESIS_BLOCK_FOOTER_RESERVE_CHARS + 50})",
+    )
+
+# ── F1 — teste de composição (o que faltava): para várias quantidades de
+#    teses, `per_thesis` calculado por compute_reference_budgets, aplicado
+#    ao builder REAL, ainda produz um bloco com conteúdo de fato — é
+#    exatamente o cenário que quebrava silenciosamente a partir de n=9
+#    teses (per_thesis=976, teto efetivo pré-fix=486 => nenhuma categoria
+#    cabia e o bloco virava 100% rodapé, sem aviso nenhum na tela).
+for _n_theses in (8, 9, 10, 12, 15):
+    _budgets_n = compute_reference_budgets(
+        _n_theses,
+        max_total_chars=MAX_TOTAL,
+        max_section_chars=MAX_SECTION,
+        max_thesis_chars=MAX_THESIS,
+    )
+    _per_thesis_n = _budgets_n["per_thesis"]
+    _block_n = _agent._build_budgeted_thesis_reference_block(
+        thesis_label="Tese qualquer",
+        chunks=[_MERIT_CHUNK],
+        trf_region="TRF4",
+        max_chars=_per_thesis_n,
+    )
+    check(
+        f"n_teses={_n_theses} (per_thesis={_per_thesis_n}): bloco real tem conteúdo, não só rodapé",
+        "\n<EXEMPLO_ESTRUTURA_TESE>" in _block_n,
+        f"(len={len(_block_n)})",
     )
 
 # ── F3 — _assemble_style_references_block: poda por prioridade ───────────
@@ -216,12 +259,7 @@ check(
     f"(len={len(_pruned_block)}, max={_prune_budget})",
 )
 
-# ── compute_reference_budgets ────────────────────────────────────────────
-MAX_TOTAL = 22000
-MAX_SECTION = 2200
-MAX_THESIS = 4500
-N_SECTIONS = 4
-
+# ── compute_reference_budgets: contrato geral (teto e não estouro) ───────
 for n in (1, 3, 12, 25):
     budgets = compute_reference_budgets(
         n, max_total_chars=MAX_TOTAL, max_section_chars=MAX_SECTION, max_thesis_chars=MAX_THESIS,

@@ -671,6 +671,12 @@ DOCUMENT_TYPE_LABELS = {
     "peticao_intermediaria": "Petição Intermediária",
 }
 
+# Rótulo placeholder usado quando uma seleção não tem tese de catálogo
+# associada (`thesis` é None). Não é uma tese real do catálogo — o worker
+# (process_panel.py) filtra esse rótulo antes de gerar avisos de cobertura,
+# já que "tese sem modelo" não faz sentido para uma seleção sem tese.
+NO_THESIS_LABEL = "Sem tese específica"
+
 
 class AgentGeneratedDocument:
     """
@@ -1095,7 +1101,7 @@ class AgentGeneratedDocument:
 
             section_label = self._normalize_section_label_for_prompt(source_section)
             if not section_label:
-                section_label = (thesis.name if thesis else "Sem tese específica").strip()
+                section_label = (thesis.name if thesis else NO_THESIS_LABEL).strip()
 
             grouped.setdefault(section_label, []).append({
                 'benefit': benefit,
@@ -1193,7 +1199,7 @@ class AgentGeneratedDocument:
         if thesis is not None:
             thesis_name = getattr(thesis, 'title', None) or getattr(thesis, 'name', None)
             thesis_key = getattr(thesis, 'key', None)
-        thesis_label = (str(thesis_name).strip() if thesis_name else 'Sem tese específica')
+        thesis_label = (str(thesis_name).strip() if thesis_name else NO_THESIS_LABEL)
         return thesis_label, (str(thesis_key).strip() if thesis_key else None)
 
     def _empty_thesis_coverage(self, selections: list[dict]) -> list[dict]:
@@ -1449,6 +1455,18 @@ class AgentGeneratedDocument:
             )
         except Exception as error:
             print(f"[AgentGeneratedDocument] Falha ao carregar referências de estilo: {error}")
+            # F3: a exceção pode ter ocorrido ANTES do laço por tese (ex.:
+            # construtor do retriever) — nesse caso coverage_list segue [] e
+            # a geração seguiria sem aviso nenhum para nenhuma tese.
+            # Completa com placeholder sem_modelo=True para toda tese que
+            # ainda não tenha entrada, preservando as que já foram
+            # processadas com sucesso antes da falha.
+            already_covered = {
+                c.get("tese") for c in coverage_list if isinstance(c, dict)
+            }
+            for placeholder in self._empty_thesis_coverage(selections):
+                if placeholder["tese"] not in already_covered:
+                    coverage_list.append(placeholder)
             self.last_reference_coverage = coverage_list
             return ""
 
@@ -1481,8 +1499,14 @@ class AgentGeneratedDocument:
 
         # Sem seções sobrando e ainda estoura: corte bruto, mas conta e
         # avisa quantas teses foram afetadas (total ou parcialmente cortadas).
+        # F10: budget_for_theses NÃO desconta mais 1 char à parte para o
+        # separador que liga `prefix` ao primeiro bloco de tese — esse char
+        # já está contado no `+ 1` de cada `entry_len` abaixo (o laço soma
+        # exatamente N separadores para N blocos: o que liga o prefixo ao
+        # primeiro + os N-1 entre blocos). Descontar os dois lugares fazia
+        # `affected` ficar 1 tese maior do que o necessário.
         prefix = "\n".join(header_blocks + remaining_sections)
-        budget_for_theses = max(0, max_total_chars - len(prefix) - (1 if thesis_blocks else 0))
+        budget_for_theses = max(0, max_total_chars - len(prefix))
 
         affected = 0
         consumed = 0
@@ -1566,6 +1590,29 @@ class AgentGeneratedDocument:
         parts.append("</SECAO>")
         return "\n".join(parts)
 
+    @staticmethod
+    def _prefer_distinct_references(chunks: list[dict]) -> list[dict]:
+        """Reordena para priorizar peças (`reference_id`) distintas primeiro.
+
+        F2: usado em EXEMPLO_ESTRUTURA_TESE, cuja `append_section` aceita
+        vários itens — sem isso, os itens podiam vir todos da mesma peça
+        mesmo havendo uma segunda peça distinta disponível na lista de
+        chunks (mantém a ordem relativa dentro de cada grupo).
+        """
+        if not chunks:
+            return []
+        seen_refs: set = set()
+        first_pass: list[dict] = []
+        rest: list[dict] = []
+        for chunk in chunks:
+            ref_id = chunk.get("reference_id")
+            if ref_id is not None and ref_id not in seen_refs:
+                seen_refs.add(ref_id)
+                first_pass.append(chunk)
+            else:
+                rest.append(chunk)
+        return first_pass + rest
+
     def _build_budgeted_thesis_reference_block(
         self,
         *,
@@ -1576,16 +1623,23 @@ class AgentGeneratedDocument:
     ) -> str:
         """Monta bloco de referência por tese com orçamento por seção.
 
+        `max_chars` é orçamento de CONTEÚDO (categorias), não do bloco
+        renderizado inteiro — o rodapé fixo (`<INSTRUCAO_DE_USO>` +
+        `</TESE>`, ver THESIS_BLOCK_FOOTER_RESERVE_CHARS) já foi descontado
+        uma única vez por `compute_reference_budgets` antes de chegar aqui.
+        O bloco renderizado final sai em torno de
+        `max_chars + THESIS_BLOCK_FOOTER_RESERVE_CHARS`. NÃO desconte o
+        rodapé de novo aqui — descontar nos dois lugares reduzia pela
+        metade o teto efetivo de conteúdo por categoria (e, com muitas
+        teses, zerava todas as categorias, sobrando só rodapé no bloco).
+
         Orçamentos por categoria escalam proporcionalmente a `max_chars`
         (referência: os valores fixos abaixo valem para `max_chars=4500`,
         o antigo `max_thesis_chars`) — sem isso, com cotas pequenas (muitas
         teses) a categoria de maior prioridade (EXEMPLO_ESTRUTURA_TESE) era a
         primeira a ficar sem espaço, porque o preenchimento é tudo-ou-nada em
         ordem fixa dentro do orçamento total. Piso de ~250 chars por
-        categoria para nenhuma zerar. O rodapé fixo (`<INSTRUCAO_DE_USO>` +
-        `</TESE>`, ver THESIS_BLOCK_FOOTER_RESERVE_CHARS) é reservado ANTES
-        de preencher categorias, já que é anexado incondicionalmente no
-        final — sem a reserva, o bloco renderizado estourava `max_chars`.
+        categoria para nenhuma zerar.
         """
         if not chunks:
             return ""
@@ -1598,10 +1652,9 @@ class AgentGeneratedDocument:
             "PADRAO_PEDIDO_DA_TESE": max(250, int(900 * scale)),
             "REFERENCIAS_COMPLEMENTARES": max(250, int(600 * scale)),
         }
-        # Orçamento disponível para categorias, descontado o rodapé fixo que
-        # é anexado depois (F2) — o bloco final (categorias + rodapé) cabe
-        # em max_chars.
-        content_ceiling = max(0, max_chars - THESIS_BLOCK_FOOTER_RESERVE_CHARS)
+        # Orçamento disponível para categorias == max_chars (já é orçamento
+        # de conteúdo, ver docstring acima — o rodapé é somado por cima).
+        content_ceiling = max(0, max_chars)
 
         regional = (trf_region or "").strip().upper()
         categories = {
@@ -1634,6 +1687,14 @@ class AgentGeneratedDocument:
                 categories["PADRAO_PEDIDO_DA_TESE"].append(chunk)
             else:
                 categories["REFERENCIAS_COMPLEMENTARES"].append(chunk)
+
+        # F2: EXEMPLO_ESTRUTURA_TESE aceita 2 itens (ver append_section
+        # abaixo) — reordena para priorizar peças (reference_id) distintas,
+        # senão os 2 itens podiam vir da mesma peça mesmo havendo uma
+        # segunda peça distinta disponível na lista.
+        categories["EXEMPLO_ESTRUTURA_TESE"] = self._prefer_distinct_references(
+            categories["EXEMPLO_ESTRUTURA_TESE"]
+        )
 
         parts = [f"\n<TESE nome=\"{thesis_label}\">"]
         total_chars = len(parts[0])
@@ -1715,7 +1776,7 @@ class AgentGeneratedDocument:
         append_section(
             "EXEMPLO_ESTRUTURA_TESE",
             categories["EXEMPLO_ESTRUTURA_TESE"],
-            max_items=1,
+            max_items=2,
             budget=budgets["EXEMPLO_ESTRUTURA_TESE"],
         )
         append_section(

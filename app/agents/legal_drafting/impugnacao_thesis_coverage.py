@@ -29,10 +29,13 @@ from app.agents.legal_drafting.impugnacao_process_context import (
 # Rodapé fixo de todo bloco <TESE>...</TESE> (ver
 # agent_generated_document._build_budgeted_thesis_reference_block): o texto
 # de <INSTRUCAO_DE_USO> + a tag de fechamento </TESE> são anexados DEPOIS de
-# preencher as categorias, fora do orçamento por categoria. Fonte única do
-# tamanho desse rodapé, usada tanto para reservar espaço antes de preencher
-# categorias quanto para compute_reference_budgets devolver um per_thesis
-# que já reflete o que sobra para conteúdo de fato (não o rodapé fixo).
+# preencher as categorias, fora do orçamento por categoria. A reserva desse
+# rodapé é descontada UMA ÚNICA VEZ, aqui, por compute_reference_budgets —
+# `per_thesis` já sai como orçamento de CONTEÚDO (o bloco renderizado fica
+# em torno de `per_thesis + THESIS_BLOCK_FOOTER_RESERVE_CHARS`). O builder
+# do bloco (`_build_budgeted_thesis_reference_block`) recebe `max_chars` já
+# líquido e NÃO deve descontar o rodapé de novo — descontar nos dois
+# lugares reduzia pela metade o teto efetivo de conteúdo por categoria.
 THESIS_BLOCK_FOOTER_TEXT = (
     "<INSTRUCAO_DE_USO>"
     "Priorize EXEMPLO_ESTRUTURA_TESE para estrutura argumentativa. "
@@ -57,15 +60,22 @@ def compute_reference_budgets(
     n_sections: int = 4,
     min_thesis_chars: int = 1200,
     footer_reserve_chars: int = THESIS_BLOCK_FOOTER_RESERVE_CHARS,
+    header_reserve_chars: int = 500,
 ) -> dict:
     """Cota por tese ANTES de qualquer extra — nenhuma tese fica sem bloco.
 
-    Retorna {'per_thesis': int, 'per_section': int}. `per_thesis` já desconta
-    `footer_reserve_chars` (o rodapé fixo de cada bloco de tese, ver
-    THESIS_BLOCK_FOOTER_RESERVE_CHARS) para refletir o que sobra para
-    conteúdo de fato.
+    Retorna {'per_thesis': int, 'per_section': int} — orçamento de
+    CONTEÚDO por tese/seção (a reserva do rodapé fixo de cada bloco
+    `<TESE>`, ver THESIS_BLOCK_FOOTER_RESERVE_CHARS, já está descontada de
+    `per_thesis`; quem monta o bloco não deve descontá-la de novo — ver
+    `_build_budgeted_thesis_reference_block`). `header_reserve_chars`
+    desconta do orçamento total o cabeçalho fixo do bloco de referências
+    (as linhas `=== REFERENCIAS ... ===` fora de qualquer tese/seção),
+    para que encaixes exatos não estourem `max_total_chars` na montagem
+    final.
     """
     n = max(1, n_theses)
+    max_total_chars = max(0, max_total_chars - header_reserve_chars)
     if n * min_thesis_chars > max_total_chars:
         # O piso multiplicado por n não cabe no orçamento total: cede o piso
         # (em vez de estourar max_total_chars) e nada sobra para seções.

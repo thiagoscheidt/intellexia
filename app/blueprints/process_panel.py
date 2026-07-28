@@ -14,7 +14,11 @@ from app.models import (
     ProcessCommunication, ProcessDeadline, ProcessDatajudSnapshot,
     ImpugnacaoReferenceModel,
 )
-from app.agents.legal_drafting.agent_generated_document import AgentGeneratedDocument, DOCUMENT_TYPE_LABELS
+from app.agents.legal_drafting.agent_generated_document import (
+    AgentGeneratedDocument,
+    DOCUMENT_TYPE_LABELS,
+    NO_THESIS_LABEL,
+)
 from app.agents.legal_drafting.document_docx_export_agent import OfficeDocxExportAgent
 from app.agents.legal_drafting.impugnacao_enrichment_agent import ImpugnacaoEnrichmentAgent
 from app.services import process_deadline_service
@@ -3488,14 +3492,24 @@ def _run_generated_document_generation(app_obj, law_firm_id, process_id, doc_id,
             if isinstance(result_dict, dict):
                 internal_notes = (result_dict.get('internal_review_notes') or '').strip() or None
 
-            # Cobertura por tese: teses sem peça-modelo no acervo viram item
+            # Cobertura por tese: teses redigidas sem peça-modelo viram item
             # de checklist nas notas internas — "sem peça-modelo" é palavra-
             # chave de alerta no renderizador de notas da tela de detalhe.
+            # F5: "Sem tese específica" é o rótulo placeholder de seleções
+            # sem tese de catálogo (ver NO_THESIS_LABEL) — não é uma tese
+            # real, então não vira aviso aqui.
             coverage = getattr(agent, 'last_reference_coverage', None) or []
-            missing = [c for c in coverage if isinstance(c, dict) and c.get('sem_modelo')]
+            missing = [
+                c for c in coverage
+                if isinstance(c, dict) and c.get('sem_modelo') and c.get('tese') != NO_THESIS_LABEL
+            ]
+            # F6: o texto não afirma ausência no acervo (pode ser infra fora
+            # do ar, ou o usuário desmarcou todas as peças da tese) — mantém
+            # a expressão literal "sem peça-modelo" (palavra-chave acima).
             warning_lines = [
-                f'- [ ] Não foi encontrado modelo de referência para a tese "{c.get("tese")}" — '
-                'redigida sem peça-modelo do acervo; revisar fundamentação e citações.'
+                f'- [ ] Tese "{c.get("tese")}" foi redigida sem peça-modelo do acervo '
+                '(nenhuma referência confirmada ou disponível na geração); '
+                'revisar fundamentação e citações.'
                 for c in missing
             ]
             if warning_lines:

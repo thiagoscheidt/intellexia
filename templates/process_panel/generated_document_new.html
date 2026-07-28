@@ -1173,8 +1173,13 @@ breadcrumbs=[
     function melhorCamadaEntre(exemplos) {
       let best = null;
       exemplos.forEach(e => {
-        const order = LAYER_ORDER.hasOwnProperty(e.camada) ? LAYER_ORDER[e.camada] : LAYER_ORDER.geral;
-        if (best === null || order < LAYER_ORDER[best]) best = e.camada;
+        // Normaliza para uma das 4 camadas conhecidas (fallback 'geral')
+        // ANTES de comparar — senão, com uma camada desconhecida no 1º
+        // item, `best` guardava a string desconhecida e a comparação
+        // seguinte virava `x < LAYER_ORDER[undefined]` (sempre falsa),
+        // congelando o resultado no valor inicial.
+        const camada = LAYER_ORDER.hasOwnProperty(e.camada) ? e.camada : 'geral';
+        if (best === null || LAYER_ORDER[camada] < LAYER_ORDER[best]) best = camada;
       });
       return best;
     }
