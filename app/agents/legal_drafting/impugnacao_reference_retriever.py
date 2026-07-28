@@ -63,8 +63,8 @@ class ImpugnacaoReferenceRetriever:
         law_firm_id: int,
         section_kind: Optional[str],
         generation_mode: Optional[str],
-        trf_region: Optional[str],
         thesis_catalog_id: Optional[str],
+        extra_match: Optional[dict] = None,
     ) -> rest.Filter:
         must: list[rest.FieldCondition] = [
             rest.FieldCondition(key="law_firm_id", match=rest.MatchValue(value=int(law_firm_id))),
@@ -95,16 +95,56 @@ class ImpugnacaoReferenceRetriever:
                 )
             )
 
-        should = []
-        if trf_region:
-            should.append(
-                rest.FieldCondition(
-                    key="trf_region",
-                    match=rest.MatchValue(value=trf_region.upper()),
-                )
-            )
+        for key, value in (extra_match or {}).items():
+            must.append(rest.FieldCondition(key=key, match=rest.MatchValue(value=value)))
 
-        return rest.Filter(must=must, should=should or None)
+        return rest.Filter(must=must)
+
+    @staticmethod
+    def _context_layers(context: Optional[dict], section_kind: Optional[str]) -> list[dict]:
+        """Filtros extras em ordem de especificidade: juiz > vara > TRF > geral.
+
+        Para chunks de jurisprudência, a vara de ORIGEM da peça fica em
+        `orgao_julgador_origem_norm` (o `orgao_julgador` é do precedente).
+        """
+        context = context or {}
+        vara_key = (
+            "orgao_julgador_origem_norm"
+            if section_kind == "jurisprudence"
+            else "orgao_julgador_norm"
+        )
+        layers: list[dict] = []
+        if context.get("judge_name_norm"):
+            layers.append({"judge_name_norm": context["judge_name_norm"]})
+        if context.get("orgao_julgador_norm"):
+            layers.append({vara_key: context["orgao_julgador_norm"]})
+        if context.get("trf_region"):
+            layers.append({"trf_region": str(context["trf_region"]).upper()})
+        layers.append({})
+        return layers
+
+    @staticmethod
+    def _hit_to_item(payload: dict, default_kind: str) -> dict:
+        return {
+            "section_kind": payload.get("section_kind") or default_kind,
+            "heading": payload.get("heading") or "",
+            "section": payload.get("section") or "",
+            "section_normalized": payload.get("section_normalized") or "",
+            "reference_title": payload.get("reference_title") or "",
+            "trf_region": payload.get("trf_region") or "",
+            "thesis_catalog_id": payload.get("thesis_catalog_id") or "",
+            "thesis_catalog_ids": payload.get("thesis_catalog_ids") or [],
+            "quality_score": payload.get("quality_score"),
+            "tribunal": payload.get("tribunal") or "",
+            "case_number": payload.get("case_number") or "",
+            "relator": payload.get("relator") or "",
+            "orgao_julgador": payload.get("orgao_julgador") or "",
+            "data_julgamento": payload.get("data_julgamento") or "",
+            "tipo_juris": payload.get("tipo_juris") or "",
+            "secao_origem": payload.get("secao_origem") or "general",
+            "fundamento_principal": payload.get("fundamento_principal") or "",
+            "text": (payload.get("text") or "").strip(),
+        }
 
     def fetch_style_references(
         self,
@@ -113,12 +153,17 @@ class ImpugnacaoReferenceRetriever:
         query_text: str,
         generation_mode: Optional[str] = None,
         trf_region: Optional[str] = None,
+        context: Optional[dict] = None,
         thesis_catalog_id: Optional[str] = None,
         kind_plan: Optional[list[tuple[str, int]]] = None,
         max_chunks: Optional[int] = None,
         max_chars: Optional[int] = None,
     ) -> list[dict]:
         """Retorna lista de chunks para compor bloco de referência.
+
+        Busca em camadas de especificidade decrescente (juiz > vara > TRF >
+        geral), conforme `context` (formato de `build_reference_search_context`).
+        Sem `context`, o kwarg `trf_region` vira contexto mínimo (compat).
 
         Cada item: {section_kind, heading, reference_title, trf_region,
         quality_score, text}.
@@ -134,6 +179,9 @@ class ImpugnacaoReferenceRetriever:
         cap_chunks = max_chunks or IMPUGNACAO_REFERENCES_MAX_CHUNKS
         cap_chars = max_chars or IMPUGNACAO_REFERENCES_MAX_CHARS
 
+        if context is None and trf_region:
+            context = {"trf_region": trf_region}
+
         try:
             vector = self._embed(query_text or "impugnacao a contestacao FAP")
         except Exception as error:
@@ -142,108 +190,66 @@ class ImpugnacaoReferenceRetriever:
 
         collected: list[dict] = []
         total_chars = 0
-        seen_ids: set[str] = set()
+        seen_ids: set = set()
 
-        for kind, top_k in plan:
-            if len(collected) >= cap_chunks or total_chars >= cap_chars:
-                break
+        def _query(kind: Optional[str], extra_match: dict, limit: int):
             try:
-                response = self.qdrant.query_points(
+                return self.qdrant.query_points(
                     collection_name=self.collection,
                     query=vector,
                     query_filter=self._build_filter(
                         law_firm_id=law_firm_id,
                         section_kind=kind,
                         generation_mode=generation_mode,
-                        trf_region=trf_region,
                         thesis_catalog_id=thesis_catalog_id,
+                        extra_match=extra_match,
                     ),
-                    limit=top_k,
+                    limit=limit,
                     with_payload=True,
-                )
+                ).points
             except Exception as error:
-                print(f"[ImpugnacaoReferenceRetriever] Falha ao buscar kind={kind}: {error}")
-                continue
+                print(f"[ImpugnacaoReferenceRetriever] Falha kind={kind} camada={extra_match}: {error}")
+                return []
 
-            for hit in response.points:
-                if hit.id in seen_ids:
-                    continue
-                payload = hit.payload or {}
-                text = (payload.get("text") or "").strip()
-                if not text:
-                    continue
-                if total_chars + len(text) > cap_chars and collected:
-                    continue
-                collected.append(
-                    {
-                        "section_kind": payload.get("section_kind") or kind,
-                        "heading": payload.get("heading") or "",
-                        "reference_title": payload.get("reference_title") or "",
-                        "trf_region": payload.get("trf_region") or "",
-                        "thesis_catalog_id": payload.get("thesis_catalog_id") or "",
-                        "thesis_catalog_ids": payload.get("thesis_catalog_ids") or [],
-                        "quality_score": payload.get("quality_score"),
-                        "tribunal": payload.get("tribunal") or "",
-                        "case_number": payload.get("case_number") or "",
-                        "relator": payload.get("relator") or "",
-                        "orgao_julgador": payload.get("orgao_julgador") or "",
-                        "data_julgamento": payload.get("data_julgamento") or "",
-                        "tipo_juris": payload.get("tipo_juris") or "",
-                        "secao_origem": payload.get("secao_origem") or "general",
-                        "fundamento_principal": payload.get("fundamento_principal") or "",
-                        "text": text,
-                    }
+        def _collect(kind: Optional[str], top_k: int) -> None:
+            nonlocal total_chars
+            taken_for_kind = 0
+            for layer in self._context_layers(context, kind):
+                if taken_for_kind >= top_k or len(collected) >= cap_chunks or total_chars >= cap_chars:
+                    return
+                hits = _query(kind, layer, top_k)
+                # Dentro da camada, mantém a ordem de score do Qdrant;
+                # quality_score desempata.
+                hits = sorted(
+                    hits,
+                    key=lambda h: (
+                        -(getattr(h, "score", 0) or 0),
+                        -float((h.payload or {}).get("quality_score") or 0),
+                    ),
                 )
-                seen_ids.add(hit.id)
-                total_chars += len(text)
-                if len(collected) >= cap_chunks or total_chars >= cap_chars:
-                    break
+                for hit in hits:
+                    if taken_for_kind >= top_k or len(collected) >= cap_chunks or total_chars >= cap_chars:
+                        return
+                    if hit.id in seen_ids:
+                        continue
+                    item = self._hit_to_item(hit.payload or {}, kind or "general")
+                    if not item["text"]:
+                        continue
+                    if total_chars + len(item["text"]) > cap_chars and collected:
+                        continue
+                    collected.append(item)
+                    seen_ids.add(hit.id)
+                    total_chars += len(item["text"])
+                    taken_for_kind += 1
+
+        for kind, top_k in plan:
+            if len(collected) >= cap_chunks or total_chars >= cap_chars:
+                break
+            _collect(kind, top_k)
 
         # Fallback amplo apenas quando nada foi encontrado no plano principal.
-        if not collected and cap_chunks > 0 and total_chars < cap_chars:
-            try:
-                broad_response = self.qdrant.query_points(
-                    collection_name=self.collection,
-                    query=vector,
-                    query_filter=self._build_filter(
-                        law_firm_id=law_firm_id,
-                        section_kind=None,
-                        generation_mode=generation_mode,
-                        trf_region=trf_region,
-                        thesis_catalog_id=thesis_catalog_id,
-                    ),
-                    limit=cap_chunks,
-                    with_payload=True,
-                )
-            except Exception as error:
-                print(f"[ImpugnacaoReferenceRetriever] Falha no fallback amplo: {error}")
-                broad_response = None
-
-            for hit in (broad_response.points if broad_response else []):
-                if hit.id in seen_ids:
-                    continue
-                payload = hit.payload or {}
-                text = (payload.get("text") or "").strip()
-                if not text:
-                    continue
-                if total_chars + len(text) > cap_chars and collected:
-                    continue
-                collected.append(
-                    {
-                        "section_kind": payload.get("section_kind") or "general",
-                        "heading": payload.get("heading") or "",
-                        "reference_title": payload.get("reference_title") or "",
-                        "trf_region": payload.get("trf_region") or "",
-                        "thesis_catalog_id": payload.get("thesis_catalog_id") or "",
-                        "thesis_catalog_ids": payload.get("thesis_catalog_ids") or [],
-                        "quality_score": payload.get("quality_score"),
-                        "text": text,
-                    }
-                )
-                seen_ids.add(hit.id)
-                total_chars += len(text)
-                if len(collected) >= cap_chunks or total_chars >= cap_chars:
-                    break
+        if not collected and cap_chunks > 0:
+            _collect(None, cap_chunks)
 
         return collected
 
