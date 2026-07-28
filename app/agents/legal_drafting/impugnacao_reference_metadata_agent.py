@@ -21,6 +21,7 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 from langchain_openai import ChatOpenAI
+from app.utils.cnj import cnj_digits, tribunal_sigla_from_cnj
 
 
 _VALID_TRF = {"TRF1", "TRF2", "TRF3", "TRF4", "TRF5", "TRF6"}
@@ -51,6 +52,27 @@ class ImpugnacaoReferenceMetadata(BaseModel):
         description=(
             "Razão social da empresa autora, se aparecer no cabeçalho/qualificação "
             "da peça. Retorne null se não conseguir identificar."
+        ),
+    )
+    process_number: Optional[str] = Field(
+        None,
+        description=(
+            "Número CNJ do processo de origem da peça (formato "
+            "NNNNNNN-DD.AAAA.J.TR.OOOO), se constar no texto. Null caso contrário."
+        ),
+    )
+    orgao_julgador: Optional[str] = Field(
+        None,
+        description=(
+            "Vara/órgão julgador do endereçamento da peça (ex.: '3ª Vara Federal "
+            "de Florianópolis'). Null se não constar."
+        ),
+    )
+    judge_name: Optional[str] = Field(
+        None,
+        description=(
+            "Nome do(a) magistrado(a), somente se citado nominalmente no texto. "
+            "Null caso contrário — nunca deduza."
         ),
     )
     trf_region: Optional[str] = Field(
@@ -85,6 +107,12 @@ Regras:
   NIT ou nome de pessoa física. Pode citar setor/segmento e ano da vigência
   se aparecerem.
 - case_name: razão social da empresa autora, se aparecer; null caso contrário.
+- process_number: número CNJ completo do processo, se aparecer (formato
+  NNNNNNN-DD.AAAA.J.TR.OOOO). Copie exatamente como está; null se não constar.
+- orgao_julgador: vara/órgão julgador do endereçamento (ex.: "3ª Vara Federal
+  de Florianópolis"). Null se não constar.
+- judge_name: nome do(a) juiz(a) SOMENTE se citado nominalmente. Null caso
+  contrário — nunca deduza a partir da vara.
 - trf_region: detecte pelo endereçamento (ex.: "Justiça Federal da Seção
   Judiciária do RS" → TRF4). Use somente TRF1..TRF6 ou null.
 - generation_mode: 'A' (mérito técnico predominante) ou 'B' (defesa
@@ -154,6 +182,21 @@ class ImpugnacaoReferenceMetadataAgent:
         if meta.case_name is not None:
             cleaned = meta.case_name.strip()
             meta.case_name = cleaned[:250] if cleaned else None
+
+        if meta.process_number is not None:
+            candidate = meta.process_number.strip()
+            meta.process_number = candidate[:30] if len(cnj_digits(candidate)) == 20 else None
+
+        for attr in ("orgao_julgador", "judge_name"):
+            value = getattr(meta, attr)
+            if value is not None:
+                cleaned = value.strip()
+                setattr(meta, attr, cleaned[:250] if cleaned else None)
+
+        # CNJ válido é fonte determinística de TRF — sobrepõe o palpite do LLM.
+        cnj_sigla = tribunal_sigla_from_cnj(meta.process_number) if meta.process_number else None
+        if cnj_sigla and cnj_sigla.startswith("TRF"):
+            meta.trf_region = cnj_sigla
 
         if meta.trf_region:
             v = meta.trf_region.strip().upper()
