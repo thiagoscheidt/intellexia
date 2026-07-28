@@ -320,6 +320,10 @@ breadcrumbs=[
             </div>
             <div class="wizard-step" id="step-ind-3">
               <div class="wizard-step-circle">3</div>
+              <div class="wizard-step-label">Documentos</div>
+            </div>
+            <div class="wizard-step" id="step-ind-4">
+              <div class="wizard-step-circle">4</div>
               <div class="wizard-step-label">Revisão</div>
             </div>
           </div>
@@ -536,8 +540,73 @@ breadcrumbs=[
               </div>
             </div>
 
-            <!-- ── Step 3: Revisão ────────────────────────────────────── -->
+            <!-- ── Step 3: Documentos ─────────────────────────────────── -->
             <div class="wizard-panel" id="panel-3">
+              <h6 class="fw-semibold mb-1">Documentos e anexos</h6>
+              <p class="text-muted small mb-3">
+                Confira os anexos por benefício e as peças-modelo de referência que serão usados na geração.
+              </p>
+
+              <input type="hidden" name="documents_confirmed" value="1">
+
+              <div id="docs-loading" class="text-center py-5 text-muted">
+                <div class="spinner-border spinner-border-sm mb-2" role="status"></div>
+                <div class="small">Analisando documentos do processo…</div>
+              </div>
+
+              <div id="docs-error" class="text-center py-5 d-none">
+                <p class="text-danger small mb-2">
+                  <i class="bi bi-exclamation-triangle me-1"></i>
+                  Não foi possível carregar a análise de documentos.
+                </p>
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="loadDocumentsPreview(true)">
+                  <i class="bi bi-arrow-clockwise me-1"></i> Tentar novamente
+                </button>
+              </div>
+
+              <div id="docs-content" class="d-none">
+                <!-- Contestação -->
+                <div class="mb-3 d-none" id="docs-contestacao-block">
+                  <div class="review-section-label mb-2">
+                    <i class="bi bi-file-earmark-pdf me-1"></i>Contestação
+                  </div>
+                  <div id="docs-contestacao-card"></div>
+                </div>
+
+                <!-- Anexos por benefício -->
+                <div class="mb-3">
+                  <div class="review-section-label mb-2">
+                    <i class="bi bi-paperclip me-1"></i>Anexos por Benefício
+                  </div>
+                  <div id="docs-attachments-container" class="d-flex flex-column gap-2"></div>
+                </div>
+
+                <!-- Peças-modelo de referência -->
+                <div class="mb-3 d-none" id="docs-references-block">
+                  <div class="review-section-label mb-2">
+                    <i class="bi bi-bookmark-star me-1"></i>Peças-modelo de Referência
+                  </div>
+                  <div id="docs-references-status" class="small mb-2 d-none"></div>
+                  <div id="docs-references-container" class="d-flex flex-column gap-2"></div>
+                  <div id="docs-references-unchecked-warning" class="alert alert-warning py-2 px-3 small mt-2 d-none">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    Nenhuma peça-modelo selecionada — o documento será gerado sem referências de estilo.
+                  </div>
+                </div>
+              </div>
+
+              <div class="step-actions">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="goToStep(2)">
+                  <i class="bi bi-arrow-left me-1"></i> Anterior
+                </button>
+                <button type="button" class="btn btn-primary btn-sm" onclick="goToStep(4)">
+                  Próximo <i class="bi bi-arrow-right ms-1"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- ── Step 4: Revisão ────────────────────────────────────── -->
+            <div class="wizard-panel" id="panel-4">
               <h6 class="fw-semibold mb-1">Revisão e geração</h6>
               <p class="text-muted small mb-3">Confirme os dados abaixo e clique em <strong>Gerar Documento</strong>.
               </p>
@@ -609,6 +678,25 @@ breadcrumbs=[
                 </div>
               </div>
 
+              <!-- Documentos confirmados -->
+              <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <span class="review-section-label">
+                    <i class="bi bi-paperclip me-1"></i>Documentos Confirmados
+                  </span>
+                  <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none small"
+                    onclick="goToStep(3)">
+                    <i class="bi bi-pencil-square me-1"></i>Alterar
+                  </button>
+                </div>
+                <div class="summary-box">
+                  <div class="summary-line">
+                    <span class="text-muted">Documentos confirmados</span>
+                    <span class="fw-semibold text-end" id="summary-docs-line">—</span>
+                  </div>
+                </div>
+              </div>
+
               <!-- Instruções adicionais -->
               <div class="mb-3">
                 <label class="form-label fw-semibold small">
@@ -621,7 +709,7 @@ breadcrumbs=[
               </div>
 
               <div class="step-actions">
-                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="goToStep(2)">
+                <button type="button" class="btn btn-outline-secondary btn-sm" onclick="goToStep(3)">
                   <i class="bi bi-arrow-left me-1"></i> Anterior
                 </button>
                 <button type="submit" class="btn btn-success btn-sm" id="btnGenerate">
@@ -666,7 +754,8 @@ breadcrumbs=[
     window.goToStep = function (step) {
       if (step === 2 && currentStep === 1 && !validateStep1()) return;
       if (step === 3 && currentStep === 2 && !validateStep2()) return;
-      if (step === 3) buildSummary();
+      if (step === 3) loadDocumentsPreview();
+      if (step === 4) buildSummary();
 
       const prevInd = document.getElementById('step-ind-' + currentStep);
       prevInd.classList.remove('active');
@@ -679,7 +768,7 @@ breadcrumbs=[
       curInd.classList.add('active');
       document.getElementById('panel-' + currentStep).classList.add('active');
 
-      for (let i = currentStep + 1; i <= 3; i++) {
+      for (let i = currentStep + 1; i <= 4; i++) {
         document.getElementById('step-ind-' + i).classList.remove('active', 'completed');
       }
     };
@@ -753,6 +842,276 @@ breadcrumbs=[
       });
     }
 
+    // ── Documentos (step 3) ─────────────────────────────────────────────
+    const PREVIEW_URL = "{{ url_for('process_panel.generated_document_preview', process_id=process.id) }}";
+    const CAMADA_BADGE = {
+      juiz: { label: 'Mesmo juiz', cls: 'bg-success text-white' },
+      vara: { label: 'Mesma vara', cls: 'bg-primary text-white' },
+      trf: { label: 'Mesmo TRF', cls: 'bg-info text-white' },
+      geral: { label: 'Acervo geral', cls: 'bg-secondary-subtle text-secondary-emphasis' },
+    };
+    let docsLastSignature = null;
+    let docsLoadedOk = false;
+
+    function computeSelectionSignature() {
+      const typeEl = document.querySelector('input[name="document_type"]:checked');
+      const type = typeEl ? typeEl.value : '';
+      const sels = Array.from(document.querySelectorAll('input[name="selections[]"]:checked'))
+        .map(el => el.value).sort();
+      return type + '|' + sels.join(',');
+    }
+
+    function renderContestacaoCard(cont) {
+      const card = document.createElement('div');
+      const icon = document.createElement('i');
+      const text = document.createElement('span');
+      text.className = 'small fw-semibold';
+      if (cont.pdf_encontrado && cont.resumo_encontrado) {
+        card.className = 'p-3 rounded-3 bg-success-subtle border border-success-subtle d-flex align-items-center gap-2';
+        icon.className = 'bi bi-check-circle-fill text-success';
+        text.classList.add('text-success-emphasis');
+        text.textContent = 'Contestação da União encontrada: ' + (cont.pdf_nome || '');
+      } else {
+        card.className = 'p-3 rounded-3 bg-danger-subtle border border-danger-subtle d-flex align-items-center gap-2';
+        icon.className = 'bi bi-exclamation-triangle-fill text-danger';
+        text.classList.add('text-danger-emphasis');
+        const missing = [];
+        if (!cont.pdf_encontrado) missing.push('PDF da contestação não encontrado');
+        if (!cont.resumo_encontrado) missing.push('resumo da contestação não encontrado');
+        text.textContent = missing.join(' e ') + ' — a geração falhará sem a contestação/resumo.';
+      }
+      card.appendChild(icon);
+      card.appendChild(text);
+      return card;
+    }
+
+    function renderBenefitAttachments(b) {
+      const card = document.createElement('div');
+      card.className = 'review-benefit-card';
+
+      const header = document.createElement('div');
+      header.className = 'd-flex align-items-center gap-2 flex-wrap mb-2';
+      const nbBadge = document.createElement('span');
+      nbBadge.className = 'badge bg-secondary-subtle text-secondary-emphasis';
+      nbBadge.textContent = 'NB ' + (b.nb || '—');
+      header.appendChild(nbBadge);
+      if (b.segurado) {
+        const seg = document.createElement('span');
+        seg.className = 'fw-semibold small';
+        seg.textContent = b.segurado;
+        header.appendChild(seg);
+      }
+      card.appendChild(header);
+
+      const anexos = b.anexos || [];
+      if (anexos.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'text-muted small fst-italic';
+        empty.textContent = 'Nenhum anexo descrito.';
+        card.appendChild(empty);
+        return card;
+      }
+
+      const list = document.createElement('div');
+      list.className = 'd-flex flex-column gap-1';
+      anexos.forEach(a => {
+        const row = document.createElement('label');
+        row.className = 'd-flex align-items-center gap-2 small mb-0';
+        const chk = document.createElement('input');
+        chk.type = 'checkbox';
+        chk.name = 'confirmed_attachment_ids[]';
+        chk.value = String(a.id);
+        chk.checked = true;
+        row.appendChild(chk);
+        const span = document.createElement('span');
+        const titulo = a.titulo || a.arquivo || 'Anexo';
+        span.textContent = titulo;
+        if (a.arquivo && a.titulo && a.titulo !== a.arquivo) {
+          const fileSpan = document.createElement('span');
+          fileSpan.className = 'text-muted';
+          fileSpan.textContent = ' (' + a.arquivo + ')';
+          span.appendChild(fileSpan);
+        }
+        row.appendChild(span);
+        list.appendChild(row);
+      });
+      card.appendChild(list);
+      return card;
+    }
+
+    function renderReferenceCard(ref) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'review-benefit-card';
+
+      const label = document.createElement('label');
+      label.className = 'd-flex align-items-start gap-2 mb-0';
+      const chk = document.createElement('input');
+      chk.type = 'checkbox';
+      chk.name = 'confirmed_reference_ids[]';
+      chk.value = String(ref.reference_id);
+      chk.checked = true;
+      chk.className = 'mt-1';
+      chk.addEventListener('change', updateReferencesUncheckedWarning);
+      label.appendChild(chk);
+
+      const body = document.createElement('div');
+      body.className = 'flex-grow-1 min-w-0';
+
+      const headerRow = document.createElement('div');
+      headerRow.className = 'd-flex align-items-center gap-2 flex-wrap mb-1';
+      const titleSpan = document.createElement('span');
+      titleSpan.className = 'fw-semibold small';
+      titleSpan.textContent = ref.titulo || '(sem título)';
+      headerRow.appendChild(titleSpan);
+      const camadaInfo = CAMADA_BADGE[ref.camada] || CAMADA_BADGE.geral;
+      const camadaBadge = document.createElement('span');
+      camadaBadge.className = 'badge ' + camadaInfo.cls;
+      camadaBadge.style.fontSize = '.7rem';
+      camadaBadge.textContent = camadaInfo.label;
+      headerRow.appendChild(camadaBadge);
+      body.appendChild(headerRow);
+
+      const metaParts = [];
+      if (ref.trf_region) metaParts.push(ref.trf_region);
+      if (ref.orgao_julgador) metaParts.push(ref.orgao_julgador);
+      if (ref.judge_name) metaParts.push(ref.judge_name);
+      if (metaParts.length) {
+        const meta = document.createElement('div');
+        meta.className = 'benefit-meta mb-1';
+        meta.textContent = metaParts.join(' · ');
+        body.appendChild(meta);
+      }
+
+      if (Array.isArray(ref.teses) && ref.teses.length) {
+        const thesesRow = document.createElement('div');
+        thesesRow.className = 'd-flex flex-wrap gap-1 mb-1';
+        ref.teses.forEach(t => {
+          const b = document.createElement('span');
+          b.className = 'badge bg-secondary-subtle text-secondary-emphasis';
+          b.style.fontSize = '.7rem';
+          b.textContent = t;
+          thesesRow.appendChild(b);
+        });
+        body.appendChild(thesesRow);
+      }
+
+      const footRow = document.createElement('div');
+      footRow.className = 'small text-muted';
+      const bits = [];
+      if (typeof ref.quality_score === 'number') bits.push('★ ' + ref.quality_score.toFixed(2));
+      const trechos = ref.trechos || 0;
+      bits.push(trechos + (trechos === 1 ? ' trecho' : ' trechos'));
+      footRow.textContent = bits.join(' · ');
+      body.appendChild(footRow);
+
+      label.appendChild(body);
+      wrapper.appendChild(label);
+      return wrapper;
+    }
+
+    function updateReferencesUncheckedWarning() {
+      const checkboxes = document.querySelectorAll('#docs-references-container input[type="checkbox"]');
+      const warning = document.getElementById('docs-references-unchecked-warning');
+      if (checkboxes.length === 0) { warning.classList.add('d-none'); return; }
+      const anyChecked = Array.from(checkboxes).some(c => c.checked);
+      warning.classList.toggle('d-none', anyChecked);
+    }
+
+    function renderDocumentsPreview(data, docType) {
+      const isImpugnacao = docType === 'impugnacao_contestacao';
+
+      // Contestação
+      const contBlock = document.getElementById('docs-contestacao-block');
+      const contCard = document.getElementById('docs-contestacao-card');
+      contCard.textContent = '';
+      if (data.contestacao && data.contestacao.aplicavel) {
+        contBlock.classList.remove('d-none');
+        contCard.appendChild(renderContestacaoCard(data.contestacao));
+      } else {
+        contBlock.classList.add('d-none');
+      }
+
+      // Anexos por benefício
+      const attContainer = document.getElementById('docs-attachments-container');
+      attContainer.textContent = '';
+      const beneficios = data.beneficios || [];
+      if (beneficios.length === 0) {
+        const empty = document.createElement('div');
+        empty.className = 'text-muted small fst-italic';
+        empty.textContent = 'Nenhum benefício selecionado para anexar documentos.';
+        attContainer.appendChild(empty);
+      } else {
+        beneficios.forEach(b => attContainer.appendChild(renderBenefitAttachments(b)));
+      }
+
+      // Peças-modelo de referência
+      const refBlock = document.getElementById('docs-references-block');
+      const refContainer = document.getElementById('docs-references-container');
+      const refStatus = document.getElementById('docs-references-status');
+      const refUncheckedWarning = document.getElementById('docs-references-unchecked-warning');
+      refContainer.textContent = '';
+      refStatus.textContent = '';
+      refStatus.classList.add('d-none');
+      refUncheckedWarning.classList.add('d-none');
+
+      if (!isImpugnacao) {
+        refBlock.classList.add('d-none');
+      } else {
+        refBlock.classList.remove('d-none');
+        if (data.referencias_erro) {
+          refStatus.className = 'alert alert-warning py-2 px-3 small mb-2';
+          refStatus.textContent = 'Busca de referências indisponível — o documento será gerado sem referências de estilo.';
+          refStatus.classList.remove('d-none');
+        } else if (!data.referencias || data.referencias.length === 0) {
+          refStatus.className = 'text-muted small fst-italic mb-2';
+          refStatus.textContent = 'Nenhuma peça-modelo de referência encontrada para este processo — o documento será gerado sem referências de estilo.';
+          refStatus.classList.remove('d-none');
+        } else {
+          data.referencias.forEach(ref => refContainer.appendChild(renderReferenceCard(ref)));
+        }
+        updateReferencesUncheckedWarning();
+      }
+    }
+
+    window.loadDocumentsPreview = function (force) {
+      const signature = computeSelectionSignature();
+      if (!force && docsLoadedOk && signature === docsLastSignature) return;
+
+      const loadingEl = document.getElementById('docs-loading');
+      const errorEl = document.getElementById('docs-error');
+      const contentEl = document.getElementById('docs-content');
+      loadingEl.classList.remove('d-none');
+      errorEl.classList.add('d-none');
+      contentEl.classList.add('d-none');
+
+      const typeEl = document.querySelector('input[name="document_type"]:checked');
+      const type = typeEl ? typeEl.value : '';
+      const selections = Array.from(document.querySelectorAll('input[name="selections[]"]:checked'))
+        .map(el => el.value);
+
+      fetch(PREVIEW_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ document_type: type, selections: selections }),
+      })
+        .then(resp => {
+          if (!resp.ok) throw new Error('http ' + resp.status);
+          return resp.json();
+        })
+        .then(data => {
+          renderDocumentsPreview(data, type);
+          docsLastSignature = signature;
+          docsLoadedOk = true;
+          loadingEl.classList.add('d-none');
+          contentEl.classList.remove('d-none');
+        })
+        .catch(function () {
+          docsLoadedOk = false;
+          loadingEl.classList.add('d-none');
+          errorEl.classList.remove('d-none');
+        });
+    };
+
     // ── Summary ───────────────────────────────────────────────────────────
     const TYPE_LABELS = {{ document_type_labels | tojson
   }};
@@ -770,6 +1129,14 @@ breadcrumbs=[
 
     countBadge.textContent = checked.length;
     container.querySelectorAll('.review-benefit-card').forEach(el => el.remove());
+
+    const refCount = document.querySelectorAll('input[name="confirmed_reference_ids[]"]:checked').length;
+    const attCount = document.querySelectorAll('input[name="confirmed_attachment_ids[]"]:checked').length;
+    const docsLine = document.getElementById('summary-docs-line');
+    if (docsLine) {
+      docsLine.textContent = refCount + ' peça' + (refCount === 1 ? '' : 's') + '-modelo · '
+        + attCount + ' anexo' + (attCount === 1 ? '' : 's');
+    }
 
     if (checked.length === 0) {
       emptyMsg.classList.remove('d-none');
