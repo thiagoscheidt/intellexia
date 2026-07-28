@@ -70,6 +70,54 @@ bi-file-earmark-richtext') %}
         {% endfor %}{% endif %}
         {% endwith %}
 
+        {% if reference.ingestion_status == 'processing' %}
+        <!-- Ingestão em andamento: painel com polling (mesmo padrão do gerador de documentos) -->
+        <div class="card border-0 shadow-sm rounded-3 mb-4" id="ingestionProcessingPanel"
+            data-status-url="{{ url_for('impugnacao_references.reference_status', ref_id=reference.id) }}">
+            <div class="card-body text-center py-5">
+                <div class="position-relative d-inline-block mb-3">
+                    <div class="spinner-border text-primary" style="width:3rem;height:3rem;border-width:.2rem;"></div>
+                    <i class="bi bi-stars position-absolute top-50 start-50 translate-middle"
+                        style="color:#6f42c1;"></i>
+                </div>
+                <div class="fw-semibold">Indexando peça com IA…</div>
+                <div class="small text-muted mt-1">
+                    Extração de texto, metadados, classificação de teses e indexação rodam em
+                    segundo plano e podem levar alguns minutos. Esta página atualiza sozinha
+                    quando concluir — você pode navegar e voltar depois.
+                </div>
+            </div>
+        </div>
+        <script>
+            (function () {
+                var panel = document.getElementById('ingestionProcessingPanel');
+                if (!panel) return;
+                var poll = setInterval(function () {
+                    fetch(panel.dataset.statusUrl, { headers: { 'Accept': 'application/json' } })
+                        .then(function (resp) { return resp.ok ? resp.json() : null; })
+                        .then(function (data) {
+                            if (data && data.status && data.status !== 'processing') {
+                                clearInterval(poll);
+                                window.location.reload();
+                            }
+                        })
+                        .catch(function () { /* transitório — tenta de novo no próximo ciclo */ });
+                }, 4000);
+            })();
+        </script>
+        {% elif reference.ingestion_status == 'failed' %}
+        <div class="alert alert-danger d-flex align-items-start gap-3 mb-4">
+            <i class="bi bi-exclamation-triangle-fill fs-4"></i>
+            <div>
+                <div class="fw-semibold">Falha na indexação desta peça</div>
+                {% if reference.ingestion_error %}
+                <div class="small font-monospace mt-1">{{ reference.ingestion_error }}</div>
+                {% endif %}
+                <div class="small mt-2">Use o botão <strong>Reindexar trechos</strong> para tentar novamente.</div>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- Métricas rápidas -->
         <div class="row g-3 mb-4">
             <div class="col-6 col-md-3">
@@ -354,8 +402,13 @@ bi-file-earmark-richtext') %}
                             <form method="POST"
                                 action="{{ url_for('impugnacao_references.reindex_reference', ref_id=reference.id) }}"
                                 onsubmit="return confirm('Reindexar este arquivo? Os trechos antigos serão substituídos.');">
-                                <button class="btn btn-outline-primary btn-sm w-100">
+                                <button class="btn btn-outline-primary btn-sm w-100"
+                                    {% if reference.ingestion_status == 'processing' %}disabled{% endif %}>
+                                    {% if reference.ingestion_status == 'processing' %}
+                                    <span class="spinner-border spinner-border-sm me-1" style="width:.8rem;height:.8rem"></span> Indexando…
+                                    {% else %}
                                     <i class="bi bi-arrow-repeat me-1"></i> Reindexar trechos
+                                    {% endif %}
                                 </button>
                             </form>
                             {% if reference.status == 'active' %}
@@ -541,6 +594,10 @@ bi-file-earmark-richtext') %}
                             style="width:64px;height:64px">
                             <i class="bi bi-layers display-6 text-muted"></i>
                         </div>
+                        {% if reference.ingestion_status == 'processing' %}
+                        <p class="text-muted mb-1 fw-medium">Indexação em andamento</p>
+                        <p class="small text-muted mb-0">Os trechos aparecem aqui quando a ingestão terminar.</p>
+                        {% else %}
                         <p class="text-muted mb-1 fw-medium">Nenhum trecho indexado</p>
                         <p class="small text-muted mb-4">Use o botão "Reindexar" para gerar os trechos desta peça.</p>
                         <form method="POST"
@@ -550,6 +607,7 @@ bi-file-earmark-richtext') %}
                                 <i class="bi bi-arrow-repeat me-1"></i> Indexar agora
                             </button>
                         </form>
+                        {% endif %}
                     </div>
                     {% endif %}
                 </div>

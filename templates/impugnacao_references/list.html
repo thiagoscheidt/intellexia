@@ -190,6 +190,16 @@
                                         <i class="bi bi-archive me-1"></i>Arquivada
                                     </span>
                                     {% endif %}
+                                    {% if ref.ingestion_status == 'processing' %}
+                                    <span class="badge bg-info-subtle text-info border border-info-subtle">
+                                        <span class="spinner-border spinner-border-sm me-1"
+                                            style="width:.65rem;height:.65rem;border-width:.12em"></span>Indexando
+                                    </span>
+                                    {% elif ref.ingestion_status == 'failed' %}
+                                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle">
+                                        <i class="bi bi-exclamation-triangle me-1"></i>Falha
+                                    </span>
+                                    {% endif %}
                                 </td>
                                 <td class="text-muted" style="font-size:.8rem; white-space:nowrap">
                                     {{ ref.created_at|datetime_sp if ref.created_at else '—' }}

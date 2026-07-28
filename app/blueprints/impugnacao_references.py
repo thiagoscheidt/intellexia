@@ -9,22 +9,29 @@ Rotas:
     GET  /referencias-impugnacao/novo
     POST /referencias-impugnacao/novo
     GET  /referencias-impugnacao/<id>
+    GET  /referencias-impugnacao/<id>/status
     POST /referencias-impugnacao/<id>/metadados
     POST /referencias-impugnacao/<id>/arquivar
     POST /referencias-impugnacao/<id>/reativar
     POST /referencias-impugnacao/<id>/excluir
     POST /referencias-impugnacao/<id>/reindexar
+
+A ingestão (Docling + agentes + embeddings + Qdrant + Meilisearch) roda em
+thread de segundo plano — mesmo padrão do gerador de documentos do Painel de
+Processos — com status em ImpugnacaoReferenceModel.ingestion_status e polling
+pela rota /status.
 """
 
 from __future__ import annotations
 
 import os
+import threading
 from datetime import datetime
 from functools import wraps
 
 from flask import (
     Blueprint, render_template, request, redirect, url_for,
-    flash, session, abort,
+    flash, session, abort, current_app, jsonify,
 )
 from werkzeug.utils import secure_filename
 
@@ -81,6 +88,135 @@ def _load_thesis_catalog(law_firm_id: int) -> list[dict]:
         for thesis in theses
         if thesis.key and thesis.name
     ]
+
+
+# ── Ingestão em segundo plano ─────────────────────────────────────────
+
+def _run_reference_ingestion(app_obj, law_firm_id, ref_id, is_new):
+    """Worker de ingestão (thread): Docling → metadados IA → Qdrant → Meili.
+
+    No upload (is_new=True) os metadados são sempre extraídos; na reindexação
+    só há backfill quando os campos de contexto estão vazios.
+    """
+    with app_obj.app_context():
+        reference = None
+        try:
+            from app.agents.legal_drafting.impugnacao_reference_ingestor import (
+                ImpugnacaoReferenceIngestor,
+            )
+            from app.agents.legal_drafting.impugnacao_reference_metadata_agent import (
+                ImpugnacaoReferenceMetadataAgent,
+            )
+
+            reference = ImpugnacaoReferenceModel.query.filter_by(
+                id=ref_id, law_firm_id=law_firm_id
+            ).first()
+            if reference is None or not reference.file_path:
+                return
+
+            ingestor = ImpugnacaoReferenceIngestor()
+            processed_document = ingestor._process_document(reference.file_path)
+            extracted_text = str(getattr(processed_document, 'full_text', '') or '').strip()
+
+            needs_backfill = not any([
+                reference.process_number, reference.orgao_julgador, reference.judge_name,
+            ])
+            if extracted_text and (is_new or needs_backfill):
+                try:
+                    meta = ImpugnacaoReferenceMetadataAgent().extract(
+                        extracted_text, original_filename=reference.original_filename,
+                    )
+                    if is_new:
+                        reference.title = (meta.title or reference.title)[:250]
+                        reference.case_name = meta.case_name
+                        reference.trf_region = meta.trf_region
+                        reference.generation_mode = meta.generation_mode
+                        reference.quality_score = meta.quality_score
+                    reference.process_number = meta.process_number
+                    reference.orgao_julgador = meta.orgao_julgador
+                    reference.judge_name = meta.judge_name
+                    if not is_new and not reference.trf_region and meta.trf_region:
+                        reference.trf_region = meta.trf_region
+                    db.session.commit()
+                except Exception as error:
+                    db.session.rollback()
+                    print(f'[impugnacao_references.worker] metadados falharam: {error}')
+
+            thesis_catalog = _load_thesis_catalog(law_firm_id)
+
+            # Limpa índice antigo antes de reingerir.
+            ingestor.delete_by_reference_id(ref_id)
+            ImpugnacaoReferenceChunk.query.filter_by(reference_id=ref_id).delete()
+            db.session.commit()
+
+            chunks_meta = ingestor.ingest_file(
+                file_path=reference.file_path,
+                reference_id=reference.id,
+                law_firm_id=law_firm_id,
+                title=reference.title,
+                trf_region=reference.trf_region,
+                generation_mode=reference.generation_mode,
+                quality_score=float(reference.quality_score) if reference.quality_score is not None else None,
+                process_number=reference.process_number,
+                orgao_julgador=reference.orgao_julgador,
+                judge_name=reference.judge_name,
+                thesis_catalog=thesis_catalog,
+                text=extracted_text or None,
+                processed_document=processed_document,
+            )
+
+            reference.qdrant_collection = ingestor.collection
+            reference.chunks_count = len(chunks_meta)
+            reference.thesis_catalog_ids = ingestor.last_document_thesis_catalog_ids or []
+            reference.sections_json = ingestor.last_sections_summary or []
+            for chunk in chunks_meta:
+                db.session.add(ImpugnacaoReferenceChunk(
+                    reference_id=reference.id,
+                    law_firm_id=law_firm_id,
+                    section_kind=chunk.get('section_kind'),
+                    thesis_catalog_id=chunk.get('thesis_catalog_id'),
+                    benefit_type=chunk.get('benefit_type'),
+                    qdrant_point_id=chunk.get('qdrant_point_id'),
+                    chunk_chars=chunk.get('chunk_chars', 0),
+                    order_in_doc=chunk.get('order_in_doc', 0),
+                    preview_text=chunk.get('preview_text'),
+                    full_text=chunk.get('full_text'),
+                    secao_origem=chunk.get('secao_origem'),
+                    tribunal=chunk.get('tribunal'),
+                    processo=chunk.get('processo'),
+                    relator=chunk.get('relator'),
+                    tipo_juris=chunk.get('tipo_juris'),
+                    fundamento_principal=chunk.get('fundamento_principal'),
+                ))
+            reference.ingestion_status = 'completed'
+            reference.ingestion_error = None
+            db.session.commit()
+
+            impugnacao_reference_search.index_reference_chunks(reference, chunks_meta)
+        except Exception as error:
+            app_obj.logger.error(f'[impugnacao_references.worker] falha na ingestão de {ref_id}: {error}')
+            try:
+                db.session.rollback()
+                reference = ImpugnacaoReferenceModel.query.filter_by(
+                    id=ref_id, law_firm_id=law_firm_id
+                ).first()
+                if reference is not None:
+                    reference.ingestion_status = 'failed'
+                    reference.ingestion_error = str(error)[:2000]
+                    db.session.commit()
+            except Exception:
+                db.session.rollback()
+        finally:
+            db.session.remove()
+
+
+def _spawn_reference_ingestion(law_firm_id, ref_id, is_new):
+    threading.Thread(
+        target=_run_reference_ingestion,
+        args=(current_app._get_current_object(), law_firm_id, ref_id, is_new),
+        daemon=True,
+        name=f'impugnacao-ref-ingest-{ref_id}',
+    ).start()
 
 
 # ── Listagem ──────────────────────────────────────────────────────────
@@ -205,141 +341,31 @@ def new_reference():
     file_size = os.path.getsize(file_path)
     file_ext = safe_name.rsplit('.', 1)[-1].lower() if '.' in safe_name else ''
 
-    # ── Extração de texto + metadados automáticos ────────────────────
-    extracted_text = ''
-    title = None
-    case_name = None
-    trf_region = None
-    generation_mode = None
-    quality_score = 3.0
-    process_number = None
-    orgao_julgador = None
-    judge_name = None
-    processed_document = None
-    ingestor = None
-    thesis_catalog = _load_thesis_catalog(law_firm_id)
-
-    try:
-        from app.agents.legal_drafting.impugnacao_reference_ingestor import (
-            ImpugnacaoReferenceIngestor,
-        )
-        from app.agents.legal_drafting.impugnacao_reference_metadata_agent import (
-            ImpugnacaoReferenceMetadataAgent,
-        )
-
-        ingestor = ImpugnacaoReferenceIngestor()
-        processed_document = ingestor._process_document(file_path)
-        extracted_text = str(getattr(processed_document, 'full_text', '') or '').strip()
-
-        meta = ImpugnacaoReferenceMetadataAgent().extract(
-            extracted_text, original_filename=upload.filename,
-        )
-        title = meta.title
-        case_name = meta.case_name
-        trf_region = meta.trf_region
-        generation_mode = meta.generation_mode
-        quality_score = meta.quality_score
-        process_number = meta.process_number
-        orgao_julgador = meta.orgao_julgador
-        judge_name = meta.judge_name
-    except Exception as error:
-        print(f'[impugnacao_references.new] falha na extração de metadados: {error}')
-        # Fallback determinístico: título a partir do nome do arquivo
-        stem = os.path.splitext(upload.filename)[0]
-        title = (stem.replace('_', ' ').replace('-', ' ').strip() or 'Peça-Modelo')[:250]
+    # Título provisório (nome do arquivo); a IA substitui no worker.
+    stem = os.path.splitext(upload.filename)[0]
+    provisional_title = (stem.replace('_', ' ').replace('-', ' ').strip() or 'Peça-Modelo')[:250]
 
     reference = ImpugnacaoReferenceModel(
         law_firm_id=law_firm_id,
         user_id=user_id,
-        title=title,
-        case_name=case_name,
-        trf_region=trf_region,
-        generation_mode=generation_mode,
-        quality_score=quality_score,
-        process_number=process_number,
-        orgao_julgador=orgao_julgador,
-        judge_name=judge_name,
+        title=provisional_title,
         original_filename=upload.filename,
         file_path=file_path,
         file_size=file_size,
         file_type=file_ext,
         notes=notes,
         status='active',
+        ingestion_status='processing',
     )
     db.session.add(reference)
     db.session.commit()
 
-    # Ingestão no Qdrant (não bloquear a criação se falhar)
-    try:
-        if ingestor is None:
-            from app.agents.legal_drafting.impugnacao_reference_ingestor import (
-                ImpugnacaoReferenceIngestor,
-            )
-            ingestor = ImpugnacaoReferenceIngestor()
-
-        chunks_meta = ingestor.ingest_file(
-            file_path=file_path,
-            reference_id=reference.id,
-            law_firm_id=law_firm_id,
-            title=title,
-            trf_region=trf_region,
-            generation_mode=generation_mode,
-            quality_score=quality_score,
-            process_number=process_number,
-            orgao_julgador=orgao_julgador,
-            judge_name=judge_name,
-            thesis_catalog=thesis_catalog,
-            text=extracted_text,
-            processed_document=processed_document,
-        )
-
-        reference.qdrant_collection = ingestor.collection
-        reference.chunks_count = len(chunks_meta)
-        reference.thesis_catalog_ids = ingestor.last_document_thesis_catalog_ids or []
-        reference.sections_json = ingestor.last_sections_summary or []
-
-        for chunk in chunks_meta:
-            db.session.add(ImpugnacaoReferenceChunk(
-                reference_id=reference.id,
-                law_firm_id=law_firm_id,
-                section_kind=chunk.get('section_kind'),
-                thesis_catalog_id=chunk.get('thesis_catalog_id'),
-                benefit_type=chunk.get('benefit_type'),
-                qdrant_point_id=chunk.get('qdrant_point_id'),
-                chunk_chars=chunk.get('chunk_chars', 0),
-                order_in_doc=chunk.get('order_in_doc', 0),
-                preview_text=chunk.get('preview_text'),
-                full_text=chunk.get('full_text'),
-                secao_origem=chunk.get('secao_origem'),
-                tribunal=chunk.get('tribunal'),
-                processo=chunk.get('processo'),
-                relator=chunk.get('relator'),
-                tipo_juris=chunk.get('tipo_juris'),
-                fundamento_principal=chunk.get('fundamento_principal'),
-            ))
-        db.session.commit()
-        impugnacao_reference_search.index_reference_chunks(reference, chunks_meta)
-        meta_bits = []
-        if trf_region:
-            meta_bits.append(trf_region)
-        if generation_mode:
-            meta_bits.append(f'modo {generation_mode}')
-        meta_suffix = f' ({", ".join(meta_bits)})' if meta_bits else ''
-        flash(
-            f'Peça-modelo "{title}"{meta_suffix} cadastrada e '
-            f'{len(chunks_meta)} trechos indexados.',
-            'success',
-        )
-    except Exception as error:
-        db.session.rollback()
-        # Recarrega para atualizar campos básicos
-        reference = ImpugnacaoReferenceModel.query.get(reference.id)
-        flash(
-            f'Peça cadastrada, mas houve falha na indexação: {error}. '
-            'Use "Reindexar" para tentar novamente.',
-            'warning',
-        )
-
+    _spawn_reference_ingestion(law_firm_id, reference.id, is_new=True)
+    flash(
+        'Peça enviada. A extração de metadados e a indexação rodam em segundo '
+        'plano — a página atualiza sozinha quando concluir.',
+        'info',
+    )
     return redirect(url_for('impugnacao_references.reference_detail', ref_id=reference.id))
 
 
@@ -363,6 +389,20 @@ def reference_detail(ref_id):
         reference=reference,
         chunks=chunks,
     )
+
+
+@impugnacao_references_bp.route('/<int:ref_id>/status')
+@require_law_firm
+def reference_status(ref_id):
+    """Status da ingestão — consumido pelo polling da tela de detalhe."""
+    law_firm_id = get_current_law_firm_id()
+    reference = ImpugnacaoReferenceModel.query.filter_by(
+        id=ref_id, law_firm_id=law_firm_id
+    ).first_or_404()
+    return jsonify({
+        'status': reference.ingestion_status or 'completed',
+        'chunks_count': reference.chunks_count or 0,
+    })
 
 
 @impugnacao_references_bp.route('/<int:ref_id>/metadados', methods=['POST'])
@@ -503,81 +543,18 @@ def reindex_reference(ref_id):
         flash('Arquivo original não encontrado. Não é possível reindexar.', 'danger')
         return redirect(url_for('impugnacao_references.reference_detail', ref_id=ref_id))
 
-    try:
-        from app.agents.legal_drafting.impugnacao_reference_ingestor import (
-            ImpugnacaoReferenceIngestor,
-        )
-        ingestor = ImpugnacaoReferenceIngestor()
-        thesis_catalog = _load_thesis_catalog(law_firm_id)
-        processed_document = ingestor._process_document(reference.file_path)
+    if reference.ingestion_status == 'processing':
+        flash('Esta peça já está sendo indexada — aguarde a conclusão.', 'warning')
+        return redirect(url_for('impugnacao_references.reference_detail', ref_id=ref_id))
 
-        # Backfill: peças antigas ganham os campos de contexto na reindexação.
-        if not any([reference.process_number, reference.orgao_julgador, reference.judge_name]):
-            try:
-                from app.agents.legal_drafting.impugnacao_reference_metadata_agent import (
-                    ImpugnacaoReferenceMetadataAgent,
-                )
-                extracted_text = str(getattr(processed_document, 'full_text', '') or '').strip()
-                if extracted_text:
-                    meta = ImpugnacaoReferenceMetadataAgent().extract(
-                        extracted_text, original_filename=reference.original_filename,
-                    )
-                    reference.process_number = meta.process_number
-                    reference.orgao_julgador = meta.orgao_julgador
-                    reference.judge_name = meta.judge_name
-                    if not reference.trf_region and meta.trf_region:
-                        reference.trf_region = meta.trf_region
-            except Exception as error:
-                print(f'[impugnacao_references.reindex] backfill de metadados falhou: {error}')
+    reference.ingestion_status = 'processing'
+    reference.ingestion_error = None
+    db.session.commit()
 
-        # Limpa vetores antigos e chunks antigos
-        ingestor.delete_by_reference_id(ref_id)
-        ImpugnacaoReferenceChunk.query.filter_by(reference_id=ref_id).delete()
-        db.session.commit()
-
-        chunks_meta = ingestor.ingest_file(
-            file_path=reference.file_path,
-            reference_id=reference.id,
-            law_firm_id=law_firm_id,
-            title=reference.title,
-            trf_region=reference.trf_region,
-            generation_mode=reference.generation_mode,
-            quality_score=float(reference.quality_score) if reference.quality_score is not None else None,
-            process_number=reference.process_number,
-            orgao_julgador=reference.orgao_julgador,
-            judge_name=reference.judge_name,
-            thesis_catalog=thesis_catalog,
-            processed_document=processed_document,
-        )
-
-        reference.qdrant_collection = ingestor.collection
-        reference.chunks_count = len(chunks_meta)
-        reference.thesis_catalog_ids = ingestor.last_document_thesis_catalog_ids or []
-        reference.sections_json = ingestor.last_sections_summary or []
-        for chunk in chunks_meta:
-            db.session.add(ImpugnacaoReferenceChunk(
-                reference_id=reference.id,
-                law_firm_id=law_firm_id,
-                section_kind=chunk.get('section_kind'),
-                thesis_catalog_id=chunk.get('thesis_catalog_id'),
-                benefit_type=chunk.get('benefit_type'),
-                qdrant_point_id=chunk.get('qdrant_point_id'),
-                chunk_chars=chunk.get('chunk_chars', 0),
-                order_in_doc=chunk.get('order_in_doc', 0),
-                preview_text=chunk.get('preview_text'),
-                full_text=chunk.get('full_text'),
-                secao_origem=chunk.get('secao_origem'),
-                tribunal=chunk.get('tribunal'),
-                processo=chunk.get('processo'),
-                relator=chunk.get('relator'),
-                tipo_juris=chunk.get('tipo_juris'),
-                fundamento_principal=chunk.get('fundamento_principal'),
-            ))
-        db.session.commit()
-        impugnacao_reference_search.index_reference_chunks(reference, chunks_meta)
-        flash(f'Reindexado: {len(chunks_meta)} trechos.', 'success')
-    except Exception as error:
-        db.session.rollback()
-        flash(f'Falha ao reindexar: {error}', 'danger')
-
+    _spawn_reference_ingestion(law_firm_id, ref_id, is_new=False)
+    flash(
+        'Reindexação iniciada em segundo plano — a página atualiza sozinha '
+        'quando concluir.',
+        'info',
+    )
     return redirect(url_for('impugnacao_references.reference_detail', ref_id=ref_id))

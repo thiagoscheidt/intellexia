@@ -3201,6 +3201,8 @@ class ImpugnacaoReferenceModel(db.Model):
     thesis_catalog_ids = db.Column(db.JSON)
 
     status = db.Column(db.String(20), default='active', index=True)  # 'active' | 'archived'
+    ingestion_status = db.Column(db.String(20), default='completed')  # 'processing' | 'completed' | 'failed'
+    ingestion_error = db.Column(db.Text)
     notes = db.Column(db.Text)
 
     created_at = db.Column(db.DateTime, default=datetime.now)
