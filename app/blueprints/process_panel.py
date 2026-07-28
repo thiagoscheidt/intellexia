@@ -3449,7 +3449,10 @@ def _run_generated_document_generation(app_obj, law_firm_id, process_id, doc_id,
             # Enriquecimento jurisprudencial (apenas para impugnação)
             if generated_doc.document_type == 'impugnacao_contestacao':
                 try:
-                    trf_region = getattr(process, 'trf_region', None) or ''
+                    from app.agents.legal_drafting.impugnacao_process_context import (
+                        trf_region_from_process,
+                    )
+                    trf_region = trf_region_from_process(process) or ''
                     full_text = ImpugnacaoEnrichmentAgent(
                         model_name=ai_model_settings_service.get_model(
                             law_firm_id, 'impugnacao_enrichment')).enrich(

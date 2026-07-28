@@ -1192,14 +1192,11 @@ class AgentGeneratedDocument:
                 ImpugnacaoReferenceRetriever,
             )
 
-            trf_region = None
-            court_name = getattr(getattr(process, 'court', None), 'name', '') or ''
-            if not court_name:
-                court_name = str(getattr(process, 'tribunal_name', '') or '')
-            for region in ('TRF1', 'TRF2', 'TRF3', 'TRF4', 'TRF5', 'TRF6'):
-                if region.lower() in court_name.lower():
-                    trf_region = region
-                    break
+            from app.agents.legal_drafting.impugnacao_process_context import (
+                build_reference_search_context,
+            )
+            search_context = build_reference_search_context(process)
+            trf_region = search_context.get('trf_region')
 
             section_plans = [
                 (
