@@ -32,6 +32,7 @@ from app.models import (
     ImpugnacaoReferenceChunk,
     JudicialLegalThesis,
 )
+from app.services import impugnacao_reference_search
 
 
 impugnacao_references_bp = Blueprint(
@@ -247,6 +248,7 @@ def new_reference():
                 fundamento_principal=chunk.get('fundamento_principal'),
             ))
         db.session.commit()
+        impugnacao_reference_search.index_reference_chunks(reference, chunks_meta)
         meta_bits = []
         if trf_region:
             meta_bits.append(trf_region)
@@ -315,6 +317,8 @@ def archive_reference(ref_id):
     else:
         flash('Peça-modelo arquivada.', 'success')
 
+    impugnacao_reference_search.update_reference_status(reference)
+
     return redirect(url_for('impugnacao_references.list_references'))
 
 
@@ -337,6 +341,8 @@ def reactivate_reference(ref_id):
         flash(f'Reativada no banco, mas falhou atualizar Qdrant: {error}', 'warning')
     else:
         flash('Peça-modelo reativada.', 'success')
+
+    impugnacao_reference_search.update_reference_status(reference)
 
     return redirect(url_for('impugnacao_references.reference_detail', ref_id=ref_id))
 
@@ -364,6 +370,8 @@ def delete_reference(ref_id):
         ImpugnacaoReferenceIngestor().delete_by_reference_id(ref_id)
     except Exception as error:
         print(f'[impugnacao_references] Falha ao deletar do Qdrant: {error}')
+
+    impugnacao_reference_search.delete_reference(ref_id)
 
     db.session.delete(reference)
     db.session.commit()
@@ -454,6 +462,7 @@ def reindex_reference(ref_id):
                 fundamento_principal=chunk.get('fundamento_principal'),
             ))
         db.session.commit()
+        impugnacao_reference_search.index_reference_chunks(reference, chunks_meta)
         flash(f'Reindexado: {len(chunks_meta)} trechos.', 'success')
     except Exception as error:
         db.session.rollback()
