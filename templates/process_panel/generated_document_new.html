@@ -392,8 +392,9 @@ breadcrumbs=[
             <div class="wizard-panel" id="panel-2">
               <h6 class="fw-semibold mb-1">Selecione os benefícios por tese</h6>
               <p class="text-muted small mb-3" id="step2-hint">
-                Cada grupo corresponde a uma <strong>tese jurídica</strong>. Selecione os benefícios individualmente
-                ou use <em>Selecionar todos</em> para marcar todos de uma tese.
+                Cada grupo corresponde a uma <strong>tese jurídica</strong>. Todos os benefícios já vêm
+                selecionados — desmarque individualmente os que não devem entrar, ou use
+                <em>Desmarcar todos</em> em uma tese.
               </p>
 
               {% if thesis_groups %}
@@ -832,6 +833,12 @@ breadcrumbs=[
         if (groupBody) bootstrap.Collapse.getOrCreateInstance(groupBody).hide();
       }
     };
+
+    // ── Pré-seleção: todos os benefícios já começam marcados ──────────────
+    document.querySelectorAll('.benefit-check-card').forEach(card => setCardChecked(card, true));
+    document.querySelectorAll('button[onclick^="toggleAllInGroup"]').forEach(btn => {
+      btn.textContent = 'Desmarcar todos';
+    });
 
     // ── Mostrar campos de contestação apenas para impugnação ──────────────
     function updateContestationFields() {
