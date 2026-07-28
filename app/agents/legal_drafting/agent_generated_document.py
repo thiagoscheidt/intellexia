@@ -691,6 +691,7 @@ class AgentGeneratedDocument:
         contestation_file_path: Optional[str] = None,
         contestation_summary_payload: Optional[dict] = None,
         law_firm_id: Optional[int] = None,
+        allowed_reference_ids: Optional[list[int]] = None,
     ) -> GeneratedImpugnacaoContestacao:
         """
         Gera Impugnação à Contestação da União.
@@ -714,6 +715,7 @@ class AgentGeneratedDocument:
             process=process,
             selections=selections,
             law_firm_id=law_firm_id,
+            allowed_reference_ids=allowed_reference_ids,
         )
 
         user_prompt_sections = [
@@ -1178,6 +1180,7 @@ class AgentGeneratedDocument:
         process,
         selections: list[dict],
         law_firm_id: Optional[int],
+        allowed_reference_ids: Optional[list[int]] = None,
     ) -> str:
         """Recupera trechos da base de peças-modelo do escritório e formata
         como bloco de inspiração de estilo no user_prompt.
@@ -1186,6 +1189,8 @@ class AgentGeneratedDocument:
         interromper a geração — retornamos string vazia.
         """
         if not law_firm_id:
+            return ""
+        if allowed_reference_ids is not None and not allowed_reference_ids:
             return ""
         try:
             from app.agents.legal_drafting.impugnacao_reference_retriever import (
@@ -1280,6 +1285,7 @@ class AgentGeneratedDocument:
                     kind_plan=kind_plan,
                     max_chunks=5,
                     max_chars=max_section_chars,
+                    allowed_reference_ids=allowed_reference_ids,
                 )
                 section_block = self._build_section_style_reference_block(
                     section_label=section_label,
@@ -1342,6 +1348,7 @@ class AgentGeneratedDocument:
                     thesis_catalog_id=thesis_catalog_tag,
                     kind_plan=focused_kind_plan,
                     max_chunks=6,
+                    allowed_reference_ids=allowed_reference_ids,
                 )
                 if not chunks:
                     continue
@@ -1866,6 +1873,7 @@ class AgentGeneratedDocument:
         contestation_file_path: Optional[str] = None,
         contestation_summary_payload: Optional[dict] = None,
         law_firm_id: Optional[int] = None,
+        allowed_reference_ids: Optional[list[int]] = None,
     ):
         """
         Despacha para o método correto e retorna (result_dict, full_text).
@@ -1879,6 +1887,7 @@ class AgentGeneratedDocument:
                 contestation_file_path=contestation_file_path,
                 contestation_summary_payload=contestation_summary_payload,
                 law_firm_id=law_firm_id,
+                allowed_reference_ids=allowed_reference_ids,
             )
         elif document_type == "manifestacao":
             result = self.generate_manifestacao(process, selections, instructions)

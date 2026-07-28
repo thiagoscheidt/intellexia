@@ -65,6 +65,7 @@ class ImpugnacaoReferenceRetriever:
         generation_mode: Optional[str],
         thesis_catalog_id: Optional[str],
         extra_match: Optional[dict] = None,
+        allowed_reference_ids: Optional[list[int]] = None,
     ) -> rest.Filter:
         must: list[rest.FieldCondition] = [
             rest.FieldCondition(key="law_firm_id", match=rest.MatchValue(value=int(law_firm_id))),
@@ -98,6 +99,12 @@ class ImpugnacaoReferenceRetriever:
         for key, value in (extra_match or {}).items():
             must.append(rest.FieldCondition(key=key, match=rest.MatchValue(value=value)))
 
+        if allowed_reference_ids:
+            must.append(rest.FieldCondition(
+                key="reference_id",
+                match=rest.MatchAny(any=[int(rid) for rid in allowed_reference_ids]),
+            ))
+
         return rest.Filter(must=must)
 
     @staticmethod
@@ -126,6 +133,10 @@ class ImpugnacaoReferenceRetriever:
     @staticmethod
     def _hit_to_item(payload: dict, default_kind: str) -> dict:
         return {
+            "reference_id": payload.get("reference_id"),
+            "judge_name_norm": payload.get("judge_name_norm") or "",
+            "orgao_julgador_norm": payload.get("orgao_julgador_norm") or "",
+            "orgao_julgador_origem_norm": payload.get("orgao_julgador_origem_norm") or "",
             "section_kind": payload.get("section_kind") or default_kind,
             "heading": payload.get("heading") or "",
             "section": payload.get("section") or "",
@@ -158,6 +169,7 @@ class ImpugnacaoReferenceRetriever:
         kind_plan: Optional[list[tuple[str, int]]] = None,
         max_chunks: Optional[int] = None,
         max_chars: Optional[int] = None,
+        allowed_reference_ids: Optional[list[int]] = None,
     ) -> list[dict]:
         """Retorna lista de chunks para compor bloco de referência.
 
@@ -171,6 +183,8 @@ class ImpugnacaoReferenceRetriever:
         if not IMPUGNACAO_REFERENCES_ENABLED:
             return []
         if not law_firm_id:
+            return []
+        if allowed_reference_ids is not None and not allowed_reference_ids:
             return []
         if not self._collection_exists():
             return []
@@ -203,6 +217,7 @@ class ImpugnacaoReferenceRetriever:
                         generation_mode=generation_mode,
                         thesis_catalog_id=thesis_catalog_id,
                         extra_match=extra_match,
+                        allowed_reference_ids=allowed_reference_ids,
                     ),
                     limit=limit,
                     with_payload=True,

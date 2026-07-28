@@ -31,13 +31,13 @@ def make_point(pid, text, **payload):
 
 POINTS = [
     make_point("p-judge", "trecho do mesmo juiz", judge_name_norm="JOAO DA SILVA",
-               orgao_julgador_norm="3A VARA FEDERAL", trf_region="TRF4"),
+               orgao_julgador_norm="3A VARA FEDERAL", trf_region="TRF4", reference_id=1),
     make_point("p-vara", "trecho da mesma vara", judge_name_norm=None,
-               orgao_julgador_norm="3A VARA FEDERAL", trf_region="TRF4"),
+               orgao_julgador_norm="3A VARA FEDERAL", trf_region="TRF4", reference_id=1),
     make_point("p-trf", "trecho do mesmo trf", judge_name_norm=None,
-               orgao_julgador_norm="OUTRA VARA", trf_region="TRF4"),
+               orgao_julgador_norm="OUTRA VARA", trf_region="TRF4", reference_id=2),
     make_point("p-geral", "trecho geral", judge_name_norm=None,
-               orgao_julgador_norm=None, trf_region="TRF1"),
+               orgao_julgador_norm=None, trf_region="TRF1", reference_id=2),
 ]
 
 # Pontos de jurisprudência: para esse section_kind, a camada de "vara" usa
@@ -46,10 +46,10 @@ POINTS = [
 JURIS_POINTS = [
     make_point("j-origem", "trecho juris da mesma origem", section_kind="jurisprudence",
                judge_name_norm=None, orgao_julgador_norm="OUTRO ORGAO (PRECEDENTE)",
-               orgao_julgador_origem_norm="3A VARA FEDERAL", trf_region="TRF4"),
+               orgao_julgador_origem_norm="3A VARA FEDERAL", trf_region="TRF4", reference_id=3),
     make_point("j-decoy", "trecho juris de outra origem", section_kind="jurisprudence",
                judge_name_norm=None, orgao_julgador_norm="3A VARA FEDERAL",
-               orgao_julgador_origem_norm="OUTRA ORIGEM QUALQUER", trf_region="TRF4"),
+               orgao_julgador_origem_norm="OUTRA ORIGEM QUALQUER", trf_region="TRF4", reference_id=3),
 ]
 
 
@@ -62,13 +62,19 @@ class StubQdrant:
     def query_points(self, collection_name, query, query_filter, limit, with_payload):
         conditions = []
         for cond in (query_filter.must or []):
-            conditions.append((cond.key, cond.match.value))
+            match = cond.match
+            values = getattr(match, "any", None)
+            if values is not None:
+                conditions.append((cond.key, lambda v, values=values: v in values))
+            else:
+                value = match.value
+                conditions.append((cond.key, lambda v, value=value: v == value))
         hits = []
         for point in POINTS + JURIS_POINTS:
             payload = dict(point.payload)
             payload.setdefault("law_firm_id", 1)
             payload.setdefault("status", "active")
-            if all(payload.get(k) == v for k, v in conditions):
+            if all(check(payload.get(k)) for k, check in conditions):
                 hits.append(point)
         return SimpleNamespace(points=hits[:limit])
 
@@ -120,6 +126,26 @@ result_juris = retriever.fetch_style_references(
 juris_texts = [r["text"] for r in result_juris]
 check("juris usa vara de origem (swap de chave)", juris_texts == ["trecho juris da mesma origem"],
       f"(ordem: {juris_texts})")
+
+# ── allowed_reference_ids ────────────────────────────────────────────
+result_allowed = retriever.fetch_style_references(
+    law_firm_id=1, query_text="tese", context=CTX,
+    kind_plan=[("merit_by_thesis", 4)], max_chunks=4, max_chars=50_000,
+    allowed_reference_ids=[2],
+)
+allowed_texts = [r["text"] for r in result_allowed]
+check("filtro por reference_id", all(
+    r.get("reference_id") == 2 for r in result_allowed) and len(result_allowed) > 0,
+    f"(veio {allowed_texts})")
+
+result_empty = retriever.fetch_style_references(
+    law_firm_id=1, query_text="tese", context=CTX,
+    kind_plan=[("merit_by_thesis", 4)], max_chunks=4, max_chars=50_000,
+    allowed_reference_ids=[],
+)
+check("lista vazia -> sem consulta", result_empty == [])
+
+check("item expõe reference_id", all("reference_id" in r for r in result_allowed))
 
 print()
 if FAILS:

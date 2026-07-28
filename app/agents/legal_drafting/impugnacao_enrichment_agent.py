@@ -84,6 +84,7 @@ class ImpugnacaoEnrichmentAgent:
         law_firm_id: int,
         trf_region: Optional[str],
         context: Optional[dict] = None,
+        allowed_reference_ids: Optional[list[int]] = None,
     ) -> str:
         all_juris: list[dict] = []
         seen_texts: set[str] = set()
@@ -120,6 +121,7 @@ class ImpugnacaoEnrichmentAgent:
                 thesis_catalog_id=thesis_key,
                 kind_plan=[("jurisprudence", self.MAX_JURIS_PER_THESIS)],
                 max_chunks=self.MAX_JURIS_PER_THESIS,
+                allowed_reference_ids=allowed_reference_ids,
             )
             _add_chunks(chunks)
 
@@ -131,6 +133,7 @@ class ImpugnacaoEnrichmentAgent:
             context=context,
             kind_plan=[("jurisprudence", 20)],
             max_chunks=20,
+            allowed_reference_ids=allowed_reference_ids,
         )
         _add_chunks(general_chunks)
 
@@ -178,6 +181,7 @@ class ImpugnacaoEnrichmentAgent:
         law_firm_id: int,
         trf_region: Optional[str] = None,
         context: Optional[dict] = None,
+        allowed_reference_ids: Optional[list[int]] = None,
     ) -> str:
         """Enriquece o documento com jurisprudências reais do banco.
 
@@ -187,7 +191,10 @@ class ImpugnacaoEnrichmentAgent:
             return document_text
 
         try:
-            juris_context = self._build_jurisprudence_context(selections, law_firm_id, trf_region, context=context)
+            juris_context = self._build_jurisprudence_context(
+                selections, law_firm_id, trf_region, context=context,
+                allowed_reference_ids=allowed_reference_ids,
+            )
         except Exception as error:
             print(f"[EnrichmentAgent] Falha ao recuperar jurisprudências: {error}")
             return document_text

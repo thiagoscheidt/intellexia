@@ -3356,6 +3356,19 @@ def _run_generated_document_generation(app_obj, law_firm_id, process_id, doc_id,
             if not process or not generated_doc or not version:
                 raise ValueError('Registro de geração não encontrado.')
 
+            confirmed = version.confirmed_documents_json
+            allowed_reference_ids = None
+            allowed_attachment_ids = None
+            if isinstance(confirmed, dict):
+                raw_refs = confirmed.get('reference_ids')
+                if isinstance(raw_refs, list):
+                    allowed_reference_ids = [int(r) for r in raw_refs if str(r).isdigit()]
+                raw_atts = confirmed.get('attachment_ids')
+                if isinstance(raw_atts, list):
+                    allowed_attachment_ids = [int(a) for a in raw_atts if str(a).isdigit()]
+            elif confirmed is not None:
+                print(f'[GeneratedDocument] confirmed_documents_json malformado na versão {version.id} — ignorando')
+
             # Reconstrói as seleções a partir do que foi persistido
             sel_benefit_ids = {s.benefit_id for s in generated_doc.selections}
             sel_thesis_ids = {s.legal_thesis_id for s in generated_doc.selections if s.legal_thesis_id}
@@ -3419,6 +3432,7 @@ def _run_generated_document_generation(app_obj, law_firm_id, process_id, doc_id,
                     }
                     for att in (benefit.attachments or [])
                     if att.is_active and (att.description or '').strip()
+                    and (allowed_attachment_ids is None or att.id in allowed_attachment_ids)
                 ]
                 agent_selections.append({
                     'benefit': benefit,
@@ -3444,26 +3458,31 @@ def _run_generated_document_generation(app_obj, law_firm_id, process_id, doc_id,
                 contestation_file_path=contestation_file_path,
                 contestation_summary_payload=contestation_summary_payload,
                 law_firm_id=law_firm_id,
+                allowed_reference_ids=allowed_reference_ids,
             )
 
             # Enriquecimento jurisprudencial (apenas para impugnação)
             if generated_doc.document_type == 'impugnacao_contestacao':
-                try:
-                    from app.agents.legal_drafting.impugnacao_process_context import (
-                        build_reference_search_context,
-                    )
-                    search_context = build_reference_search_context(process)
-                    full_text = ImpugnacaoEnrichmentAgent(
-                        model_name=ai_model_settings_service.get_model(
-                            law_firm_id, 'impugnacao_enrichment')).enrich(
-                        document_text=full_text,
-                        selections=agent_selections,
-                        law_firm_id=law_firm_id,
-                        trf_region=search_context.get('trf_region') or '',
-                        context=search_context,
-                    )
-                except Exception as enrich_err:
-                    print(f'[EnrichmentAgent] Falha silenciosa: {enrich_err}')
+                if allowed_reference_ids is not None and not allowed_reference_ids:
+                    print('[EnrichmentAgent] pulado — nenhuma peça-modelo confirmada.')
+                else:
+                    try:
+                        from app.agents.legal_drafting.impugnacao_process_context import (
+                            build_reference_search_context,
+                        )
+                        search_context = build_reference_search_context(process)
+                        full_text = ImpugnacaoEnrichmentAgent(
+                            model_name=ai_model_settings_service.get_model(
+                                law_firm_id, 'impugnacao_enrichment')).enrich(
+                            document_text=full_text,
+                            selections=agent_selections,
+                            law_firm_id=law_firm_id,
+                            trf_region=search_context.get('trf_region') or '',
+                            context=search_context,
+                            allowed_reference_ids=allowed_reference_ids,
+                        )
+                    except Exception as enrich_err:
+                        print(f'[EnrichmentAgent] Falha silenciosa: {enrich_err}')
 
             internal_notes = None
             if isinstance(result_dict, dict):
@@ -3541,6 +3560,21 @@ def generated_document_create(process_id):
         ).options(selectinload(JudicialProcessBenefit.attachments)).all()
     }
 
+    confirmed_documents = None
+    if request.form.get('documents_confirmed') == '1':
+        def _int_list(field):
+            out = []
+            for raw in request.form.getlist(field):
+                try:
+                    out.append(int(raw))
+                except (TypeError, ValueError):
+                    continue
+            return out
+        confirmed_documents = {
+            'reference_ids': _int_list('confirmed_reference_ids[]'),
+            'attachment_ids': _int_list('confirmed_attachment_ids[]'),
+        }
+
     title = DOCUMENT_TYPE_LABELS.get(document_type, document_type)
 
     generated_doc = JudicialProcessGeneratedDocument(
@@ -3569,6 +3603,7 @@ def generated_document_create(process_id):
         source='ai_generated',
         generation_status='processing',
         model_used=model_name,
+        confirmed_documents_json=confirmed_documents,
     )
     db.session.add(version)
     db.session.flush()
