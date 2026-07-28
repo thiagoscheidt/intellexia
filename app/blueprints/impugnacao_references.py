@@ -9,9 +9,11 @@ Rotas:
     GET  /referencias-impugnacao/novo
     POST /referencias-impugnacao/novo
     GET  /referencias-impugnacao/<id>
+    POST /referencias-impugnacao/<id>/metadados
     POST /referencias-impugnacao/<id>/arquivar
     POST /referencias-impugnacao/<id>/reativar
     POST /referencias-impugnacao/<id>/excluir
+    POST /referencias-impugnacao/<id>/reindexar
 """
 
 from __future__ import annotations
@@ -88,16 +90,69 @@ def _load_thesis_catalog(law_firm_id: int) -> list[dict]:
 def list_references():
     law_firm_id = get_current_law_firm_id()
     status_filter = (request.args.get('status') or 'active').strip()
+    trf_filter = (request.args.get('trf') or '').strip().upper()
+    vara_filter = (request.args.get('vara') or '').strip()
+    search_query = (request.args.get('q') or '').strip()
 
     query = ImpugnacaoReferenceModel.query.filter_by(law_firm_id=law_firm_id)
     if status_filter in ('active', 'archived'):
         query = query.filter_by(status=status_filter)
+    if trf_filter:
+        query = query.filter_by(trf_region=trf_filter)
+    if vara_filter:
+        query = query.filter(ImpugnacaoReferenceModel.orgao_julgador.ilike(f'%{vara_filter}%'))
 
     references = query.order_by(ImpugnacaoReferenceModel.created_at.desc()).all()
+
+    # Busca textual: Meilisearch com fallback SQL LIKE nos chunks.
+    search_hits_by_ref: dict[int, list[dict]] = {}
+    search_error = False
+    if search_query:
+        hits = impugnacao_reference_search.search_chunks(
+            law_firm_id, search_query,
+            status=status_filter if status_filter in ('active', 'archived') else 'active',
+            trf_region=trf_filter or None,
+        )
+        if hits is None:
+            # Meilisearch fora do ar: aviso na tela + fallback SQL LIKE.
+            search_error = True
+            like = f'%{search_query}%'
+            rows = (
+                ImpugnacaoReferenceChunk.query
+                .filter_by(law_firm_id=law_firm_id)
+                .filter(ImpugnacaoReferenceChunk.full_text.ilike(like))
+                .limit(30)
+                .all()
+            )
+            for row in rows:
+                search_hits_by_ref.setdefault(row.reference_id, []).append({
+                    'section': row.secao_origem or '',
+                    'section_kind': row.section_kind,
+                    'text': (row.preview_text or '')[:200],
+                })
+        else:
+            for hit in hits:
+                ref_id = hit.get('reference_id')
+                if ref_id is not None:
+                    search_hits_by_ref.setdefault(int(ref_id), []).append(hit)
+        references = [ref for ref in references if ref.id in search_hits_by_ref]
+
+    trf_options = ['TRF1', 'TRF2', 'TRF3', 'TRF4', 'TRF5', 'TRF6']
+    total = len(references)
+    total_chunks = sum(ref.chunks_count or 0 for ref in references)
+
     return render_template(
         'impugnacao_references/list.html',
         references=references,
         status_filter=status_filter,
+        trf_filter=trf_filter,
+        vara_filter=vara_filter,
+        search_query=search_query,
+        search_hits_by_ref=search_hits_by_ref,
+        search_error=search_error,
+        trf_options=trf_options,
+        total=total,
+        total_chunks=total_chunks,
     )
 
 
@@ -293,6 +348,58 @@ def reference_detail(ref_id):
         reference=reference,
         chunks=chunks,
     )
+
+
+@impugnacao_references_bp.route('/<int:ref_id>/metadados', methods=['POST'])
+@require_law_firm
+def update_metadata(ref_id):
+    from app.utils.cnj import cnj_digits, tribunal_sigla_from_cnj
+
+    law_firm_id = get_current_law_firm_id()
+    reference = ImpugnacaoReferenceModel.query.filter_by(
+        id=ref_id, law_firm_id=law_firm_id
+    ).first_or_404()
+
+    def _clean(name, max_len):
+        value = (request.form.get(name) or '').strip()
+        return value[:max_len] or None
+
+    reference.title = _clean('title', 250) or reference.title
+    reference.case_name = _clean('case_name', 250)
+    reference.orgao_julgador = _clean('orgao_julgador', 250)
+    reference.judge_name = _clean('judge_name', 250)
+
+    process_number = _clean('process_number', 30)
+    if process_number and len(cnj_digits(process_number)) != 20:
+        flash('Número CNJ inválido — os demais campos foram salvos.', 'warning')
+        process_number = reference.process_number
+    reference.process_number = process_number
+
+    trf_region = (request.form.get('trf_region') or '').strip().upper() or None
+    cnj_sigla = tribunal_sigla_from_cnj(reference.process_number)
+    if cnj_sigla and cnj_sigla.startswith('TRF'):
+        trf_region = cnj_sigla  # CNJ válido manda no TRF
+    reference.trf_region = trf_region if trf_region in (
+        'TRF1', 'TRF2', 'TRF3', 'TRF4', 'TRF5', 'TRF6') else None
+
+    db.session.commit()
+
+    # Reflete os metadados no índice de busca da tela.
+    chunk_records = [
+        {
+            'qdrant_point_id': chunk.qdrant_point_id,
+            'heading': None, 'section': chunk.secao_origem,
+            'section_kind': chunk.section_kind,
+            'thesis_catalog_id': chunk.thesis_catalog_id,
+            'order_in_doc': chunk.order_in_doc,
+            'full_text': chunk.full_text,
+        }
+        for chunk in ImpugnacaoReferenceChunk.query.filter_by(reference_id=ref_id).all()
+    ]
+    impugnacao_reference_search.index_reference_chunks(reference, chunk_records)
+
+    flash('Metadados atualizados. Reindexe a peça para propagar ao Qdrant.', 'success')
+    return redirect(url_for('impugnacao_references.reference_detail', ref_id=ref_id))
 
 
 # ── Arquivar / Reativar / Reindexar / Excluir ─────────────────────────

@@ -27,8 +27,6 @@
         <!-- Stats + ação principal -->
         <div class="d-flex flex-wrap justify-content-between align-items-center mb-4 gap-3">
             <div class="d-flex gap-3 flex-wrap">
-                {% set total = references|length %}
-                {% set total_chunks = references|sum(attribute='chunks_count') %}
                 <div class="d-flex align-items-center gap-2 px-3 py-2 rounded-3 border bg-white shadow-sm">
                     <i class="bi bi-file-earmark-text text-primary"></i>
                     <div>
@@ -70,6 +68,33 @@
                         </a>
                     </li>
                 </ul>
+                <form method="get" class="d-flex flex-wrap gap-2 mt-2" role="search">
+                    <input type="hidden" name="status" value="{{ status_filter }}">
+                    <div class="input-group input-group-sm" style="max-width:320px">
+                        <span class="input-group-text"><i class="bi bi-search"></i></span>
+                        <input type="search" name="q" class="form-control" value="{{ search_query or '' }}"
+                            placeholder="Buscar em seções, texto, juiz, processo...">
+                    </div>
+                    <select name="trf" class="form-select form-select-sm" style="max-width:110px"
+                        onchange="this.form.submit()">
+                        <option value="">TRF</option>
+                        {% for opt in trf_options %}
+                        <option value="{{ opt }}" {% if trf_filter == opt %}selected{% endif %}>{{ opt }}</option>
+                        {% endfor %}
+                    </select>
+                    <input type="text" name="vara" class="form-control form-control-sm" style="max-width:220px"
+                        value="{{ vara_filter or '' }}" placeholder="Vara / órgão julgador">
+                    <button class="btn btn-sm btn-outline-primary" type="submit">Filtrar</button>
+                    {% if search_query or trf_filter or vara_filter %}
+                    <a class="btn btn-sm btn-outline-secondary"
+                        href="{{ url_for('impugnacao_references.list_references', status=status_filter) }}">Limpar</a>
+                    {% endif %}
+                </form>
+                {% if search_error %}
+                <div class="small text-warning mt-2">
+                    <i class="bi bi-exclamation-triangle me-1"></i>Busca textual indisponível no momento — exibindo resultados do filtro simples.
+                </div>
+                {% endif %}
             </div>
 
             <div class="card-body p-0">
@@ -80,6 +105,7 @@
                             <tr>
                                 <th class="ps-4 py-3">Título</th>
                                 <th>TRF</th>
+                                <th>Vara</th>
                                 <th>Modo</th>
                                 <th>Qualidade</th>
                                 <th>Trechos</th>
@@ -96,10 +122,26 @@
                                     {% if ref.case_name %}
                                     <div class="small text-muted">{{ ref.case_name }}</div>
                                     {% endif %}
+                                    {% if search_query and search_hits_by_ref.get(ref.id) %}
+                                    {% for hit in search_hits_by_ref[ref.id][:2] %}
+                                    <div class="small text-muted mt-1 border-start ps-2">
+                                        {% if hit.get('section') %}<span class="badge bg-light text-dark border me-1">{{ hit['section'][:60] }}</span>{% endif %}
+                                        {{ hit.get('text', '')[:180] }}
+                                    </div>
+                                    {% endfor %}
+                                    {% endif %}
                                 </td>
                                 <td>
                                     {% if ref.trf_region %}
                                     <span class="badge bg-info text-dark">{{ ref.trf_region }}</span>
+                                    {% else %}<span class="text-muted small">—</span>{% endif %}
+                                </td>
+                                <td>
+                                    {% if ref.orgao_julgador %}
+                                    <span class="small">{{ ref.orgao_julgador }}</span>
+                                    {% if ref.judge_name %}
+                                    <div class="small text-muted"><i class="bi bi-person me-1"></i>{{ ref.judge_name }}</div>
+                                    {% endif %}
                                     {% else %}<span class="text-muted small">—</span>{% endif %}
                                 </td>
                                 <td>

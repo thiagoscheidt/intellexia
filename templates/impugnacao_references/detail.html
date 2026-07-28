@@ -149,6 +149,95 @@ bi-file-earmark-richtext') %}
             </div>
         </div>
 
+        <div class="card border-0 shadow-sm rounded-3 mb-4">
+            <div class="card-header bg-light border-0 py-3">
+                <span class="fw-medium"><i class="bi bi-geo-alt me-2"></i>Origem da peça</span>
+            </div>
+            <div class="card-body">
+                <form method="post" action="{{ url_for('impugnacao_references.update_metadata', ref_id=reference.id) }}">
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">Título</label>
+                            <input type="text" name="title" class="form-control form-control-sm"
+                                value="{{ reference.title or '' }}">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">Empresa (razão social)</label>
+                            <input type="text" name="case_name" class="form-control form-control-sm"
+                                value="{{ reference.case_name or '' }}">
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small text-muted">Número CNJ do processo</label>
+                            <input type="text" name="process_number" class="form-control form-control-sm"
+                                value="{{ reference.process_number or '' }}" placeholder="0000000-00.0000.0.00.0000">
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small text-muted">TRF</label>
+                            <select name="trf_region" class="form-select form-select-sm">
+                                <option value="">—</option>
+                                {% for opt in ['TRF1','TRF2','TRF3','TRF4','TRF5','TRF6'] %}
+                                <option value="{{ opt }}" {% if reference.trf_region == opt %}selected{% endif %}>{{ opt }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted">Vara / órgão julgador</label>
+                            <input type="text" name="orgao_julgador" class="form-control form-control-sm"
+                                value="{{ reference.orgao_julgador or '' }}">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted">Juiz(a)</label>
+                            <input type="text" name="judge_name" class="form-control form-control-sm"
+                                value="{{ reference.judge_name or '' }}">
+                        </div>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mt-3">
+                        <span class="small text-muted">Com CNJ válido, o TRF é derivado automaticamente do número.</span>
+                        <button type="submit" class="btn btn-sm btn-primary">
+                            <i class="bi bi-check-lg me-1"></i>Salvar metadados
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        {% if reference.sections_json %}
+        <div class="card border-0 shadow-sm rounded-3 mb-4">
+            <div class="card-header bg-light border-0 py-3">
+                <span class="fw-medium"><i class="bi bi-list-nested me-2"></i>Seções detectadas</span>
+                <span class="badge bg-secondary-subtle text-secondary ms-2">{{ reference.sections_json|length }}</span>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th class="ps-3">Seção</th>
+                                <th>Tipo</th>
+                                <th>Teses</th>
+                                <th class="text-end pe-3">Trechos</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for sec in reference.sections_json %}
+                            <tr>
+                                <td class="ps-3 small">{{ sec.titulo }}</td>
+                                <td><span class="badge bg-light text-dark border">{{ sec.section_kind }}</span></td>
+                                <td>
+                                    {% for tese in sec.teses %}
+                                    <span class="badge bg-info-subtle text-info border border-info-subtle">{{ tese }}</span>
+                                    {% else %}<span class="text-muted small">—</span>{% endfor %}
+                                </td>
+                                <td class="text-end pe-3">{{ sec.qtd_chunks }}</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <div class="row g-4">
             <!-- Coluna esquerda: metadados + ações -->
             <div class="col-lg-4">
@@ -159,24 +248,6 @@ bi-file-earmark-richtext') %}
                     </div>
                     <div class="card-body px-4 py-2">
                         <ul class="list-unstyled mb-0">
-                            {% if reference.case_name %}
-                            <li class="d-flex gap-3 py-2 border-bottom align-items-start">
-                                <i class="bi bi-briefcase text-muted mt-1 meta-icon"></i>
-                                <div>
-                                    <div class="small text-muted">Caso</div>
-                                    <div class="small fw-medium">{{ reference.case_name }}</div>
-                                </div>
-                            </li>
-                            {% endif %}
-                            <li class="d-flex gap-3 py-2 border-bottom align-items-start">
-                                <i class="bi bi-globe2 text-muted mt-1 meta-icon"></i>
-                                <div>
-                                    <div class="small text-muted">TRF</div>
-                                    {% if reference.trf_region %}
-                                    <span class="badge bg-info text-dark">{{ reference.trf_region }}</span>
-                                    {% else %}<span class="small text-muted">—</span>{% endif %}
-                                </div>
-                            </li>
                             <li class="d-flex gap-3 py-2 border-bottom align-items-start">
                                 <i class="bi bi-diagram-3 text-muted mt-1 meta-icon"></i>
                                 <div>
