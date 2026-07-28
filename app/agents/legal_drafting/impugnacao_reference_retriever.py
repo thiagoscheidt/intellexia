@@ -248,6 +248,7 @@ class ImpugnacaoReferenceRetriever:
                     if hit.id in seen_ids:
                         continue
                     item = self._hit_to_item(hit.payload or {}, kind or "general")
+                    item["point_id"] = str(hit.id)
                     if not item["text"]:
                         continue
                     if total_chars + len(item["text"]) > cap_chars and collected:

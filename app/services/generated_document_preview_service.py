@@ -20,7 +20,10 @@ _PREVIEW_SECTION_PLANS = [
     ("MERITO", [("merit_by_thesis", 6), ("jurisprudence", 4), ("general", 2)]),
     ("PEDIDOS", [("requests", 4), ("general", 2), ("jurisprudence", 2)]),
 ]
-_PREVIEW_THESIS_PLAN = [("merit_by_thesis", 6), ("jurisprudence", 4), ("requests", 2)]
+_PREVIEW_THESIS_PLAN = [("merit_by_thesis", 6), ("jurisprudence", 15), ("requests", 2)]
+_PREVIEW_GENERAL_JURISPRUDENCE_QUERY = (
+    "jurisprudência FAP impugnação contestação preliminar prescrição"
+)
 _PREVIEW_MAX_CHUNKS = 20
 _PREVIEW_MAX_CHARS = 60_000
 
@@ -51,10 +54,16 @@ def aggregate_reference_candidates(chunks: list[dict], context: dict) -> list[di
     trechos. Metadados de exibição (título, vara, ★) vêm do banco depois.
     """
     by_ref: dict[int, dict] = {}
+    seen: set = set()
     for chunk in chunks or []:
         ref_id = chunk.get("reference_id")
         if ref_id is None:
             continue
+        point_id = chunk.get("point_id")
+        if point_id is not None:
+            if point_id in seen:
+                continue
+            seen.add(point_id)
         ref_id = int(ref_id)
         entry = by_ref.setdefault(ref_id, {
             "reference_id": ref_id,
@@ -117,6 +126,7 @@ def build_documents_preview(
             .filter(JudicialProcessBenefit.id.in_(benefit_ids),
                     JudicialProcessBenefit.process_id == process.id)
             .options(selectinload(JudicialProcessBenefit.attachments))
+            .order_by(JudicialProcessBenefit.id.asc())
             .all()
         )
         for benefit in benefits:
@@ -149,6 +159,19 @@ def build_documents_preview(
             context = build_reference_search_context(process)
             retriever = ImpugnacaoReferenceRetriever()
 
+            # Probe explícito de disponibilidade: fetch_style_references() engole
+            # falhas de Qdrant/embedding internamente e devolve [] tanto para
+            # "coleção vazia" quanto para "indisponível" — sem isto, o except
+            # abaixo nunca dispara para falhas reais (o usuário vê "nenhuma
+            # referência encontrada" numa indisponibilidade, e reference_ids=[]
+            # fica persistido travando a geração sem referências mesmo depois
+            # do Qdrant voltar). Nota: coleção genuinamente inexistente ainda
+            # (acervo vazio) também cai aqui como erro — aceitável e mais
+            # seguro do que confirmar silenciosamente "sem referências".
+            if not retriever._collection_exists():
+                raise RuntimeError('coleção de referências indisponível')
+            retriever._embed('impugnação à contestação FAP')
+
             thesis_ids = {t_id for _, t_id in parsed_selections if t_id}
             theses = []
             if thesis_ids:
@@ -179,6 +202,19 @@ def build_documents_preview(
                     max_chunks=_PREVIEW_MAX_CHUNKS,
                     max_chars=_PREVIEW_MAX_CHARS,
                 ))
+
+            # Espelha a busca geral de jurisprudência do enriquecimento — sem
+            # ela, peças ricas em jurisprudência ficavam com menos trechos no
+            # preview do que na geração e podiam não bater o mínimo de
+            # confirmação, sendo excluídas mesmo com o usuário confirmando tudo.
+            all_chunks.extend(retriever.fetch_style_references(
+                law_firm_id=law_firm_id,
+                query_text=_PREVIEW_GENERAL_JURISPRUDENCE_QUERY,
+                context=context,
+                kind_plan=[("jurisprudence", 20)],
+                max_chunks=_PREVIEW_MAX_CHUNKS,
+                max_chars=_PREVIEW_MAX_CHARS,
+            ))
 
             aggregated = aggregate_reference_candidates(all_chunks, context)
 

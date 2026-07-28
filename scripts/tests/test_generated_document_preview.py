@@ -1,6 +1,10 @@
 """Agregação do preview de documentos (retriever stubado — sem serviços).
 
 Rodar: uv run python scripts/tests/test_generated_document_preview.py
+
+Cobre apenas `aggregate_reference_candidates` (função pura). A orquestração
+completa (`build_documents_preview`) depende de app/models + Flask app context
+e não é stubada aqui — cobertura é manual (ver checklist do wizard Documentos).
 """
 import sys
 from pathlib import Path
@@ -53,6 +57,20 @@ check("peça 1 conta trechos", by_id[1]["trechos"] == 2)
 check("juris usa vara de origem", by_id[2]["camada"] == "vara", f"(veio {by_id.get(2)})")
 check("sem match -> geral", by_id[3]["camada"] == "geral")
 check("ordem por camada", [i["reference_id"] for i in agg] == [1, 2, 3], f"(veio {[i['reference_id'] for i in agg]})")
+
+# ── Dedup por point_id (múltiplas chamadas ao retriever podem trazer o
+#    mesmo chunk mais de uma vez — não deve inflar a contagem de trechos) ──
+DUP_CHUNKS = [
+    {"reference_id": 10, "section_kind": "jurisprudence", "thesis_catalog_id": "tese_a",
+     "judge_name_norm": "", "orgao_julgador_norm": "", "orgao_julgador_origem_norm": "",
+     "trf_region": "TRF4", "text": "mesmo trecho", "point_id": "abc-123"},
+    {"reference_id": 10, "section_kind": "jurisprudence", "thesis_catalog_id": "tese_a",
+     "judge_name_norm": "", "orgao_julgador_norm": "", "orgao_julgador_origem_norm": "",
+     "trf_region": "TRF4", "text": "mesmo trecho", "point_id": "abc-123"},
+]
+dup_agg = aggregate_reference_candidates(DUP_CHUNKS, CTX)
+dup_by_id = {item["reference_id"]: item for item in dup_agg}
+check("dedup por point_id -> 1 trecho", dup_by_id[10]["trechos"] == 1, f"(veio {dup_by_id.get(10)})")
 
 print()
 if FAILS:

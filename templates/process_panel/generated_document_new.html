@@ -1137,12 +1137,17 @@ breadcrumbs=[
     countBadge.textContent = checked.length;
     container.querySelectorAll('.review-benefit-card').forEach(el => el.remove());
 
-    const refCount = document.querySelectorAll('input[name="confirmed_reference_ids[]"]:checked').length;
-    const attCount = document.querySelectorAll('input[name="confirmed_attachment_ids[]"]:checked').length;
     const docsLine = document.getElementById('summary-docs-line');
     if (docsLine) {
-      docsLine.textContent = refCount + ' peça' + (refCount === 1 ? '' : 's') + '-modelo · '
-        + attCount + ' anexo' + (attCount === 1 ? '' : 's');
+      const documentsConfirmed = document.getElementById('documentsConfirmedInput');
+      if (!documentsConfirmed || documentsConfirmed.value !== '1') {
+        docsLine.textContent = 'Documentos: não confirmados — fluxo padrão (todos os anexos e referências automáticos)';
+      } else {
+        const refCount = document.querySelectorAll('input[name="confirmed_reference_ids[]"]:checked').length;
+        const attCount = document.querySelectorAll('input[name="confirmed_attachment_ids[]"]:checked').length;
+        docsLine.textContent = refCount + ' peça' + (refCount === 1 ? '' : 's') + '-modelo · '
+          + attCount + ' anexo' + (attCount === 1 ? '' : 's');
+      }
     }
 
     if (checked.length === 0) {

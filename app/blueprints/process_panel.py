@@ -3362,10 +3362,10 @@ def _run_generated_document_generation(app_obj, law_firm_id, process_id, doc_id,
             if isinstance(confirmed, dict):
                 raw_refs = confirmed.get('reference_ids')
                 if isinstance(raw_refs, list):
-                    allowed_reference_ids = [int(r) for r in raw_refs if str(r).isdigit()]
+                    allowed_reference_ids = [int(r) for r in raw_refs if isinstance(r, int) and r > 0]
                 raw_atts = confirmed.get('attachment_ids')
                 if isinstance(raw_atts, list):
-                    allowed_attachment_ids = [int(a) for a in raw_atts if str(a).isdigit()]
+                    allowed_attachment_ids = [int(a) for a in raw_atts if isinstance(a, int) and a > 0]
             elif confirmed is not None:
                 print(f'[GeneratedDocument] confirmed_documents_json malformado na versão {version.id} — ignorando')
 
@@ -3566,9 +3566,11 @@ def generated_document_create(process_id):
             out = []
             for raw in request.form.getlist(field):
                 try:
-                    out.append(int(raw))
+                    value = int(raw)
                 except (TypeError, ValueError):
                     continue
+                if value > 0:
+                    out.append(value)
             return out
         confirmed_documents = {
             'reference_ids': _int_list('confirmed_reference_ids[]'),
