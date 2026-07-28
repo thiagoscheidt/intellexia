@@ -347,6 +347,26 @@
     padding: .35rem .65rem;
     min-width: 0;
   }
+
+  /* Cobertura por tese */
+  .thesis-coverage-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: .75rem;
+    font-size: .82rem;
+    background: var(--bs-body-bg);
+    border: 1px solid rgba(15, 23, 42, .08);
+    border-radius: .6rem;
+    padding: .5rem .75rem;
+  }
+
+  .thesis-coverage-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
 </style>
 {% endblock %}
 
@@ -641,6 +661,18 @@ breadcrumbs=[
                   <div id="docs-attachments-container" class="d-flex flex-column gap-2"></div>
                 </div>
 
+                <!-- Cobertura por tese -->
+                <div class="mb-3 d-none" id="docs-thesis-coverage-block">
+                  <div class="review-section-label mb-2">
+                    <i class="bi bi-bar-chart-steps me-1"></i>Cobertura por Tese
+                  </div>
+                  <p class="text-muted small mb-2">
+                    Cada tese precisa de peça-modelo para a argumentação sair encorpada. Teses sem modelo serão
+                    redigidas sem precedente interno do escritório.
+                  </p>
+                  <div id="docs-thesis-coverage-container" class="d-flex flex-column gap-2"></div>
+                </div>
+
                 <!-- Peças-modelo de referência -->
                 <div class="mb-3 d-none" id="docs-references-block">
                   <div class="review-section-label mb-2">
@@ -732,6 +764,10 @@ breadcrumbs=[
                   </span>
                 </div>
                 <div id="summary-references-list" class="summary-references-list"></div>
+                <div id="summary-thesis-coverage-alert" class="alert alert-warning py-2 px-3 small mt-2 d-none">
+                  <i class="bi bi-exclamation-triangle me-1"></i>
+                  <span id="summary-thesis-coverage-alert-text"></span>
+                </div>
               </div>
 
               <!-- Contexto do processo -->
@@ -937,8 +973,15 @@ breadcrumbs=[
       trf: { label: 'Mesmo TRF', cls: 'bg-info text-white' },
       geral: { label: 'Acervo geral', cls: 'bg-secondary-subtle text-secondary-emphasis' },
     };
+    const LAYER_ORDER = { juiz: 0, vara: 1, trf: 2, geral: 3 };
+    const THESIS_STATUS_CLASS = {
+      success: 'bg-success-subtle text-success border border-success-subtle',
+      warning: 'bg-warning-subtle text-warning-emphasis border border-warning-subtle',
+      danger: 'bg-danger-subtle text-danger border border-danger-subtle',
+    };
     let docsLastSignature = null;
     let docsLoadedOk = false;
+    let lastCoberturaTeses = [];
 
     function computeSelectionSignature() {
       const typeEl = document.querySelector('input[name="document_type"]:checked');
@@ -1041,7 +1084,10 @@ breadcrumbs=[
       chk.dataset.titulo = ref.titulo || '(sem título)';
       chk.dataset.camada = ref.camada || 'geral';
       chk.dataset.trechos = String(ref.trechos || 0);
-      chk.addEventListener('change', updateReferencesUncheckedWarning);
+      chk.addEventListener('change', function () {
+        updateReferencesUncheckedWarning();
+        updateThesisCoverage();
+      });
       label.appendChild(chk);
 
       const body = document.createElement('div');
@@ -1118,8 +1164,90 @@ breadcrumbs=[
       warning.classList.toggle('d-none', anyChecked);
     }
 
+    // ── Cobertura por tese (recalculada ao vivo conforme peças são marcadas) ──
+    function getConfirmedReferenceIds() {
+      return new Set(Array.from(document.querySelectorAll('input[name="confirmed_reference_ids[]"]:checked'))
+        .map(el => el.value));
+    }
+
+    function melhorCamadaEntre(exemplos) {
+      let best = null;
+      exemplos.forEach(e => {
+        const order = LAYER_ORDER.hasOwnProperty(e.camada) ? LAYER_ORDER[e.camada] : LAYER_ORDER.geral;
+        if (best === null || order < LAYER_ORDER[best]) best = e.camada;
+      });
+      return best;
+    }
+
+    function computeThesisStatus(tese, checkedIds) {
+      const exemplos = Array.isArray(tese.exemplos) ? tese.exemplos : [];
+      const marcados = exemplos.filter(e => checkedIds.has(String(e.reference_id)));
+
+      if (exemplos.length === 0 && tese.sem_modelo) {
+        return { level: 'danger', text: 'Nenhum modelo de referência no acervo' };
+      }
+      if (marcados.length === 0) {
+        return { level: 'danger', text: 'Nenhuma peça confirmada para esta tese' };
+      }
+      if (marcados.length === 1) {
+        const camadaInfo = CAMADA_BADGE[marcados[0].camada] || CAMADA_BADGE.geral;
+        return { level: 'warning', text: '1 exemplo · ' + camadaInfo.label.toLowerCase() };
+      }
+      const camadaInfo = CAMADA_BADGE[melhorCamadaEntre(marcados)] || CAMADA_BADGE.geral;
+      return { level: 'success', text: marcados.length + ' exemplos · ' + camadaInfo.label.toLowerCase() };
+    }
+
+    function renderThesisCoverageRow(tese, checkedIds) {
+      const status = computeThesisStatus(tese, checkedIds);
+
+      const row = document.createElement('div');
+      row.className = 'thesis-coverage-row';
+
+      const name = document.createElement('span');
+      name.className = 'thesis-coverage-name fw-semibold';
+      name.textContent = tese.tese || '(sem nome)';
+      name.title = tese.tese || '';
+      row.appendChild(name);
+
+      const pill = document.createElement('span');
+      pill.className = 'badge flex-shrink-0 ' + (THESIS_STATUS_CLASS[status.level] || THESIS_STATUS_CLASS.danger);
+      pill.textContent = status.text;
+      row.appendChild(pill);
+
+      return row;
+    }
+
+    function updateThesisCoverage() {
+      const block = document.getElementById('docs-thesis-coverage-block');
+      const container = document.getElementById('docs-thesis-coverage-container');
+      if (!block || !container) return;
+
+      container.textContent = '';
+      if (!Array.isArray(lastCoberturaTeses) || lastCoberturaTeses.length === 0) {
+        block.classList.add('d-none');
+        return;
+      }
+
+      block.classList.remove('d-none');
+      const checkedIds = getConfirmedReferenceIds();
+      lastCoberturaTeses.forEach(tese => container.appendChild(renderThesisCoverageRow(tese, checkedIds)));
+    }
+
+    function countTesesSemPecaConfirmada() {
+      if (!Array.isArray(lastCoberturaTeses) || lastCoberturaTeses.length === 0) return 0;
+      const checkedIds = getConfirmedReferenceIds();
+      let count = 0;
+      lastCoberturaTeses.forEach(tese => {
+        const exemplos = Array.isArray(tese.exemplos) ? tese.exemplos : [];
+        const marcados = exemplos.filter(e => checkedIds.has(String(e.reference_id)));
+        if (marcados.length === 0) count++;
+      });
+      return count;
+    }
+
     function renderDocumentsPreview(data, docType) {
       const isImpugnacao = docType === 'impugnacao_contestacao';
+      lastCoberturaTeses = Array.isArray(data.cobertura_teses) ? data.cobertura_teses : [];
 
       // Contestação
       const contBlock = document.getElementById('docs-contestacao-block');
@@ -1172,6 +1300,8 @@ breadcrumbs=[
         }
         updateReferencesUncheckedWarning();
       }
+
+      updateThesisCoverage();
     }
 
     window.loadDocumentsPreview = function (force) {
@@ -1311,6 +1441,21 @@ breadcrumbs=[
             refsList.appendChild(row);
           });
         }
+      }
+    }
+
+    // ── Teses sem peça-modelo confirmada (resumo, só impugnação) ────────
+    const coverageAlert = document.getElementById('summary-thesis-coverage-alert');
+    const coverageAlertText = document.getElementById('summary-thesis-coverage-alert-text');
+    if (coverageAlert && coverageAlertText) {
+      const semPeca = (isImpugnacao && docsOk) ? countTesesSemPecaConfirmada() : 0;
+      if (semPeca > 0) {
+        coverageAlertText.textContent = semPeca
+          + (semPeca === 1 ? ' tese sem peça-modelo confirmada' : ' teses sem peça-modelo confirmada')
+          + ' — ' + (semPeca === 1 ? 'será redigida' : 'serão redigidas') + ' sem precedente interno.';
+        coverageAlert.classList.remove('d-none');
+      } else {
+        coverageAlert.classList.add('d-none');
       }
     }
 
