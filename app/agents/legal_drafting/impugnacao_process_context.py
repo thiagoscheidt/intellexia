@@ -13,7 +13,10 @@ from typing import Optional
 
 from app.utils.cnj import tribunal_sigla_from_cnj
 
-_TRF_TEXT_RE = re.compile(r"\btrf\s*([1-6])\b|([1-6])\D{0,3}regi[aã]o", re.IGNORECASE)
+_TRF_TEXT_RE = re.compile(
+    r"\btrf\s*([1-6])\b|tribunal\s+regional\s+federal\s+da\s+([1-6])\D{0,3}regi[aã]o",
+    re.IGNORECASE,
+)
 _SECTION_NUMBER_PREFIX_RE = re.compile(r"^\s*\d{1,2}(?:\.\d+)*\s*[\.\)\-:]?\s*")
 
 

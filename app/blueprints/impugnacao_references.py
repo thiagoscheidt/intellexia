@@ -94,6 +94,12 @@ def list_references():
     vara_filter = (request.args.get('vara') or '').strip()
     search_query = (request.args.get('q') or '').strip()
 
+    thesis_options = _load_thesis_catalog(law_firm_id)
+    valid_thesis_keys = {t['key'] for t in thesis_options}
+    tese_filter = (request.args.get('tese') or '').strip()
+    if tese_filter not in valid_thesis_keys:
+        tese_filter = ''
+
     query = ImpugnacaoReferenceModel.query.filter_by(law_firm_id=law_firm_id)
     if status_filter in ('active', 'archived'):
         query = query.filter_by(status=status_filter)
@@ -104,6 +110,12 @@ def list_references():
 
     references = query.order_by(ImpugnacaoReferenceModel.created_at.desc()).all()
 
+    if tese_filter:
+        references = [
+            ref for ref in references
+            if tese_filter in (ref.thesis_catalog_ids or [])
+        ]
+
     # Busca textual: Meilisearch com fallback SQL LIKE nos chunks.
     search_hits_by_ref: dict[int, list[dict]] = {}
     search_error = False
@@ -112,6 +124,7 @@ def list_references():
             law_firm_id, search_query,
             status=status_filter if status_filter in ('active', 'archived') else 'active',
             trf_region=trf_filter or None,
+            thesis_catalog_id=tese_filter or None,
         )
         if hits is None:
             # Meilisearch fora do ar: aviso na tela + fallback SQL LIKE.
@@ -151,6 +164,8 @@ def list_references():
         search_hits_by_ref=search_hits_by_ref,
         search_error=search_error,
         trf_options=trf_options,
+        thesis_options=thesis_options,
+        tese_filter=tese_filter,
         total=total,
         total_chunks=total_chunks,
     )
@@ -384,19 +399,9 @@ def update_metadata(ref_id):
 
     db.session.commit()
 
-    # Reflete os metadados no índice de busca da tela.
-    chunk_records = [
-        {
-            'qdrant_point_id': chunk.qdrant_point_id,
-            'heading': None, 'section': chunk.secao_origem,
-            'section_kind': chunk.section_kind,
-            'thesis_catalog_id': chunk.thesis_catalog_id,
-            'order_in_doc': chunk.order_in_doc,
-            'full_text': chunk.full_text,
-        }
-        for chunk in ImpugnacaoReferenceChunk.query.filter_by(reference_id=ref_id).all()
-    ]
-    impugnacao_reference_search.index_reference_chunks(reference, chunk_records)
+    # Reflete os metadados no índice de busca da tela (partial update —
+    # preserva texto/heading/section já indexados).
+    impugnacao_reference_search.update_reference_metadata(reference)
 
     flash('Metadados atualizados. Reindexe a peça para propagar ao Qdrant.', 'success')
     return redirect(url_for('impugnacao_references.reference_detail', ref_id=ref_id))

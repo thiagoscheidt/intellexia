@@ -59,6 +59,16 @@ proc_texto = SimpleNamespace(
 )
 check("TRF por texto do tribunal", trf_region_from_process(proc_texto), "TRF4")
 
+# Regex não deve capturar "Região" fora de contexto federal (ex.: Justiça do
+# Trabalho, que também usa "Tribunal Regional do Trabalho da Nª Região").
+proc_trt = SimpleNamespace(
+    id=5, law_firm_id=1, process_number=None,
+    court=SimpleNamespace(tribunal="Tribunal Regional do Trabalho da 4ª Região",
+                          orgao_julgador=None),
+    tribunal=None, tribunal_name="", section=None, judge_name=None,
+)
+check("TRT não é confundido com TRF", trf_region_from_process(proc_trt), None)
+
 # ── contexto completo com snapshot DataJud stubado ───────────────────
 djs.get_snapshot = lambda process_id, law_firm_id: SimpleNamespace(
     payload_json={"instancias": [

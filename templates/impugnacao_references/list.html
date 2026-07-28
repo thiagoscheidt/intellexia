@@ -84,8 +84,15 @@
                     </select>
                     <input type="text" name="vara" class="form-control form-control-sm" style="max-width:220px"
                         value="{{ vara_filter or '' }}" placeholder="Vara / órgão julgador">
+                    <select name="tese" class="form-select form-select-sm" style="max-width:220px"
+                        onchange="this.form.submit()">
+                        <option value="">Tese</option>
+                        {% for t in thesis_options %}
+                        <option value="{{ t['key'] }}" {% if tese_filter == t['key'] %}selected{% endif %}>{{ t['name'] }}</option>
+                        {% endfor %}
+                    </select>
                     <button class="btn btn-sm btn-outline-primary" type="submit">Filtrar</button>
-                    {% if search_query or trf_filter or vara_filter %}
+                    {% if search_query or trf_filter or vara_filter or tese_filter %}
                     <a class="btn btn-sm btn-outline-secondary"
                         href="{{ url_for('impugnacao_references.list_references', status=status_filter) }}">Limpar</a>
                     {% endif %}

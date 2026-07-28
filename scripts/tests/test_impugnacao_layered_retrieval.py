@@ -40,6 +40,18 @@ POINTS = [
                orgao_julgador_norm=None, trf_region="TRF1"),
 ]
 
+# Pontos de jurisprudência: para esse section_kind, a camada de "vara" usa
+# orgao_julgador_origem_norm (vara de ORIGEM da peça), não orgao_julgador_norm
+# (que no payload de jurisprudência é o órgão do precedente, não da origem).
+JURIS_POINTS = [
+    make_point("j-origem", "trecho juris da mesma origem", section_kind="jurisprudence",
+               judge_name_norm=None, orgao_julgador_norm="OUTRO ORGAO (PRECEDENTE)",
+               orgao_julgador_origem_norm="3A VARA FEDERAL", trf_region="TRF4"),
+    make_point("j-decoy", "trecho juris de outra origem", section_kind="jurisprudence",
+               judge_name_norm=None, orgao_julgador_norm="3A VARA FEDERAL",
+               orgao_julgador_origem_norm="OUTRA ORIGEM QUALQUER", trf_region="TRF4"),
+]
+
 
 class StubQdrant:
     """Aplica as FieldConditions `must` do filtro sobre POINTS em memória."""
@@ -52,7 +64,7 @@ class StubQdrant:
         for cond in (query_filter.must or []):
             conditions.append((cond.key, cond.match.value))
         hits = []
-        for point in POINTS:
+        for point in POINTS + JURIS_POINTS:
             payload = dict(point.payload)
             payload.setdefault("law_firm_id", 1)
             payload.setdefault("status", "active")
@@ -98,6 +110,16 @@ result_trf = retriever.fetch_style_references(
 )
 trf_texts = [r["text"] for r in result_trf]
 check("kwarg trf_region prioriza TRF4", all("geral" not in t for t in trf_texts), f"(ordem: {trf_texts})")
+
+# Jurisprudência: a camada de "vara" deve usar orgao_julgador_origem_norm
+# (vara de origem da peça), não orgao_julgador_norm (órgão do precedente).
+result_juris = retriever.fetch_style_references(
+    law_firm_id=1, query_text="tese", context=CTX,
+    kind_plan=[("jurisprudence", 1)], max_chunks=1, max_chars=50_000,
+)
+juris_texts = [r["text"] for r in result_juris]
+check("juris usa vara de origem (swap de chave)", juris_texts == ["trecho juris da mesma origem"],
+      f"(ordem: {juris_texts})")
 
 print()
 if FAILS:
