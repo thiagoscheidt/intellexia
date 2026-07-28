@@ -144,8 +144,13 @@ _IMPORT_ITEM_RESUMABLE_STATUSES = ('pending', 'downloading', 'indexing', 'failed
 
 # C2: um job 'running' sem nenhum progresso de item por mais desse tempo é
 # considerado travado (thread morta num restart/deploy) — a tela oferece
-# "Retomar" mesmo com status 'running' nesse caso.
-_STALE_JOB_THRESHOLD_MINUTES = 15
+# "Retomar" mesmo com status 'running' nesse caso. 30 min (não 15) porque
+# uma ingestão pesada de verdade (Docling + LLMs + embeddings de um PDF
+# grande) legitimamente fica minutos sem tocar o item — marcar como stale
+# cedo demais deixa o usuário clicar "Retomar" sobre um job que só está
+# ocupado, disparando uma segunda ingestão concorrente sobre o mesmo
+# reference_id (ver _should_reuse_existing_reference).
+_STALE_JOB_THRESHOLD_MINUTES = 30
 
 # I7(a): pausa entre downloads sucessivos do Drive no worker — 350 downloads
 # em sequência sem intervalo é o cenário que dispara quota/captcha do Google.
@@ -154,6 +159,45 @@ _DOWNLOAD_PAUSE_SECONDS = 1.5
 _INDEXING_INCOMPLETE_MESSAGE = (
     'Indexação não concluída — reprocesse o item ou reindexe a peça.'
 )
+_INDEXING_IN_PROGRESS_ELSEWHERE_MESSAGE = (
+    'Indexação já em andamento por outro processamento — aguarde ou '
+    'reprocesse depois.'
+)
+
+# Ações possíveis de _should_reuse_existing_reference.
+_REUSE_ACTION_REUSE = 'reuse'
+_REUSE_ACTION_WAIT = 'wait'
+_REUSE_ACTION_DUPLICATE = 'duplicate'
+
+
+def _should_reuse_existing_reference(existing, item) -> str:
+    """Decide o que fazer quando já existe uma ImpugnacaoReferenceModel com o
+    mesmo `source_drive_file_id` do item sendo processado.
+
+    Função pura (testável com objetos simples) para travar a regra que
+    corrige a regressão do I4: `ingest_reference` faz
+    `delete_by_reference_id` + apaga os `ImpugnacaoReferenceChunk` e
+    reinsere — duas execuções concorrentes reindexando o MESMO
+    `reference_id` podem intercalar e deixar trechos duplicados ou
+    `chunks_count`/`ingestion_status` divergindo do Qdrant/Meilisearch.
+
+    - `'reuse'`: a peça encontrada é a do PRÓPRIO item
+      (`existing.id == item.reference_id`) e não está sendo processada
+      agora (`ingestion_status != 'processing'`) — seguro reindexar por
+      cima (retomada depois de uma falha anterior deste mesmo item).
+    - `'wait'`: a peça é do próprio item, mas está `ingestion_status ==
+      'processing'` — outra execução (uma thread de worker ainda viva,
+      inclusive um "Retomar" disparado sobre um job que só parecia stale)
+      já está reindexando essa mesma peça agora. NÃO reindexar aqui.
+    - `'duplicate'`: a peça é de outro item/origem — mesmo que incompleta,
+      não é seguro mexer numa ingestão que não é deste item; é duplicata
+      de verdade.
+    """
+    if existing.id != item.reference_id:
+        return _REUSE_ACTION_DUPLICATE
+    if existing.ingestion_status == 'processing':
+        return _REUSE_ACTION_WAIT
+    return _REUSE_ACTION_REUSE
 
 
 def _import_job_is_stale(job) -> bool:
@@ -219,19 +263,35 @@ def _run_import_job(app_obj, law_firm_id, job_id):
                         law_firm_id=law_firm_id, source_drive_file_id=item.drive_file_id
                     ).first()
                     if existing is not None:
-                        # I4: se a peça encontrada é a do próprio item (retomada
-                        # após uma falha que já tinha criado a peça) ou ficou
-                        # incompleta (ingestão falhou/travou), não é duplicata de
-                        # verdade — reusa e reindexa em vez de marcar
-                        # skipped_duplicate sem nunca reprocessar.
-                        is_own_reference = existing.id == item.reference_id
-                        is_incomplete = existing.ingestion_status != 'completed'
-                        if not (is_own_reference or is_incomplete):
+                        # I4: reusar-e-reindexar só quando a peça é do próprio
+                        # item e não está sendo indexada agora — caso
+                        # contrário seria uma segunda ingest_reference
+                        # concorrente sobre o mesmo reference_id (delete +
+                        # reinsere dos chunks), que intercala e deixa
+                        # trechos duplicados. Ver _should_reuse_existing_reference.
+                        action = _should_reuse_existing_reference(existing, item)
+
+                        if action == _REUSE_ACTION_DUPLICATE:
                             item.status = 'skipped_duplicate'
                             item.reference_id = existing.id
                             db.session.commit()
                             continue
 
+                        if action == _REUSE_ACTION_WAIT:
+                            # Não reindexa por cima de uma ingestão em
+                            # andamento (job concorrente citando o mesmo
+                            # arquivo do Drive, ou "Retomar" disparado
+                            # enquanto a ingestão pesada original ainda
+                            # está viva — ver C2/_STALE_JOB_THRESHOLD_MINUTES).
+                            # Não marca failed para não poluir o painel de
+                            # falhas com algo que pode terminar sozinho.
+                            item.status = 'indexing'
+                            item.reference_id = existing.id
+                            item.error_message = _INDEXING_IN_PROGRESS_ELSEWHERE_MESSAGE
+                            db.session.commit()
+                            continue
+
+                        # action == _REUSE_ACTION_REUSE
                         item.reference_id = existing.id
                         item.status = 'indexing'
                         db.session.commit()

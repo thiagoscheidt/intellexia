@@ -30,6 +30,7 @@ from app.services.impugnacao_import_service import (
     SpreadsheetFormatError,
 )
 from app.services.impugnacao_reference_ingestion import apply_extracted_metadata
+from app.blueprints.impugnacao_references import _should_reuse_existing_reference
 
 FAILS = []
 
@@ -338,6 +339,55 @@ try:
     check("preserve=False: quality_score sobrescrito pela IA", ref_manual.quality_score, meta.quality_score)
     check("preserve=False: process_number sobrescrito pela IA", ref_manual.process_number, meta.process_number)
     check("preserve=False: judge_name sobrescrito pela IA", ref_manual.judge_name, meta.judge_name)
+
+    # ── _should_reuse_existing_reference (regressão do I4) ──────────────
+    print("\n_should_reuse_existing_reference:")
+
+    # peça do próprio item, já concluída ou com falha anterior -> reusa e reindexa
+    own_completed = SimpleNamespace(id=10, ingestion_status='completed')
+    check(
+        "própria peça, completed -> reuse",
+        _should_reuse_existing_reference(own_completed, SimpleNamespace(reference_id=10)),
+        'reuse',
+    )
+    own_failed = SimpleNamespace(id=10, ingestion_status='failed')
+    check(
+        "própria peça, failed -> reuse",
+        _should_reuse_existing_reference(own_failed, SimpleNamespace(reference_id=10)),
+        'reuse',
+    )
+
+    # peça do próprio item, mas sendo indexada agora por outra execução
+    # (job concorrente ou 'Retomar' sobre ingestão ainda viva) -> espera,
+    # nunca reindexa em cima de uma ingest_reference já em andamento
+    own_processing = SimpleNamespace(id=10, ingestion_status='processing')
+    check(
+        "própria peça, processing -> wait (não reindexa em cima de outra execução)",
+        _should_reuse_existing_reference(own_processing, SimpleNamespace(reference_id=10)),
+        'wait',
+    )
+
+    # peça de OUTRO item/origem -> duplicata de verdade, mesmo incompleta
+    # (é exatamente o cenário da regressão: dois jobs citando o mesmo
+    # arquivo do Drive não podem reindexar a peça um do outro)
+    other_processing = SimpleNamespace(id=99, ingestion_status='processing')
+    check(
+        "peça de outro item, processing -> duplicate (não reindexa peça alheia)",
+        _should_reuse_existing_reference(other_processing, SimpleNamespace(reference_id=None)),
+        'duplicate',
+    )
+    other_failed = SimpleNamespace(id=99, ingestion_status='failed')
+    check(
+        "peça de outro item, failed -> duplicate (incompleta mas não é minha)",
+        _should_reuse_existing_reference(other_failed, SimpleNamespace(reference_id=10)),
+        'duplicate',
+    )
+    other_completed = SimpleNamespace(id=99, ingestion_status='completed')
+    check(
+        "peça de outro item, completed -> duplicate",
+        _should_reuse_existing_reference(other_completed, SimpleNamespace(reference_id=None)),
+        'duplicate',
+    )
 
     # ── download_drive_file: sem rede, só a assinatura/erro de conexão ──
     # Não fazemos chamada de rede real; apenas garantimos que download_drive_file
