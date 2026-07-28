@@ -844,6 +844,7 @@ breadcrumbs=[
 
     // ── Documentos (step 3) ─────────────────────────────────────────────
     const PREVIEW_URL = "{{ url_for('process_panel.generated_document_preview', process_id=process.id) }}";
+    const REFERENCE_FILE_URL_BASE = "{{ url_for('impugnacao_references.list_references') }}";
     const CAMADA_BADGE = {
       juiz: { label: 'Mesmo juiz', cls: 'bg-success text-white' },
       vara: { label: 'Mesma vara', cls: 'bg-primary text-white' },
@@ -941,10 +942,10 @@ breadcrumbs=[
 
     function renderReferenceCard(ref) {
       const wrapper = document.createElement('div');
-      wrapper.className = 'review-benefit-card';
+      wrapper.className = 'review-benefit-card d-flex align-items-start gap-2';
 
       const label = document.createElement('label');
-      label.className = 'd-flex align-items-start gap-2 mb-0';
+      label.className = 'd-flex align-items-start gap-2 mb-0 flex-grow-1 min-w-0';
       const chk = document.createElement('input');
       chk.type = 'checkbox';
       chk.name = 'confirmed_reference_ids[]';
@@ -1006,6 +1007,17 @@ breadcrumbs=[
 
       label.appendChild(body);
       wrapper.appendChild(label);
+
+      // Botão fora do <label>: clicar para ver o arquivo não pode togglar o checkbox.
+      const fileBtn = document.createElement('a');
+      fileBtn.href = REFERENCE_FILE_URL_BASE + ref.reference_id + '/arquivo';
+      fileBtn.target = '_blank';
+      fileBtn.rel = 'noopener';
+      fileBtn.className = 'btn btn-sm btn-outline-secondary flex-shrink-0';
+      fileBtn.title = 'Visualizar arquivo original da peça';
+      fileBtn.innerHTML = '<i class="bi bi-file-earmark-text"></i>';
+      wrapper.appendChild(fileBtn);
+
       return wrapper;
     }
 
