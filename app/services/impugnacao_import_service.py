@@ -236,7 +236,16 @@ def parse_spreadsheet(
     tela) se nenhuma aba tiver cabeçalho reconhecível ou se nenhuma linha
     do tipo pedido for encontrada.
     """
-    wb = openpyxl.load_workbook(file_path, data_only=True)
+    try:
+        wb = openpyxl.load_workbook(file_path, data_only=True)
+    except Exception as exc:
+        # openpyxl levanta zipfile.BadZipFile (ou outros erros de parsing)
+        # para um .xlsx corrompido/renomeado — sempre traduzido para o erro
+        # amigável que a tela já sabe exibir.
+        raise SpreadsheetFormatError(
+            "Não foi possível ler a planilha — confirme que é um arquivo "
+            ".xlsx válido."
+        ) from exc
     header = _find_header(wb)
     if header is None:
         raise SpreadsheetFormatError(
@@ -379,6 +388,25 @@ _RESTRICTED_MESSAGE = (
     'Arquivo sem compartilhamento público no Drive — libere o acesso '
     '(qualquer pessoa com o link) e reprocesse este item.'
 )
+_RATE_LIMIT_MESSAGE = (
+    'O Drive não devolveu o arquivo (possível limite de requisições). '
+    'Tente reprocessar este item mais tarde.'
+)
+# Sinais textuais de que o HTML devolvido é mesmo uma tela de login/permissão
+# (e não um captcha/limite de requisições genérico do Drive).
+_LOGIN_SIGNALS = ('accounts.google.com', 'sign in', 'solicitar acesso', 'request access')
+
+
+def _classify_restricted_html(body: bytes) -> str:
+    """Decide, a partir do HTML devolvido no lugar do arquivo binário, se é
+    um bloqueio de compartilhamento (login/permissão — mensagem de sempre)
+    ou algo mais genérico que sugere limite de requisições/captcha do Drive
+    (mensagem nova, orienta reprocessar mais tarde em vez de mexer no
+    compartilhamento de centenas de arquivos). Testável sem rede."""
+    text = (body or b'').decode('utf-8', errors='ignore').lower()
+    if any(signal in text for signal in _LOGIN_SIGNALS):
+        return _RESTRICTED_MESSAGE
+    return _RATE_LIMIT_MESSAGE
 
 
 def _looks_like_html(content_type: Optional[str], first_chunk_bytes: bytes) -> bool:
@@ -438,11 +466,18 @@ def _open_drive_stream(url: str, timeout: int):
 
 def _save_stream(response, first_chunk: bytes, drive_file_id: str, dest_dir: str) -> tuple:
     filename = _filename_from_content_disposition(response.headers.get('Content-Disposition'))
-    original_filename = filename or f'{drive_file_id}.pdf'
+    # original_filename vai para ImpugnacaoReferenceModel.original_filename,
+    # coluna String(255) — corta antes de gravar (M9), senão MySQL levanta
+    # DataError em nomes de arquivo do Drive mais longos.
+    original_filename = (filename or f'{drive_file_id}.pdf')[:255]
     safe_name = _safe_filename(filename, f'{drive_file_id}.pdf')
 
+    # Timestamp de segundo colide entre itens processados na mesma janela
+    # (ex.: vários "Impugnação.pdf" seguidos) — os 8 primeiros chars do
+    # drive_file_id garantem nome único mesmo assim (M8).
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    dest_path = os.path.join(dest_dir, f'{timestamp}_{safe_name}')
+    unique_suffix = drive_file_id[:8]
+    dest_path = os.path.join(dest_dir, f'{timestamp}_{unique_suffix}_{safe_name}')
 
     sha256 = hashlib.sha256()
     try:
@@ -490,10 +525,10 @@ def download_drive_file(drive_file_id: str, dest_dir: str, *, timeout: int = 90)
                 retry_content_type = retry_response.headers.get('Content-Type', '')
                 if _looks_like_html(retry_content_type, retry_first_chunk):
                     retry_response.close()
-                    raise DriveAccessError(_RESTRICTED_MESSAGE)
+                    raise DriveAccessError(_classify_restricted_html(retry_first_chunk))
                 response, first_chunk = retry_response, retry_first_chunk
             else:
-                raise DriveAccessError(_RESTRICTED_MESSAGE)
+                raise DriveAccessError(_classify_restricted_html(body))
 
         return _save_stream(response, first_chunk, drive_file_id, dest_dir)
     finally:

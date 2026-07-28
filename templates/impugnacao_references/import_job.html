@@ -102,12 +102,19 @@
                     <i class="bi bi-exclamation-triangle text-danger me-2"></i>Importação com falhas
                     {% endif %}
                 </span>
-                {% if job.status in ('completed', 'failed') and has_failed %}
-                <form method="POST" action="{{ url_for('impugnacao_references.import_job_resume', job_id=job.id) }}">
-                    <button type="submit" class="btn btn-sm btn-outline-primary">
-                        <i class="bi bi-arrow-repeat me-1"></i>Retomar (reprocessar falhas)
-                    </button>
-                </form>
+                {% if (job.status in ('completed', 'failed') and has_failed) or (job.status == 'running' and job_is_stale) %}
+                <div class="d-flex flex-column align-items-end gap-1">
+                    {% if job.status == 'running' and job_is_stale %}
+                    <span class="small text-warning">
+                        <i class="bi bi-exclamation-triangle me-1"></i>A importação parece interrompida — nenhum progresso nos últimos minutos.
+                    </span>
+                    {% endif %}
+                    <form method="POST" action="{{ url_for('impugnacao_references.import_job_resume', job_id=job.id) }}">
+                        <button type="submit" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-arrow-repeat me-1"></i>Retomar (reprocessar falhas)
+                        </button>
+                    </form>
+                </div>
                 {% endif %}
             </div>
 

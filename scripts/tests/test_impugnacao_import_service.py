@@ -10,18 +10,26 @@ Rodar: uv run python scripts/tests/test_impugnacao_import_service.py
 """
 import sys
 import tempfile
+from decimal import Decimal
 from pathlib import Path
+from types import SimpleNamespace
 
 import openpyxl
 
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from app.services.impugnacao_import_service import (
+    _classify_restricted_html,
+    _filename_from_content_disposition,
     _looks_like_html,
+    _RATE_LIMIT_MESSAGE,
+    _RESTRICTED_MESSAGE,
     download_drive_file,
     normalize_tribunal,
     parse_spreadsheet,
+    SpreadsheetFormatError,
 )
+from app.services.impugnacao_reference_ingestion import apply_extracted_metadata
 
 FAILS = []
 
@@ -173,7 +181,21 @@ try:
     except Exception as exc:
         check_true(
             "planilha sem cabeçalho levanta SpreadsheetFormatError",
-            type(exc).__name__ == 'SpreadsheetFormatError',
+            isinstance(exc, SpreadsheetFormatError),
+            f"(veio {type(exc).__name__})",
+        )
+
+    # arquivo .xlsx corrompido/renomeado (na verdade um .txt) -> SpreadsheetFormatError,
+    # não o BadZipFile cru do openpyxl (I6)
+    xlsx_nao_zip = tmp_dir / 'nao_e_zip.xlsx'
+    xlsx_nao_zip.write_text('isto não é um arquivo .xlsx, é texto puro', encoding='utf-8')
+    try:
+        parse_spreadsheet(str(xlsx_nao_zip))
+        check_true(".xlsx não-zip levanta SpreadsheetFormatError", False)
+    except Exception as exc:
+        check_true(
+            ".xlsx não-zip levanta SpreadsheetFormatError (não BadZipFile)",
+            isinstance(exc, SpreadsheetFormatError),
             f"(veio {type(exc).__name__})",
         )
 
@@ -205,6 +227,117 @@ try:
         _looks_like_html('', b'<html><head>'),
         True,
     )
+
+    # ── _filename_from_content_disposition ─────────────────────────────
+    print("\n_filename_from_content_disposition:")
+    check(
+        'filename="a.pdf" -> a.pdf',
+        _filename_from_content_disposition('attachment; filename="a.pdf"'),
+        'a.pdf',
+    )
+    check(
+        "RFC 5987 filename*=UTF-8''Impugna%C3%A7%C3%A3o.pdf -> Impugnação.pdf",
+        _filename_from_content_disposition(
+            "attachment; filename*=UTF-8''Impugna%C3%A7%C3%A3o.pdf"
+        ),
+        'Impugnação.pdf',
+    )
+
+    # ── _classify_restricted_html (I7) ──────────────────────────────────
+    print("\n_classify_restricted_html:")
+    check(
+        "HTML de login do Google -> mensagem de compartilhamento",
+        _classify_restricted_html(
+            'Faça login em accounts.google.com para continuar'.encode('utf-8')
+        ),
+        _RESTRICTED_MESSAGE,
+    )
+    check(
+        "HTML com 'Solicitar acesso' -> mensagem de compartilhamento",
+        _classify_restricted_html(
+            'Voce precisa <a>Solicitar acesso</a> a este arquivo'.encode('utf-8')
+        ),
+        _RESTRICTED_MESSAGE,
+    )
+    check(
+        "HTML genérico sem sinal de login -> mensagem de limite de requisições",
+        _classify_restricted_html(
+            b'<html><body>Ocorreu um erro inesperado. Tente novamente.</body></html>'
+        ),
+        _RATE_LIMIT_MESSAGE,
+    )
+
+    # ── apply_extracted_metadata (C1) ───────────────────────────────────
+    print("\napply_extracted_metadata:")
+    meta = SimpleNamespace(
+        title='Título sugerido pela IA',
+        case_name='Empresa Sugerida pela IA Ltda',
+        process_number='1234567-12.2024.4.02.1234',
+        orgao_julgador='Vara sugerida pela IA',
+        judge_name='Fulano de Tal',
+        trf_region='TRF2',
+        generation_mode='A',
+        quality_score=4.5,
+    )
+
+    # preserve_curated_fields=True: os 4 campos curados (title, case_name,
+    # trf_region, orgao_julgador) já preenchidos permanecem intocados;
+    # generation_mode/quality_score/process_number/judge_name vêm sempre da
+    # IA, mesmo com quality_score prévio 3.00 (Decimal, truthy) — é
+    # exatamente o cenário do bug C1(b).
+    ref_curated = SimpleNamespace(
+        title='Título Curado da Planilha',
+        case_name='Empresa Curada Ltda',
+        trf_region='TRF4',
+        orgao_julgador='3ª Vara Federal de Florianópolis',
+        process_number=None,
+        judge_name=None,
+        generation_mode=None,
+        quality_score=Decimal('3.00'),
+    )
+    apply_extracted_metadata(ref_curated, meta, is_new=True, preserve_curated_fields=True)
+    check("preserve=True: title permanece curado", ref_curated.title, 'Título Curado da Planilha')
+    check("preserve=True: case_name permanece curado", ref_curated.case_name, 'Empresa Curada Ltda')
+    check("preserve=True: trf_region permanece curado", ref_curated.trf_region, 'TRF4')
+    check(
+        "preserve=True: orgao_julgador permanece curado",
+        ref_curated.orgao_julgador,
+        '3ª Vara Federal de Florianópolis',
+    )
+    check("preserve=True: generation_mode vem da IA", ref_curated.generation_mode, 'A')
+    check(
+        "preserve=True: quality_score vem da IA mesmo com 3.00 prévio",
+        ref_curated.quality_score,
+        4.5,
+    )
+    check("preserve=True: process_number vem da IA", ref_curated.process_number, meta.process_number)
+    check("preserve=True: judge_name vem da IA", ref_curated.judge_name, meta.judge_name)
+
+    # preserve_curated_fields=False (upload manual): comportamento antigo —
+    # os 5 campos curados são sempre sobrescritos pela IA.
+    ref_manual = SimpleNamespace(
+        title='Título Curado da Planilha',
+        case_name='Empresa Curada Ltda',
+        trf_region='TRF4',
+        orgao_julgador='3ª Vara Federal de Florianópolis',
+        process_number=None,
+        judge_name=None,
+        generation_mode=None,
+        quality_score=Decimal('3.00'),
+    )
+    apply_extracted_metadata(ref_manual, meta, is_new=True, preserve_curated_fields=False)
+    check("preserve=False: title sobrescrito pela IA", ref_manual.title, meta.title)
+    check("preserve=False: case_name sobrescrito pela IA", ref_manual.case_name, meta.case_name)
+    check("preserve=False: trf_region sobrescrito pela IA", ref_manual.trf_region, meta.trf_region)
+    check(
+        "preserve=False: orgao_julgador sobrescrito pela IA",
+        ref_manual.orgao_julgador,
+        meta.orgao_julgador,
+    )
+    check("preserve=False: generation_mode sobrescrito pela IA", ref_manual.generation_mode, meta.generation_mode)
+    check("preserve=False: quality_score sobrescrito pela IA", ref_manual.quality_score, meta.quality_score)
+    check("preserve=False: process_number sobrescrito pela IA", ref_manual.process_number, meta.process_number)
+    check("preserve=False: judge_name sobrescrito pela IA", ref_manual.judge_name, meta.judge_name)
 
     # ── download_drive_file: sem rede, só a assinatura/erro de conexão ──
     # Não fazemos chamada de rede real; apenas garantimos que download_drive_file

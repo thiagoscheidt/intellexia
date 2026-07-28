@@ -22,6 +22,61 @@ from app.models import (
 from app.services import impugnacao_reference_search
 
 
+def apply_extracted_metadata(reference, meta, *, is_new: bool, preserve_curated_fields: bool) -> None:
+    """Aplica ao `reference` os metadados extraídos pela IA (`meta`).
+
+    Função pura (sem I/O, sem consultar `needs_backfill`) — só decide qual
+    campo recebe o valor da IA. Extraída de `ingest_reference` para ser
+    testável isoladamente com um objeto simples (não precisa do modelo
+    SQLAlchemy nem de app context).
+
+    Duas categorias de campo:
+    - Curados (`title`, `case_name`, `trf_region`, `orgao_julgador`): quando
+      `is_new=True` e `preserve_curated_fields=True` (importação em lote a
+      partir da planilha, cujos metadados são fato curado), só são
+      preenchidos pela IA se ainda estiverem vazios — nunca sobrescrevem o
+      que veio da planilha. Com `preserve_curated_fields=False` (upload
+      manual), a IA sempre define esses 4 campos quando `is_new=True`.
+    - Sempre-IA (`process_number`, `judge_name`, `generation_mode`,
+      `quality_score`): a planilha nunca traz esses dados, então a IA é a
+      única fonte — são sempre atribuídos quando `is_new=True`,
+      independente de `preserve_curated_fields` (inclusive `quality_score`,
+      que tem default truthy `Decimal('3.00')` no modelo — por isso não
+      pode ser tratado como "vazio == não preenchido").
+
+    Quando `is_new=False` (reindexação), os campos curados não são tocados;
+    `process_number`/`orgao_julgador`/`judge_name` são sempre atribuídos
+    (o chamador só roda a extração aqui quando os três já estão vazios —
+    ver `needs_backfill` em `ingest_reference`) e `trf_region` recebe
+    backfill apenas se estiver vazio.
+    """
+    if is_new:
+        if preserve_curated_fields:
+            if not reference.title:
+                reference.title = (meta.title or reference.title)[:250]
+            if not reference.case_name:
+                reference.case_name = meta.case_name
+            if not reference.trf_region:
+                reference.trf_region = meta.trf_region
+            if not reference.orgao_julgador:
+                reference.orgao_julgador = meta.orgao_julgador
+        else:
+            reference.title = (meta.title or reference.title)[:250]
+            reference.case_name = meta.case_name
+            reference.trf_region = meta.trf_region
+            reference.orgao_julgador = meta.orgao_julgador
+        reference.generation_mode = meta.generation_mode
+        reference.quality_score = meta.quality_score
+        reference.process_number = meta.process_number
+        reference.judge_name = meta.judge_name
+    else:
+        reference.process_number = meta.process_number
+        reference.orgao_julgador = meta.orgao_julgador
+        reference.judge_name = meta.judge_name
+        if not reference.trf_region and meta.trf_region:
+            reference.trf_region = meta.trf_region
+
+
 def _load_thesis_catalog(law_firm_id: int) -> list[dict]:
     theses = (
         JudicialLegalThesis.query
@@ -57,11 +112,13 @@ def ingest_reference(
     reindexação só há backfill quando os campos de contexto estão vazios.
 
     `preserve_curated_fields`: quando True, os campos vindos de fonte curada
-    (title, case_name, trf_region, generation_mode, quality_score) só são
-    sobrescritos pela IA se estiverem vazios (usado pela importação em lote,
-    cujos metadados da planilha são fato curado). Com o flag em False
-    (padrão — caminho do upload manual), o comportamento é o mesmo de sempre:
-    a IA sempre define esses 5 campos quando is_new=True.
+    (title, case_name, trf_region, orgao_julgador) só são sobrescritos pela
+    IA se estiverem vazios (usado pela importação em lote, cujos metadados
+    da planilha são fato curado). process_number, judge_name,
+    generation_mode e quality_score são sempre definidos pela IA (a
+    planilha não traz esses dados). Com o flag em False (padrão — caminho
+    do upload manual), o comportamento é o mesmo de sempre: a IA sempre
+    define os 4 campos curados quando is_new=True. Ver `apply_extracted_metadata`.
     """
     reference = None
     try:
@@ -90,29 +147,10 @@ def ingest_reference(
                 meta = ImpugnacaoReferenceMetadataAgent().extract(
                     extracted_text, original_filename=reference.original_filename,
                 )
-                if is_new:
-                    if preserve_curated_fields:
-                        if not reference.title:
-                            reference.title = (meta.title or reference.title)[:250]
-                        if not reference.case_name:
-                            reference.case_name = meta.case_name
-                        if not reference.trf_region:
-                            reference.trf_region = meta.trf_region
-                        if not reference.generation_mode:
-                            reference.generation_mode = meta.generation_mode
-                        if not reference.quality_score:
-                            reference.quality_score = meta.quality_score
-                    else:
-                        reference.title = (meta.title or reference.title)[:250]
-                        reference.case_name = meta.case_name
-                        reference.trf_region = meta.trf_region
-                        reference.generation_mode = meta.generation_mode
-                        reference.quality_score = meta.quality_score
-                reference.process_number = meta.process_number
-                reference.orgao_julgador = meta.orgao_julgador
-                reference.judge_name = meta.judge_name
-                if not is_new and not reference.trf_region and meta.trf_region:
-                    reference.trf_region = meta.trf_region
+                apply_extracted_metadata(
+                    reference, meta,
+                    is_new=is_new, preserve_curated_fields=preserve_curated_fields,
+                )
                 db.session.commit()
             except Exception as error:
                 db.session.rollback()

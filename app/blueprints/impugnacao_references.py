@@ -37,7 +37,8 @@ from __future__ import annotations
 
 import os
 import threading
-from datetime import datetime
+import time
+from datetime import datetime, timedelta
 from functools import wraps
 
 from flask import (
@@ -141,6 +142,38 @@ IMPORT_UPLOAD_BASE_DIR = os.path.join('uploads', 'impugnacao_imports')
 
 _IMPORT_ITEM_RESUMABLE_STATUSES = ('pending', 'downloading', 'indexing', 'failed')
 
+# C2: um job 'running' sem nenhum progresso de item por mais desse tempo é
+# considerado travado (thread morta num restart/deploy) — a tela oferece
+# "Retomar" mesmo com status 'running' nesse caso.
+_STALE_JOB_THRESHOLD_MINUTES = 15
+
+# I7(a): pausa entre downloads sucessivos do Drive no worker — 350 downloads
+# em sequência sem intervalo é o cenário que dispara quota/captcha do Google.
+_DOWNLOAD_PAUSE_SECONDS = 1.5
+
+_INDEXING_INCOMPLETE_MESSAGE = (
+    'Indexação não concluída — reprocesse o item ou reindexe a peça.'
+)
+
+
+def _import_job_is_stale(job) -> bool:
+    """Um job 'running' é considerado travado quando nenhum item mudou de
+    status nos últimos `_STALE_JOB_THRESHOLD_MINUTES` minutos. Usa o
+    `updated_at` mais recente dentre os itens do job como "última
+    atividade" — ou `job.started_at` se nenhum item foi tocado ainda (ex.:
+    restart bem no início do job)."""
+    if job.status != 'running':
+        return False
+    last_item_update = (
+        db.session.query(db.func.max(ImpugnacaoImportItem.updated_at))
+        .filter_by(job_id=job.id, law_firm_id=job.law_firm_id)
+        .scalar()
+    )
+    reference_time = last_item_update or job.started_at
+    if reference_time is None:
+        return False
+    return (datetime.now() - reference_time) > timedelta(minutes=_STALE_JOB_THRESHOLD_MINUTES)
+
 
 def _run_import_job(app_obj, law_firm_id, job_id):
     """Worker da fila de importação (thread): processa os itens selecionados
@@ -150,6 +183,11 @@ def _run_import_job(app_obj, law_firm_id, job_id):
     worker segue para o próximo. `db.session.remove()` só roda no `finally`
     do job inteiro (nunca por item), porque `ingest_reference` não gerencia a
     sessão.
+
+    A transição do job para 'running' (+ started_at) é feita pela rota que
+    dispara esta thread (`import_job_start`/`import_job_resume`), não aqui —
+    ver I5: fazer isso só dentro da thread cria uma janela TOCTOU em que dois
+    POSTs concorrentes disparam dois workers sobre os mesmos itens.
     """
     with app_obj.app_context():
         try:
@@ -158,10 +196,6 @@ def _run_import_job(app_obj, law_firm_id, job_id):
             ).first()
             if job is None:
                 return
-
-            job.status = 'running'
-            job.started_at = datetime.now()
-            db.session.commit()
 
             items = (
                 ImpugnacaoImportItem.query
@@ -185,14 +219,45 @@ def _run_import_job(app_obj, law_firm_id, job_id):
                         law_firm_id=law_firm_id, source_drive_file_id=item.drive_file_id
                     ).first()
                     if existing is not None:
-                        item.status = 'skipped_duplicate'
+                        # I4: se a peça encontrada é a do próprio item (retomada
+                        # após uma falha que já tinha criado a peça) ou ficou
+                        # incompleta (ingestão falhou/travou), não é duplicata de
+                        # verdade — reusa e reindexa em vez de marcar
+                        # skipped_duplicate sem nunca reprocessar.
+                        is_own_reference = existing.id == item.reference_id
+                        is_incomplete = existing.ingestion_status != 'completed'
+                        if not (is_own_reference or is_incomplete):
+                            item.status = 'skipped_duplicate'
+                            item.reference_id = existing.id
+                            db.session.commit()
+                            continue
+
                         item.reference_id = existing.id
+                        item.status = 'indexing'
+                        db.session.commit()
+
+                        ingest_reference(
+                            law_firm_id, existing.id,
+                            is_new=True, preserve_curated_fields=True,
+                        )
+
+                        db.session.refresh(existing)
+                        if existing.ingestion_status == 'completed':
+                            item.status = 'completed'
+                            item.error_message = None
+                        else:
+                            item.status = 'failed'
+                            # M11: ingestion_error pode ficar None se a peça
+                            # nunca saiu de 'processing' (ex.: reindexação não
+                            # concluiu) — não deixa o item sem explicação.
+                            item.error_message = existing.ingestion_error or _INDEXING_INCOMPLETE_MESSAGE
                         db.session.commit()
                         continue
 
                     item.status = 'downloading'
                     db.session.commit()
 
+                    time.sleep(_DOWNLOAD_PAUSE_SECONDS)
                     try:
                         file_path, original_filename, sha256 = download_drive_file(
                             item.drive_file_id, dest_dir
@@ -263,7 +328,9 @@ def _run_import_job(app_obj, law_firm_id, job_id):
                         item.error_message = None
                     else:
                         item.status = 'failed'
-                        item.error_message = reference.ingestion_error
+                        # M11: idem — peça pode ficar em 'processing' sem
+                        # ingestion_error preenchido.
+                        item.error_message = reference.ingestion_error or _INDEXING_INCOMPLETE_MESSAGE
                     db.session.commit()
                 except Exception as error:
                     db.session.rollback()
@@ -646,6 +713,16 @@ def delete_reference(ref_id):
 
     impugnacao_reference_search.delete_reference(ref_id)
 
+    # C3: impugnacao_import_items.reference_id referencia esta peça sem
+    # ondelete definido no schema existente (evitamos DDL num banco já em
+    # produção) — MySQL rejeitaria o DELETE com IntegrityError, deixando a
+    # peça meio destruída (arquivo/índices já apagados acima, registro não).
+    # Zera o vínculo antes de excluir; o item de importação continua
+    # existindo, só perde a referência à peça (que não existe mais).
+    ImpugnacaoImportItem.query.filter_by(
+        reference_id=ref_id, law_firm_id=law_firm_id
+    ).update({'reference_id': None})
+
     db.session.delete(reference)
     db.session.commit()
     flash('Peça-modelo excluída.', 'success')
@@ -780,6 +857,7 @@ def import_job_detail(job_id):
         'impugnacao_references/import_job.html',
         job=job,
         items=items,
+        job_is_stale=_import_job_is_stale(job),
     )
 
 
@@ -791,8 +869,10 @@ def import_job_start(job_id):
         id=job_id, law_firm_id=law_firm_id
     ).first_or_404()
 
-    if job.status == 'running':
-        flash('Esta importação já está em andamento.', 'warning')
+    # M10: 'iniciar' só vale para job recém-criado ('draft'). Depois disso
+    # (running/completed/failed) o caminho é sempre 'retomar'.
+    if job.status != 'draft':
+        flash('Esta importação já foi iniciada — use "Retomar" se necessário.', 'warning')
         return redirect(url_for('impugnacao_references.import_job_detail', job_id=job.id))
 
     selected_ids = {int(v) for v in request.form.getlist('selected_items[]') if v.isdigit()}
@@ -806,6 +886,15 @@ def import_job_start(job_id):
             item.selected = False
             if item.status == 'pending':
                 item.status = 'skipped_by_user'
+
+    # I5: grava a transição para 'running' aqui (rota, não worker) e commita
+    # antes de disparar a thread — o guard acima só protege contra duplo
+    # disparo se o status já estiver em 'running' no banco no momento em que
+    # o segundo POST consulta; deixar essa gravação para dentro da thread
+    # cria uma janela onde dois POSTs concorrentes veem ambos job.status
+    # =='draft' e disparam dois workers sobre os mesmos itens.
+    job.status = 'running'
+    job.started_at = datetime.now()
     db.session.commit()
 
     _spawn_import_job(law_firm_id, job.id)
@@ -825,9 +914,20 @@ def import_job_resume(job_id):
         id=job_id, law_firm_id=law_firm_id
     ).first_or_404()
 
-    if job.status == 'running':
+    # M10: 'retomar' vale para completed/failed, ou para 'running' travado
+    # (C2 — thread morta num restart/deploy, sem progresso recente).
+    if job.status == 'draft':
+        flash('Esta importação ainda não foi iniciada — use "Importar selecionados".', 'warning')
+        return redirect(url_for('impugnacao_references.import_job_detail', job_id=job.id))
+    if job.status == 'running' and not _import_job_is_stale(job):
         flash('Esta importação já está em andamento.', 'warning')
         return redirect(url_for('impugnacao_references.import_job_detail', job_id=job.id))
+
+    # I5: mesma lógica de import_job_start — grava 'running' + started_at
+    # aqui e commita antes de disparar a thread.
+    job.status = 'running'
+    job.started_at = datetime.now()
+    db.session.commit()
 
     _spawn_import_job(law_firm_id, job.id)
     flash(
