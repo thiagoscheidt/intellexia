@@ -288,6 +288,59 @@
     color: var(--bs-secondary-color);
     margin-bottom: .2rem;
   }
+
+  /* ── Revisão (passo 4): cartões de escolha + lista compacta ── */
+  .review-choice {
+    background: #fff;
+    border: 1px solid #e9ecef;
+    border-radius: .5rem;
+    padding: .6rem .8rem;
+  }
+
+  .review-choice-label {
+    font-size: .7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+    color: #6c757d;
+    white-space: nowrap;
+  }
+
+  .summary-benefits-list {
+    display: flex;
+    flex-direction: column;
+    gap: .3rem;
+    max-height: 250px;
+    overflow-y: auto;
+  }
+
+  .review-benefit-row {
+    display: flex;
+    align-items: center;
+    gap: .6rem;
+    font-size: .82rem;
+    background: #fff;
+    border: 1px solid #f0f2f4;
+    border-radius: .45rem;
+    padding: .35rem .65rem;
+    min-width: 0;
+  }
+
+  .review-benefit-row .rb-nb {
+    color: #fff;
+    padding: .15em .6em;
+    border-radius: 20px;
+    font-size: .74rem;
+    font-weight: 600;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .review-benefit-row .rb-thesis {
+    font-size: .74rem;
+    color: #6c757d;
+    max-width: 45%;
+  }
 </style>
 {% endblock %}
 
@@ -609,10 +662,60 @@ breadcrumbs=[
             <!-- ── Step 4: Revisão ────────────────────────────────────── -->
             <div class="wizard-panel" id="panel-4">
               <h6 class="fw-semibold mb-1">Revisão e geração</h6>
-              <p class="text-muted small mb-3">Confirme os dados abaixo e clique em <strong>Gerar Documento</strong>.
-              </p>
+              <p class="text-muted small mb-3">Confira as escolhas abaixo — cada cartão leva de volta ao passo
+                correspondente.</p>
 
-              <!-- Dados do processo -->
+              <!-- Escolhas do wizard -->
+              <div class="row g-2 mb-3">
+                <div class="col-md-4">
+                  <div class="review-choice h-100">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                      <span class="review-choice-label"><i class="bi bi-file-earmark-text me-1"></i>Tipo de documento</span>
+                      <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none small flex-shrink-0"
+                        onclick="goToStep(1)">Alterar</button>
+                    </div>
+                    <div class="fw-semibold small mt-1" id="summary-type">—</div>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="review-choice h-100">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                      <span class="review-choice-label"><i class="bi bi-people me-1"></i>Benefícios</span>
+                      <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none small flex-shrink-0"
+                        onclick="goToStep(2)">Alterar</button>
+                    </div>
+                    <div class="fw-semibold small mt-1" id="summary-benefits-chip">—</div>
+                  </div>
+                </div>
+                <div class="col-md-4">
+                  <div class="review-choice h-100">
+                    <div class="d-flex justify-content-between align-items-start gap-2">
+                      <span class="review-choice-label"><i class="bi bi-paperclip me-1"></i>Documentos</span>
+                      <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none small flex-shrink-0"
+                        onclick="goToStep(3)">Alterar</button>
+                    </div>
+                    <div class="fw-semibold small mt-1" id="summary-docs-line">—</div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Benefícios selecionados (lista compacta) -->
+              <div class="mb-3">
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                  <span class="review-section-label">
+                    <i class="bi bi-people me-1"></i>Benefícios Selecionados
+                    <span id="summary-count"
+                      class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1"
+                      style="font-size:.7rem">0</span>
+                  </span>
+                </div>
+                <div id="summary-benefits-detail" class="summary-benefits-list">
+                  <div class="text-muted small fst-italic ps-1" id="summary-empty-msg">Nenhum benefício selecionado.
+                  </div>
+                </div>
+              </div>
+
+              <!-- Contexto do processo -->
               <div class="mb-3">
                 <div class="d-flex justify-content-between align-items-center mb-2">
                   <span class="review-section-label">
@@ -627,10 +730,6 @@ breadcrumbs=[
                   <div class="summary-line">
                     <span class="text-muted">Número</span>
                     <span class="fw-semibold text-end">{{ process.process_number or process.title or '—' }}</span>
-                  </div>
-                  <div class="summary-line">
-                    <span class="text-muted">Tipo de documento</span>
-                    <span class="fw-semibold" id="summary-type">—</span>
                   </div>
                   {% if process.tribunal_name %}
                   <div class="summary-line">
@@ -656,45 +755,6 @@ breadcrumbs=[
                     <span class="fw-semibold text-end">{{ process.plaintiff_client.name }}</span>
                   </div>
                   {% endif %}
-                </div>
-              </div>
-
-              <!-- Benefícios selecionados (detalhado) -->
-              <div class="mb-3">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                  <span class="review-section-label">
-                    <i class="bi bi-people me-1"></i>Benefícios Selecionados
-                    <span id="summary-count"
-                      class="badge bg-primary-subtle text-primary border border-primary-subtle ms-1"
-                      style="font-size:.7rem">0</span>
-                  </span>
-                  <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none small"
-                    onclick="goToStep(2)">
-                    <i class="bi bi-pencil-square me-1"></i>Alterar seleção
-                  </button>
-                </div>
-                <div id="summary-benefits-detail" class="d-flex flex-column gap-2">
-                  <div class="text-muted small fst-italic ps-1" id="summary-empty-msg">Nenhum benefício selecionado.
-                  </div>
-                </div>
-              </div>
-
-              <!-- Documentos confirmados -->
-              <div class="mb-3">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                  <span class="review-section-label">
-                    <i class="bi bi-paperclip me-1"></i>Documentos Confirmados
-                  </span>
-                  <button type="button" class="btn btn-link btn-sm p-0 text-decoration-none small"
-                    onclick="goToStep(3)">
-                    <i class="bi bi-pencil-square me-1"></i>Alterar
-                  </button>
-                </div>
-                <div class="summary-box">
-                  <div class="summary-line">
-                    <span class="text-muted">Documentos confirmados</span>
-                    <span class="fw-semibold text-end" id="summary-docs-line">—</span>
-                  </div>
                 </div>
               </div>
 
@@ -1146,7 +1206,6 @@ breadcrumbs=[
     const selectedType = document.querySelector('input[name="document_type"]:checked');
     const typeLabel = selectedType ? (TYPE_LABELS[selectedType.value] || selectedType.value) : '—';
     document.getElementById('summary-type').textContent = typeLabel;
-    const isImpugnacao = selectedType && selectedType.value === 'impugnacao_contestacao';
 
     const checked = document.querySelectorAll('input[name="selections[]"]:checked');
     const container = document.getElementById('summary-benefits-detail');
@@ -1154,13 +1213,27 @@ breadcrumbs=[
     const countBadge = document.getElementById('summary-count');
 
     countBadge.textContent = checked.length;
-    container.querySelectorAll('.review-benefit-card').forEach(el => el.remove());
+    container.querySelectorAll('.review-benefit-row').forEach(el => el.remove());
+
+    // Cartão Benefícios: total + nº de teses distintas
+    const thesisSet = new Set();
+    checked.forEach(c => {
+      const card = c.closest('.benefit-check-card');
+      if (card && card.dataset.thesis) thesisSet.add(card.dataset.thesis);
+    });
+    const benefitsChip = document.getElementById('summary-benefits-chip');
+    if (benefitsChip) {
+      benefitsChip.textContent = checked.length === 0
+        ? 'Nenhum selecionado'
+        : checked.length + ' benefício' + (checked.length === 1 ? '' : 's')
+          + ' · ' + thesisSet.size + ' tese' + (thesisSet.size === 1 ? '' : 's');
+    }
 
     const docsLine = document.getElementById('summary-docs-line');
     if (docsLine) {
       const documentsConfirmed = document.getElementById('documentsConfirmedInput');
       if (!documentsConfirmed || documentsConfirmed.value !== '1') {
-        docsLine.textContent = 'Documentos: não confirmados — fluxo padrão (todos os anexos e referências automáticos)';
+        docsLine.textContent = 'Não confirmados — fluxo padrão';
       } else {
         const refCount = document.querySelectorAll('input[name="confirmed_reference_ids[]"]:checked').length;
         const attCount = document.querySelectorAll('input[name="confirmed_attachment_ids[]"]:checked').length;
@@ -1175,6 +1248,8 @@ breadcrumbs=[
     }
     emptyMsg.classList.add('d-none');
 
+    // Lista compacta: uma linha por benefício (o detalhe — fundamento da
+    // União, anexos — já foi conferido nos passos 2 e 3).
     checked.forEach(c => {
       const card = c.closest('.benefit-check-card');
       if (!card) return;
@@ -1186,37 +1261,39 @@ breadcrumbs=[
       const thesis = card.dataset.thesis || '';
       const nbColor = getNbColor(nb);
 
-      // Fundamento da contestação (só aparece para impugnação)
-      let fundamento = '';
-      if (isImpugnacao) {
-        const contFields = card.querySelector('[id^="cont-fields-"]');
-        if (contFields) {
-          const values = contFields.querySelectorAll('.contestation-value');
-          if (values.length > 0) fundamento = values[0].textContent.trim();
-        }
-      }
+      const row = document.createElement('div');
+      row.className = 'review-benefit-row';
+
+      const nbSpan = document.createElement('span');
+      nbSpan.className = 'rb-nb';
+      nbSpan.style.background = nbColor;
+      nbSpan.textContent = 'NB ' + nb;
+      row.appendChild(nbSpan);
+
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'fw-semibold text-truncate';
+      nameSpan.textContent = insured || '—';
+      row.appendChild(nameSpan);
 
       const metaParts = [];
       if (btype) metaParts.push(btype);
-      if (vigencia) metaParts.push(`Vigência ${vigencia}`);
-      if (thesis) metaParts.push(thesis);
+      if (vigencia) metaParts.push('Vig. ' + vigencia);
+      if (metaParts.length) {
+        const metaSpan = document.createElement('span');
+        metaSpan.className = 'text-muted text-truncate d-none d-md-inline';
+        metaSpan.style.fontSize = '.76rem';
+        metaSpan.textContent = metaParts.join(' · ');
+        row.appendChild(metaSpan);
+      }
 
-      const row = document.createElement('div');
-      row.className = 'review-benefit-card';
-      row.innerHTML = `
-        <div class="d-flex align-items-center gap-2 flex-wrap">
-          <span style="background:${nbColor};color:#fff;padding:.2em .65em;border-radius:20px;font-size:.78rem;font-weight:600;white-space:nowrap;">
-            NB ${nb}
-          </span>
-          ${insured ? `<span class="fw-semibold">${insured}</span>` : ''}
-        </div>
-        ${metaParts.length ? `<div class="benefit-meta mt-1">${metaParts.join(' · ')}</div>` : ''}
-        ${fundamento ? `
-          <div class="cont-fundamento">
-            <div class="cont-fundamento-label">Fundamento da União</div>
-            ${fundamento}
-          </div>` : ''}
-      `;
+      if (thesis) {
+        const thesisSpan = document.createElement('span');
+        thesisSpan.className = 'rb-thesis text-truncate ms-auto';
+        thesisSpan.textContent = thesis;
+        thesisSpan.title = thesis;
+        row.appendChild(thesisSpan);
+      }
+
       container.appendChild(row);
     });
   }
