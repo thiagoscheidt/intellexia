@@ -406,11 +406,30 @@ def view_reference_file(ref_id):
         flash('Arquivo original não encontrado no servidor.', 'warning')
         return redirect(url_for('impugnacao_references.reference_detail', ref_id=ref_id))
 
-    return send_file(
-        os.path.abspath(file_path),
-        as_attachment=False,
-        download_name=reference.original_filename,
-    )
+    ext = (reference.file_type or '').strip().lower()
+    if not ext and '.' in file_path:
+        ext = file_path.rsplit('.', 1)[-1].lower()
+
+    if ext == 'pdf':
+        # Inline apenas para PDF, com mimetype fixo — nunca deixar o
+        # navegador "adivinhar" o tipo (evita render como HTML na origem da app).
+        response = send_file(
+            os.path.abspath(file_path),
+            as_attachment=False,
+            download_name=reference.original_filename,
+            mimetype='application/pdf',
+        )
+    else:
+        response = send_file(
+            os.path.abspath(file_path),
+            as_attachment=True,
+            download_name=reference.original_filename,
+            mimetype='application/octet-stream',
+        )
+        response.headers['Content-Security-Policy'] = "default-src 'none'; sandbox"
+
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    return response
 
 
 @impugnacao_references_bp.route('/<int:ref_id>/status')
