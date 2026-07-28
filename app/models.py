@@ -3186,6 +3186,11 @@ class ImpugnacaoReferenceModel(db.Model):
     generation_mode = db.Column(db.String(1))     # 'A' (mérito) ou 'B' (defesa)
     quality_score = db.Column(db.Numeric(3, 2), default=Decimal('3.00'))
 
+    process_number = db.Column(db.String(30))        # número CNJ da peça de origem
+    orgao_julgador = db.Column(db.String(255))       # vara/órgão julgador de origem
+    judge_name = db.Column(db.String(255))           # magistrado, quando identificado
+    sections_json = db.Column(db.JSON)               # seções detectadas na ingestão
+
     original_filename = db.Column(db.String(255))
     file_path = db.Column(db.String(500))
     file_size = db.Column(db.Integer)
