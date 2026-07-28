@@ -3096,6 +3096,7 @@ class JudicialProcessGeneratedDocumentVersion(db.Model):
     generation_status = db.Column(db.String(20), default='pending', index=True)
     # pending | processing | completed | failed
     error_message = db.Column(db.Text)
+    confirmed_documents_json = db.Column(db.JSON)  # {"reference_ids": [], "attachment_ids": []}; NULL = sem restrição
 
     model_used = db.Column(db.String(80))
     token_usage_json = db.Column(db.Text)
