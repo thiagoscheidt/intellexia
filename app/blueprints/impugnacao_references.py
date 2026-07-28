@@ -141,6 +141,9 @@ def new_reference():
     trf_region = None
     generation_mode = None
     quality_score = 3.0
+    process_number = None
+    orgao_julgador = None
+    judge_name = None
     processed_document = None
     ingestor = None
     thesis_catalog = _load_thesis_catalog(law_firm_id)
@@ -165,6 +168,9 @@ def new_reference():
         trf_region = meta.trf_region
         generation_mode = meta.generation_mode
         quality_score = meta.quality_score
+        process_number = meta.process_number
+        orgao_julgador = meta.orgao_julgador
+        judge_name = meta.judge_name
     except Exception as error:
         print(f'[impugnacao_references.new] falha na extração de metadados: {error}')
         # Fallback determinístico: título a partir do nome do arquivo
@@ -179,6 +185,9 @@ def new_reference():
         trf_region=trf_region,
         generation_mode=generation_mode,
         quality_score=quality_score,
+        process_number=process_number,
+        orgao_julgador=orgao_julgador,
+        judge_name=judge_name,
         original_filename=upload.filename,
         file_path=file_path,
         file_size=file_size,
@@ -205,6 +214,9 @@ def new_reference():
             trf_region=trf_region,
             generation_mode=generation_mode,
             quality_score=quality_score,
+            process_number=process_number,
+            orgao_julgador=orgao_julgador,
+            judge_name=judge_name,
             thesis_catalog=thesis_catalog,
             text=extracted_text,
             processed_document=processed_document,
@@ -213,6 +225,7 @@ def new_reference():
         reference.qdrant_collection = ingestor.collection
         reference.chunks_count = len(chunks_meta)
         reference.thesis_catalog_ids = ingestor.last_document_thesis_catalog_ids or []
+        reference.sections_json = ingestor.last_sections_summary or []
 
         for chunk in chunks_meta:
             db.session.add(ImpugnacaoReferenceChunk(
@@ -376,6 +389,26 @@ def reindex_reference(ref_id):
         )
         ingestor = ImpugnacaoReferenceIngestor()
         thesis_catalog = _load_thesis_catalog(law_firm_id)
+        processed_document = ingestor._process_document(reference.file_path)
+
+        # Backfill: peças antigas ganham os campos de contexto na reindexação.
+        if not any([reference.process_number, reference.orgao_julgador, reference.judge_name]):
+            try:
+                from app.agents.legal_drafting.impugnacao_reference_metadata_agent import (
+                    ImpugnacaoReferenceMetadataAgent,
+                )
+                extracted_text = str(getattr(processed_document, 'full_text', '') or '').strip()
+                if extracted_text:
+                    meta = ImpugnacaoReferenceMetadataAgent().extract(
+                        extracted_text, original_filename=reference.original_filename,
+                    )
+                    reference.process_number = meta.process_number
+                    reference.orgao_julgador = meta.orgao_julgador
+                    reference.judge_name = meta.judge_name
+                    if not reference.trf_region and meta.trf_region:
+                        reference.trf_region = meta.trf_region
+            except Exception as error:
+                print(f'[impugnacao_references.reindex] backfill de metadados falhou: {error}')
 
         # Limpa vetores antigos e chunks antigos
         ingestor.delete_by_reference_id(ref_id)
@@ -390,13 +423,17 @@ def reindex_reference(ref_id):
             trf_region=reference.trf_region,
             generation_mode=reference.generation_mode,
             quality_score=float(reference.quality_score) if reference.quality_score is not None else None,
+            process_number=reference.process_number,
+            orgao_julgador=reference.orgao_julgador,
+            judge_name=reference.judge_name,
             thesis_catalog=thesis_catalog,
-            processed_document=ingestor._process_document(reference.file_path),
+            processed_document=processed_document,
         )
 
         reference.qdrant_collection = ingestor.collection
         reference.chunks_count = len(chunks_meta)
         reference.thesis_catalog_ids = ingestor.last_document_thesis_catalog_ids or []
+        reference.sections_json = ingestor.last_sections_summary or []
         for chunk in chunks_meta:
             db.session.add(ImpugnacaoReferenceChunk(
                 reference_id=reference.id,
