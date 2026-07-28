@@ -10,7 +10,10 @@ from __future__ import annotations
 import os
 from typing import Callable, Optional
 
-_LAYER_ORDER = {"juiz": 0, "vara": 1, "trf": 2, "geral": 3}
+from app.agents.legal_drafting.impugnacao_process_context import (
+    LAYER_ORDER,
+    chunk_match_layer,
+)
 
 # Planos de busca do preview: mesmos kinds da geração, caps generosos para
 # enumerar candidatos (o preview define o conjunto permitido, não os trechos).
@@ -26,25 +29,6 @@ _PREVIEW_GENERAL_JURISPRUDENCE_QUERY = (
 )
 _PREVIEW_MAX_CHUNKS = 20
 _PREVIEW_MAX_CHARS = 60_000
-
-
-def _chunk_layer(chunk: dict, context: dict) -> str:
-    judge = (context.get("judge_name_norm") or "").strip()
-    vara = (context.get("orgao_julgador_norm") or "").strip()
-    trf = (context.get("trf_region") or "").strip().upper()
-
-    if judge and (chunk.get("judge_name_norm") or "") == judge:
-        return "juiz"
-    vara_key = (
-        "orgao_julgador_origem_norm"
-        if (chunk.get("section_kind") or "") == "jurisprudence"
-        else "orgao_julgador_norm"
-    )
-    if vara and (chunk.get(vara_key) or "") == vara:
-        return "vara"
-    if trf and (chunk.get("trf_region") or "").upper() == trf:
-        return "trf"
-    return "geral"
 
 
 def aggregate_reference_candidates(chunks: list[dict], context: dict) -> list[dict]:
@@ -72,8 +56,8 @@ def aggregate_reference_candidates(chunks: list[dict], context: dict) -> list[di
             "trechos": 0,
         })
         entry["trechos"] += 1
-        layer = _chunk_layer(chunk, context or {})
-        if _LAYER_ORDER[layer] < _LAYER_ORDER[entry["camada"]]:
+        layer = chunk_match_layer(chunk, context or {})
+        if LAYER_ORDER[layer] < LAYER_ORDER[entry["camada"]]:
             entry["camada"] = layer
         thesis = chunk.get("thesis_catalog_id")
         if thesis and thesis not in entry["teses"]:
@@ -81,7 +65,7 @@ def aggregate_reference_candidates(chunks: list[dict], context: dict) -> list[di
 
     return sorted(
         by_ref.values(),
-        key=lambda item: (_LAYER_ORDER[item["camada"]], -item["trechos"], item["reference_id"]),
+        key=lambda item: (LAYER_ORDER[item["camada"]], -item["trechos"], item["reference_id"]),
     )
 
 

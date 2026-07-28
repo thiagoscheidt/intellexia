@@ -13,6 +13,17 @@ from typing import Optional
 
 from app.utils.cnj import tribunal_sigla_from_cnj
 
+# Camadas de especificidade decrescente usadas para priorizar peças-modelo
+# (busca do retriever) e para classificar trechos já recuperados (preview,
+# cobertura por tese): mesmo juiz > mesma vara > mesmo TRF > acervo geral.
+LAYER_ORDER = {"juiz": 0, "vara": 1, "trf": 2, "geral": 3}
+LAYER_LABELS = {
+    "juiz": "Mesmo juiz",
+    "vara": "Mesma vara",
+    "trf": "Mesmo TRF",
+    "geral": "Acervo geral",
+}
+
 _TRF_TEXT_RE = re.compile(
     r"\btrf\s*([1-6])\b|tribunal\s+regional\s+federal\s+da\s+([1-6])\D{0,3}regi[aã]o",
     re.IGNORECASE,
@@ -87,3 +98,30 @@ def build_reference_search_context(process) -> dict:
         'judge_name': judge,
         'judge_name_norm': normalize_context_value(judge) or None,
     }
+
+
+def chunk_match_layer(chunk: dict, context: dict) -> str:
+    """Classifica um trecho já recuperado na camada mais específica que bate
+    com o contexto do processo (mesmo juiz > mesma vara > mesmo TRF > geral).
+
+    Para chunks de jurisprudência, a vara comparada é a de ORIGEM da peça
+    (`orgao_julgador_origem_norm`), pois `orgao_julgador_norm` ali é o órgão
+    do precedente, não da origem — mesmo critério de `_context_layers` no
+    retriever.
+    """
+    judge = (context.get("judge_name_norm") or "").strip()
+    vara = (context.get("orgao_julgador_norm") or "").strip()
+    trf = (context.get("trf_region") or "").strip().upper()
+
+    if judge and (chunk.get("judge_name_norm") or "") == judge:
+        return "juiz"
+    vara_key = (
+        "orgao_julgador_origem_norm"
+        if (chunk.get("section_kind") or "") == "jurisprudence"
+        else "orgao_julgador_norm"
+    )
+    if vara and (chunk.get(vara_key) or "") == vara:
+        return "vara"
+    if trf and (chunk.get("trf_region") or "").upper() == trf:
+        return "trf"
+    return "geral"

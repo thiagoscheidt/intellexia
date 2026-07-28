@@ -170,12 +170,20 @@ class ImpugnacaoReferenceRetriever:
         max_chunks: Optional[int] = None,
         max_chars: Optional[int] = None,
         allowed_reference_ids: Optional[list[int]] = None,
+        min_distinct_references: Optional[int] = None,
     ) -> list[dict]:
         """Retorna lista de chunks para compor bloco de referência.
 
         Busca em camadas de especificidade decrescente (juiz > vara > TRF >
         geral), conforme `context` (formato de `build_reference_search_context`).
         Sem `context`, o kwarg `trf_region` vira contexto mínimo (compat).
+
+        `min_distinct_references`: quando informado, o laço de camadas de cada
+        kind continua descendo mesmo após cumprir a cota `top_k`, aceitando
+        apenas trechos de `reference_id` ainda não visto NESTA chamada, até
+        juntar N peças distintas ou esgotar as camadas. Teto rígido de
+        `top_k + min_distinct_references` trechos por kind. Sem o parâmetro,
+        o comportamento é idêntico ao anterior (compat).
 
         Cada item: {section_kind, heading, reference_title, trf_region,
         quality_score, text}.
@@ -205,6 +213,13 @@ class ImpugnacaoReferenceRetriever:
         collected: list[dict] = []
         total_chars = 0
         seen_ids: set = set()
+        distinct_refs: set = set()
+
+        def _needs_more_distinct() -> bool:
+            return (
+                min_distinct_references is not None
+                and len(distinct_refs) < min_distinct_references
+            )
 
         def _query(kind: Optional[str], extra_match: dict, limit: int):
             try:
@@ -229,8 +244,11 @@ class ImpugnacaoReferenceRetriever:
         def _collect(kind: Optional[str], top_k: int) -> None:
             nonlocal total_chars
             taken_for_kind = 0
+            hard_ceiling = top_k + (min_distinct_references or 0)
             for layer in self._context_layers(context, kind):
-                if taken_for_kind >= top_k or len(collected) >= cap_chunks or total_chars >= cap_chars:
+                if len(collected) >= cap_chunks or total_chars >= cap_chars:
+                    return
+                if taken_for_kind >= top_k and not _needs_more_distinct():
                     return
                 hits = _query(kind, layer, top_k)
                 # Dentro da camada, mantém a ordem de score do Qdrant;
@@ -243,7 +261,12 @@ class ImpugnacaoReferenceRetriever:
                     ),
                 )
                 for hit in hits:
-                    if taken_for_kind >= top_k or len(collected) >= cap_chunks or total_chars >= cap_chars:
+                    if len(collected) >= cap_chunks or total_chars >= cap_chars:
+                        return
+                    quota_done = taken_for_kind >= top_k
+                    if quota_done and not _needs_more_distinct():
+                        return
+                    if taken_for_kind >= hard_ceiling:
                         return
                     if hit.id in seen_ids:
                         continue
@@ -251,12 +274,21 @@ class ImpugnacaoReferenceRetriever:
                     item["point_id"] = str(hit.id)
                     if not item["text"]:
                         continue
+                    ref_id = item.get("reference_id")
+                    # Cota do kind já cumprida: só aceita peça (reference_id)
+                    # ainda não vista nesta chamada — é isso que garante
+                    # exemplos de peças distintas em vez de mais trechos da
+                    # mesma peça.
+                    if quota_done and (ref_id is None or ref_id in distinct_refs):
+                        continue
                     if total_chars + len(item["text"]) > cap_chars and collected:
                         continue
                     collected.append(item)
                     seen_ids.add(hit.id)
                     total_chars += len(item["text"])
                     taken_for_kind += 1
+                    if ref_id is not None:
+                        distinct_refs.add(ref_id)
 
         for kind, top_k in plan:
             if len(collected) >= cap_chunks or total_chars >= cap_chars:
