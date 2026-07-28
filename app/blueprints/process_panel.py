@@ -3660,6 +3660,42 @@ def generated_document_status(process_id, doc_id):
     })
 
 
+@process_panel_bp.route('/<int:process_id>/documentos-gerados/preview-documentos', methods=['POST'])
+@require_law_firm
+def generated_document_preview(process_id):
+    """Preview dos insumos da geração — consumido pelo passo Documentos do wizard."""
+    law_firm_id = get_current_law_firm_id()
+    process = JudicialProcess.query.filter_by(
+        id=process_id, law_firm_id=law_firm_id
+    ).first_or_404()
+
+    payload = request.get_json(silent=True) or {}
+    document_type = str(payload.get('document_type') or '').strip()
+    if document_type not in DOCUMENT_TYPE_LABELS:
+        return jsonify({'error': 'Tipo de documento inválido.'}), 400
+
+    parsed = []
+    for raw in payload.get('selections') or []:
+        parts = str(raw).split(':', 1)
+        try:
+            b_id = int(parts[0])
+            t_id = int(parts[1]) if len(parts) > 1 and parts[1] else None
+            parsed.append((b_id, t_id))
+        except (ValueError, IndexError):
+            continue
+
+    from app.services.generated_document_preview_service import build_documents_preview
+    preview = build_documents_preview(
+        process=process,
+        law_firm_id=law_firm_id,
+        document_type=document_type,
+        parsed_selections=parsed,
+        resolve_contestation_pdf=_resolve_latest_contestation_pdf_path,
+        resolve_contestation_summary=_resolve_latest_contestation_summary_payload,
+    )
+    return jsonify(preview)
+
+
 @process_panel_bp.route('/<int:process_id>/documentos-gerados/<int:doc_id>/salvar', methods=['POST'])
 @require_law_firm
 def generated_document_save(process_id, doc_id):
