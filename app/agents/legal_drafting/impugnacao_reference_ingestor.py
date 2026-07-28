@@ -32,6 +32,10 @@ from app.agents.legal_drafting.impugnacao_reference_thesis_classifier_agent impo
 from app.agents.legal_drafting.impugnacao_jurisprudencia_extractor_agent import (
     ImpugnacaoJurisprudenciaExtractorAgent,
 )
+from app.agents.legal_drafting.impugnacao_process_context import (
+    normalize_context_value,
+    normalize_section_title,
+)
 
 
 load_dotenv()
@@ -117,6 +121,7 @@ class ImpugnacaoReferenceIngestor:
         self.qdrant = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT, timeout=60)
         self.openai = OpenAI()
         self.last_document_thesis_catalog_ids: list[str] = []
+        self.last_sections_summary: list[dict] = []
         self.thesis_classifier_agent = ImpugnacaoReferenceThesisClassifierAgent()
         self.jurisprudencia_extractor = ImpugnacaoJurisprudenciaExtractorAgent()
         self._ensure_collection()
@@ -481,6 +486,9 @@ class ImpugnacaoReferenceIngestor:
         thesis_catalog: Optional[list[dict]] = None,
         text: Optional[str] = None,
         processed_document=None,
+        process_number: Optional[str] = None,
+        orgao_julgador: Optional[str] = None,
+        judge_name: Optional[str] = None,
     ) -> list[dict]:
         """Processa o arquivo e indexa todos os chunks no Qdrant.
 
@@ -488,6 +496,17 @@ class ImpugnacaoReferenceIngestor:
         Retorna lista de metadados por chunk (para persistir em
         impugnacao_reference_chunks).
         """
+        self.last_sections_summary = []
+        orgao_julgador_norm = normalize_context_value(orgao_julgador) or None
+        judge_name_norm = normalize_context_value(judge_name) or None
+        context_payload = {
+            "process_number": (process_number or "").strip() or None,
+            "orgao_julgador": (orgao_julgador or "").strip() or None,
+            "orgao_julgador_norm": orgao_julgador_norm,
+            "judge_name": (judge_name or "").strip() or None,
+            "judge_name_norm": judge_name_norm,
+        }
+
         provided_text = (text or '').strip()
 
         if processed_document is None:
@@ -561,6 +580,7 @@ class ImpugnacaoReferenceIngestor:
 
         chunk_records: list[dict] = []
         points: list[rest.PointStruct] = []
+        sections_map: dict[str, dict] = {}
         ingested_at = datetime.utcnow().isoformat() + "Z"
 
         # ── Índice dos chunks principais ───────────────────────────────
@@ -596,6 +616,10 @@ class ImpugnacaoReferenceIngestor:
                 "section_kind": seg.get("section_kind", "general"),
                 "page": seg.get("page"),
                 "section": seg.get("section"),
+                "section_normalized": normalize_section_title(
+                    seg.get("section") or seg.get("heading") or ""
+                ) or None,
+                **context_payload,
                 "reference_id": int(reference_id),
                 "law_firm_id": int(law_firm_id),
                 "reference_title": title,
@@ -622,7 +646,25 @@ class ImpugnacaoReferenceIngestor:
                 "order_in_doc": order,
                 "preview_text": chunk_text[:280],
                 "full_text": chunk_text,
+                "heading": seg.get("heading", ""),
+                "section": seg.get("section"),
             })
+
+            section_title_raw = str(seg.get("section") or seg.get("heading") or "").strip()
+            section_key = payload["section_normalized"] or section_title_raw or "(sem seção)"
+            entry = sections_map.setdefault(section_key, {
+                "titulo": section_title_raw or "(sem seção)",
+                "titulo_normalizado": payload["section_normalized"] or "",
+                "section_kind": payload["section_kind"],
+                "teses": [],
+                "qtd_chunks": 0,
+            })
+            entry["qtd_chunks"] += 1
+            for thesis_key in chunk_thesis_catalog_ids:
+                if thesis_key not in entry["teses"]:
+                    entry["teses"].append(thesis_key)
+
+        self.last_sections_summary = list(sections_map.values())
 
         # ── Chunks de jurisprudência extraídos pelo agente ─────────────
         # Numeração começa após todos os chunks principais.
@@ -637,9 +679,11 @@ class ImpugnacaoReferenceIngestor:
             jpoint_id = str(uuid.uuid4())
             jvector = self._embed(jtext)
 
+            juris_heading = jitem.processo or jitem.tribunal or "jurisprudência"
+
             jpayload = {
                 "text": jtext,
-                "heading": jitem.processo or jitem.tribunal or "jurisprudência",
+                "heading": juris_heading,
                 "section_kind": "jurisprudence",
                 "reference_id": int(reference_id),
                 "law_firm_id": int(law_firm_id),
@@ -663,6 +707,13 @@ class ImpugnacaoReferenceIngestor:
                 "status": "active",
                 "order_in_doc": juris_order_base + j_idx,
                 "ingested_at": ingested_at,
+                # `orgao_julgador` acima é do PRECEDENTE citado — não sobrescrever.
+                # Contexto do processo de origem entra sob chaves próprias.
+                "process_number": context_payload["process_number"],
+                "judge_name": context_payload["judge_name"],
+                "judge_name_norm": context_payload["judge_name_norm"],
+                "orgao_julgador_origem": context_payload["orgao_julgador"],
+                "orgao_julgador_origem_norm": context_payload["orgao_julgador_norm"],
             }
 
             points.append(rest.PointStruct(id=jpoint_id, vector=jvector, payload=jpayload))
@@ -683,6 +734,8 @@ class ImpugnacaoReferenceIngestor:
                 "relator": jitem.relator,
                 "tipo_juris": jitem.tipo,
                 "fundamento_principal": jitem.fundamento_principal,
+                "heading": juris_heading,
+                "section": None,
             })
 
         if points:
