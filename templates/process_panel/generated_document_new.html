@@ -547,7 +547,7 @@ breadcrumbs=[
                 Confira os anexos por benefício e as peças-modelo de referência que serão usados na geração.
               </p>
 
-              <input type="hidden" name="documents_confirmed" value="1">
+              <input type="hidden" name="documents_confirmed" value="0" id="documentsConfirmedInput">
 
               <div id="docs-loading" class="text-center py-5 text-muted">
                 <div class="spinner-border spinner-border-sm mb-2" role="status"></div>
@@ -1080,9 +1080,14 @@ breadcrumbs=[
       const loadingEl = document.getElementById('docs-loading');
       const errorEl = document.getElementById('docs-error');
       const contentEl = document.getElementById('docs-content');
+      const confirmedInput = document.getElementById('documentsConfirmedInput');
       loadingEl.classList.remove('d-none');
       errorEl.classList.add('d-none');
       contentEl.classList.add('d-none');
+      // Só carrega valor '1' quando um preview realmente for renderizado com sucesso —
+      // enquanto isso (carregando ou após falha), o passo fica como "não confirmado"
+      // para o backend não filtrar anexos com base em uma lista vazia por acidente.
+      if (confirmedInput) confirmedInput.value = '0';
 
       const typeEl = document.querySelector('input[name="document_type"]:checked');
       const type = typeEl ? typeEl.value : '';
@@ -1102,11 +1107,13 @@ breadcrumbs=[
           renderDocumentsPreview(data, type);
           docsLastSignature = signature;
           docsLoadedOk = true;
+          if (confirmedInput) confirmedInput.value = '1';
           loadingEl.classList.add('d-none');
           contentEl.classList.remove('d-none');
         })
         .catch(function () {
           docsLoadedOk = false;
+          if (confirmedInput) confirmedInput.value = '0';
           loadingEl.classList.add('d-none');
           errorEl.classList.remove('d-none');
         });
