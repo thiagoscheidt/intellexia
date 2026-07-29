@@ -1,9 +1,10 @@
 """Teste do anotador de marcadores de imagem (pdf_image_annotator).
 
 Puro Python — sem rede, sem banco, sem app Flask, sem chamada de visão/OpenAI.
-Cobre a função pura de ancoragem, a leitura do env de liga/desliga da visão e
-a coleta de imagens (filtro de área + dedup por xref) sobre um PDF sintético
-criado com PyMuPDF.
+Cobre a função pura de ancoragem, a leitura do env de liga/desliga da visão, a
+coleta de imagens (filtro de área + dedup por xref) sobre um PDF sintético
+criado com PyMuPDF e a classificação de "cromo do documento" (papel timbrado/
+cabeçalho repetido, que não deve virar marcador).
 
 Rodar: uv run python scripts/tests/test_pdf_image_annotator.py
 """
@@ -18,6 +19,7 @@ import fitz  # PyMuPDF
 from PIL import Image
 
 from app.services.pdf_image_annotator import (
+    _chrome_xrefs,
     _collect_images_by_doc,
     _vision_enabled,
     insert_marker_after_anchor,
@@ -189,6 +191,75 @@ try:
     check("total de ocorrências mantidas após filtro de área: 2 (grande na p1 + grande na p2)", total_occurrences, 2)
 finally:
     doc.close()
+
+
+# ── _chrome_xrefs: classificação de cromo do documento ──────────────────
+
+print("\n== _chrome_xrefs (papel timbrado / cabeçalho repetido não vira marcador) ==")
+
+# xref em 3 páginas -> cromo (limiar default = 3)
+xref_pages_3_of_8 = {101: {1, 2, 3}}
+check(
+    "xref em 3 páginas (doc de 8) -> cromo",
+    _chrome_xrefs(xref_pages_3_of_8, total_pages=8),
+    {101},
+)
+
+# xref em 2 páginas -> NÃO é cromo, MESMO num PDF de 2 páginas (100% das páginas).
+# É o caso que motivou a correção: prova legítima repetida não pode ser descartada
+# só porque aparece em "mais da metade" de um documento curto.
+xref_pages_2_of_2 = {202: {1, 2}}
+check(
+    "xref em 2 páginas de um PDF de 2 páginas -> NÃO é cromo (piso de 3 protege)",
+    _chrome_xrefs(xref_pages_2_of_2, total_pages=2),
+    set(),
+)
+
+# xref em 1 página -> não é cromo
+xref_pages_1 = {303: {5}}
+check(
+    "xref em 1 página -> não é cromo",
+    _chrome_xrefs(xref_pages_1, total_pages=10),
+    set(),
+)
+
+# documento de 10 páginas, xref em 6 -> cromo
+xref_pages_6_of_10 = {404: {1, 2, 3, 4, 5, 6}}
+check(
+    "xref em 6 páginas de um doc de 10 páginas -> cromo",
+    _chrome_xrefs(xref_pages_6_of_10, total_pages=10),
+    {404},
+)
+
+# mistura: só o xref de cromo é descartado, o legítimo permanece
+mixed = {101: {1, 2, 3, 4}, 505: {2}}
+check(
+    "mistura: só o xref repetido (cromo) entra no conjunto, o de 1 página não",
+    _chrome_xrefs(mixed, total_pages=8),
+    {101},
+)
+
+# env IMPUGNACAO_IMAGE_CHROME_MIN_PAGES respeitado (inclusive abaixo de 3)
+_ORIGINAL_CHROME_ENV = os.environ.get("IMPUGNACAO_IMAGE_CHROME_MIN_PAGES")
+try:
+    os.environ["IMPUGNACAO_IMAGE_CHROME_MIN_PAGES"] = "2"
+    check(
+        "env=2: xref em 2 páginas vira cromo (limiar configurado é respeitado)",
+        _chrome_xrefs({606: {1, 2}}, total_pages=8),
+        {606},
+    )
+finally:
+    if _ORIGINAL_CHROME_ENV is None:
+        os.environ.pop("IMPUGNACAO_IMAGE_CHROME_MIN_PAGES", None)
+    else:
+        os.environ["IMPUGNACAO_IMAGE_CHROME_MIN_PAGES"] = _ORIGINAL_CHROME_ENV
+
+# confirma que o env voltou ao estado original (não vaza pros testes acima)
+check(
+    "env restaurado ao valor original após o teste",
+    os.environ.get("IMPUGNACAO_IMAGE_CHROME_MIN_PAGES"),
+    _ORIGINAL_CHROME_ENV,
+)
 
 
 # ── resultado ─────────────────────────────────────────────────────────────

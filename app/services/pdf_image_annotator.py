@@ -7,8 +7,11 @@ introdução para o parágrafo seguinte, perdendo o elo entre a tese e a prova
 visual que a sustenta.
 
 Este serviço usa PyMuPDF (`fitz`) para localizar as imagens de cada página,
-casar cada uma com o bloco de texto imediatamente acima (a "âncora") e inserir
-um marcador textual — `[IMAGEM: <descrição>]` ou, sem descrição,
+descartar "cromo do documento" (papel timbrado, cabeçalho/rodapé, brasão,
+assinatura — imagens repetidas em várias páginas que não são prova, ver
+`_chrome_xrefs`), casar cada imagem restante com o bloco de texto
+imediatamente acima (a "âncora") e inserir um marcador textual —
+`[IMAGEM: <descrição>]` ou, sem descrição,
 `[IMAGEM — print citado no parágrafo acima]` — na posição correta do fluxo de
 texto vindo do `pdfplumber`. Opcionalmente, descreve as imagens via um modelo
 de visão barato (lotes numa única chamada multimodal).
@@ -100,6 +103,17 @@ def _render_dpi() -> int:
         return int(os.getenv("IMPUGNACAO_IMAGE_RENDER_DPI", "150"))
     except (TypeError, ValueError):
         return 150
+
+
+def _chrome_min_pages() -> int:
+    """IMPUGNACAO_IMAGE_CHROME_MIN_PAGES (default 3): a partir de quantas
+    páginas distintas um xref é tratado como "cromo do documento" (papel
+    timbrado, cabeçalho/rodapé repetido, brasão, linha de assinatura) e
+    descartado antes de gerar qualquer marcador — não é prova, é moldura."""
+    try:
+        return int(os.getenv("IMPUGNACAO_IMAGE_CHROME_MIN_PAGES", "3"))
+    except (TypeError, ValueError):
+        return 3
 
 
 # ── Ancoragem (função pura, testável isoladamente) ──────────────────────────
@@ -238,6 +252,85 @@ def _collect_images_by_doc(
             occurrences_by_page[page_number] = page_occurrences
 
     return occurrences_by_page, first_seen_order
+
+
+def _xref_page_counts(
+    occurrences_by_page: dict[int, list[_ImageOccurrence]]
+) -> dict[int, set[int]]:
+    """{xref: {números de página distintos em que aparece}}."""
+    counts: dict[int, set[int]] = {}
+    for page_number, occurrences in occurrences_by_page.items():
+        for occurrence in occurrences:
+            counts.setdefault(occurrence.xref, set()).add(page_number)
+    return counts
+
+
+def _chrome_xrefs(xref_pages: dict[int, set[int]], total_pages: int) -> set[int]:
+    """Identifica xrefs que são "cromo do documento" — papel timbrado,
+    cabeçalho/rodapé, brasão, linha de assinatura — repetidos em várias
+    páginas e que por isso não são prova: não devem gerar marcador nem
+    entrar na conta de descrição por visão.
+
+    `xref_pages`: mapa xref -> conjunto de páginas distintas em que aparece
+    (ver `_xref_page_counts`). `total_pages`: total de páginas do documento.
+
+    Regra: um xref é cromo se aparece em `IMPUGNACAO_IMAGE_CHROME_MIN_PAGES`
+    páginas distintas ou mais (configurável, respeitado tal como setado —
+    inclusive abaixo de 3, se um escritório quiser afinar isso para um
+    acervo específico), OU se aparece em mais da metade das páginas do
+    documento (para pegar cromo em documentos curtos, onde o limiar
+    configurado pode nunca ser atingido).
+
+    A segunda condição ("mais da metade") NUNCA dispara com menos de 3
+    páginas de ocorrência — mesmo numa peça de 2 páginas onde a mesma
+    imagem aparece nas 2 (100% das páginas), isso não é cromo por si só,
+    é prova legítima repetida, e não deve ser descartado silenciosamente.
+    """
+    min_pages_config = _chrome_min_pages()
+    safe_total_pages = total_pages if total_pages and total_pages > 0 else 1
+
+    chrome: set[int] = set()
+    for xref, pages in xref_pages.items():
+        count = len(pages)
+        if count >= min_pages_config:
+            chrome.add(xref)
+            continue
+        if count >= 3 and count * 2 > safe_total_pages:
+            chrome.add(xref)
+
+    return chrome
+
+
+def _remove_chrome_occurrences(
+    occurrences_by_page: dict[int, list[_ImageOccurrence]],
+    first_seen_order: list[int],
+    total_pages: int,
+) -> tuple[dict[int, list[_ImageOccurrence]], list[int], set[int]]:
+    """Aplica `_chrome_xrefs` e remove as ocorrências de imagens de cromo,
+    tanto das páginas quanto da ordem de descrição. Loga quantas ocorrências
+    foram descartadas, para auditar quando alguém estranhar um print ausente."""
+    xref_pages = _xref_page_counts(occurrences_by_page)
+    chrome = _chrome_xrefs(xref_pages, total_pages)
+    if not chrome:
+        return occurrences_by_page, first_seen_order, chrome
+
+    filtered_by_page: dict[int, list[_ImageOccurrence]] = {}
+    discarded = 0
+    for page_number, occurrences in occurrences_by_page.items():
+        kept = [occ for occ in occurrences if occ.xref not in chrome]
+        discarded += len(occurrences) - len(kept)
+        if kept:
+            filtered_by_page[page_number] = kept
+
+    filtered_order = [xref for xref in first_seen_order if xref not in chrome]
+
+    print(
+        f"{_LOG_PREFIX} descartadas {discarded} ocorrência(s) de imagem "
+        f"({len(chrome)} xref(s) único(s): {sorted(chrome)}) como cromo do "
+        f"documento — repetiam em várias páginas (cabeçalho/rodapé/timbrado/"
+        f"assinatura), não geram marcador."
+    )
+    return filtered_by_page, filtered_order, chrome
 
 
 def _find_anchor_text(page: "fitz.Page", image_rect: "fitz.Rect") -> str:
@@ -472,6 +565,12 @@ def _annotate_pages_with_images(
     doc = fitz.open(pdf_path)
     try:
         occurrences_by_page, first_seen_order = _collect_images_by_doc(doc, min_area)
+        if not occurrences_by_page:
+            return page_texts
+
+        occurrences_by_page, first_seen_order, _chrome = _remove_chrome_occurrences(
+            occurrences_by_page, first_seen_order, doc.page_count
+        )
         if not occurrences_by_page:
             return page_texts
 
