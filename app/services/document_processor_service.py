@@ -620,7 +620,9 @@ class DocumentProcessorService:
 
         return pages, chunks_with_pages
 
-    def process_document(self, file_path: str | Path) -> DocumentProcessResult:
+    def process_document(
+        self, file_path: str | Path, *, annotate_images: bool = False
+    ) -> DocumentProcessResult:
         """
         Extrai o conteúdo completo do arquivo com informações de página.
 
@@ -633,6 +635,14 @@ class DocumentProcessorService:
         3. Monta `chunks_with_pages` prontos para ingestão no formato
            [{"text": "...", "page": N}, ...]. As tabelas sempre vêm do
            pdfplumber, em qualquer caminho.
+
+        `annotate_images`: default False (nenhum outro chamador muda de
+        comportamento). Quando True e o caminho rápido do pdfplumber for
+        escolhido, insere marcadores `[IMAGEM: ...]` no texto de cada página
+        (via `app.services.pdf_image_annotator.annotate_pages_with_images`)
+        antes de montar `chunks_with_pages`/`full_text` — assim os marcadores
+        fluem para ambos. Hoje só a ingestão de peças-modelo de impugnação
+        liga esta flag.
         """
         file_path = Path(file_path)
         chunks_with_pages: list[dict] = []
@@ -649,6 +659,9 @@ class DocumentProcessorService:
                 if total_chars >= self.FAST_PATH_MIN_AVG_CHARS * len(page_texts):
                     total_pages = len(page_texts)
                     print(f"[DocumentProcessorService][texto] {total_pages} páginas via camada de texto (sem Docling)")
+                    if annotate_images:
+                        from app.services.pdf_image_annotator import annotate_pages_with_images
+                        page_texts = annotate_pages_with_images(str(file_path), page_texts)
                     pages, chunks_with_pages = self._build_pages_with_sections(page_texts)
                     full_text = "\n\n".join(text for _, text in page_texts if text.strip())
                 else:

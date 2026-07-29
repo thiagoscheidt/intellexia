@@ -26,6 +26,7 @@ from qdrant_client.http import models as rest
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 from app.services.document_processor_service import DocumentProcessorService
+from app.services.pdf_image_annotator import IMAGE_MARKER_PLAIN
 from app.agents.legal_drafting.impugnacao_reference_thesis_classifier_agent import (
     ImpugnacaoReferenceThesisClassifierAgent,
 )
@@ -229,7 +230,7 @@ class ImpugnacaoReferenceIngestor:
     def _process_document(file_path: str | Path):
         path = Path(file_path)
         processor = DocumentProcessorService()
-        return processor.process_document(str(path))
+        return processor.process_document(str(path), annotate_images=True)
 
     @classmethod
     def _build_segments_from_pages(cls, processed_document) -> list[dict]:
@@ -380,25 +381,40 @@ class ImpugnacaoReferenceIngestor:
                 "section_kind": section_kind,
             })
 
+        # Pré-processa marcadores de imagem do caminho Docling (PDF
+        # escaneado): a linha isolada `<!-- image -->` vira a linha do
+        # marcador do annotator (sem descrição); o prefixo `<!-- image -->`
+        # no começo de uma linha vira o marcador em linha própria, seguido
+        # do restante da linha. Depois disso o loop de heading roda sobre
+        # texto já "limpo", sem precisar conhecer o marcador do Docling.
+        expanded_lines: list[str] = []
         for raw_line in lines:
             line = raw_line.rstrip()
             if re.match(r"^\s*<!--\s*image\s*-->\s*$", line, flags=re.IGNORECASE):
+                expanded_lines.append(IMAGE_MARKER_PLAIN)
                 continue
-            line_for_heading = re.sub(r"^\s*<!--\s*image\s*-->\s*", "", line, flags=re.IGNORECASE)
+            prefix_match = re.match(r"^\s*<!--\s*image\s*-->\s*", line, flags=re.IGNORECASE)
+            if prefix_match:
+                expanded_lines.append(IMAGE_MARKER_PLAIN)
+                expanded_lines.append(line[prefix_match.end():])
+                continue
+            expanded_lines.append(line)
+
+        for line in expanded_lines:
             is_heading = bool(
-                _HEADING_NUMERIC_RE.match(line_for_heading)
-                or _HEADING_ROMAN_RE.match(line_for_heading)
-                or _HEADING_MARKDOWN_NUMERIC_RE.match(line_for_heading)
-                or _HEADING_MARKDOWN_CAPS_RE.match(line_for_heading)
-                or (len(line_for_heading) < 180 and _HEADING_MARKDOWN_GENERIC_RE.match(line_for_heading))
-                or (len(line_for_heading) < 120 and _HEADING_CAPS_RE.match(line_for_heading))
+                _HEADING_NUMERIC_RE.match(line)
+                or _HEADING_ROMAN_RE.match(line)
+                or _HEADING_MARKDOWN_NUMERIC_RE.match(line)
+                or _HEADING_MARKDOWN_CAPS_RE.match(line)
+                or (len(line) < 180 and _HEADING_MARKDOWN_GENERIC_RE.match(line))
+                or (len(line) < 120 and _HEADING_CAPS_RE.match(line))
             )
             if is_heading and current_buffer:
                 _flush()
                 current_buffer = []
-                current_heading = line_for_heading
+                current_heading = line
             elif is_heading and not current_buffer:
-                current_heading = line_for_heading
+                current_heading = line
             else:
                 current_buffer.append(line)
 

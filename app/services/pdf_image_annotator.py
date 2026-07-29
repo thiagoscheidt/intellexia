@@ -42,6 +42,13 @@ _LOG_PREFIX = "[pdf_image_annotator]"
 _MAX_ANCHOR_CHARS = 60
 _MAX_DESCRIPTION_CHARS = 220
 
+# Marcador sem descrição (visão desligada/falhou ou teto por documento
+# atingido). Público para reuso por outros pontos de integração — hoje,
+# `ImpugnacaoReferenceIngestor._split_by_headings` converte para este mesmo
+# marcador as linhas `<!-- image -->` que vêm do caminho Docling, em vez de
+# duplicar a string.
+IMAGE_MARKER_PLAIN = "[IMAGEM — print citado no parágrafo acima]"
+
 _WS_RE = re.compile(r"\s+")
 _NUMBERED_LINE_RE = re.compile(r"^\s*(\d+)[.)]\s*(.+)$")
 
@@ -373,7 +380,7 @@ def _build_marker(description: Optional[str]) -> str:
         if len(desc) > _MAX_DESCRIPTION_CHARS:
             desc = desc[:_MAX_DESCRIPTION_CHARS].rstrip() + "…"
         return f"[IMAGEM: {desc}]"
-    return "[IMAGEM — print citado no parágrafo acima]"
+    return IMAGE_MARKER_PLAIN
 
 
 # ── Visão (descrição por lote) ───────────────────────────────────────────
