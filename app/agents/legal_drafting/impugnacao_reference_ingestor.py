@@ -227,10 +227,16 @@ class ImpugnacaoReferenceIngestor:
     # ── Extração de texto ──────────────────────────────────────────────
 
     @staticmethod
-    def _process_document(file_path: str | Path):
+    def _process_document(file_path: str | Path, law_firm_id: Optional[int] = None):
+        """`law_firm_id`: repassado ao annotator de imagens para que o
+        consumo de tokens da descrição por visão seja atribuído ao tenant
+        correto (sem isso, ficaria com `law_firm_id=NULL` e sumiria do
+        Dashboard de Tokens — ver `pdf_image_annotator.annotate_pages_with_images`)."""
         path = Path(file_path)
         processor = DocumentProcessorService()
-        return processor.process_document(str(path), annotate_images=True)
+        return processor.process_document(
+            str(path), annotate_images=True, annotate_law_firm_id=law_firm_id
+        )
 
     @classmethod
     def _build_segments_from_pages(cls, processed_document) -> list[dict]:
@@ -271,8 +277,8 @@ class ImpugnacaoReferenceIngestor:
         return segments
 
     @staticmethod
-    def _extract_text(file_path: str | Path) -> str:
-        result = ImpugnacaoReferenceIngestor._process_document(file_path)
+    def _extract_text(file_path: str | Path, law_firm_id: Optional[int] = None) -> str:
+        result = ImpugnacaoReferenceIngestor._process_document(file_path, law_firm_id=law_firm_id)
         return (result.full_text or "").strip()
 
     # ── Segmentação ────────────────────────────────────────────────────
@@ -527,7 +533,7 @@ class ImpugnacaoReferenceIngestor:
 
         if processed_document is None:
             try:
-                processed_document = self._process_document(file_path)
+                processed_document = self._process_document(file_path, law_firm_id=law_firm_id)
             except Exception as error:
                 print(f"[ImpugnacaoReferenceIngestor] Falha ao processar com paginação: {error}")
 
@@ -543,7 +549,7 @@ class ImpugnacaoReferenceIngestor:
             if not fallback_text and processed_document is not None:
                 fallback_text = str(getattr(processed_document, 'full_text', '') or '').strip()
             if not fallback_text:
-                fallback_text = self._extract_text(file_path)
+                fallback_text = self._extract_text(file_path, law_firm_id=law_firm_id)
 
             if not fallback_text:
                 print(f"[ImpugnacaoReferenceIngestor] Texto vazio em {file_path}")

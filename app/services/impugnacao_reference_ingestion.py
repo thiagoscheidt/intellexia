@@ -149,7 +149,7 @@ def ingest_reference(
             return
 
         ingestor = ImpugnacaoReferenceIngestor()
-        processed_document = ingestor._process_document(reference.file_path)
+        processed_document = ingestor._process_document(reference.file_path, law_firm_id=law_firm_id)
         extracted_text = str(getattr(processed_document, 'full_text', '') or '').strip()
 
         needs_backfill = not any([

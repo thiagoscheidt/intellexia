@@ -50,7 +50,11 @@ _MAX_DESCRIPTION_CHARS = 220
 IMAGE_MARKER_PLAIN = "[IMAGEM — print citado no parágrafo acima]"
 
 _WS_RE = re.compile(r"\s+")
-_NUMBERED_LINE_RE = re.compile(r"^\s*(\d+)[.)]\s*(.+)$")
+# Tolera decoração leve que o modelo às vezes acrescenta em volta do número
+# (markdown bold, marcador de lista, traço) — ex.: "**1.** ...", "- 1) ...",
+# "#1 - ...". Sem isso, uma resposta decorada casa zero linhas: a chamada é
+# gasta e todos os marcadores ficam sem descrição, sem nenhum aviso.
+_NUMBERED_LINE_RE = re.compile(r"^\s*[*#\->\s]*(\d+)\s*[.)\-:]+\**\s*(.+)$")
 
 _VISION_PROMPT = (
     "Você recebe recortes de imagens extraídas de uma peça jurídica trabalhista/"
@@ -102,7 +106,13 @@ def _vision_batch_size() -> int:
 
 
 def _vision_model() -> str:
-    return os.getenv("IMPUGNACAO_IMAGE_VISION_MODEL", "gpt-4o-mini")
+    """IMPUGNACAO_IMAGE_VISION_MODEL: default `openai/gpt-4o-mini` — este
+    ambiente fala com o gateway via `OPENAI_BASE_URL` (OpenRouter), cujo
+    formato canônico de nome de modelo é `<provedor>/<modelo>` (mesmo padrão
+    dos demais modelos do `.env`, ex. `DEFAULT_MODEL`). O `TokenUsageService`
+    já remove esse prefixo (`rsplit("/", 1)`) ao estimar custo, então o
+    rastreio de tokens não muda."""
+    return os.getenv("IMPUGNACAO_IMAGE_VISION_MODEL", "openai/gpt-4o-mini")
 
 
 def _render_dpi() -> int:
@@ -207,6 +217,53 @@ def insert_marker_after_anchor(page_text: str, anchor: str, marker: str) -> str:
     return _splice_marker(before, after, marker_text)
 
 
+def insert_markers_after_anchors(page_text: str, anchor_marker_pairs: list[tuple[str, str]]) -> str:
+    """Aplica `insert_marker_after_anchor` a vários pares (âncora, marcador),
+    na ORDEM em que são passados, preservando essa ordem mesmo quando duas
+    imagens compartilham a MESMA âncora (ex.: duas imagens coladas logo após
+    o mesmo parágrafo).
+
+    Chamar `insert_marker_after_anchor` isoladamente em sequência sempre
+    re-acha a PRIMEIRA ocorrência da âncora no texto (que não muda de
+    posição entre chamadas) — a segunda inserção entraria bem entre a âncora
+    e o marcador da primeira, invertendo a ordem visual das duas imagens.
+    Aqui, ao reusar uma âncora já inserida antes, a próxima inserção retoma
+    do ponto logo após o marcador anterior em vez de re-buscar a âncora, o
+    que preserva a ordem de chegada.
+    """
+    text = page_text or ""
+    last_insert_end: dict[str, int] = {}
+
+    for anchor, marker in anchor_marker_pairs:
+        marker_text = (marker or "").strip()
+        if not marker_text:
+            continue
+
+        normalized_anchor = _normalize_ws(anchor)
+        cursor = last_insert_end.get(normalized_anchor) if normalized_anchor else None
+
+        if cursor is not None:
+            insert_at = cursor
+        elif normalized_anchor:
+            insert_at = _find_anchor_end_index(text, normalized_anchor)
+        else:
+            insert_at = None
+
+        if insert_at is None:
+            new_text = _append_marker_at_end(text, marker_text)
+            new_end = len(new_text)
+        else:
+            before, after = text[:insert_at], text[insert_at:]
+            new_text = _splice_marker(before, after, marker_text)
+            new_end = insert_at + (len(new_text) - len(text))
+
+        if normalized_anchor:
+            last_insert_end[normalized_anchor] = new_end
+        text = new_text
+
+    return text
+
+
 # ── Coleta de imagens (dedup por xref + filtro de área) ─────────────────────
 
 
@@ -228,6 +285,12 @@ def _collect_images_by_doc(
 
     Imagens com área < `min_area` são descartadas (descarta logo, assinatura,
     linhas decorativas).
+
+    Dedup por `(xref, rect)` dentro da página: `get_images(full=True)` pode
+    listar o mesmo xref mais de uma vez (múltiplas referências ao mesmo
+    XObject); como `get_image_rects(xref)` devolve TODOS os retângulos do
+    xref na página a cada chamada, sem o dedup a mesma ocorrência entraria
+    duplicada — e viraria marcador duplicado no texto.
     """
     occurrences_by_page: dict[int, list[_ImageOccurrence]] = {}
     first_seen_order: list[int] = []
@@ -237,6 +300,7 @@ def _collect_images_by_doc(
         page = doc[page_index]
         page_number = page_index + 1
         page_occurrences: list[_ImageOccurrence] = []
+        seen_page_occurrence_keys: set[tuple] = set()
         for img in page.get_images(full=True):
             xref = img[0]
             try:
@@ -247,6 +311,14 @@ def _collect_images_by_doc(
                 area = float(rect.width) * float(rect.height)
                 if area < min_area:
                     continue
+                occurrence_key = (
+                    xref,
+                    round(rect.x0, 2), round(rect.y0, 2),
+                    round(rect.x1, 2), round(rect.y1, 2),
+                )
+                if occurrence_key in seen_page_occurrence_keys:
+                    continue
+                seen_page_occurrence_keys.add(occurrence_key)
                 page_occurrences.append(
                     _ImageOccurrence(page_number=page_number, xref=xref, rect=rect, area=area)
                 )
@@ -261,48 +333,89 @@ def _collect_images_by_doc(
     return occurrences_by_page, first_seen_order
 
 
-def _xref_page_counts(
+_CHROME_POSITION_TOLERANCE_PT = 12.0  # pontos; cabeçalho/rodapé/timbrado repete
+# quase exatamente no mesmo canto da página em todas as ocorrências. Uma
+# prova (ex.: print do CNIS) que o Word/LibreOffice deduplicou no mesmo
+# XObject mas colou em pontos diferentes do corpo do texto (sob teses
+# distintas) varia de posição — por isso NÃO deve ser tratada como cromo.
+
+
+def _xref_positions(
     occurrences_by_page: dict[int, list[_ImageOccurrence]]
-) -> dict[int, set[int]]:
-    """{xref: {números de página distintos em que aparece}}."""
-    counts: dict[int, set[int]] = {}
+) -> dict[int, list[tuple[int, float, float]]]:
+    """{xref: [(número da página, x0, y0), ...]} — uma entrada por ocorrência,
+    usada por `_chrome_xrefs` tanto para contar páginas distintas quanto para
+    checar estabilidade posicional."""
+    positions: dict[int, list[tuple[int, float, float]]] = {}
     for page_number, occurrences in occurrences_by_page.items():
         for occurrence in occurrences:
-            counts.setdefault(occurrence.xref, set()).add(page_number)
-    return counts
+            positions.setdefault(occurrence.xref, []).append(
+                (page_number, float(occurrence.rect.x0), float(occurrence.rect.y0))
+            )
+    return positions
 
 
-def _chrome_xrefs(xref_pages: dict[int, set[int]], total_pages: int) -> set[int]:
+def _positions_stable(
+    positions: list[tuple[int, float, float]], tolerance: float = _CHROME_POSITION_TOLERANCE_PT
+) -> bool:
+    """True se todas as ocorrências (x0, y0) ficam a até `tolerance` pontos
+    umas das outras — mesmo canto da página em todas as aparições, a
+    assinatura de cabeçalho/rodapé/timbrado. Posições espalhadas pela página
+    (mesma imagem colada em pontos diferentes do corpo do texto) não passam
+    aqui, e por isso não viram cromo."""
+    if len(positions) <= 1:
+        return True
+    xs = [x for _, x, _ in positions]
+    ys = [y for _, _, y in positions]
+    return (max(xs) - min(xs)) <= tolerance and (max(ys) - min(ys)) <= tolerance
+
+
+def _chrome_xrefs(
+    xref_positions: dict[int, list[tuple[int, float, float]]], total_pages: int
+) -> set[int]:
     """Identifica xrefs que são "cromo do documento" — papel timbrado,
     cabeçalho/rodapé, brasão, linha de assinatura — repetidos em várias
-    páginas e que por isso não são prova: não devem gerar marcador nem
-    entrar na conta de descrição por visão.
+    páginas NA MESMA POSIÇÃO, e que por isso não são prova: não devem gerar
+    marcador nem entrar na conta de descrição por visão.
 
-    `xref_pages`: mapa xref -> conjunto de páginas distintas em que aparece
-    (ver `_xref_page_counts`). `total_pages`: total de páginas do documento.
+    `xref_positions`: mapa xref -> lista de (página, x0, y0) por ocorrência
+    (ver `_xref_positions`). `total_pages`: total de páginas do documento.
 
-    Regra: um xref é cromo se aparece em `IMPUGNACAO_IMAGE_CHROME_MIN_PAGES`
-    páginas distintas ou mais (configurável, respeitado tal como setado —
-    inclusive abaixo de 3, se um escritório quiser afinar isso para um
-    acervo específico), OU se aparece em mais da metade das páginas do
-    documento (para pegar cromo em documentos curtos, onde o limiar
-    configurado pode nunca ser atingido).
+    Regra (duas condições, ambas precisam de estabilidade posicional — ver
+    `_positions_stable`):
+    1. aparece em `IMPUGNACAO_IMAGE_CHROME_MIN_PAGES` páginas distintas ou
+       mais (configurável, respeitado tal como setado — inclusive abaixo de
+       3, se um escritório quiser afinar isso para um acervo específico); OU
+    2. aparece em pelo menos 3 páginas E em mais da metade das páginas do
+       documento (para pegar cromo em documentos curtos, onde o limiar
+       configurado pode nunca ser atingido).
 
-    A segunda condição ("mais da metade") NUNCA dispara com menos de 3
-    páginas de ocorrência — mesmo numa peça de 2 páginas onde a mesma
-    imagem aparece nas 2 (100% das páginas), isso não é cromo por si só,
-    é prova legítima repetida, e não deve ser descartado silenciosamente.
+    A condição 2 só entra em jogo quando o env eleva
+    `IMPUGNACAO_IMAGE_CHROME_MIN_PAGES` acima de 3 — com o default (3), a
+    condição 1 já cobre `count >= 3` antes dela ser sequer avaliada; ela
+    existe para não perder a proteção de "documento curto" quando alguém
+    sobe o limiar. Ela também NUNCA dispara com menos de 3 páginas de
+    ocorrência — mesmo numa peça de 2 páginas onde a mesma imagem aparece
+    nas 2 (100% das páginas), isso não é cromo por si só.
+
+    Sem a checagem de posição, Word/LibreOffice deduplicando a MESMA prova
+    (print do CNIS) colada sob teses distintas num único XObject faria os
+    marcadores sumirem em silêncio — por isso, quando a posição varia, o
+    xref fica de fora do cromo mesmo satisfazendo a contagem de páginas: no
+    pior caso sobra um marcador a mais, nunca falta um em silêncio.
     """
     min_pages_config = _chrome_min_pages()
     safe_total_pages = total_pages if total_pages and total_pages > 0 else 1
 
     chrome: set[int] = set()
-    for xref, pages in xref_pages.items():
+    for xref, positions in xref_positions.items():
+        pages = {page for page, _, _ in positions}
         count = len(pages)
-        if count >= min_pages_config:
-            chrome.add(xref)
+        many_pages = count >= min_pages_config
+        majority_of_doc = count >= 3 and count * 2 > safe_total_pages
+        if not (many_pages or majority_of_doc):
             continue
-        if count >= 3 and count * 2 > safe_total_pages:
+        if _positions_stable(positions):
             chrome.add(xref)
 
     return chrome
@@ -314,12 +427,18 @@ def _remove_chrome_occurrences(
     total_pages: int,
 ) -> tuple[dict[int, list[_ImageOccurrence]], list[int], set[int]]:
     """Aplica `_chrome_xrefs` e remove as ocorrências de imagens de cromo,
-    tanto das páginas quanto da ordem de descrição. Loga quantas ocorrências
-    foram descartadas, para auditar quando alguém estranhar um print ausente."""
-    xref_pages = _xref_page_counts(occurrences_by_page)
-    chrome = _chrome_xrefs(xref_pages, total_pages)
+    tanto das páginas quanto da ordem de descrição. Loga página(s), área e
+    posição de cada xref descartado, para auditar quando alguém estranhar um
+    print ausente."""
+    xref_positions = _xref_positions(occurrences_by_page)
+    chrome = _chrome_xrefs(xref_positions, total_pages)
     if not chrome:
         return occurrences_by_page, first_seen_order, chrome
+
+    xref_to_first_occurrence: dict[int, _ImageOccurrence] = {}
+    for occurrences in occurrences_by_page.values():
+        for occurrence in occurrences:
+            xref_to_first_occurrence.setdefault(occurrence.xref, occurrence)
 
     filtered_by_page: dict[int, list[_ImageOccurrence]] = {}
     discarded = 0
@@ -331,12 +450,21 @@ def _remove_chrome_occurrences(
 
     filtered_order = [xref for xref in first_seen_order if xref not in chrome]
 
-    print(
-        f"{_LOG_PREFIX} descartadas {discarded} ocorrência(s) de imagem "
-        f"({len(chrome)} xref(s) único(s): {sorted(chrome)}) como cromo do "
-        f"documento — repetiam em várias páginas (cabeçalho/rodapé/timbrado/"
-        f"assinatura), não geram marcador."
-    )
+    for xref in sorted(chrome):
+        positions = xref_positions.get(xref, [])
+        pages = sorted({page for page, _, _ in positions})
+        occurrence = xref_to_first_occurrence.get(xref)
+        area = occurrence.area if occurrence else 0.0
+        x0 = occurrence.rect.x0 if occurrence else 0.0
+        y0 = occurrence.rect.y0 if occurrence else 0.0
+        print(
+            f"{_LOG_PREFIX} descartada xref={xref} como cromo do documento — "
+            f"{len(pages)} página(s) {pages}, área~{area:.0f}pt², posição "
+            f"estável em x0~{x0:.0f}/y0~{y0:.0f} (tolerância "
+            f"{_CHROME_POSITION_TOLERANCE_PT:.0f}pt) — repete no mesmo lugar "
+            f"(cabeçalho/rodapé/timbrado/assinatura), não gera marcador."
+        )
+    print(f"{_LOG_PREFIX} total: {discarded} ocorrência(s) descartada(s) como cromo ({len(chrome)} xref(s) único(s)).")
     return filtered_by_page, filtered_order, chrome
 
 
@@ -466,16 +594,30 @@ def _describe_image_batch(images_b64: list[str], *, law_firm_id: Optional[int]) 
         )
 
     model_name = _vision_model()
+    create_kwargs: dict = {
+        "model": model_name,
+        "messages": [{"role": "user", "content": content}],
+    }
+    # Modelos gpt-5* rejeitam temperature != 1 (não-padrão). Omitir o
+    # parâmetro nesse caso; para os demais mantemos temperature=0.0
+    # (determinístico) como o resto do projeto.
+    if "gpt-5" not in model_name.lower():
+        create_kwargs["temperature"] = 0.0
+
     started_at = time.perf_counter()
-    completion = client.chat.completions.create(
-        model=model_name,
-        messages=[{"role": "user", "content": content}],
-        temperature=0.0,
-    )
+    completion = client.chat.completions.create(**create_kwargs)
     latency_ms = int((time.perf_counter() - started_at) * 1000)
 
     text = completion.choices[0].message.content if completion.choices else ""
     descriptions = _parse_numbered_descriptions(text or "", len(images_b64))
+
+    non_empty = sum(1 for d in descriptions if d)
+    if non_empty == 0 and len(images_b64) > 0:
+        excerpt = (text or "").strip()[:200]
+        print(
+            f"{_LOG_PREFIX} AVISO: resposta de visão não parseável "
+            f"(0 de {len(images_b64)} descrições) — trecho: {excerpt!r}"
+        )
 
     _record_vision_usage(completion, model_name=model_name, law_firm_id=law_firm_id, latency_ms=latency_ms)
 
@@ -599,14 +741,23 @@ def _annotate_pages_with_images(
                 continue
             page = doc[page_number - 1]
             text = page_text_map[page_number]
+            anchor_marker_pairs: list[tuple[str, str]] = []
             for occurrence in occurrences:
                 try:
                     description = descriptions_by_xref.get(occurrence.xref)
                     marker = _build_marker(description)
                     anchor = _find_anchor_text(page, occurrence.rect)
-                    text = insert_marker_after_anchor(text, anchor, marker)
+                    anchor_marker_pairs.append((anchor, marker))
                 except Exception as exc:
                     print(f"{_LOG_PREFIX} falha ao anotar imagem xref={occurrence.xref}: {exc}")
+            if anchor_marker_pairs:
+                try:
+                    # Insere em lote (não uma chamada por ocorrência) para
+                    # preservar a ordem quando duas imagens compartilham a
+                    # mesma âncora — ver `insert_markers_after_anchors`.
+                    text = insert_markers_after_anchors(text, anchor_marker_pairs)
+                except Exception as exc:
+                    print(f"{_LOG_PREFIX} falha ao inserir marcadores na página {page_number}: {exc}")
             page_text_map[page_number] = text
 
         return [(page_number, page_text_map.get(page_number, original_text)) for page_number, original_text in page_texts]

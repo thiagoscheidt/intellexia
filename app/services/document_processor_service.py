@@ -5,7 +5,7 @@ import re
 import unicodedata
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, List
+from typing import Any, List, Optional
 
 import pdfplumber
 from markitdown import MarkItDown
@@ -621,7 +621,11 @@ class DocumentProcessorService:
         return pages, chunks_with_pages
 
     def process_document(
-        self, file_path: str | Path, *, annotate_images: bool = False
+        self,
+        file_path: str | Path,
+        *,
+        annotate_images: bool = False,
+        annotate_law_firm_id: Optional[int] = None,
     ) -> DocumentProcessResult:
         """
         Extrai o conteúdo completo do arquivo com informações de página.
@@ -643,6 +647,12 @@ class DocumentProcessorService:
         antes de montar `chunks_with_pages`/`full_text` — assim os marcadores
         fluem para ambos. Hoje só a ingestão de peças-modelo de impugnação
         liga esta flag.
+
+        `annotate_law_firm_id`: repassado ao annotator para que o consumo de
+        tokens da descrição por visão (`TokenUsageService`) seja gravado com
+        o tenant correto — sem isso, as chamadas de visão do lote de
+        importação ficariam com `law_firm_id=NULL` e sumiriam do Dashboard
+        de Tokens. Só tem efeito quando `annotate_images=True`.
         """
         file_path = Path(file_path)
         chunks_with_pages: list[dict] = []
@@ -661,7 +671,9 @@ class DocumentProcessorService:
                     print(f"[DocumentProcessorService][texto] {total_pages} páginas via camada de texto (sem Docling)")
                     if annotate_images:
                         from app.services.pdf_image_annotator import annotate_pages_with_images
-                        page_texts = annotate_pages_with_images(str(file_path), page_texts)
+                        page_texts = annotate_pages_with_images(
+                            str(file_path), page_texts, law_firm_id=annotate_law_firm_id
+                        )
                     pages, chunks_with_pages = self._build_pages_with_sections(page_texts)
                     full_text = "\n\n".join(text for _, text in page_texts if text.strip())
                 else:

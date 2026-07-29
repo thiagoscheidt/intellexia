@@ -11,9 +11,10 @@ de introdução ("...por decorrer de acidente de trajeto:") direto para o parág
 seguinte. O agente nunca sabe que ali havia prova visual, e o trecho indexado
 perde justamente o elo entre a tese e o documento que a sustenta.
 
-Medido no acervo local (38 peças já importadas): **1.674 imagens**, **561 únicas**
-após deduplicar repetições de cabeçalho — ~15 únicas por peça, ~5.200 projetadas
-para as 350 peças.
+Medido no acervo local (38 peças já importadas): **1.673 ocorrências** de imagem,
+das quais **1.180 descartadas como cromo do documento** (cabeçalho/rodapé/timbrado
+repetido na mesma posição — ver filtro de estabilidade posicional) e **491 imagens
+únicas reais** — mediana de 11 por peça, ~4.500 projetadas para as 350 peças.
 
 ## Decisões (aprovadas pelo usuário)
 
@@ -46,8 +47,15 @@ annotate_pages_with_images(pdf_path, page_texts, *, describe=None,
 - Via PyMuPDF (já é dependência): posição de cada imagem e dos blocos de texto.
 - **Filtro de ruído**: ignora imagens com área < `IMAGE_MIN_AREA` (15.000 pt²) —
   descarta logo, assinatura e linhas decorativas.
-- **Dedup por `xref`** no documento inteiro: o cabeçalho repetido em 20 páginas é
-  descrito uma vez e a descrição é reusada (foi o que levou 1.674 → 561).
+- **Dedup por `xref`** no documento inteiro: o cabeçalho repetido em várias páginas
+  é descrito uma vez e a descrição é reusada.
+- **Filtro de cromo com estabilidade posicional**: um xref repetido em páginas
+  distintas só é descartado como cromo se também aparecer aproximadamente na MESMA
+  posição em todas elas (tolerância ~12pt em x0/y0) — cabeçalho/rodapé repete no
+  mesmo lugar; a mesma prova (ex.: print do CNIS) colada sob teses diferentes no
+  meio do texto varia de posição e não é descartada, mesmo repetindo em várias
+  páginas. Foi esse filtro que levou 1.673 ocorrências → 1.180 cromo → 491 imagens
+  únicas reais.
 - **Ancoragem**: o marcador entra logo após o bloco de texto imediatamente acima
   da imagem — casando o fim desse bloco (normalizado) dentro do texto da página.
   Sem casamento, o marcador vai para o fim da página. Nunca some, nunca entra em
@@ -70,8 +78,14 @@ annotate_pages_with_images(pdf_path, page_texts, *, describe=None,
   `_build_pages_with_sections`, para os marcadores fluírem para `chunks_with_pages`
   e `full_text`.
 - `ImpugnacaoReferenceIngestor._process_document` passa `annotate_images=True`.
-- Caminho Docling (PDF escaneado): hoje o ingestor **descarta** as linhas
-  `<!-- image -->`; passam a virar o marcador sem descrição.
+- Caminho Docling (PDF escaneado): a conversão de `<!-- image -->` para o marcador
+  sem descrição só vale no **fallback** `_split_by_headings` (usado quando não há
+  `chunks_with_pages` nenhum). O caminho Docling **por página**
+  (`DocumentProcessorService.process_document`, via `doc.iterate_items()`) descarta
+  itens sem `.text` — que é o caso dos itens de imagem — antes de montar
+  `page_texts`/`chunks_with_pages`; por isso um PDF escaneado processado pelo
+  caminho normal (com segmentação por página) segue **sem** marcador de imagem nos
+  chunks por página, mesmo com este recurso.
 
 ## Fora de escopo
 
