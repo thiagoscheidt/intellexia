@@ -36,6 +36,7 @@ fila persistida no banco, também processada em thread de segundo plano
 from __future__ import annotations
 
 import os
+import shutil
 import threading
 import time
 from datetime import datetime, timedelta
@@ -49,6 +50,7 @@ from werkzeug.utils import secure_filename
 
 from app.models import (
     db,
+    User,
     ImpugnacaoReferenceModel,
     ImpugnacaoReferenceChunk,
     ImpugnacaoImportJob,
@@ -85,6 +87,21 @@ def require_law_firm(f):
         if not get_current_law_firm_id():
             flash('Você precisa estar associado a um escritório.', 'warning')
             return redirect(url_for('auth.login'))
+        return f(*args, **kwargs)
+    return decorated_function
+
+
+def require_admin_user(f):
+    """Ações destrutivas do módulo são admin-only (mesmo padrão do process_panel)."""
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        user_id = session.get('user_id')
+        if not user_id:
+            return redirect(url_for('auth.login'))
+        user = User.query.get(user_id)
+        if not user or user.role != 'admin':
+            flash('Acesso negado: privilégio de administrador necessário.', 'danger')
+            return redirect(url_for('impugnacao_references.list_references'))
         return f(*args, **kwargs)
     return decorated_function
 
@@ -650,6 +667,87 @@ def view_reference_file(ref_id):
 
     response.headers['X-Content-Type-Options'] = 'nosniff'
     return response
+
+
+RESET_CONFIRMATION_WORD = 'APAGAR TUDO'
+
+
+@impugnacao_references_bp.route('/resetar', methods=['POST'])
+@require_law_firm
+@require_admin_user
+def reset_reference_base():
+    """Apaga TODA a base de peças-modelo do escritório (reset para reimportar).
+
+    Irreversível. Admin-only e protegida por confirmação digitada. Limpa, nesta
+    ordem: Qdrant e Meilisearch (um filtro por escritório, não N chamadas),
+    arquivos físicos, jobs/itens de importação e, por fim, peças e trechos.
+    """
+    law_firm_id = get_current_law_firm_id()
+
+    if (request.form.get('confirmacao') or '').strip().upper() != RESET_CONFIRMATION_WORD:
+        flash(
+            f'Confirmação incorreta — digite "{RESET_CONFIRMATION_WORD}" para apagar a base.',
+            'warning',
+        )
+        return redirect(url_for('impugnacao_references.list_references'))
+
+    total_pecas = ImpugnacaoReferenceModel.query.filter_by(law_firm_id=law_firm_id).count()
+    avisos = []
+
+    # 1) Índices externos primeiro: se algo falhar aqui, o banco ainda reflete
+    # a realidade e o usuário pode repetir a operação.
+    try:
+        from app.agents.legal_drafting.impugnacao_reference_ingestor import (
+            ImpugnacaoReferenceIngestor,
+        )
+        if not ImpugnacaoReferenceIngestor().delete_by_law_firm_id(law_firm_id):
+            avisos.append('vetores do Qdrant')
+    except Exception as error:
+        print(f'[impugnacao_references.reset] Qdrant: {error}')
+        avisos.append('vetores do Qdrant')
+
+    if not impugnacao_reference_search.delete_all_for_law_firm(law_firm_id):
+        avisos.append('índice de busca')
+
+    # 2) Arquivos físicos das peças e das planilhas importadas.
+    for base_dir in (UPLOAD_BASE_DIR, IMPORT_UPLOAD_BASE_DIR):
+        firm_dir = os.path.join(base_dir, str(law_firm_id))
+        if os.path.isdir(firm_dir):
+            try:
+                shutil.rmtree(firm_dir)
+            except Exception as error:
+                print(f'[impugnacao_references.reset] arquivos em {firm_dir}: {error}')
+                avisos.append('arquivos enviados')
+
+    # 3) Banco: jobs de importação e peças (chunks saem por cascade).
+    try:
+        ImpugnacaoImportItem.query.filter_by(law_firm_id=law_firm_id).delete(
+            synchronize_session=False)
+        ImpugnacaoImportJob.query.filter_by(law_firm_id=law_firm_id).delete(
+            synchronize_session=False)
+        ImpugnacaoReferenceChunk.query.filter_by(law_firm_id=law_firm_id).delete(
+            synchronize_session=False)
+        ImpugnacaoReferenceModel.query.filter_by(law_firm_id=law_firm_id).delete(
+            synchronize_session=False)
+        db.session.commit()
+    except Exception as error:
+        db.session.rollback()
+        flash(f'Falha ao apagar a base: {error}', 'danger')
+        return redirect(url_for('impugnacao_references.list_references'))
+
+    if avisos:
+        flash(
+            f'Base apagada ({total_pecas} peça(s)), mas houve falha ao limpar: '
+            f'{", ".join(sorted(set(avisos)))}. Rode o reset de novo para tentar novamente.',
+            'warning',
+        )
+    else:
+        flash(
+            f'Base de peças-modelo apagada por completo — {total_pecas} peça(s) removida(s). '
+            'Pode iniciar uma nova importação.',
+            'success',
+        )
+    return redirect(url_for('impugnacao_references.list_references'))
 
 
 @impugnacao_references_bp.route('/<int:ref_id>/status')

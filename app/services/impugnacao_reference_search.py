@@ -98,6 +98,18 @@ def delete_reference(reference_id: int) -> bool:
         return False
 
 
+def delete_all_for_law_firm(law_firm_id: int) -> bool:
+    """Apaga TODOS os documentos do escritório no índice (reset da base)."""
+    try:
+        client, index = _get_index()
+        task = index.delete_documents_by_filter(f"law_firm_id = {int(law_firm_id)}")
+        client.wait_for_task(task.task_uid, timeout_in_ms=30000)
+        return True
+    except Exception as error:
+        print(f"[impugnacao_reference_search] Falha ao limpar índice do escritório {law_firm_id}: {error}")
+        return False
+
+
 def update_reference_status(reference) -> bool:
     """Propaga o status atual (active/archived) para os documentos da peça."""
     try:

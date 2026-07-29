@@ -779,6 +779,26 @@ class ImpugnacaoReferenceIngestor:
         except Exception as error:
             print(f"[ImpugnacaoReferenceIngestor] Falha ao deletar reference {reference_id}: {error}")
 
+    def delete_by_law_firm_id(self, law_firm_id: int) -> bool:
+        """Apaga TODOS os vetores do escritório na coleção (reset da base).
+
+        Um único delete por filtro em vez de N chamadas por peça.
+        """
+        try:
+            self.qdrant.delete(
+                collection_name=self.collection,
+                points_selector=rest.Filter(
+                    must=[rest.FieldCondition(
+                        key="law_firm_id", match=rest.MatchValue(value=int(law_firm_id))
+                    )]
+                ),
+                wait=True,
+            )
+            return True
+        except Exception as error:
+            print(f"[ImpugnacaoReferenceIngestor] Falha ao limpar vetores do escritório {law_firm_id}: {error}")
+            return False
+
     def set_status_by_reference_id(self, reference_id: int, status: str) -> None:
         try:
             self.qdrant.set_payload(
