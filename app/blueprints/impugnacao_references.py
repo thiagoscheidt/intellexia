@@ -294,6 +294,19 @@ def _run_import_job(app_obj, law_firm_id, job_id):
                         # action == _REUSE_ACTION_REUSE
                         item.reference_id = existing.id
                         item.status = 'indexing'
+                        # P1: marca a peça como 'processing' ANTES de chamar
+                        # ingest_reference — ela só toca ingestion_status no
+                        # fim, então sem isso a peça ficava com o status
+                        # antigo (ex.: 'failed') durante toda a reindexação;
+                        # um segundo "Retomar" nessa janela veria
+                        # ingestion_status != 'processing' e decidiria
+                        # 'reuse' de novo, disparando a própria ingestão
+                        # concorrente que _should_reuse_existing_reference
+                        # deveria impedir. Com isso, a segunda tentativa cai
+                        # em 'wait', como projetado (mesmo padrão de
+                        # reindex_reference, linhas ~804-812).
+                        existing.ingestion_status = 'processing'
+                        existing.ingestion_error = None
                         db.session.commit()
 
                         ingest_reference(
