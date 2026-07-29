@@ -3250,9 +3250,11 @@ class ImpugnacaoReferenceChunk(db.Model):
 
     # Campos de jurisprudência (preenchidos apenas quando section_kind='jurisprudence')
     secao_origem = db.Column(db.String(60))
-    tribunal = db.Column(db.String(60))
-    processo = db.Column(db.String(120))
-    relator = db.Column(db.String(255))
+    # O extrator devolve listas concatenadas quando o trecho cita vários
+    # precedentes ("AC x; AC y; ..."), por isso tribunal/processo/relator são largos.
+    tribunal = db.Column(db.String(120))
+    processo = db.Column(db.String(500))
+    relator = db.Column(db.String(500))
     tipo_juris = db.Column(db.String(60))
     fundamento_principal = db.Column(db.Text)
 

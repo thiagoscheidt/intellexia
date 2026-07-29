@@ -22,6 +22,19 @@ from app.models import (
 from app.services import impugnacao_reference_search
 
 
+def _clip(value, max_len: int):
+    """Corta um valor de texto no limite da coluna (None passa direto).
+
+    O extrator de jurisprudência devolve listas concatenadas ("AC x; AC y; ...")
+    que estouram VARCHAR e, sem isso, um único campo longo derrubava a ingestão
+    inteira da peça (DataError no INSERT do lote de chunks).
+    """
+    if value is None:
+        return None
+    text = str(value)
+    return text[:max_len] if len(text) > max_len else text
+
+
 def apply_extracted_metadata(reference, meta, *, is_new: bool, preserve_curated_fields: bool) -> None:
     """Aplica ao `reference` os metadados extraídos pela IA (`meta`).
 
@@ -187,19 +200,19 @@ def ingest_reference(
             db.session.add(ImpugnacaoReferenceChunk(
                 reference_id=reference.id,
                 law_firm_id=law_firm_id,
-                section_kind=chunk.get('section_kind'),
-                thesis_catalog_id=chunk.get('thesis_catalog_id'),
-                benefit_type=chunk.get('benefit_type'),
-                qdrant_point_id=chunk.get('qdrant_point_id'),
+                section_kind=_clip(chunk.get('section_kind'), 60),
+                thesis_catalog_id=_clip(chunk.get('thesis_catalog_id'), 120),
+                benefit_type=_clip(chunk.get('benefit_type'), 10),
+                qdrant_point_id=_clip(chunk.get('qdrant_point_id'), 64),
                 chunk_chars=chunk.get('chunk_chars', 0),
                 order_in_doc=chunk.get('order_in_doc', 0),
                 preview_text=chunk.get('preview_text'),
                 full_text=chunk.get('full_text'),
-                secao_origem=chunk.get('secao_origem'),
-                tribunal=chunk.get('tribunal'),
-                processo=chunk.get('processo'),
-                relator=chunk.get('relator'),
-                tipo_juris=chunk.get('tipo_juris'),
+                secao_origem=_clip(chunk.get('secao_origem'), 60),
+                tribunal=_clip(chunk.get('tribunal'), 120),
+                processo=_clip(chunk.get('processo'), 500),
+                relator=_clip(chunk.get('relator'), 500),
+                tipo_juris=_clip(chunk.get('tipo_juris'), 60),
                 fundamento_principal=chunk.get('fundamento_principal'),
             ))
         reference.ingestion_status = 'completed'
