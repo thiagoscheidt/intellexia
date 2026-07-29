@@ -171,8 +171,13 @@ def ingest_reference(
 
         thesis_catalog = _load_thesis_catalog(law_firm_id)
 
-        # Limpa índice antigo antes de reingerir.
+        # Limpa índice antigo antes de reingerir — os TRÊS destinos juntos
+        # (Qdrant, banco e Meilisearch). Se o Meilisearch fosse limpo só no
+        # fim, junto com a regravação, uma falha no meio da ingestão deixaria
+        # documentos órfãos lá: a busca da tela mostraria trechos de uma versão
+        # da peça que não existe mais no banco nem no Qdrant.
         ingestor.delete_by_reference_id(ref_id)
+        impugnacao_reference_search.delete_reference(ref_id)
         ImpugnacaoReferenceChunk.query.filter_by(reference_id=ref_id).delete()
         db.session.commit()
 
