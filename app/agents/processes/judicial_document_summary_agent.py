@@ -4,6 +4,7 @@ import os
 import time
 from pathlib import Path
 from typing import Optional, List
+from urllib.parse import urlparse
 
 from dotenv import load_dotenv
 from pydantic import BaseModel, ConfigDict, Field
@@ -115,19 +116,68 @@ class JudicialDocumentSummaryAgent:
             "Evite argumentos genericos: cada item deve refletir o conteudo efetivamente identificado na contestacao.\n"
         )
 
+    # Teto do texto extraído enviado ao modelo (mesma variável usada pelos
+    # demais resumos do projeto).
+    TEXT_MAX_CHARS = int(os.getenv("SUMMARY_MAX_CHARS", "50000"))
+
     @staticmethod
-    def _build_messages_for_history(
+    def _build_document_content_parts(
+        file_path: str,
         user_prompt: str,
-        file_part: dict,
-    ) -> list[dict]:
+        document_text: Optional[str] = None,
+    ) -> tuple[list[dict], str]:
+        """Monta o conteúdo da mensagem: anexo para PDF, texto para o resto.
+
+        O provider aceita apenas PDF como anexo inline (`file_data`) — mandar
+        .docx volta 400 `invalid_file`. Para os demais formatos vai o texto já
+        extraído do documento, mesmo critério do Revisor FAP. Se não houver
+        texto disponível (URL remota, extração falha), cai no anexo, que é o
+        comportamento histórico.
+
+        Retorna (partes de conteúdo, modo de análise).
+        """
+        normalized_path = str(file_path or "").strip()
+        is_remote = normalized_path.startswith("http://") or normalized_path.startswith("https://")
+        suffix = Path(urlparse(normalized_path).path if is_remote else normalized_path).suffix.lower()
+
+        text = str(document_text or "").strip()
+        if suffix != ".pdf" and not text and not is_remote:
+            try:
+                from markitdown import MarkItDown
+
+                text = str(MarkItDown().convert(normalized_path).text_content or "").strip()
+            except Exception as exc:
+                print(f"[JudicialDocumentSummaryAgent] Falha ao extrair texto de {normalized_path}: {exc}")
+
+        if suffix != ".pdf" and text:
+            truncated = text[:JudicialDocumentSummaryAgent.TEXT_MAX_CHARS]
+            if len(text) > len(truncated):
+                truncated = f"{truncated}\n\n[...conteudo truncado...]"
+            return (
+                [
+                    {
+                        "type": "text",
+                        "text": f"{user_prompt}\n\nCONTEUDO EXTRAIDO DO DOCUMENTO:\n{truncated}",
+                    }
+                ],
+                "extracted_text",
+            )
+
+        return (
+            [
+                {"type": "text", "text": user_prompt},
+                FileAgent().build_openrouter_file_part(normalized_path),
+            ],
+            "file_attachment",
+        )
+
+    @staticmethod
+    def _build_messages_for_history(content_parts: list[dict]) -> list[dict]:
         return [
             {"role": "system", "content": _SYSTEM_PROMPT},
             {
                 "role": "user",
-                "content": [
-                    {"type": "text", "text": user_prompt},
-                    file_part,
-                ],
+                "content": content_parts,
             },
         ]
 
@@ -177,6 +227,7 @@ class JudicialDocumentSummaryAgent:
         document_event_identifier: str = "",
         user_id: Optional[int] = None,
         law_firm_id: Optional[int] = None,
+        document_text: Optional[str] = None,
     ) -> dict:
         if not file_path:
             raise ValueError("file_path e obrigatorio para gerar resumo")
@@ -185,13 +236,9 @@ class JudicialDocumentSummaryAgent:
         if not normalized_path:
             raise ValueError("file_path invalido")
 
-        if normalized_path.startswith("http://") or normalized_path.startswith("https://"):
-            file_part = FileAgent().build_openrouter_file_part(normalized_path)
-        else:
-            path_obj = Path(normalized_path)
-            if not path_obj.exists():
+        if not (normalized_path.startswith("http://") or normalized_path.startswith("https://")):
+            if not Path(normalized_path).exists():
                 raise FileNotFoundError(f"Arquivo nao encontrado: {normalized_path}")
-            file_part = FileAgent().build_openrouter_file_part(str(path_obj))
 
         user_prompt = self._build_user_prompt(
             document_type_name,
@@ -209,6 +256,12 @@ class JudicialDocumentSummaryAgent:
             response_format=ToolStrategy(JudicialDocumentSummarySchema),
         )
 
+        content_parts, analysis_mode = self._build_document_content_parts(
+            normalized_path,
+            user_prompt,
+            document_text=document_text,
+        )
+
         call_started_at = time.time()
         response_payload = None
         metadata_payload = {
@@ -216,8 +269,9 @@ class JudicialDocumentSummaryAgent:
             "file_type": file_type,
             "file_name": Path(normalized_path).name if normalized_path else "",
             "document_event_identifier": document_event_identifier,
+            "analysis_mode": analysis_mode,
         }
-        history_messages = self._build_messages_for_history(user_prompt, file_part)
+        history_messages = self._build_messages_for_history(content_parts)
 
         try:
             response_payload = agent.invoke(
@@ -277,18 +331,9 @@ class JudicialDocumentSummaryAgent:
             )
 
             fallback = self.chat_model.with_structured_output(JudicialDocumentSummarySchema)
-            fallback_payload = fallback.invoke(
-                [
-                    {"role": "system", "content": _SYSTEM_PROMPT},
-                    {
-                        "role": "user",
-                        "content": [
-                            {"type": "text", "text": user_prompt},
-                            file_part,
-                        ],
-                    },
-                ]
-            )
+            # Mesmo conteúdo da tentativa principal: o fallback existe para o
+            # caminho sem tool-calling, não para reenviar um anexo recusado.
+            fallback_payload = fallback.invoke(history_messages)
 
             _, fallback_rows = self.token_usage_service.capture_and_store(
                 {

@@ -25,14 +25,16 @@ _MANUAL_FILES = (
     ("Painel FAP", "MANUAL_PAINEL_FAP.md"),
     ("Painel de Contestações", "MANUAL_PAINEL_CONTESTACOES.md"),
     ("Revisor de Petições", "MANUAL_REVISOR_PETICOES.md"),
+    ("Notificações por E-mail", "MANUAL_NOTIFICACOES.md"),
 )
 
 MAX_QUESTION_CHARS = 1000
 MAX_HISTORY_MESSAGES = 6
 
 _SYSTEM_INSTRUCTIONS = """Você é o assistente de ajuda do sistema IntellexIA. \
-Seu papel é tirar dúvidas dos usuários sobre quatro painéis: Dashboard Principal, \
-Painel FAP, Painel de Contestações e Revisor de Petições.
+Seu papel é tirar dúvidas dos usuários sobre os painéis e recursos do IntellexIA \
+cobertos pelos manuais: Dashboard Principal, Painel FAP, Painel de Contestações, \
+Revisor de Petições e Notificações por E-mail.
 
 Regras:
 - Responda SOMENTE com base no conteúdo dos manuais fornecidos abaixo.

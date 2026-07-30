@@ -16,6 +16,7 @@ import json
 import os
 import re
 import time
+import traceback
 from decimal import Decimal
 from typing import Optional, Any
 from datetime import datetime
@@ -363,6 +364,10 @@ INSTRUÇÕES DO PROJETO:
                 print_prefix="[FapReviewer]",
                 model_name=self.model_name,
                 model_provider="openai",
+                # A revisão roda em thread de background (sem request context):
+                # o fallback de sessão do TokenUsageService não resolve o tenant.
+                user_id=user_id,
+                law_firm_id=law_firm_id,
                 latency_ms=latency_ms,
                 metadata_payload={
                     "petition_file_path": petition_file_path,
@@ -445,7 +450,10 @@ INSTRUÇÕES DO PROJETO:
         except ReviewOutputParseError:
             raise
         except Exception as e:
-            # Fallback em caso de erro
+            # Fallback em caso de erro. Sem este log a falha ficava invisível:
+            # a execução era concluída com resultado vazio e sem registro de tokens.
+            print(f"[FapReviewer] ERRO em review_petition_single_version: {type(e).__name__}: {e}")
+            traceback.print_exc()
             return PetitionReviewResult(
                 analysis_type="single_version",
                 focused_review=bool(prior_attention_points),
@@ -546,6 +554,10 @@ INSTRUÇÕES DO PROJETO:
                 print_prefix="[FapReviewer]",
                 model_name=self.model_name,
                 model_provider="openai",
+                # A revisão roda em thread de background (sem request context):
+                # o fallback de sessão do TokenUsageService não resolve o tenant.
+                user_id=user_id,
+                law_firm_id=law_firm_id,
                 latency_ms=latency_ms,
                 metadata_payload={
                     "original_petition_file_path": original_petition_file_path,
@@ -628,6 +640,10 @@ INSTRUÇÕES DO PROJETO:
         except ReviewOutputParseError:
             raise
         except Exception as e:
+            # Fallback em caso de erro. Sem este log a falha ficava invisível:
+            # a execução era concluída com resultado vazio e sem registro de tokens.
+            print(f"[FapReviewer] ERRO em review_petition_comparative: {type(e).__name__}: {e}")
+            traceback.print_exc()
             return PetitionReviewResult(
                 analysis_type="comparative",
                 focused_review=bool(prior_attention_points),

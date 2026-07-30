@@ -556,6 +556,230 @@ class DocumentProcessorService:
             return []
         return page_texts
 
+    # DOCX não tem paginação. Quebramos o documento em "páginas" sintéticas
+    # deste tamanho (ordem de grandeza de uma página de petição) para que a
+    # detecção de seções e o chunking por página continuem valendo.
+    DOCX_SYNTHETIC_PAGE_CHARS = 3000
+
+    @staticmethod
+    def _docx_table_rows(table: Any) -> list[str]:
+        """Linhas da tabela no mesmo formato do pdfplumber: 'célula | célula'.
+
+        `row.cells` repete a mesma célula em cada coluna do grid que ela ocupa
+        (mescla horizontal). Contar a repetição duplicaria o rótulo no header
+        — comum nas petições FAP, onde "Vigências do FAP" ocupa duas colunas —
+        e desalinharia todas as colunas seguintes em relação aos dados.
+        """
+        rows: list[str] = []
+        for row in table.rows:
+            cells: list[str] = []
+            previous_tc = None
+            for cell in row.cells:
+                current_tc = getattr(cell, "_tc", None)
+                if current_tc is not None and current_tc is previous_tc:
+                    continue
+                previous_tc = current_tc
+                cells.append(" ".join(str(cell.text or "").split()))
+            if any(cells):
+                rows.append(" | ".join(cells))
+        return rows
+
+    _DOCX_W_NS = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+
+    @classmethod
+    def _docx_decimal_numbering_starts(cls, document: Any) -> dict[tuple[str, str], int]:
+        """{(numId, ilvl): valor inicial} dos níveis numerados em decimal.
+
+        Só decimal: o número reconstruído aqui vira prefixo de título e a
+        detecção de seções do projeto reconhece "N. Título". Formatos romanos
+        ou por letra ficam de fora em vez de virar um número inventado.
+        """
+        try:
+            numbering = document.part.numbering_part.element
+        except Exception:
+            return {}
+
+        ns = cls._DOCX_W_NS
+        abstract_by_id = {
+            node.get(f"{ns}abstractNumId"): node
+            for node in numbering.findall(f"{ns}abstractNum")
+        }
+
+        starts: dict[tuple[str, str], int] = {}
+        for num in numbering.findall(f"{ns}num"):
+            num_id = num.get(f"{ns}numId")
+            abstract_ref = num.find(f"{ns}abstractNumId")
+            if not num_id or abstract_ref is None:
+                continue
+            abstract = abstract_by_id.get(abstract_ref.get(f"{ns}val"))
+            if abstract is None:
+                continue
+
+            for lvl in abstract.findall(f"{ns}lvl"):
+                fmt = lvl.find(f"{ns}numFmt")
+                if fmt is None or fmt.get(f"{ns}val") != "decimal":
+                    continue
+                ilvl = lvl.get(f"{ns}ilvl") or "0"
+                start_node = lvl.find(f"{ns}start")
+                try:
+                    start = int(start_node.get(f"{ns}val")) if start_node is not None else 1
+                except (TypeError, ValueError):
+                    start = 1
+                starts[(num_id, ilvl)] = start
+
+        return starts
+
+    @classmethod
+    def _docx_paragraph_numbering_ref(cls, paragraph: Any) -> tuple[str, str] | None:
+        """(numId, ilvl) quando o parágrafo usa numeração automática do Word."""
+        ns = cls._DOCX_W_NS
+        p_pr = paragraph._p.find(f"{ns}pPr")
+        if p_pr is None:
+            return None
+
+        num_pr = p_pr.find(f"{ns}numPr")
+        if num_pr is None:
+            return None
+
+        num_id_node = num_pr.find(f"{ns}numId")
+        if num_id_node is None:
+            return None
+
+        num_id = num_id_node.get(f"{ns}val")
+        if not num_id:
+            return None
+
+        ilvl_node = num_pr.find(f"{ns}ilvl")
+        ilvl = (ilvl_node.get(f"{ns}val") if ilvl_node is not None else None) or "0"
+        return num_id, ilvl
+
+    @staticmethod
+    def _is_docx_heading(paragraph: Any) -> bool:
+        try:
+            style_name = str(getattr(paragraph.style, "name", "") or "").strip().lower()
+        except Exception:
+            return False
+        return style_name.startswith(("heading", "título", "titulo"))
+
+    @classmethod
+    def _docx_numbering_prefix(
+        cls,
+        numbering_ref: tuple[str, str],
+        numbering_starts: dict[tuple[str, str], int],
+        counters: dict[tuple[str, int], int],
+    ) -> str:
+        """Próximo número da sequência (ex.: '2.', '2.1.'); '' se não for decimal."""
+        num_id, ilvl = numbering_ref
+        if (num_id, ilvl) not in numbering_starts:
+            return ""
+
+        try:
+            level = int(ilvl)
+        except (TypeError, ValueError):
+            level = 0
+
+        start = numbering_starts.get((num_id, ilvl), 1)
+        counters[(num_id, level)] = counters.get((num_id, level), start - 1) + 1
+
+        # Um nível novo reinicia os níveis mais profundos, como no Word.
+        for deeper in [key for key in counters if key[0] == num_id and key[1] > level]:
+            del counters[deeper]
+
+        parts = [str(counters.get((num_id, current), 1)) for current in range(level + 1)]
+        return ".".join(parts) + "."
+
+    def _extract_pages_and_tables_from_docx(
+        self, file_path: str | Path
+    ) -> tuple[list[tuple[int, str]], list[dict]]:
+        """[(página sintética, texto)] + tabelas do .docx, na ordem do documento.
+
+        O Docling lê o texto do DOCX, mas não pagina (`doc.pages` vazio) nem
+        devolve tabelas — e o extrator de benefícios depende exclusivamente de
+        `tables`. Aqui percorremos o corpo do documento com python-docx para
+        entregar as duas coisas no mesmo formato que o caminho PDF produz.
+        Retorna ([], []) em qualquer falha, deixando o fallback do Docling agir.
+        """
+        try:
+            from docx import Document as DocxDocument
+            from docx.table import Table
+            from docx.text.paragraph import Paragraph
+        except ImportError as exc:
+            print(f"[DocumentProcessorService][docx] python-docx indisponível: {exc}")
+            return [], []
+
+        try:
+            document = DocxDocument(str(file_path))
+        except Exception as exc:
+            print(f"[DocumentProcessorService][docx] Falha ao abrir o arquivo: {exc}")
+            return [], []
+
+        page_texts: list[tuple[int, str]] = []
+        tables: list[dict] = []
+        current_lines: list[str] = []
+        current_chars = 0
+        page_no = 1
+        numbering_starts = self._docx_decimal_numbering_starts(document)
+        numbering_counters: dict[tuple[str, int], int] = {}
+
+        def _flush_page() -> None:
+            nonlocal current_lines, current_chars, page_no
+            if not current_lines:
+                return
+            page_texts.append((page_no, "\n".join(current_lines)))
+            current_lines = []
+            current_chars = 0
+            page_no += 1
+
+        try:
+            for child in document.element.body.iterchildren():
+                tag = str(child.tag)
+
+                if tag.endswith("}p"):
+                    paragraph = Paragraph(child, document)
+                    text = " ".join(paragraph.text.split())
+                    if not text:
+                        continue
+
+                    # Título numerado pelo Word guarda o número em
+                    # numbering.xml, fora do texto do parágrafo. Sem
+                    # reconstruí-lo, nenhuma seção é detectada e as tabelas
+                    # perdem o vínculo com a tese jurídica.
+                    numbering_ref = self._docx_paragraph_numbering_ref(paragraph)
+                    if numbering_ref and self._is_docx_heading(paragraph):
+                        prefix = self._docx_numbering_prefix(
+                            numbering_ref, numbering_starts, numbering_counters
+                        )
+                        if prefix:
+                            text = f"{prefix} {text}"
+
+                    current_lines.append(text)
+                    current_chars += len(text)
+
+                elif tag.endswith("}tbl"):
+                    rows = self._docx_table_rows(Table(child, document))
+                    if not rows:
+                        continue
+                    # A seção é preenchida depois, quando as páginas já tiverem
+                    # passado pela detecção de seções (mesmo mapa do PDF).
+                    tables.append({"page": page_no, "section": None, "text": rows})
+                    # O texto da tabela também entra na página, como no
+                    # pdfplumber — é assim que os NBs ficam buscáveis no
+                    # full_text e nos chunks.
+                    current_lines.extend(rows)
+                    current_chars += sum(len(row) for row in rows)
+
+                else:
+                    continue
+
+                if current_chars >= self.DOCX_SYNTHETIC_PAGE_CHARS:
+                    _flush_page()
+        except Exception as exc:
+            print(f"[DocumentProcessorService][docx] Falha ao percorrer o documento: {exc}")
+            return [], []
+
+        _flush_page()
+        return page_texts, tables
+
     def _build_pages_with_sections(
         self, page_texts: list[tuple[int, str]]
     ) -> tuple[list[PageContent], list[dict]]:
@@ -679,6 +903,23 @@ class DocumentProcessorService:
                 else:
                     print("[DocumentProcessorService][texto] Camada de texto esparsa — "
                           "caindo para o Docling (provável PDF escaneado)")
+
+        # 1b) DOCX — python-docx (parágrafos + tabelas na ordem do documento)
+        elif file_path.suffix.lower() == ".docx":
+            page_texts, docx_tables = self._extract_pages_and_tables_from_docx(file_path)
+            if page_texts:
+                total_pages = len(page_texts)
+                print(
+                    f"[DocumentProcessorService][docx] {total_pages} página(s) sintética(s) / "
+                    f"{len(docx_tables)} tabela(s)"
+                )
+                pages, chunks_with_pages = self._build_pages_with_sections(page_texts)
+                full_text = "\n\n".join(text for _, text in page_texts if text.strip())
+
+                page_section_map = {page.page: page.section for page in pages}
+                for table in docx_tables:
+                    table["section"] = page_section_map.get(table.get("page"))
+                tables = docx_tables
 
         # 2) Fallback — Docling
         if not chunks_with_pages:

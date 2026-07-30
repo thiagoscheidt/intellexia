@@ -1300,6 +1300,9 @@ class JudicialDocumentService:
             'sections_overview': sections_overview if isinstance(sections_overview, list) else [],
             'pedidos_excerpt': str(pedidos_excerpt or '').strip(),
             'document_event_identifier': str(document.event_identifier or '').strip(),
+            # Reaproveitado pelo resumo: para arquivo não-PDF o modelo recebe
+            # este texto (o provider recusa anexo que não seja PDF).
+            'document_full_text': document_full_text,
         }
 
     def _summarize_judicial_document(
@@ -1326,9 +1329,11 @@ class JudicialDocumentService:
             if not isinstance(sections_overview, list):
                 sections_overview = []
             pedidos_excerpt = ''
+            document_full_text = ''
             document_event_identifier = str(document.event_identifier or '').strip()
             if isinstance(context_payload, dict):
                 pedidos_excerpt = str(context_payload.get('pedidos_excerpt', '') or '').strip()
+                document_full_text = str(context_payload.get('document_full_text', '') or '')
                 context_event_identifier = str(context_payload.get('document_event_identifier', '') or '').strip()
                 if context_event_identifier:
                     document_event_identifier = context_event_identifier
@@ -1346,6 +1351,7 @@ class JudicialDocumentService:
                 document_event_identifier=document_event_identifier,
                 user_id=document.uploaded_by,
                 law_firm_id=process.law_firm_id,
+                document_text=document_full_text,
             )
 
             if isinstance(summary_result, dict) and document_event_identifier:
