@@ -3958,8 +3958,25 @@ def generated_document_download(process_id, doc_id):
             process_id=process_id, doc_id=doc_id,
         ))
 
-    safe_title = re.sub(r'[^\w\s-]', '', generated_doc.title).strip().replace(' ', '_')
-    filename = f"{safe_title}_v{new_version.version_number}.docx"
+    # Nome do arquivo identifica a peça: tipo + cliente + nº do processo
+    # (o título sozinho é o rótulo do tipo — igual para todas as petições).
+    def _filename_part(value, keep_dots=False):
+        text = str(value or '').strip()
+        if not text:
+            return ''
+        pattern = r'[^\w\s.\-]' if keep_dots else r'[^\w\s-]'
+        text = re.sub(pattern, '', text)
+        return re.sub(r'\s+', '_', text).strip('_.')
+
+    parts = [_filename_part(generated_doc.title)]
+    client_name = getattr(getattr(process, 'plaintiff_client', None), 'name', None)
+    if client_name:
+        parts.append(_filename_part(client_name)[:60].strip('_'))
+    if process.process_number:
+        parts.append(_filename_part(process.process_number, keep_dots=True))
+
+    base_name = '_-_'.join(part for part in parts if part) or 'documento_gerado'
+    filename = f"{base_name}_v{new_version.version_number}.docx"
 
     return send_file(
         buf,
