@@ -89,6 +89,9 @@
   #docxRenderWrap {
     background: #eceff3;
     min-height: 60vh;
+    max-height: 78vh;      /* viewer com rolagem própria, não a página inteira */
+    overflow-y: auto;
+    overflow-x: auto;
     padding: 1.25rem 0;
   }
 
@@ -1054,6 +1057,10 @@ breadcrumbs=[
             inWrapper: true,
             ignoreWidth: false,
             ignoreHeight: false,
+            // Timbrado (imagens de cabeçalho/rodapé) renderiza mal no browser
+            // e é ruído para revisão — o arquivo baixado continua com ele.
+            renderHeaders: false,
+            renderFooters: false,
           });
         })
         .then(function () {
