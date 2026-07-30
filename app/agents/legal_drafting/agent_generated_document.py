@@ -23,6 +23,12 @@ from app.agents.core.file_agent import FileAgent
 from app.utils.timezone import now_sp
 from app.services.token_usage_service import TokenUsageService
 from app.services.agent_execution_history_service import AgentExecutionHistoryService
+from app.agents.legal_drafting.impugnacao_numbering import (
+    renumber_document,
+    strip_trailing_closing,
+    strip_leading_duplicate_heading,
+    detect_internal_references,
+)
 from app.agents.legal_drafting.impugnacao_thesis_coverage import (
     THESIS_BLOCK_FOOTER_RESERVE_CHARS,
     THESIS_BLOCK_FOOTER_TEXT,
@@ -427,7 +433,12 @@ class GeneratedImpugnacaoContestacao(BaseModel):
 
         if self.closing:
             parts.append("\n" + self.closing.strip() + "\n")
-        return "".join(parts)
+
+        # A numeração final é do CÓDIGO, não do modelo: renumera as seções em
+        # sequência (1..N), re-sequencia subseções e corrige remissões — caso
+        # real de produção saiu com "DA INSUFICIÊNCIA" sem número e o mérito
+        # herdando o default 3 do schema.
+        return renumber_document("".join(parts))
 
     def to_dict(self) -> dict:
         return self.model_dump()
@@ -473,11 +484,30 @@ def _sanitize_generated_impugnacao(
     result.preliminary_notes = _clean(result.preliminary_notes)
     result.general_legal_grounds = _clean(result.general_legal_grounds)
     result.jurisprudence = _clean(result.jurisprudence)
-    result.requests = _clean(result.requests)
+    # O fecho oficial vem sempre de `closing`; quando o modelo também encerra
+    # `requests` com "Nestes termos / Pede deferimento", a peça sai com o
+    # fecho duplicado (caso real de produção).
+    result.requests = strip_trailing_closing(_clean(result.requests))
     result.closing = _normalize_closing_with_current_date(_clean(result.closing))
+    # O cabeçalho da compensação é adicionado pelo código em to_full_text();
+    # o modelo às vezes o repete como primeira linha do conteúdo.
+    result.compensation_section = strip_leading_duplicate_heading(
+        _clean(result.compensation_section),
+        "COMPENSAÇÃO E RESTITUIÇÃO – PROCEDIMENTOS",
+    )
 
     for section in result.benefit_sections:
         section.argument = _clean(section.argument)
+
+    # Vazamento de material interno (catálogo de teses, guia, peças-modelo)
+    # no corpo da peça vira alerta nas Observações Internas — não editamos
+    # prosa jurídica às cegas.
+    for body_text in (
+        result.introduction, result.preliminary_notes, result.general_legal_grounds,
+        result.jurisprudence, result.requests, result.compensation_section,
+        *[section.argument for section in result.benefit_sections],
+    ):
+        notes.extend(detect_internal_references(body_text))
 
     if result.internal_review_notes:
         notes.append(result.internal_review_notes.strip())

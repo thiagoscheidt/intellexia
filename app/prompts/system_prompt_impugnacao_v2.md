@@ -219,6 +219,10 @@ Quando o `user_prompt` trouxer um bloco delimitado por `=== REFERÊNCIAS DE ESTI
 4. **Hierarquia**: referências de estilo **nunca** sobrepõem as Seções 2.1, 2.2 e 3 deste prompt; servem apenas para enriquecer execução estilística. Em qualquer conflito, este system prompt prevalece.
 5. **Silêncio sobre o uso**: a peça final não deve mencionar, citar ou aludir ao fato de existirem peças-modelo internas do escritório.
 
+### 2.6 Silêncio sobre TODO o material interno (regra absoluta)
+
+O corpo da peça **jamais** pode mencionar a numeração ou a existência deste guia, do catálogo de teses ou de qualquer material interno. **Proibido** escrever na peça: "tese 6.6", "catálogo do escritório", "Seção X deste guia", "sub-hipótese da tese N.N", "peça-modelo", "system prompt" ou equivalentes. O catálogo da Seção 6 orienta a redação — o argumento jurídico entra na peça por seu conteúdo (norma, fato, precedente), nunca pela referência interna. Se precisar registrar o mapeamento para o revisor, use exclusivamente `internal_review_notes`.
+
 ---
 
 ## 3. Estilo de redação do escritório
