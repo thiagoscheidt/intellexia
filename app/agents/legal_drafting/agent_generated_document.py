@@ -29,6 +29,12 @@ from app.agents.legal_drafting.impugnacao_numbering import (
     strip_leading_duplicate_heading,
     detect_internal_references,
 )
+from app.agents.legal_drafting.impugnacao_section_guarantees import (
+    ensure_benefit_table_in_argument,
+    detect_recognized_selections,
+    build_recognized_section_text,
+    insert_recognized_section,
+)
 from app.agents.legal_drafting.impugnacao_thesis_coverage import (
     THESIS_BLOCK_FOOTER_RESERVE_CHARS,
     THESIS_BLOCK_FOOTER_TEXT,
@@ -442,6 +448,131 @@ class GeneratedImpugnacaoContestacao(BaseModel):
 
     def to_dict(self) -> dict:
         return self.model_dump()
+
+
+def _selection_to_guarantee_dict(sel: dict) -> dict:
+    """Converte uma seleção (objetos do banco) no dict plano das garantias."""
+    benefit = sel.get('benefit')
+    thesis = sel.get('thesis')
+    contestation = sel.get('contestation')
+
+    def _val(obj, *names):
+        for name in names:
+            value = getattr(obj, name, None) if obj is not None else None
+            if value:
+                return str(value)
+        return ""
+
+    return {
+        'benefit_number': _val(benefit, 'benefit_number'),
+        'nit_number': _val(benefit, 'nit_number'),
+        'insured_name': _val(benefit, 'insured_name'),
+        'benefit_type': _val(benefit, 'benefit_type'),
+        'fap_vigencia_year': _val(benefit, 'fap_vigencia_year'),
+        'thesis_name': _val(thesis, 'name', 'title'),
+        'status_label': (
+            _val(contestation, 'contestation_status_label', 'contestation_status')
+            or _val(benefit, 'contestation_status_label', 'contestation_status')
+        ),
+        'decision': (
+            _val(contestation, 'contestation_decision')
+            or _val(benefit, 'contestation_decision')
+        ),
+    }
+
+
+def _apply_section_guarantees(
+    result: GeneratedImpugnacaoContestacao,
+    selections: list[dict],
+) -> None:
+    """Tabela de benefícios por tese + seção de pedidos reconhecidos (Modo A).
+
+    Usa os dados REAIS das seleções (verdade do banco), nunca o que o modelo
+    devolveu — se o modelo obedeceu (tabela presente / seção redigida), nada
+    é alterado.
+    """
+    if getattr(result, 'generation_mode', 'A') != 'A':
+        return
+    if not selections:
+        return
+
+    def _norm_thesis(name: str) -> str:
+        return re.sub(r"\s+", " ", str(name or "").strip()).lower()
+
+    all_benefits: list[dict] = []
+    by_thesis: dict[str, list[dict]] = {}
+    for sel in selections:
+        if not isinstance(sel, dict):
+            continue
+        info = _selection_to_guarantee_dict(sel)
+        if not info['benefit_number']:
+            continue
+        all_benefits.append(info)
+        key = _norm_thesis(info['thesis_name'])
+        bucket = by_thesis.setdefault(key, [])
+        if all(b['benefit_number'] != info['benefit_number'] for b in bucket):
+            bucket.append(info)
+
+    # ── Tabela por tese ──────────────────────────────────────────────
+    injected_tables: list[str] = []
+    for section in result.benefit_sections:
+        candidates = by_thesis.get(_norm_thesis(section.thesis_name))
+        if not candidates:
+            # Fallback: dados que o próprio modelo estruturou em benefits[].
+            candidates = [
+                {
+                    'benefit_number': item.benefit_number,
+                    'nit_number': item.nit_number,
+                    'insured_name': item.insured_name,
+                    'benefit_type': item.benefit_type,
+                    'fap_vigencia_year': item.fap_vigencia_year,
+                }
+                for item in (section.benefits or [])
+                if item.benefit_number
+            ]
+        if not candidates:
+            continue
+        section.argument, injected = ensure_benefit_table_in_argument(
+            section.argument, candidates
+        )
+        if injected:
+            injected_tables.append(section.thesis_name or '(sem nome)')
+
+    # ── Pedidos reconhecidos pela União ──────────────────────────────
+    recognized: list[dict] = []
+    seen_nb: set[str] = set()
+    for info in detect_recognized_selections(all_benefits):
+        if info['benefit_number'] in seen_nb:
+            continue
+        seen_nb.add(info['benefit_number'])
+        recognized.append(info)
+
+    injected_recognized = False
+    if recognized:
+        before = result.preliminary_notes
+        result.preliminary_notes = insert_recognized_section(
+            before, build_recognized_section_text(recognized)
+        )
+        injected_recognized = result.preliminary_notes != before
+
+    # ── Notas para o revisor ─────────────────────────────────────────
+    extra_notes: list[str] = []
+    if injected_tables:
+        extra_notes.append(
+            "- [ ] Tabela de benefícios inserida automaticamente na(s) tese(s): "
+            + "; ".join(injected_tables) + " — conferir os dados na peça."
+        )
+    if injected_recognized:
+        extra_notes.append(
+            "- [ ] Seção DOS PEDIDOS RECONHECIDOS inserida automaticamente a partir "
+            "da Decisão da União (NB " + ", ".join(sorted(seen_nb)) + ") — conferir e "
+            "completar a citação do trecho da contestação."
+        )
+    if extra_notes:
+        existing = (result.internal_review_notes or "").strip()
+        result.internal_review_notes = (
+            (existing + "\n" if existing else "") + "\n".join(extra_notes)
+        )
 
 
 def _sanitize_generated_impugnacao(
@@ -928,6 +1059,11 @@ class AgentGeneratedDocument:
 
         if isinstance(parsed_result, GeneratedImpugnacaoContestacao):
             parsed_result = _sanitize_generated_impugnacao(parsed_result)
+            # Garantias determinísticas com os dados REAIS das seleções:
+            # tabela de benefícios por tese (alguns modelos a omitem) e seção
+            # de pedidos reconhecidos pela União (template 5.5) quando a
+            # Decisão da União indica reconhecimento e o modelo não a redigiu.
+            _apply_section_guarantees(parsed_result, selections)
 
         elapsed_s = time.perf_counter() - started_at
         print(f"[AgentGeneratedDocument] LLM concluída em {elapsed_s:.2f}s")
