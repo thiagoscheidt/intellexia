@@ -503,7 +503,7 @@
   {% endblock %}
 
   {% block extra_js %}
-  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="{{ url_for('static', filename='js/vendor/marked.min.js') }}"></script>
   <script>
     // Controle do accordion de benefícios
     (function () {

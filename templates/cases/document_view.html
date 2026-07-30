@@ -216,7 +216,7 @@
 </div>
 
 <!-- Marked.js para renderizar Markdown -->
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="{{ url_for('static', filename='js/vendor/marked.min.js') }}"></script>
 <script>
   // Configurar marked
   marked.setOptions({

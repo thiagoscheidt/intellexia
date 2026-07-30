@@ -3885,6 +3885,51 @@ def generated_document_restore_version(process_id, doc_id, version_id):
     ))
 
 
+@process_panel_bp.route('/<int:process_id>/documentos-gerados/<int:doc_id>/docx-preview', methods=['GET'])
+@require_law_firm
+def generated_document_docx_preview(process_id, doc_id):
+    """Serve o DOCX da versão corrente para o visualizador da tela.
+
+    Ao contrário do download, NÃO cria versão nova — é leitura pura, consumida
+    via fetch pelo docx-preview.js. O `?v=<version_id>` na URL serve só para o
+    navegador não reusar cache de outra versão.
+    """
+    law_firm_id = get_current_law_firm_id()
+    process = JudicialProcess.query.filter_by(
+        id=process_id, law_firm_id=law_firm_id
+    ).first_or_404()
+    generated_doc = JudicialProcessGeneratedDocument.query.filter_by(
+        id=doc_id, process_id=process.id, law_firm_id=law_firm_id
+    ).first_or_404()
+
+    version = generated_doc.current_version
+    if not version or not str(version.content or '').strip():
+        abort(404)
+
+    try:
+        export_agent = OfficeDocxExportAgent()
+        buf = export_agent.export_generated_document(
+            document_title=generated_doc.title or 'DOCUMENTO GERADO',
+            document_text=version.content,
+            run_ai_normalization=False,
+            law_firm_id=law_firm_id,
+            include_document_title=(generated_doc.document_type != 'impugnacao_contestacao'),
+        )
+    except Exception as error:
+        current_app.logger.error(f'[GeneratedDocument] Falha no DOCX de preview: {error}')
+        abort(500)
+
+    response = send_file(
+        buf,
+        mimetype='application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        as_attachment=False,
+        download_name='preview.docx',
+    )
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['Cache-Control'] = 'private, max-age=300'
+    return response
+
+
 @process_panel_bp.route('/<int:process_id>/documentos-gerados/<int:doc_id>/download', methods=['GET', 'POST'])
 @require_law_firm
 def generated_document_download(process_id, doc_id):

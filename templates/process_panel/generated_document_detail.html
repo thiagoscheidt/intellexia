@@ -85,6 +85,23 @@
     margin: 1.5rem 0;
   }
 
+  /* Visualização do DOCX real (docx-preview.js) */
+  #docxRenderWrap {
+    background: #eceff3;
+    min-height: 60vh;
+    padding: 1.25rem 0;
+  }
+
+  #docxRenderContainer .docx-wrapper {
+    background: transparent;
+    padding: 0;
+  }
+
+  #docxRenderContainer .docx-wrapper > section.docx {
+    box-shadow: 0 6px 22px rgba(15, 23, 42, .14);
+    margin-bottom: 1.25rem;
+  }
+
   /* Editor mode */
   #docEditorWrap {
     display: none;
@@ -451,8 +468,17 @@ breadcrumbs=[
           </button>
         </div>
         {% else %}
-        <!-- Preview rendered -->
-        <div id="docPreview"></div>
+        <!-- Visualização do DOCX real (docx-preview.js); fallback = markdown -->
+        <div id="docxRenderWrap"
+          data-docx-url="{{ url_for('process_panel.generated_document_docx_preview', process_id=process.id, doc_id=generated_doc.id, v=cv.id) }}">
+          <div id="docxRenderLoading" class="text-center py-5">
+            <div class="spinner-border text-secondary mb-2" style="width:2rem;height:2rem"></div>
+            <div class="small text-muted">Montando visualização do documento…</div>
+          </div>
+          <div id="docxRenderContainer"></div>
+        </div>
+        <!-- Preview markdown (fallback e base do modo edição) -->
+        <div id="docPreview" style="display:none"></div>
         <!-- Editor padrão (Quill) -->
         <div id="docEditorWrap">
           <div id="docEditorQuill"></div>
@@ -741,7 +767,10 @@ breadcrumbs=[
 
 {% block extra_js %}
 <!-- marked.js for markdown rendering -->
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="{{ url_for('static', filename='js/vendor/marked.min.js') }}"></script>
+<!-- docx-preview (vendorizado): renderiza o DOCX real no navegador -->
+<script src="{{ url_for('static', filename='js/vendor/jszip.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/vendor/docx-preview.min.js') }}"></script>
 <script>
   (function () {
     const editorInput = document.getElementById('docEditor');
@@ -996,9 +1025,55 @@ breadcrumbs=[
       renderAnexoBadges(preview);
     }
 
+    // ── Visualização do DOCX real (docx-preview.js) ─────────────────────
+    // O DOCX da versão corrente é buscado e renderizado no navegador; se a
+    // biblioteca não carregar ou a rota falhar, cai para o preview markdown.
+    const docxWrap = document.getElementById('docxRenderWrap');
+    const docxContainer = document.getElementById('docxRenderContainer');
+    const docxLoading = document.getElementById('docxRenderLoading');
+    let docxViewOk = false;
+
+    function showReadView() {
+      if (docxViewOk && docxWrap) {
+        docxWrap.style.display = 'block';
+        if (preview) preview.style.display = 'none';
+      } else {
+        if (docxWrap) docxWrap.style.display = 'none';
+        if (preview) preview.style.display = 'block';
+      }
+    }
+
+    if (docxWrap && docxContainer && rawContent && typeof docx !== 'undefined') {
+      fetch(docxWrap.dataset.docxUrl, { headers: { 'Accept': '*/*' } })
+        .then(function (resp) {
+          if (!resp.ok) throw new Error('HTTP ' + resp.status);
+          return resp.arrayBuffer();
+        })
+        .then(function (buffer) {
+          return docx.renderAsync(buffer, docxContainer, null, {
+            inWrapper: true,
+            ignoreWidth: false,
+            ignoreHeight: false,
+          });
+        })
+        .then(function () {
+          docxViewOk = true;
+          if (docxLoading) docxLoading.style.display = 'none';
+          if (!editMode) showReadView();
+        })
+        .catch(function (err) {
+          console.warn('Visualização DOCX indisponível — usando preview de texto.', err);
+          docxViewOk = false;
+          showReadView();
+        });
+    } else {
+      showReadView();
+    }
+
     window.toggleEditMode = function () {
       editMode = true;
       preview.style.display = 'none';
+      if (docxWrap) docxWrap.style.display = 'none';
       if (editorWrap) editorWrap.style.display = 'block';
       if (quill) quill.focus();
 
@@ -1020,11 +1095,11 @@ breadcrumbs=[
         }
       }
       if (editorWrap) editorWrap.style.display = 'none';
-      preview.style.display = 'block';
       if (preview && typeof marked !== 'undefined') {
         preview.innerHTML = marked.parse(originalContent || '');
         renderAnexoBadges(preview);
       }
+      showReadView();
       if (btnToggle) btnToggle.classList.remove('d-none');
       if (saveForm) saveForm.classList.add('d-none');
       if (btnCancelEdit) btnCancelEdit.classList.add('d-none');
