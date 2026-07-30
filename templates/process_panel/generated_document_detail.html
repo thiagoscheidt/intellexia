@@ -88,8 +88,9 @@
   /* Visualização do DOCX real (docx-preview.js) */
   #docxRenderWrap {
     background: #eceff3;
-    min-height: 60vh;
-    max-height: 78vh;      /* viewer com rolagem própria, não a página inteira */
+    min-height: 74vh;
+    /* ocupa a viewport abaixo da toolbar; rolagem é do viewer, não da página */
+    max-height: calc(100vh - 180px);
     overflow-y: auto;
     overflow-x: auto;
     padding: 1.25rem 0;
@@ -103,6 +104,9 @@
   #docxRenderContainer .docx-wrapper > section.docx {
     box-shadow: 0 6px 22px rgba(15, 23, 42, .14);
     margin-bottom: 1.25rem;
+    /* leve redução para uma folha A4 inteira caber na área visível em
+       monitores comuns (1080p); o texto segue confortável de ler */
+    zoom: 0.82;
   }
 
   /* Editor mode */
