@@ -138,6 +138,19 @@ class FapPetitionReviewerAgent:
     _SECTION_TITLE_MAX_CHARS = int(os.environ.get('FAP_REVIEW_SECTION_TITLE_MAX_CHARS', '160'))
     _NO_ACTIVE_PRIOR_ATTENTION_MARKER = '__NO_ACTIVE_PRIOR_ATTENTION_POINTS__'
 
+    # Teto de raciocínio enviado ao OpenRouter. Nos modelos com thinking (ex.:
+    # anthropic/claude-sonnet-5) o raciocínio sai do MESMO orçamento de saída que
+    # o JSON: em 04/08/2026 uma revisão queimou ~57k dos 65.536 tokens pensando,
+    # sobraram ~8k, o JSON veio cortado e a revisão morreu em ReviewOutputParseError.
+    #
+    # É TETO, não meta: o modelo gasta só o que precisa, então um limite alto não
+    # encarece nem alonga as revisões comuns — ele só morde no caso extremo.
+    # Com 40k sobram ~25k para o JSON (~75-100k chars), cerca de 2x o maior caso
+    # real observado. Preferimos preservar a profundidade da análise jurídica a
+    # apertar a margem: raciocínio amputado degrada em silêncio, o estouro avisa.
+    # Use 0 para não enviar o parâmetro (modelos sem suporte a reasoning).
+    _REASONING_MAX_TOKENS = int(os.environ.get('FAP_REVIEW_REASONING_MAX_TOKENS') or '40000')
+
     _OUTPUT_SCHEMA_SINGLE = """{
   "theses": [
     {"thesis": "nome da tese identificada", "benefit_number": "número do benefício ou null", "classification": "enquadramento identificado ou null"}
@@ -179,10 +192,15 @@ class FapPetitionReviewerAgent:
         
         # Com gpt-4o + temperature=0.0, OpenAI oferece determinismo
         # temperature=0.0 = máximo determinismo para o modelo (limites dependem do modelo)
+        extra_body: dict[str, Any] = {}
+        if self._REASONING_MAX_TOKENS > 0:
+            extra_body['reasoning'] = {'max_tokens': self._REASONING_MAX_TOKENS}
+
         self.llm = ChatOpenAI(
             api_key=self.api_key,
             model=model,
-            temperature=temperature
+            temperature=temperature,
+            extra_body=extra_body,
         )
         
         self.token_usage_service = TokenUsageService()
