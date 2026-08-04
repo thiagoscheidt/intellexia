@@ -56,6 +56,28 @@ MAX_IDENTIFIER_LENGTH = 96
 # watchdog de `revision_result` já a converte em 'failed'.
 REPROCESSABLE_EXECUTION_STATUSES = frozenset({'failed'})
 
+# Tempo além do qual uma execução em 'processing' é dada como interrompida.
+# A revisão roda em thread daemon: se o processo web reiniciar no meio, ela
+# ficaria presa em "processando" para sempre.
+PROCESSING_TIMEOUT_SECONDS = 15 * 60
+
+
+def is_execution_stuck(execution, now: datetime | None = None) -> bool:
+    """Execução presa em 'processing' além do tempo limite.
+
+    Mede desde `updated_at` — o início do processamento ATUAL —, não desde
+    `created_at`. A diferença importa no reprocessamento: a execução é antiga
+    por criação e recém-iniciada por processamento, e medir pela criação a
+    marcaria como interrompida no instante seguinte ao clique, antes de o
+    agente ter qualquer chance de responder.
+    """
+    if execution.status != 'processing':
+        return False
+    started = execution.updated_at or execution.created_at
+    if not started:
+        return False
+    return ((now or datetime.now()) - started).total_seconds() > PROCESSING_TIMEOUT_SECONDS
+
 
 def describe_reprocess_block(execution) -> str | None:
     """Motivo pelo qual a execução não pode ser reprocessada; None quando pode."""
@@ -81,6 +103,10 @@ def reset_execution_for_reprocess(execution) -> None:
     execution.status = 'processing'
     execution.error_message = None
     execution.completed_at = None
+    # Marca o início DESTE processamento: é o relógio que `is_execution_stuck`
+    # lê. Explícito em vez de confiar no `onupdate` do ORM, porque disso depende
+    # o watchdog não matar o reprocessamento no instante seguinte ao clique.
+    execution.updated_at = datetime.now()
 
 
 def build_petition_title(raw_title: str, fallback_filename: str = '',

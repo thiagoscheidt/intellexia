@@ -33,8 +33,10 @@ os.environ.setdefault('OPENAI_API_KEY', 'test-key')
 
 from app.models import FapReviewExecution  # noqa: E402
 from app.services.fap_review_service import (  # noqa: E402
+    PROCESSING_TIMEOUT_SECONDS,
     REPROCESSABLE_EXECUTION_STATUSES,
     describe_reprocess_block,
+    is_execution_stuck,
     reset_execution_for_reprocess,
 )
 
@@ -99,6 +101,18 @@ def test_reset_returns_to_processing():
           f"(obteve {execution.completed_at!r})")
 
 
+def test_reset_marks_processing_start():
+    """O reset precisa reiniciar o relógio que o watchdog lê."""
+    print("[5b] Reset marca o início do processamento atual")
+    execution = build_execution(updated_at=datetime(2026, 8, 1, 9, 0, 0))
+    reset_execution_for_reprocess(execution)
+    check("updated_at avançou para agora",
+          execution.updated_at > datetime(2026, 8, 1, 9, 0, 0),
+          f"(obteve {execution.updated_at!r})")
+    check("execução recém-resetada não é vista como travada",
+          is_execution_stuck(execution) is False)
+
+
 def test_reset_preserves_revision_number():
     print("[5] Reset preserva a numeração da revisão (decisão central do design)")
     execution = build_execution(revision_number=3)
@@ -115,12 +129,63 @@ def test_reset_preserves_result_json():
           f"(obteve {execution.result_json!r})")
 
 
+def test_watchdog_measures_from_current_processing_start():
+    """Regressão: o watchdog matava o reprocessamento no instante seguinte ao clique.
+
+    Ele media desde `created_at`, premissa válida enquanto cada execução era
+    processada uma única vez logo após nascer. Uma execução reprocessada é
+    ANTIGA por criação e RECÉM-INICIADA por processamento: o watchdog via
+    "processing há 3 dias" e marcava 'failed' antes de o agente responder.
+    """
+    print("[7] Watchdog mede desde o início do processamento atual, não da criação")
+    agora = datetime(2026, 8, 4, 18, 0, 0)
+
+    # Cenário do bug: criada há dias, reprocessada há 1 minuto.
+    reprocessada = build_execution(
+        status='processing',
+        created_at=datetime(2026, 8, 1, 9, 0, 0),
+        updated_at=datetime(2026, 8, 4, 17, 59, 0),
+    )
+    check("execução recém-reprocessada NÃO é considerada travada",
+          is_execution_stuck(reprocessada, now=agora) is False,
+          "(watchdog mataria o reprocessamento)")
+
+    # Continua pegando o caso real: processamento parado além do limite.
+    travada = build_execution(
+        status='processing',
+        created_at=datetime(2026, 8, 4, 17, 0, 0),
+        updated_at=datetime(2026, 8, 4, 17, 0, 0),
+    )
+    check("execução parada além do limite é travada",
+          is_execution_stuck(travada, now=agora) is True)
+
+    # Sem updated_at, cai em created_at.
+    sem_updated = build_execution(
+        status='processing',
+        created_at=datetime(2026, 8, 4, 17, 0, 0),
+        updated_at=None,
+    )
+    check("sem updated_at usa created_at",
+          is_execution_stuck(sem_updated, now=agora) is True)
+
+    # Status diferente de processing nunca é travada.
+    check("execução 'failed' não é travada",
+          is_execution_stuck(build_execution(status='failed'), now=agora) is False)
+    check("execução 'completed' não é travada",
+          is_execution_stuck(build_execution(status='completed'), now=agora) is False)
+
+    check("limite de 15 minutos preservado", PROCESSING_TIMEOUT_SECONDS == 15 * 60,
+          f"(obteve {PROCESSING_TIMEOUT_SECONDS})")
+
+
 if __name__ == '__main__':
     test_failed_revision_is_reprocessable()
     test_other_statuses_are_blocked()
     test_training_is_blocked()
     test_reset_returns_to_processing()
+    test_reset_marks_processing_start()
     test_reset_preserves_revision_number()
     test_reset_preserves_result_json()
+    test_watchdog_measures_from_current_processing_start()
     print(f"\nResultado: {PASSED} ok, {FAILED} falhas")
     sys.exit(1 if FAILED else 0)

@@ -1432,8 +1432,7 @@ def revision_result(execution_id: int):
 
     # Watchdog: a revisão roda em thread; se o processo web for reiniciado no
     # meio, a execução ficaria presa em "processando" para sempre.
-    if (execution.status == 'processing' and execution.created_at
-            and (datetime.now() - execution.created_at).total_seconds() > 15 * 60):
+    if _svc.is_execution_stuck(execution):
         execution.status = 'failed'
         execution.error_message = ('Processamento interrompido (tempo excedido — provável reinício '
                                    'do servidor). Envie a revisão novamente.')
@@ -2238,6 +2237,10 @@ def reprocess_revision(execution_id: int):
     previous_error = (execution.error_message or 'sem mensagem registrada')[:200]
 
     _svc.reset_execution_for_reprocess(execution)
+    # O agente carrega as referências ATIVAS, então o snapshot de rastreabilidade
+    # tem de refletir as versões desta execução, não as da tentativa que falhou.
+    execution.used_versions_json = json.dumps(
+        _svc.collect_active_versions(law_firm_id), ensure_ascii=False)
     _sync_petition_after_revision(execution)
     db.session.commit()
 
