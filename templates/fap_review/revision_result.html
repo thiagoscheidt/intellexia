@@ -1722,9 +1722,20 @@
                 <div class="alert alert-danger">
                     <h5 class="alert-heading"><i class="bi bi-exclamation-triangle-fill me-1"></i> Erro na Execução</h5>
                     <p class="mb-3">{{ execution.error_message }}</p>
-                    <a href="{{ url_for('fap_review.revision') }}" class="btn btn-sm btn-primary">
-                        <i class="bi bi-arrow-repeat me-1"></i> Tentar Novamente
-                    </a>
+                    <div class="d-flex flex-wrap gap-2 align-items-center">
+                        <button type="button" class="btn btn-sm btn-primary" id="reprocessBtn"
+                            data-reprocess-url="{{ url_for('fap_review.reprocess_revision', execution_id=execution.id) }}">
+                            <i class="bi bi-arrow-clockwise me-1"></i> Processar Novamente
+                        </button>
+                        <a href="{{ url_for('fap_review.revision') }}" class="btn btn-sm btn-outline-secondary">
+                            <i class="bi bi-upload me-1"></i> Enviar Nova Versão
+                        </a>
+                    </div>
+                    <p class="small text-muted mb-0 mt-2">
+                        "Processar Novamente" reaproveita a petição, os anexos e a planilha já enviados,
+                        sem precisar subir os arquivos de novo.
+                    </p>
+                    <div id="reprocessFeedback" class="small mt-2 d-none"></div>
                 </div>
             </div>
 
@@ -2593,6 +2604,53 @@
     setTimeout(function () {
         location.reload();
     }, 3000);
+</script>
+{% endif %}
+
+{% if execution.status == 'failed' %}
+<script>
+    (function () {
+        const btn = document.getElementById('reprocessBtn');
+        const feedback = document.getElementById('reprocessFeedback');
+        if (!btn) { return; }
+
+        function showFeedback(message, isError) {
+            if (!feedback) { return; }
+            feedback.textContent = message;
+            feedback.className = 'small mt-2 ' + (isError ? 'text-danger' : 'text-success');
+        }
+
+        btn.addEventListener('click', async function () {
+            if (!window.confirm('Reprocessar esta revisão com os mesmos arquivos? A análise leva 1 a 2 minutos.')) {
+                return;
+            }
+
+            btn.disabled = true;
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Iniciando...';
+
+            try {
+                const response = await fetch(btn.dataset.reprocessUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    }
+                });
+                let payload = {};
+                try { payload = await response.json(); } catch { payload = {}; }
+                if (!response.ok) {
+                    throw new Error(payload.error || 'Não foi possível reprocessar a revisão.');
+                }
+                showFeedback('Reprocessamento iniciado. Acompanhe o andamento nesta página.', false);
+                window.setTimeout(function () { window.location.reload(); }, 900);
+            } catch (error) {
+                showFeedback(error.message || 'Não foi possível reprocessar a revisão.', true);
+                btn.disabled = false;
+                btn.innerHTML = originalHtml;
+            }
+        });
+    })();
 </script>
 {% endif %}
 

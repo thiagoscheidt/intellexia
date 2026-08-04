@@ -9,6 +9,7 @@ Rotas principais:
 """
 
 import difflib
+import logging
 import os
 import json
 import shutil
@@ -45,6 +46,8 @@ from app.services import fap_review_service as _svc
 from app.services import fap_review_aux_service as _aux_svc
 from app.utils.document_utils import render_docx_preview_html
 from app.utils.timezone import now_sp
+
+logger = logging.getLogger(__name__)
 
 # Document processing
 try:
@@ -92,6 +95,24 @@ def _get_file_extension(filename: str) -> str:
 def allowed_file(filename: str, allowed_extensions: set) -> bool:
     """Verifica se arquivo tem extensão permitida"""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in allowed_extensions
+
+
+def _to_decimal_or_none(value) -> Decimal | None:
+    """Converte custo em Decimal, devolvendo None quando não há valor utilizável.
+
+    O custo é opcional: o agente devolve None quando o TokenUsageService não
+    resolve o preço do modelo (ex.: modelo fora de `_DEFAULT_PRICING_PER_1K` com
+    a consulta de preços do OpenRouter indisponível). `Decimal(str(None))`
+    estoura ConversionSyntax e derrubava uma revisão já concluída — contabilidade
+    de custo não pode invalidar o trabalho do revisor.
+    """
+    if value is None:
+        return None
+    try:
+        return Decimal(str(value))
+    except (ArithmeticError, ValueError, TypeError):
+        logger.warning("Custo ignorado por não ser numérico: %r", value)
+        return None
 
 
 def get_current_law_firm_id() -> int:
@@ -586,6 +607,51 @@ def _build_prior_attention_points(
     return '\n'.join(lines)
 
 
+def _start_review_in_background(execution_id: int, law_firm_id: int, petition_file_path: str,
+                                compared_file_path: str | None = None,
+                                benefits_spreadsheet: dict | None = None) -> None:
+    """Dispara o agente revisor numa thread e devolve o controle imediatamente.
+
+    A chamada à LLM leva 1-2 min; processar dentro da requisição estoura os
+    timeouts de proxy (Cloudflare ~100s). O POST retorna na hora e a tela de
+    resultado acompanha o status (auto-refresh).
+
+    Usado tanto pelo envio de uma revisão nova quanto pelo reprocessamento de
+    uma que falhou — o tratamento de falha da thread mora só aqui.
+    """
+    app_obj = current_app._get_current_object()
+
+    def _run_review_in_background():
+        with app_obj.app_context():
+            try:
+                _execute_reviewer_agent(
+                    execution_id,
+                    law_firm_id,
+                    petition_file_path,
+                    compared_file_path,
+                    benefits_spreadsheet=benefits_spreadsheet,
+                )
+            except Exception as agent_error:
+                app_obj.logger.error(f"Erro na execução do agente: {agent_error}")
+                # _execute_reviewer_agent já marca 'failed'; garante o estado
+                try:
+                    background_execution = FapReviewExecution.query.get(execution_id)
+                    if background_execution and background_execution.status == 'processing':
+                        background_execution.status = 'failed'
+                        background_execution.error_message = str(agent_error)
+                        db.session.commit()
+                except Exception:
+                    db.session.rollback()
+            finally:
+                db.session.remove()
+
+    threading.Thread(
+        target=_run_review_in_background,
+        daemon=True,
+        name=f'fap-review-{execution_id}',
+    ).start()
+
+
 def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_file_path: str,
                            compared_file_path: str = None,
                            benefits_spreadsheet: dict | None = None) -> dict:
@@ -808,14 +874,16 @@ def _execute_reviewer_agent(execution_id: int, law_firm_id: int, petition_file_p
             # Se o resultado tem tokens, armazenar
             if hasattr(result, 'tokens_used'):
                 execution.tokens_used = result.tokens_used
-            if hasattr(result, 'cost_usd'):
-                execution.cost_usd = Decimal(str(result.cost_usd))
+            result_cost = _to_decimal_or_none(getattr(result, 'cost_usd', None))
+            if result_cost is not None:
+                execution.cost_usd = result_cost
 
             # Soma tokens/custo das extrações auxiliares ao total da execução
             if aux_review_payload and aux_review_payload.get('tokens_used'):
                 execution.tokens_used = (execution.tokens_used or 0) + int(aux_review_payload['tokens_used'])
-            if aux_review_payload and aux_review_payload.get('cost_usd'):
-                execution.cost_usd = (execution.cost_usd or Decimal('0')) + Decimal(str(aux_review_payload['cost_usd']))
+            aux_cost = _to_decimal_or_none((aux_review_payload or {}).get('cost_usd'))
+            if aux_cost is not None:
+                execution.cost_usd = (execution.cost_usd or Decimal('0')) + aux_cost
 
             _sync_petition_after_revision(execution)
             
@@ -1292,9 +1360,6 @@ def revision():
                       f'Revisão iniciada: {main_file.filename}')
             
             # ===== INVOCAR AGENTE REVISOR (em segundo plano) =====
-            # A chamada à LLM leva 1-2 min; processar na requisição estoura os
-            # timeouts de proxy (Cloudflare ~100s). O POST retorna imediatamente
-            # e a tela de resultado acompanha o status (auto-refresh).
             petition_file_path = str(filepath)
 
             if not Path(petition_file_path).exists():
@@ -1306,39 +1371,16 @@ def revision():
                 if not Path(compared_file_path).exists():
                     raise ValueError("Arquivo comparado não encontrado para análise")
 
-            app_obj = current_app._get_current_object()
             execution_id_value = execution.id
             petition_id_value = petition.id
 
-            def _run_review_in_background():
-                with app_obj.app_context():
-                    try:
-                        _execute_reviewer_agent(
-                            execution_id_value,
-                            law_firm_id,
-                            petition_file_path,
-                            compared_file_path,
-                            benefits_spreadsheet=benefits_spreadsheet,
-                        )
-                    except Exception as agent_error:
-                        app_obj.logger.error(f"Erro na execução do agente: {agent_error}")
-                        # _execute_reviewer_agent já marca 'failed'; garante o estado
-                        try:
-                            background_execution = FapReviewExecution.query.get(execution_id_value)
-                            if background_execution and background_execution.status == 'processing':
-                                background_execution.status = 'failed'
-                                background_execution.error_message = str(agent_error)
-                                db.session.commit()
-                        except Exception:
-                            db.session.rollback()
-                    finally:
-                        db.session.remove()
-
-            threading.Thread(
-                target=_run_review_in_background,
-                daemon=True,
-                name=f'fap-review-{execution_id_value}',
-            ).start()
+            _start_review_in_background(
+                execution_id_value,
+                law_firm_id,
+                petition_file_path,
+                compared_file_path,
+                benefits_spreadsheet=benefits_spreadsheet,
+            )
 
             return jsonify({
                 'success': True,
@@ -2143,6 +2185,83 @@ def revision_status(execution_id: int):
     return jsonify({
         'status': execution.status,
         'error_message': execution.error_message,
+    })
+
+
+@fap_review_bp.route('/revision/<int:execution_id>/reprocess', methods=['POST'])
+@require_law_firm
+def reprocess_revision(execution_id: int):
+    """Reexecuta uma revisão que falhou reaproveitando os arquivos já enviados.
+
+    Grava na MESMA execução: `revision_number` é a versão da petição revisada,
+    não a tentativa de processamento — uma falha técnica não é uma revisão nova.
+    Os arquivos não são copiados; a execução já aponta para eles.
+    """
+    law_firm_id = get_current_law_firm_id()
+    execution = FapReviewExecution.query.filter_by(
+        id=execution_id,
+        law_firm_id=law_firm_id,
+    ).first_or_404()
+
+    block_reason = _svc.describe_reprocess_block(execution)
+    if block_reason:
+        return jsonify({'error': block_reason}), 409
+
+    petition_file_path = execution.main_document_path
+    if not petition_file_path or not Path(petition_file_path).is_file():
+        return jsonify({
+            'error': 'O arquivo original desta revisão não está mais no servidor. '
+                     'Envie a petição novamente pela tela de Nova Revisão.'
+        }), 422
+
+    # Anexo ou planilha ausente não impede a revisão — só o documento principal
+    # é essencial. O agente lê os auxiliares da própria execução.
+    compared_file_path = None
+    if execution.comparative_analysis and execution.compared_document_path:
+        if Path(execution.compared_document_path).is_file():
+            compared_file_path = execution.compared_document_path
+        else:
+            logger.warning(
+                'Reprocessamento da execução %s sem o documento comparado (arquivo ausente).',
+                execution_id,
+            )
+
+    benefits_spreadsheet = _load_execution_benefits_spreadsheet(execution)
+    if benefits_spreadsheet and not Path(str(benefits_spreadsheet['path'])).is_file():
+        logger.warning(
+            'Reprocessamento da execução %s sem a planilha de benefícios (arquivo ausente).',
+            execution_id,
+        )
+        benefits_spreadsheet = None
+
+    # Guardado antes do reset: a execução é sobrescrita e o erro se perderia.
+    previous_error = (execution.error_message or 'sem mensagem registrada')[:200]
+
+    _svc.reset_execution_for_reprocess(execution)
+    _sync_petition_after_revision(execution)
+    db.session.commit()
+
+    _log_audit(
+        law_firm_id,
+        'revision_reprocessed',
+        'execution',
+        execution.id,
+        f'Reprocessamento solicitado. Erro anterior: {previous_error}',
+        user_id=session.get('user_id'),
+    )
+
+    _start_review_in_background(
+        execution.id,
+        law_firm_id,
+        petition_file_path,
+        compared_file_path,
+        benefits_spreadsheet=benefits_spreadsheet,
+    )
+
+    return jsonify({
+        'success': True,
+        'execution_id': execution.id,
+        'message': 'Reprocessamento iniciado com os mesmos arquivos.',
     })
 
 

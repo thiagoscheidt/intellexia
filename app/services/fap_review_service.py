@@ -49,6 +49,39 @@ NEW_REVISION_BLOCKED_STATUSES = {'awaiting_approval', 'ready_for_filing', 'filed
 
 MAX_IDENTIFIER_LENGTH = 96
 
+# Só revisão que falhou pode ser reexecutada com os mesmos arquivos.
+# 'completed' fica de fora para não sobrescrever achados já triados, e
+# 'processing'/'pending' para não disparar duas execuções (cada clique custa uma
+# chamada de modelo). Execução presa em 'processing' não precisa estar aqui: o
+# watchdog de `revision_result` já a converte em 'failed'.
+REPROCESSABLE_EXECUTION_STATUSES = frozenset({'failed'})
+
+
+def describe_reprocess_block(execution) -> str | None:
+    """Motivo pelo qual a execução não pode ser reprocessada; None quando pode."""
+    if execution.execution_type != 'revision':
+        return 'Apenas revisões podem ser reprocessadas.'
+    if execution.status not in REPROCESSABLE_EXECUTION_STATUSES:
+        label = 'concluída' if execution.status == 'completed' else 'em processamento'
+        return (
+            f'Esta revisão está {label} e não pode ser reprocessada. '
+            'O reprocessamento existe para revisões que falharam.'
+        )
+    return None
+
+
+def reset_execution_for_reprocess(execution) -> None:
+    """Devolve a execução ao estado inicial de processamento.
+
+    Preserva `revision_number` — a numeração representa a versão da petição
+    revisada, não a tentativa de processamento — e preserva `result_json`, que
+    pode conter resultado aproveitável de uma execução que falhou só na etapa de
+    contabilidade de custo, depois de o modelo já ter respondido.
+    """
+    execution.status = 'processing'
+    execution.error_message = None
+    execution.completed_at = None
+
 
 def build_petition_title(raw_title: str, fallback_filename: str = '',
                          fallback_identifier: str = '') -> str:
