@@ -205,6 +205,81 @@ def test_indexar_e_buscar():
         print('  (índice de teste removido)')
 
 
+def test_montar_filtro():
+    print('\n8. Montagem do filtro do Meilisearch')
+    from datetime import date
+
+    check('sem filtro devolve None', busca.montar_filtro({}) is None,
+          repr(busca.montar_filtro({})))
+
+    f = busca.montar_filtro({'pub_name': ['DO1']})
+    check('um valor vira igualdade', f == '(pub_name = "DO1")', repr(f))
+
+    f = busca.montar_filtro({'pub_name': ['DO1', 'DO3']})
+    check('dois valores do mesmo campo viram OR',
+          f == '(pub_name = "DO1" OR pub_name = "DO3")', repr(f))
+
+    f = busca.montar_filtro({'pub_name': ['DO1'], 'art_type': ['Portaria']})
+    check('campos diferentes viram AND',
+          ' AND ' in f and 'pub_name' in f and 'art_type' in f, repr(f))
+
+    f = busca.montar_filtro({'de': date(2026, 8, 1), 'ate': date(2026, 8, 10)})
+    check('período vira faixa em AAAAMMDD',
+          'pub_date_num >= 20260801' in f and 'pub_date_num <= 20260810' in f, repr(f))
+
+    f = busca.montar_filtro({'orgao_raiz': ['Ministério "X"']})
+    check('aspas no valor são escapadas', '\\"' in f, repr(f))
+
+    check('valores vazios são ignorados',
+          busca.montar_filtro({'pub_name': ['', None]}) is None,
+          repr(busca.montar_filtro({'pub_name': ['', None]})))
+
+
+def test_busca_com_filtro():
+    print('\n9. Busca filtrada (Meilisearch local)')
+    if not busca.is_available():
+        print('  ⏭️  Meilisearch não responde — pulando')
+        return
+
+    from main import app
+    from app.models import DouArticle
+
+    nome_teste = 'dou_articles_test'
+    indice = busca.get_index(nome_teste)
+    try:
+        with app.app_context():
+            artigos = DouArticle.query.filter_by(pub_name='DO1').limit(300).all()
+            if not artigos:
+                print('  ⏭️  sem matérias da Seção 1 — pulando')
+                return
+            busca.index_articles(artigos, indice=indice)
+        busca.aguardar_indexacao(indice)
+
+        sem = busca.search('portaria', indice=indice)
+        check('busca sem filtro acha algo', sem['total'] > 0, str(sem['total']))
+
+        so_do1 = busca.search('portaria', filtros={'pub_name': ['DO1']}, indice=indice)
+        check('filtro pela seção presente mantém os resultados',
+              so_do1['total'] == sem['total'], f"{sem['total']} -> {so_do1['total']}")
+
+        so_do2 = busca.search('portaria', filtros={'pub_name': ['DO2']}, indice=indice)
+        check('filtro por seção ausente no lote zera', so_do2['total'] == 0,
+              str(so_do2['total']))
+
+        from datetime import date
+        futuro = busca.search('portaria', filtros={'de': date(2099, 1, 1)}, indice=indice)
+        check('período no futuro zera', futuro['total'] == 0, str(futuro['total']))
+
+        por_data = busca.search('portaria', ordem='data', indice=indice)
+        chave = lambda d: d.split('/')[::-1]  # noqa: E731 — DD/MM/AAAA -> AAAA,MM,DD
+        datas = [h['data_br'] for h in por_data['hits'] if h['data_br']]
+        check('ordem por data é decrescente',
+              datas == sorted(datas, key=chave, reverse=True), str(datas[:4]))
+    finally:
+        busca.drop_index(nome_teste)
+        print('  (índice de teste removido)')
+
+
 def main():
     print('=' * 60)
     print('TESTES DA BUSCA DO DOU')
@@ -217,6 +292,8 @@ def main():
     test_orgao_raiz()
     test_documento_indexado()
     test_indexar_e_buscar()
+    test_montar_filtro()
+    test_busca_com_filtro()
 
     print('\n' + '=' * 60)
     if _falhas:
