@@ -16,6 +16,7 @@ consulta é roteada para esses campos quando o termo é um número.
 
 from __future__ import annotations
 
+import html
 import logging
 import os
 import re
@@ -51,9 +52,17 @@ LOTE_PADRAO = 1000
 # Teto de paginação do Meilisearch (padrão do próprio servidor). Além dele o
 # `estimated_total_hits` satura e não há mais páginas para entregar.
 MAX_TOTAL_HITS = 1000
-_DESTAQUE_PRE = '<mark>'
-_DESTAQUE_POS = '</mark>'
 TAM_TRECHO = 40
+
+# O Meilisearch marca o trecho inserindo as tags que a gente pedir, e NÃO
+# escapa o texto original. Como o texto do DOU chega com '<' e '&' literais
+# (6 em 5.000 matérias têm '<', p.ex. "Site da SEAD <centraldecompras.pi.gov.br>"),
+# mandar '<mark>' direto significaria injetar HTML do documento na página.
+# Pedimos caracteres de controle como marca, escapamos tudo, e só então
+# trocamos a marca pela tag de verdade. STX/ETX não ocorrem em texto do DOU.
+MARCA_INI = '\x02'
+MARCA_FIM = '\x03'
+TAM_JANELA_IDENTIFICADOR = 240
 
 # Formatos conferidos contra o acervo real:
 #   CNPJ     19.630.496/0001-05     -> 14 dígitos
@@ -310,8 +319,8 @@ def search(termo: str, filtros: dict | None = None, ordem: str = 'relevancia',
             filter=montar_filtro(filtros),
             facets=_FACETAS,
             attributes_to_highlight=['identifica', 'ementa', 'texto'],
-            highlight_pre_tag=_DESTAQUE_PRE,
-            highlight_post_tag=_DESTAQUE_POS,
+            highlight_pre_tag=MARCA_INI,
+            highlight_post_tag=MARCA_FIM,
             attributes_to_crop=['texto'],
             crop_length=TAM_TRECHO,
             sort=['pub_date_num:desc'] if ordem == 'data' else None,
@@ -333,7 +342,7 @@ def search(termo: str, filtros: dict | None = None, ordem: str = 'relevancia',
     total = max(estimado, sum(por_secao.values())) if por_secao else estimado
 
     return {
-        'hits': [_formatar_hit(h) for h in resultado.hits],
+        'hits': [_formatar_hit(h, tipo, normalizado) for h in resultado.hits],
         'total': total,
         # Quantos a paginação consegue alcançar: além do teto, o Meilisearch
         # não entrega mais páginas, e a tela precisa disso para não oferecer
@@ -346,14 +355,60 @@ def search(termo: str, filtros: dict | None = None, ordem: str = 'relevancia',
     }
 
 
-def _formatar_hit(hit: dict) -> dict:
+def destacar(valor: str | None) -> str:
+    """Escapa o HTML do texto e só então converte a marca em ``<mark>``.
+
+    A ordem importa: escapar depois de inserir a tag apagaria o destaque;
+    inserir a tag antes de escapar deixaria o '<' do próprio texto do DOU
+    virar elemento na página.
+    """
+    if not valor:
+        return ''
+    return (html.escape(valor, quote=False)
+            .replace(MARCA_INI, '<mark>')
+            .replace(MARCA_FIM, '</mark>'))
+
+
+def trecho_do_identificador(texto: str | None, digitos: str,
+                            janela: int = TAM_JANELA_IDENTIFICADOR) -> str | None:
+    """Recorta o texto em volta da ocorrência do número, já com a marca.
+
+    Buscar por CNPJ casa no campo ``cnpjs``, que guarda só os dígitos — mas o
+    texto traz o número formatado, então o Meilisearch não tem o que destacar
+    em ``texto`` e devolve o começo da matéria. Num edital de 10 mil caracteres
+    com o CNPJ na posição 9.700, o trecho mostrado não tinha nada a ver com a
+    busca. Aqui a gente acha a ocorrência e recorta em volta dela.
+    """
+    if not texto or not digitos:
+        return None
+
+    for regex in (_RE_CNPJ, _RE_PROCESSO, _RE_CNPJ_DIGITOS):
+        for achado in regex.finditer(texto):
+            if so_digitos(achado.group()) != digitos:
+                continue
+            inicio = max(0, achado.start() - janela // 2)
+            fim = min(len(texto), achado.end() + janela // 2)
+            return (texto[inicio:achado.start()]
+                    + MARCA_INI + achado.group() + MARCA_FIM
+                    + texto[achado.end():fim])
+    return None
+
+
+def _formatar_hit(hit: dict, tipo: str = 'texto', normalizado: str = '') -> dict:
     """Achata o resultado do Meilisearch no que a tela precisa."""
     destacado = hit.get('_formatted') or {}
+
+    if tipo in ('cnpj', 'processo'):
+        trecho_bruto = trecho_do_identificador(hit.get('texto'), normalizado)
+    else:
+        trecho_bruto = destacado.get('texto')
+
     return {
         'id': hit.get('id'),
-        'identifica': destacado.get('identifica') or hit.get('identifica') or '(sem identificação)',
-        'ementa': destacado.get('ementa') or hit.get('ementa') or '',
-        'trecho': destacado.get('texto') or '',
+        'identifica': (destacar(destacado.get('identifica') or hit.get('identifica'))
+                       or '(sem identificação)'),
+        'ementa': destacar(destacado.get('ementa') or hit.get('ementa')),
+        'trecho': destacar(trecho_bruto),
         'orgao_hierarquia': hit.get('orgao_hierarquia') or '',
         'orgao_raiz': hit.get('orgao_raiz') or '',
         'art_type': hit.get('art_type') or '',

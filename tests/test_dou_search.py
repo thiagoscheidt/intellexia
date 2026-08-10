@@ -280,6 +280,57 @@ def test_busca_com_filtro():
         print('  (índice de teste removido)')
 
 
+def test_trecho_do_identificador():
+    """Buscar por CNPJ tem de mostrar ONDE o CNPJ está, não o começo do texto."""
+    print('\n10. Trecho centrado no identificador')
+
+    texto = ('EDITAL Nº 5 - 3ª CÂMARA. ' + ('lorem ipsum ' * 400) +
+             'Indeferimento Total 97 10128.027654/2024-83 2025 '
+             '90.400.888/1335-33 Adm. 2ª Instância. ' + ('fim ' * 50))
+
+    trecho = busca.trecho_do_identificador(texto, '90400888133533')
+    check('acha o trecho', trecho is not None, repr(trecho))
+    check('o trecho contém o número, formatado como no texto',
+          '90.400.888/1335-33' in (trecho or ''), (trecho or '')[:80])
+    check('não devolve o começo do texto',
+          'EDITAL Nº 5' not in (trecho or ''), (trecho or '')[:60])
+    check('traz contexto em volta',
+          'Indeferimento' in (trecho or '') and 'Instância' in (trecho or ''),
+          (trecho or '')[:120])
+
+    check('número ausente devolve None',
+          busca.trecho_do_identificador(texto, '00000000000000') is None)
+    check('texto vazio devolve None',
+          busca.trecho_do_identificador('', '90400888133533') is None)
+
+    # o processo do mesmo texto, para provar que não casa por prefixo
+    t2 = busca.trecho_do_identificador(texto, '10128027654202483')
+    check('acha também o número de processo',
+          '10128.027654/2024-83' in (t2 or ''), (t2 or '')[:80])
+
+
+def test_escape_do_destaque():
+    """O texto do DOU não pode injetar HTML: escapar antes de marcar."""
+    print('\n11. Escape do HTML no trecho destacado')
+
+    bruto = ('Edital: Site da SEAD <centraldecompras.pi.gov.br > '
+             + busca.MARCA_INI + 'termo' + busca.MARCA_FIM + ' & outros')
+    saida = busca.destacar(bruto)
+
+    check('o < do texto vira &lt;', '&lt;centraldecompras' in saida, saida[:90])
+    check('o & do texto vira &amp;', '&amp; outros' in saida, saida[-40:])
+    check('a marca vira <mark> de verdade', '<mark>termo</mark>' in saida, saida)
+    check('não sobra tag crua do texto',
+          saida.count('<') == saida.count('<mark>') + saida.count('</mark>'),
+          saida)
+
+    check('None vira string vazia', busca.destacar(None) == '')
+
+    # o caso que realmente importa
+    hostil = busca.destacar('<script>alert(1)</script>')
+    check('script do texto não vira tag', '<script>' not in hostil, hostil)
+
+
 def main():
     print('=' * 60)
     print('TESTES DA BUSCA DO DOU')
@@ -294,6 +345,8 @@ def main():
     test_indexar_e_buscar()
     test_montar_filtro()
     test_busca_com_filtro()
+    test_trecho_do_identificador()
+    test_escape_do_destaque()
 
     print('\n' + '=' * 60)
     if _falhas:
