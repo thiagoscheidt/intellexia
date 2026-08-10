@@ -36,7 +36,7 @@ from app.models import db, DouEdition, DouArticle, DouSyncRun, Client
 
 from app.services import dou_ingestion_service as ingestion
 from app.services import dou_search_service as busca_service
-from app.services.dou_xml_parser import sanitizar_html
+from app.services.dou_xml_parser import grifar_html, sanitizar_html
 
 dou_bp = Blueprint('dou', __name__, url_prefix='/dou')
 
@@ -256,6 +256,8 @@ def materia(article_id):
                      if edicao_obj and edicao_obj.pdf_disponivel and artigo.pagina_num
                      else None)
 
+    termo_busca = (request.args.get('q') or '').strip()
+
     # Onde a matéria fica dentro do recorte de três páginas: a primeira, quando
     # ela abre a seção e não há anterior; a segunda no resto dos casos.
     pagina_no_recorte = 1 if (artigo.pagina_num or 1) <= 1 else 2
@@ -264,7 +266,6 @@ def materia(article_id):
     # registrada na matéria. No edital 11908 o título está na 109 e o CNPJ
     # procurado, na 110: abrir na 109 mostraria a página certa e o achado
     # nenhum.
-    termo_busca = (request.args.get('q') or '').strip()
     if termo_busca and pagina_no_pdf:
         encontrada = _pagina_do_termo(artigo, termo_busca)
         if encontrada:
@@ -276,10 +277,12 @@ def materia(article_id):
         edicao=edicao_obj,
         pagina_no_recorte=pagina_no_recorte,
         termo_busca=termo_busca,
-        # O HTML do documento passa pela faxina antes de ir para a tela: é
-        # conteúdo de terceiros, e renderizá-lo cru deixaria o DOU injetar
-        # marcação na página.
-        texto_formatado=sanitizar_html(artigo.texto_html),
+        # A ordem importa: sanitizar primeiro, grifar depois. Grifar antes
+        # faria a faxina descartar o <mark> que acabamos de inserir.
+        texto_formatado=grifar_html(
+            sanitizar_html(artigo.texto_html),
+            busca_service.termos_para_grifo(termo_busca),
+        ),
         pagina_pdf=pagina_no_pdf,
     )
 

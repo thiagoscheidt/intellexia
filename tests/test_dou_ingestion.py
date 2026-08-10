@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from main import app
 from app.models import db, DouEdition, DouArticle
 from app.services import dou_ingestion_service as ingestion
+from app.services import dou_search_service as busca
 
 FIXTURES = Path(__file__).resolve().parent / 'fixtures'
 
@@ -69,14 +70,25 @@ class FakeClient:
 
 
 def limpar_dados_de_teste():
-    """Remove o resíduo da data-sentinela — banco e arquivos.
+    """Remove o resíduo da data-sentinela — banco, índice e arquivos.
 
     Só toca DATA_TESTE (1970-01-01). Nunca apagar por outro critério: a versão
     anterior removia execuções por ``modo``, o que alcançava execuções reais.
+
+    O índice também precisa ser limpo: ``ingest_date`` indexa no índice de
+    produção, e apagar só do MySQL deixava documentos órfãos aparecendo na
+    busca — inclusive em primeiro lugar, porque a fixture fala de "Fator
+    Acidentário de Prevenção".
     """
+    ids = [a.id for a in DouArticle.query.join(DouEdition)
+           .filter(DouEdition.data_publicacao == DATA_TESTE).all()]
+
     for edicao in DouEdition.query.filter_by(data_publicacao=DATA_TESTE).all():
         db.session.delete(edicao)
     db.session.commit()
+
+    if ids:
+        busca.remove_articles(ids)
 
     diretorio = ingestion.storage_dir(DATA_TESTE)
     if diretorio.exists():
@@ -216,6 +228,46 @@ def test_conteudo_nao_e_zip():
     limpar_dados_de_teste()
 
 
+def test_limpeza_nao_deixa_fantasma_no_indice():
+    """Matéria apagada do banco tem de sair do índice também.
+
+    ``ingest_date`` indexa no índice de produção. Quando a limpeza só apagava
+    do MySQL, ficavam documentos órfãos que apareciam na busca e levavam a
+    404 — e, como esta fixture fala de "Fator Acidentário de Prevenção", eles
+    apareciam em PRIMEIRO lugar na consulta mais importante do domínio.
+    """
+    print('\n8. Limpeza remove do índice, não só do banco')
+    if not busca.is_available():
+        print('  ⏭️  Meilisearch não responde — pulando')
+        return
+
+    # Esperar a fila antes de medir: a exclusão do Meilisearch é assíncrona, e
+    # ler o tamanho logo após a limpeza pegava documentos ainda em remoção.
+    limpar_dados_de_teste()
+    busca.aguardar_indexacao()
+    antes = busca.get_index().get_stats().number_of_documents
+
+    xml_a = (FIXTURES / 'dou_sample_article.xml').read_bytes()
+    client = FakeClient({(DATA_TESTE, 'DO1'): montar_zip(xml_a)})
+    ingestion.ingest_date(DATA_TESTE, secoes=['DO1'], with_pdf=False, client=client)
+    busca.aguardar_indexacao()
+
+    durante = busca.get_index().get_stats().number_of_documents
+    check('a ingestão indexou a matéria de teste', durante > antes,
+          f'{antes} -> {durante}')
+
+    limpar_dados_de_teste()
+    busca.aguardar_indexacao()
+    depois = busca.get_index().get_stats().number_of_documents
+
+    check('a limpeza devolveu o índice ao tamanho original', depois == antes,
+          f'{antes} -> {durante} -> {depois}')
+
+    with app.app_context():
+        no_banco = DouArticle.query.count()
+    check('índice e banco batem', depois == no_banco, f'índice {depois} x banco {no_banco}')
+
+
 def test_storage_dir():
     print('\n6. Caminho de armazenamento')
     caminho = ingestion.storage_dir(date(2026, 8, 10))
@@ -236,6 +288,7 @@ def main():
         test_nao_publicado()
         test_dry_run()
         test_conteudo_nao_e_zip()
+        test_limpeza_nao_deixa_fantasma_no_indice()
         test_storage_dir()
         limpar_dados_de_teste()
 

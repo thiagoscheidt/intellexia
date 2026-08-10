@@ -190,6 +190,47 @@ def test_sanitizar_html():
     check('None devolve vazio', sanitizar_html(None) == '')
 
 
+def test_grifar_html():
+    print('\n10. Grifo do termo buscado no texto')
+    from app.services.dou_xml_parser import grifar_html
+
+    saida = grifar_html('<p>O Fator Acidentário de Prevenção</p>', ['fator'])
+    check('grifa ignorando a caixa', '<mark>Fator</mark>' in saida, saida)
+
+    saida = grifar_html('<p>O Fator Acidentário</p>', ['acidentario'])
+    check('grifa ignorando o acento — como o índice casa',
+          '<mark>Acidentário</mark>' in saida, saida)
+
+    saida = grifar_html('<p>Fator Acidentário de Prevenção</p>',
+                        ['fator acidentário', 'fator', 'acidentário'])
+    check('a frase inteira vence as palavras soltas',
+          '<mark>Fator Acidentário</mark>' in saida, saida)
+
+    # O que impede o grifo de destruir o documento
+    tabela = '<table><tr><td><p>Protocolo</p></td></tr></table>'
+    saida = grifar_html(tabela, ['table'])
+    check('buscar "table" não quebra a tag <table>',
+          saida.startswith('<table>') and '<mark>' not in saida, saida)
+
+    saida = grifar_html('<td colspan="2"><p>a</p></td>', ['colspan'])
+    check('não grifa dentro de atributo',
+          'colspan="2"' in saida and '<mark>' not in saida, saida)
+
+    saida = grifar_html('<p>CNPJ 90.400.888/1335-33 aqui</p>', ['90.400.888/1335-33'])
+    check('grifa número com pontuação',
+          '<mark>90.400.888/1335-33</mark>' in saida, saida)
+
+    check('sem termo devolve o html intacto',
+          grifar_html('<p>a</p>', []) == '<p>a</p>')
+    check('termo curto demais é ignorado',
+          '<mark>' not in grifar_html('<p>de acordo</p>', ['de']))
+    check('html vazio devolve vazio', grifar_html('', ['x']) == '')
+
+    # Escapa o texto ao remontar o nó
+    saida = grifar_html('<p>a &amp; b fator</p>', ['fator'])
+    check('preserva entidade ao remontar', '&amp;' in saida, saida)
+
+
 def main():
     print('=' * 60)
     print('TESTES DO PARSER DE XML DO DOU')
@@ -204,6 +245,7 @@ def main():
     test_xml_hostil()
     test_strip_html()
     test_sanitizar_html()
+    test_grifar_html()
 
     print('\n' + '=' * 60)
     if _falhas:

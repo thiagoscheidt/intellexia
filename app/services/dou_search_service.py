@@ -143,6 +143,24 @@ def termos_para_pdf(consulta: str) -> list[str]:
     return [t for t in (formatado, normalizado) if t]
 
 
+def termos_para_grifo(consulta: str) -> list[str]:
+    """O que grifar no texto da matéria.
+
+    Diferente de ``termos_para_pdf``: no PDF a busca é literal e a frase
+    inteira é o alvo; no texto vale grifar também as palavras soltas, porque é
+    assim que o Meilisearch casa — quem procurou "fator acidentário" achou a
+    matéria por causa das duas palavras, e esperaria ver as duas marcadas.
+    """
+    tipo, normalizado = classificar_consulta(consulta)
+    if tipo != 'texto':
+        return termos_para_pdf(consulta)
+    if not normalizado:
+        return []
+
+    palavras = [p.strip('"\'.,;:()[]') for p in normalizado.split()]
+    return [normalizado] + [p for p in palavras if len(p) >= 3]
+
+
 def orgao_raiz(hierarquia: str | None) -> str | None:
     """Primeiro nível de 'Ministério X/Autarquia Y/Diretoria Z'.
 
@@ -305,6 +323,26 @@ def index_articles(artigos, indice=None) -> int:
         return len(documentos)
     except Exception as exc:  # noqa: BLE001 — indexar não derruba a captura
         logger.error('DOU busca: falha ao indexar %d matéria(s): %s', len(artigos), exc)
+        return 0
+
+
+def remove_articles(ids, indice=None) -> int:
+    """Tira do índice as matérias que saíram do banco. Devolve quantas.
+
+    Apagar matéria do MySQL não a tira do Meilisearch: o índice guardaria um
+    resultado que leva a um 404. Todo caminho que exclui matéria precisa passar
+    por aqui — foi assim que o teste de ingestão deixou 36 documentos órfãos no
+    índice de produção, e eles apareciam em primeiro lugar na busca.
+    """
+    ids = [int(i) for i in (ids or [])]
+    if not ids:
+        return 0
+    try:
+        indice = indice or get_index()
+        indice.delete_documents([str(i) for i in ids])
+        return len(ids)
+    except Exception as exc:  # noqa: BLE001 — limpeza de índice não derruba nada
+        logger.error('DOU busca: falha ao remover %d documento(s): %s', len(ids), exc)
         return 0
 
 

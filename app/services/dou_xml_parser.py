@@ -19,7 +19,9 @@ from __future__ import annotations
 
 import hashlib
 import re
+import unicodedata
 from datetime import date, datetime
+from html import escape
 
 # defusedxml, nunca xml.etree: o parser da stdlib expande entidades e um XML
 # malicioso dentro do ZIP ("billion laughs") consumiria toda a memória do
@@ -76,6 +78,64 @@ _TAGS_REMOVIDAS = {'script', 'style', 'iframe', 'object', 'embed',
 # Só o que a tabela precisa para manter a forma. `class` e `style` saem: classe
 # do documento colidiria com o CSS do app, e `style` é vetor de abuso visual.
 _ATRIBUTOS_PERMITIDOS = {'td': ('colspan', 'rowspan'), 'th': ('colspan', 'rowspan')}
+
+
+def _classe_sem_acento(letra: str) -> str:
+    """'a' → '[aàáâãä]'. Deixa o grifo casar como o Meilisearch casa.
+
+    O índice ignora acento, então quem busca "acidentario" acha a matéria — e
+    ficaria estranho o termo não aparecer grifado no texto.
+    """
+    variantes = {
+        'a': 'aàáâãä', 'e': 'eèéêë', 'i': 'iìíîï',
+        'o': 'oòóôõö', 'u': 'uùúûü', 'c': 'cç', 'n': 'nñ',
+    }
+    base = unicodedata.normalize('NFKD', letra).encode('ascii', 'ignore').decode().lower()
+    if base in variantes:
+        return f'[{variantes[base]}]'
+    return re.escape(letra)
+
+
+def _padrao_dos_termos(termos) -> re.Pattern | None:
+    """Um regex que casa qualquer um dos termos, ignorando caixa e acento.
+
+    Os mais longos vêm primeiro para a frase inteira vencer as palavras soltas
+    — senão "fator acidentário" sairia grifado em dois pedaços.
+    """
+    limpos = [t for t in (termos or []) if t and len(t.strip()) >= 3]
+    if not limpos:
+        return None
+    alternativas = [
+        ''.join(_classe_sem_acento(c) for c in termo)
+        for termo in sorted(set(limpos), key=len, reverse=True)
+    ]
+    return re.compile('|'.join(alternativas), re.IGNORECASE)
+
+
+def grifar_html(html_seguro: str | None, termos) -> str:
+    """Envolve em ``<mark>`` as ocorrências dos termos, sem tocar nas tags.
+
+    Percorre apenas os nós de texto: uma substituição no HTML cru destruiria a
+    marcação (buscar "table" quebraria ``<table>``). Recebe HTML **já
+    sanitizado** — esta função marca, não protege.
+    """
+    padrao = _padrao_dos_termos(termos)
+    if not padrao or not html_seguro:
+        return html_seguro or ''
+
+    sopa = BeautifulSoup(html_seguro, 'html.parser')
+
+    for no in list(sopa.find_all(string=True)):
+        if no.parent is not None and no.parent.name == 'mark':
+            continue
+        original = str(no)
+        if not padrao.search(original):
+            continue
+        marcado = padrao.sub(lambda m: f'<mark>{escape(m.group())}</mark>',
+                             escape(original))
+        no.replace_with(BeautifulSoup(marcado, 'html.parser'))
+
+    return str(sopa)
 
 
 def sanitizar_html(bruto: str | None) -> str:
