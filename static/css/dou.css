@@ -545,16 +545,47 @@
   margin: 0;
 }
 
-/* A página do Diário, embutida */
+/* Metadados da matéria, em faixa */
+.dou-meta {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.dou-meta__rot {
+  font-size: .62rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--bs-secondary-color);
+}
+
+.dou-meta__val {
+  font-size: .88rem;
+  font-weight: 600;
+  color: var(--bs-body-color);
+}
+
+/* Medida de leitura do texto corrido. A tabela escapa dela: precisa da largura
+   toda para as colunas de protocolo e CNPJ caberem. */
+.dou-leitura {
+  max-width: 62rem;
+}
+
+.dou-leitura .dou-texto table {
+  max-width: none;
+}
+
+/* A página do Diário, embutida. Alta de propósito: a folha do DOU é A3
+   (841x1190 pt), e numa altura menor o texto sai ilegível. */
 .dou-pdf-quadro {
   width: 100%;
-  height: 78vh;
-  min-height: 460px;
+  height: 88vh;
+  min-height: 520px;
   border: 1px solid var(--bs-border-color);
   border-radius: 10px;
   background: var(--bs-secondary-bg);
 }
 
 @media (max-width: 767.98px) {
-  .dou-pdf-quadro { height: 60vh; }
+  .dou-pdf-quadro { height: 65vh; }
 }

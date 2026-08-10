@@ -256,10 +256,15 @@ def materia(article_id):
                      if edicao_obj and edicao_obj.pdf_disponivel and artigo.pagina_num
                      else None)
 
+    # Onde a matéria fica dentro do recorte de três páginas: a primeira, quando
+    # ela abre a seção e não há anterior; a segunda no resto dos casos.
+    pagina_no_recorte = 1 if (artigo.pagina_num or 1) <= 1 else 2
+
     return render_template(
         'dou/materia.html',
         artigo=artigo,
         edicao=edicao_obj,
+        pagina_no_recorte=pagina_no_recorte,
         # O HTML do documento passa pela faxina antes de ir para a tela: é
         # conteúdo de terceiros, e renderizá-lo cru deixaria o DOU injetar
         # marcação na página.
@@ -270,12 +275,15 @@ def materia(article_id):
 
 @dou_bp.route('/materia/<int:article_id>/pagina.pdf')
 def pagina_pdf(article_id):
-    """Só a página da matéria, extraída do PDF assinado da seção.
+    """A página da matéria e as vizinhas, recortadas do PDF assinado da seção.
 
     Mandar o PDF inteiro para mostrar uma página é inviável: a Seção 3 tem
-    60 MB. A extração custa 4 a 14 ms e devolve ~170 KB — 350x menor — e o
-    tamanho não depende do arquivo de origem. Mantém o texto selecionável, o
-    que uma imagem da página perderia.
+    60 MB. O recorte custa poucos milissegundos e o tamanho não depende do
+    arquivo de origem. Mantém o texto selecionável, o que uma imagem perderia.
+
+    Vêm a anterior e a seguinte porque matéria não respeita limite de página:
+    um edital começa numa e termina na outra, e mostrar só a página registrada
+    entregaria o ato cortado.
     """
     artigo = DouArticle.query.get_or_404(article_id)
     edicao_obj = artigo.edition
@@ -293,9 +301,11 @@ def pagina_pdf(article_id):
             indice = artigo.pagina_num - 1
             if not 0 <= indice < documento.page_count:
                 abort(404)
-            with fitz.open() as pagina:
-                pagina.insert_pdf(documento, from_page=indice, to_page=indice)
-                conteudo = pagina.tobytes()
+            inicio = max(0, indice - 1)
+            fim = min(documento.page_count - 1, indice + 1)
+            with fitz.open() as recorte:
+                recorte.insert_pdf(documento, from_page=inicio, to_page=fim)
+                conteudo = recorte.tobytes()
     except Exception:  # noqa: BLE001 — PDF corrompido não pode virar 500
         current_app.logger.exception(
             'DOU: falha ao extrair a página %s da matéria %s',
