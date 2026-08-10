@@ -3834,10 +3834,18 @@ class DouArticle(db.Model):
     """
     __tablename__ = 'dou_articles'
 
+    # A unicidade espelha exatamente a chave usada no upsert da ingestão. Se
+    # divergirem, o lookup não encontra a linha, tenta INSERT e a constraint
+    # barra — derrubando a edição inteira. Foi o que aconteceu quando a
+    # unicidade estava só no `hash`: uma matéria idêntica reaparecendo em outra
+    # edição (republicação, suplemento) colidia globalmente.
+    # O `hash` fica como índice simples: serve para detectar mudança de
+    # conteúdo, não para identificar a matéria.
     __table_args__ = (
-        db.UniqueConstraint('hash', name='uq_dou_articles_hash'),
+        db.UniqueConstraint('edition_id', 'art_id', 'id_materia',
+                            name='uq_dou_articles_edition_materia'),
         db.Index('ix_dou_articles_pubdate_pubname', 'pub_date', 'pub_name'),
-        db.Index('ix_dou_articles_edition_art', 'edition_id', 'art_id'),
+        db.Index('ix_dou_articles_hash', 'hash'),
     )
 
     id = db.Column(db.Integer, primary_key=True)

@@ -1,0 +1,203 @@
+#!/usr/bin/env python3
+"""
+Testes da ingestão do DOU (app/services/dou_ingestion_service.py).
+
+Não toca a rede: um client falso devolve ZIPs montados em memória. Cobre o
+que mais importa no módulo — idempotência e republicação.
+
+    uv run python tests/test_dou_ingestion.py
+"""
+
+import io
+import sys
+import zipfile
+from datetime import date
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from main import app
+from app.models import db, DouEdition, DouArticle, DouSyncRun
+from app.services import dou_ingestion_service as ingestion
+
+FIXTURES = Path(__file__).resolve().parent / 'fixtures'
+DATA_TESTE = date(2026, 8, 10)
+
+_falhas = []
+
+
+def check(nome: str, condicao: bool, detalhe: str = '') -> None:
+    if condicao:
+        print(f'  ✅ {nome}')
+    else:
+        print(f'  ❌ {nome}{" — " + detalhe if detalhe else ""}')
+        _falhas.append(nome)
+
+
+def montar_zip(*xmls: bytes) -> bytes:
+    """Monta um ZIP em memória com um arquivo .xml por matéria, como o INLABS."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_DEFLATED) as z:
+        for i, conteudo in enumerate(xmls):
+            z.writestr(f'materia_{i}.xml', conteudo)
+    return buffer.getvalue()
+
+
+class FakeClient:
+    """Duplo do InlabsClient: devolve ZIPs fixos, sem rede."""
+
+    def __init__(self, zips: dict, pdfs: dict | None = None):
+        self.zips = zips        # {(data, secao): bytes | None}
+        self.pdfs = pdfs or {}
+
+    def login(self):
+        pass
+
+    def download_xml_zip(self, data, secao):
+        return self.zips.get((data, secao))
+
+    def download_pdf(self, data, secao):
+        return self.pdfs.get((data, secao.lower()))
+
+
+def limpar_dados_de_teste():
+    """Remove qualquer resíduo da data de teste."""
+    edicoes = DouEdition.query.filter_by(data_publicacao=DATA_TESTE).all()
+    for e in edicoes:
+        db.session.delete(e)
+    DouSyncRun.query.filter_by(modo=DouSyncRun.MODO_MANUAL).delete()
+    db.session.commit()
+
+
+def test_ingestao_basica():
+    print('\n1. Ingestão de um ZIP com duas matérias')
+    limpar_dados_de_teste()
+
+    xml_a = (FIXTURES / 'dou_sample_article.xml').read_bytes()
+    xml_b = (FIXTURES / 'dou_sample_minimo.xml').read_bytes()
+    zip_bytes = montar_zip(xml_a, xml_b)
+
+    client = FakeClient({(DATA_TESTE, 'DO1'): zip_bytes})
+    resultado = ingestion.ingest_date(DATA_TESTE, secoes=['DO1'], with_pdf=False, client=client)
+
+    check('relata 2 matérias inseridas',
+          resultado['materias_inseridas'] == 2, str(resultado))
+    check('relata 0 atualizadas', resultado['materias_atualizadas'] == 0, str(resultado))
+
+    edicao = DouEdition.query.filter_by(data_publicacao=DATA_TESTE, secao='DO1').first()
+    check('criou a edição', edicao is not None)
+    check('status ficou parsed', edicao.status == DouEdition.STATUS_PARSED, edicao.status)
+    check('qtd_materias = 2', edicao.qtd_materias == 2, str(edicao.qtd_materias))
+    check('gravou content_signature', bool(edicao.content_signature))
+    check('zip_path é relativo',
+          edicao.zip_path.startswith('uploads/dou/'), repr(edicao.zip_path))
+    check('arquivo existe em disco', Path(edicao.zip_path).exists(), edicao.zip_path)
+
+    artigos = DouArticle.query.filter_by(edition_id=edicao.id).all()
+    check('2 matérias no banco', len(artigos) == 2, str(len(artigos)))
+    check('desnormalizou pub_date', all(a.pub_date is not None or a.pub_name == 'DO3' for a in artigos))
+
+
+def test_idempotencia():
+    print('\n2. Idempotência: reingerir o mesmo ZIP não duplica')
+    xml_a = (FIXTURES / 'dou_sample_article.xml').read_bytes()
+    zip_bytes = montar_zip(xml_a)
+
+    client = FakeClient({(DATA_TESTE, 'DO2'): zip_bytes})
+    ingestion.ingest_date(DATA_TESTE, secoes=['DO2'], with_pdf=False, client=client)
+    antes = DouArticle.query.join(DouEdition).filter(
+        DouEdition.data_publicacao == DATA_TESTE, DouEdition.secao == 'DO2'
+    ).count()
+
+    segundo = ingestion.ingest_date(DATA_TESTE, secoes=['DO2'], with_pdf=False, client=client)
+    depois = DouArticle.query.join(DouEdition).filter(
+        DouEdition.data_publicacao == DATA_TESTE, DouEdition.secao == 'DO2'
+    ).count()
+
+    check('mesma contagem de matérias', antes == depois, f'{antes} → {depois}')
+    check('nada foi inserido na segunda vez',
+          segundo['materias_inseridas'] == 0, str(segundo))
+    check('assinatura igual pula o reprocesso',
+          segundo.get('inalterado') is True, str(segundo))
+
+
+def test_republicacao():
+    print('\n3. Republicação: conteúdo diferente atualiza, não duplica')
+    xml_a = (FIXTURES / 'dou_sample_article.xml').read_bytes()
+    xml_alterado = xml_a.replace(b'Fica aprovado', b'Fica revogado')
+
+    client1 = FakeClient({(DATA_TESTE, 'DO3'): montar_zip(xml_a)})
+    ingestion.ingest_date(DATA_TESTE, secoes=['DO3'], with_pdf=False, client=client1)
+
+    client2 = FakeClient({(DATA_TESTE, 'DO3'): montar_zip(xml_alterado)})
+    resultado = ingestion.ingest_date(DATA_TESTE, secoes=['DO3'], with_pdf=False, client=client2)
+
+    edicao = DouEdition.query.filter_by(data_publicacao=DATA_TESTE, secao='DO3').first()
+    artigos = DouArticle.query.filter_by(edition_id=edicao.id).all()
+
+    check('continua com 1 matéria (UPDATE, não INSERT)', len(artigos) == 1, str(len(artigos)))
+    check('relata 1 atualizada', resultado['materias_atualizadas'] == 1, str(resultado))
+    check('texto novo foi gravado', 'revogado' in artigos[0].texto, artigos[0].texto[:80])
+    check('hash mudou junto', artigos[0].hash is not None)
+
+
+def test_nao_publicado():
+    print('\n4. Seção não publicada (404) não é erro')
+    client = FakeClient({})  # tudo devolve None
+    resultado = ingestion.ingest_date(DATA_TESTE, secoes=['DO1E'], with_pdf=False, client=client)
+
+    check('contabiliza como não publicado',
+          resultado['nao_publicados'] == 1, str(resultado))
+    check('não conta como erro', resultado['erros'] == 0, str(resultado))
+
+    edicao = DouEdition.query.filter_by(data_publicacao=DATA_TESTE, secao='DO1E').first()
+    check('registra a edição como not_published',
+          edicao is not None and edicao.status == DouEdition.STATUS_NOT_PUBLISHED,
+          edicao.status if edicao else 'sem edição')
+
+
+def test_dry_run():
+    print('\n5. dry-run não grava nada')
+    limpar_dados_de_teste()
+    xml_a = (FIXTURES / 'dou_sample_article.xml').read_bytes()
+    client = FakeClient({(DATA_TESTE, 'DO1'): montar_zip(xml_a)})
+
+    ingestion.ingest_date(DATA_TESTE, secoes=['DO1'], with_pdf=False,
+                          dry_run=True, client=client)
+
+    check('nenhuma edição criada',
+          DouEdition.query.filter_by(data_publicacao=DATA_TESTE).count() == 0)
+
+
+def test_storage_dir():
+    print('\n6. Caminho de armazenamento')
+    caminho = ingestion.storage_dir(date(2026, 8, 10))
+    check('caminho relativo por ano/mês/dia',
+          str(caminho) == 'uploads/dou/2026/08/10', str(caminho))
+    check('não é absoluto', not caminho.is_absolute(), str(caminho))
+
+
+def main():
+    print('=' * 60)
+    print('TESTES DA INGESTÃO DO DOU')
+    print('=' * 60)
+
+    with app.app_context():
+        test_ingestao_basica()
+        test_idempotencia()
+        test_republicacao()
+        test_nao_publicado()
+        test_dry_run()
+        test_storage_dir()
+        limpar_dados_de_teste()
+
+    print('\n' + '=' * 60)
+    if _falhas:
+        print(f'❌ {len(_falhas)} falha(s): {", ".join(_falhas)}')
+        return 1
+    print('✅ Todos os testes passaram')
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

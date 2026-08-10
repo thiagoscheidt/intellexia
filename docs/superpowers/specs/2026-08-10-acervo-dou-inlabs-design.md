@@ -217,10 +217,11 @@ Uma linha por matéria (`<article>` do XML).
 | `texto` | `db.Text(16777215)` | LONGTEXT no MySQL — texto limpo, sem tags |
 | `texto_html` | `db.Text(16777215)` | conteúdo original de `<Texto>` |
 | `raw_xml` | `db.Text(16777215)` | o `<article>` inteiro, verbatim |
-| `hash` | String(64) | SHA-256 do conteúdo — **UNIQUE** |
+| `hash` | String(64) | SHA-256 do conteúdo — detecta mudança, não identifica |
 | `created_at` / `updated_at` | DateTime | |
 
-Índices: `(pub_date, pub_name)`, `orgao_hierarquia`, `art_type`, `hash` UNIQUE.
+UNIQUE: `(edition_id, art_id, id_materia)`.
+Índices: `(pub_date, pub_name)`, `orgao_hierarquia`, `art_type`, `hash`.
 
 `raw_xml` é a apólice de seguro: se o parser mapear um campo errado, o dado não
 se perde — reprocessa a partir do banco, sem rebaixar do INLABS.
@@ -254,16 +255,24 @@ Auditoria de cada execução — alimenta a aba Captura.
 
 ### 6.1 Dedup
 
-O `hash` da matéria é UNIQUE e definido como
-`SHA-256(art_id | id_materia | pub_date | pub_name | raw_xml)`, com os campos
-concatenados por `|` e `raw_xml` normalizado (whitespace entre tags colapsado).
+A identidade de uma matéria é `(edition_id, art_id, id_materia)` — uma matéria
+por edição. É essa a chave UNIQUE **e** a chave do upsert: encontrando a linha,
+atualiza os campos; não encontrando, insere.
 
-Incluir `raw_xml` significa que **qualquer alteração de conteúdo gera um hash
-novo** — republicação com texto corrigido entra como matéria distinta, não
-sobrescreve silenciosamente a anterior. O upsert, portanto, casa por
-`(art_id, id_materia, edition_id)`: encontrando a linha, atualiza os campos e o
-`hash`; não encontrando, insere. O `hash` UNIQUE é a rede de segurança contra
-INSERT duplicado quando a mesma matéria chega duas vezes na mesma execução.
+> **As duas têm de ser a mesma chave.** Na primeira implementação a unicidade
+> ficou só no `hash`, enquanto o upsert casava por `(edition_id, art_id,
+> id_materia)`. Quando uma matéria idêntica reaparecia sob outra edição —
+> exatamente o caso de republicação/suplemento da §2.2 — o lookup não a
+> encontrava, tentava INSERT e a constraint global barrava, derrubando a
+> ingestão da edição inteira. Constraint e lookup divergentes é o defeito;
+> espelhá-los é a correção.
+
+O `hash` é `SHA-256(art_id | id_materia | pub_date | pub_name | raw_xml)`, com
+os campos concatenados por `|` e `raw_xml` normalizado (whitespace entre tags
+colapsado). Ele **não identifica** a matéria: serve só para detectar mudança de
+conteúdo. Incluir `raw_xml` significa que qualquer alteração gera hash novo, e é
+assim que a ingestão sabe distinguir "já tenho isso" de "isso foi republicado
+com correção". Fica como índice simples, não único.
 
 Reprocessar o mesmo dia é **UPDATE, nunca INSERT duplicado** — mesma regra do
 `ProcessCommunication`. Isso torna qualquer reexecução segura.
