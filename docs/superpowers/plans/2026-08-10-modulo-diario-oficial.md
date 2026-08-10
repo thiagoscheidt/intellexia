@@ -1930,6 +1930,13 @@ def main() -> int:
     parser.add_argument('--dry-run', action='store_true', help='não grava nada')
     args = parser.parse_args()
 
+    # Erro de argumento é reportado antes de qualquer checagem de ambiente:
+    # quem digitou o comando errado precisa ver o erro real, não "credenciais
+    # ausentes".
+    if args.backfill and not args.desde:
+        _log('❌ --backfill exige --desde YYYY-MM-DD')
+        return 2
+
     if args.secoes:
         os.environ['DOU_SECOES'] = args.secoes
 
@@ -1950,9 +1957,6 @@ def main() -> int:
         with_pdf = not args.sem_pdf
 
         if args.backfill:
-            if not args.desde:
-                _log('❌ --backfill exige --desde YYYY-MM-DD')
-                return 2
             _log(f'⏳ Backfill de {args.desde} até {args.ate or date.today()}...')
             run = ingestion.backfill(args.desde, args.ate, with_pdf=with_pdf, dry_run=args.dry_run)
         elif args.data:
