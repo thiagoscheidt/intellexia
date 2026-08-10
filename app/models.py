@@ -2482,6 +2482,13 @@ class FapWebContestacao(db.Model):
             'law_firm_id', 'contestacao_id',
             name='uq_fap_web_contestacoes_law_firm_contestacao',
         ),
+        # Cobre a agregação do dashboard (contestações por deferimento, por
+        # empresa): o MySQL resolve o GROUP BY só no índice, sem tocar nas
+        # linhas — e portanto sem ler os ~2 KB de raw_data de cada uma.
+        db.Index(
+            'ix_fap_web_contestacoes_firm_raiz_deferimento',
+            'law_firm_id', 'cnpj_raiz', 'deferimento_descricao',
+        ),
     )
 
     id = db.Column(db.Integer, primary_key=True)
@@ -2502,6 +2509,13 @@ class FapWebContestacao(db.Model):
     # ── Situação / status ────────────────────────────────────────────
     situacao_codigo    = db.Column(db.String(100), index=True)
     situacao_descricao = db.Column(db.String(255))
+
+    # ── Deferimento (resultado do julgamento) ─────────────────────────
+    # Extraída de raw_data['deferimento']['descricao'] durante a sincronização.
+    # Coluna dedicada para permitir agregar direto em SQL: sem ela o dashboard
+    # precisava trazer o raw_data das 11 mil linhas (~23 MB) só para contar
+    # quantas caem em cada status. Indexada em ix_fap_web_contestacoes_firm_raiz_deferimento.
+    deferimento_descricao = db.Column(db.String(255))
 
     # ── Protocolo e transmissão ───────────────────────────────────────
     protocolo       = db.Column(db.String(100), index=True)
@@ -2567,21 +2581,16 @@ class FapWebContestacao(db.Model):
         except Exception:
             return None
 
-    @property
-    def deferimento_descricao(self):
-        """Descrição do deferimento (ex.: 'Deferimento Parcial') ou None.
+    @staticmethod
+    def extract_deferimento_descricao(item):
+        """Descrição do deferimento a partir do item da API FAP (ou None).
 
-        Extraída de raw_data['deferimento']['descricao'].
+        Fonte única usada pelas duas sincronizações (painel e cron) e pelo
+        backfill da migration, para que a coluna ``deferimento_descricao``
+        seja sempre derivada do JSON da mesma forma.
         """
-        if not self.raw_data:
-            return None
-        try:
-            import json as _json
-            raw = _json.loads(self.raw_data)
-            deferimento = raw.get('deferimento') or {}
-            return (deferimento.get('descricao') or '').strip() or None
-        except Exception:
-            return None
+        deferimento = (item or {}).get('deferimento') or {}
+        return (deferimento.get('descricao') or '').strip() or None
 
     def __repr__(self):
         return f'<FapWebContestacao id={self.contestacao_id} cnpj={self.cnpj} ano={self.ano_vigencia}>'

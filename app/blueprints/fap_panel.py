@@ -401,6 +401,9 @@ def sync_run_year():
                 except Exception:
                     pass
 
+            # Deferimento em coluna própria (o dashboard agrega por ela em SQL)
+            deferimento_descricao = FapWebContestacao.extract_deferimento_descricao(item)
+
             # Dedup pela mesma chave única do banco
             # (uq_fap_web_contestacoes_law_firm_contestacao = law_firm_id + contestacao_id).
             # NÃO incluir cnpj_raiz aqui: o valor gravado na coluna pode divergir
@@ -470,6 +473,7 @@ def sync_run_year():
                 existing.protocolo = next_values['protocolo']
                 existing.data_transmissao = next_values['data_transmissao']
                 existing.data_dou_date       = next_values['data_dou_date']
+                existing.deferimento_descricao = deferimento_descricao
                 existing.raw_data            = json.dumps(item, ensure_ascii=False)
                 existing.last_synced_at      = now
                 updated += 1
@@ -488,6 +492,7 @@ def sync_run_year():
                     protocolo           = item.get('protocolo'),
                     data_transmissao    = data_transmissao,
                     data_dou_date       = data_dou_date,
+                    deferimento_descricao = deferimento_descricao,
                     raw_data            = json.dumps(item, ensure_ascii=False),
                     last_synced_at      = now,
                 )

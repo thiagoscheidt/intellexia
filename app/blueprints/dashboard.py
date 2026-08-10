@@ -47,39 +47,38 @@ def require_admin_user(f):
 def _build_deferimento_distribution(law_firm_id):
     """Distribuição de contestações por status de deferimento.
 
-    O deferimento vive em raw_data['deferimento']['descricao'] (não é coluna),
-    então parseamos o JSON em Python. Contestações sem deferimento entram na
-    categoria 'Sem julgamento'.
+    Agrupa direto em SQL pela coluna ``deferimento_descricao``, populada na
+    sincronização. O índice (law_firm_id, cnpj_raiz, deferimento_descricao)
+    cobre o GROUP BY, então o MySQL nem toca no raw_data das linhas.
+    Contestações sem deferimento entram na categoria 'Sem julgamento'.
 
     Retorna (overall, por_empresa):
       - overall:     {descricao: total} agregando todas as empresas
       - por_empresa: {cnpj_raiz: {descricao: total}} para filtro no frontend
     """
-    import json as _json
     from app.models import FapWebContestacao
 
     rows = (
-        FapWebContestacao.query
-        .filter_by(law_firm_id=law_firm_id)
-        .with_entities(FapWebContestacao.cnpj_raiz, FapWebContestacao.raw_data)
+        db.session.query(
+            FapWebContestacao.cnpj_raiz,
+            FapWebContestacao.deferimento_descricao,
+            db.func.count(FapWebContestacao.id),
+        )
+        .filter(FapWebContestacao.law_firm_id == law_firm_id)
+        .group_by(
+            FapWebContestacao.cnpj_raiz,
+            FapWebContestacao.deferimento_descricao,
+        )
         .all()
     )
 
     overall = {}
     por_empresa = {}
-    for raiz, raw_data in rows:
-        desc = ''
-        if raw_data:
-            try:
-                raw = _json.loads(raw_data)
-                deferimento = raw.get('deferimento') or {}
-                desc = (deferimento.get('descricao') or '').strip()
-            except Exception:
-                desc = ''
-        key = desc or 'Sem julgamento'
-        overall[key] = overall.get(key, 0) + 1
+    for raiz, desc, count in rows:
+        key = (desc or '').strip() or 'Sem julgamento'
+        overall[key] = overall.get(key, 0) + count
         bucket = por_empresa.setdefault(raiz or '—', {})
-        bucket[key] = bucket.get(key, 0) + 1
+        bucket[key] = bucket.get(key, 0) + count
 
     return overall, por_empresa
 

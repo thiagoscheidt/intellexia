@@ -366,6 +366,11 @@ def persist_contestacoes_for_company(
                 'data_dou_date': data_dou_date,
             }
 
+            # Deferimento em coluna própria (o dashboard agrega por ela em SQL).
+            # Fora de next_values de propósito: essa estrutura alimenta também o
+            # change history, e a coluna é só um espelho do raw_data.
+            deferimento_descricao = FapWebContestacao.extract_deferimento_descricao(item)
+
             if existing:
                 changed_old = {}
                 changed_new = {}
@@ -401,6 +406,7 @@ def persist_contestacoes_for_company(
 
                 for k, v in next_values.items():
                     setattr(existing, k, v)
+                existing.deferimento_descricao = deferimento_descricao
                 existing.raw_data = json.dumps(item, ensure_ascii=False)
                 existing.last_synced_at = now
                 updated += 1
@@ -408,6 +414,7 @@ def persist_contestacoes_for_company(
                 rec = FapWebContestacao(
                     law_firm_id=law_firm_id,
                     contestacao_id=int(cid),
+                    deferimento_descricao=deferimento_descricao,
                     raw_data=json.dumps(item, ensure_ascii=False),
                     last_synced_at=now,
                     **next_values,
