@@ -70,17 +70,18 @@
             <div class="d-flex justify-content-between align-items-center px-2 pb-2">
               <small class="text-muted">
                 {{ edicao.secao_label }} · página {{ artigo.pagina }} ·
-                PDF assinado da Imprensa Nacional
+                recortada do PDF assinado da Imprensa Nacional
               </small>
-              <a href="{{ url_for('dou.baixar_pdf', edition_id=edicao.id) }}#page={{ pagina_pdf }}"
+              <a href="{{ url_for('dou.pagina_pdf', article_id=artigo.id) }}"
                  target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm">
                 <i class="bi bi-box-arrow-up-right me-1"></i>Abrir em nova aba
               </a>
             </div>
-            {# O src só é preenchido quando a aba é aberta: o PDF da Seção 3 tem
-               44 MB, e carregá-lo em toda visita à matéria seria inaceitável. #}
+            {# Só a página, extraída do PDF da seção: ~170 KB em vez dos 60 MB
+               do arquivo inteiro. O src ainda é preguiçoso — não faz sentido
+               buscar nada de quem só queria ler o texto. #}
             <iframe class="dou-pdf-quadro" title="Página {{ artigo.pagina }} do Diário Oficial"
-                    data-src="{{ url_for('dou.baixar_pdf', edition_id=edicao.id) }}#page={{ pagina_pdf }}"
+                    data-src="{{ url_for('dou.pagina_pdf', article_id=artigo.id) }}"
                     src="about:blank"></iframe>
           </div>
         </div>

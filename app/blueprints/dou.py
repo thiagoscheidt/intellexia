@@ -25,10 +25,11 @@ a proteção é a permissão de módulo, aplicada pelo middleware.
 """
 
 from datetime import datetime
+from io import BytesIO
 from pathlib import Path
 
 from flask import (Blueprint, render_template, request, redirect,
-                   url_for, flash, send_file, abort, session)
+                   url_for, flash, send_file, abort, session, current_app)
 from sqlalchemy import func
 
 from app.models import db, DouEdition, DouArticle, DouSyncRun, Client
@@ -251,9 +252,9 @@ def materia(article_id):
     # A página impressa corresponde 1:1 à página do PDF assinado — conferido em
     # 216 matérias de todas as seções, 96% batendo. Só oferecemos a aba quando
     # há PDF em disco e a matéria diz em que página está.
-    pagina_pdf = (artigo.pagina_num
-                  if edicao_obj and edicao_obj.pdf_disponivel and artigo.pagina_num
-                  else None)
+    pagina_no_pdf = (artigo.pagina_num
+                     if edicao_obj and edicao_obj.pdf_disponivel and artigo.pagina_num
+                     else None)
 
     return render_template(
         'dou/materia.html',
@@ -263,7 +264,47 @@ def materia(article_id):
         # conteúdo de terceiros, e renderizá-lo cru deixaria o DOU injetar
         # marcação na página.
         texto_formatado=sanitizar_html(artigo.texto_html),
-        pagina_pdf=pagina_pdf,
+        pagina_pdf=pagina_no_pdf,
+    )
+
+
+@dou_bp.route('/materia/<int:article_id>/pagina.pdf')
+def pagina_pdf(article_id):
+    """Só a página da matéria, extraída do PDF assinado da seção.
+
+    Mandar o PDF inteiro para mostrar uma página é inviável: a Seção 3 tem
+    60 MB. A extração custa 4 a 14 ms e devolve ~170 KB — 350x menor — e o
+    tamanho não depende do arquivo de origem. Mantém o texto selecionável, o
+    que uma imagem da página perderia.
+    """
+    artigo = DouArticle.query.get_or_404(article_id)
+    edicao_obj = artigo.edition
+
+    if not (edicao_obj and edicao_obj.pdf_disponivel and artigo.pagina_num):
+        abort(404)
+
+    caminho = Path(edicao_obj.pdf_path)
+    if not caminho.exists():
+        abort(404)
+
+    try:
+        import fitz  # PyMuPDF — import tardio: só esta rota precisa
+        with fitz.open(caminho) as documento:
+            indice = artigo.pagina_num - 1
+            if not 0 <= indice < documento.page_count:
+                abort(404)
+            with fitz.open() as pagina:
+                pagina.insert_pdf(documento, from_page=indice, to_page=indice)
+                conteudo = pagina.tobytes()
+    except Exception:  # noqa: BLE001 — PDF corrompido não pode virar 500
+        current_app.logger.exception(
+            'DOU: falha ao extrair a página %s da matéria %s',
+            artigo.pagina_num, article_id)
+        abort(404)
+
+    return send_file(
+        BytesIO(conteudo), mimetype='application/pdf', as_attachment=False,
+        download_name=f'DOU-{artigo.pub_date:%Y-%m-%d}-{artigo.pub_name}-p{artigo.pagina}.pdf',
     )
 
 
