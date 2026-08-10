@@ -115,6 +115,96 @@ def test_orgao_raiz():
     check('vazio devolve None', busca.orgao_raiz('   ') is None)
 
 
+def test_documento_indexado():
+    """O documento carrega o que a tela precisa e o que a busca filtra."""
+    print('\n6. Montagem do documento')
+    from main import app
+    from app.models import DouArticle
+
+    with app.app_context():
+        artigo = (DouArticle.query
+                  .filter(DouArticle.orgao_hierarquia.isnot(None)).first())
+        if artigo is None:
+            print('  ⏭️  acervo vazio — pulando')
+            return
+
+        doc = busca.montar_documento(artigo)
+        esperado_data = artigo.pub_date.strftime('%d/%m/%Y')
+        esperado_raiz = busca.orgao_raiz(artigo.orgao_hierarquia)
+        esperado_texto = artigo.texto or ''
+        artigo_id = artigo.id
+
+    check('id é o id da matéria', doc['id'] == artigo_id, str(doc.get('id')))
+    check('pub_date_num é AAAAMMDD inteiro',
+          isinstance(doc['pub_date_num'], int) and 20000000 < doc['pub_date_num'] < 21000000,
+          str(doc.get('pub_date_num')))
+    check('data_br pronta para exibir', doc['data_br'] == esperado_data, doc.get('data_br'))
+    check('orgao_raiz é o primeiro nível', doc['orgao_raiz'] == esperado_raiz,
+          doc.get('orgao_raiz'))
+    check('cnpjs é lista', isinstance(doc['cnpjs'], list))
+    check('processos é lista', isinstance(doc['processos'], list))
+    check('texto vai inteiro para o índice', doc['texto'] == esperado_texto,
+          '(texto divergente)')
+
+
+def test_indexar_e_buscar():
+    """Ponta a ponta contra o Meilisearch local, em índice de teste próprio."""
+    print('\n7. Indexação e busca (Meilisearch local)')
+
+    if not busca.is_available():
+        print('  ⏭️  Meilisearch não responde — pulando')
+        return
+
+    from main import app
+    from app.models import DouArticle
+
+    # NUNCA o índice de produção: neste módulo já houve teste que destruiu
+    # dado real por usar a mesma chave que o dado verdadeiro.
+    nome_teste = 'dou_articles_test'
+    indice = busca.get_index(nome_teste)
+
+    try:
+        with app.app_context():
+            artigos = DouArticle.query.limit(300).all()
+            if not artigos:
+                print('  ⏭️  acervo vazio — pulando')
+                return
+            enviados = busca.index_articles(artigos, indice=indice)
+            com_cnpj = next((a for a in artigos if busca.extrair_cnpjs(a.texto)), None)
+            cnpj = busca.extrair_cnpjs(com_cnpj.texto)[0] if com_cnpj else None
+            cnpj_id = com_cnpj.id if com_cnpj else None
+
+        check('indexou o lote', enviados == len(artigos), f'{enviados}/{len(artigos)}')
+        busca.aguardar_indexacao(indice)
+
+        if cnpj:
+            r = busca.search(cnpj, indice=indice)
+            check('acha pelo CNPJ só em dígitos',
+                  any(h['id'] == cnpj_id for h in r['hits']),
+                  f'{cnpj}: {r["total"]} resultado(s)')
+
+            formatado = f'{cnpj[:2]}.{cnpj[2:5]}.{cnpj[5:8]}/{cnpj[8:12]}-{cnpj[12:]}'
+            r2 = busca.search(formatado, indice=indice)
+            check('acha pelo CNPJ formatado, mesmo resultado',
+                  any(h['id'] == cnpj_id for h in r2['hits']), formatado)
+
+        r3 = busca.search('portaria', indice=indice)
+        check('busca por texto devolve resultados', r3['total'] > 0, str(r3['total']))
+        check('traz facetas com contagem',
+              isinstance(r3['facetas'], dict) and 'pub_name' in r3['facetas'],
+              str(list(r3['facetas'].keys()) if r3['facetas'] else None))
+        check('traz trecho destacado',
+              any('<mark>' in (h.get('trecho') or '') for h in r3['hits']),
+              '(nenhum destaque)')
+
+        r4 = busca.search('zzzznaoexisteestetermo', indice=indice)
+        check('termo sem resultado devolve zero, sem erro', r4['total'] == 0, str(r4['total']))
+
+    finally:
+        busca.drop_index(nome_teste)
+        print('  (índice de teste removido)')
+
+
 def main():
     print('=' * 60)
     print('TESTES DA BUSCA DO DOU')
@@ -125,6 +215,8 @@ def main():
     test_extrair_processos()
     test_classificar_consulta()
     test_orgao_raiz()
+    test_documento_indexado()
+    test_indexar_e_buscar()
 
     print('\n' + '=' * 60)
     if _falhas:

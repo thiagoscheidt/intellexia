@@ -232,6 +232,14 @@ def ingest_date(data: date, secoes=None, with_pdf: bool = True,
 
             db.session.commit()
 
+            # Índice de busca: alimentado depois do commit, e de propósito sem
+            # try/except aqui — index_articles já trata a própria falha e
+            # devolve 0. A captura não pode passar a depender do Meilisearch.
+            from app.services import dou_search_service
+            dou_search_service.index_articles(
+                DouArticle.query.filter_by(edition_id=edition.id).all()
+            )
+
             resumo['materias_inseridas'] += inseridas
             resumo['materias_atualizadas'] += atualizadas
             resumo['detalhes'].append({

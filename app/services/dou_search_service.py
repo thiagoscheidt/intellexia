@@ -16,7 +16,44 @@ consulta é roteada para esses campos quando o termo é um número.
 
 from __future__ import annotations
 
+import logging
+import os
 import re
+
+from dotenv import load_dotenv
+from meilisearch_python_sdk import Client as MeilisearchClient
+from meilisearch_python_sdk.models.settings import TypoTolerance
+
+# Carregado aqui, e não só pelo main.py: os testes importam este módulo direto,
+# e sem isso a chave do Meilisearch seria lida como None na importação. É o
+# mesmo que impugnacao_reference_search faz.
+load_dotenv()
+
+logger = logging.getLogger(__name__)
+
+MEILISEARCH_HOST = os.getenv('MEILISEARCH_HOST', 'http://localhost:7700')
+MEILISEARCH_API_KEY = os.getenv('MEILISEARCH_API_KEY')
+MEILI_INDEX = os.getenv('DOU_MEILI_INDEX', 'dou_articles')
+
+# A ordem é a ordem de relevância: o Meilisearch pesa os primeiros mais alto.
+_SEARCHABLE = ['identifica', 'ementa', 'titulo', 'orgao_hierarquia',
+               'cnpjs', 'processos', 'texto']
+_FILTERABLE = ['pub_name', 'pub_date_num', 'art_type', 'orgao_raiz', 'edicao']
+_SORTABLE = ['pub_date_num']
+_FACETAS = ['pub_name', 'orgao_raiz', 'art_type']
+
+# Número aproximado é número errado: sem isso, 19630496000105 casaria com o
+# CNPJ de outra empresa que difere por um dígito.
+_SEM_TOLERANCIA = ['cnpjs', 'processos']
+
+LOTE_PADRAO = 1000
+
+# Teto de paginação do Meilisearch (padrão do próprio servidor). Além dele o
+# `estimated_total_hits` satura e não há mais páginas para entregar.
+MAX_TOTAL_HITS = 1000
+_DESTAQUE_PRE = '<mark>'
+_DESTAQUE_POS = '</mark>'
+TAM_TRECHO = 40
 
 # Formatos conferidos contra o acervo real:
 #   CNPJ     19.630.496/0001-05     -> 14 dígitos
@@ -95,3 +132,263 @@ def classificar_consulta(termo: str) -> tuple[str, str]:
             return ('processo', digitos)
 
     return ('texto', termo)
+
+
+# ---------------------------------------------------------------- o índice
+
+def _client() -> MeilisearchClient:
+    return MeilisearchClient(MEILISEARCH_HOST, MEILISEARCH_API_KEY)
+
+
+def is_available() -> bool:
+    """O Meilisearch responde? Falha aqui nunca vira exceção para quem chama."""
+    try:
+        _client().health()
+        return True
+    except Exception as exc:  # noqa: BLE001 — indisponibilidade não é erro de programa
+        logger.info('DOU busca: Meilisearch indisponível (%s)', exc)
+        return False
+
+
+def get_index(nome: str | None = None):
+    """Índice pronto para uso, com os atributos aplicados de forma idempotente."""
+    client = _client()
+    indice = client.get_or_create_index(uid=nome or MEILI_INDEX, primary_key='id')
+
+    if list(indice.get_searchable_attributes() or []) != _SEARCHABLE:
+        client.wait_for_task(
+            indice.update_searchable_attributes(_SEARCHABLE).task_uid,
+            timeout_in_ms=20000)
+
+    if set(indice.get_filterable_attributes() or []) != set(_FILTERABLE):
+        client.wait_for_task(
+            indice.update_filterable_attributes(_FILTERABLE).task_uid,
+            timeout_in_ms=20000)
+
+    if set(indice.get_sortable_attributes() or []) != set(_SORTABLE):
+        client.wait_for_task(
+            indice.update_sortable_attributes(_SORTABLE).task_uid,
+            timeout_in_ms=20000)
+
+    client.wait_for_task(
+        indice.update_typo_tolerance(
+            TypoTolerance(enabled=True, disable_on_attributes=_SEM_TOLERANCIA)
+        ).task_uid, timeout_in_ms=20000)
+
+    return indice
+
+
+def drop_index(nome: str) -> None:
+    """Remove um índice. Existe para o teste limpar o índice dele."""
+    try:
+        _client().delete_index_if_exists(nome)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning('DOU busca: falha ao remover o índice %s: %s', nome, exc)
+
+
+def aguardar_indexacao(indice=None, timeout_ms: int = 600000) -> None:
+    """Espera a fila do Meilisearch esvaziar para este índice.
+
+    ``add_documents`` é assíncrono: devolve na hora e o documento só fica
+    buscável depois. Quem indexa e consulta em seguida — o teste, a
+    reindexação — precisa esperar, senão consulta um índice ainda vazio.
+
+    Recebe o **nome** do índice, nunca chama ``get_index``: aquela função
+    reconfigura os atributos e o `wait_for_task` dela ficaria na fila atrás dos
+    documentos que estamos justamente esperando, estourando o timeout.
+    """
+    uid = indice.uid if hasattr(indice, 'uid') else (indice or MEILI_INDEX)
+    try:
+        client = _client()
+        for tarefa in client.get_tasks(index_ids=[uid]).results:
+            if tarefa.status in ('enqueued', 'processing'):
+                client.wait_for_task(tarefa.uid, timeout_in_ms=timeout_ms)
+    except Exception as exc:  # noqa: BLE001
+        logger.warning('DOU busca: falha ao aguardar a indexação: %s', exc)
+
+
+# ------------------------------------------------------------- indexação
+
+def montar_documento(artigo) -> dict:
+    """DouArticle → documento do índice."""
+    texto = artigo.texto or ''
+    return {
+        'id': artigo.id,
+        'edition_id': artigo.edition_id,
+        'identifica': artigo.identifica or '',
+        'ementa': artigo.ementa or '',
+        'titulo': artigo.titulo or '',
+        'texto': texto,
+        'orgao_hierarquia': artigo.orgao_hierarquia or '',
+        'orgao_raiz': orgao_raiz(artigo.orgao_hierarquia) or '—',
+        'art_type': artigo.art_type or '—',
+        'pub_name': artigo.pub_name or '—',
+        'edicao': artigo.edicao or '',
+        'pagina': artigo.pagina or '',
+        'pagina_num': artigo.pagina_num,
+        'pdf_page': artigo.pdf_page or '',
+        # AAAAMMDD inteiro, não timestamp: timestamp depende de fuso e erra o
+        # dia no filtro por data.
+        'pub_date_num': int(artigo.pub_date.strftime('%Y%m%d')) if artigo.pub_date else 0,
+        'data_br': artigo.pub_date.strftime('%d/%m/%Y') if artigo.pub_date else '',
+        'cnpjs': extrair_cnpjs(texto),
+        'processos': extrair_processos(texto),
+    }
+
+
+def index_articles(artigos, indice=None) -> int:
+    """Indexa uma coleção de DouArticle. Devolve quantos foram enviados.
+
+    Falha aqui **nunca** derruba a captura: a fase 1 não pode passar a depender
+    da fase 2. Erro é registrado e a matéria entra no índice na próxima
+    reindexação.
+    """
+    artigos = list(artigos or [])
+    if not artigos:
+        return 0
+
+    try:
+        indice = indice or get_index()
+        documentos = [montar_documento(a) for a in artigos]
+        for inicio in range(0, len(documentos), LOTE_PADRAO):
+            indice.add_documents(documentos[inicio:inicio + LOTE_PADRAO])
+        return len(documentos)
+    except Exception as exc:  # noqa: BLE001 — indexar não derruba a captura
+        logger.error('DOU busca: falha ao indexar %d matéria(s): %s', len(artigos), exc)
+        return 0
+
+
+def reindex_all(desde=None, lote: int = LOTE_PADRAO, indice=None) -> int:
+    """Reconstrói o índice a partir do banco. Devolve o total indexado.
+
+    Percorre por id crescente em blocos, para não carregar centenas de milhares
+    de matérias na memória de uma vez.
+    """
+    from app.models import DouArticle  # import tardio: evita ciclo com models
+
+    indice = indice or get_index()
+    query_base = DouArticle.query
+    if desde is not None:
+        query_base = query_base.filter(DouArticle.pub_date >= desde)
+
+    total = 0
+    ultimo_id = 0
+    while True:
+        bloco = (query_base.filter(DouArticle.id > ultimo_id)
+                 .order_by(DouArticle.id).limit(lote).all())
+        if not bloco:
+            break
+        indice.add_documents([montar_documento(a) for a in bloco])
+        total += len(bloco)
+        ultimo_id = bloco[-1].id
+        logger.info('DOU busca: %d matéria(s) indexada(s)', total)
+
+    return total
+
+
+# ---------------------------------------------------------------- consulta
+
+def search(termo: str, filtros: dict | None = None, ordem: str = 'relevancia',
+           pagina: int = 1, por_pagina: int = 20, indice=None) -> dict:
+    """Busca no acervo. Devolve sempre um dicionário, mesmo em falha.
+
+    Chaves: hits, total, ms, facetas, tipo_consulta, indisponivel.
+    """
+    vazio = {'hits': [], 'total': 0, 'total_navegavel': 0, 'ms': 0, 'facetas': {},
+             'tipo_consulta': 'texto', 'indisponivel': False}
+
+    tipo, normalizado = classificar_consulta(termo)
+    if not normalizado:
+        return vazio
+
+    try:
+        indice = indice or get_index()
+        resultado = indice.search(
+            normalizado,
+            offset=(max(pagina, 1) - 1) * por_pagina,
+            limit=por_pagina,
+            filter=montar_filtro(filtros),
+            facets=_FACETAS,
+            attributes_to_highlight=['identifica', 'ementa', 'texto'],
+            highlight_pre_tag=_DESTAQUE_PRE,
+            highlight_post_tag=_DESTAQUE_POS,
+            attributes_to_crop=['texto'],
+            crop_length=TAM_TRECHO,
+            sort=['pub_date_num:desc'] if ordem == 'data' else None,
+        )
+    except Exception as exc:  # noqa: BLE001 — buscar não derruba a tela
+        logger.error('DOU busca: falha na consulta %r: %s', termo, exc)
+        return {**vazio, 'indisponivel': True}
+
+    facetas = resultado.facet_distribution or {}
+    estimado = resultado.estimated_total_hits or 0
+
+    # `estimated_total_hits` para no teto de paginação do Meilisearch (padrão
+    # 1.000), então termos comuns reportariam sempre "1.000". As contagens de
+    # faceta NÃO têm esse teto: "licitação" informa 1.000 no estimado e 5.139
+    # somando as facetas. Como `pub_name` está sempre presente no documento, a
+    # soma da distribuição dele é o total exato — usar isso evita subnotificar
+    # em 5x nos termos mais buscados.
+    por_secao = facetas.get('pub_name') or {}
+    total = max(estimado, sum(por_secao.values())) if por_secao else estimado
+
+    return {
+        'hits': [_formatar_hit(h) for h in resultado.hits],
+        'total': total,
+        # Quantos a paginação consegue alcançar: além do teto, o Meilisearch
+        # não entrega mais páginas, e a tela precisa disso para não oferecer
+        # uma página que voltaria vazia.
+        'total_navegavel': min(total, MAX_TOTAL_HITS),
+        'ms': resultado.processing_time_ms or 0,
+        'facetas': facetas,
+        'tipo_consulta': tipo,
+        'indisponivel': False,
+    }
+
+
+def _formatar_hit(hit: dict) -> dict:
+    """Achata o resultado do Meilisearch no que a tela precisa."""
+    destacado = hit.get('_formatted') or {}
+    return {
+        'id': hit.get('id'),
+        'identifica': destacado.get('identifica') or hit.get('identifica') or '(sem identificação)',
+        'ementa': destacado.get('ementa') or hit.get('ementa') or '',
+        'trecho': destacado.get('texto') or '',
+        'orgao_hierarquia': hit.get('orgao_hierarquia') or '',
+        'orgao_raiz': hit.get('orgao_raiz') or '',
+        'art_type': hit.get('art_type') or '',
+        'pub_name': hit.get('pub_name') or '',
+        'data_br': hit.get('data_br') or '',
+        'pagina': hit.get('pagina') or '',
+    }
+
+
+def montar_filtro(filtros: dict | None) -> str | None:
+    """Dicionário de filtros → expressão de filtro do Meilisearch.
+
+    Valores do mesmo campo combinam com OR (marcar duas seções mostra as
+    duas); campos diferentes combinam com AND (seção E órgão).
+    """
+    if not filtros:
+        return None
+
+    partes = []
+
+    for campo in _FACETAS:
+        valores = [v for v in (filtros.get(campo) or []) if v]
+        if valores:
+            ors = ' OR '.join(f'{campo} = "{_escapar(v)}"' for v in valores)
+            partes.append(f'({ors})')
+
+    de, ate = filtros.get('de'), filtros.get('ate')
+    if de:
+        partes.append(f"pub_date_num >= {int(de.strftime('%Y%m%d'))}")
+    if ate:
+        partes.append(f"pub_date_num <= {int(ate.strftime('%Y%m%d'))}")
+
+    return ' AND '.join(partes) if partes else None
+
+
+def _escapar(valor: str) -> str:
+    """O filtro do Meilisearch delimita valores por aspas duplas."""
+    return str(valor).replace('\\', '\\\\').replace('"', '\\"')
