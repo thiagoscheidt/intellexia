@@ -279,3 +279,108 @@
     transform: none;
   }
 }
+
+/* ------------------------------------------------------------ busca */
+
+.dou-facetas {
+  max-height: 62vh;
+  overflow-y: auto;
+}
+
+.dou-faceta + .dou-faceta {
+  margin-top: 1rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--bs-border-color);
+}
+
+.dou-faceta__titulo {
+  font-size: .68rem;
+  text-transform: uppercase;
+  letter-spacing: .08em;
+  color: var(--bs-secondary-color);
+  margin-bottom: .4rem;
+}
+
+.dou-faceta__item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: .45rem;
+  align-items: center;
+  padding: .12rem 0;
+  font-size: .82rem;
+  cursor: pointer;
+}
+
+.dou-faceta__rot {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dou-faceta__qtd {
+  font-size: .72rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--bs-secondary-color);
+}
+
+/* Um resultado */
+.dou-hit {
+  display: block;
+  padding: .85rem 1.05rem;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 14px;
+  background: var(--bs-body-bg);
+  text-decoration: none;
+  color: inherit;
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+}
+
+.dou-hit + .dou-hit {
+  margin-top: .55rem;
+}
+
+.dou-hit:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, .07);
+  border-color: var(--bs-primary-border-subtle);
+}
+
+.dou-hit__titulo {
+  font-weight: 600;
+  color: var(--bs-body-color);
+}
+
+.dou-hit:hover .dou-hit__titulo {
+  color: var(--bs-primary);
+}
+
+.dou-hit__meta {
+  font-size: .74rem;
+  color: var(--bs-secondary-color);
+  margin: .12rem 0 .3rem;
+}
+
+.dou-hit__trecho {
+  font-size: .84rem;
+  color: var(--bs-body-color);
+  line-height: 1.5;
+}
+
+.dou-hit__orgao {
+  font-size: .74rem;
+  color: var(--bs-secondary-color);
+  margin-top: .3rem;
+}
+
+/* O termo casado, destacado pelo Meilisearch */
+.dou-hit mark {
+  background: var(--bs-warning-bg-subtle);
+  color: inherit;
+  padding: 0 .12em;
+  border-radius: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dou-hit { transition: none; }
+  .dou-hit:hover { transform: none; }
+}

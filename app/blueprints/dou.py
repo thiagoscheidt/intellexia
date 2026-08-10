@@ -28,17 +28,19 @@ from datetime import datetime
 from pathlib import Path
 
 from flask import (Blueprint, render_template, request, redirect,
-                   url_for, flash, send_file, abort)
+                   url_for, flash, send_file, abort, session)
 from sqlalchemy import func
 
-from app.models import db, DouEdition, DouArticle, DouSyncRun
+from app.models import db, DouEdition, DouArticle, DouSyncRun, Client
 
 from app.services import dou_ingestion_service as ingestion
+from app.services import dou_search_service as busca_service
 
 dou_bp = Blueprint('dou', __name__, url_prefix='/dou')
 
 PER_PAGE_EDICOES = 30
 PER_PAGE_MATERIAS = 50
+PER_PAGE_BUSCA = 20
 
 # Rótulos de data em português: strftime depende de locale instalado no
 # servidor, o que não se pode assumir.
@@ -196,6 +198,46 @@ def edicao(data_str):
                                      if e.status == DouEdition.STATUS_ERROR],
                            materias=materias, tipos=tipos, ordens=ORDENS,
                            f_orgao=orgao, f_tipo=tipo, f_ordem=ordem)
+
+
+# ----------------------------------------------------------------- busca
+
+@dou_bp.route('/busca')
+def busca():
+    """Busca por termo em todo o acervo.
+
+    O acervo é global, mas a lista de clientes do atalho é do escritório — é o
+    único ponto desta tela que enxerga tenant.
+    """
+    termo = (request.args.get('q') or '').strip()
+    ordem = 'data' if request.args.get('ordem') == 'data' else 'relevancia'
+    pagina = max(request.args.get('page', 1, type=int) or 1, 1)
+
+    filtros = {
+        'pub_name': request.args.getlist('secao'),
+        'orgao_raiz': request.args.getlist('orgao'),
+        'art_type': request.args.getlist('tipo'),
+        'de': _parse_data(request.args.get('de')),
+        'ate': _parse_data(request.args.get('ate')),
+    }
+
+    resultado = None
+    if termo:
+        resultado = busca_service.search(
+            termo, filtros=filtros, ordem=ordem,
+            pagina=pagina, por_pagina=PER_PAGE_BUSCA)
+
+    law_firm_id = session.get('law_firm_id')
+    clientes = (Client.query.filter_by(law_firm_id=law_firm_id)
+                .order_by(Client.name).all()) if law_firm_id else []
+
+    return render_template(
+        'dou/busca.html',
+        termo=termo, resultado=resultado, filtros=filtros, ordem=ordem,
+        pagina=pagina, por_pagina=PER_PAGE_BUSCA, clientes=clientes,
+        disponivel=busca_service.is_available(),
+        section_labels=DouEdition.SECTION_LABELS,
+    )
 
 
 # ------------------------------------------------------- nível 3: a matéria

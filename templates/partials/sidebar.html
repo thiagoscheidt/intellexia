@@ -338,6 +338,14 @@
               </a>
             </li>
             <li class="nav-item">
+              <a href="{{ url_for('dou.busca') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'dou.busca' else '' }}"
+                style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-search" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Busca</p>
+              </a>
+            </li>
+            <li class="nav-item">
               <a href="{{ url_for('dou.captura') }}"
                 class="nav-link {{ 'active' if request.endpoint == 'dou.captura' else '' }}"
                 style="font-size: 0.9em;">

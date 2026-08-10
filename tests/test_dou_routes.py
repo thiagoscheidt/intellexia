@@ -149,6 +149,42 @@ def test_link_no_menu_lateral():
     check('não depende do Monitoramento', '/comunicacoes' not in html)
 
 
+def test_tela_de_busca():
+    print('\n6. Tela de busca')
+    endpoints = {r.endpoint for r in app.url_map.iter_rules()}
+    check('dou.busca existe', 'dou.busca' in endpoints)
+
+    with app.app_context():
+        usuario = User.query.filter_by(role='admin').first()
+        if usuario is None:
+            print('  ⏭️  nenhum usuário admin no banco — pulando')
+            return
+        user_id, firm_id = usuario.id, usuario.law_firm_id
+
+    with app.test_client() as c:
+        with c.session_transaction() as sessao:
+            sessao['user_id'] = user_id
+            sessao['law_firm_id'] = firm_id
+            sessao['user_role'] = 'admin'
+
+        resposta = c.get('/dou/busca')
+        check('abre sem termo (estado inicial)', resposta.status_code == 200,
+              str(resposta.status_code))
+        html = resposta.get_data(as_text=True)
+        check('estado inicial, sem resultados', 'dou-hit' not in html)
+        check('convida a agir', 'O que você procura' in html)
+
+        resposta = c.get('/dou/busca?q=portaria')
+        check('busca por termo responde 200', resposta.status_code == 200,
+              str(resposta.status_code))
+
+        resposta = c.get('/dou/busca?q=' + 'z' * 30)
+        check('termo sem resultado responde 200, não 500',
+              resposta.status_code == 200, str(resposta.status_code))
+        check('estado vazio explica o que foi buscado',
+              'Nada encontrado' in resposta.get_data(as_text=True))
+
+
 def main():
     print('=' * 60)
     print('TESTES DAS ROTAS DO DIÁRIO OFICIAL')
@@ -159,6 +195,7 @@ def main():
     test_exige_login()
     test_navegacao_em_tres_niveis()
     test_link_no_menu_lateral()
+    test_tela_de_busca()
 
     print('\n' + '=' * 60)
     if _falhas:
