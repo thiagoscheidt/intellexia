@@ -188,6 +188,22 @@ def ingest_date(data: date, secoes=None, with_pdf: bool = True,
                                        'bytes': len(conteudo)})
             continue
 
+        # Nada vai para o disco antes de provar que é um ZIP. A gravação
+        # acontecia antes do parse, e o rollback do banco não desfaz escrita em
+        # disco: quando o INLABS devolveu a página HTML do portal para uma data
+        # de fim de semana, ficaram 12 arquivos .zip que eram HTML. Qualquer
+        # download corrompido ou truncado cairia no mesmo buraco.
+        if not zipfile.is_zipfile(io.BytesIO(conteudo)):
+            amostra = conteudo[:80].decode('utf-8', 'replace').replace('\n', ' ')
+            mensagem = (f'resposta do INLABS não é um ZIP '
+                        f'({len(conteudo)} bytes; começa com "{amostra}")')
+            logger.error('DOU: %s %s — %s', data, secao, mensagem)
+            resumo['erros'] += 1
+            _marcar_erro(data, secao, mensagem)
+            resumo['detalhes'].append({'secao': secao, 'resultado': 'erro',
+                                       'erro': mensagem})
+            continue
+
         try:
             destino = storage_dir(data)
             destino.mkdir(parents=True, exist_ok=True)

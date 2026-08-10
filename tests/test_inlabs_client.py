@@ -30,10 +30,11 @@ def check(nome: str, condicao: bool, detalhe: str = '') -> None:
 
 
 class FakeResponse:
-    def __init__(self, status_code=200, content=b'', cookies=None):
+    def __init__(self, status_code=200, content=b'', cookies=None, headers=None):
         self.status_code = status_code
         self.content = content
         self.cookies = cookies or {}
+        self.headers = headers or {'Content-Type': 'application/octet-stream'}
 
 
 class FakeSession:
@@ -122,6 +123,39 @@ def test_404_nao_e_erro():
     check('404 devolve None em vez de levantar', resultado is None, repr(resultado))
 
 
+def test_data_inexistente_devolve_html():
+    """O INLABS tem DUAS formas de dizer "não publicado".
+
+    Quando a data existe mas a seção não (ex.: uma edição extra que não saiu),
+    responde 404. Mas quando a **data inteira** não existe — fim de semana,
+    feriado — responde **200 com a página HTML do portal**, ~37 KB. Tratar só o
+    404 fazia o HTML chegar ao zipfile e estourar BadZipFile, marcando todo fim
+    de semana como falha de captura.
+    """
+    print('\n6. Data inexistente: 200 com HTML também é "não publicado"')
+    d = date(2026, 8, 8)  # sábado
+    url = f'{ic.URL_DOWNLOAD}2026-08-08&dl=2026-08-08-DO1.zip'
+    pagina = b'<!DOCTYPE html>\r\n<html>\r\n<head>\r\n<title>Imprensa Nacional - INLABS</title>'
+    fake = FakeSession(respostas={
+        url: FakeResponse(200, pagina, headers={'Content-Type': 'text/html; charset=utf-8'})
+    })
+
+    client = ic.InlabsClient(email='a@b.com', password='x')
+    client._session = fake
+
+    check('HTML com 200 devolve None, como o 404',
+          client.download_xml_zip(d, 'DO1') is None,
+          'devolveu a página HTML como se fosse o arquivo')
+
+    # E o caminho normal não pode ter sido quebrado pela correção
+    url_ok = f'{ic.URL_DOWNLOAD}2026-08-10&dl=2026-08-10-DO1.zip'
+    fake_ok = FakeSession(respostas={url_ok: FakeResponse(200, b'PK\x03\x04dados')})
+    client_ok = ic.InlabsClient(email='a@b.com', password='x')
+    client_ok._session = fake_ok
+    check('arquivo de verdade continua passando',
+          client_ok.download_xml_zip(date(2026, 8, 10), 'DO1') == b'PK\x03\x04dados')
+
+
 def test_login_sem_cookie():
     print('\n5. Credencial inválida (login não devolve cookie)')
     fake = FakeSession(cookie=None)
@@ -134,6 +168,36 @@ def test_login_sem_cookie():
         check('login sem cookie levanta InlabsAuthError', True)
 
 
+def test_portal_em_manutencao():
+    """502 do portal não pode virar "verifique as credenciais".
+
+    O INLABS responde 502 com uma página "Sistema em Manutenção". Como o login
+    só checava a presença do cookie, uma indisponibilidade do portal era
+    relatada como credencial errada — mandando quem lê o log do cron caçar
+    problema no lugar errado.
+    """
+    print('\n7. Portal fora do ar é distinguido de credencial errada')
+
+    class SessaoEmManutencao(FakeSession):
+        def request(self, method, url, **kwargs):
+            self.chamadas.append({'method': method, 'url': url, **kwargs})
+            return FakeResponse(502, b'<html><title>Sistema em Manuten&ccedil;&atilde;o</title>',
+                                headers={'Content-Type': 'text/html'})
+
+    client = ic.InlabsClient(email='a@b.com', password='x')
+    client._session = SessaoEmManutencao()
+    try:
+        client.login()
+        check('502 levanta InlabsUnavailable', False, 'não levantou')
+    except ic.InlabsUnavailable as exc:
+        check('502 levanta InlabsUnavailable', True)
+        check('a mensagem fala em indisponibilidade, não em credencial',
+              'indisponível' in str(exc) and 'credenciais' not in str(exc), str(exc))
+    except ic.InlabsAuthError as exc:
+        check('502 levanta InlabsUnavailable', False,
+              f'culpou a credencial: {exc}')
+
+
 def main():
     print('=' * 60)
     print('TESTES DO CLIENT DO INLABS')
@@ -143,7 +207,9 @@ def main():
     test_sem_credenciais()
     test_login_e_headers()
     test_404_nao_e_erro()
+    test_data_inexistente_devolve_html()
     test_login_sem_cookie()
+    test_portal_em_manutencao()
 
     print('\n' + '=' * 60)
     if _falhas:

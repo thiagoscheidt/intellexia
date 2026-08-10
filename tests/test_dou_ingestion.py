@@ -183,6 +183,39 @@ def test_dry_run():
           DouEdition.query.filter_by(data_publicacao=DATA_TESTE).count() == 0)
 
 
+def test_conteudo_nao_e_zip():
+    """Bytes que não são ZIP não podem virar arquivo em disco nem traceback.
+
+    A gravação acontecia antes do parse e o rollback do banco não desfaz
+    escrita em disco: quando o INLABS devolveu a página HTML do portal para
+    datas de fim de semana, ficaram 12 arquivos .zip que eram HTML de 37 KB.
+    """
+    print('\n7. Resposta que não é ZIP não deixa lixo em disco')
+    limpar_dados_de_teste()
+
+    lixo = b'<!DOCTYPE html>\r\n<html><head><title>Imprensa Nacional</title></head></html>'
+    client = FakeClient({(DATA_TESTE, 'DO1'): lixo})
+
+    resultado = ingestion.ingest_date(DATA_TESTE, secoes=['DO1'],
+                                      with_pdf=False, client=client)
+
+    check('contabiliza como erro, sem estourar', resultado['erros'] == 1, str(resultado))
+    check('nenhuma matéria inserida', resultado['materias_inseridas'] == 0, str(resultado))
+
+    caminho = ingestion.storage_dir(DATA_TESTE) / '1970-01-01-DO1.zip'
+    check('nada foi gravado em disco', not caminho.exists(), str(caminho))
+
+    edicao = DouEdition.query.filter_by(data_publicacao=DATA_TESTE, secao='DO1').first()
+    check('edição fica marcada como erro',
+          edicao is not None and edicao.status == DouEdition.STATUS_ERROR,
+          edicao.status if edicao else 'sem edição')
+    check('a mensagem explica o que veio',
+          edicao is not None and 'não é um ZIP' in (edicao.error_message or ''),
+          edicao.error_message if edicao else '')
+
+    limpar_dados_de_teste()
+
+
 def test_storage_dir():
     print('\n6. Caminho de armazenamento')
     caminho = ingestion.storage_dir(date(2026, 8, 10))
@@ -202,6 +235,7 @@ def main():
         test_republicacao()
         test_nao_publicado()
         test_dry_run()
+        test_conteudo_nao_e_zip()
         test_storage_dir()
         limpar_dados_de_teste()
 

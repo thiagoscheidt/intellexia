@@ -56,6 +56,10 @@ class InlabsAuthError(InlabsError):
     """Login recusado: o INLABS não devolveu o cookie de sessão."""
 
 
+class InlabsUnavailable(InlabsError):
+    """INLABS fora do ar (5xx). Transitório — a próxima execução tenta de novo."""
+
+
 def is_configured() -> bool:
     """True quando há credenciais no ambiente. Sem elas o módulo não roda."""
     return bool(os.environ.get('INLABS_EMAIL') and os.environ.get('INLABS_PASSWORD'))
@@ -97,7 +101,20 @@ class InlabsClient:
         }
         payload = {'email': self._email, 'password': self._password}
 
-        self._request_com_retry('POST', URL_LOGIN, headers=headers, data=payload)
+        resposta = self._request_com_retry('POST', URL_LOGIN, headers=headers,
+                                           data=payload)
+
+        # Distinguir "fora do ar" de "credencial errada" antes de olhar o
+        # cookie. O portal responde 502 com uma página "Sistema em Manutenção";
+        # sem esta checagem isso virava "verifique as credenciais" e mandava
+        # quem lê o log caçar problema no lugar errado.
+        if resposta.status_code >= 500:
+            raise InlabsUnavailable(
+                f'INLABS indisponível (HTTP {resposta.status_code}) — '
+                f'provavelmente em manutenção; a próxima execução tenta de novo'
+            )
+        if resposta.status_code != 200:
+            raise InlabsError(f'INLABS devolveu HTTP {resposta.status_code} no login')
 
         cookie = self._session.cookies.get('inlabs_session_cookie')
         if not cookie:
@@ -136,10 +153,21 @@ class InlabsClient:
             resposta = self._request_com_retry('GET', url, headers=self._headers_download())
 
         if resposta.status_code == 404:
-            logger.info('INLABS: %s não publicado', arquivo)
+            logger.info('INLABS: %s não publicado (404)', arquivo)
             return None
         if resposta.status_code != 200:
             raise InlabsError(f'INLABS devolveu HTTP {resposta.status_code} para {arquivo}')
+
+        # O INLABS tem DUAS formas de dizer "não publicado", e só uma delas é
+        # 404. Quando a data existe mas o arquivo não (uma edição extra que não
+        # saiu), responde 404. Quando a **data inteira** não existe — fim de
+        # semana, feriado — responde 200 com a página HTML do portal (~37 KB).
+        # Sem esta checagem o HTML seguia como se fosse o arquivo e estourava
+        # BadZipFile lá na ingestão, marcando todo fim de semana como falha.
+        tipo = (resposta.headers.get('Content-Type') or '').lower()
+        if 'text/html' in tipo:
+            logger.info('INLABS: %s não publicado (portal devolveu HTML)', arquivo)
+            return None
 
         return resposta.content
 

@@ -228,7 +228,18 @@ implementação de referência oficial (`github.com/Imprensa-Nacional/inlabs`).
   `DO1 DO2 DO3 DO1E DO2E DO3E` — as terminadas em `E` são as edições extras,
   arquivos separados); PDF assinado em `YYYY_MM_DD_ASSINADO_<secao>.pdf`
   (minúsculas, `do1 do2 do3` — o PDF **já contempla as extras**).
-- **HTTP 404 é estado normal** ("não publicado naquele dia/seção"), não erro.
+- **"Não publicado" chega de DUAS formas, e só uma é 404.** Data existe e o
+  arquivo não (edição extra que não saiu) → **404**. Data inteira não existe
+  (fim de semana, feriado) → **HTTP 200 com a página HTML do portal** (~37 KB).
+  As duas significam "não publicado"; tratar só o 404 fazia o HTML chegar ao
+  `zipfile` e estourar `BadZipFile` em todo sábado e domingo. O client decide
+  pelo `Content-Type`: `text/html` = página, não arquivo.
+- **Nada é gravado em disco antes de provar que é ZIP.** O `rollback` do banco
+  não desfaz escrita em disco — foi assim que 12 páginas HTML viraram arquivos
+  `.zip` de 37 KB em `uploads/dou/`.
+- **5xx é indisponibilidade, não credencial errada.** O portal responde 502 com
+  "Sistema em Manutenção"; o login checa o status antes do cookie e levanta
+  `InlabsUnavailable`, para o log do cron não mandar caçar problema na senha.
 - **Janela móvel**: o portal mantém ~4 meses de edições e descarta o resto. O
   que não for capturado se perde — daí o `--backfill`.
 - **O INLABS reescreve datas passadas** (republicações, suplementos). Por isso
