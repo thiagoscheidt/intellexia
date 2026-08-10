@@ -4,6 +4,11 @@
 {% block title %}Buscar no Diário Oficial{% endblock %}
 
 {% block extra_css %}
+{# O base.html traz só o select2.min.css. O tema bootstrap-5 é folha à parte, e
+   sem ela `theme: 'bootstrap-5'` deixa o widget sem estilo nenhum. É o que as
+   demais telas com select2 fazem (disputes_center, fap_panel). #}
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
 <link rel="stylesheet" href="{{ url_for('static', filename='css/dou.css') }}">
 {% endblock %}
 
@@ -195,7 +200,9 @@
 {% endif %}
 
 </div>
+{% endblock %}
 
+{% block extra_js %}
 <script>
   (function () {
     const seletor = document.getElementById('seletor-cliente');
@@ -204,7 +211,7 @@
     // Select2 com o matcher de CNPJ do projeto: com centenas de clientes, um
     // <select> simples é rolagem inviável, e o matcher deixa achar tanto pelo
     // nome quanto pelo CNPJ, com ou sem pontuação.
-    if (typeof $ !== 'undefined' && $.fn && $.fn.select2) {
+    if (window.jQuery && $.fn.select2) {
       $(seletor).select2({
         theme: 'bootstrap-5',
         placeholder: 'Buscar por cliente…',
@@ -213,15 +220,25 @@
         matcher: window.cnpjSelect2Matcher,
         language: { noResults: function () { return 'Nenhum cliente encontrado.'; } },
       });
-    }
 
-    // Escolher um cliente preenche a busca com o CNPJ dele e submete.
-    $(seletor).on('change', function () {
-      if (!this.value) return;
-      const campo = document.querySelector('input[name="q"]');
-      campo.value = this.value;
-      campo.form.submit();
-    });
+      // Escolher um cliente preenche a busca com o CNPJ dele e submete.
+      // O evento vem pelo jQuery: o select2 dispara 'change' por lá, e um
+      // addEventListener nativo não o escutaria.
+      $(seletor).on('change', function () {
+        if (!this.value) return;
+        const campo = document.querySelector('input[name="q"]');
+        campo.value = this.value;
+        campo.form.submit();
+      });
+    } else {
+      // Sem jQuery/select2 o <select> continua funcionando como está.
+      seletor.addEventListener('change', function () {
+        if (!this.value) return;
+        const campo = document.querySelector('input[name="q"]');
+        campo.value = this.value;
+        campo.form.submit();
+      });
+    }
   })();
 </script>
 {% endblock %}
