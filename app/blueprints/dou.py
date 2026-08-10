@@ -155,7 +155,13 @@ def materia(article_id):
 
 @dou_bp.route('/edicao/<int:edition_id>/pdf')
 def baixar_pdf(edition_id):
-    """Entrega o PDF assinado da edição, se ainda existir em disco."""
+    """Entrega o PDF assinado da edição, se ainda existir em disco.
+
+    ``as_attachment=False`` faz o navegador **abrir** o PDF no visualizador
+    embutido em vez de baixá-lo — os links apontam para uma aba nova. O
+    ``download_name`` continua definido: é o nome que aparece quando o usuário
+    decide salvar a partir do visualizador.
+    """
     edicao_obj = DouEdition.query.get_or_404(edition_id)
     if not edicao_obj.pdf_disponivel:
         flash('O PDF assinado desta edição não está disponível.', 'warning')
@@ -165,7 +171,8 @@ def baixar_pdf(edition_id):
     caminho = Path(edicao_obj.pdf_path)
     if not caminho.exists():
         abort(404)
-    return send_file(caminho.resolve(), as_attachment=True, download_name=caminho.name)
+    return send_file(caminho.resolve(), as_attachment=False,
+                     download_name=caminho.name, mimetype='application/pdf')
 
 
 # ----------------------------------------------------------------- captura

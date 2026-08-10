@@ -53,8 +53,10 @@
         {% endif %}
         {% if edicao and edicao.pdf_disponivel %}
         <a href="{{ url_for('dou.baixar_pdf', edition_id=edicao.id) }}"
+           target="_blank" rel="noopener"
            class="btn btn-outline-danger btn-sm">
           <i class="bi bi-file-earmark-pdf me-1"></i>PDF assinado da edição
+          <i class="bi bi-box-arrow-up-right ms-1 small"></i>
         </a>
         {% endif %}
         {% if artigo.pub_date and edicao %}
