@@ -139,8 +139,8 @@ Um documento por matéria, `id` = `DouArticle.id`.
 | Papel | Campos | Nota |
 |---|---|---|
 | **Pesquisável** (ordem = peso) | `identifica`, `ementa`, `titulo`, `orgao_hierarquia`, `texto`, `cnpjs`, `processos` | a ordem da lista é a ordem de relevância no Meilisearch |
-| **Filtrável** (viram faceta) | `pub_name`, `pub_date_ts`, `art_type`, `orgao_raiz`, `edicao` | |
-| **Ordenável** | `pub_date_ts` | para "mais recentes primeiro" |
+| **Filtrável** (viram faceta) | `pub_name`, `pub_date_num`, `art_type`, `orgao_raiz`, `edicao` | |
+| **Ordenável** | `pub_date_num` | para "mais recentes primeiro" |
 | **Exibição** | `pagina`, `pagina_num`, `pdf_page`, `data_br`, `edition_id` | não pesquisáveis |
 
 Dois campos derivados, e por quê:
@@ -150,8 +150,10 @@ Dois campos derivados, e por quê:
   `Ministério da Previdência Social/INSS/...`). A hierarquia completa tem
   centenas de valores distintos e não vira faceta usável; a raiz tem dezenas e
   é o corte que se usa na prática.
-- **`pub_date_ts`** — a data como timestamp inteiro. O Meilisearch filtra e
-  ordena por faixa numérica, não por tipo data.
+- **`pub_date_num`** — a data como inteiro `AAAAMMDD` (10/08/2026 → `20260810`).
+  O Meilisearch filtra e ordena por faixa numérica, não por tipo data. Inteiro
+  no formato da data, e não timestamp, porque timestamp depende de fuso e vira
+  erro de um dia em filtro por data.
 
 O campo `texto` é indexado inteiro. Indexar só ementa e título deixaria de fora
 o nome de um cliente citado no corpo de uma licitação, que é justamente uma das
