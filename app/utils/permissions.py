@@ -8,6 +8,7 @@ MODULE_PERMISSIONS = {
     'fap_review': 'Revisor de Peticoes',
     'process_panel': 'Painel de Processos',
     'communications': 'Monitoramento de Processos',
+    'dou': 'Diario Oficial',
     'cases': 'Casos',
     'knowledge_base': 'Base de Conhecimento',
     'tools': 'Ferramentas',
@@ -26,7 +27,7 @@ ADMIN_ONLY_MODULES = {'settings', 'admin_users'}
 
 # Cadastros saem dos defaults de não-admin, mas podem ser concedidos
 # individualmente pela tela de Administração de Usuários.
-_RESTRICTED_BY_DEFAULT = ADMIN_ONLY_MODULES | {'clients', 'lawyers', 'courts'}
+_RESTRICTED_BY_DEFAULT = ADMIN_ONLY_MODULES | {'clients', 'lawyers', 'courts', 'dou'}
 _NON_ADMIN_DEFAULTS = [k for k in ALL_MODULE_PERMISSION_KEYS if k not in _RESTRICTED_BY_DEFAULT]
 
 ROLE_DEFAULT_MODULE_PERMISSIONS = {
@@ -44,6 +45,7 @@ ENDPOINT_MODULE_MAP = {
     'process_panel.': 'process_panel',
     'impugnacao_references.': 'process_panel',
     'communications.': 'communications',
+    'dou.': 'dou',
     'cases.': 'cases',
     'benefits.': 'cases',
     'documents.': 'cases',

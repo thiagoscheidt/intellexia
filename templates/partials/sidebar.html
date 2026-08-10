@@ -316,6 +316,47 @@
         </li>
         {% endif %}
 
+        {% if can_view_module('dou') %}
+        <li
+          class="nav-item {{ 'menu-open' if request.endpoint and request.endpoint.startswith('dou.') else '' }}">
+          <a href="#"
+            class="nav-link {{ 'active' if request.endpoint and request.endpoint.startswith('dou.') else '' }}">
+            <i class="nav-icon bi bi-newspaper"></i>
+            <p style="line-height: 1.15;">
+              Diário Oficial
+              <small class="d-block" style="font-size: 0.72em; opacity: 0.65;">(D.O.U.)</small>
+              <i class="nav-arrow bi bi-chevron-right"></i>
+            </p>
+          </a>
+          <ul class="nav nav-treeview" style="background-color: rgba(0,0,0,0.1);">
+            <li class="nav-item">
+              <a href="{{ url_for('dou.edicoes') }}"
+                class="nav-link {{ 'active' if request.endpoint in ('dou.edicoes', 'dou.edicao', 'dou.materia') else '' }}"
+                style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-collection" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Edições</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('dou.busca') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'dou.busca' else '' }}"
+                style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-search" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Busca</p>
+              </a>
+            </li>
+            <li class="nav-item">
+              <a href="{{ url_for('dou.captura') }}"
+                class="nav-link {{ 'active' if request.endpoint == 'dou.captura' else '' }}"
+                style="font-size: 0.9em;">
+                <i class="nav-icon bi bi-activity" style="margin-right: 8px; color: #6c757d;"></i>
+                <p style="margin-left: 15px;">Captura</p>
+              </a>
+            </li>
+          </ul>
+        </li>
+        {% endif %}
+
         {% if can_view_module('cases') %}
         <li
           class="nav-item {{ 'menu-open' if request.endpoint and (request.endpoint.startswith('cases.') or request.endpoint.startswith('benefits.') or request.endpoint.startswith('documents.') or request.endpoint.startswith('petitions.') or request.endpoint.startswith('fap_reasons.')) else '' }}">

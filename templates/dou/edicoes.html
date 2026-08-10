@@ -1,0 +1,153 @@
+{% extends "layout/base.html" %}
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}Diário Oficial{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dou.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="dou-page">
+
+{{ page_hero(
+     'Diário Oficial da União',
+     'Edições capturadas do portal da Imprensa Nacional',
+     'bi bi-newspaper',
+     [{'label': 'Início', 'href': url_for('dashboard.index')},
+      {'label': 'Diário Oficial', 'active': True}]) }}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <div class="dou-resumo">
+    {% if total_edicoes %}
+    <strong>{{ '{:,}'.format(total_edicoes).replace(',', '.') }}</strong>
+    {{ 'edição' if total_edicoes == 1 else 'edições' }}
+    <span class="mx-1">·</span>
+    {% if periodo_inicio == periodo_fim %}
+    {{ periodo_fim.strftime('%d/%m/%Y') }}
+    {% else %}
+    {{ periodo_inicio.strftime('%d/%m/%Y') }} a {{ periodo_fim.strftime('%d/%m/%Y') }}
+    {% endif %}
+    <span class="mx-1">·</span>
+    <strong>{{ '{:,}'.format(total_materias).replace(',', '.') }}</strong>
+    {{ 'matéria' if total_materias == 1 else 'matérias' }}
+    {% endif %}
+  </div>
+  <div class="d-flex align-items-center gap-2">
+    <a href="{{ url_for('dou.busca') }}" class="dou-cta">
+      <i class="bi bi-search"></i>
+      <span>Buscar no Diário</span>
+    </a>
+    <a href="{{ url_for('dou.captura') }}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-activity me-1"></i>Estado da captura
+    </a>
+  </div>
+</div>
+
+{# A busca é a ação de maior valor da tela: navegar por data serve para ler a
+   edição do dia, mas quem procura um assunto ou um cliente precisa da busca.
+   Por isso ela ganha uma faixa própria, e não só um botão na barra.
+   Só aparece com acervo: sem matéria capturada, convidar a buscar é convidar
+   para uma tela que não teria o que devolver. #}
+{% if total_materias %}
+<a class="dou-busca-convite" href="{{ url_for('dou.busca') }}">
+  <span class="dou-busca-convite__icone"><i class="bi bi-search"></i></span>
+  <span class="dou-busca-convite__texto">
+    <strong>Procurar em todas as edições</strong>
+    <small>Um termo, o CNPJ de um cliente ou um número de processo — em
+      {{ '{:,}'.format(total_materias).replace(',', '.') }} matérias de uma vez</small>
+  </span>
+  <span class="dou-busca-convite__seta"><i class="bi bi-arrow-right"></i></span>
+</a>
+{% endif %}
+
+{% if not linhas %}
+<div class="card border-0 shadow-sm">
+  <div class="card-body text-center py-5">
+    <i class="bi bi-newspaper display-4 text-muted"></i>
+    <h5 class="mt-3">Nenhuma edição capturada ainda</h5>
+    <p class="text-muted mb-0">
+      Rode <code>uv run python scripts/sync_dou.py</code> ou aguarde a próxima
+      execução automática.
+    </p>
+  </div>
+</div>
+{% else %}
+
+{% for linha in linhas %}
+<article class="dou-edicao {{ 'dou-edicao--recente' if loop.first and paginacao.page == 1 }}">
+
+  <a class="dou-data" href="{{ url_for('dou.edicao', data_str=linha.data.isoformat()) }}"
+     aria-label="Edição de {{ linha.data.strftime('%d/%m/%Y') }}">
+    <div class="dou-data__semana">{{ linha.semana }}</div>
+    <div class="dou-data__dia">{{ '%02d' % linha.dia }}</div>
+    <div class="dou-data__mes">{{ linha.mes_ano }}</div>
+  </a>
+
+  <div class="dou-cadernos">
+    {% for e in linha.edicoes %}
+    {% set largura = ((e.qtd_materias or 0) * 100 / maior_caderno) | round(1) %}
+    <div class="dou-caderno dou-caderno--s{{ e.secao_numero[0] }}">
+      <a class="dou-caderno__link"
+         href="{{ url_for('dou.edicao', data_str=linha.data.isoformat(), secao=e.secao) }}"
+         title="{{ e.secao_label }} — {{ e.qtd_materias }} matérias">
+        <span class="dou-caderno__num">{{ e.secao_numero }}</span>
+        <span class="dou-caderno__assunto">{{ e.secao_assunto }}</span>
+        <span class="dou-barra" aria-hidden="true">
+          <span class="dou-barra__preenche" style="width: {{ largura }}%"></span>
+        </span>
+        <span class="dou-caderno__qtd">{{ '{:,}'.format(e.qtd_materias or 0).replace(',', '.') }}</span>
+      </a>
+      {% if e.pdf_disponivel %}
+      <a class="dou-pdf" target="_blank" rel="noopener"
+         href="{{ url_for('dou.baixar_pdf', edition_id=e.id) }}"
+         title="Abrir o PDF assinado da {{ e.secao_label }} em nova aba">
+        <i class="bi bi-file-earmark-pdf"></i>
+      </a>
+      {% else %}
+      <span></span>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+
+  <div class="dou-total">
+    <div class="dou-total__num">{{ '{:,}'.format(linha.total_materias).replace(',', '.') }}</div>
+    <div class="dou-total__rot">matérias</div>
+  </div>
+
+</article>
+{% endfor %}
+
+{% if paginacao.pages > 1 %}
+<div class="d-flex justify-content-between align-items-center mt-4">
+  <small class="text-muted">
+    Página {{ paginacao.page }} de {{ paginacao.pages }}
+  </small>
+  <div class="btn-group btn-group-sm">
+    {% if paginacao.has_prev %}
+    <a class="btn btn-outline-secondary"
+       href="{{ url_for('dou.edicoes', page=paginacao.prev_num) }}">
+      <i class="bi bi-chevron-left me-1"></i>Mais recentes
+    </a>
+    {% endif %}
+    {% if paginacao.has_next %}
+    <a class="btn btn-outline-secondary"
+       href="{{ url_for('dou.edicoes', page=paginacao.next_num) }}">
+      Mais antigas<i class="bi bi-chevron-right ms-1"></i>
+    </a>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+<p class="dou-resumo mt-4 mb-0">
+  <i class="bi bi-info-circle me-1"></i>
+  A barra mostra o tamanho de cada caderno na comparação com o maior desta
+  página. Clique no caderno para ler as matérias, ou no ícone de PDF para abrir
+  o arquivo assinado da Imprensa Nacional em nova aba.
+</p>
+
+{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,160 @@
+{% extends "layout/base.html" %}
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}{{ artigo.identifica or 'Matéria do DOU' }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dou.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="dou-page">
+
+{{ page_hero(
+     artigo.identifica or 'Matéria do Diário Oficial',
+     artigo.orgao_hierarquia or '',
+     'bi bi-file-text',
+     [{'label': 'Diário Oficial', 'href': url_for('dou.edicoes')},
+      {'label': artigo.pub_date.strftime('%d/%m/%Y') if artigo.pub_date else 'Edição',
+       'href': url_for('dou.edicao', data_str=artigo.pub_date.isoformat(), secao=edicao.secao) if artigo.pub_date and edicao else None},
+      {'label': 'Matéria', 'active': True}]) }}
+
+{# Metadados em faixa horizontal, não em coluna lateral: a página do DOU é A3,
+   e espremê-la em 2/3 da largura deixava o texto ilegível. Assim as duas abas
+   ganham a tela inteira. #}
+<div class="card border-0 shadow-sm mb-3">
+  <div class="card-body py-2 px-3 d-flex flex-wrap align-items-center gap-3">
+    <div class="dou-meta">
+      <span class="dou-meta__rot">Seção</span>
+      <span class="dou-meta__val">{{ artigo.pub_name }}</span>
+    </div>
+    <div class="dou-meta">
+      <span class="dou-meta__rot">Data</span>
+      <span class="dou-meta__val">{{ artigo.pub_date.strftime('%d/%m/%Y') if artigo.pub_date else '—' }}</span>
+    </div>
+    <div class="dou-meta">
+      <span class="dou-meta__rot">Edição</span>
+      <span class="dou-meta__val">{{ artigo.edicao or '—' }}</span>
+    </div>
+    <div class="dou-meta">
+      <span class="dou-meta__rot">Página</span>
+      <span class="dou-meta__val">{{ artigo.pagina or '—' }}</span>
+    </div>
+    <div class="dou-meta">
+      <span class="dou-meta__rot">Tipo</span>
+      <span class="dou-meta__val">{{ artigo.art_type or '—' }}</span>
+    </div>
+
+    <div class="ms-auto d-flex flex-wrap gap-2">
+      {% if artigo.pdf_page %}
+      <a href="{{ artigo.pdf_page }}" target="_blank" rel="noopener"
+         class="btn btn-outline-primary btn-sm">
+        <i class="bi bi-box-arrow-up-right me-1"></i>Portal oficial
+      </a>
+      {% endif %}
+      {% if edicao and edicao.pdf_disponivel %}
+      <a href="{{ url_for('dou.baixar_pdf', edition_id=edicao.id) }}"
+         target="_blank" rel="noopener" class="btn btn-outline-danger btn-sm">
+        <i class="bi bi-file-earmark-pdf me-1"></i>Edição completa
+      </a>
+      {% endif %}
+      {% if artigo.pub_date and edicao %}
+      <a href="{{ url_for('dou.edicao', data_str=artigo.pub_date.isoformat(), secao=edicao.secao) }}"
+         class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left me-1"></i>Voltar à edição
+      </a>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% if pagina_pdf %}
+<ul class="nav nav-tabs" id="abas-materia" role="tablist">
+  <li class="nav-item" role="presentation">
+    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#aba-texto"
+            type="button" role="tab" aria-controls="aba-texto" aria-selected="true">
+      <i class="bi bi-file-text me-1"></i>Texto
+    </button>
+  </li>
+  <li class="nav-item" role="presentation">
+    <button class="nav-link" id="botao-aba-pagina" data-bs-toggle="tab"
+            data-bs-target="#aba-pagina" type="button" role="tab"
+            aria-controls="aba-pagina" aria-selected="false">
+      <i class="bi bi-file-earmark-pdf me-1"></i>Página do Diário
+    </button>
+  </li>
+</ul>
+{% endif %}
+
+<div class="tab-content">
+  <div class="tab-pane fade show active" id="aba-texto" role="tabpanel">
+    <div class="card border-0 shadow-sm mb-4 {{ 'rounded-top-0' if pagina_pdf }}">
+      <div class="card-body">
+        {# Medida de leitura: linha longa demais cansa, mesmo com espaço. #}
+        <div class="dou-leitura">
+          {% if artigo.ementa %}
+          <div class="alert alert-light border">
+            <div class="small text-muted mb-1">Ementa</div>
+            {{ artigo.ementa }}
+          </div>
+          {% endif %}
+          {% if artigo.titulo %}<h5>{{ artigo.titulo }}</h5>{% endif %}
+          {% if artigo.subtitulo %}<h6 class="text-muted">{{ artigo.subtitulo }}</h6>{% endif %}
+          <div class="small text-muted mb-3">{{ artigo.orgao_hierarquia }}</div>
+
+          {% if texto_formatado %}
+          {# Já passou por sanitizar_html no blueprint: só tags de conteúdo,
+             sem atributos além de colspan/rowspan. #}
+          <div class="dou-texto">{{ texto_formatado | safe }}</div>
+          {% else %}
+          <div class="dou-texto dou-texto--puro">{{ artigo.texto }}</div>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+
+  {% if pagina_pdf %}
+  <div class="tab-pane fade" id="aba-pagina" role="tabpanel">
+    <div class="card border-0 shadow-sm mb-4 rounded-top-0">
+      <div class="card-body p-2">
+        <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 px-2 pb-2">
+          <small class="text-muted">
+            {{ edicao.secao_label }} · a matéria está na página <strong>{{ artigo.pagina }}</strong>;
+            as vizinhas vêm junto porque um ato pode continuar na página seguinte{% if termo_busca %},
+            e o termo buscado está grifado{% endif %}
+          </small>
+          <a href="{{ url_for('dou.pagina_pdf', article_id=artigo.id, q=termo_busca or None) }}#page={{ pagina_no_recorte }}"
+             target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrows-fullscreen me-1"></i>Abrir em tela cheia
+          </a>
+        </div>
+        {# Só as três páginas, recortadas do PDF da seção: ~510 KB em vez dos
+           60 MB do arquivo inteiro. O src é preguiçoso — quem só quer o texto
+           não busca nada. #}
+        <iframe class="dou-pdf-quadro" title="Página {{ artigo.pagina }} do Diário Oficial"
+                data-src="{{ url_for('dou.pagina_pdf', article_id=artigo.id, q=termo_busca or None) }}#page={{ pagina_no_recorte }}"
+                src="about:blank"></iframe>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if pagina_pdf %}
+<script>
+  // O PDF só é buscado quando a aba é aberta: quem só quer ler o texto não
+  // deve pagar por ele.
+  document.getElementById('botao-aba-pagina')?.addEventListener('shown.bs.tab', function () {
+    const quadro = document.querySelector('.dou-pdf-quadro');
+    if (quadro && quadro.dataset.src && quadro.src !== quadro.dataset.src) {
+      quadro.src = quadro.dataset.src;
+    }
+  });
+</script>
+{% endif %}
+{% endblock %}

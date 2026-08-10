@@ -214,13 +214,14 @@ Uma linha por matéria (`<article>` do XML).
 | `art_class` | String(255) | |
 | `ementa` | Text | |
 | `titulo` / `subtitulo` | Text | |
-| `texto` | `db.Text(16777215)` | MEDIUMTEXT — texto limpo, sem tags |
+| `texto` | `db.Text(16777215)` | LONGTEXT no MySQL — texto limpo, sem tags |
 | `texto_html` | `db.Text(16777215)` | conteúdo original de `<Texto>` |
 | `raw_xml` | `db.Text(16777215)` | o `<article>` inteiro, verbatim |
-| `hash` | String(64) | SHA-256 do conteúdo — **UNIQUE** |
+| `hash` | String(64) | SHA-256 do conteúdo — detecta mudança, não identifica |
 | `created_at` / `updated_at` | DateTime | |
 
-Índices: `(pub_date, pub_name)`, `orgao_hierarquia`, `art_type`, `hash` UNIQUE.
+UNIQUE: `(edition_id, art_id, id_materia)`.
+Índices: `(pub_date, pub_name)`, `orgao_hierarquia`, `art_type`, `hash`.
 
 `raw_xml` é a apólice de seguro: se o parser mapear um campo errado, o dado não
 se perde — reprocessa a partir do banco, sem rebaixar do INLABS.
@@ -254,16 +255,24 @@ Auditoria de cada execução — alimenta a aba Captura.
 
 ### 6.1 Dedup
 
-O `hash` da matéria é UNIQUE e definido como
-`SHA-256(art_id | id_materia | pub_date | pub_name | raw_xml)`, com os campos
-concatenados por `|` e `raw_xml` normalizado (whitespace entre tags colapsado).
+A identidade de uma matéria é `(edition_id, art_id, id_materia)` — uma matéria
+por edição. É essa a chave UNIQUE **e** a chave do upsert: encontrando a linha,
+atualiza os campos; não encontrando, insere.
 
-Incluir `raw_xml` significa que **qualquer alteração de conteúdo gera um hash
-novo** — republicação com texto corrigido entra como matéria distinta, não
-sobrescreve silenciosamente a anterior. O upsert, portanto, casa por
-`(art_id, id_materia, edition_id)`: encontrando a linha, atualiza os campos e o
-`hash`; não encontrando, insere. O `hash` UNIQUE é a rede de segurança contra
-INSERT duplicado quando a mesma matéria chega duas vezes na mesma execução.
+> **As duas têm de ser a mesma chave.** Na primeira implementação a unicidade
+> ficou só no `hash`, enquanto o upsert casava por `(edition_id, art_id,
+> id_materia)`. Quando uma matéria idêntica reaparecia sob outra edição —
+> exatamente o caso de republicação/suplemento da §2.2 — o lookup não a
+> encontrava, tentava INSERT e a constraint global barrava, derrubando a
+> ingestão da edição inteira. Constraint e lookup divergentes é o defeito;
+> espelhá-los é a correção.
+
+O `hash` é `SHA-256(art_id | id_materia | pub_date | pub_name | raw_xml)`, com
+os campos concatenados por `|` e `raw_xml` normalizado (whitespace entre tags
+colapsado). Ele **não identifica** a matéria: serve só para detectar mudança de
+conteúdo. Incluir `raw_xml` significa que qualquer alteração gera hash novo, e é
+assim que a ingestão sabe distinguir "já tenho isso" de "isso foi republicado
+com correção". Fica como índice simples, não único.
 
 Reprocessar o mesmo dia é **UPDATE, nunca INSERT duplicado** — mesma regra do
 `ProcessCommunication`. Isso torna qualquer reexecução segura.
@@ -330,14 +339,29 @@ Módulo **"Diário Oficial"**, prefixo `/dou`, blueprint `dou_bp`, herdando de
 `templates/layout/base.html` e usando `page_hero`, conforme as convenções de
 frontend do projeto.
 
-### 8.1 Aba Acervo
+### 8.1 Acervo — navegação em três níveis
 
-- Navegação por **data** e **seção**.
-- Lista de matérias com filtro por **órgão** (`orgao_hierarquia`) e **tipo de
-  ato** (`art_type`), paginada.
-- Detalhe da matéria: `identifica`, ementa, texto, órgão, página, edição, e link
-  para a página oficial (`pdf_page`).
-- Download do PDF assinado da edição, quando presente.
+A primeira versão caiu direto na lista de matérias e ficou ilegível: um único
+dia tem ~3.400 matérias, o que dava 115 páginas de rolagem sem nenhum degrau
+antes. Pior, o usuário não reconhecia o que estava vendo ("cada item é um
+XML?"). A hierarquia abaixo resolve os dois problemas.
+
+1. **`/dou` — edições por data.** Porta de entrada, espelhando a listagem do
+   INLABS: uma linha por dia, mais recente primeiro, com as seções capturadas
+   (com contagem), o total de matérias e o PDF assinado de cada seção. Quem só
+   quer o PDF do dia resolve aqui, sem ver matéria nenhuma. Só entram datas com
+   ao menos uma seção `parsed` — fim de semana não vira linha vazia.
+2. **`/dou/edicao/<data>` — a edição do dia.** Uma aba por seção publicada, com
+   a contagem de matérias; a aba ativa lista suas matérias com filtro por
+   **órgão** (`orgao_hierarquia`) e **tipo de ato** (`art_type`), paginadas. O
+   PDF assinado da seção ativa fica ao lado dos filtros. Seções não publicadas e
+   com falha aparecem como nota de rodapé, não como abas vazias.
+3. **`/dou/materia/<id>` — a matéria.** `identifica`, ementa, texto, órgão,
+   página, edição, e link para a página oficial (`pdf_page`).
+
+As matérias são filtradas por **`edition_id`**, nunca por `pub_name`: o
+`pubName` vem do XML e não se sabe o que a Imprensa Nacional grava nele dentro
+de um ZIP de edição extra. `edition_id` é exato nos dois casos.
 
 Sem busca por termo nesta fase (fica para o spec de busca full-text). A navegação
 é por data/seção/órgão/tipo, que os índices do §5.3 atendem.

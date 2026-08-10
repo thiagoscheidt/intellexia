@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="ISO-8859-1"?>
+<articles fixed="1">
+<article id="12345678" name="PORTARIA Nº 1.234, DE 8 DE AGOSTO DE 2026" idOficio="99887" pubName="DO1" artType="Portaria" pubDate="10/08/2026" artClass="00012:00003" artCategory="Ministério da Previdência Social/Instituto Nacional do Seguro Social" artSize="2100" artNotes="" numberPage="42" pdfPage="http://pesquisa.in.gov.br/imprensa/jsp/visualiza/index.jsp?jornal=515&amp;pagina=42&amp;data=10/08/2026" editionNumber="152" highlightType="" highlightPriority="" highlightimage="" highlightimagename="" idMateria="87654321">
+<body>
+<Identifica>PORTARIA Nº 1.234, DE 8 DE AGOSTO DE 2026</Identifica>
+<Data>10/08/2026</Data>
+<Ementa>Dispõe sobre o Fator Acidentário de Prevenção - FAP e dá outras providências.</Ementa>
+<Titulo>Título de exemplo</Titulo>
+<SubTitulo>Subtítulo de exemplo</SubTitulo>
+<Texto>&lt;p class="identifica"&gt;PORTARIA Nº 1.234&lt;/p&gt;&lt;p class="dou-paragraph"&gt;O MINISTRO resolve: Art. 1º Fica aprovado o índice composto do FAP.&lt;/p&gt;</Texto>
+</body>
+</article>
+</articles>

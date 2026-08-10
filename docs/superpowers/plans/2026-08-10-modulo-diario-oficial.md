@@ -574,10 +574,18 @@ class DouArticle(db.Model):
     """
     __tablename__ = 'dou_articles'
 
+    # A unicidade espelha exatamente a chave usada no upsert da ingestão. Se
+    # divergirem, o lookup não encontra a linha, tenta INSERT e a constraint
+    # barra — derrubando a edição inteira. Foi o que aconteceu quando a
+    # unicidade estava só no `hash`: uma matéria idêntica reaparecendo em outra
+    # edição (republicação, suplemento) colidia globalmente.
+    # O `hash` fica como índice simples: serve para detectar mudança de
+    # conteúdo, não para identificar a matéria.
     __table_args__ = (
-        db.UniqueConstraint('hash', name='uq_dou_articles_hash'),
+        db.UniqueConstraint('edition_id', 'art_id', 'id_materia',
+                            name='uq_dou_articles_edition_materia'),
         db.Index('ix_dou_articles_pubdate_pubname', 'pub_date', 'pub_name'),
-        db.Index('ix_dou_articles_edition_art', 'edition_id', 'art_id'),
+        db.Index('ix_dou_articles_hash', 'hash'),
     )
 
     id = db.Column(db.Integer, primary_key=True)
@@ -607,7 +615,10 @@ class DouArticle(db.Model):
     titulo = db.Column(db.Text)
     subtitulo = db.Column(db.Text)
 
-    texto = db.Column(db.Text(16777215))        # MEDIUMTEXT — texto limpo
+    # Texto longo: o comprimento declarado faz o MySQL escolher LONGTEXT (o
+    # TEXT padrão são 64 KB em bytes, e matéria de DOU passa disso com folga —
+    # foi o que obrigou o ALTER de process_communications.texto no passado).
+    texto = db.Column(db.Text(16777215))        # texto limpo, sem tags
     texto_html = db.Column(db.Text(16777215))   # conteúdo original de <Texto>
     raw_xml = db.Column(db.Text(16777215))      # o <article> inteiro, verbatim
 
@@ -1919,6 +1930,13 @@ def main() -> int:
     parser.add_argument('--dry-run', action='store_true', help='não grava nada')
     args = parser.parse_args()
 
+    # Erro de argumento é reportado antes de qualquer checagem de ambiente:
+    # quem digitou o comando errado precisa ver o erro real, não "credenciais
+    # ausentes".
+    if args.backfill and not args.desde:
+        _log('❌ --backfill exige --desde YYYY-MM-DD')
+        return 2
+
     if args.secoes:
         os.environ['DOU_SECOES'] = args.secoes
 
@@ -1939,9 +1957,6 @@ def main() -> int:
         with_pdf = not args.sem_pdf
 
         if args.backfill:
-            if not args.desde:
-                _log('❌ --backfill exige --desde YYYY-MM-DD')
-                return 2
             _log(f'⏳ Backfill de {args.desde} até {args.ate or date.today()}...')
             run = ingestion.backfill(args.desde, args.ate, with_pdf=with_pdf, dry_run=args.dry_run)
         elif args.data:

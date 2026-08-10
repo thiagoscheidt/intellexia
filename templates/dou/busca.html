@@ -1,0 +1,244 @@
+{% extends "layout/base.html" %}
+{% from "partials/page_hero.html" import page_hero %}
+
+{% block title %}Buscar no Diário Oficial{% endblock %}
+
+{% block extra_css %}
+{# O base.html traz só o select2.min.css. O tema bootstrap-5 é folha à parte, e
+   sem ela `theme: 'bootstrap-5'` deixa o widget sem estilo nenhum. É o que as
+   demais telas com select2 fazem (disputes_center, fap_panel). #}
+<link rel="stylesheet"
+  href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dou.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="dou-page">
+
+{{ page_hero(
+     'Buscar no Diário Oficial',
+     'Pesquisa em todas as matérias capturadas',
+     'bi bi-search',
+     [{'label': 'Diário Oficial', 'href': url_for('dou.edicoes')},
+      {'label': 'Busca', 'active': True}]) }}
+
+<form method="get" class="card border-0 shadow-sm mb-3">
+  <div class="card-body">
+    <div class="row g-2">
+      <div class="col-lg-7">
+        <input type="search" name="q" value="{{ termo }}" autofocus
+               class="form-control" placeholder="Termo, CNPJ ou número de processo">
+      </div>
+      <div class="col-lg-3">
+        <select class="form-select" id="seletor-cliente">
+          <option value=""></option>
+          {% for cliente in clientes %}
+          <option value="{{ cliente.cnpj }}">{{ cliente.name }} — {{ cliente.cnpj }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div class="col-lg-2 d-grid">
+        <button type="submit" class="btn btn-primary">
+          <i class="bi bi-search me-1"></i>Buscar
+        </button>
+      </div>
+    </div>
+    {% for chave, valores in {'secao': filtros.pub_name, 'orgao': filtros.orgao_raiz, 'tipo': filtros.art_type}.items() %}
+      {% for v in valores %}<input type="hidden" name="{{ chave }}" value="{{ v }}">{% endfor %}
+    {% endfor %}
+    <input type="hidden" name="ordem" value="{{ ordem }}">
+  </div>
+</form>
+
+{% if not disponivel %}
+<div class="alert alert-warning">
+  <i class="bi bi-exclamation-triangle me-1"></i>
+  A busca está indisponível no momento — o serviço de indexação não respondeu.
+  Você ainda pode <a href="{{ url_for('dou.edicoes') }}">navegar pelo acervo</a>.
+</div>
+{% elif not termo %}
+<div class="card border-0 shadow-sm">
+  <div class="card-body text-center py-5">
+    <i class="bi bi-search display-4 text-muted"></i>
+    <h5 class="mt-3">O que você procura no Diário?</h5>
+    <p class="text-muted mb-0">
+      Um termo (<em>fator acidentário</em>), um CNPJ (com ou sem pontuação)
+      ou um número de processo. Ou escolha um cliente na lista acima.
+    </p>
+  </div>
+</div>
+{% elif resultado.indisponivel %}
+<div class="alert alert-danger">
+  A busca falhou. Tente de novo em instantes.
+</div>
+{% else %}
+
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+  <div class="dou-resumo">
+    <strong>{{ '{:,}'.format(resultado.total).replace(',', '.') }}</strong>
+    {{ 'matéria encontrada' if resultado.total == 1 else 'matérias encontradas' }}
+    · {{ resultado.ms }} ms
+    {% if resultado.tipo_consulta == 'cnpj' %}
+    <span class="badge text-bg-light border ms-1">busca por CNPJ</span>
+    {% elif resultado.tipo_consulta == 'processo' %}
+    <span class="badge text-bg-light border ms-1">busca por processo</span>
+    {% endif %}
+  </div>
+  <div class="btn-group btn-group-sm">
+    <a class="btn btn-outline-secondary {{ 'active' if ordem == 'relevancia' }}"
+       href="{{ url_for('dou.busca', q=termo, ordem='relevancia', secao=filtros.pub_name, orgao=filtros.orgao_raiz, tipo=filtros.art_type) }}">Relevância</a>
+    <a class="btn btn-outline-secondary {{ 'active' if ordem == 'data' }}"
+       href="{{ url_for('dou.busca', q=termo, ordem='data', secao=filtros.pub_name, orgao=filtros.orgao_raiz, tipo=filtros.art_type) }}">Mais recentes</a>
+  </div>
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-3">
+    <div class="card border-0 shadow-sm">
+      <div class="card-header bg-white fw-semibold">Refinar</div>
+      <div class="card-body dou-facetas">
+        <form method="get">
+          <input type="hidden" name="q" value="{{ termo }}">
+          <input type="hidden" name="ordem" value="{{ ordem }}">
+
+          {% for campo, rotulo, param, selecionados in [
+               ('pub_name', 'Seção', 'secao', filtros.pub_name),
+               ('orgao_raiz', 'Órgão', 'orgao', filtros.orgao_raiz),
+               ('art_type', 'Tipo de ato', 'tipo', filtros.art_type)] %}
+            {% set dist = resultado.facetas.get(campo) or {} %}
+            {% if dist %}
+            <div class="dou-faceta">
+              <div class="dou-faceta__titulo">{{ rotulo }}</div>
+              {% for valor, qtd in dist | dictsort(by='value', reverse=true) %}
+              {% if loop.index <= 8 %}
+              <label class="dou-faceta__item">
+                <input type="checkbox" name="{{ param }}" value="{{ valor }}"
+                       {{ 'checked' if valor in selecionados }}>
+                <span class="dou-faceta__rot" title="{{ valor }}">
+                  {{ section_labels.get(valor, valor) if campo == 'pub_name' else valor }}
+                </span>
+                <span class="dou-faceta__qtd">{{ qtd }}</span>
+              </label>
+              {% endif %}
+              {% endfor %}
+            </div>
+            {% endif %}
+          {% endfor %}
+
+          <div class="dou-faceta">
+            <div class="dou-faceta__titulo">Período</div>
+            <div class="d-flex gap-1">
+              <input type="date" name="de" class="form-control form-control-sm"
+                     value="{{ filtros.de.isoformat() if filtros.de else '' }}">
+              <input type="date" name="ate" class="form-control form-control-sm"
+                     value="{{ filtros.ate.isoformat() if filtros.ate else '' }}">
+            </div>
+          </div>
+
+          <div class="d-grid gap-1 mt-3">
+            <button type="submit" class="btn btn-primary btn-sm">Aplicar</button>
+            <a href="{{ url_for('dou.busca', q=termo) }}"
+               class="btn btn-outline-secondary btn-sm">Limpar filtros</a>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <div class="col-lg-9">
+    {% if not resultado.hits %}
+    <div class="card border-0 shadow-sm">
+      <div class="card-body text-center py-5 text-muted">
+        <i class="bi bi-search display-6"></i>
+        <p class="mt-2 mb-0">
+          Nada encontrado para <strong>{{ termo }}</strong>.
+          Tente outro termo ou remova filtros.
+        </p>
+      </div>
+    </div>
+    {% else %}
+    {% for h in resultado.hits %}
+    <a class="dou-hit" href="{{ url_for('dou.materia', article_id=h.id, q=termo) }}">
+      <div class="dou-hit__titulo">{{ h.identifica | safe }}</div>
+      <div class="dou-hit__meta">
+        {{ h.data_br }} · {{ h.pub_name }}{% if h.pagina %} · p. {{ h.pagina }}{% endif %}
+        {% if h.art_type and h.art_type != '—' %} · {{ h.art_type }}{% endif %}
+      </div>
+      {% if h.trecho %}
+      <div class="dou-hit__trecho">…{{ h.trecho | safe }}…</div>
+      {% elif h.ementa %}
+      <div class="dou-hit__trecho">{{ h.ementa | safe }}</div>
+      {% endif %}
+      <div class="dou-hit__orgao">{{ h.orgao_hierarquia }}</div>
+    </a>
+    {% endfor %}
+
+    {% set total_paginas = (resultado.total_navegavel // por_pagina) + (1 if resultado.total_navegavel % por_pagina else 0) %}
+    {% if total_paginas > 1 %}
+    <div class="d-flex justify-content-between align-items-center mt-3">
+      <small class="text-muted">
+        Página {{ pagina }} de {{ total_paginas }}
+        {% if resultado.total > resultado.total_navegavel %}
+        <span class="ms-1">· refine os filtros para alcançar as demais</span>
+        {% endif %}
+      </small>
+      <div class="btn-group btn-group-sm">
+        {% if pagina > 1 %}
+        <a class="btn btn-outline-secondary"
+           href="{{ url_for('dou.busca', q=termo, ordem=ordem, secao=filtros.pub_name, orgao=filtros.orgao_raiz, tipo=filtros.art_type, page=pagina-1) }}">Anterior</a>
+        {% endif %}
+        {% if pagina < total_paginas %}
+        <a class="btn btn-outline-secondary"
+           href="{{ url_for('dou.busca', q=termo, ordem=ordem, secao=filtros.pub_name, orgao=filtros.orgao_raiz, tipo=filtros.art_type, page=pagina+1) }}">Próxima</a>
+        {% endif %}
+      </div>
+    </div>
+    {% endif %}
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+  (function () {
+    const seletor = document.getElementById('seletor-cliente');
+    if (!seletor) return;
+
+    // Select2 com o matcher de CNPJ do projeto: com centenas de clientes, um
+    // <select> simples é rolagem inviável, e o matcher deixa achar tanto pelo
+    // nome quanto pelo CNPJ, com ou sem pontuação.
+    if (window.jQuery && $.fn.select2) {
+      $(seletor).select2({
+        theme: 'bootstrap-5',
+        placeholder: 'Buscar por cliente…',
+        allowClear: true,
+        width: '100%',
+        matcher: window.cnpjSelect2Matcher,
+        language: { noResults: function () { return 'Nenhum cliente encontrado.'; } },
+      });
+
+      // Escolher um cliente preenche a busca com o CNPJ dele e submete.
+      // O evento vem pelo jQuery: o select2 dispara 'change' por lá, e um
+      // addEventListener nativo não o escutaria.
+      $(seletor).on('change', function () {
+        if (!this.value) return;
+        const campo = document.querySelector('input[name="q"]');
+        campo.value = this.value;
+        campo.form.submit();
+      });
+    } else {
+      // Sem jQuery/select2 o <select> continua funcionando como está.
+      seletor.addEventListener('change', function () {
+        if (!this.value) return;
+        const campo = document.querySelector('input[name="q"]');
+        campo.value = this.value;
+        campo.form.submit();
+      });
+    }
+  })();
+</script>
+{% endblock %}

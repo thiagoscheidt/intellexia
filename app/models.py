@@ -3749,3 +3749,208 @@ class CommunicationSyncState(db.Model):
 
     def __repr__(self):
         return f'<CommunicationSyncState lawyer_id={self.lawyer_id} last={self.last_synced_date}>'
+
+
+class DouEdition(db.Model):
+    """Tabela dou_editions - uma edição do DOU por (data, seção).
+
+    **Sem law_firm_id, deliberadamente.** O DOU é dado público federal, byte a
+    byte idêntico para todo escritório: replicá-lo por tenant duplicaria ~32 GB
+    por ano por escritório sem proteger sigilo nenhum. É um catálogo público
+    compartilhado. O que for específico de escritório em fases futuras
+    (watchlist, marcação de leitura) entra em tabela própria, com law_firm_id.
+    """
+    __tablename__ = 'dou_editions'
+
+    # Seções do XML: as terminadas em E são as edições extras, arquivos separados
+    XML_SECTIONS = ('DO1', 'DO2', 'DO3', 'DO1E', 'DO2E', 'DO3E')
+    # Seções do PDF assinado (minúsculas na URL) — o PDF já contempla as extras
+    PDF_SECTIONS = ('do1', 'do2', 'do3')
+    SECTION_LABELS = {
+        'DO1': 'Seção 1 — Atos Normativos',
+        'DO2': 'Seção 2 — Pessoal',
+        'DO3': 'Seção 3 — Contratos e Licitações',
+        'DO1E': 'Seção 1 — Edição Extra',
+        'DO2E': 'Seção 2 — Edição Extra',
+        'DO3E': 'Seção 3 — Edição Extra',
+    }
+    # Só o assunto do caderno, sem o prefixo "Seção N" — na tela o número já
+    # aparece no chip ao lado, e repeti-lo rouba espaço da informação.
+    SECTION_SUBJECTS = {
+        'DO1': 'Atos normativos',
+        'DO2': 'Pessoal',
+        'DO3': 'Contratos e licitações',
+        'DO1E': 'Atos normativos · extra',
+        'DO2E': 'Pessoal · extra',
+        'DO3E': 'Contratos · extra',
+    }
+
+    STATUS_PENDING = 'pending'
+    STATUS_DOWNLOADED = 'downloaded'
+    STATUS_PARSED = 'parsed'
+    STATUS_NOT_PUBLISHED = 'not_published'
+    STATUS_ERROR = 'error'
+
+    __table_args__ = (
+        db.UniqueConstraint('data_publicacao', 'secao', name='uq_dou_editions_data_secao'),
+        db.Index('ix_dou_editions_data_secao', 'data_publicacao', 'secao'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    data_publicacao = db.Column(db.Date, nullable=False, index=True)
+    secao = db.Column(db.String(10), nullable=False, index=True)
+
+    qtd_materias = db.Column(db.Integer, default=0, nullable=False)
+
+    zip_path = db.Column(db.String(500))        # relativo: uploads/dou/YYYY/MM/DD/...
+    zip_bytes = db.Column(db.BigInteger)
+    content_signature = db.Column(db.String(64))  # SHA-256 do ZIP — detecta republicação
+
+    pdf_path = db.Column(db.String(500))        # nulo nas seções *E (o PDF cobre as extras)
+    pdf_bytes = db.Column(db.BigInteger)
+    pdf_purged_at = db.Column(db.DateTime)      # marcado quando a retenção poda o PDF
+
+    status = db.Column(db.String(20), nullable=False, default=STATUS_PENDING, index=True)
+    error_message = db.Column(db.Text)
+
+    baixado_em = db.Column(db.DateTime)
+    processado_em = db.Column(db.DateTime)
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    articles = db.relationship(
+        'DouArticle', back_populates='edition',
+        cascade='all, delete-orphan', passive_deletes=True,
+    )
+
+    @property
+    def secao_label(self):
+        return self.SECTION_LABELS.get(self.secao, self.secao)
+
+    @property
+    def secao_assunto(self):
+        """'Atos normativos' — o assunto do caderno, sem o prefixo 'Seção N'."""
+        return self.SECTION_SUBJECTS.get(self.secao, self.secao)
+
+    @property
+    def secao_numero(self):
+        """'DO1' → '1'; 'DO1E' → '1E'. O rótulo curto do chip na tela."""
+        return (self.secao or '').replace('DO', '') or self.secao
+
+    @property
+    def pdf_disponivel(self):
+        return bool(self.pdf_path) and not self.pdf_purged_at
+
+    def __repr__(self):
+        return f'<DouEdition {self.data_publicacao} {self.secao} status={self.status}>'
+
+
+class DouArticle(db.Model):
+    """Tabela dou_articles - uma matéria publicada no DOU.
+
+    Sem law_firm_id pelo mesmo motivo de DouEdition. ``raw_xml`` guarda o
+    <article> verbatim: se o parser mapear um campo errado, o dado não se perde
+    — reprocessa a partir do banco, sem rebaixar do INLABS.
+    """
+    __tablename__ = 'dou_articles'
+
+    # A unicidade espelha exatamente a chave usada no upsert da ingestão. Se
+    # divergirem, o lookup não encontra a linha, tenta INSERT e a constraint
+    # barra — derrubando a edição inteira. Foi o que aconteceu quando a
+    # unicidade estava só no `hash`: uma matéria idêntica reaparecendo em outra
+    # edição (republicação, suplemento) colidia globalmente.
+    # O `hash` fica como índice simples: serve para detectar mudança de
+    # conteúdo, não para identificar a matéria.
+    __table_args__ = (
+        db.UniqueConstraint('edition_id', 'art_id', 'id_materia',
+                            name='uq_dou_articles_edition_materia'),
+        db.Index('ix_dou_articles_pubdate_pubname', 'pub_date', 'pub_name'),
+        db.Index('ix_dou_articles_hash', 'hash'),
+    )
+
+    id = db.Column(db.Integer, primary_key=True)
+    edition_id = db.Column(
+        db.Integer, db.ForeignKey('dou_editions.id', ondelete='CASCADE'),
+        nullable=False, index=True,
+    )
+
+    # Chaves do INLABS
+    art_id = db.Column(db.String(50), index=True)
+    id_materia = db.Column(db.String(50), index=True)
+
+    # Desnormalizados da edição, para filtro barato sem JOIN
+    pub_name = db.Column(db.String(10), index=True)
+    pub_date = db.Column(db.Date, index=True)
+
+    edicao = db.Column(db.String(20))
+    pagina = db.Column(db.String(20))           # como veio do XML, verbatim
+    # Mesma página como inteiro, só para ordenar: a ordem de página é a ordem de
+    # leitura do jornal, e ordenar pela coluna de texto daria 1, 101, 103, ..., 2.
+    # Coluna própria (em vez de CAST na query) para o índice ser usável e para
+    # não depender de sintaxe específica de MySQL ou SQLite.
+    pagina_num = db.Column(db.Integer, index=True)
+    pdf_page = db.Column(db.Text)               # URL da página no pesquisa.in.gov.br
+
+    orgao_hierarquia = db.Column(db.String(500), index=True)   # artCategory
+    identifica = db.Column(db.String(500))      # "PORTARIA Nº 1.234, DE ..."
+    art_type = db.Column(db.String(100), index=True)
+    art_class = db.Column(db.String(255))
+
+    ementa = db.Column(db.Text)
+    titulo = db.Column(db.Text)
+    subtitulo = db.Column(db.Text)
+
+    # Texto longo: o comprimento declarado faz o MySQL escolher LONGTEXT (o
+    # TEXT padrão são 64 KB em bytes, e matéria de DOU passa disso com folga —
+    # foi o que obrigou o ALTER de process_communications.texto no passado).
+    texto = db.Column(db.Text(16777215))        # texto limpo, sem tags
+    texto_html = db.Column(db.Text(16777215))   # conteúdo original de <Texto>
+    raw_xml = db.Column(db.Text(16777215))      # o <article> inteiro, verbatim
+
+    hash = db.Column(db.String(64), nullable=False)
+
+    created_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+    updated_at = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
+
+    edition = db.relationship('DouEdition', back_populates='articles')
+
+    def __repr__(self):
+        return f'<DouArticle {self.pub_name} {self.pub_date} {self.identifica!r}>'
+
+
+class DouSyncRun(db.Model):
+    """Tabela dou_sync_runs - auditoria de cada execução da captura do DOU.
+
+    Alimenta a aba Captura da tela. Sem law_firm_id: a captura é global.
+    """
+    __tablename__ = 'dou_sync_runs'
+
+    MODO_CRON = 'cron'
+    MODO_BACKFILL = 'backfill'
+    MODO_MANUAL = 'manual'
+
+    STATUS_RUNNING = 'running'
+    STATUS_SUCCESS = 'success'
+    STATUS_PARTIAL = 'partial'
+    STATUS_ERROR = 'error'
+
+    id = db.Column(db.Integer, primary_key=True)
+    modo = db.Column(db.String(20), nullable=False, default=MODO_CRON, index=True)
+
+    iniciado_em = db.Column(db.DateTime, default=datetime.now, nullable=False, index=True)
+    finalizado_em = db.Column(db.DateTime)
+
+    data_inicial = db.Column(db.Date)
+    data_final = db.Column(db.Date)
+
+    edicoes_baixadas = db.Column(db.Integer, default=0, nullable=False)
+    materias_inseridas = db.Column(db.Integer, default=0, nullable=False)
+    materias_atualizadas = db.Column(db.Integer, default=0, nullable=False)
+    nao_publicados = db.Column(db.Integer, default=0, nullable=False)  # 404 esperados
+    erros = db.Column(db.Integer, default=0, nullable=False)
+
+    status = db.Column(db.String(20), nullable=False, default=STATUS_RUNNING, index=True)
+    detalhe_json = db.Column(db.JSON)           # por dia/seção, para diagnóstico
+
+    def __repr__(self):
+        return f'<DouSyncRun {self.modo} {self.iniciado_em} status={self.status}>'
