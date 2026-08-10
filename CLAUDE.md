@@ -144,6 +144,7 @@ intellexia/
 | `admin_users` | — | Gerenciamento de usuários (admin-only) |
 | `access_audit` | `/admin/access-audit` | Atividade de usuários (admin-only): último login, telas acessadas, online agora. Visitas de tela agregadas por dia em `user_page_visits`, gravadas pelo middleware no mesmo commit de `last_activity` |
 | `docs` | `/docs` | Manual de uso dos painéis (renderizado dos markdowns) + assistente "pergunte ao manual" |
+| `dou` | `/dou` | **Diário Oficial**: acervo do DOU capturado do INLABS (Imprensa Nacional). Captura diária dos ZIPs de XML das seções `DO1 DO2 DO3 DO1E DO2E DO3E` mais os PDFs assinados, quebrando cada edição matéria a matéria. Tela de acervo (navegação por data/seção, filtro por órgão e tipo de ato) e de captura (cobertura, falhas, reprocesso) |
 | `communications` | `/comunicacoes` | **Monitoramento de Processos**: comunicações processuais por fonte de informação (`ProcessCommunication.source` — hoje só `comunica_pje`; novas fontes = nova constante `SOURCE_*` + rótulo em `SOURCE_LABELS`). Radar por OAB, inteiro teor, controle de lidas, descoberta automática de processos. O nome de exibição é "Monitoramento de Processos"; endpoint/URL/módulo permanecem `communications` |
 
 ### Documentação do usuário (Manual + Assistente "pergunte ao manual")
@@ -213,6 +214,44 @@ Regras oficiais que o client implementa — não as contorne:
 - Endpoints públicos além de `GET /comunicacao`: `GET /comunicacao/{hash}/certidao` (certidão), `GET /comunicacao/tribunal` (tribunais + data do último envio) e `GET /caderno/{sigla}/{data}/{meio}` (caderno diário compactado por tribunal, disponível a partir das 03:00). Login/POST/DELETE são exclusivos dos Tribunais.
 
 **Sincronização por caderno (modo alternativo)**: `sync_law_firm_from_cadernos` baixa o caderno diário de cada tribunal (zip de JSONs, mesmo schema de `/comunicacao`) e filtra localmente pelas OABs do escritório — 1 download por tribunal em vez de 1 consulta por advogado; não sofre o limite de 10.000 resultados. Tribunais padrão vêm do histórico do escritório (`firm_tribunal_siglas`). Usa o mesmo upsert por hash, então rodar junto com a sincronização por OAB não duplica. CLI: `scripts/sync_process_communications.py --caderno [--data YYYY-MM-DD] [--tribunais TRF4,TRF3]`. Escala: caderno do TRF4 ≈ 20 MB / 32 mil comunicações, varredura local ≈ 4s.
+
+### Integração INLABS / Diário Oficial da União
+
+Portal de dados abertos da Imprensa Nacional. Todo acesso isolado em
+`app/services/inlabs_client.py`, com o mecanismo conferido contra a
+implementação de referência oficial (`github.com/Imprensa-Nacional/inlabs`).
+
+- **Login**: `POST /logar.php` com form `{email, password}` → cookie
+  `inlabs_session_cookie`. Downloads exigem os headers `Cookie` e
+  `origem: 736372697074`.
+- **Arquivos**: XML em `YYYY-MM-DD-<SECAO>.zip` (seções em MAIÚSCULAS,
+  `DO1 DO2 DO3 DO1E DO2E DO3E` — as terminadas em `E` são as edições extras,
+  arquivos separados); PDF assinado em `YYYY_MM_DD_ASSINADO_<secao>.pdf`
+  (minúsculas, `do1 do2 do3` — o PDF **já contempla as extras**).
+- **HTTP 404 é estado normal** ("não publicado naquele dia/seção"), não erro.
+- **Janela móvel**: o portal mantém ~4 meses de edições e descarta o resto. O
+  que não for capturado se perde — daí o `--backfill`.
+- **O INLABS reescreve datas passadas** (republicações, suplementos). Por isso
+  toda execução reconfere os últimos `DOU_RECHECK_DAYS` dias comparando o
+  SHA-256 do ZIP com `dou_editions.content_signature`. Um cron que só olha
+  "hoje" perde essas republicações.
+- **Identidade da matéria** é `(edition_id, art_id, id_materia)` — é a chave
+  UNIQUE **e** a chave do upsert, e as duas têm de continuar iguais. O `hash`
+  do conteúdo serve só para detectar mudança, nunca para identificar: quando a
+  unicidade ficou nele, uma matéria idêntica reaparecendo em outra edição
+  colidia e derrubava a ingestão do dia inteiro.
+- **XML sempre por `defusedxml`**, nunca `xml.etree`: o conteúdo vem de um ZIP
+  baixado da rede, e o parser da stdlib expande entidades — uma bomba
+  "billion laughs" consumiria toda a memória do servidor.
+- **Exceção de multi-tenancy**: `dou_editions`, `dou_articles` e
+  `dou_sync_runs` **não têm `law_firm_id`**. O DOU é dado público federal,
+  idêntico para todo escritório; replicá-lo por tenant custaria ~32 GB/ano por
+  escritório sem proteger sigilo nenhum. É um catálogo público compartilhado.
+  O que for específico de escritório (watchlist, marcação de leitura) entra em
+  tabela própria, com `law_firm_id` — o invariante continua valendo para todo
+  dado de negócio.
+- **Retenção**: `DOU_PDF_RETENTION_MONTHS` (padrão 24) poda apenas os PDFs;
+  XML, texto e metadados nunca são podados.
 
 ### Timezone
 
@@ -355,6 +394,9 @@ FapReview.revision [POST]
 | `access_audit_service`                 | Auditoria de acesso: registro de visitas de tela e estatísticas de atividade/online — fonte única do dashboard admin |
 | `comunica_pje_client`                  | Cliente HTTP da API pública do Comunica PJe/DJEN — todo acesso isolado aqui; pacing global + regras de rate limit (ver seção "Integração Comunica PJe") |
 | `communication_monitor_service`        | Monitoramento de Processos: sincronização por OAB e por caderno (dedup por hash da API), descoberta de processos (`origin='comunica_auto'` + triagem), explicação IA com cache (`explain_communication`), queries da tela e das tools MCP — fonte única |
+| `inlabs_client`                        | Cliente HTTP do INLABS (Imprensa Nacional) — todo acesso isolado aqui: login, cookie de sessão, montagem de URL, retry com teto, timeout e relogin transparente |
+| `dou_xml_parser`                       | XML do DOU → dicts. Função pura, sem rede/banco/Flask — a peça que muda se a Imprensa Nacional alterar o schema |
+| `dou_ingestion_service`                | Ingestão do DOU: download → disco → parse → upsert → auditoria. Dedup por chave da matéria, janela de reverificação e retenção de PDF — fonte única da tela e do cron |
 | `process_radar_service`                | Radar da Mesa de Trabalho (providências IA + publicações não lidas + movimentação DataJud) — fonte única do widget do Painel de Processos (`build_radar`) e do e-mail Resumo do Radar (`build_radar_digest`) |
 | `JudicialSentenceAnalysisService`      | Análise de sentenças judiciais                            |
 | `DataJudApi`                           | Integração com API DataJud do CNJ                         |
@@ -411,6 +453,14 @@ KB_MAX_HISTORY_CHARS=12000
 # Processamento de documentos
 MAX_CHARS_PER_CHUNK=1500
 SUMMARY_MAX_CHARS=50000
+
+# INLABS / Diário Oficial da União (opcional — em branco desativa a captura)
+INLABS_EMAIL=...
+INLABS_PASSWORD=...
+DOU_SECOES=DO1,DO2,DO3,DO1E,DO2E,DO3E   # padrão: todas
+DOU_RECHECK_DAYS=7                      # janela de reverificação
+DOU_PDF_RETENTION_MONTHS=24             # 0 = nunca podar
+DOU_DOWNLOAD_TIMEOUT=120                # segundos
 ```
 
 ---
