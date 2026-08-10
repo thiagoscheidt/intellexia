@@ -331,6 +331,32 @@ def test_escape_do_destaque():
     check('script do texto não vira tag', '<script>' not in hostil, hostil)
 
 
+def test_termos_para_pdf():
+    """O que procurar dentro do PDF depende de como o número aparece impresso."""
+    print('\n12. Termos para grifar no PDF')
+
+    for entrada in ('90400888133533', '90.400.888/1335-33'):
+        termos = busca.termos_para_pdf(entrada)
+        check(f'{entrada!r} gera as duas grafias',
+              termos == ['90.400.888/1335-33', '90400888133533'], str(termos))
+
+    termos = busca.termos_para_pdf('15414630210202680')
+    check('processo também é formatado',
+          termos[0] == '15414.630210/2026-80', str(termos))
+
+    check('texto livre vai como está',
+          busca.termos_para_pdf('fator acidentário') == ['fator acidentário'],
+          str(busca.termos_para_pdf('fator acidentário')))
+    check('termo em branco não gera nada', busca.termos_para_pdf('  ') == [])
+
+    check('formatar CNPJ', busca.formatar_identificador('cnpj', '90400888133533')
+          == '90.400.888/1335-33')
+    check('formatar processo', busca.formatar_identificador('processo', '15414630210202680')
+          == '15414.630210/2026-80')
+    check('dígitos de menos devolve None',
+          busca.formatar_identificador('cnpj', '123') is None)
+
+
 def main():
     print('=' * 60)
     print('TESTES DA BUSCA DO DOU')
@@ -347,6 +373,7 @@ def main():
     test_busca_com_filtro()
     test_trecho_do_identificador()
     test_escape_do_destaque()
+    test_termos_para_pdf()
 
     print('\n' + '=' * 60)
     if _falhas:

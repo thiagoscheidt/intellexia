@@ -158,7 +158,7 @@
     </div>
     {% else %}
     {% for h in resultado.hits %}
-    <a class="dou-hit" href="{{ url_for('dou.materia', article_id=h.id) }}">
+    <a class="dou-hit" href="{{ url_for('dou.materia', article_id=h.id, q=termo) }}">
       <div class="dou-hit__titulo">{{ h.identifica | safe }}</div>
       <div class="dou-hit__meta">
         {{ h.data_br }} · {{ h.pub_name }}{% if h.pagina %} · p. {{ h.pagina }}{% endif %}

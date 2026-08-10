@@ -121,9 +121,10 @@
         <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 px-2 pb-2">
           <small class="text-muted">
             {{ edicao.secao_label }} · a matéria está na página <strong>{{ artigo.pagina }}</strong>;
-            as vizinhas vêm junto porque um ato pode continuar na página seguinte
+            as vizinhas vêm junto porque um ato pode continuar na página seguinte{% if termo_busca %},
+            e o termo buscado está grifado{% endif %}
           </small>
-          <a href="{{ url_for('dou.pagina_pdf', article_id=artigo.id) }}#page={{ pagina_no_recorte }}"
+          <a href="{{ url_for('dou.pagina_pdf', article_id=artigo.id, q=termo_busca or None) }}#page={{ pagina_no_recorte }}"
              target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm">
             <i class="bi bi-arrows-fullscreen me-1"></i>Abrir em tela cheia
           </a>
@@ -132,7 +133,7 @@
            60 MB do arquivo inteiro. O src é preguiçoso — quem só quer o texto
            não busca nada. #}
         <iframe class="dou-pdf-quadro" title="Página {{ artigo.pagina }} do Diário Oficial"
-                data-src="{{ url_for('dou.pagina_pdf', article_id=artigo.id) }}#page={{ pagina_no_recorte }}"
+                data-src="{{ url_for('dou.pagina_pdf', article_id=artigo.id, q=termo_busca or None) }}#page={{ pagina_no_recorte }}"
                 src="about:blank"></iframe>
       </div>
     </div>

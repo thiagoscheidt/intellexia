@@ -260,17 +260,71 @@ def materia(article_id):
     # ela abre a seção e não há anterior; a segunda no resto dos casos.
     pagina_no_recorte = 1 if (artigo.pagina_num or 1) <= 1 else 2
 
+    # Vindo da busca, abrir onde o termo está — que nem sempre é a página
+    # registrada na matéria. No edital 11908 o título está na 109 e o CNPJ
+    # procurado, na 110: abrir na 109 mostraria a página certa e o achado
+    # nenhum.
+    termo_busca = (request.args.get('q') or '').strip()
+    if termo_busca and pagina_no_pdf:
+        encontrada = _pagina_do_termo(artigo, termo_busca)
+        if encontrada:
+            pagina_no_recorte = encontrada
+
     return render_template(
         'dou/materia.html',
         artigo=artigo,
         edicao=edicao_obj,
         pagina_no_recorte=pagina_no_recorte,
+        termo_busca=termo_busca,
         # O HTML do documento passa pela faxina antes de ir para a tela: é
         # conteúdo de terceiros, e renderizá-lo cru deixaria o DOU injetar
         # marcação na página.
         texto_formatado=sanitizar_html(artigo.texto_html),
         pagina_pdf=pagina_no_pdf,
     )
+
+
+def _janela_do_recorte(artigo, total_paginas):
+    """(início, fim) em índice zero das páginas que entram no recorte."""
+    indice = artigo.pagina_num - 1
+    return max(0, indice - 1), min(total_paginas - 1, indice + 1)
+
+
+def _pagina_do_termo(artigo, consulta):
+    """Em qual página do recorte o termo aparece (1-based). 0 se não achar.
+
+    Custa uma abertura do PDF (~10 ms) e só roda quando se veio da busca.
+    """
+    termos = busca_service.termos_para_pdf(consulta)
+    if not termos:
+        return 0
+    try:
+        import fitz
+        with fitz.open(Path(artigo.edition.pdf_path)) as documento:
+            inicio, fim = _janela_do_recorte(artigo, documento.page_count)
+            for numero in range(inicio, fim + 1):
+                if any(documento[numero].search_for(t) for t in termos):
+                    return numero - inicio + 1
+    except Exception:  # noqa: BLE001 — é conveniência; falhar volta ao padrão
+        current_app.logger.warning(
+            'DOU: não foi possível localizar %r no PDF da matéria %s',
+            consulta, artigo.id)
+    return 0
+
+
+def _grifar(recorte, termos) -> int:
+    """Marca as ocorrências dos termos no recorte. Devolve a 1ª página com grifo.
+
+    Devolve 0 quando não achou nada — quem chama decide para onde abrir.
+    """
+    primeira = 0
+    for numero in range(recorte.page_count):
+        pagina = recorte[numero]
+        for termo in termos:
+            for retangulo in pagina.search_for(termo):
+                pagina.add_highlight_annot(retangulo)
+                primeira = primeira or (numero + 1)
+    return primeira
 
 
 @dou_bp.route('/materia/<int:article_id>/pagina.pdf')
@@ -295,16 +349,27 @@ def pagina_pdf(article_id):
     if not caminho.exists():
         abort(404)
 
+    termos = busca_service.termos_para_pdf(request.args.get('q') or '')
+
     try:
         import fitz  # PyMuPDF — import tardio: só esta rota precisa
         with fitz.open(caminho) as documento:
             indice = artigo.pagina_num - 1
             if not 0 <= indice < documento.page_count:
                 abort(404)
-            inicio = max(0, indice - 1)
-            fim = min(documento.page_count - 1, indice + 1)
+            inicio, fim = _janela_do_recorte(artigo, documento.page_count)
             with fitz.open() as recorte:
                 recorte.insert_pdf(documento, from_page=inicio, to_page=fim)
+
+                # Rótulos com a numeração original: sem isso o visualizador
+                # mostraria "1, 2, 3" e o leitor perderia a referência da
+                # página do Diário, que é como o ato é citado.
+                recorte.set_page_labels([{'startpage': 0, 'prefix': '',
+                                          'style': 'D', 'firstpagenum': inicio + 1}])
+
+                if termos:
+                    _grifar(recorte, termos)
+
                 conteudo = recorte.tobytes()
     except Exception:  # noqa: BLE001 — PDF corrompido não pode virar 500
         current_app.logger.exception(

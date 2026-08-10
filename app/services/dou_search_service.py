@@ -114,6 +114,35 @@ def extrair_processos(texto: str | None) -> list[str]:
     return _unicos(so_digitos(m) for m in _RE_PROCESSO.findall(texto))
 
 
+def formatar_identificador(tipo: str, digitos: str) -> str | None:
+    """Dígitos → a grafia com pontuação, que é como o número sai impresso.
+
+    Serve para procurar o número dentro do PDF: o índice guarda só dígitos, mas
+    a página traz `19.630.496/0001-05`.
+    """
+    d = so_digitos(digitos)
+    if tipo == 'cnpj' and len(d) == TAM_CNPJ:
+        return f'{d[:2]}.{d[2:5]}.{d[5:8]}/{d[8:12]}-{d[12:]}'
+    if tipo == 'processo' and len(d) == TAM_PROCESSO:
+        return f'{d[:5]}.{d[5:11]}/{d[11:15]}-{d[15:]}'
+    return None
+
+
+def termos_para_pdf(consulta: str) -> list[str]:
+    """O que procurar dentro da página do PDF, a partir do que foi digitado.
+
+    Para texto livre devolve o próprio termo. Para identificador devolve as
+    duas grafias — o usuário pode ter digitado só os dígitos, e no PDF o número
+    aparece pontuado.
+    """
+    tipo, normalizado = classificar_consulta(consulta)
+    if tipo == 'texto':
+        return [normalizado] if normalizado else []
+
+    formatado = formatar_identificador(tipo, normalizado)
+    return [t for t in (formatado, normalizado) if t]
+
+
 def orgao_raiz(hierarquia: str | None) -> str | None:
     """Primeiro nível de 'Ministério X/Autarquia Y/Diretoria Z'.
 
