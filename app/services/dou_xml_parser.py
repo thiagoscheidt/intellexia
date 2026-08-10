@@ -60,6 +60,51 @@ def strip_html(value: str | None) -> str:
     return _WHITESPACE.sub(' ', texto).strip()
 
 
+# Tags de conteúdo que o DOU usa e que podem ser renderizadas. O que não estiver
+# aqui perde a tag e mantém o texto.
+_TAGS_PERMITIDAS = {
+    'p', 'br', 'strong', 'b', 'em', 'i', 'u', 'sup', 'sub',
+    'table', 'thead', 'tbody', 'tfoot', 'tr', 'td', 'th',
+    'ul', 'ol', 'li', 'blockquote',
+}
+
+# Estas somem inteiras, com conteúdo: desembrulhar um <script> deixaria o código
+# aparecer como texto na tela.
+_TAGS_REMOVIDAS = {'script', 'style', 'iframe', 'object', 'embed',
+                   'link', 'meta', 'form', 'input', 'button'}
+
+# Só o que a tabela precisa para manter a forma. `class` e `style` saem: classe
+# do documento colidiria com o CSS do app, e `style` é vetor de abuso visual.
+_ATRIBUTOS_PERMITIDOS = {'td': ('colspan', 'rowspan'), 'th': ('colspan', 'rowspan')}
+
+
+def sanitizar_html(bruto: str | None) -> str:
+    """HTML do ``<Texto>`` → HTML seguro para renderizar na tela.
+
+    O conteúdo vem do documento publicado, não do nosso sistema: renderizá-lo
+    cru seria deixar o DOU injetar marcação na página. A faxina mantém o que dá
+    forma ao ato — parágrafos e, sobretudo, as tabelas (938 matérias do acervo
+    têm tabela, e sem elas o texto vira um paredão ilegível) — e descarta o
+    resto.
+    """
+    if not bruto:
+        return ''
+
+    sopa = BeautifulSoup(bruto, 'html.parser')
+
+    for tag in sopa.find_all(list(_TAGS_REMOVIDAS)):
+        tag.decompose()
+
+    for tag in sopa.find_all(True):
+        if tag.name not in _TAGS_PERMITIDAS:
+            tag.unwrap()          # perde a tag, mantém o texto
+            continue
+        permitidos = _ATRIBUTOS_PERMITIDOS.get(tag.name, ())
+        tag.attrs = {k: v for k, v in tag.attrs.items() if k in permitidos}
+
+    return str(sopa)
+
+
 def _parse_date(value: str | None) -> date | None:
     """A data do INLABS vem como dd/mm/aaaa. Valor ausente ou inesperado → None."""
     if not value:

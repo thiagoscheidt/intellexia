@@ -145,6 +145,51 @@ def test_strip_html():
     check('colapsa espaços', strip_html('<p>a</p>\n\n  <p>b</p>') == 'a b', repr(strip_html('<p>a</p>\n\n  <p>b</p>')))
 
 
+def test_sanitizar_html():
+    print('\n9. Faxina do HTML da matéria')
+    from app.services.dou_xml_parser import sanitizar_html
+
+    check('mantém parágrafo', sanitizar_html('<p>Olá</p>') == '<p>Olá</p>',
+          sanitizar_html('<p>Olá</p>'))
+
+    tabela = ('<table><tr><td rowspan="1" colspan="2"><p>Ordem</p></td>'
+              '<td><p>CNPJ</p></td></tr></table>')
+    saida = sanitizar_html(tabela)
+    check('mantém a tabela', '<table>' in saida and '<td' in saida, saida[:80])
+    check('mantém colspan e rowspan',
+          'colspan="2"' in saida and 'rowspan="1"' in saida, saida[:110])
+
+    check('descarta script inteiro, com o conteúdo',
+          sanitizar_html('<p>a</p><script>alert(1)</script>') == '<p>a</p>',
+          sanitizar_html('<p>a</p><script>alert(1)</script>'))
+    check('descarta style inteiro',
+          'body' not in sanitizar_html('<style>body{display:none}</style><p>a</p>'),
+          sanitizar_html('<style>body{display:none}</style><p>a</p>'))
+    check('descarta iframe',
+          '<iframe' not in sanitizar_html('<iframe src="http://x"></iframe><p>a</p>'))
+
+    check('tira class do documento (colide com o CSS do app)',
+          'class' not in sanitizar_html('<p class="dou-paragraph">a</p>'),
+          sanitizar_html('<p class="dou-paragraph">a</p>'))
+    check('tira style inline',
+          'style' not in sanitizar_html('<p style="position:fixed">a</p>'),
+          sanitizar_html('<p style="position:fixed">a</p>'))
+    check('tira onerror e afins',
+          'onerror' not in sanitizar_html('<p onerror="x()">a</p>'),
+          sanitizar_html('<p onerror="x()">a</p>'))
+
+    check('tag desconhecida perde a tag e mantém o texto',
+          sanitizar_html('<marquee>texto</marquee>') == 'texto',
+          sanitizar_html('<marquee>texto</marquee>'))
+    check('link vira texto, sem href',
+          'href' not in sanitizar_html('<a href="javascript:x()">clique</a>')
+          and 'clique' in sanitizar_html('<a href="javascript:x()">clique</a>'),
+          sanitizar_html('<a href="javascript:x()">clique</a>'))
+
+    check('vazio devolve vazio', sanitizar_html('') == '')
+    check('None devolve vazio', sanitizar_html(None) == '')
+
+
 def main():
     print('=' * 60)
     print('TESTES DO PARSER DE XML DO DOU')
@@ -158,6 +203,7 @@ def main():
     test_xml_invalido()
     test_xml_hostil()
     test_strip_html()
+    test_sanitizar_html()
 
     print('\n' + '=' * 60)
     if _falhas:

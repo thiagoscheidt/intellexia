@@ -35,6 +35,7 @@ from app.models import db, DouEdition, DouArticle, DouSyncRun, Client
 
 from app.services import dou_ingestion_service as ingestion
 from app.services import dou_search_service as busca_service
+from app.services.dou_xml_parser import sanitizar_html
 
 dou_bp = Blueprint('dou', __name__, url_prefix='/dou')
 
@@ -245,7 +246,25 @@ def busca():
 @dou_bp.route('/materia/<int:article_id>')
 def materia(article_id):
     artigo = DouArticle.query.get_or_404(article_id)
-    return render_template('dou/materia.html', artigo=artigo, edicao=artigo.edition)
+    edicao_obj = artigo.edition
+
+    # A página impressa corresponde 1:1 à página do PDF assinado — conferido em
+    # 216 matérias de todas as seções, 96% batendo. Só oferecemos a aba quando
+    # há PDF em disco e a matéria diz em que página está.
+    pagina_pdf = (artigo.pagina_num
+                  if edicao_obj and edicao_obj.pdf_disponivel and artigo.pagina_num
+                  else None)
+
+    return render_template(
+        'dou/materia.html',
+        artigo=artigo,
+        edicao=edicao_obj,
+        # O HTML do documento passa pela faxina antes de ir para a tela: é
+        # conteúdo de terceiros, e renderizá-lo cru deixaria o DOU injetar
+        # marcação na página.
+        texto_formatado=sanitizar_html(artigo.texto_html),
+        pagina_pdf=pagina_pdf,
+    )
 
 
 @dou_bp.route('/edicao/<int:edition_id>/pdf')

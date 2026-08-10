@@ -494,3 +494,67 @@
   .dou-busca-convite:hover { transform: none; }
   .dou-busca-convite:hover .dou-busca-convite__seta { transform: none; }
 }
+
+/* ------------------------------------------------- a matéria (texto e página) */
+
+/* Texto formatado do documento. As tags vêm da faxina do sanitizar_html, sem
+   classes do DOU, então o estilo é aplicado por elemento. */
+.dou-texto {
+  line-height: 1.7;
+  /* a tabela larga rola dentro do bloco, sem empurrar o layout da página */
+  overflow-x: auto;
+}
+
+.dou-texto p {
+  margin-bottom: .85rem;
+}
+
+/* Quando não há HTML de origem, cai no texto puro e a quebra de linha importa */
+.dou-texto--puro {
+  white-space: pre-wrap;
+}
+
+/* Tabelas do DOU: até 100 linhas, com colunas estreitas de protocolo e CNPJ.
+   Rolagem própria para a tabela não empurrar o layout da página. */
+.dou-texto table {
+  width: 100%;
+  margin: 1rem 0;
+  border-collapse: collapse;
+  font-size: .82rem;
+}
+
+.dou-texto table + table {
+  margin-top: 1.5rem;
+}
+
+.dou-texto td,
+.dou-texto th {
+  border: 1px solid var(--bs-border-color);
+  padding: .3rem .5rem;
+  vertical-align: top;
+}
+
+.dou-texto th {
+  background: var(--bs-secondary-bg);
+  font-weight: 600;
+}
+
+/* Dentro da célula o parágrafo não pode carregar a margem do texto corrido */
+.dou-texto td p,
+.dou-texto th p {
+  margin: 0;
+}
+
+/* A página do Diário, embutida */
+.dou-pdf-quadro {
+  width: 100%;
+  height: 78vh;
+  min-height: 460px;
+  border: 1px solid var(--bs-border-color);
+  border-radius: 10px;
+  background: var(--bs-secondary-bg);
+}
+
+@media (max-width: 767.98px) {
+  .dou-pdf-quadro { height: 60vh; }
+}

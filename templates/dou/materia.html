@@ -3,7 +3,13 @@
 
 {% block title %}{{ artigo.identifica or 'Matéria do DOU' }}{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/dou.css') }}">
+{% endblock %}
+
 {% block content %}
+<div class="dou-page">
+
 {{ page_hero(
      artigo.identifica or 'Matéria do Diário Oficial',
      artigo.orgao_hierarquia or '',
@@ -15,18 +21,71 @@
 
 <div class="row">
   <div class="col-lg-8">
-    <div class="card border-0 shadow-sm mb-4">
-      <div class="card-body">
-        {% if artigo.ementa %}
-        <div class="alert alert-light border">
-          <div class="small text-muted mb-1">Ementa</div>
-          {{ artigo.ementa }}
+    {% if pagina_pdf %}
+    <ul class="nav nav-tabs" id="abas-materia" role="tablist">
+      <li class="nav-item" role="presentation">
+        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#aba-texto"
+                type="button" role="tab" aria-controls="aba-texto" aria-selected="true">
+          <i class="bi bi-file-text me-1"></i>Texto
+        </button>
+      </li>
+      <li class="nav-item" role="presentation">
+        <button class="nav-link" id="botao-aba-pagina" data-bs-toggle="tab"
+                data-bs-target="#aba-pagina" type="button" role="tab"
+                aria-controls="aba-pagina" aria-selected="false">
+          <i class="bi bi-file-earmark-pdf me-1"></i>Página do Diário
+        </button>
+      </li>
+    </ul>
+    {% endif %}
+
+    <div class="tab-content">
+      <div class="tab-pane fade show active" id="aba-texto" role="tabpanel">
+        <div class="card border-0 shadow-sm mb-4 {{ 'rounded-top-0' if pagina_pdf }}">
+          <div class="card-body">
+            {% if artigo.ementa %}
+            <div class="alert alert-light border">
+              <div class="small text-muted mb-1">Ementa</div>
+              {{ artigo.ementa }}
+            </div>
+            {% endif %}
+            {% if artigo.titulo %}<h5>{{ artigo.titulo }}</h5>{% endif %}
+            {% if artigo.subtitulo %}<h6 class="text-muted">{{ artigo.subtitulo }}</h6>{% endif %}
+
+            {% if texto_formatado %}
+            {# Já passou por sanitizar_html no blueprint: só tags de conteúdo,
+               sem atributos além de colspan/rowspan. #}
+            <div class="dou-texto mt-3">{{ texto_formatado | safe }}</div>
+            {% else %}
+            <div class="dou-texto dou-texto--puro mt-3">{{ artigo.texto }}</div>
+            {% endif %}
+          </div>
         </div>
-        {% endif %}
-        {% if artigo.titulo %}<h5>{{ artigo.titulo }}</h5>{% endif %}
-        {% if artigo.subtitulo %}<h6 class="text-muted">{{ artigo.subtitulo }}</h6>{% endif %}
-        <div class="dou-texto mt-3" style="white-space: pre-wrap; line-height: 1.7;">{{ artigo.texto }}</div>
       </div>
+
+      {% if pagina_pdf %}
+      <div class="tab-pane fade" id="aba-pagina" role="tabpanel">
+        <div class="card border-0 shadow-sm mb-4 rounded-top-0">
+          <div class="card-body p-2">
+            <div class="d-flex justify-content-between align-items-center px-2 pb-2">
+              <small class="text-muted">
+                {{ edicao.secao_label }} · página {{ artigo.pagina }} ·
+                PDF assinado da Imprensa Nacional
+              </small>
+              <a href="{{ url_for('dou.baixar_pdf', edition_id=edicao.id) }}#page={{ pagina_pdf }}"
+                 target="_blank" rel="noopener" class="btn btn-outline-secondary btn-sm">
+                <i class="bi bi-box-arrow-up-right me-1"></i>Abrir em nova aba
+              </a>
+            </div>
+            {# O src só é preenchido quando a aba é aberta: o PDF da Seção 3 tem
+               44 MB, e carregá-lo em toda visita à matéria seria inaceitável. #}
+            <iframe class="dou-pdf-quadro" title="Página {{ artigo.pagina }} do Diário Oficial"
+                    data-src="{{ url_for('dou.baixar_pdf', edition_id=edicao.id) }}#page={{ pagina_pdf }}"
+                    src="about:blank"></iframe>
+          </div>
+        </div>
+      </div>
+      {% endif %}
     </div>
   </div>
 
@@ -73,4 +132,21 @@
     </div>
   </div>
 </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+{% if pagina_pdf %}
+<script>
+  // O PDF só é buscado quando a aba é aberta. O da Seção 3 tem 44 MB: baixá-lo
+  // em toda visita à matéria estouraria a banda de quem só queria ler o texto.
+  document.getElementById('botao-aba-pagina')?.addEventListener('shown.bs.tab', function () {
+    const quadro = document.querySelector('.dou-pdf-quadro');
+    if (quadro && quadro.dataset.src && quadro.src !== quadro.dataset.src) {
+      quadro.src = quadro.dataset.src;
+    }
+  });
+</script>
+{% endif %}
 {% endblock %}
